@@ -21,21 +21,39 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 Path root = basedir.toPath()
-Path file = root.resolve('.run/ServerApp.run.xml')
-assert Arrays.equals(Files.readAllBytes(file), Files.readAllBytes(root.resolve('expected/ServerApp.txt'))) :
-        'the generated Maven run configuration differs from its expected/ file:\n' + file.toFile().text
 
-String body = file.toFile().text
-assert body.contains('type="MavenRunConfiguration" factoryName="Maven"')
-assert body.contains('<option value="vidocq:run" />')
-assert body.contains('<option name="pomFileName" value="server/pom.xml" />')
-assert body.contains('<option name="workingDirPath" value="$PROJECT_DIR$" />')
-assert !body.contains('Maven.BeforeRunTask') : 'vidocq:run compiles and indexes by itself'
-assert !body.contains('MAIN_CLASS_NAME') && !body.contains('"Make"') : 'the IDE build is not what runs the application'
+// Vidocq/vidocq#143: the Maven kind now writes three shared configurations per application.
+Path devFile = root.resolve('.run/ServerApp.run.xml')
+Path packagedFile = root.resolve('.run/ServerApp (packaged).run.xml')
+Path debugFile = root.resolve('.run/ServerApp (debug).run.xml')
+assert Arrays.equals(Files.readAllBytes(devFile), Files.readAllBytes(root.resolve('expected/ServerApp.txt'))) :
+        'the generated Dev configuration differs from its expected/ file:\n' + devFile.toFile().text
+assert Arrays.equals(Files.readAllBytes(packagedFile), Files.readAllBytes(root.resolve('expected/ServerApp (packaged).txt'))) :
+        'the generated packaged configuration differs from its expected/ file:\n' + packagedFile.toFile().text
+assert Arrays.equals(Files.readAllBytes(debugFile), Files.readAllBytes(root.resolve('expected/ServerApp (debug).txt'))) :
+        'the generated debug configuration differs from its expected/ file:\n' + debugFile.toFile().text
+
+String devBody = devFile.toFile().text
+assert devBody.contains('type="MavenRunConfiguration" factoryName="Maven"')
+assert devBody.contains('<option value="vidocq:dev" />')
+assert devBody.contains('<option name="pomFileName" value="server/pom.xml" />')
+assert devBody.contains('<option name="workingDirPath" value="$PROJECT_DIR$" />')
+assert !devBody.contains('Maven.BeforeRunTask') : 'vidocq:dev compiles and indexes by itself'
+assert !devBody.contains('MAIN_CLASS_NAME') && !devBody.contains('"Make"') : 'the IDE build is not what runs the application'
+
+String packagedBody = packagedFile.toFile().text
+assert packagedBody.contains('<option value="vidocq:run" />')
+assert packagedBody.contains('name="ServerApp (packaged)" type="MavenRunConfiguration"')
+
+String debugBody = debugFile.toFile().text
+assert debugBody.contains('name="ServerApp (debug)" type="Remote"')
+assert debugBody.contains('<option name="HOST" value="127.0.0.1" />')
+assert debugBody.contains('<option name="PORT" value="5005" />')
 
 String log = root.resolve('build.log').toFile().text
 assert log.contains('Vidocq idea: writing Maven run configurations of 1 application(s) in ')
 assert log.contains('[INFO] Vidocq idea: IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings > Build, Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the application runs on: vidocq:run forks it from the JVM running Maven.')
 assert log.contains('[WARNING] Vidocq idea: vidocq.idea.jre is not set, so the run configurations written do not pin a JDK: IntelliJ runs Maven on its Maven runner JRE')
-assert log.contains('run configuration(s) in ') && log.contains('/.run are up to date.') : 'the strict check passes right after a write'
+assert log.contains('Vidocq idea: 3 run configuration(s): 3 created')
+assert log.contains('3 run configuration(s) in ') && log.contains('/.run are up to date.') : 'the strict check passes right after a write'
 return true

@@ -22,7 +22,8 @@ import java.nio.file.Path
 
 Path root = basedir.toPath()
 List<String> names = Files.list(root.resolve('.run')).withCloseable { s -> s.map { it.fileName.toString() }.sorted().toList() }
-assert names == ['BetaApp.run.xml'] : "files in .run/: $names"
+// Vidocq/vidocq#143: the default (Maven) kind writes three files for beta, none for excluded alpha.
+assert names == ['BetaApp (debug).run.xml', 'BetaApp (packaged).run.xml', 'BetaApp.run.xml'] : "files in .run/: $names"
 
 String log = root.resolve('build.log').toFile().text
 // 1. alpha is the top-level project and leaves only itself out.

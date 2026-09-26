@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.maven.idea;
 
+import io.vidocq.runtime.maven.JdwpAgent;
+
 /**
  * A Vidocq application of the reactor, as one IntelliJ IDEA run configuration describes it.
  *
@@ -31,7 +33,22 @@ package io.vidocq.runtime.maven.idea;
  * @param generateGoal      the Maven goal of the before-launch step: {@code vidocq:generate}, or
  *                          {@code vidocq:generate@<execution>} when one execution carries the
  *                          configuration of that goal
+ * @param debugHost         the host the {@code (debug)} configuration attaches to; blank or {@code null}
+ *                          becomes {@link JdwpAgent#DEFAULT_HOST} (Vidocq/vidocq#143)
+ * @param debugPort         the port the {@code (debug)} configuration attaches to; not positive becomes
+ *                          {@code 5005}, the default of {@code vidocq:dev}'s own debug agent
  */
 record IdeaApplication(String coordinates, String mainClass, String configurationName, String moduleName,
-                       String pomPath, String generateGoal) {
+                       String pomPath, String generateGoal, String debugHost, int debugPort) {
+
+    IdeaApplication {
+        debugHost = debugHost == null || debugHost.isBlank() ? JdwpAgent.DEFAULT_HOST : debugHost;
+        debugPort = debugPort <= 0 ? 5005 : debugPort;
+    }
+
+    /** The debug host and port default to those of {@code vidocq:dev}'s own debug agent. */
+    IdeaApplication(String coordinates, String mainClass, String configurationName, String moduleName,
+                    String pomPath, String generateGoal) {
+        this(coordinates, mainClass, configurationName, moduleName, pomPath, generateGoal, null, 0);
+    }
 }

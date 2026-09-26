@@ -70,7 +70,7 @@ final class IdeaApplications {
      */
     static final List<String> MODULE_PROPERTIES = List.of(ApplicationMainClass.PROPERTY,
             ApplicationMainClass.MODULE_PROPERTY, "vidocq.idea.configurationName", "vidocq.idea.moduleName",
-            EXCLUDE_PROPERTY);
+            EXCLUDE_PROPERTY, "vidocq.dev.debugHost", "vidocq.dev.debugPort");
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String PREFIX = "Vidocq idea: ";
@@ -148,12 +148,14 @@ final class IdeaApplications {
             String moduleName = pomValue(project, "vidocq.idea.moduleName", project.getArtifactId(),
                     coordinates, errors);
             String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
+            String debugHost = project.getProperties().getProperty("vidocq.dev.debugHost");
+            int debugPort = debugPort(project, coordinates, errors);
             if (errors.size() > errorsBefore) {
                 continue;
             }
 
             applications.add(new IdeaApplication(coordinates, mainClass, configurationName, moduleName, pomPath,
-                    generateGoal(plugin, coordinates, diagnostics)));
+                    generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort));
 
             if (project.getProperties().getProperty("vidocq.idea.moduleName") == null) {
                 reportRenamedModule(project, coordinates, moduleNames, allProjects, diagnostics);
@@ -223,6 +225,30 @@ final class IdeaApplications {
             errors.add(PREFIX + coordinates + ": " + key + " must not be blank or contain control characters.");
         }
         return value;
+    }
+
+    /**
+     * {@code vidocq.dev.debugHost}, from the module's own model, or 0 for the default (Vidocq/vidocq#143): the
+     * {@code (debug)} configuration attaches to the same host and port {@code vidocq:dev}'s own debug agent
+     * would use for this module.
+     */
+    private static int debugPort(MavenProject project, String coordinates, List<String> errors) {
+        String value = project.getProperties().getProperty("vidocq.dev.debugPort");
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        int port;
+        try {
+            port = Integer.parseInt(value.strip());
+        } catch (NumberFormatException e) {
+            errors.add(PREFIX + coordinates + ": vidocq.dev.debugPort \"" + value + "\" is not a valid port number.");
+            return 0;
+        }
+        if (port < 1 || port > 65535) {
+            errors.add(PREFIX + coordinates + ": vidocq.dev.debugPort \"" + value + "\" is not a valid port number.");
+            return 0;
+        }
+        return port;
     }
 
     /** The text after the last dot of the qualified name ({@code $} of a nested class read as a dot). */

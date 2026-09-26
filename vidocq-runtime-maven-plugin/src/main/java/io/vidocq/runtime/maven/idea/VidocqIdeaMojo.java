@@ -48,10 +48,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 /**
- * <b>Experimental.</b> Writes one IntelliJ IDEA shared run configuration per Vidocq application of the
+ * <b>Experimental.</b> Writes IntelliJ IDEA shared run configurations for the Vidocq applications of the
  * reactor into {@code .run/}, or checks them. Invoke it from the command line, in the directory IntelliJ
  * opens as the project (usually the reactor root):
  *
@@ -59,10 +60,15 @@ import java.util.stream.Stream;
  * mvn vidocq:idea -Dvidocq.idea.check=true
  * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
- * <p>By default each configuration is an IntelliJ <b>Maven</b> run of {@code vidocq:run} on the
- * application's own pom: Maven compiles, indexes and forks the JVM exactly as on the command line, so the
- * run can never miss the bean index of the dependency jars (Vidocq/vidocq#83) — the IDE's own build never
- * runs {@code vidocq:generate}. {@code -Dvidocq.idea.kind=application} writes an <b>Application</b> run of
+ * <p>By default each application gets three files (Vidocq/vidocq#143): the <i>Dev</i> configuration, an
+ * IntelliJ <b>Maven</b> run of {@code vidocq:dev} (console, reload, continuous testing) on the application's
+ * own pom, which keeps the file name and the configuration name a developer already uses; a <i>(packaged)</i>
+ * configuration, the same Maven run of {@code vidocq:run} instead, as the single file did before this
+ * application had a Dev configuration; and a <i>(debug)</i> configuration, a Remote JVM Debug run that
+ * attaches to the debug agent {@code vidocq:dev} starts. A Maven run compiles, indexes and forks the JVM
+ * exactly as on the command line, so it can never miss the bean index of the dependency jars
+ * (Vidocq/vidocq#83) — the IDE's own build never runs {@code vidocq:generate}.
+ * {@code -Dvidocq.idea.kind=application} writes a single <b>Application</b> run of
  * the main class instead, with two before-launch steps: IntelliJ's Make, then {@code vidocq:generate} on
  * the application's pom; {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves that second step out.
  *
@@ -118,8 +124,9 @@ public class VidocqIdeaMojo extends AbstractMojo {
     private String check;
 
     /**
-     * {@code maven} (default): an IntelliJ Maven run configuration of {@code vidocq:run} on the application's
-     * pom, which compiles, indexes and forks the JVM as the command line does. {@code application}: an
+     * {@code maven} (default): three IntelliJ Maven/Remote run configurations per application (Vidocq/vidocq#143)
+     * — Dev ({@code vidocq:dev}), {@code (packaged)} ({@code vidocq:run}) and {@code (debug)} (Remote JVM Debug) —
+     * each of which compiles, indexes and forks the JVM as the command line does. {@code application}: a single
      * IntelliJ Application run configuration of the main class, with Make and {@code vidocq:generate} before
      * launch.
      */
@@ -236,8 +243,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
             case WRITE -> "writing";
             case CHECK -> "checking";
             case STRICT_CHECK -> "strictly checking";
-        } + " " + (renderKind == Kind.MAVEN ? "Maven" : "Application") + " run configurations of " + targets.size()
-                + " application(s) in " + runDirectory);
+        } + " " + (renderKind == Kind.MAVEN ? "Maven" : "Application") + " run configurations of "
+                + discovery.applications().size() + " application(s) in " + runDirectory);
 
         if (mode == Mode.WRITE) {
             write(targets.values(), runDirectory, targets);
@@ -265,32 +272,60 @@ public class VidocqIdeaMojo extends AbstractMojo {
         };
     }
 
-    /** One application and the file that holds its configuration. */
+    /**
+     * One generated file and the application it belongs to. {@code withJre} re-renders its body for another
+     * JRE, keeping everything else about this particular file (its goal, its name, or its debug host and
+     * port) unchanged; {@link #pinHint} uses it to tell whether a user-owned file differs only by its JDK.
+     */
     private record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
-                          State state) {
+                          State state, UnaryOperator<String> withJre) {
     }
 
     private Map<String, Target> targets(List<IdeaApplication> applications, Path runDirectory)
             throws MojoExecutionException, MojoFailureException {
         Map<String, Target> targets = new LinkedHashMap<>();
         for (IdeaApplication application : applications) {
-            String fileName = RunConfigurationRenderer.fileName(application.configurationName());
-            // Case-insensitive: two names that differ only by case are one file on macOS and Windows.
-            String key = fileName.toLowerCase(Locale.ROOT);
-            Target other = targets.get(key);
-            if (other != null) {
-                throw new MojoFailureException(PREFIX + other.application().coordinates() + " and "
-                        + application.coordinates() + " both map to .run/" + fileName + " (configuration name \""
-                        + application.configurationName() + "\"). Set <vidocq.idea.configurationName> in one of"
-                        + " their poms.");
+            if (renderKind == Kind.MAVEN) {
+                // Vidocq/vidocq#143: the Dev configuration keeps the existing name and file, and now runs
+                // vidocq:dev; the packaged and debug configurations are new, additional files.
+                addTarget(targets, runDirectory, application, application.configurationName(),
+                        candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
+                                RunConfigurationRenderer.DEV_GOAL, application.configurationName()));
+                String packagedName = application.configurationName() + RunConfigurationRenderer.PACKAGED_SUFFIX;
+                addTarget(targets, runDirectory, application, packagedName,
+                        candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
+                                RunConfigurationRenderer.RUN_GOAL, packagedName));
+                String debugName = application.configurationName() + RunConfigurationRenderer.DEBUG_SUFFIX;
+                addTarget(targets, runDirectory, application, debugName,
+                        candidateJre -> RunConfigurationRenderer.debugBody(debugName, application.debugHost(),
+                                application.debugPort()));
+            } else {
+                addTarget(targets, runDirectory, application, application.configurationName(),
+                        candidateJre -> RunConfigurationRenderer.body(application, renderKind, candidateJre,
+                                generateBeforeLaunch));
             }
-            Path file = runDirectory.resolve(fileName);
-            String body = RunConfigurationRenderer.body(application, renderKind, jre, generateBeforeLaunch);
-            byte[] onDisk = Files.isRegularFile(file) ? read(file) : null;
-            targets.put(key, new Target(application, ".run/" + fileName, file, body, onDisk,
-                    RunConfigurationFiles.classify(onDisk, body)));
         }
         return targets;
+    }
+
+    /** Adds one file to {@code targets}, failing on a name collision with a file already added. */
+    private void addTarget(Map<String, Target> targets, Path runDirectory, IdeaApplication application,
+                           String configurationName, UnaryOperator<String> withJre)
+            throws MojoExecutionException, MojoFailureException {
+        String fileName = RunConfigurationRenderer.fileName(configurationName);
+        // Case-insensitive: two names that differ only by case are one file on macOS and Windows.
+        String key = fileName.toLowerCase(Locale.ROOT);
+        Target other = targets.get(key);
+        if (other != null) {
+            throw new MojoFailureException(PREFIX + other.application().coordinates() + " and "
+                    + application.coordinates() + " both map to .run/" + fileName + " (configuration name \""
+                    + configurationName + "\"). Set <vidocq.idea.configurationName> in one of their poms.");
+        }
+        Path file = runDirectory.resolve(fileName);
+        String body = withJre.apply(jre);
+        byte[] onDisk = Files.isRegularFile(file) ? read(file) : null;
+        targets.put(key, new Target(application, ".run/" + fileName, file, body, onDisk,
+                RunConfigurationFiles.classify(onDisk, body), withJre));
     }
 
     /**
@@ -472,9 +507,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
         String declaration = "<vidocq.idea.jre>" + pinned.replace("&", "&amp;").replace("<", "&lt;")
                 .replace(">", "&gt;") + "</vidocq.idea.jre>";
         // Without a marker, a file whose content becomes the expected one is adopted as it is.
-        if (target.state() == State.FOREIGN && RunConfigurationFiles.shownBody(target.onDisk())
-                .equals(RunConfigurationRenderer.body(target.application(), renderKind, pinned,
-                generateBeforeLaunch))) {
+        if (target.state() == State.FOREIGN
+                && RunConfigurationFiles.shownBody(target.onDisk()).equals(target.withJre().apply(pinned))) {
             return subject + " differs from what vidocq:idea writes only by its JDK '" + pinned + "': declare "
                     + declaration + " in the top-level pom and run \"mvn vidocq:idea\" to adopt it as it is.";
         }

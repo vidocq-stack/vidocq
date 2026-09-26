@@ -301,4 +301,46 @@ class RunConfigurationRendererTest {
         assertEquals("maven", Kind.MAVEN.property());
         assertEquals("application", Kind.APPLICATION.property());
     }
+
+    // ---- Dev, packaged and debug configurations (Vidocq/vidocq#143) ----------------------------------
+
+    @Test
+    void constants_haveTheDocumentedValues() {
+        assertEquals("vidocq:dev", RunConfigurationRenderer.DEV_GOAL);
+        assertEquals(" (packaged)", RunConfigurationRenderer.PACKAGED_SUFFIX);
+        assertEquals(" (debug)", RunConfigurationRenderer.DEBUG_SUFFIX);
+    }
+
+    @Test
+    void theDebugConfigurationAttachesToTheDevAgent() {
+        String body = RunConfigurationRenderer.debugBody("ServerApp (debug)", "127.0.0.1", 5005);
+
+        assertTrue(body.contains("name=\"ServerApp (debug)\" type=\"Remote\""), body);
+        assertTrue(body.contains("<option name=\"HOST\" value=\"127.0.0.1\" />"), body);
+        assertTrue(body.contains("<option name=\"PORT\" value=\"5005\" />"), body);
+    }
+
+    @Test
+    void debugBody_escapesItsNameAndHost() {
+        String body = RunConfigurationRenderer.debugBody("A & <B>", "my \"host\"", 5005);
+
+        assertTrue(body.contains("name=\"A &amp; &lt;B&gt;\" type=\"Remote\""), body);
+        assertTrue(body.contains("<option name=\"HOST\" value=\"my &quot;host&quot;\" />"), body);
+    }
+
+    @Test
+    void theMainMavenConfigurationRunsVidocqDevAndThePackagedOneVidocqRun() {
+        IdeaApplication application = new IdeaApplication("com.example:app", "com.example.App", "ServerApp", "app",
+                "pom.xml", "vidocq:generate");
+
+        String dev = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.DEV_GOAL,
+                "ServerApp");
+        String packaged = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.RUN_GOAL,
+                "ServerApp (packaged)");
+
+        assertTrue(dev.contains("<option value=\"vidocq:dev\" />"), dev);
+        assertTrue(dev.contains("name=\"ServerApp\""), dev);
+        assertTrue(packaged.contains("<option value=\"vidocq:run\" />"), packaged);
+        assertTrue(packaged.contains("name=\"ServerApp (packaged)\""), packaged);
+    }
 }

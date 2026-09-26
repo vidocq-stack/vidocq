@@ -3,8 +3,9 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <!-- The default kind: a Maven run configuration of vidocq:run on the application's own pom. No
-         vidocq.idea.jre, so the goal also warns that the written file pins no JDK. -->
+    <!-- The default kind: Dev (vidocq:dev), packaged (vidocq:run) and debug Maven/Remote run configurations
+         on the application's own pom (Vidocq/vidocq#143). No vidocq.idea.jre, so the goal also warns that
+         the written files pin no JDK. -->
     <groupId>com.example.it</groupId>
     <artifactId>maven-kind</artifactId>
     <version>1.0</version>

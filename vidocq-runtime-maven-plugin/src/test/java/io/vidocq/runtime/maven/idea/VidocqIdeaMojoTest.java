@@ -666,11 +666,14 @@ class VidocqIdeaMojoTest {
     /**
      * Clicking Run in IntelliJ builds with the IDE, which never runs {@code vidocq:generate}: the bean index
      * then misses the beans of the dependency jars and the server answers 404 (Vidocq/vidocq#83). The default
-     * configuration is therefore a Maven run of {@code vidocq:run}, which compiles, indexes and forks the JVM
+     * kind therefore writes three shared configurations per application (Vidocq/vidocq#143): the Dev one,
+     * which keeps the file name and now runs {@code vidocq:dev}; a {@code (packaged)} one, the Maven run of
+     * {@code vidocq:run} the single file ran before; and a {@code (debug)} Remote JVM Debug configuration
+     * that attaches to {@code vidocq:dev}'s own debug agent. Both Maven runs compile, index and fork the JVM
      * exactly as the command line does.
      */
     @Test
-    void theDefaultKindIsAMavenRunOfVidocqRun() throws Exception {
+    void theDefaultKindWritesDevPackagedAndDebugConfigurationsPerApplication() throws Exception {
         VidocqIdeaMojo maven = new VidocqIdeaMojo();
         maven.setLog(log);
         maven.setGenerateBeforeLaunch(true);
@@ -678,17 +681,43 @@ class VidocqIdeaMojoTest {
 
         maven.run(projects, projects, new Properties(), root);
 
-        String alpha = read("AlphaApp.run.xml");
-        assertEquals(RunConfigurationRenderer.file(new IdeaApplication("com.example:alpha",
-                "com.example.alpha.AlphaApp", "AlphaApp", "alpha", "alpha/pom.xml", "vidocq:generate"),
-                Kind.MAVEN, null, true), alpha);
-        assertTrue(alpha.contains("type=\"MavenRunConfiguration\" factoryName=\"Maven\""), alpha);
-        assertTrue(alpha.contains("<option value=\"vidocq:run\" />"), alpha);
-        assertTrue(alpha.contains("<option name=\"pomFileName\" value=\"alpha/pom.xml\" />"), alpha);
-        assertFalse(alpha.contains("MAIN_CLASS_NAME"), "the Maven kind runs a goal, not a main class: " + alpha);
-        assertFalse(alpha.contains("Maven.BeforeRunTask"), "vidocq:run indexes by itself: " + alpha);
+        try (Stream<Path> files = Files.list(root.resolve(".run"))) {
+            assertEquals(List.of("AlphaApp (debug).run.xml", "AlphaApp (packaged).run.xml", "AlphaApp.run.xml",
+                            "Beta server (debug).run.xml", "Beta server (packaged).run.xml", "Beta server.run.xml"),
+                    files.map(p -> p.getFileName().toString()).sorted().toList());
+        }
+
+        IdeaApplication alpha = new IdeaApplication("com.example:alpha", "com.example.alpha.AlphaApp", "AlphaApp",
+                "alpha", "alpha/pom.xml", "vidocq:generate");
+        String dev = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.DEV_GOAL, "AlphaApp");
+        String packaged = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.RUN_GOAL,
+                "AlphaApp" + RunConfigurationRenderer.PACKAGED_SUFFIX);
+        String debug = RunConfigurationRenderer.debugBody("AlphaApp" + RunConfigurationRenderer.DEBUG_SUFFIX,
+                alpha.debugHost(), alpha.debugPort());
+
+        assertEquals(RunConfigurationRenderer.markerLine(dev) + "\n" + dev, read("AlphaApp.run.xml"));
+        assertEquals(RunConfigurationRenderer.markerLine(packaged) + "\n" + packaged,
+                read("AlphaApp (packaged).run.xml"));
+        assertEquals(RunConfigurationRenderer.markerLine(debug) + "\n" + debug, read("AlphaApp (debug).run.xml"));
+
+        String devFile = read("AlphaApp.run.xml");
+        assertTrue(devFile.contains("type=\"MavenRunConfiguration\" factoryName=\"Maven\""), devFile);
+        assertTrue(devFile.contains("<option value=\"vidocq:dev\" />"), devFile);
+        assertTrue(devFile.contains("<option name=\"pomFileName\" value=\"alpha/pom.xml\" />"), devFile);
+        assertFalse(devFile.contains("MAIN_CLASS_NAME"), "the Maven kind runs a goal, not a main class: " + devFile);
+        assertFalse(devFile.contains("Maven.BeforeRunTask"), "vidocq:dev indexes by itself: " + devFile);
+
+        String packagedFile = read("AlphaApp (packaged).run.xml");
+        assertTrue(packagedFile.contains("<option value=\"vidocq:run\" />"), packagedFile);
+
+        String debugFile = read("AlphaApp (debug).run.xml");
+        assertTrue(debugFile.contains("type=\"Remote\""), debugFile);
+        assertTrue(debugFile.contains("<option name=\"HOST\" value=\"127.0.0.1\" />"), debugFile);
+        assertTrue(debugFile.contains("<option name=\"PORT\" value=\"5005\" />"), debugFile);
+
         assertTrue(log.has("INFO", "Vidocq idea: writing Maven run configurations of 2 application(s) in "
                 + root.toRealPath() + "/.run"), log.toString());
+        assertTrue(log.has("INFO", "Vidocq idea: 6 run configuration(s): 6 created"), log.toString());
         assertTrue(log.has("INFO", "Vidocq idea: IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings >"
                 + " Build, Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the"
                 + " application runs on: vidocq:run forks it from the JVM running Maven."), log.toString());
@@ -696,8 +725,39 @@ class VidocqIdeaMojoTest {
         maven.setCheck("strict");
         maven.run(projects, projects, new Properties(), root);
 
-        assertTrue(log.has("INFO", "Vidocq idea: 2 run configuration(s) in " + root.toRealPath()
+        assertTrue(log.has("INFO", "Vidocq idea: 6 run configuration(s) in " + root.toRealPath()
                 + "/.run are up to date."), log.toString());
+    }
+
+    /** The Application kind is unchanged: one file per application, no packaged or debug configuration. */
+    @Test
+    void theApplicationKindStillWritesOneFilePerApplication() throws Exception {
+        run();
+
+        try (Stream<Path> files = Files.list(root.resolve(".run"))) {
+            assertEquals(List.of("AlphaApp.run.xml", "Beta server.run.xml"),
+                    files.map(p -> p.getFileName().toString()).sorted().toList());
+        }
+    }
+
+    /** vidocq.dev.debugHost and vidocq.dev.debugPort, read from the module's own pom, name the debug agent. */
+    @Test
+    void theDebugConfigurationUsesTheModulesOwnDebugHostAndPort() throws Exception {
+        projects.get(1).getProperties().setProperty("vidocq.dev.debugHost", "0.0.0.0");
+        projects.get(1).getProperties().setProperty("vidocq.dev.debugPort", "18095");
+        VidocqIdeaMojo maven = new VidocqIdeaMojo();
+        maven.setLog(log);
+        maven.setGenerateBeforeLaunch(true);
+        maven.setCheck("false");
+
+        maven.run(projects, projects, new Properties(), root);
+
+        String debugFile = read("AlphaApp (debug).run.xml");
+        assertTrue(debugFile.contains("<option name=\"HOST\" value=\"0.0.0.0\" />"), debugFile);
+        assertTrue(debugFile.contains("<option name=\"PORT\" value=\"18095\" />"), debugFile);
+        String betaDebugFile = read("Beta server (debug).run.xml");
+        assertTrue(betaDebugFile.contains("<option name=\"HOST\" value=\"127.0.0.1\" />"), betaDebugFile);
+        assertTrue(betaDebugFile.contains("<option name=\"PORT\" value=\"5005\" />"), betaDebugFile);
     }
 
     @Test
@@ -743,7 +803,9 @@ class VidocqIdeaMojoTest {
 
         assertNotEquals(application, read("AlphaApp.run.xml"));
         assertTrue(read("AlphaApp.run.xml").contains("type=\"MavenRunConfiguration\""), read("AlphaApp.run.xml"));
-        assertTrue(log.has("INFO", "Vidocq idea: 2 run configuration(s): 2 updated"), log.toString());
+        // Vidocq/vidocq#143: the two existing files (one per application) are updated; the (packaged) and
+        // (debug) files of each application are new.
+        assertTrue(log.has("INFO", "Vidocq idea: 6 run configuration(s): 4 created, 2 updated"), log.toString());
     }
 
     @Test
