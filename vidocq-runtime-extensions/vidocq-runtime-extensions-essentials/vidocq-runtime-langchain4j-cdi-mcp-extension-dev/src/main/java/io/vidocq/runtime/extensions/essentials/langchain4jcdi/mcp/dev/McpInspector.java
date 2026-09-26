@@ -261,20 +261,23 @@ final class McpInspector {
 
     /**
      * The exchange as the page shows it, secrets masked by name and scrubbed by value: the request, and the HTTP
-     * status, the SSE events and the response.
+     * status, the SSE events and the response. Each tree is scrubbed by value before it is added, not after the
+     * whole is serialized, so that a secret escaped by the JSON-P provider (a quote, a backslash, a control
+     * character, a non-ASCII character) is still found in its decoded form.
      */
     private static String details(JsonObject request, McpClient.Exchange exchange, Set<String> secrets) {
-        JsonObjectBuilder out = Json.createObjectBuilder().add("request", Secrets.mask(request));
+        JsonObjectBuilder out = Json.createObjectBuilder()
+                .add("request", Secrets.scrubTree(Secrets.mask(request), secrets));
         if (exchange != null) {
             out.add("status", exchange.status());
             if (!exchange.events().isEmpty()) {
                 JsonArrayBuilder events = Json.createArrayBuilder();
-                exchange.events().forEach(event -> events.add(Secrets.mask(event)));
+                exchange.events().forEach(event -> events.add(Secrets.scrubTree(Secrets.mask(event), secrets)));
                 out.add("events", events);
             }
-            out.add("response", Secrets.mask(exchange.response()));
+            out.add("response", Secrets.scrubTree(Secrets.mask(exchange.response()), secrets));
         }
-        return Secrets.scrub(out.build().toString(), secrets);
+        return out.build().toString();
     }
 
     /**

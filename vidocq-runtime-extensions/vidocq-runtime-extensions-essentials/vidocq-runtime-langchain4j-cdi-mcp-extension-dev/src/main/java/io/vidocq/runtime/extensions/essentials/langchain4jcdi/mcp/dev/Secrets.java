@@ -81,31 +81,83 @@ final class Secrets {
         return found;
     }
 
-    /** {@code text} with each of {@code secrets} of {@value #MIN_SCRUBBED} characters or more replaced. */
+    /**
+     * {@code value} with every {@link JsonString} leaf (never a member name) scrubbed of {@code secrets} (see
+     * {@link #scrub}), at any depth. Scrubbing the tree before it is serialized, rather than the serialized text,
+     * is what lets a secret containing a quote, a backslash, a control character or a non-ASCII character (escaped
+     * by the JSON-P provider) be found and replaced: as a decoded string it matches, where the escaped text would
+     * not.
+     */
+    static JsonValue scrubTree(JsonValue value, Collection<String> secrets) {
+        if (value instanceof JsonObject object) {
+            JsonObjectBuilder out = Json.createObjectBuilder();
+            object.forEach((name, member) -> out.add(name, scrubTree(member, secrets)));
+            return out.build();
+        }
+        if (value instanceof JsonArray array) {
+            JsonArrayBuilder out = Json.createArrayBuilder();
+            array.forEach(item -> out.add(scrubTree(item, secrets)));
+            return out.build();
+        }
+        if (value instanceof JsonString string) {
+            return Json.createValue(scrub(string.getString(), secrets));
+        }
+        return value;
+    }
+
+    /**
+     * {@code text} with each of {@code secrets} of {@value #MIN_SCRUBBED} characters or more replaced, along with
+     * its JSON-escaped form (what {@link Json#createValue(String)} would serialize it as, without the surrounding
+     * quotes): {@code text} may itself hold raw JSON (an SSE event, a response kept as text), where a secret with a
+     * quote, a backslash or another character the provider escapes appears in its escaped form instead of its
+     * decoded one.
+     */
     static String scrub(String text, Collection<String> secrets) {
         if (text == null) {
             return null;
         }
-        String out = text;
-        for (String secret : secrets.stream().sorted(Comparator.comparingInt(String::length).reversed()).toList()) {
+        Set<String> patterns = new LinkedHashSet<>();
+        for (String secret : secrets) {
             if (secret.length() >= MIN_SCRUBBED) {
-                out = out.replace(secret, MASK);
+                patterns.add(secret);
+                patterns.add(escapedBody(secret));
             }
         }
+        String out = text;
+        for (String pattern : patterns.stream().sorted(Comparator.comparingInt(String::length).reversed()).toList()) {
+            out = out.replace(pattern, MASK);
+        }
         return out;
+    }
+
+    /** {@code secret} as a JSON string's body, without its surrounding quotes. */
+    private static String escapedBody(String secret) {
+        String quoted = Json.createValue(secret).toString();
+        return quoted.substring(1, quoted.length() - 1);
     }
 
     private static void collect(JsonValue value, Set<String> found) {
         if (value instanceof JsonObject object) {
             object.forEach((name, member) -> {
-                if (secret(name) && member instanceof JsonString string) {
-                    found.add(string.getString());
+                if (secret(name)) {
+                    collectLeaves(member, found);
                 } else {
                     collect(member, found);
                 }
             });
         } else if (value instanceof JsonArray array) {
             array.forEach(item -> collect(item, found));
+        }
+    }
+
+    /** Every {@link JsonString} leaf beneath {@code value}, at any depth: the value of a secret-named member. */
+    private static void collectLeaves(JsonValue value, Set<String> found) {
+        if (value instanceof JsonString string) {
+            found.add(string.getString());
+        } else if (value instanceof JsonObject object) {
+            object.forEach((name, member) -> collectLeaves(member, found));
+        } else if (value instanceof JsonArray array) {
+            array.forEach(item -> collectLeaves(item, found));
         }
     }
 }

@@ -260,4 +260,44 @@ class McpInspectorTest {
         inspector.sample(sample);
         assertEquals("table", sample.kind("calls"));
     }
+
+    /**
+     * Fix round 1: a secret with a quote, a backslash, a tab or a non-ASCII character is escaped by the JSON-P
+     * provider when the exchange is serialized; scrubbing must happen on the decoded value, in the tree, not on the
+     * already-serialized text, or the escaped form of the very same secret survives.
+     */
+    @Test
+    void aSecretWithSpecialCharactersNeverLeaksInItsEscapedFormEither() {
+        for (String secret : List.of("sk-test\"quote", "a\\b\\c-1", "tab\there", "clé-secrète")) {
+            String arguments = Json.createObjectBuilder().add("query", "cats").add("apiKey", secret).build()
+                    .toString();
+            McpInspector inspector = McpInspector.of(McpCatalogue.of(List.of(InspectorFixtures.tool("search")),
+                    List.of(), List.of(), List.of()), stub.uri(), Duration.ofSeconds(5));
+
+            stub.respond(request -> StubMcp.error(request, 200, -32602, "Invalid key " + secret + " for query"));
+            PanelAction.ActionResult errorResult = action(inspector, "tool.search").call()
+                    .apply(Map.of("arguments", arguments));
+
+            assertEquals(secret, object(stub.received().getLast().body()).getJsonObject("params")
+                    .getJsonObject("arguments").getString("apiKey"), "the server receives the real value");
+            assertFalse(errorResult.summary().contains(secret), secret + " in " + errorResult.summary());
+            assertFalse(errorResult.details().contains(secret), secret + " in " + errorResult.details());
+            CallHistory.Call errorCall = inspector.history().calls().getFirst();
+            assertFalse(errorCall.details().contains(secret), secret + " in " + errorCall.details());
+            assertFalse(errorCall.replay().contains(secret), secret + " in " + errorCall.replay());
+
+            stub.respond(request -> StubMcp.result(request, Json.createObjectBuilder()
+                    .add("content", Json.createArrayBuilder().add(Json.createObjectBuilder().add("type", "text")
+                            .add("text", "key was " + secret)))
+                    .build().toString()));
+            PanelAction.ActionResult textResult = action(inspector, "tool.search").call()
+                    .apply(Map.of("arguments", arguments));
+
+            assertFalse(textResult.summary().contains(secret), secret + " in " + textResult.summary());
+            assertFalse(textResult.details().contains(secret), secret + " in " + textResult.details());
+            CallHistory.Call textCall = inspector.history().calls().getFirst();
+            assertFalse(textCall.details().contains(secret), secret + " in " + textCall.details());
+            assertFalse(textCall.replay().contains(secret), secret + " in " + textCall.replay());
+        }
+    }
 }
