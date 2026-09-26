@@ -18,8 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * The live mcp panel of the dev console, which only vidocq:dev adds (Vidocq/vidocq#143). This is also where the
- * MCP inspector will be built.
+ * The live mcp panel of the dev console and its MCP inspector, which only vidocq:dev adds (Vidocq/vidocq#143).
  */
 module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev {
     requires io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
@@ -30,6 +29,9 @@ module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev {
     // this module (Vidocq/vidocq#143). The runtime module requires it too, but not transitively, so it must
     // be required here again.
     requires dev.langchain4j.cdi.mcp.invoker.cdi41;
+    // The MCP inspector: JSON-RPC with the JSON-P langchain4j-cdi already brings, over the JDK's HTTP client.
+    requires jakarta.json;
+    requires java.net.http;
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel
             with io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev.McpLivePanel;
