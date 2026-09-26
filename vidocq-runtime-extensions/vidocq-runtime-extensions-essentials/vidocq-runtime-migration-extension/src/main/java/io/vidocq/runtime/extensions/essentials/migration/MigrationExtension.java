@@ -54,8 +54,8 @@ import java.util.stream.Collectors;
  * <p>Its section of the startup report, {@code migration}, says what each datasource's migration did, and
  * raises {@value #NOTHING_FOUND} for one that found no migration and has none in its schema history.
  *
- * <p>Implements {@link MigrationControl} and publishes itself through {@link MigrationLive} once a migrator is
- * selected, cleared first in {@link #onStop}: the {@code migration} panel of the {@code -dev} companion module
+ * <p>Publishes a {@link MigrationControl} through {@link MigrationLive} once a migrator is selected, cleared first
+ * in {@link #onStop}: the {@code migration} panel of the {@code -dev} companion module
  * reads it live, per datasource, its version, what the last run did, and, in a dev launch, the migrations applied
  * and pending, listed once after the boot's migration and again after each action, never while the page polls. In
  * a dev launch it offers two actions through that control: {@code migrate}, which applies the pending migrations
@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  * migrates it again, refused, with nothing dropped, unless {@code vidocq.migration[.<name>].cleanDisabled} is
  * {@code false}. The password of a datasource reaches neither the page nor the log.
  */
-public final class MigrationExtension implements VidocqExtension, StartupReportContributor, MigrationControl {
+public final class MigrationExtension implements VidocqExtension, StartupReportContributor {
 
     private static final System.Logger LOG = System.getLogger(MigrationExtension.class.getName());
 
@@ -156,7 +156,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         LOG.log(System.Logger.Level.INFO,
                 "Migration configured: engine=" + migrator.engine()
                         + " datasources=" + targets.stream().map(MigrationTarget::dataSourceName).toList());
-        MigrationLive.publish(this);
+        MigrationLive.publish(control);
     }
 
     @Override
@@ -247,23 +247,42 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
     // ── MigrationControl (read by the -dev panel through MigrationLive) ──────
 
     /**
-     * Per datasource, its version, what the last run did, whether its schema may be cleaned, and the migrations
-     * applied and pending when they were listed. Reads the outcomes kept in memory, nothing else: they were listed
-     * by {@link #onStart} or by the last action.
+     * What {@link MigrationLive} publishes: the extension is a public class in an exported package, so its
+     * operations stay package-private and only this adapter reaches them.
      */
-    @Override
-    public List<LiveOutcome> outcomes() {
-        return outcomes.stream()
-                .map(o -> new LiveOutcome(o.dataSourceName(), o.result().version(), o.lastRun(), o.cleanDisabled(),
-                        cleanDisabledKey(o.dataSourceName()), o.info(), o.infoAbsent()))
-                .toList();
+    private final class Control implements MigrationControl {
+
+        /**
+         * Per datasource, its version, what the last run did, whether its schema may be cleaned, and the migrations
+         * applied and pending when they were listed. Reads the outcomes kept in memory, nothing else: they were
+         * listed by {@link #onStart} or by the last action.
+         */
+        @Override
+        public List<LiveOutcome> outcomes() {
+            return outcomes.stream()
+                    .map(o -> new LiveOutcome(o.dataSourceName(), o.result().version(), o.lastRun(),
+                            o.cleanDisabled(), cleanDisabledKey(o.dataSourceName()), o.info(), o.infoAbsent()))
+                    .toList();
+        }
+
+        /** The datasources migrated, in configuration order; empty when there is no migrator. */
+        @Override
+        public List<String> dataSources() {
+            return targets.stream().map(MigrationTarget::dataSourceName).toList();
+        }
+
+        @Override
+        public String migrateNow(String dataSource) {
+            return MigrationExtension.this.migrateNow(dataSource);
+        }
+
+        @Override
+        public String cleanAndMigrate(String dataSource) {
+            return MigrationExtension.this.cleanAndMigrate(dataSource);
+        }
     }
 
-    /** The datasources migrated, in configuration order; empty when there is no migrator. */
-    @Override
-    public List<String> dataSources() {
-        return targets.stream().map(MigrationTarget::dataSourceName).toList();
-    }
+    private final MigrationControl control = new Control();
 
     /**
      * Applies the pending migrations of a datasource, as the boot did, and replaces its outcome.
@@ -271,8 +290,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
      * @param name the datasource
      * @return what was done, such as {@code default: 2 migrations applied, schema at version 3}
      */
-    @Override
-    public String migrateNow(String name) {
+    String migrateNow(String name) {
         MigrationTarget t = target(name);
         synchronized (lock(t)) {
             requireRunning();
@@ -289,8 +307,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
      * @param name the datasource
      * @return what was done, or why nothing was, naming the key to set
      */
-    @Override
-    public String cleanAndMigrate(String name) {
+    String cleanAndMigrate(String name) {
         MigrationTarget t = target(name);
         if (t.cleanDisabled()) {
             return name + ": clean refused, nothing dropped; set " + cleanDisabledKey(name) + "=false to allow it";
@@ -359,6 +376,11 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
             next.replaceAll(current -> current.dataSourceName().equals(o.dataSourceName()) ? o : current);
             outcomes = List.copyOf(next);
         }
+    }
+
+    /** The outcomes the report and the control read now, for the tests. */
+    List<Outcome> outcomes() {
+        return outcomes;
     }
 
     private Outcome outcome(String name) {

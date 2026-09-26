@@ -33,6 +33,8 @@ import io.vidocq.vauban.core.container.VaubanContainer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -46,6 +48,8 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -301,7 +305,8 @@ class MigrationExtensionTest {
         ext.contribute(new ReportContext(Verbosity.DETAILED), section);
 
         assertEquals("s3cr3t", schema.lastPassword, "the backend gets it");
-        for (String text : List.of(results.toString(), ext.outcomes().toString(), section.summary,
+        for (String text : List.of(results.toString(), ext.outcomes().toString(),
+                MigrationLive.control().outcomes().toString(), section.summary,
                 section.rows.toString(), schema.lastTarget.toString())) {
             assertFalse(text.contains("s3cr3t"), text);
         }
@@ -317,6 +322,27 @@ class MigrationExtensionTest {
                         type.getSimpleName() + "." + component.getName());
             }
         }
+    }
+
+    /**
+     * The extension is a public class in an exported package: its operations stay package-private, and what the
+     * {@code -dev} panel reaches is a private adapter published through {@link MigrationLive}.
+     */
+    @Test
+    void theControlIsAnAdapterAndTheOperationsStayPackagePrivate() {
+        MigrationExtension ext = booted(new SchemaFake("1"), Map.of("vidocq.pool.url", "jdbc:h2:mem:def"));
+        MigrationControl control = MigrationLive.control();
+
+        assertNotNull(control);
+        assertNotSame(ext, control);
+        assertFalse(MigrationControl.class.isAssignableFrom(MigrationExtension.class));
+        for (Method m : MigrationExtension.class.getDeclaredMethods()) {
+            if (Set.of("migrateNow", "cleanAndMigrate", "outcomes", "dataSources").contains(m.getName())) {
+                assertFalse(Modifier.isPublic(m.getModifiers()), m.toString());
+            }
+        }
+        assertEquals(List.of("default"), control.dataSources());
+        assertEquals("1", control.outcomes().get(0).version());
     }
 
     @Test
