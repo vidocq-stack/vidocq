@@ -39,6 +39,17 @@
             <artifactId>vidocq-runtime-devconsole-extension</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!--
+            Vidocq/vidocq#143: the mcp panel of the dev console moved to this -dev companion module, which only
+            vidocq:dev normally adds. I4 needs it on the launched JVM's module path too, run time only, exactly like
+            the console above: without it, the mcp section is written but no longer shown live.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</artifactId>
+            <version>${project.version}</version>
+            <scope>runtime</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

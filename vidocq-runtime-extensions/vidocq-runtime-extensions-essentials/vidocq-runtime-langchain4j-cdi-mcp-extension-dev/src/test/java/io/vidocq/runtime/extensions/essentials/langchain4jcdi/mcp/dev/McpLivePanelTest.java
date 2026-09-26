@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
 import dev.langchain4j.cdi.mcp.server.transport.McpNotificationBroadcaster;
 import dev.langchain4j.cdi.mcp.server.transport.McpResourceSubscriptionManager;
@@ -25,8 +25,8 @@ import dev.langchain4j.cdi.mcp.server.transport.McpRootsManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerRequestManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSessionManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSubscriptionRegistry;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.vauban.core.container.VaubanContainer;
@@ -36,21 +36,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * U5 of Vidocq/vidocq#94: the {@code mcp} panel shown live. What it samples before the server has served anything,
- * that sampling creates nothing — the test that actually protects the contract — how long a sample takes, that a
- * stopped extension writes nothing, and that a twin server leaves the panel inert.
+ * U5 of Vidocq/vidocq#94, moved here by Vidocq/vidocq#143: the {@code mcp} panel shown live. What it samples before
+ * the server has served anything, that sampling creates nothing — the test that actually protects the contract —
+ * how long a sample takes, that a stopped panel writes nothing, and that a twin server leaves the panel inert.
  */
-class McpPanelTest {
+class McpLivePanelTest {
 
     /** The MCP server beans of a container, with everything their injection points need. */
     private static final Class<?>[] SERVER_BEANS = {
@@ -62,17 +60,16 @@ class McpPanelTest {
     private static final List<String> ALL_KEYS = List.of(
             "sessions", "streams", "listens", "pending", "invoker.methods", "invoker.matches", "invoker.misses");
 
-    private final McpExtension extension = new McpExtension();
+    private final McpLivePanel panel = new McpLivePanel();
 
     @AfterEach
     void stop() {
-        extension.onStop();
+        panel.stop();
     }
 
     @Test
-    void itIsADevConsolePanelThatPlotsConnectionsAndServerRequests() {
-        DevConsolePanel panel = assertInstanceOf(DevConsolePanel.class, extension);
-
+    void itMakesTheMcpSectionLiveWithItsCharts() {
+        assertEquals("mcp", panel.id());
         assertEquals(List.of("connections", "server-requests"), panel.charts().stream().map(Chart::id).toList());
         Chart connections = panel.charts().get(0);
         assertEquals("Connections", connections.title());
@@ -92,7 +89,7 @@ class McpPanelTest {
         try (VaubanContainer container = started()) {
             RecordingSample sample = new RecordingSample();
 
-            extension.sample(sample);
+            panel.sample(sample);
 
             assertEquals(ALL_KEYS, List.copyOf(sample.keys()));
             assertEquals("absent", sample.kind("sessions"));
@@ -129,7 +126,7 @@ class McpPanelTest {
             assertEquals(0, registry.size(), "the client proxy did not create the instance behind it");
 
             RecordingSample sample = new RecordingSample();
-            extension.sample(sample);
+            panel.sample(sample);
 
             assertEquals("gauge", sample.kind("listens"));
             assertEquals(0.0, sample.number("listens"));
@@ -152,7 +149,7 @@ class McpPanelTest {
                     "the session manager already existed before the sample");
             assertFalse(cleanupThreadAlive(), "the mcp-session-cleanup thread was already running");
 
-            extension.sample(new RecordingSample());
+            panel.sample(new RecordingSample());
 
             assertNull(beans.getContext(sessionManager.getScope()).get(sessionManager),
                     "sample() created the McpSessionManager bean: it must read Context.get(bean), never a proxy");
@@ -169,11 +166,11 @@ class McpPanelTest {
     void aSampleTakesUnderFiveMilliseconds() {
         try (VaubanContainer container = started()) {
             for (int warmup = 0; warmup < 100; warmup++) {
-                extension.sample(new RecordingSample());
+                panel.sample(new RecordingSample());
             }
 
             long start = System.nanoTime();
-            extension.sample(new RecordingSample());
+            panel.sample(new RecordingSample());
             long elapsedNanos = System.nanoTime() - start;
 
             assertTrue(elapsedNanos < 5_000_000L, "a sample took " + elapsedNanos / 1_000 + " us, over the 5 ms"
@@ -182,17 +179,17 @@ class McpPanelTest {
     }
 
     @Test
-    void afterOnStopTheSampleWritesNothing() {
+    void afterStopTheSampleWritesNothing() {
         try (VaubanContainer container = started()) {
             RecordingSample before = new RecordingSample();
-            extension.sample(before);
+            panel.sample(before);
             assertFalse(before.isEmpty(), "the panel wrote nothing while the container was up");
 
-            extension.onStop();
+            panel.stop();
 
             RecordingSample after = new RecordingSample();
-            extension.sample(after);
-            assertTrue(after.isEmpty(), "the panel wrote " + after.keys() + " after onStop");
+            panel.sample(after);
+            assertTrue(after.isEmpty(), "the panel wrote " + after.keys() + " after stop");
         }
     }
 
@@ -214,19 +211,18 @@ class McpPanelTest {
     }
 
     @Test
-    void beforeOnStartTheSampleWritesNothing() {
+    void beforeStartTheSampleWritesNothing() {
         RecordingSample sample = new RecordingSample();
 
-        new McpExtension().sample(sample);
+        new McpLivePanel().sample(sample);
 
         assertTrue(sample.isEmpty());
     }
 
-    /** A container with the MCP server's beans, with {@code extension} started on it. */
+    /** A container with the MCP server's beans, with {@code panel} started on it. */
     private VaubanContainer started() {
-        extension.configure(McpConfigMappingTest.config(Map.of()));
-        VaubanContainer container = McpTestContainers.container(extension, SERVER_BEANS);
-        extension.onStart(new FakeExtensionContext(container));
+        VaubanContainer container = McpTestContainers.container(SERVER_BEANS);
+        panel.start(new FakeExtensionContext(container));
         return container;
     }
 

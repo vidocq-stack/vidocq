@@ -30,6 +30,7 @@ import dev.langchain4j.cdi.mcp.server.transport.McpEndpoint;
 import dev.langchain4j.cdi.mcp.server.transport.McpMrtrMode;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfigResolver;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.report.Verbosity;
 import org.junit.jupiter.api.Test;
 

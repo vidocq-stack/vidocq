@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfigResolver;
 import io.vidocq.vauban.core.container.VaubanContainer;
@@ -26,23 +26,21 @@ import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 /**
  * Real Vauban containers for the tests that need one: no HTTP, no port, no classpath scan.
  *
- * <p>Public, and its one method too: {@code io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live}'s tests
- * (a different package, same module) build the same containers to drive {@code McpInspection} (Vidocq/vidocq#143).
+ * <p>Copied from the runtime module's own test fixture (Vidocq/vidocq#143), simplified: {@code McpLivePanel} never
+ * calls {@code McpExtension#beforeStart}, so this copy builds the container directly instead of taking an
+ * {@code McpExtension} to configure it with — which would need the runtime module's base package, never exported to
+ * this one.
  */
-public final class McpTestContainers {
+final class McpTestContainers {
 
     private McpTestContainers() {}
 
-    /**
-     * A container holding langchain4j-cdi's {@link McpServerConfigResolver}, {@code extra}, and whatever
-     * {@link McpExtension#beforeStart} adds after {@code extension} was configured.
-     */
-    public static VaubanContainer container(McpExtension extension, Class<?>... extra) {
+    /** A container holding langchain4j-cdi's {@link McpServerConfigResolver} and {@code extra}. */
+    static VaubanContainer container(Class<?>... extra) {
         VaubanContainerBuilder builder = VaubanContainer.builder().addBeanClass(McpServerConfigResolver.class);
         for (Class<?> type : extra) {
             builder.addBeanClass(type);
         }
-        extension.beforeStart(builder);
         return builder.build();
     }
 }

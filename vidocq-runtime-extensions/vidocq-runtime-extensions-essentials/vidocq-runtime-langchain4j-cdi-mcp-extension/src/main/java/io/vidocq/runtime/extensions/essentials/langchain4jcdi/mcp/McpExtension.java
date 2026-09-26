@@ -21,18 +21,15 @@ package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
 
 import dev.langchain4j.cdi.mcp.server.transport.McpEndpoint;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
-import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -45,15 +42,16 @@ import java.util.Set;
  *       {@code @Named("mcp-server")} bean langchain4j-cdi reads, only when a key is set.</li>
  *   <li>{@link #contribute} writes the {@code mcp} section of the startup report and raises
  *       {@code VIDOCQ-MCP-001} to {@code 005}.</li>
- *   <li>That section is also the {@code mcp} panel of the dev console, shown live: {@link #charts} and
- *       {@link #sample} add the values that change while the server runs. See {@link McpLiveBeans} for how they are
- *       read without creating a single bean.</li>
+ *   <li>That section is also the {@code mcp} panel of the dev console, shown live: the companion module
+ *       {@code vidocq-runtime-langchain4j-cdi-mcp-extension-dev} (Vidocq/vidocq#143), which only {@code vidocq:dev}
+ *       adds, reads {@link McpInspection} to sample the values that change while the server runs, without creating a
+ *       single bean.</li>
  * </ul>
  *
  * <p>Priority {@code 600}: after Cassini ({@code 500}), whose section, when it declares routes, comes first, so
  * that the {@code mcp} section can print the absolute URL of {@code /mcp}.
  */
-public final class McpExtension implements VidocqExtension, DevConsolePanel {
+public final class McpExtension implements VidocqExtension, StartupReportContributor {
 
     static final String NAME = "langchain4j-cdi-mcp";
     static final int PRIORITY = 600;
@@ -62,24 +60,10 @@ public final class McpExtension implements VidocqExtension, DevConsolePanel {
 
     private static final System.Logger LOG = System.getLogger(McpExtension.class.getName());
 
-    /**
-     * What the page plots. The three invoker values get no chart: they count distinct methods, so they grow once
-     * per method and then stop, and a curve of them would read as traffic.
-     */
-    private static final List<Chart> CHARTS = List.of(
-            new Chart("connections", "Connections",
-                    List.of(Series.area("sessions"), Series.line("streams"), Series.line("listens"))),
-            new Chart("server-requests", "Server-to-client requests", List.of(Series.line("pending"))));
-
     /** What the {@code vidocq.mcp.*} keys describe; {@code null} when none is set. */
     private volatile McpServerConfig mapped;
     /** What {@link #onStart} read from the container; {@link McpInspection#NOTHING} before and after. */
     private volatile McpInspection inspection = McpInspection.NOTHING;
-    /**
-     * The beans {@link #sample} reads, resolved once in {@link #onStart}; {@link McpLiveBeans#NONE} before it,
-     * after {@link #onStop}, and on a twin server, which leaves the panel inert.
-     */
-    private volatile McpLiveBeans live = McpLiveBeans.NONE;
 
     /** Created by the {@link java.util.ServiceLoader}. */
     public McpExtension() {}
@@ -117,21 +101,19 @@ public final class McpExtension implements VidocqExtension, DevConsolePanel {
     }
 
     /**
-     * Reads the container's metadata once: the facts of the boot, then the beans the panel samples. A twin MCP
-     * server ({@code VIDOCQ-MCP-003}) is reported but never sampled: its beans are another copy of the classes this
-     * extension links to, so nothing it holds can be read from here.
+     * Reads the container's metadata once: the facts of the boot, which {@link #contribute} writes and the
+     * {@code mcp} live panel of the {@code -dev} companion module reads again from the same container. A twin MCP
+     * server ({@code VIDOCQ-MCP-003}) is reported but never sampled by that panel: its beans are another copy of
+     * the classes this extension links to, so nothing it holds can be read.
      */
     @Override
     public void onStart(ExtensionContext context) {
-        McpInspection read = McpInspection.of(context.beanManager());
-        inspection = read;
-        live = McpLiveBeans.of(read, context.beanManager());
+        inspection = McpInspection.of(context.beanManager());
     }
 
-    /** Clears what {@link #sample} reads first, before anything else it refers to may be closed. */
+    /** Clears what {@link #contribute} last read, before anything it refers to may be closed. */
     @Override
     public void onStop() {
-        live = McpLiveBeans.NONE;
         inspection = McpInspection.NOTHING;
         McpServerConfigProducer.config = null;
     }
@@ -149,20 +131,5 @@ public final class McpExtension implements VidocqExtension, DevConsolePanel {
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
         McpStartupSection.write(inspection, mapped != null, McpEndpoint.class.getModule(), context, section);
-    }
-
-    @Override
-    public List<Chart> charts() {
-        return CHARTS;
-    }
-
-    /**
-     * The live values of the MCP server, from the beans {@link #onStart} resolved: counters kept in memory, read
-     * without a lock, without I/O and without creating a bean. Nothing before {@code onStart}, nothing after
-     * {@code onStop}, and nothing on a twin server.
-     */
-    @Override
-    public void sample(PanelSample sample) {
-        live.sample(sample);
     }
 }

@@ -56,15 +56,11 @@
     </properties>
 
     <dependencies>
+        <!-- VidocqExtension and the report types: the mcp section, shown live by the -dev companion module
+             (Vidocq/vidocq#143). This module is small and brings only vidocq-runtime-spi. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
-        </dependency>
-        <!-- McpExtension is its own dev console panel: the mcp section of the report, shown live. This module is
-             small and brings only vidocq-runtime-spi. -->
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

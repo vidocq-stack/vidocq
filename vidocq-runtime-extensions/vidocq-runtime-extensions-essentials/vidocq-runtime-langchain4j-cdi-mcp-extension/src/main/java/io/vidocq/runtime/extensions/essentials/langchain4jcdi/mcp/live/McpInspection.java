@@ -17,10 +17,11 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live;
 
 import dev.langchain4j.cdi.mcp.server.registry.McpToolRegistry;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerConfig;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.McpServerConfigProducer;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.Bean;
@@ -29,17 +30,19 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import java.util.Set;
 
 /**
- * What {@link McpExtension#onStart} reads from the container's metadata, once, without creating a bean.
+ * What {@code McpExtension#onStart} reads from the container's metadata, once, without creating a bean. Also read by
+ * the {@code mcp} live panel of the dev console (Vidocq/vidocq#143), which only {@code vidocq:dev} adds: that is why
+ * this record, and this package, is {@code exports ... to ....mcp.dev} of the runtime extension's module.
  *
  * @param twin                 langchain4j-cdi's beans come from another copy of its classes than the one this
  *                             extension links to: the MCP server was loaded twice ({@code VIDOCQ-MCP-003})
  * @param namedConfigBeans     how many {@code @Named("mcp-server")} {@link McpServerConfig} beans exist
  * @param configFromExtension  whether one of them is produced by {@link McpServerConfigProducer}
  */
-record McpInspection(boolean twin, int namedConfigBeans, boolean configFromExtension) {
+public record McpInspection(boolean twin, int namedConfigBeans, boolean configFromExtension) {
 
     /** Before {@code onStart}, or when the container cannot be read: nothing known. */
-    static final McpInspection NOTHING = new McpInspection(false, 0, false);
+    public static final McpInspection NOTHING = new McpInspection(false, 0, false);
 
     /** The qualifier langchain4j-cdi's {@code McpServerConfigResolver} injects. */
     static final String CONFIG_BEAN_NAME = "mcp-server";
@@ -50,7 +53,7 @@ record McpInspection(boolean twin, int namedConfigBeans, boolean configFromExten
      * @param beans the bean manager of the started container
      * @return what was read; {@link #NOTHING} when the container cannot be read
      */
-    static McpInspection of(BeanManager beans) {
+    public static McpInspection of(BeanManager beans) {
         try {
             Bean<?> registry = null;
             for (Bean<?> bean : beans.getBeans(Object.class, Any.Literal.INSTANCE)) {

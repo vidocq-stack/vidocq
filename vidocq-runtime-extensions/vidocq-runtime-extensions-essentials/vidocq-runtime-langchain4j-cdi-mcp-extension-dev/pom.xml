@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+  ~
+  ~ This program and the accompanying materials are made available under the
+  ~ terms of the Eclipse Public License 2.0 which is available at
+  ~ https://www.eclipse.org/legal/epl-2.0/
+  ~
+  ~ This Source Code may also be made available under the following Secondary
+  ~ Licenses when the conditions for such availability set forth in the Eclipse
+  ~ Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+  ~ or any later version, which is available at
+  ~ https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+  ~
+  ~ It is also made available under the European Union Public Licence v. 1.2,
+  ~ which is available at
+  ~ https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+  ~
+  ~ SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+  -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+        <artifactId>vidocq-runtime-extensions-essentials</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</artifactId>
+    <name>Vidocq :: Extensions :: Essentials :: langchain4j-cdi MCP server :: dev console panel</name>
+    <description>The live mcp panel of the dev console. Only vidocq:dev adds it; no binary contains it
+        (Vidocq/vidocq#143). This is also where the MCP inspector will be built.</description>
+
+    <properties>
+        <!--
+            Same reason as vidocq-runtime-langchain4j-cdi-mcp-extension's own properties: not released while
+            langchain4j-cdi is a SNAPSHOT (Vidocq/vidocq#94, decision 4). Remove all five once that module's do.
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Not in the root pom's dependencyManagement: neither is the runtime extension itself (Vidocq/vidocq#94,
+             decision 4, both left out while langchain4j-cdi is a SNAPSHOT), so the version is stated here. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+            <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <!-- Vidocq/vidocq#143: a dev tool; vidocq:dev adds it, no binary ever contains it. -->
+                            <Vidocq-Dev-Only>true</Vidocq-Dev-Only>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+            <!--
+                module-info.java lives in the standard src/main/java, so it compiles normally. Surefire still
+                must not fork on the module path: with no module descriptor of its own, the test sources would
+                need every dependency module explicitly, which the reactor does not resolve here. Same pattern
+                as every other -dev module of Vidocq/vidocq#143 (Tasks 7-11).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

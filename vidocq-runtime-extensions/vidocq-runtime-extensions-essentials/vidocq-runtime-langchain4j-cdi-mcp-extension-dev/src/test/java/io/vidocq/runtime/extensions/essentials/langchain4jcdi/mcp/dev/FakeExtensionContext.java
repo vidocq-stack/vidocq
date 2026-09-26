@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -25,8 +25,9 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.vauban.core.container.VaubanContainer;
 
 /**
- * The context {@link McpExtension#onStart} needs: a started container, and nothing else. {@code onStart} reads the
- * bean manager only, which {@link ExtensionContext#beanManager()} takes from the container.
+ * The context {@link McpLivePanel#start} needs: a started container, and nothing else. {@code start} reads the bean
+ * manager only, which {@link ExtensionContext#beanManager()} takes from the container. Copied from the runtime
+ * module's own test fixture (Vidocq/vidocq#143), unchanged.
  *
  * @param container the started container
  */
@@ -34,11 +35,11 @@ record FakeExtensionContext(VaubanContainer container) implements ExtensionConte
 
     @Override
     public VidocqConfiguration configuration() {
-        throw new UnsupportedOperationException("onStart reads the bean manager only");
+        throw new UnsupportedOperationException("start reads the bean manager only");
     }
 
     @Override
     public VidocqConfig config() {
-        throw new UnsupportedOperationException("onStart reads the bean manager only");
+        throw new UnsupportedOperationException("start reads the bean manager only");
     }
 }

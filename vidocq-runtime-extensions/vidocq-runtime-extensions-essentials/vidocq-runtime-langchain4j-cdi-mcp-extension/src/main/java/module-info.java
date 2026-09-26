@@ -18,15 +18,13 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Hosts a langchain4j-cdi MCP server on Vidocq: the server's bean list, the {@code vidocq.mcp.*} keys, the
- * {@code mcp} section of the startup report, and that section shown live as the dev console's {@code mcp} panel.
+ * Hosts a langchain4j-cdi MCP server on Vidocq: the server's bean list, the {@code vidocq.mcp.*} keys, and the
+ * {@code mcp} section of the startup report. That section is shown live as the dev console's {@code mcp} panel by
+ * the companion module {@code vidocq-runtime-langchain4j-cdi-mcp-extension-dev} (Vidocq/vidocq#143), which only
+ * {@code vidocq:dev} adds and which reads the {@code .live} package below.
  */
 module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp {
     requires transitive io.vidocq.runtime.spi;
-    // McpExtension is its own dev console panel: its report section, shown live. Hard, not static: a class does
-    // not load without the interfaces it implements. Transitive, as io.vidocq.runtime.spi above, so that a module
-    // reading this one sees the SPI McpExtension is typed with; the module is small and brings only that SPI.
-    requires transitive io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.vauban.core;
     requires jakarta.cdi;
     requires jakarta.inject;
@@ -40,6 +38,10 @@ module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp {
 
     // Vauban creates McpServerConfigProducer and calls its producer method reflectively: this module has no APT.
     opens io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+
+    // What the mcp panel of the -dev module reads (Vidocq/vidocq#143); no other module sees it.
+    exports io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live
+            to io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.McpExtension;

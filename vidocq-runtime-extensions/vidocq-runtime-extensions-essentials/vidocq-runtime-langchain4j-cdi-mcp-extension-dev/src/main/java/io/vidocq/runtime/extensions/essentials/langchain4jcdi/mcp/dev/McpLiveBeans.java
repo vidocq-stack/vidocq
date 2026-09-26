@@ -17,13 +17,14 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp;
+package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev;
 
 import dev.langchain4j.cdi.mcp.invoker.cdi41.McpCdi41InvokerProvider;
 import dev.langchain4j.cdi.mcp.server.transport.McpNotificationBroadcaster;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerRequestManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSessionManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSubscriptionRegistry;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Unit;
 import jakarta.enterprise.context.spi.Context;
@@ -33,8 +34,8 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import java.util.function.ToIntFunction;
 
 /**
- * The beans the {@code mcp} dev console panel reads, resolved once in {@link McpExtension#onStart} and never
- * created: the immutable snapshot {@link McpExtension#sample} reads.
+ * The beans the {@code mcp} dev console panel reads, resolved once in {@link McpLivePanel#start} and never created:
+ * the immutable snapshot {@link McpLivePanel#sample} reads.
  *
  * <p><b>Why bean metadata rather than a proxy.</b> Holding a client proxy obtained at boot and calling it from
  * {@code sample} would create the bean on the first poll of the dev console page — for {@link McpSessionManager}
