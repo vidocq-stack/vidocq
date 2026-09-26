@@ -46,7 +46,8 @@ public final class ApplicationLaunch {
     }
 
     /**
-     * The module path of the child JVM.
+     * The module path of the child JVM, keeping every declared jar — including one marked
+     * {@link DevOnlyJars#MANIFEST_ENTRY dev-only} (Ruling 6: {@code vidocq:dev} keeps a declared console).
      *
      * @param project     the project being run
      * @param buildDir    {@code target/}, where {@code vauban:modularize} writes its copies
@@ -57,6 +58,26 @@ public final class ApplicationLaunch {
      */
     public static List<Path> modulePath(MavenProject project, Path buildDir, Path classesDir, boolean layerMode,
                                         Consumer<Path> modularized) {
+        return modulePath(project, buildDir, classesDir, layerMode, modularized, false, id -> { });
+    }
+
+    /**
+     * The module path of the child JVM, optionally dropping every jar marked
+     * {@link DevOnlyJars#MANIFEST_ENTRY dev-only} (Vidocq/vidocq#143): no binary produced by
+     * {@code vidocq:run}, {@code vidocq:package} or {@code vidocq:jlink} may carry a development tool, even
+     * when the project declares it as a dependency.
+     *
+     * @param project     the project being run
+     * @param buildDir    {@code target/}, where {@code vauban:modularize} writes its copies
+     * @param classesDir  {@code target/classes}
+     * @param layerMode   universal-loader mode: the application classes travel through
+     *                    {@code -Dvidocq.app.path} instead, since a module must not be on both paths
+     * @param modularized called with each dependency jar that a modularized copy replaces
+     * @param dropDevOnly when {@code true}, an artifact whose jar is dev-only is left off the path
+     * @param dropped     called with the artifact id of each dev-only jar that was dropped
+     */
+    public static List<Path> modulePath(MavenProject project, Path buildDir, Path classesDir, boolean layerMode,
+                                        Consumer<Path> modularized, boolean dropDevOnly, Consumer<String> dropped) {
         List<Path> entries = new ArrayList<>();
         if (!layerMode) {
             entries.add(classesDir);
@@ -64,6 +85,10 @@ public final class ApplicationLaunch {
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                 Path jar = artifact.getFile().toPath();
+                if (dropDevOnly && DevOnlyJars.isDevOnly(jar)) {
+                    dropped.accept(artifact.getArtifactId());
+                    continue;
+                }
                 Path resolved = ModularizedJars.resolve(buildDir, jar);
                 if (!resolved.equals(jar)) {
                     modularized.accept(jar);

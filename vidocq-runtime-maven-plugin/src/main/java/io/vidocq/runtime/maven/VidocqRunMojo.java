@@ -204,7 +204,8 @@ public class VidocqRunMojo extends AbstractMojo {
         // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
         // classes stay off the module path and boot in a Vauban-defined module layer.
         List<Path> modulePath = ApplicationLaunch.modulePath(project, build, classes, true,
-                jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()));
+                jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()), true,
+                id -> getLog().warn(DevOnlyJars.droppedWarning(id)));
         List<Path> appPath = ApplicationLaunch.appPath(classes, true);
         Map<String, String> systemProperties = buildSystemProperties();
         List<String> jvmArgs = buildJvmArgs();

@@ -156,6 +156,10 @@ public class VidocqJlinkMojo extends AbstractMojo {
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {
+                if (DevOnlyJars.isDevOnly(f.toPath())) {
+                    getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
+                    continue;
+                }
                 // Prefer a sealed/repackaged copy (cassini-maven-plugin) when one exists for this
                 // artifact: same module name, but the resource package is closed and the adapters are
                 // published via `provides`. Staged under the ORIGINAL filename for consistency.

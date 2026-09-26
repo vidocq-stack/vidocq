@@ -129,6 +129,10 @@ public class VidocqPackageMojo extends AbstractMojo {
             // copy, under the original file name.
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
+                    if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
+                        getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
+                        continue;
+                    }
                     Path original = artifact.getFile().toPath();
                     Path src = ModularizedJars.resolve(buildDir.toPath(), original);
                     if (!src.equals(original)) {
