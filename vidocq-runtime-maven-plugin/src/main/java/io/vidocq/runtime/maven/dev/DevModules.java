@@ -127,7 +127,8 @@ final class DevModules {
             if (onPath.contains(key)) {
                 continue;
             }
-            // The base version: a remote snapshot resolves at its timestamp, the companion has a build number of its own.
+            // The base version: a remote snapshot resolves at its timestamp, and the companion has a build number
+            // of its own.
             String coordinates = key + ":" + artifact.getBaseVersion();
             List<Resolved> resolved;
             try {

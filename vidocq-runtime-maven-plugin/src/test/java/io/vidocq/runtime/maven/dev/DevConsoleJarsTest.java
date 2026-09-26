@@ -87,7 +87,7 @@ class DevConsoleJarsTest {
         assertEquals(Set.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY), addedKeys);
     }
 
-    /** The dev services step already put the SPI on the path under vidocq:dev: the console step adds the console only. */
+    /** Under vidocq:dev the dev services step already put the SPI on the path: the console step adds the console. */
     @Test
     void aJarAnEarlierStepAddedIsNotAddedAgain(@TempDir Path dir) throws Exception {
         Artifact chappe = artifact("io.vidocq.runtime.extensions.essentials",
