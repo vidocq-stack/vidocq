@@ -98,6 +98,32 @@
                     <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
+            <!--
+                StubMcp (Vidocq/vidocq#143, Task 7) opens a com.sun.net.httpserver.HttpServer to stand in for the
+                application's /mcp. Because src/main/java carries a module-info.java, the compiler plugin patches
+                the test sources into that module for testCompile, so the module itself - not the unnamed module -
+                needs a readability edge to the JDK's own jdk.httpserver module; this is test-only, so it is added
+                here rather than as a module-info.java requires.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs>
+                                <!-- jdk.httpserver is not on any module's requires graph here, so it must also be
+                                     added as a root module before an add-reads edge to it resolves. -->
+                                <arg>--add-modules</arg>
+                                <arg>jdk.httpserver</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev=jdk.httpserver</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
