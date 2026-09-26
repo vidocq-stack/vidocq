@@ -19,17 +19,10 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
 
-import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.RecordedSample.Absent;
-import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.RecordedSample.Counter;
-import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.RecordedSample.Elapsed;
-import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.RecordedSample.Gauge;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.RecordedSection.Anomaly;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.TestContexts.ReportContext;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.TestContexts.StartContext;
-import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.Series;
-import io.vidocq.runtime.spi.devconsole.Unit;
+import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live.MansartPoolsLive;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.Verbosity;
@@ -37,7 +30,6 @@ import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.sql.Connection;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,16 +37,16 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Mansart pool panel: {@link MansartPoolExtension} is its own {@link DevConsolePanel}, so its section of the
- * startup report is also a live panel of the dev console. Its boot facts are written into a {@link RecordedSection}
- * and its live values into a {@link RecordedSample}, as the report and the console would receive them.
+ * The {@code mansart-pool} section of the startup report {@link MansartPoolExtension} writes. Its boot facts are
+ * written into a {@link RecordedSection}, as the report would receive them. Since Vidocq/vidocq#143, its live
+ * values are read by the {@code vidocq-runtime-mansart-pool-extension-dev} companion instead — see
+ * {@code PoolsLivePanelTest} there.
  */
-class MansartPoolPanelTest {
+class MansartPoolSectionTest {
 
     /** The password of the pools configured below: it must never be written anywhere. */
     private static final String PASSWORD = "pw-4udit-1";
@@ -67,7 +59,7 @@ class MansartPoolPanelTest {
     }
 
     private static String h2(String name) {
-        return "jdbc:h2:mem:panel-" + name + "-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        return "jdbc:h2:mem:section-" + name + "-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
     }
 
     /** Configures the extension and opens its pools, as Vidocq does before the container starts. */
@@ -86,23 +78,11 @@ class MansartPoolPanelTest {
         return section;
     }
 
-    private RecordedSample sample() {
-        RecordedSample sample = new RecordedSample();
-        ext.sample(sample);
-        return sample;
-    }
-
     @Test
-    void theExtensionIsItsOwnPanel() {
-        assertInstanceOf(DevConsolePanel.class, ext, "found with no second declaration");
+    void theExtensionContributesItsSection() {
         assertInstanceOf(StartupReportContributor.class, ext);
         assertEquals("mansart-pool", ext.id());
         assertEquals("Mansart pools", ext.title());
-        assertEquals(List.of(
-                        new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
-                                Series.line("waiting"), Series.ceiling("active"))),
-                        new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts")))),
-                ext.charts());
     }
 
     @Test
@@ -114,9 +94,6 @@ class MansartPoolPanelTest {
         assertEquals("idle: no vidocq.pool[.<name>].url", section.summary());
         assertEquals(List.of(), section.rows());
         assertEquals(List.of(), section.anomalies());
-        RecordedSample sample = sample();
-        assertEquals(List.of(), sample.groupNames());
-        assertEquals(List.of(), sample.keys());
     }
 
     /** A @Default H2 pool and a named PostgreSQL pool whose URL carries credentials; neither is connected. */
@@ -148,7 +125,7 @@ class MansartPoolPanelTest {
                 "@Default password",
                 "audit", "audit user", "audit size", "audit timeouts", "audit checks", "audit password",
                 "audit url credentials"), section.keys());
-        assertTrue(section.value("@Default").startsWith("jdbc:h2:mem:panel-default-"), section.value("@Default"));
+        assertTrue(section.value("@Default").startsWith("jdbc:h2:mem:section-default-"), section.value("@Default"));
         assertEquals("sa", section.value("@Default user"));
         assertEquals("min idle 0 (boot only), max 8", section.value("@Default size"));
         assertEquals("acquire PT5S, idle PT10M, lifetime PT30M", section.value("@Default timeouts"));
@@ -231,78 +208,9 @@ class MansartPoolPanelTest {
         boot("vidocq.pool.url", h2("unnamed"), "vidocq.pool.default.url", h2("named"));
 
         assertEquals("2 pools (@Default, default), 20 connections max", facts(LaunchMode.DEV).summary());
-        assertEquals(List.of("@Default", "default"), sample().groupNames());
-    }
-
-    @Test
-    void eachPoolIsAGroupOfLiveValues() throws Exception {
-        boot("vidocq.pool.url", h2("default"), "vidocq.pool.maxSize", "8",
-                "vidocq.pool.audit.url", h2("audit"), "vidocq.pool.audit.maxSize", "4",
-                "vidocq.pool.audit.leakDetectionThreshold", "PT30S");
-
-        RecordedSample held;
-        try (Connection borrowed = ext.pool().getConnection()) {
-            assertNotNull(borrowed);
-            held = sample();
-        }
-        RecordedSample released = sample();
-
-        assertEquals(List.of(), held.keys(), "every value belongs to a pool");
-        assertEquals(List.of("@Default", "audit"), held.groupNames());
-        RecordedSample busy = held.written("@Default");
-        assertEquals(List.of("active", "idle", "waiting", "borrows", "timeouts", "leaks", "mean-borrow"), busy.keys());
-        assertEquals(new Gauge(1, 8.0, Unit.COUNT), busy.value("active"));
-        assertEquals(new Gauge(0, 8.0, Unit.COUNT), busy.value("idle"));
-        assertEquals(new Gauge(0, null, Unit.COUNT), busy.value("waiting"), "an estimate, with no max");
-        assertEquals(new Counter(1, Unit.COUNT), busy.value("borrows"));
-        assertEquals(new Counter(0, Unit.COUNT), busy.value("timeouts"));
-        assertEquals(new Absent("leak detection off"), busy.value("leaks"), "off, never a zero");
-        Elapsed mean = assertInstanceOf(Elapsed.class, busy.value("mean-borrow"));
-        assertFalse(mean.value().isNegative());
-
-        RecordedSample idle = released.written("@Default");
-        assertEquals(new Gauge(0, 8.0, Unit.COUNT), idle.value("active"));
-        assertEquals(new Gauge(1, 8.0, Unit.COUNT), idle.value("idle"));
-        assertEquals(new Counter(1, Unit.COUNT), idle.value("borrows"));
-
-        RecordedSample audit = released.written("audit");
-        assertEquals(new Gauge(0, 4.0, Unit.COUNT), audit.value("active"));
-        assertEquals(new Counter(0, Unit.COUNT), audit.value("leaks"), "leak detection on: a count");
-        assertEquals(new Absent("no borrow yet"), audit.value("mean-borrow"), "no mean of nothing");
-    }
-
-    @Test
-    void everyChartPlotsValuesTheSampleWrites() {
-        boot("vidocq.pool.url", h2("default"), "vidocq.pool.audit.url", h2("audit"));
-        RecordedSample sample = sample();
-
-        for (String pool : sample.groupNames()) {
-            RecordedSample group = sample.written(pool);
-            for (Chart chart : ext.charts()) {
-                for (Series series : chart.series()) {
-                    RecordedSample.Value value = group.value(series.key());
-                    if (series.style() == Series.Style.RATE) {
-                        assertInstanceOf(Counter.class, value, chart.id() + " " + series);
-                    } else {
-                        Gauge gauge = assertInstanceOf(Gauge.class, value, chart.id() + " " + series);
-                        if (series.style() == Series.Style.CEILING) {
-                            assertNotNull(gauge.max(), chart.id() + ": a ceiling needs a max");
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    void onceStoppedThePanelShowsNoPool() {
-        boot("vidocq.pool.url", h2("default"), "vidocq.pool.audit.url", h2("audit"));
-        assertEquals(2, sample().groupNames().size());
-
-        ext.onStop();
-
-        assertEquals(List.of(), sample().groupNames(), "a poll during a dev reload reads no closed pool");
-        assertEquals("idle: no vidocq.pool[.<name>].url", facts(LaunchMode.DEV).summary());
+        assertEquals(List.of("@Default", "default"),
+                MansartPoolsLive.pools().stream().map(MansartPoolsLive.Pool::label).toList(),
+                "the holder the -dev panel reads sees the same labels");
     }
 
     @Test

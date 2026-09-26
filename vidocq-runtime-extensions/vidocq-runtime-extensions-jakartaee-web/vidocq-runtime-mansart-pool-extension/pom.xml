@@ -15,16 +15,12 @@
     <description>Publishes a MansartDataSource as a CDI @Default DataSource for any Vidocq application that wants a virtual-thread-native, zero-dep JDBC pool.</description>
 
     <dependencies>
+        <!-- The live pool panel of the dev console moved to the vidocq-runtime-mansart-pool-extension-dev
+             companion (Vidocq/vidocq#143), so this module no longer depends on the dev console SPI: no
+             remaining main or test source here touches it. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
-        </dependency>
-        <!-- DevConsolePanel: the extension shows its section of the startup report live in the dev console.
-             A hard dependency, since a class does not load without the interfaces it implements; the module
-             is small and brings only vidocq-runtime-spi. -->
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>

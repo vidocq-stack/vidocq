@@ -23,16 +23,13 @@ import io.vidocq.mansart.pool.PoolConfig;
 import io.vidocq.mansart.pool.PoolMetrics;
 import io.vidocq.mansart.pool.ValidationMode;
 import io.vidocq.mansart.pool.core.MansartDataSource;
+import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live.MansartPoolsLive;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
-import io.vidocq.runtime.spi.devconsole.Series;
-import io.vidocq.runtime.spi.devconsole.Unit;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
@@ -70,9 +67,9 @@ import java.util.stream.Collectors;
  *   <li>{@code onStart(ExtensionContext)} notes what the startup report will flag: a pool whose
  *       {@code minIdle} pre-fill opened nothing, a named pool no {@code @Named} {@link DataSource} bean
  *       serves.</li>
- *   <li>{@code onStop} first forgets the pools the dev console reads, then drains each via
- *       {@link MansartDataSource#close()} — housekeeper stops, idle connections close, in-flight users get
- *       {@link io.vidocq.mansart.pool.PoolException.Reason#POOL_CLOSED}.</li>
+ *   <li>{@code onStop} first clears {@link MansartPoolsLive}, the holder the {@code -dev} live panel reads, then
+ *       drains each pool via {@link MansartDataSource#close()} — housekeeper stops, idle connections close,
+ *       in-flight users get {@link io.vidocq.mansart.pool.PoolException.Reason#POOL_CLOSED}.</li>
  * </ol>
  *
  * <p>Priority {@code 200} — runs after the Chappe transport (100) so the JDBC driver class load
@@ -103,9 +100,10 @@ import java.util.stream.Collectors;
  * {@code @Repository(dataStore = "<name>")} to it. The same {@code vidocq.pool.*} suffixes apply,
  * prefixed {@code vidocq.pool.<name>.}.</p>
  *
- * <p><b>Startup report and dev console.</b> The extension is its own {@link DevConsolePanel}, so the core
- * finds its section of the startup report with no second declaration, and the dev console shows that
- * section live. The unnamed pool is labelled {@value #DEFAULT_LABEL}, which no named pool can be mistaken
+ * <p><b>Startup report and dev console.</b> The extension writes its {@code mansart-pool} section of the
+ * startup report; the {@code vidocq-runtime-mansart-pool-extension-dev} companion, which only {@code vidocq:dev}
+ * adds, makes that section live by reading {@link MansartPoolsLive}, the holder this extension publishes.
+ * The unnamed pool is labelled {@value #DEFAULT_LABEL}, which no named pool can be mistaken
  * for, a pool named {@code default} included; named pools follow in name order.
  * <ul>
  *   <li><b>Boot facts</b>, {@link #contribute}: {@code 2 pools (@Default, audit), 12 connections max},
@@ -115,12 +113,12 @@ import java.util.stream.Collectors;
  *       credentials are configured, never what they are. {@link PoolConfig#toString()} prints the
  *       password: it is never rendered nor logged. Anomalies {@code MANSART-POOL-001} (the {@code minIdle}
  *       pre-fill opened nothing) and {@code MANSART-POOL-002} (a named pool with no bean).</li>
- *   <li><b>Live values</b>, {@link #sample}: one group per pool, read from
- *       {@link MansartDataSource#snapshot()}, lock-free and without I/O — the {@code active} and
- *       {@code idle} connections out of {@code maxSize}, the borrowers {@code waiting} (an estimate), the
- *       {@code borrows}, {@code timeouts} and {@code leaks} so far ({@code leak detection off} when it is),
- *       and the {@code mean-borrow} time, a mean over the pool's whole life, wait and connection opening
- *       included, which is shown as a number and never plotted.</li>
+ *   <li><b>Live values</b>, read by the {@code -dev} panel from {@link MansartDataSource#snapshot()},
+ *       lock-free and without I/O — the {@code active} and {@code idle} connections out of {@code maxSize},
+ *       the borrowers {@code waiting} (an estimate), the {@code borrows}, {@code timeouts} and {@code leaks}
+ *       so far ({@code leak detection off} when it is), and the {@code mean-borrow} time, a mean over the
+ *       pool's whole life, wait and connection opening included, which is shown as a number and never
+ *       plotted.</li>
  *   <li><b>Charts</b>, per pool: {@code connections} (active, idle stacked on it, waiting, and the
  *       {@code maxSize} ceiling) and {@code throughput} (borrows and timeouts per second).</li>
  * </ul>
@@ -129,11 +127,11 @@ import java.util.stream.Collectors;
  * And a snapshot is not atomic: each figure is read on its own, so {@code active + idle} can dip, or
  * briefly exceed what the pool holds, while a connection moves between them.
  *
- * <p>{@link #sample} runs on the console's request threads while a dev reload may be stopping this
- * extension: it reads one {@code volatile} immutable list of the open pools, published once they are all
- * open and emptied before any is closed.
+ * <p>The {@code -dev} panel's sample runs on the console's request threads while a dev reload may be
+ * stopping this extension: {@link MansartPoolsLive} holds one {@code volatile} immutable list of the open
+ * pools, published once they are all open and emptied before any is closed.
  */
-public final class MansartPoolExtension implements VidocqExtension, DevConsolePanel {
+public final class MansartPoolExtension implements VidocqExtension, StartupReportContributor {
 
     private static final System.Logger LOG = System.getLogger(MansartPoolExtension.class.getName());
 
@@ -147,11 +145,6 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
     /** The label of the pool of {@code vidocq.pool.url}, the pool injected as {@code @Default}; a named pool has its name. */
     static final String DEFAULT_LABEL = "@Default";
 
-    private static final List<Chart> CHARTS = List.of(
-            new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
-                    Series.line("waiting"), Series.ceiling("active"))),
-            new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
-
     /** The {@code @Default} pool config (from {@code vidocq.pool.*}); {@code null} when not opted in. */
     private PoolConfig poolConfig;
     /** Open {@code @Default} pool, or {@code null} when idle. */
@@ -164,9 +157,9 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
     private Map<String, String> devServices = Map.of();
 
     /**
-     * The open pools, as the report and the dev console show them: an immutable list published at the end of
-     * {@code beforeStart}, once every pool is open, and emptied first thing in {@code onStop}, before any is closed.
-     * {@link #sample} reads it once per call, from the console's request threads.
+     * The open pools, as the report shows them: an immutable list published at the end of {@code beforeStart}, once
+     * every pool is open, and emptied first thing in {@code onStop}, before any is closed. The same pools are
+     * published to {@link MansartPoolsLive} for the {@code -dev} panel to read.
      */
     private volatile List<PoolView> views = List.of();
     /** The labels of the named pools no {@code @Named} {@link DataSource} bean serves, found in {@code onStart}. */
@@ -253,6 +246,8 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
             opened.add(view(e.getKey(), false, PREFIX + e.getKey() + ".", ds));
         }
         views = List.copyOf(opened);
+        MansartPoolsLive.publish(
+                opened.stream().map(v -> new MansartPoolsLive.Pool(v.label(), v.pool())).toList());
     }
 
     /**
@@ -301,6 +296,7 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
     @Override
     public void onStop() {
         // First, before any pool is closed: a dev console poll from now on reads no pool.
+        MansartPoolsLive.clear();
         views = List.of();
         namedWithoutBean = Set.of();
         prefillFailed = Set.of();
@@ -518,40 +514,6 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
         }
         // the keys only, never the values: a driver property may be a password
         section.list(label + " driver properties", new TreeSet<>(c.driverProperties().keySet()));
-    }
-
-    @Override
-    public List<Chart> charts() {
-        return CHARTS;
-    }
-
-    /**
-     * One group per open pool, from its {@link MansartDataSource#snapshot()}: counters kept in memory, read without a
-     * lock and without I/O, in two small allocations. Once {@code onStop} has begun, no pool.
-     */
-    @Override
-    public void sample(PanelSample sample) {
-        List<PoolView> opened = views;
-        for (PoolView v : opened) {
-            PoolConfig c = v.pool().config();
-            PoolMetrics m = v.pool().snapshot();
-            PanelSample pool = sample.group(v.label())
-                    .gauge("active", m.active(), c.maxSize(), Unit.COUNT)
-                    .gauge("idle", m.idle(), c.maxSize(), Unit.COUNT)
-                    .gauge("waiting", m.waiting(), Unit.COUNT)
-                    .counter("borrows", m.totalBorrows(), Unit.COUNT)
-                    .counter("timeouts", m.totalTimeouts(), Unit.COUNT);
-            if (c.leakDetectionThreshold().isZero()) {
-                pool.absent("leaks", "leak detection off");
-            } else {
-                pool.counter("leaks", m.totalLeaks(), Unit.COUNT);
-            }
-            if (m.totalBorrows() == 0) {
-                pool.absent("mean-borrow", "no borrow yet");
-            } else {
-                pool.duration("mean-borrow", m.meanBorrowDuration());
-            }
-        }
     }
 
     /** Visible for tests. */
