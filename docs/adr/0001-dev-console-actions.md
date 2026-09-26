@@ -114,3 +114,53 @@ its origin).
   is one rule for every client of the page, and needs no cookie handling in the console. The Dev MCP of #121 runs
   no action, so it needs no token: its read-only tools keep the checks of a read (`Host`, `Origin` when present,
   `application/json`), and an action through MCP would first need this ADR amended.
+
+## Amendment 1 (2026-09-26) — JSON arguments, structured results, groups
+
+* Status: Accepted
+* Design: `docs/superpowers/specs/2026-09-26-mcp-inspector-design.md`
+
+The MCP inspector of the `mcp` panel calls the application's tools with arguments a JSON Schema describes, and shows
+what came back and the JSON-RPC exchange. The actions gain what it needs, in a form any panel can use.
+
+### SPI
+
+* `PanelAction.Argument.json(name, label, schema)`: the value is a JSON document; `schema` is a JSON Schema, as the
+  text of a JSON object of at most 32 KiB, or the constructor throws. One action has at most one `json` argument,
+  beside any `oneOf` and `matching` ones. The value reaches the action as its JSON text, in the same map.
+  `accepts(String)` stays the only check: for `json`, "parses as a JSON object".
+* `PanelAction.ActionResult(summary, contentType, body, error, details)`: `summary` is the line, at most 200
+  characters, `done` for `null`; `body`, `text/plain` or `application/json`, and `details`, JSON shown folded, are at
+  most 256 KiB each, truncated with `… truncated at 256 KiB`; `error` flags an outcome that is an error of the
+  action's target, which is not an exception.
+* A new constructor takes `Function<Map<String, String>, ActionResult> call`, a `group` (at most 40 characters) and a
+  `description` (at most 2,000). The record keeps one internal form: an old `run` is wrapped as
+  `args -> ActionResult.of(run.apply(args))`, and `run()` still returns the line, so existing panels change nothing.
+
+### Transport
+
+Check 5 becomes: the panel and the action exist (`404`); the body is at most **64 KiB for an action with a `json`
+argument, 4 KiB otherwise**, checked before it is read (`413`); it is one JSON object of strings whose keys are
+exactly the declared arguments, each value accepted, a `json` value parsing as a JSON object (`400`). The console
+never validates a value against its schema: the action's target does.
+
+### Running
+
+* The answer to a request that returned is `200 {"result": summary, "error": true, "contentType": …, "body": …,
+  "details": …}`, each of the last four only when set: an action returning one line still answers
+  `{"result": "..."}`, and a page that reads `result` only still works.
+* The logged result line is `summary`.
+* The snapshot gives each action its `group` and `description` when set, each `json` argument its `schema` as a JSON
+  object, and a last outcome that is an error `"error": true`. A panel keeps up to 128 actions.
+
+### Unchanged
+
+Everything else holds: dev launch only, the per-boot token, the same-origin check, `POST` of `application/json`, one
+action at a time per panel, the 60 s limit, and the logging of every run.
+
+### Consequences
+
+* **+** A panel can take structured input and show structured output, which a tool inspector, a query runner or a
+  message sender needs, with the same guards as every action.
+* **−** A larger body and larger answers: the limits are fixed, and the console checks the body's size before it
+  reads it.

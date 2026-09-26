@@ -506,6 +506,83 @@ public List<PanelAction> actions() {
 * **A confirmation for what cannot be undone.** When `confirmation` is set, the page asks it inline, next to the button, and sends only on a second click.
 * **The console guards the request, the panel never parses one.** Who may run an action — the console's own page only, behind an origin check and the token of the boot — is decided in one place: see xref:dev-console.adoc#actions[the checks of an action request].
 
+[#json-argument]
+=== A JSON argument [.tag-new]#NEW#
+
+`PanelAction.Argument.json(String name, String label, String schema)` takes a JSON document rather than a string:
+`schema` is a JSON Schema, as the text of a JSON object of at most 32 KiB, checked when the argument is built, or
+the constructor throws. One action has at most one `json` argument, beside any `oneOf` and `matching` ones, and the
+value reaches `call` as its JSON text, in the same `Map<String, String>`. `accepts(String)` stays the only check:
+for a `json` argument it means "parses as a JSON object", whatever its length.
+
+The page renders it as a form generated from the schema when the schema is flat (xref:dev-console.adoc#mcp-inspector[the
+rule the MCP inspector uses]) and as a raw JSON editor otherwise; the console never validates the value against the
+schema itself — the action's target does. The MCP inspector's own tool action is a short example
+(`TestPanels.InspectorPanel`'s `tool.weather`):
+
+[source,java]
+----
+static final String SCHEMA = "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},"
+        + "\"required\":[\"city\"]}";
+
+new PanelAction("tool.weather", "Weather", null,
+        List.of(PanelAction.Argument.json("arguments", "Arguments", SCHEMA)), arguments -> {
+            runs.add(arguments);
+            return new PanelAction.ActionResult("ok in 3 ms", "application/json",
+                    "{\"temp\":21}", false, "{\"request\":{\"method\":\"tools/call\"}}");
+        }, "Tools", "The weather in a city.\nIn Celsius.");
+----
+
+[#action-result]
+=== A structured result [.tag-new]#NEW#
+
+The 7-argument constructor, `PanelAction(id, label, confirmation, arguments, call, group, description)`, takes a
+`Function<Map<String, String>, ActionResult> call` in place of `run`: `call` returns an
+`ActionResult(summary, contentType, body, error, details)` rather than one line.
+
+* `summary` is what `run` used to return: the line the page shows and the console logs, at most 200 characters,
+  `null` reading as `done`.
+* `body` is optional content shown under the line, at most 256 KiB: `contentType` is `text/plain` or
+  `application/json`, the page pretty-printing JSON.
+* `error` is `true` when the call went through but its outcome is an error of the action's target, such as a tool
+  returning `isError`; it is distinct from an exception `call` throws, which stays the usual `500` with the
+  exception's simple class name, never its message.
+* `details` is optional JSON, at most 256 KiB, shown folded under "Exchange" — the MCP inspector puts the exact
+  JSON-RPC request and response there.
+
+A `body` or `details` longer than 256 KiB is truncated, ending with `… truncated at 256 KiB`.
+
+The old constructors keep working unchanged: `PanelAction(id, label, confirmation, arguments, run)` and
+`PanelAction(id, label, confirmation, run)`, with `run` still a `Function<Map<String, String>, String>`, wrap it as
+`args -> ActionResult.of(run.apply(args))` internally, and `run()` still returns a function to the summary line, so
+an action written before this section existed answers exactly `{"result": "..."}`, as before.
+
+[#action-groups]
+=== Groups and descriptions [.tag-new]#NEW#
+
+Two more optional fields, both on every constructor:
+
+* `group`, at most 40 characters, such as `Tools`: the page folds the actions of a panel into sections by group,
+  in the order each group is first seen, rather than listing every button flat.
+* `description`, at most 2,000 characters, line breaks kept, such as a tool's own description: shown under the
+  action's label.
+
+Past ten actions, whatever their groups, the page adds a text filter that narrows the list and opens the groups
+that match. A panel keeps 128 actions at most; an id seen again, or one past the 128th, is dropped, as an id
+`actions()` returns twice always was.
+
+[#replay-column]
+=== A replay column [.tag-new]#NEW#
+
+A `table` column headed `PanelSample.REPLAY_COLUMN` (`"replay"`) turns each of its cells into a "Replay" button on
+the page: the cell is the id of an action of the same panel, a space, then a JSON object of its arguments by name,
+such as `tool.weather {"arguments":{"city":"Paris"}}`. The button fills that action's form with those arguments and
+sends nothing; the user still has to submit. A cell of `"***"` is left empty instead, for the user to type again —
+how the MCP inspector's history marks an argument it masked as a secret.
+
+The console keeps such a cell whole up to `PanelSample.MAX_REPLAY_CELL`, 4,096 characters, and empties a longer one
+rather than truncate it into something that would not parse.
+
 [#rules]
 == The rules [.tag-new]#NEW#
 

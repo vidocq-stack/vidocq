@@ -726,6 +726,15 @@ What reaches the page is a key, a kind, a number and a unit: no session id, no t
 
 The anomalies below are each one WARNING record on `io.vidocq.startup.anomaly`, logged at every level of the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). They cover what the extension makes possible or alone can see; langchain4j-cdi's own failures stay in its logs.
 
+[#langchain4j-cdi-mcp-inspector]
+==== The MCP inspector [.tag-new]#NEW#
+
+The `mcp` panel is also where the dev console calls the server's own tools, prompts and resources: it publishes
+the URL of `/mcp` the startup report printed, the way its own `mcp` section does, so the panel can find it after
+a dev reload too, without a listener of its own. The panel builds nothing else and creates no bean beyond what its
+live values already read. See xref:dev-console.adoc#mcp-inspector[MCP inspector] for what it shows and how a call
+is made.
+
 [#vidocq-mcp-001]
 === VIDOCQ-MCP-001 — the MCP server module cannot serve from the boot layer [.tag-new]#NEW#
 

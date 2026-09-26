@@ -387,6 +387,93 @@ It used to be the page that kept them, one point per poll. A browser stops the t
 * **It is bounded, and the bound is a number.** 256 series of 300 points, measured full at 1,966,960 bytes — 1.88 MB — and it does not grow with the length of a run. Series are kept first seen, first served; one that arrives past the cap keeps its live value on its tile and gets no curve, and the snapshot says `historyTruncated`.
 * **It is forgotten with its boot.** A new `boot` id — a dev reload included — starts every curve again, and `onStop` stops the thread before the panels go.
 
+[#mcp-inspector]
+== MCP inspector [.tag-new]#NEW#
+
+In a `dev` launch of an application that has `vidocq-runtime-langchain4j-cdi-mcp-extension`, the `mcp` tab lists
+the application's tools, prompts, resources and resource templates, and can call each of them. The list is three
+folded sections, `Tools`, `Prompts` and `Resources`, each titled with its count and opened on demand; past ten
+actions a text filter narrows the list and opens the sections that match.
+
+A tool's arguments are a form generated from its input schema when the schema is flat — its root is
+`"type": "object"` and every property is a `string`, `number`, `integer` or `boolean`, or an `enum` of strings, with
+no `$ref` and no nesting — and a raw JSON editor otherwise, started from its required properties. A
+"JSON" switch shows the same values as JSON on a flat form too, and switching back keeps them. A prompt's arguments
+and a resource template's variables are always a flat form, one `string` per argument or variable.
+
+The call goes through the application's own `/mcp`, from the console's own JVM, in protocol `2026-07-28`, with no
+session opened: the URL is the one the startup report prints for `/mcp`, a loopback one preferred when more than
+one listener carries it. When no listener has bound `/mcp`, the tab shows `absent: /mcp has no bound address` and
+offers nothing to call.
+
+**Confirmation.** Before it sends a tool call, the page asks `Call <name>? It runs the application's code, and may
+change data.` unless the tool is `readOnlyHint: true` and not `destructiveHint: true`. A prompt `get` or a resource
+`read` never asks.
+
+**A result** shows the summary line, coloured when it is an error, then the body — JSON pretty-printed — and, under
+"Exchange", the JSON-RPC request and response exactly as they were sent and received (or the SSE events, for a
+streamed answer). What each outcome shows:
+
+[cols="2,2,1,3"]
+|===
+| Outcome | `summary` | `error` | `body`
+
+| tool result
+| `ok in <ms> ms`
+| from `isError`
+| the content: the text items joined, or the JSON of `structuredContent` when present
+
+| prompt
+| `<n> message(s) in <ms> ms`
+| false
+| the messages as JSON
+
+| resource
+| `<n> content item(s) in <ms> ms`
+| false
+| the first text content, or the JSON of the contents
+
+| JSON-RPC error
+| `error <code>: <message>`
+| true
+| the error object
+
+| a tool asking the client for input
+| `this tool asks the client for input (<kinds>): not supported by the dev console inspector yet`
+| true
+| the input request
+
+| transport failure
+| `/mcp unreachable at <url>`, `timed out after 55 s`, or `HTTP <status>`
+| true
+| none
+|===
+
+A response body past 1 MiB fails the call as a transport failure; the panel never buffers more of it than that. The
+body and the details the page shows are truncated at 256 KiB regardless, as any action's are.
+
+**A tool that asks the client for input.** The inspector declares elicitation, sampling and roots so that such a
+tool answers `input_required` rather than a missing-capability error, and reports it with the refusal line above.
+In `CONTINUATION` mode, the tool's invocation stays parked on a server worker until the server's own continuation
+timeout: the inspector cannot end it sooner, since the stateless `2026-07-28` protocol has no way to cancel a
+finished HTTP exchange, and answering the input request would only re-run the tool from the start under the
+default mode. `REPLAY`, the default request-state mode, parks nothing: each round is its own call.
+
+**History.** The panel keeps the last 20 calls of the boot, newest first, each with its time, action, outcome,
+duration and arguments, and a "Replay" button that fills the action's form with those arguments and sends nothing
+until you submit. A dev reload clears the history along with the catalogue.
+
+**Secrets.** An argument whose name holds, ignoring case, `password`, `passwd`, `secret`, `token`, `apikey`,
+`api-key`, `api_key`, `credential` or `authorization`, at any depth, is shown as `***` in the history, the
+"Exchange" details and the console's log line; a string value of four characters or more that belongs to such an
+argument is also replaced by `***` wherever it appears in the summary and the details, in case a server's error
+message quotes it. The MCP server itself always receives the real value, and the result body is shown exactly as
+the server returned it. A masked value is left empty on a replay: type it again.
+
+**What v1 does not do.** Elicitation, sampling and roots are declared but never answered — a tool that needs one
+gets the refusal line above, not a dialog. There is no support for subscriptions, notifications or progress, for
+completion, or for calling an MCP server other than the application's own.
+
 [#security]
 == Security [.tag-new]#NEW#
 
@@ -412,9 +499,9 @@ In a `dev` launch, a panel may offer actions, such as setting a log level (xref:
 . the method is `POST` (`405`), and the body is `application/json`, a charset allowed (`415`): a cross-site form cannot send it without a CORS preflight, which the console never answers;
 . `Origin` is present and is `http://` followed by the very `Host` the request was let in with: the origin of the page the console served there (`403`). A missing origin, `null`, `https`, another name for the same address or another port are refused;
 . the header `X-Vidocq-Console-Token` equals the token of the boot, 32 random bytes in hex drawn from `SecureRandom` when the console starts, compared in constant time; the page reads it from `/api/snapshot` (`console.actionToken`), which another site cannot read (`403`);
-. the panel and the action exist (`404`), the body is at most 4 KiB (`413`), and it is one JSON object of strings whose keys are exactly the arguments the action declared, each value accepted by its check (`400`).
+. the panel and the action exist (`404`), the body is at most 64 KiB for an action with a `json` argument, such as the <<mcp-inspector,MCP inspector>>'s, 4 KiB otherwise (`413`), and it is one JSON object of strings whose keys are exactly the arguments the action declared, each value accepted by its check, a `json` value parsing as a JSON object (`400`).
 
-A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository.
+A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository; ADR 0001, amendment 1, adds the `json` argument, the structured result and the groups this section and xref:dev-console-panels.adoc#actions[Actions] describe.
 
 [#dev-mcp]
 == Dev MCP [.tag-new]#NEW#
