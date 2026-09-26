@@ -45,10 +45,11 @@ import java.util.regex.PatternSyntaxException;
  * {@link Argument#json json} argument is the exception: its value is the text of a JSON object, of any length the
  * console's body limit lets through, described by a JSON Schema.
  *
- * <p><b>What it returns.</b> One short line of text, such as {@code 3 migrations applied}, that the page shows and the
- * console logs; {@code null} reads as {@code done}. It runs on a virtual thread of the console, one action at a time
- * per panel; past 60 seconds the page stops waiting and the outcome shows once it ends. An exception it throws is
- * shown and logged by its class only, never its message, which may carry a secret.
+ * <p><b>What it returns.</b> One short line of text, such as {@code 3 migrations applied}, that the page shows and
+ * the console logs, or an {@link ActionResult} that adds a body, an error flag and the details of the exchange,
+ * which the page shows under the line; the line never carries a secret. It runs on a virtual thread of the console,
+ * one action at a time per panel; past 60 seconds the page stops waiting and the outcome shows once it ends. An
+ * exception it throws is shown and logged by its class only, never its message, which may carry a secret.
  *
  * <pre>{@code
  * new PanelAction("set-level", "Set level", null,
@@ -64,13 +65,21 @@ import java.util.regex.PatternSyntaxException;
  *                     {@code Drop every table of @Default and migrate again?}; {@code null} to send on the first
  *                     click, never blank
  * @param arguments    what the page asks for before sending, in that order, each name once; an immutable copy
- * @param run          does the work with the checked arguments, by name, and returns one short line of text
+ * @param call         does the work with the checked arguments, by name, and returns its result
+ * @param group        a short title such as {@code Tools}: the page folds the actions of a panel by group, in
+ *                     order of first appearance, and adds a filter past ten actions; {@code null} for none
+ * @param description  a longer text shown under the label, such as a tool's description, line breaks kept;
+ *                     {@code null} for none
  */
 public record PanelAction(String id, String label, String confirmation, List<Argument> arguments,
-                          Function<Map<String, String>, String> run) {
+                          Function<Map<String, String>, ActionResult> call, String group, String description) {
 
     /** The longest value an argument accepts. */
     public static final int MAX_VALUE_LENGTH = 200;
+    /** The longest group title. */
+    public static final int MAX_GROUP = 40;
+    /** The longest description. */
+    public static final int MAX_DESCRIPTION = 2000;
 
     public PanelAction {
         PanelSample.requireKey(id);
@@ -82,7 +91,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
             throw new IllegalArgumentException("action '" + id + "' has a blank confirmation: null for none");
         }
         arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
-        Objects.requireNonNull(run, "run");
+        Objects.requireNonNull(call, "call");
         Set<String> names = new HashSet<>();
         for (Argument argument : arguments) {
             if (!names.add(argument.name())) {
@@ -93,10 +102,33 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         if (arguments.stream().filter(argument -> argument.schema() != null).count() > 1) {
             throw new IllegalArgumentException("action '" + id + "' declares more than one json argument");
         }
+        if (group != null && (group.isBlank() || group.length() > MAX_GROUP)) {
+            throw new IllegalArgumentException("action '" + id + "' has a blank group or one longer than "
+                    + MAX_GROUP + " characters: null for none");
+        }
+        if (description != null && (description.isBlank() || description.length() > MAX_DESCRIPTION)) {
+            throw new IllegalArgumentException("action '" + id + "' has a blank description or one longer than "
+                    + MAX_DESCRIPTION + " characters: null for none");
+        }
     }
 
     /**
-     * An action that takes no argument.
+     * An action that returns one line, as before {@link ActionResult} existed: {@code run} is called through
+     * {@link #call}, its line becoming the result's summary.
+     *
+     * @param id           its id, by the key rule
+     * @param label        its button
+     * @param confirmation the question asked before sending, or {@code null}
+     * @param arguments    what it takes
+     * @param run          what it does, returning one short line
+     */
+    public PanelAction(String id, String label, String confirmation, List<Argument> arguments,
+                       Function<Map<String, String>, String> run) {
+        this(id, label, confirmation, arguments, summaryOnly(run), null, null);
+    }
+
+    /**
+     * An action that takes no argument and returns one line.
      *
      * @param id           its id, by the key rule
      * @param label        its button
@@ -105,6 +137,23 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
      */
     public PanelAction(String id, String label, String confirmation, Function<Map<String, String>, String> run) {
         this(id, label, confirmation, List.of(), run);
+    }
+
+    /**
+     * What the action does, as one line: the summary of {@link #call}, {@code done} when it returns {@code null}.
+     *
+     * @return a function of the checked arguments to that line
+     */
+    public Function<Map<String, String>, String> run() {
+        return arguments -> {
+            ActionResult result = call.apply(arguments);
+            return result == null ? ActionResult.of(null).summary() : result.summary();
+        };
+    }
+
+    private static Function<Map<String, String>, ActionResult> summaryOnly(Function<Map<String, String>, String> run) {
+        Objects.requireNonNull(run, "run");
+        return arguments -> ActionResult.of(run.apply(arguments));
     }
 
     /**
@@ -235,6 +284,80 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
                 return false;
             }
             return allowedValues != null ? allowedValues.contains(value) : Pattern.matches(pattern, value);
+        }
+    }
+
+    /**
+     * What an action returns: the line the page shows and the console logs, and optionally what to show under it.
+     *
+     * @param summary     one line, at most {@value #MAX_SUMMARY} characters, a longer one cut with {@code ...};
+     *                    {@code null} reads as {@code done}
+     * @param contentType {@value #TEXT} or {@value #JSON}, which the page pretty-prints; {@code null} when there is
+     *                    no body, {@value #TEXT} when there is one and none was given
+     * @param body        what to show, or {@code null}; at most {@value #MAX_CONTENT} characters, a longer one
+     *                    truncated and ending with the marker {@code … truncated at 256 KiB}
+     * @param error       {@code true} when the call went through but its outcome is an error of its target, such as
+     *                    a tool returning {@code isError}; an exception thrown by the action is not a result
+     * @param details     JSON the page shows folded under "Exchange", such as a request and its response, or
+     *                    {@code null}; truncated as {@code body}
+     */
+    public record ActionResult(String summary, String contentType, String body, boolean error, String details) {
+
+        /** The longest summary, in characters. */
+        public static final int MAX_SUMMARY = 200;
+        /** The longest body or details, in characters. */
+        public static final int MAX_CONTENT = 256 * 1024;
+        /** A body shown as it is. */
+        public static final String TEXT = "text/plain";
+        /** A body the page pretty-prints. */
+        public static final String JSON = "application/json";
+        /** What ends a body or details that was truncated. */
+        public static final String TRUNCATED = "\n… truncated at 256 KiB";
+
+        public ActionResult {
+            summary = summary == null ? "done" : cut(summary);
+            if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)) {
+                throw new IllegalArgumentException("a result's content type is " + TEXT + " or " + JSON);
+            }
+            if (body == null) {
+                contentType = null;
+            } else if (contentType == null) {
+                contentType = TEXT;
+            }
+            body = truncated(body);
+            details = truncated(details);
+        }
+
+        /**
+         * A result that is one line, and nothing else.
+         *
+         * @param summary the line, or {@code null} for {@code done}
+         * @return the result
+         */
+        public static ActionResult of(String summary) {
+            return new ActionResult(summary, null, null, false, null);
+        }
+
+        private static String cut(String summary) {
+            if (summary.length() <= MAX_SUMMARY) {
+                return summary;
+            }
+            int end = MAX_SUMMARY - 3;
+            if (Character.isHighSurrogate(summary.charAt(end - 1))) {
+                end--;
+            }
+            return summary.substring(0, end) + "...";
+        }
+
+        private static String truncated(String text) {
+            if (text == null || text.length() <= MAX_CONTENT) {
+                return text;
+            }
+            int end = MAX_CONTENT - TRUNCATED.length();
+            if (Character.isHighSurrogate(text.charAt(end - 1))) {
+                end--;
+            }
+            return text.substring(0, end) + TRUNCATED;
         }
     }
 }

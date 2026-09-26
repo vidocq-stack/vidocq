@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -178,5 +179,44 @@ class PanelActionTest {
         assertEquals(3, mixed.arguments().size());
         assertThrows(IllegalArgumentException.class,
                 () -> new PanelAction("call", "Call", null, List.of(one, two), a -> "ok"));
+    }
+
+    @Test
+    void anOldStyleActionStillReturnsItsLineAndIsCalledThroughItsResult() {
+        PanelAction clear = new PanelAction("clear", "Clear the cache", null, arguments -> "0 entries");
+
+        assertEquals("0 entries", clear.run().apply(Map.of()));
+        assertEquals(PanelAction.ActionResult.of("0 entries"), clear.call().apply(Map.of()));
+        assertNull(clear.group());
+        assertNull(clear.description());
+        assertEquals("done", new PanelAction("noop", "Noop", null, a -> null).call().apply(Map.of()).summary());
+    }
+
+    @Test
+    void aStructuredActionReturnsAResultAndMayHaveAGroupAndADescription() {
+        PanelAction weather = new PanelAction("tool.weather", "Weather", null, List.of(), arguments ->
+                new PanelAction.ActionResult("ok in 3 ms", "application/json", "{\"t\":21}", false, "{}"),
+                "Tools", "The weather in a city.\nIn Celsius.");
+
+        assertEquals("Tools", weather.group());
+        assertEquals("The weather in a city.\nIn Celsius.", weather.description());
+        assertEquals("ok in 3 ms", weather.run().apply(Map.of()), "run() still gives the line");
+        assertEquals("{\"t\":21}", weather.call().apply(Map.of()).body());
+    }
+
+    @Test
+    void aGroupAndADescriptionAreBounded() {
+        Function<Map<String, String>, PanelAction.ActionResult> ok = a -> PanelAction.ActionResult.of("ok");
+
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, List.of(), ok, " ", null));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PanelAction("a", "A", null, List.of(), ok, "g".repeat(41), null));
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, List.of(), ok, null, ""));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PanelAction("a", "A", null, List.of(), ok, null, "d".repeat(2001)));
+        PanelAction longest = new PanelAction("a", "A", null, List.of(), ok, "g".repeat(40), "d".repeat(2000));
+        assertEquals(40, longest.group().length());
+        assertEquals(2000, longest.description().length());
+        assertThrows(NullPointerException.class, () -> new PanelAction("a", "A", null, List.of(), null, null, null));
     }
 }

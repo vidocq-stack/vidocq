@@ -61,6 +61,18 @@ import java.util.Objects;
 public interface PanelSample {
 
     /**
+     * The header of a {@link #table table} column the page turns into a "Replay" button: each cell is the id of an
+     * action of the same panel, a space, then a JSON object of its arguments by name, such as
+     * {@code tool.weather {"arguments":{"city":"Paris"}}}. The button fills that action's form with them and sends
+     * nothing; a value {@code "***"} is left empty for the user to type. The console keeps such a cell whole up to
+     * {@value #MAX_REPLAY_CELL} characters, and empties a longer one.
+     */
+    String REPLAY_COLUMN = "replay";
+
+    /** The longest cell of a {@value #REPLAY_COLUMN} column the console keeps. */
+    int MAX_REPLAY_CELL = 4096;
+
+    /**
      * A level that goes up and down, such as the threads alive. A value that is not a number, or is infinite, is
      * shown as absent.
      *
