@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verifies that the version numbers hardcoded across the documentation stay in
 # sync with the reactor's actual version, instead of drifting silently the way
-# docs/en/antora.yml and README_EN.md did (0.3.0-SNAPSHOT documented as the
+# docs/en/antora.yml and the former README_EN.md did (0.3.0-SNAPSHOT documented as the
 # current snapshot while 0.4.0-SNAPSHOT had already shipped; 0.2.0 documented
 # as the latest release while 0.3.0 had already been released to Central).
 #
@@ -47,10 +47,10 @@ if tup(release) >= tup(project):
     sys.exit(f"release-version ({release}) must be older than project-version ({project})")
 PY
 
-# 3. README_EN.md pins the vidocq-runtime-maven-plugin example to the latest
+# 3. README.md pins the vidocq-runtime-maven-plugin example to the latest
 #    *released* version — it must match release-version (it is plain Markdown,
 #    so it cannot use the Antora {release-version} attribute directly).
-README=README_EN.md
+README=README.md
 README_PINNED=$(sed -nE 's#.*<version>([0-9]+\.[0-9]+\.[0-9]+)</version>.*#\1#p' "$README" | head -1)
 [[ -n "$README_PINNED" ]] || fail "no pinned <version> found in $README's vidocq-runtime-maven-plugin snippet"
 [[ "$README_PINNED" == "$RELEASE_VERSION" ]] || fail "$README pins vidocq-runtime-maven-plugin to $README_PINNED, but the latest released version is $RELEASE_VERSION"
