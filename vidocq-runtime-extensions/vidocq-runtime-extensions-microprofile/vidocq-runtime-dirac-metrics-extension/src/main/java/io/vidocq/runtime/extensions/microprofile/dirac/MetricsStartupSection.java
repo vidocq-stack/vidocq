@@ -19,8 +19,10 @@
  */
 package io.vidocq.runtime.extensions.microprofile.dirac;
 
-import io.vidocq.runtime.extensions.microprofile.dirac.MetricsScope.Entry;
-import io.vidocq.runtime.extensions.microprofile.dirac.MetricsScope.Kind;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.DiracRegistries;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope.Entry;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope.Kind;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;

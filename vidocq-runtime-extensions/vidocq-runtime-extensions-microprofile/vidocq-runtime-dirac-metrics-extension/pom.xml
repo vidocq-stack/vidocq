@@ -16,14 +16,15 @@
         The integration relies on dirac-cdi-vauban's BuildCompatibleExtension (discovery of
         @Counted/@Timed/@Gauge + @ApplicationScoped MetricRegistry producers) and the JAX-RS @Path
         scanning of CassiniExtension, which auto-mounts MetricsResource (@Path("/metrics")). Its one
-        Java class, DiracMetricsExtension, only reads the registries for the startup report and the
-        metrics panel of the dev console.</description>
+        Java class, DiracMetricsExtension, only reads the registries for the startup report. The live
+        panel of the dev console moved to vidocq-runtime-dirac-metrics-extension-dev (Vidocq/vidocq#143),
+        which only vidocq:dev adds.</description>
 
     <!--
         Like knock-extension, the integration itself needs no Vidocq code: Dirac is zero-config and
         integrates 100% via standard SPIs (CDI 4.1 BCE + JAX-RS @Path scanning). The one VidocqExtension
         of this module, DiracMetricsExtension (Vidocq/vidocq#115), only reads what Dirac publishes, for the
-        startup report and the dev console: Vidocq-specific code lives here, so that Dirac stays portable.
+        startup report: Vidocq-specific code lives here, so that Dirac stays portable.
     -->
 
     <dependencies>
@@ -65,16 +66,12 @@
         </dependency>
 
         <!--
-            The metrics panel of the dev console (DiracMetricsExtension, Vidocq/vidocq#115): the extension SPI
-            and the dev console SPI it implements.
+            DiracMetricsExtension: the extension SPI it implements. The live panel of the dev console moved to
+            vidocq-runtime-dirac-metrics-extension-dev (Vidocq/vidocq#143), which only vidocq:dev adds.
         -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
         </dependency>
 
         <dependency>
@@ -82,6 +79,16 @@
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
         <!-- jakarta.ws.rs-api is brought transitively by dirac-rest -->
+
+        <!--
+            MetricKeysTest (moved to the .live package) checks MetricKeys.allocate against
+            PanelSample.requireKey (Vidocq/vidocq#143): a test-scope dependency only, which checkpom accepts.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

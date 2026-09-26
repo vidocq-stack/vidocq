@@ -21,10 +21,8 @@ package io.vidocq.runtime.extensions.microprofile.dirac;
 
 import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.report.Verbosity;
 import io.vidocq.vauban.core.container.VaubanContainer;
-import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.AfterEach;
@@ -33,14 +31,14 @@ import org.junit.jupiter.api.Test;
 import java.util.ServiceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code metrics} panel on a real Vauban container: it reads the registries of the existing
- * {@link MetricRegistryProducerBean} and never creates it.
+ * The {@code metrics} section of the startup report: it reads the registries of the existing
+ * {@link MetricRegistryProducerBean} bean and never creates it. The live values of the dev console panel are
+ * covered by {@code MetricsLivePanelTest} in {@code vidocq-runtime-dirac-metrics-extension-dev}.
  */
 class DiracMetricsExtensionTest {
 
@@ -52,78 +50,22 @@ class DiracMetricsExtensionTest {
     }
 
     @Test
-    void itIsAVidocqExtensionFoundByTheServiceLoaderAndADevConsolePanel() {
+    void itIsAVidocqExtensionFoundByTheServiceLoaderAndContributesItsSection() {
         assertTrue(ServiceLoader.load(VidocqExtension.class).stream()
                 .anyMatch(provider -> provider.type() == DiracMetricsExtension.class));
-        DevConsolePanel panel = assertInstanceOf(DevConsolePanel.class, extension);
-        assertEquals("metrics", panel.id());
-        assertEquals("Metrics (Dirac)", panel.title());
+        assertEquals("metrics", extension.id());
+        assertEquals("Metrics (Dirac)", extension.title());
         assertEquals("dirac-metrics", extension.name());
     }
 
     @Test
-    void beforeOnStartTheSampleIsEmpty() {
-        RecordingSample out = new RecordingSample();
-
-        extension.sample(out);
-
-        assertTrue(out.isEmpty());
-    }
-
-    @Test
-    void aProducerNotCreatedYetIsShownAbsentAndSamplingDoesNotCreateIt() {
+    void aProducerNotCreatedYetContributesRegistriesNotCreatedYet() {
         try (VaubanContainer container = started(MetricRegistryProducerBean.class)) {
-            RecordingSample out = new RecordingSample();
-            extension.sample(out);
-
-            assertEquals("absent", out.kind("registries"));
-            assertEquals("not created yet", out.text("registries"));
-            assertNull(existing(container.getBeanManager()), "sampling created the producer bean");
-
             RecordingSection section = new RecordingSection();
             extension.contribute(new FakeReportContext(Verbosity.DETAILED), section);
+
             assertEquals("registries not created yet", section.summary);
             assertNull(existing(container.getBeanManager()), "the report created the producer bean");
-        }
-    }
-
-    @Test
-    void anApplicationCounterIncrementedMovesInThePanel() {
-        try (VaubanContainer container = started(MetricRegistryProducerBean.class)) {
-            MetricRegistryProducerBean producer = create(container.getBeanManager());
-            producer.produceApplicationByType().counter("orders").inc();
-
-            RecordingSample first = new RecordingSample();
-            extension.sample(first);
-            producer.produceApplicationByType().counter("orders").inc(4);
-            RecordingSample second = new RecordingSample();
-            extension.sample(second);
-
-            assertEquals(1, first.groups().get("application").number("orders"));
-            assertEquals(5, second.groups().get("application").number("orders"));
-        }
-    }
-
-    @Test
-    void aContainerWithoutDiracSaysSo() {
-        try (VaubanContainer container = started()) {
-            RecordingSample out = new RecordingSample();
-            extension.sample(out);
-
-            assertEquals(DiracLiveBean.NOT_DEPLOYED, out.text("registries"));
-        }
-    }
-
-    @Test
-    void afterOnStopTheSampleIsEmpty() {
-        try (VaubanContainer container = started(MetricRegistryProducerBean.class)) {
-            create(container.getBeanManager());
-            extension.onStop();
-            RecordingSample out = new RecordingSample();
-
-            extension.sample(out);
-
-            assertTrue(out.isEmpty());
         }
     }
 
@@ -147,13 +89,5 @@ class DiracMetricsExtensionTest {
     private static Object existing(BeanManager beans) {
         Bean<?> bean = producerBean(beans);
         return beans.getContext(bean.getScope()).get(bean);
-    }
-
-    /** Creates the producer bean as the application would, by asking its context for it. */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static MetricRegistryProducerBean create(BeanManager beans) {
-        Bean bean = producerBean(beans);
-        Context context = beans.getContext(bean.getScope());
-        return (MetricRegistryProducerBean) context.get(bean, beans.createCreationalContext(bean));
     }
 }

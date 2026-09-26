@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.live;
 
 import org.eclipse.microprofile.metrics.MetricID;
 
@@ -46,7 +46,7 @@ import java.util.Set;
  *
  * <p>Not thread safe: one instance per group and per sample.
  */
-final class MetricKeys {
+public final class MetricKeys {
 
     /** The longest key the dev console accepts. */
     static final int MAX_LENGTH = 40;
@@ -56,7 +56,7 @@ final class MetricKeys {
     /**
      * @param reserved the keys the group writes itself, which no metric may take
      */
-    MetricKeys(Set<String> reserved) {
+    public MetricKeys(Set<String> reserved) {
         this.taken = new HashSet<>(reserved);
     }
 
@@ -66,7 +66,7 @@ final class MetricKeys {
      * @param id the metric
      * @return its key before it is cut
      */
-    static String normalize(MetricID id) {
+    public static String normalize(MetricID id) {
         StringBuilder raw = new StringBuilder(id.getName());
         for (Map.Entry<String, String> tag : id.getTags().entrySet()) {
             raw.append('.').append(tag.getKey()).append('-').append(tag.getValue());
@@ -91,7 +91,7 @@ final class MetricKeys {
      * @param suffixes what the metric appends to its key for its other values, such as {@code .mean}
      * @return the key; the metric's other keys are this key followed by each suffix
      */
-    String allocate(MetricID id, String... suffixes) {
+    public String allocate(MetricID id, String... suffixes) {
         int longest = 0;
         for (String suffix : suffixes) {
             longest = Math.max(longest, suffix.length());

@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.live;
 
 import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
 import org.eclipse.microprofile.metrics.MetricRegistry;
@@ -32,7 +32,7 @@ import java.util.List;
  * @param base        the {@code base} registry, which Dirac fills with gauges of the JVM
  * @param vendor      the {@code vendor} registry
  */
-record DiracRegistries(MetricRegistry application, MetricRegistry base, MetricRegistry vendor) {
+public record DiracRegistries(MetricRegistry application, MetricRegistry base, MetricRegistry vendor) {
 
     /**
      * The registries an existing producer holds. The three were created with it, so these calls return them and
@@ -41,7 +41,7 @@ record DiracRegistries(MetricRegistry application, MetricRegistry base, MetricRe
      * @param producer the producer instance
      * @return its registries
      */
-    static DiracRegistries of(MetricRegistryProducerBean producer) {
+    public static DiracRegistries of(MetricRegistryProducerBean producer) {
         return new DiracRegistries(producer.produceApplicationByType(), producer.produceBaseByType(),
                 producer.produceVendorByType());
     }
@@ -51,7 +51,7 @@ record DiracRegistries(MetricRegistry application, MetricRegistry base, MetricRe
      *
      * @return what each holds
      */
-    List<MetricsScope> read() {
+    public List<MetricsScope> read() {
         return List.of(MetricsScope.read(MetricRegistry.APPLICATION_SCOPE, application),
                 MetricsScope.read(MetricRegistry.BASE_SCOPE, base),
                 MetricsScope.read(MetricRegistry.VENDOR_SCOPE, vendor));

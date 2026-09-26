@@ -23,8 +23,10 @@
  * <p><em>wrapper</em> module that activates Dirac (MicroProfile Metrics 5.1) in a vidocq
  * deployment — same strategy as {@code vidocq-runtime-knock-health-extension} (see ADR-002 in
  * the {@code knock} repo). Its one class, {@code DiracMetricsExtension}, reads the registries
- * for the {@code metrics} section of the startup report and panel of the dev console; it takes
- * no part in the integration itself.</p>
+ * for the {@code metrics} section of the startup report; it takes no part in the integration
+ * itself. The live panel of the dev console lives in the companion module
+ * {@code vidocq-runtime-dirac-metrics-extension-dev} (Vidocq/vidocq#143), which only
+ * {@code vidocq:dev} adds.</p>
  *
  * <p>The integration is 100% based on standard SPIs:</p>
  * <ul>
@@ -53,9 +55,12 @@ module io.vidocq.runtime.extensions.microprofile.dirac {
     requires jakarta.cdi;
     requires jakarta.ws.rs;
 
-    // DiracMetricsExtension: the metrics section of the startup report, shown live as a panel of the
-    // dev console (Vidocq/vidocq#115). The dev console SPI brings io.vidocq.runtime.spi with it.
-    requires transitive io.vidocq.runtime.spi.devconsole;
+    // DiracMetricsExtension: the metrics section of the startup report. The devconsole SPI no longer
+    // brings io.vidocq.runtime.spi transitively (Vidocq/vidocq#143), so it is required directly.
+    requires transitive io.vidocq.runtime.spi;
+
+    // What the metrics panel of the -dev module reads (Vidocq/vidocq#143); no other module sees it.
+    exports io.vidocq.runtime.extensions.microprofile.dirac.live to io.vidocq.runtime.extensions.microprofile.dirac.dev;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.microprofile.dirac.DiracMetricsExtension;

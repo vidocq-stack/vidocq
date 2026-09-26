@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.live;
 
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import org.eclipse.microprofile.metrics.MetricID;

@@ -20,6 +20,8 @@
 package io.vidocq.runtime.extensions.microprofile.dirac;
 
 import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.DiracLiveBean;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.DiracRegistries;
 import io.vidocq.runtime.spi.report.Verbosity;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Tag;

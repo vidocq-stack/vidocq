@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.live;
 
 import org.eclipse.microprofile.metrics.Metric;
 import org.eclipse.microprofile.metrics.MetricID;
@@ -40,26 +40,26 @@ import java.util.stream.Collectors;
  * @param sampled the counters, then the timers, then the histograms, each kind in {@link MetricID} order
  * @param gauges  the gauges, in {@link MetricID} order
  */
-record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gauges) {
+public record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gauges) {
 
     /** Each group writes these keys itself: no metric takes them. */
-    static final String COUNTERS = "counters";
-    static final String TIMERS = "timers";
-    static final String HISTOGRAMS = "histograms";
-    static final String GAUGES = "gauges";
-    static final String OMITTED = "omitted";
-    static final Set<String> RESERVED = Set.of(COUNTERS, TIMERS, HISTOGRAMS, GAUGES, OMITTED);
+    public static final String COUNTERS = "counters";
+    public static final String TIMERS = "timers";
+    public static final String HISTOGRAMS = "histograms";
+    public static final String GAUGES = "gauges";
+    public static final String OMITTED = "omitted";
+    public static final Set<String> RESERVED = Set.of(COUNTERS, TIMERS, HISTOGRAMS, GAUGES, OMITTED);
 
     /** The suffix of a timer's mean, after its key, which holds its count. */
-    static final String MEAN = ".mean";
+    public static final String MEAN = ".mean";
 
     /** The kinds of metrics the panel samples, and how many values each writes. */
-    enum Kind {
+    public enum Kind {
         COUNTER(1),
         TIMER(2),
         HISTOGRAM(1);
 
-        final int values;
+        public final int values;
 
         Kind(int values) {
             this.values = values;
@@ -74,7 +74,7 @@ record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gauges) {
      * @param kind   what it is
      * @param metric the metric, read by the panel
      */
-    record Entry(MetricID id, String key, Kind kind, Metric metric) {}
+    public record Entry(MetricID id, String key, Kind kind, Metric metric) {}
 
     /**
      * Reads a registry.
@@ -100,17 +100,17 @@ record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gauges) {
     }
 
     /** How many metrics of a kind the registry holds. */
-    long count(Kind kind) {
+    public long count(Kind kind) {
         return sampled.stream().filter(entry -> entry.kind() == kind).count();
     }
 
     /** Every metric of the registry, gauges included. */
-    int size() {
+    public int size() {
         return sampled.size() + gauges.size();
     }
 
     /** A metric's name, then its tags between braces when it has any: {@code checkout{shop=eu}}. */
-    static String describe(MetricID id) {
+    public static String describe(MetricID id) {
         Map<String, String> tags = id.getTags();
         if (tags.isEmpty()) {
             return id.getName();

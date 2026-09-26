@@ -242,6 +242,11 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-dirac-metrics-extension-dev</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>

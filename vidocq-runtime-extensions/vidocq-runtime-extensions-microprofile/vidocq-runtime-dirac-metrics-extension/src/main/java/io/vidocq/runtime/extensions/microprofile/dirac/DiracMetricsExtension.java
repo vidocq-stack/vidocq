@@ -19,30 +19,33 @@
  */
 package io.vidocq.runtime.extensions.microprofile.dirac;
 
+import io.vidocq.runtime.extensions.microprofile.dirac.live.DiracLiveBean;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 
 /**
- * The {@code metrics} section of the startup report and panel of the dev console: what Dirac's registries hold.
+ * The {@code metrics} section of the startup report: what Dirac's registries hold. The live panel of the dev
+ * console moved to {@code vidocq-runtime-dirac-metrics-extension-dev} (Vidocq/vidocq#143): only {@code vidocq:dev}
+ * adds it, so this runtime extension no longer depends on the dev console SPI.
  *
  * <p>Dirac itself needs no Vidocq code: its build compatible extension and its JAX-RS resource do the integration
  * (see the module description). This class only reads what Dirac publishes, from the
  * {@code MetricRegistryProducerBean} instance the application created, and never creates it: see
- * {@link DiracLiveBean}. {@link MetricsStartupSection} writes the boot facts, {@link MetricsPanel} the live values.
+ * {@link DiracLiveBean}. {@link MetricsStartupSection} writes the boot facts; the {@code -dev} module's
+ * {@code MetricsLivePanel} and {@code MetricsPanel} write the live values.
  */
-public final class DiracMetricsExtension implements VidocqExtension, DevConsolePanel {
+public final class DiracMetricsExtension implements VidocqExtension, StartupReportContributor {
 
     static final String NAME = "dirac-metrics";
     static final String SECTION_ID = "metrics";
     static final String SECTION_TITLE = "Metrics (Dirac)";
 
     /**
-     * The producer bean {@link #sample} reads, resolved once in {@link #onStart}; {@link DiracLiveBean#NONE} before
-     * it and after {@link #onStop}.
+     * The producer bean {@link #contribute} reads, resolved once in {@link #onStart}; {@link DiracLiveBean#NONE}
+     * before it and after {@link #onStop}.
      */
     private volatile DiracLiveBean live = DiracLiveBean.NONE;
 
@@ -60,7 +63,7 @@ public final class DiracMetricsExtension implements VidocqExtension, DevConsoleP
         live = DiracLiveBean.of(context.beanManager());
     }
 
-    /** Clears what {@link #sample} reads first. */
+    /** Clears what {@link #contribute} and the live panel read first. */
     @Override
     public void onStop() {
         live = DiracLiveBean.NONE;
@@ -80,24 +83,5 @@ public final class DiracMetricsExtension implements VidocqExtension, DevConsoleP
     public void contribute(StartupReportContext context, StartupReportSection section) {
         DiracLiveBean read = live;
         MetricsStartupSection.write(read.registries(), read.absence(), context, section);
-    }
-
-    /**
-     * The live values of the registries: their maps, read in memory, and the counts their counters, timers and
-     * histograms keep. No gauge is called and no bean is created: when the producer does not exist yet, a single
-     * absent {@code registries} says why. Nothing before {@code onStart}, nothing after {@code onStop}.
-     */
-    @Override
-    public void sample(PanelSample sample) {
-        DiracLiveBean read = live;
-        if (read.beans() == null) {
-            return;
-        }
-        DiracRegistries registries = read.registries();
-        if (registries == null) {
-            sample.absent("registries", read.absence());
-        } else {
-            MetricsPanel.write(registries, sample);
-        }
     }
 }

@@ -17,10 +17,12 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.dev;
 
-import io.vidocq.runtime.extensions.microprofile.dirac.MetricsScope.Entry;
-import io.vidocq.runtime.extensions.microprofile.dirac.MetricsScope.Kind;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.DiracRegistries;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope.Entry;
+import io.vidocq.runtime.extensions.microprofile.dirac.live.MetricsScope.Kind;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Unit;
 import org.eclipse.microprofile.metrics.Counter;

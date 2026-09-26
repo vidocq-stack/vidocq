@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.dirac;
+package io.vidocq.runtime.extensions.microprofile.dirac.live;
 
 import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
 import jakarta.enterprise.context.spi.Context;
@@ -25,8 +25,9 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
- * The bean that holds Dirac's registries, resolved once in {@link DiracMetricsExtension#onStart} and never created:
- * the immutable snapshot the {@code metrics} section and panel read.
+ * The bean that holds Dirac's registries, resolved once in
+ * {@link io.vidocq.runtime.extensions.microprofile.dirac.DiracMetricsExtension#onStart} and never created: the
+ * immutable snapshot the {@code metrics} section and panel read.
  *
  * <p><b>Why bean metadata rather than a proxy.</b> {@link MetricRegistryProducerBean} is application scoped: calling
  * a client proxy of it from the dev console would create it, and with it the base registry and its gauges, on a
@@ -38,20 +39,20 @@ import jakarta.enterprise.inject.spi.BeanManager;
  * @param beans    the bean manager of the started container, {@code null} for {@link #NONE}
  * @param producer the {@link MetricRegistryProducerBean} bean, or {@code null} when the container has none
  */
-record DiracLiveBean(BeanManager beans, Bean<?> producer) {
+public record DiracLiveBean(BeanManager beans, Bean<?> producer) {
 
     /** Before {@code onStart} and after {@code onStop}: nothing to read. */
-    static final DiracLiveBean NONE = new DiracLiveBean(null, null);
+    public static final DiracLiveBean NONE = new DiracLiveBean(null, null);
 
     /** Before {@code onStart}, or after {@code onStop}. */
-    static final String NOT_STARTED = "not started";
+    public static final String NOT_STARTED = "not started";
     /**
      * No producer bean in this container, or another copy of its class, loaded by another loader, which this
      * extension cannot read.
      */
-    static final String NOT_DEPLOYED = "no Dirac registry in this container";
+    public static final String NOT_DEPLOYED = "no Dirac registry in this container";
     /** The producer exists as a bean, but nothing has asked for a registry or a metric yet. */
-    static final String NOT_CREATED_YET = "not created yet";
+    public static final String NOT_CREATED_YET = "not created yet";
 
     /**
      * Resolves the producer bean, once, without creating it.
@@ -59,7 +60,7 @@ record DiracLiveBean(BeanManager beans, Bean<?> producer) {
      * @param beans the bean manager of the started container
      * @return the bean, which may be absent; {@link #NONE} when there is no bean manager
      */
-    static DiracLiveBean of(BeanManager beans) {
+    public static DiracLiveBean of(BeanManager beans) {
         if (beans == null) {
             return NONE;
         }
@@ -80,7 +81,7 @@ record DiracLiveBean(BeanManager beans, Bean<?> producer) {
      *
      * @return the registries, or {@code null}; {@link #absence()} then says why
      */
-    DiracRegistries registries() {
+    public DiracRegistries registries() {
         if (beans == null || producer == null) {
             return null;
         }
@@ -99,7 +100,7 @@ record DiracLiveBean(BeanManager beans, Bean<?> producer) {
      *
      * @return {@value #NOT_STARTED}, {@value #NOT_DEPLOYED} or {@value #NOT_CREATED_YET}
      */
-    String absence() {
+    public String absence() {
         if (beans == null) {
             return NOT_STARTED;
         }
