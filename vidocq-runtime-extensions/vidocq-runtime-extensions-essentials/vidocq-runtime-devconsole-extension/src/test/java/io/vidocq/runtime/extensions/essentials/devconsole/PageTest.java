@@ -143,4 +143,17 @@ class PageTest {
         assertTrue(style.contains("ui-monospace"), "the data in the system's monospace font");
         assertFalse(style.contains("IBM Plex"), "a web font the page would have to load");
     }
+
+    @Test
+    void jsonArgumentsGetAFormForAFlatSchemaAndARawEditorOtherwise() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function isFlatSchema(schema)"), "the flat-schema rule, written once");
+        assertTrue(script.contains("\"$ref\""), "a $ref is never flat");
+        assertTrue(script.contains("function jsonField(argument)"), "a json argument's field");
+        assertTrue(script.contains("const REPLAY_COLUMN = \"replay\""), "PanelSample.REPLAY_COLUMN");
+        assertTrue(script.contains("const MASKED = \"***\""), "a masked value is not replayed");
+        assertTrue(script.contains("const FILTER_FROM = 10"), "a filter past ten actions");
+        assertTrue(script.contains("\"Exchange\""), "the details folded under Exchange");
+    }
 }

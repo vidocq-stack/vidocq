@@ -33,6 +33,10 @@
 // - In a dev launch, a panel's actions are buttons. Each sends one same-origin POST, application/json, with the
 //   token of the boot the snapshot carries (console.actionToken); a confirmation is asked inline, never with a
 //   blocking dialog. The page shows the line the action returned, or the class of what it threw.
+// - An action's json argument is a form generated from its JSON Schema when the schema is flat (isFlatSchema), a raw
+//   JSON editor otherwise, with a "JSON" switch that keeps the values. A structured answer shows its body, pretty
+//   printed when it is JSON, and its details folded under "Exchange". A sample table column named "replay" is a
+//   button that fills an action's form: nothing is sent until the user submits.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -490,17 +494,20 @@ function setTile(t, value, before) {
   }
 }
 
-/** A table of a sample, its columns and rows. */
-function sampleTable(value) {
+/** A table of a sample, its columns and rows; a REPLAY_COLUMN column is drawn as Replay buttons. */
+function sampleTable(value, panelId) {
   const table = el("table", "ext");
+  const columns = value.columns || [];
+  const replayAt = columns.indexOf(REPLAY_COLUMN);
   const head = el("tr");
-  for (const column of value.columns || []) head.append(el("th", null, column));
+  columns.forEach((column, i) => head.append(el("th", null, i === replayAt ? "" : column)));
   const thead = el("thead");
   thead.append(head);
   const body = el("tbody");
   for (const row of value.rows || []) {
     const tr = el("tr");
-    for (const cell of row) tr.append(el("td", /^\d+$/.test(cell) ? "n" : null, cell));
+    row.forEach((cell, i) => tr.append(i === replayAt ? replayCell(panelId, cell)
+      : el("td", /^\d+$/.test(cell) ? "n" : null, cell)));
     body.append(tr);
   }
   table.append(thead, body);
@@ -546,19 +553,74 @@ function openButtons(lines) {
 /** The time of an outcome, by the server's clock, as the reader's local time of day. */
 const clockTime = (t) => typeof t === "number" ? new Date(t).toLocaleTimeString() : "";
 
+/** Past this many actions, a panel's actions get a text filter. */
+const FILTER_FROM = 10;
+/** The header of a sample table column whose cells replay an action: PanelSample.REPLAY_COLUMN. */
+const REPLAY_COLUMN = "replay";
+/** What a panel writes in place of a secret: a replay leaves it for the user to type again. */
+const MASKED = "***";
+/** The rows of the actions on the page, by panel and action: what a Replay button fills. */
+const actionRows = new Map();
+const actionKey = (panelId, actionId) => panelId + "\u0000" + actionId;
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
 /**
- * The actions a panel offers, in a dev launch only (the snapshot then carries console.actionToken): one button each,
- * with a field per argument, a list when the server named the values it accepts. A confirmation is asked inline,
- * never with the browser's blocking dialog, which stops the page and any automation. The request is a same-origin
- * fetch with the token of the boot; the page shows the result line, or the class of what the action threw, never
- * more.
+ * The actions a panel offers, in a dev launch only (the snapshot then carries console.actionToken): one form each.
+ * Actions with a group go into a folded section per group, in order of first appearance; past FILTER_FROM actions a
+ * text filter narrows them. A confirmation is asked inline, never with the browser's blocking dialog. The request is
+ * a same-origin fetch with the token of the boot.
  */
 function actionsBar(panel) {
   const actions = Array.isArray(panel.actions) ? panel.actions : [];
   if (!actions.length) return null;
   const bar = el("div", "actions");
   const rows = actions.map((action) => actionRow(panel.id, action));
-  bar.append(...rows.map((row) => row.root));
+  for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
+  for (const row of rows) actionRows.set(actionKey(panel.id, row.id), row);
+
+  let filter = null;
+  if (rows.length > FILTER_FROM) {
+    filter = el("input", "action-filter");
+    filter.type = "search";
+    filter.placeholder = "Filter " + rows.length + " actions";
+    filter.autocomplete = "off";
+    filter.spellcheck = false;
+    bar.append(filter);
+  }
+  const sections = new Map();
+  for (const row of rows) {
+    if (!row.group) { bar.append(row.root); continue; }
+    let section = sections.get(row.group);
+    if (!section) {
+      const box = el("details", "action-group");
+      const title = el("summary");
+      box.append(title);
+      bar.append(box);
+      section = { name: row.group, box, title, rows: [] };
+      sections.set(row.group, section);
+    }
+    section.box.append(row.root);
+    section.rows.push(row);
+  }
+  const titles = () => {
+    for (const s of sections.values()) {
+      const shown = s.rows.filter((r) => !r.root.hidden).length;
+      s.title.textContent = s.name + " (" + (shown === s.rows.length ? shown : shown + " of " + s.rows.length) + ")";
+    }
+  };
+  titles();
+  if (filter) {
+    filter.addEventListener("input", () => {
+      const words = filter.value.trim().toLowerCase();
+      for (const row of rows) row.root.hidden = words !== "" && !row.text.includes(words);
+      for (const s of sections.values()) {
+        const any = s.rows.some((r) => !r.root.hidden);
+        s.box.hidden = !any;
+        if (words !== "" && any) s.box.open = true;
+      }
+      titles();
+    });
+  }
   return {
     root: bar,
     update(current) {
@@ -568,32 +630,229 @@ function actionsBar(panel) {
   };
 }
 
+/** A string argument: a list when the server named the values it accepts, a text field otherwise. */
+function stringField(argument) {
+  const wrap = el("label", "arg");
+  wrap.append(el("span", null, argument.label || argument.name));
+  let input;
+  if (Array.isArray(argument.allowed)) {
+    input = el("select");
+    for (const value of argument.allowed) {
+      const option = el("option", null, value);
+      option.value = value;
+      input.append(option);
+    }
+  } else {
+    input = el("input");
+    input.type = "text";
+    input.maxLength = 200;
+    input.autocomplete = "off";
+    input.spellcheck = false;
+  }
+  input.name = argument.name;
+  wrap.append(input);
+  return {
+    name: argument.name,
+    root: wrap,
+    value: () => input.value,
+    fill(v) { if (typeof v === "string" && v !== MASKED) input.value = v; },
+    disable(on) { input.disabled = on; },
+  };
+}
+
+const SKELETON = new Map([["string", ""], ["number", 0], ["integer", 0], ["boolean", false], ["array", []],
+  ["object", {}]]);
+const SCALAR_TYPES = new Set(["string", "number", "integer", "boolean"]);
+const NOT_FLAT = ["$ref", "properties", "items", "anyOf", "oneOf", "allOf", "not", "patternProperties"];
+
+/**
+ * Whether a json argument's schema gets a generated form (spec §2.4): its root is "type": "object", and every
+ * property is a string, a number, an integer or a boolean, or an enum of strings, with no $ref and no nesting. The
+ * one place this rule is written.
+ */
+function isFlatSchema(schema) {
+  if (!isObject(schema) || schema.type !== "object") return false;
+  if (["$ref", "anyOf", "oneOf", "allOf", "not"].some((k) => k in schema)) return false;
+  if (schema.properties === undefined) return true;
+  if (!isObject(schema.properties)) return false;
+  return Object.values(schema.properties).every((p) => isObject(p) && !NOT_FLAT.some((k) => k in p)
+    && (Array.isArray(p.enum)
+      ? (p.type === undefined || p.type === "string") && p.enum.length > 0 && p.enum.every((v) => typeof v === "string")
+      : SCALAR_TYPES.has(p.type)));
+}
+
+/** The raw editor's first value: the required properties, each with its default, or an empty value of its type. */
+function skeleton(schema) {
+  const object = {};
+  const properties = isObject(schema) && isObject(schema.properties) ? schema.properties : {};
+  const required = isObject(schema) && Array.isArray(schema.required) ? schema.required : [];
+  for (const name of required) {
+    if (typeof name !== "string") continue;
+    const p = isObject(properties[name]) ? properties[name] : {};
+    object[name] = p.default !== undefined ? p.default
+      : Array.isArray(p.enum) && p.enum.length ? p.enum[0]
+      : SKELETON.has(p.type) ? structuredClone(SKELETON.get(p.type)) : null;
+  }
+  return object;
+}
+
+/** {@code values} without the members a panel masked: the user types those again. */
+const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED));
+
+/**
+ * A json argument: a form generated from its schema when the schema is flat, using required, default, description
+ * and enum, and a raw JSON editor otherwise, starting from the required properties. A "JSON" switch shows the form's
+ * value as JSON; switching back keeps the values. value() returns the JSON text sent, or throws what is wrong.
+ */
+function jsonField(argument) {
+  const root = el("div", "json-arg");
+  const schema = argument.schema;
+  const name = argument.label || argument.name;
+  const flat = isFlatSchema(schema);
+  const required = new Set(Array.isArray(schema.required) ? schema.required.filter((n) => typeof n === "string")
+    : []);
+  const head = el("div", "json-head");
+  head.append(el("span", "json-label", name));
+  const note = el("span", "json-note");
+  const editor = el("textarea", "json-editor");
+  editor.spellcheck = false;
+  editor.rows = 6;
+  editor.name = argument.name;
+  editor.value = JSON.stringify(skeleton(schema), null, 2);
+  const form = el("div", "json-form");
+  const inputs = new Map();
+  const raw = el("input");
+  raw.type = "checkbox";
+  if (flat) {
+    for (const [property, definition] of Object.entries(schema.properties || {})) {
+      const kind = Array.isArray(definition.enum) ? "enum" : definition.type;
+      const wrap = el("label", "arg");
+      wrap.append(el("span", null, property + (required.has(property) ? " *" : "")));
+      let input;
+      if (kind === "enum" || kind === "boolean") {
+        input = el("select");
+        for (const v of ["", ...(kind === "enum" ? definition.enum : ["true", "false"])]) {
+          const option = el("option", null, v === "" ? "–" : v);
+          option.value = v;
+          input.append(option);
+        }
+      } else {
+        input = el("input");
+        input.type = "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        if (kind !== "string") input.inputMode = "decimal";
+      }
+      if (definition.default !== undefined && definition.default !== null) input.value = String(definition.default);
+      if (typeof definition.description === "string") input.title = definition.description;
+      input.name = argument.name + "." + property;
+      wrap.append(input);
+      form.append(wrap);
+      inputs.set(property, { input, kind });
+    }
+    const toggle = el("label", "json-switch");
+    toggle.append(raw, el("span", null, "JSON"));
+    head.append(toggle);
+  }
+  head.append(note);
+  root.append(head);
+  if (flat) root.append(form);
+  root.append(editor);
+  const rawMode = () => !flat || raw.checked;
+  const show = () => { form.hidden = rawMode(); editor.hidden = !rawMode(); };
+  show();
+
+  /** The form's values as an object; strict, it refuses a number that is none and a missing required property. */
+  function formObject(strict) {
+    const object = {};
+    for (const [property, { input, kind }] of inputs) {
+      const text = input.value.trim();
+      if (text === "") continue;
+      if (kind === "integer" || kind === "number") {
+        const n = Number(text);
+        const valid = kind === "integer" ? /^-?\d+$/.test(text) : Number.isFinite(n);
+        if (!valid && strict) throw new Error(property + ": not " + (kind === "integer" ? "an integer" : "a number"));
+        object[property] = valid ? n : text;
+      } else if (kind === "boolean") {
+        object[property] = text === "true";
+      } else {
+        object[property] = input.value;
+      }
+    }
+    if (strict) {
+      for (const property of required) {
+        if (!Object.hasOwn(object, property)) throw new Error(property + " is required");
+      }
+    }
+    return object;
+  }
+  function editorObject() {
+    let value;
+    try { value = JSON.parse(editor.value); } catch (unparsable) { throw new Error(name + ": not valid JSON"); }
+    if (!isObject(value)) throw new Error(name + ": not a JSON object");
+    return value;
+  }
+  function toForm(object) {
+    for (const [property, { input }] of inputs) {
+      const v = object[property];
+      input.value = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+  }
+  raw.addEventListener("change", () => {
+    note.textContent = "";
+    if (raw.checked) {
+      editor.value = JSON.stringify(formObject(false), null, 2);
+    } else {
+      try { toForm(editorObject()); } catch (invalid) { raw.checked = true; note.textContent = invalid.message; }
+    }
+    show();
+  });
+  return {
+    name: argument.name,
+    root,
+    value: () => JSON.stringify(rawMode() ? editorObject() : formObject(true)),
+    fill(values) {
+      if (!isObject(values)) return;
+      const kept = unmasked(values);
+      editor.value = JSON.stringify(kept, null, 2);
+      if (flat) toForm(kept);
+      note.textContent = Object.keys(kept).length < Object.keys(values).length ? "masked values: type them again" : "";
+    },
+    disable(on) { for (const c of [editor, raw, ...[...inputs.values()].map((i) => i.input)]) c.disabled = on; },
+  };
+}
+
+/** {@code text} pretty-printed when it is JSON, as it is otherwise. */
+function prettyJson(text) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch (notJson) { return text; }
+}
+
+/** What an answer shows under its line: its body, then its details folded under "Exchange". */
+function resultOutput(answer) {
+  const out = [];
+  if (typeof answer.body === "string") {
+    const json = typeof answer.contentType === "string" && answer.contentType.startsWith("application/json");
+    out.push(el("pre", "result-body", json ? prettyJson(answer.body) : answer.body));
+  }
+  if (typeof answer.details === "string") {
+    const exchange = el("details", "exchange");
+    exchange.append(el("summary", null, "Exchange"), el("pre", "result-body", prettyJson(answer.details)));
+    out.push(exchange);
+  }
+  return out;
+}
+
 function actionRow(panelId, action) {
   const root = el("form", "action");
   root.noValidate = true;
+  if (typeof action.description === "string" && action.description) {
+    root.append(el("p", "action-desc", action.description));
+  }
   const fields = [];
   for (const argument of action.arguments || []) {
-    const wrap = el("label", "arg");
-    wrap.append(el("span", null, argument.label || argument.name));
-    let input;
-    if (Array.isArray(argument.allowed)) {
-      input = el("select");
-      for (const value of argument.allowed) {
-        const option = el("option", null, value);
-        option.value = value;
-        input.append(option);
-      }
-    } else {
-      input = el("input");
-      input.type = "text";
-      input.maxLength = 200;
-      input.autocomplete = "off";
-      input.spellcheck = false;
-    }
-    input.name = argument.name;
-    wrap.append(input);
-    fields.push(input);
-    root.append(wrap);
+    const field = isObject(argument.schema) ? jsonField(argument) : stringField(argument);
+    fields.push(field);
+    root.append(field.root);
   }
   const go = el("button", "act", action.label || action.id);
   go.type = "submit";
@@ -605,21 +864,36 @@ function actionRow(panelId, action) {
   no.type = "button";
   ask.append(el("span", "question", action.confirmation || ""), yes, no);
   const message = el("span", "msg");
-  root.append(go, ask, message);
+  const output = el("div", "result");
+  root.append(go, ask, message, output);
 
   let sending = false;
   let shown = null;            // the time of the outcome of the snapshot last shown; a newer one replaces the message
-  const busy = (on) => { for (const c of [go, yes, no, ...fields]) c.disabled = on; };
+  const busy = (on) => {
+    for (const c of [go, yes, no]) c.disabled = on;
+    for (const field of fields) field.disable(on);
+  };
   const say = (text, cls) => { message.textContent = text; message.className = "msg" + (cls ? " " + cls : ""); };
   const closeAsk = () => { ask.hidden = true; go.hidden = false; };
+  const reveal = () => {
+    root.hidden = false;
+    const box = root.closest("details");
+    if (box) { box.hidden = false; box.open = true; }
+  };
 
   async function send() {
     const token = page.snapshot && page.snapshot.console && page.snapshot.console.actionToken;
     if (typeof token !== "string") { say("No token: reload the page.", "failed"); return; }
     const body = {};
-    for (const input of fields) body[input.name] = input.value;
+    try {
+      for (const field of fields) body[field.name] = field.value();
+    } catch (invalid) {
+      say(invalid.message, "failed");
+      return;
+    }
     sending = true;
     busy(true);
+    output.replaceChildren();
     say("running…", "running");
     try {
       const response = await fetch("api/action/" + encodeURIComponent(panelId) + "/" + encodeURIComponent(action.id), {
@@ -630,8 +904,10 @@ function actionRow(panelId, action) {
       });
       const type = response.headers.get("Content-Type") || "";
       const answer = type.startsWith("application/json") ? await response.json() : { text: await response.text() };
-      if (response.status === 200 && typeof answer.result === "string") say(answer.result, "ok");
-      else if (response.status === 500 && typeof answer.error === "string") say("failed: " + answer.error, "failed");
+      if (response.status === 200 && typeof answer.result === "string") {
+        say(answer.result, answer.error === true ? "failed" : "ok");
+        output.replaceChildren(...resultOutput(answer));
+      } else if (response.status === 500 && typeof answer.error === "string") say("failed: " + answer.error, "failed");
       else if (response.status === 202) say("still running after 60 s: the outcome will show here", "running");
       else if (response.status === 409) say("another action of this panel is running", "failed");
       else say("refused (" + response.status + ")" + (answer.text ? ": " + answer.text : ""), "failed");
@@ -654,7 +930,16 @@ function actionRow(panelId, action) {
 
   return {
     id: action.id,
+    group: typeof action.group === "string" && action.group ? action.group : null,
+    text: [action.label, action.id, action.description].filter((t) => typeof t === "string").join(" ").toLowerCase(),
     root,
+    /** Fills the form with a replayed call's arguments, by name; sends nothing. */
+    fill(values) {
+      for (const field of fields) if (Object.hasOwn(values, field.name)) field.fill(values[field.name]);
+      reveal();
+      root.scrollIntoView({ block: "nearest" });
+      go.focus();
+    },
     update(now) {
       if (!now || sending) return;
       busy(!!now.running);
@@ -662,10 +947,31 @@ function actionRow(panelId, action) {
       const last = now.last;
       if (last && typeof last.text === "string" && last.time !== shown) {
         shown = last.time;
-        say((last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time), last.ok ? "ok" : "failed");
+        say((last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time),
+          last.ok && last.error !== true ? "ok" : "failed");
       }
     },
   };
+}
+
+/**
+ * A cell of a REPLAY_COLUMN column: "<action id> <JSON object of its arguments>", as a button that fills that
+ * action's form with them. Nothing is sent: the user submits. An empty or unreadable cell stays empty.
+ */
+function replayCell(panelId, cell) {
+  const td = el("td");
+  const space = typeof cell === "string" ? cell.indexOf(" ") : -1;
+  if (space <= 0) return td;
+  let values;
+  try { values = JSON.parse(cell.slice(space + 1)); } catch (unreadable) { return td; }
+  const row = actionRows.get(actionKey(panelId, cell.slice(0, space)));
+  if (!row || !isObject(values)) return td;
+  const button = el("button", "replay", "Replay");
+  button.type = "button";
+  button.title = "Fill the form of this action with these arguments";
+  button.addEventListener("click", () => row.fill(values));
+  td.append(button);
+  return td;
 }
 
 /** The key, values and href of a line of the report: a line that points somewhere ends with {href}. */
@@ -867,7 +1173,7 @@ function scopeView(container, panel, group, values, charts) {
         const t = tiles.get(value.key);
         if (t) setTile(t, value, previous(panel.id, group, value.key));
         const holder = tableBoxes.get(value.key);
-        if (holder) holder.replaceChildren(value.kind === "table" ? sampleTable(value)
+        if (holder) holder.replaceChildren(value.kind === "table" ? sampleTable(value, panel.id)
           : el("p", "absent", value.reason || "not available"));
       }
       for (const box of boxes) drawChart(box, panel.id, group, snapshot.console.time, pollMillis(snapshot));
