@@ -53,6 +53,7 @@ class McpClientTest {
 
     @AfterEach
     void stop() {
+        client.close();
         stub.close();
     }
 
@@ -157,23 +158,57 @@ class McpClientTest {
             port = probe.getLocalPort();
         }
         URI closed = URI.create("http://127.0.0.1:" + port + "/mcp");
-        McpClient nowhere = new McpClient(closed, Duration.ofSeconds(5));
-        JsonObject request = nowhere.request("tools/call", Json.createObjectBuilder().add("name", "t")
-                .add("arguments", Json.createObjectBuilder()).build());
+        try (McpClient nowhere = new McpClient(closed, Duration.ofSeconds(5))) {
+            JsonObject request = nowhere.request("tools/call", Json.createObjectBuilder().add("name", "t")
+                    .add("arguments", Json.createObjectBuilder()).build());
 
-        McpTransportException failure = assertThrows(McpTransportException.class,
-                () -> nowhere.send(request, "t", Map.of()));
+            McpTransportException failure = assertThrows(McpTransportException.class,
+                    () -> nowhere.send(request, "t", Map.of()));
 
-        assertEquals("/mcp unreachable at " + closed, failure.getMessage());
+            assertEquals("/mcp unreachable at " + closed, failure.getMessage());
+        }
     }
 
     @Test
     void aSlowAnswerTimesOut() {
+        client.close();
         client = new McpClient(stub.uri(), Duration.ofSeconds(1));
         stub.respond(request -> new StubMcp.Answer(200, "application/json", "{}", 2_500));
 
         McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
 
         assertEquals("timed out after 1 s", failure.getMessage());
+    }
+
+    @Test
+    void aResponseBodyOverOneMebibyteIsATransportFailure() throws Exception {
+        stub.respond(request -> new StubMcp.Answer(200, "application/json", "a".repeat(1_048_576 + 1), 0));
+
+        McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
+
+        assertEquals("/mcp answered more than 1 MiB", failure.getMessage());
+    }
+
+    @Test
+    void anEndlessSlowStreamTimesOutWithoutHanging() throws Exception {
+        client.close();
+        client = new McpClient(stub.uri(), Duration.ofSeconds(1));
+        stub.respondWithEndlessSlowStream(50);
+        long start = System.nanoTime();
+
+        McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
+
+        long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
+        assertEquals("timed out after 1 s", failure.getMessage());
+        assertTrue(elapsedMillis < 10_000, "the call must not hang past the timeout: took " + elapsedMillis + " ms");
+    }
+
+    @Test
+    void aCallAfterCloseFailsCleanly() throws Exception {
+        client.close();
+
+        McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
+
+        assertEquals("/mcp unreachable at " + stub.uri(), failure.getMessage());
     }
 }

@@ -31,6 +31,7 @@ import jakarta.json.JsonReader;
 import jakarta.json.JsonString;
 import jakarta.json.JsonValue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.URI;
@@ -39,6 +40,7 @@ import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -47,6 +49,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -60,14 +69,23 @@ import java.util.concurrent.atomic.AtomicLong;
  * {@code Mcp-Name}, Base64-wrapped when it is not plain ASCII, the client's capabilities, and for a tool the
  * {@code Mcp-Param-*} headers of its designated arguments. It declares elicitation, sampling and roots, so that a
  * tool that needs them answers {@code input_required}, which the inspector reports, rather than a missing
- * capability. It accepts JSON and SSE; from a stream it keeps the final response and the events before it.
+ * capability. It accepts JSON and SSE; from a stream it keeps the final response and the events before it. A
+ * response body past {@value #MAX_RESPONSE_BYTES} bytes is discarded rather than buffered in full, so that a
+ * runaway tool result cannot exhaust the dev JVM; the wait for an answer is bounded by the constructor's
+ * {@code timeout}, whether the server is slow to answer or slow to finish streaming it.
+ *
+ * <p>Holds its own {@link HttpClient}, which JDK 21+ makes {@link AutoCloseable} with its own executor: this class
+ * is {@link AutoCloseable} too, and {@link #close()} must be called once the client is no longer needed, or a
+ * dev reload leaks the executor.
  */
-final class McpClient {
+final class McpClient implements AutoCloseable {
 
     /** The stateless era of MCP. */
     static final String PROTOCOL = McpProtocolVersions.MODERN_2026_07_28;
     /** What the inspector calls itself in {@code clientInfo}. */
     static final String CLIENT_NAME = "vidocq-dev-console";
+    /** A response body past this many bytes is discarded rather than buffered in full. */
+    static final long MAX_RESPONSE_BYTES = 1_048_576L;
 
     private static final String BASE64_PREFIX = "=?base64?";
     private static final String BASE64_SUFFIX = "?=";
@@ -87,6 +105,7 @@ final class McpClient {
     private final Duration timeout;
     private final HttpClient http;
     private final AtomicLong ids = new AtomicLong();
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
      * @param endpoint the absolute URL of {@code /mcp}
@@ -126,6 +145,9 @@ final class McpClient {
      * @throws McpTransportException when no JSON-RPC answer came back
      */
     Exchange send(JsonObject request, String name, Map<String, String> paramHeaders) throws McpTransportException {
+        if (closed.get()) {
+            throw new McpTransportException("/mcp unreachable at " + endpoint);
+        }
         HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
                 .timeout(timeout)
                 .header("Content-Type", "application/json")
@@ -137,15 +159,20 @@ final class McpClient {
         paramHeaders.forEach((designation, value) ->
                 builder.header(McpParamHeaderValidator.HEADER_PREFIX + designation, headerValue(value)));
         long start = System.nanoTime();
+        // sendAsync, not send: the request's own timeout(...) bounds a slow response HEADER, but the outer
+        // future.get(timeout, ...) below is what bounds a prompt header followed by a slow or endless BODY, and
+        // it is what the LimitingBodySubscriber's cancellation (past MAX_RESPONSE_BYTES) completes exceptionally
+        // through.
+        CompletableFuture<HttpResponse<String>> future =
+                http.sendAsync(builder.build(), responseInfo -> new LimitingBodySubscriber());
         HttpResponse<String> response;
         try {
-            response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        } catch (HttpConnectTimeoutException unreachable) {
-            throw new McpTransportException("/mcp unreachable at " + endpoint);
-        } catch (HttpTimeoutException slow) {
+            response = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException slow) {
+            future.cancel(true);
             throw new McpTransportException("timed out after " + timeout.toSeconds() + " s");
-        } catch (IOException unreachable) {
-            throw new McpTransportException("/mcp unreachable at " + endpoint);
+        } catch (ExecutionException failed) {
+            throw transportFailure(failed.getCause());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new McpTransportException("interrupted while waiting for /mcp");
@@ -164,6 +191,33 @@ final class McpClient {
             throw new McpTransportException("HTTP " + response.statusCode());
         }
         return new Exchange(request, answer, events, response.statusCode(), millis);
+    }
+
+    /**
+     * The transport failure a {@code sendAsync} {@link ExecutionException}'s cause represents: a body over
+     * {@value #MAX_RESPONSE_BYTES} bytes, a connection that never came up, or a response that took too long.
+     * {@link HttpConnectTimeoutException} is checked before {@link HttpTimeoutException}, which it extends, so
+     * that a connection that never came up is still reported as unreachable rather than as timed out.
+     */
+    private McpTransportException transportFailure(Throwable cause) {
+        if (cause instanceof ResponseTooLargeException) {
+            return new McpTransportException("/mcp answered more than 1 MiB");
+        }
+        if (cause instanceof HttpConnectTimeoutException) {
+            return new McpTransportException("/mcp unreachable at " + endpoint);
+        }
+        if (cause instanceof HttpTimeoutException) {
+            return new McpTransportException("timed out after " + timeout.toSeconds() + " s");
+        }
+        return new McpTransportException("/mcp unreachable at " + endpoint);
+    }
+
+    /** Closes the underlying {@link HttpClient} and its executor. Safe to call more than once. */
+    @Override
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            http.close();
+        }
     }
 
     /**
@@ -268,5 +322,65 @@ final class McpClient {
                         .add("sampling", JsonValue.EMPTY_JSON_OBJECT)
                         .add("roots", JsonValue.EMPTY_JSON_OBJECT))
                 .build();
+    }
+
+    /**
+     * A {@link HttpResponse.BodySubscriber} that gives up past {@link #MAX_RESPONSE_BYTES}: it cancels the
+     * subscription, discarding the connection, and completes its body exceptionally with
+     * {@link ResponseTooLargeException} rather than keep buffering.
+     */
+    private static final class LimitingBodySubscriber implements HttpResponse.BodySubscriber<String> {
+
+        private final CompletableFuture<String> result = new CompletableFuture<>();
+        private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        private Flow.Subscription subscription;
+        private long total;
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            this.subscription = subscription;
+            subscription.request(Long.MAX_VALUE);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> items) {
+            if (result.isDone()) {
+                return;
+            }
+            for (ByteBuffer item : items) {
+                byte[] chunk = new byte[item.remaining()];
+                item.get(chunk);
+                total += chunk.length;
+                buffer.write(chunk, 0, chunk.length);
+                if (total > MAX_RESPONSE_BYTES) {
+                    subscription.cancel();
+                    result.completeExceptionally(new ResponseTooLargeException());
+                    return;
+                }
+            }
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            result.completeExceptionally(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            if (!result.isDone()) {
+                result.complete(buffer.toString(StandardCharsets.UTF_8));
+            }
+        }
+
+        @Override
+        public CompletionStage<String> getBody() {
+            return result;
+        }
+    }
+
+    /** Marks a response body that exceeded {@link #MAX_RESPONSE_BYTES}. */
+    private static final class ResponseTooLargeException extends IOException {
+
+        private static final long serialVersionUID = 1L;
     }
 }

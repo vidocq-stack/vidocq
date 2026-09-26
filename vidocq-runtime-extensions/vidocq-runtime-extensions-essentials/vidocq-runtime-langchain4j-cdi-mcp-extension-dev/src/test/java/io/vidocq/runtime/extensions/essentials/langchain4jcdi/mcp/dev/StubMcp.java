@@ -57,6 +57,7 @@ final class StubMcp implements AutoCloseable {
     private final List<Received> received = new CopyOnWriteArrayList<>();
     private volatile Function<JsonObject, Answer> responder = request -> result(request, "{}");
     private volatile String rejected;
+    private volatile long endlessStreamChunkDelayMillis = -1;
 
     private StubMcp(HttpServer server) {
         this.server = server;
@@ -77,6 +78,15 @@ final class StubMcp implements AutoCloseable {
 
     void respond(Function<JsonObject, Answer> next) {
         responder = next;
+    }
+
+    /**
+     * Sends headers immediately, then an endless stream of SSE comment lines, one every {@code chunkDelayMillis},
+     * until the client gives up: for testing that the client's timeout bounds a slow or endless BODY, not only a
+     * slow response header.
+     */
+    void respondWithEndlessSlowStream(long chunkDelayMillis) {
+        endlessStreamChunkDelayMillis = chunkDelayMillis;
     }
 
     List<Received> received() {
@@ -111,6 +121,10 @@ final class StubMcp implements AutoCloseable {
         } catch (RuntimeException refused) {
             rejected = refused.getClass().getSimpleName() + ": " + refused.getMessage();
         }
+        if (endlessStreamChunkDelayMillis >= 0) {
+            streamEndlessly(exchange, endlessStreamChunkDelayMillis);
+            return;
+        }
         Answer answer = responder.apply(request);
         if (answer.delayMillis() > 0) {
             try {
@@ -124,6 +138,23 @@ final class StubMcp implements AutoCloseable {
         exchange.sendResponseHeaders(answer.status(), bytes.length == 0 ? -1 : bytes.length);
         try (OutputStream out = exchange.getResponseBody()) {
             out.write(bytes);
+        }
+    }
+
+    /** Headers now, then a comment line every {@code chunkDelayMillis} until the client disconnects or gives up. */
+    private static void streamEndlessly(HttpExchange exchange, long chunkDelayMillis) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, 0);
+        try (OutputStream out = exchange.getResponseBody()) {
+            for (int i = 0; i < 10_000; i++) {
+                out.write((": keep-alive " + i + "\n\n").getBytes(StandardCharsets.UTF_8));
+                out.flush();
+                Thread.sleep(chunkDelayMillis);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (IOException clientGaveUp) {
+            // the client cancelled or closed the connection: nothing left to answer.
         }
     }
 
