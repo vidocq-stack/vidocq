@@ -167,10 +167,9 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
-        <!-- Deviation from the Task 13 brief's file list: DevConsoleSnapshotTest also drives the migration panel's
-             actions (migratesFromTheConsoleAndRefusesToCleanByDefault), which moved to this -dev companion in Task
-             11 (commit a8b7f3a1) without this example's pom being updated — a pre-existing gap, not something this
-             task introduces. Added here, at test scope, for the same reason as the pool panel above. -->
+        <!-- DevConsoleSnapshotTest drives the migration panel's actions
+             (migratesFromTheConsoleAndRefusesToCleanByDefault), which live in this -dev companion
+             (Vidocq/vidocq#143) — needed at test scope, for the same reason as the pool panel above. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-migration-extension-dev</artifactId>

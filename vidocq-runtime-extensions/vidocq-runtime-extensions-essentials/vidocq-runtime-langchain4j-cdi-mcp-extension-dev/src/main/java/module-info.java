@@ -26,9 +26,9 @@ module io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.dev {
     requires io.vidocq.runtime.spi.devconsole;
     requires jakarta.cdi;
     requires dev.langchain4j.cdi.mcp.server;
-    // Not in the brief's list (Vidocq/vidocq#143, Task 12): McpLiveBeans reads the synthetic bean of the CDI 4.1
-    // invoker provider, McpCdi41InvokerProvider, from this module. The runtime module requires it too, but not
-    // transitively, so it must be required here again.
+    // McpLiveBeans reads the synthetic bean of the CDI 4.1 invoker provider, McpCdi41InvokerProvider, from
+    // this module (Vidocq/vidocq#143). The runtime module requires it too, but not transitively, so it must
+    // be required here again.
     requires dev.langchain4j.cdi.mcp.invoker.cdi41;
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel

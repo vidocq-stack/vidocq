@@ -74,8 +74,8 @@ class MigrationLivePanelTest {
     /**
      * Builds a {@link MigrationExtension} with a fake backend, exactly as the runtime module's own tests do —
      * through its package-private constructor, reached here by reflection since this module cannot see it
-     * directly and the constructor must stay package-private (Vidocq/vidocq#143 fix round 1: it is a test seam,
-     * not part of the runtime's public API). Surefire runs this module's tests off the module path (the pom's
+     * directly and the constructor must stay package-private (Vidocq/vidocq#143: it is a test seam, not part
+     * of the runtime's public API). Surefire runs this module's tests off the module path (the pom's
      * {@code useModulePath=false}), so {@code setAccessible(true)} needs no {@code opens} in the runtime module's
      * {@code module-info}; on a real module path this would need one, which the runtime module does not grant.
      */

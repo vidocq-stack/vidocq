@@ -856,7 +856,12 @@ vidocq-runtime-mansart-pool-extension-dev
 [#testing]
 == Testing a panel [.tag-new]#NEW#
 
-A panel needs neither the console nor a running application to be tested: call `contribute` with a section that records what it receives, and `sample` with a sample that does the same. The Mansart pool extension keeps both in its test sources, `RecordedSection` and `RecordedSample`: copy them into your extension's tests.
+A panel needs neither the console nor a running application to be tested, and, once the boot facts and the
+live values are two classes (<<dev-module,A `-dev` module, never packaged>>), they are tested apart, each in
+its own module: call `contribute` with a section that records what it receives, in the runtime module's own
+tests, and `sample` with a sample that does the same, in the `-dev` module's. The Mansart pool extension keeps
+one of each in its test sources — `RecordedSection` in `vidocq-runtime-mansart-pool-extension`'s,
+`RecordedSample` in `vidocq-runtime-mansart-pool-extension-dev`'s — copy the one you need into your own tests.
 
 The recording sample checks every key as the console does, and keeps each value as a record, so that a test compares values whole:
 
@@ -898,7 +903,9 @@ final class RecordedSample implements PanelSample {
 }
 ----
 
-The recording section keeps the summary, the rows in order and the anomalies, a secret as the report prints it, `configured` or `not configured`; a `StartupReportContext` record gives the launch mode and the level. Then the tests drive the extension as Vidocq would — `configure`, `beforeStart`, `onStart` — and read what it wrote:
+=== The boot facts, on the extension [.tag-new]#NEW#
+
+The recording section keeps the summary, the rows in order and the anomalies, a secret as the report prints it, `configured` or `not configured`; a `StartupReportContext` record gives the launch mode and the level. The tests drive the extension as Vidocq would — `configure`, `beforeStart`, `onStart` — and read what it wrote, exactly as before the split:
 
 [source,java]
 ----
@@ -916,24 +923,63 @@ void inDevTheBootFactsShowTheUrlWithoutItsCredentialsAndTheUser() {
         assertFalse(section.everything().contains(secret), secret + " written: " + section.everything());
     }
 }
+----
 
-@Test
-void everyChartPlotsValuesTheSampleWrites() {
-    boot("vidocq.pool.url", h2("default"), "vidocq.pool.audit.url", h2("audit"));
-    RecordedSample sample = new RecordedSample();
-    ext.sample(sample);
+[#testing-the-dev-module]
+=== The live values, on the `-dev` module's `LivePanel` [.tag-new]#NEW#
 
-    for (String pool : sample.groupNames()) {
-        RecordedSample group = sample.written(pool);
-        for (Chart chart : ext.charts()) {
-            for (Series series : chart.series()) {
-                RecordedSample.Value value = group.value(series.key());
-                if (series.style() == Series.Style.RATE) {
-                    assertInstanceOf(Counter.class, value, chart.id() + " " + series);
-                } else {
-                    Gauge gauge = assertInstanceOf(Gauge.class, value, chart.id() + " " + series);
-                    if (series.style() == Series.Style.CEILING) {
-                        assertNotNull(gauge.max(), chart.id() + ": a ceiling needs a max");
+`PoolsLivePanelTest`, in `vidocq-runtime-mansart-pool-extension-dev`, drives `PoolsLivePanel` directly — never
+the extension's `sample`/`charts`, which no longer exist — but still boots the real extension to open real
+pools through `MansartPoolsLive`, the holder <<example-step-2,Step 2>> publishes:
+
+[source,java]
+----
+class PoolsLivePanelTest {
+
+    private final MansartPoolExtension ext = new MansartPoolExtension();
+    private final PoolsLivePanel panel = new PoolsLivePanel();
+
+    @AfterEach
+    void stop() {
+        ext.onStop();
+    }
+
+    /** Configures the extension and opens its pools, as Vidocq does before the container starts: publishes them. */
+    private void boot(String... keysAndValues) {
+        ext.configure(config(keysAndValues));
+        ext.beforeStart(new VaubanContainerBuilder());
+    }
+
+    private RecordedSample sample() {
+        RecordedSample sample = new RecordedSample();
+        panel.sample(sample);
+        return sample;
+    }
+
+    @Test
+    void afterTheHolderIsClearedTheSampleWritesNoGroup() {
+        MansartPoolsLive.clear();
+
+        assertEquals(List.of(), sample().groupNames(), "a dev reload never shows the previous boot's pools");
+    }
+
+    @Test
+    void everyChartPlotsValuesTheSampleWrites() {
+        boot("vidocq.pool.url", h2("default"), "vidocq.pool.audit.url", h2("audit"));
+        RecordedSample sample = sample();
+
+        for (String pool : sample.groupNames()) {
+            RecordedSample group = sample.written(pool);
+            for (Chart chart : panel.charts()) {
+                for (Series series : chart.series()) {
+                    RecordedSample.Value value = group.value(series.key());
+                    if (series.style() == Series.Style.RATE) {
+                        assertInstanceOf(Counter.class, value, chart.id() + " " + series);
+                    } else {
+                        Gauge gauge = assertInstanceOf(Gauge.class, value, chart.id() + " " + series);
+                        if (series.style() == Series.Style.CEILING) {
+                            assertNotNull(gauge.max(), chart.id() + ": a ceiling needs a max");
+                        }
                     }
                 }
             }
@@ -942,17 +988,29 @@ void everyChartPlotsValuesTheSampleWrites() {
 }
 ----
 
-The tests worth writing for any panel, as `MansartPoolPanelTest` has them:
+`boot(...)` still runs the real extension's `configure`/`beforeStart`, since that is what fills
+`MansartPoolsLive`; `panel.sample(...)` and `panel.charts()` are what the test actually calls now.
+`afterTheHolderIsClearedTheSampleWritesNoGroup` is the `-dev` form of "once stopped, the panel shows nothing":
+with a holder cleared by the extension's own `onStop`, the equivalent check for a live bean recomputed from
+`ExtensionContext` (Knock's, Dirac's) is to call the panel's own `stop()` and sample again.
 
-* the boot facts in a dev launch, and outside it: no URL, no user, no configured value;
-* a search of everything written for each secret the test configured;
-* below `DETAILED`, the summary and the anomalies only;
-* the live values of each group, with a known state: the pool test holds a connection and samples, then releases it and samples again;
-* every chart plots values the sample writes, of the right kind;
-* once `onStop` ran, `sample` writes nothing and `contribute` says so;
-* each anomaly, with its message and hint.
+TIP: An extension that keeps the older, all-in-one `DevConsolePanel` form (<<dev-module,A `-dev` module, never
+packaged>>) is tested exactly as above, but on the extension itself: `ext.sample(sample)` and `ext.charts()`,
+with no second test class and no `-dev` module needed.
 
-Then see it for real: add `vidocq-runtime-devconsole-extension` to an application that uses your extension, run `mvn vidocq:dev`, open the URL, and read `GET /api/snapshot` — the document the page draws — to check what your panel sends.
+The tests worth writing for any panel:
+
+* on the extension — the boot facts in a dev launch, and outside it: no URL, no user, no configured value; a
+  search of everything written for each secret the test configured; below `DETAILED`, the summary and the
+  anomalies only; each anomaly, with its message and hint;
+* on the `LivePanel` (or the extension, for the all-in-one form) — the live values of each group, with a known
+  state: the pool test holds a connection and samples, then releases it and samples again; every chart plots
+  values the sample writes, of the right kind; once the state the panel reads is gone — the holder cleared, or
+  `stop()` called — `sample` writes nothing.
+
+Then see it for real: run `mvn vidocq:dev` on an application that has your extension — and Chappe, so the
+console has something to serve it on — open the URL, and read `GET /api/snapshot`, the document the page
+draws, to check what your panel sends.
 
 [#checklist]
 == Checklist [.tag-new]#NEW#

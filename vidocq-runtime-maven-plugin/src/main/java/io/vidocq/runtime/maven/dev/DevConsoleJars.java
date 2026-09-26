@@ -45,7 +45,7 @@ final class DevConsoleJars {
 
     private DevConsoleJars() {}
 
-    /** Whether {@code projectArtifacts} already has the Chappe HTTP server extension (Ruling 5). */
+    /** Whether {@code projectArtifacts} already has the Chappe HTTP server extension (Vidocq/vidocq#143). */
     static boolean needsConsole(Collection<Artifact> projectArtifacts) {
         for (Artifact artifact : projectArtifacts) {
             if (CHAPPE_KEY.equals(artifact.getGroupId() + ":" + artifact.getArtifactId())) {

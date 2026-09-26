@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@link DevModules#companionOf} reads a jar's {@code META-INF/vidocq/dev-module} descriptor, and {@link
  * DevModules#collect} resolves and adds each project artifact's companion, skipping what is already on the path and
- * never bringing in runtime code the application lacks (Vidocq/vidocq#143, Ruling 4).
+ * never bringing in runtime code the application lacks (Vidocq/vidocq#143).
  */
 class DevModulesTest {
 

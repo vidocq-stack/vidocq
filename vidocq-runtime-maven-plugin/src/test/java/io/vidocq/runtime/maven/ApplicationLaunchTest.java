@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * {@link ApplicationLaunch#modulePath}'s {@code dropDevOnly} overload: {@code vidocq:run} drops a jar
  * marked {@code Vidocq-Dev-Only: true} even when the project declares it, while the five-argument overload
- * that {@code vidocq:dev} uses keeps it (Ruling 6, Vidocq/vidocq#143).
+ * that {@code vidocq:dev} uses keeps it (Vidocq/vidocq#143).
  */
 class ApplicationLaunchTest {
 

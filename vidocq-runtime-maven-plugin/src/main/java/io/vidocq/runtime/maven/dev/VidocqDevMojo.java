@@ -614,7 +614,7 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
-     * The dev console and its SPI (Vidocq/vidocq#143, Ruling 5), resolved through Aether under this plugin's own
+     * The dev console and its SPI (Vidocq/vidocq#143), resolved through Aether under this plugin's own
      * version, unless the application already has both or lacks Chappe. Never a {@code vidocq-runtime-maven-plugin}
      * dependency: {@code vidocq-runtime-devconsole-extension} sits inside the {@code vidocq-runtime-extensions}
      * reactor tree, whose parent pom activates this very plugin (checkpom) as a build tool on every extension —

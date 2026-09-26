@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link DevConsoleJars#resolve} adds the dev console and its SPI from this plugin's own dependencies, and only when
- * the application already has the Chappe HTTP server extension (Vidocq/vidocq#143, Ruling 5): a CLI application
+ * the application already has the Chappe HTTP server extension (Vidocq/vidocq#143): a CLI application
  * must never get a listener started under {@code vidocq:dev}.
  */
 class DevConsoleJarsTest {

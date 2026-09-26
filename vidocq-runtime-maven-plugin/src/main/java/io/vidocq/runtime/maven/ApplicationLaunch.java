@@ -47,7 +47,7 @@ public final class ApplicationLaunch {
 
     /**
      * The module path of the child JVM, keeping every declared jar — including one marked
-     * {@link DevOnlyJars#MANIFEST_ENTRY dev-only} (Ruling 6: {@code vidocq:dev} keeps a declared console).
+     * {@link DevOnlyJars#MANIFEST_ENTRY dev-only}: {@code vidocq:dev} keeps a declared console (Vidocq/vidocq#143).
      *
      * @param project     the project being run
      * @param buildDir    {@code target/}, where {@code vauban:modularize} writes its copies

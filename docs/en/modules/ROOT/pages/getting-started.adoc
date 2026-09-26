@@ -124,9 +124,14 @@ mvn vidocq:dev
 
 Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` / `vidocq.mainClass` properties already set in the generated pom.
 
-Add `vidocq-runtime-devconsole-extension` to the pom and dev mode also serves the xref:dev-console.adoc[dev console] [.tag-new]#NEW#: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
+Nothing to add: since `todo` already has the Chappe HTTP server (through `cassini-rest`), `mvn vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own [.tag-new]#NEW#: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
 
-To run the application once, without the watcher, use `mvn vidocq:run` [.tag-new]#NEW#: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. It is also what an IDE should run — `mvn vidocq:idea` writes exactly that run configuration. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
+To run the application once, without the watcher, use `mvn vidocq:run` [.tag-new]#NEW#: it compiles, completes the bean index and forks the same JVM, and its exit code is the build's. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the `vidocq:run` goal].
+
+`mvn vidocq:idea` [.tag-new]#NEW# writes IntelliJ IDEA run configurations for what an IDE should run: by
+default, three files per application — a Maven run of `vidocq:dev` (the one above, console included), one of
+`vidocq:run` suffixed ` (packaged)`, and a Remote JVM Debug one suffixed ` (debug)` that attaches to
+`vidocq:dev`'s own debug agent. See xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
 NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goal) boot the runtime from the CLI's own module path and therefore do not see the extensions declared in your pom. Prefer `mvn vidocq:dev` and the packaged launcher for extension-based apps.
 
