@@ -127,4 +127,56 @@ class PanelActionTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new PanelAction.Argument("level", "Level", null, null), "a list or a pattern");
     }
+
+    @Test
+    void aJsonArgumentCarriesItsSchemaAndAcceptsAnObjectOnly() {
+        String schema = "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}";
+        PanelAction.Argument arguments = PanelAction.Argument.json("arguments", "Arguments", schema);
+
+        assertEquals(schema, arguments.schema());
+        assertNull(arguments.allowedValues());
+        assertNull(arguments.pattern());
+        assertTrue(arguments.accepts("{\"city\":\"Paris\"}"));
+        assertTrue(arguments.accepts("{\"city\":\"" + "a".repeat(1000) + "\"}"),
+                "no 200-character limit: the console's body limit bounds a json value");
+        assertFalse(arguments.accepts("{\"city\":"));
+        assertFalse(arguments.accepts("[\"Paris\"]"));
+        assertFalse(arguments.accepts("\"Paris\""));
+        assertFalse(arguments.accepts(null));
+    }
+
+    @Test
+    void aNestedSchemaIsFineAsLongAsItIsAnObject() {
+        String nested = "{\"type\":\"object\",\"properties\":{\"when\":{\"type\":\"object\","
+                + "\"properties\":{\"at\":{\"type\":\"string\"}}}}}";
+
+        assertEquals(nested, PanelAction.Argument.json("arguments", "Arguments", nested).schema());
+    }
+
+    @Test
+    void aSchemaThatIsNoObjectOrTooLargeIsRefused() {
+        assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.json("arguments", "Arguments", "[]"));
+        assertThrows(IllegalArgumentException.class,
+                () -> PanelAction.Argument.json("arguments", "Arguments", "{\"type\":"));
+        assertThrows(NullPointerException.class, () -> PanelAction.Argument.json("arguments", "Arguments", null));
+        String large = "{\"description\":\"" + "a".repeat(PanelAction.Argument.MAX_SCHEMA) + "\"}";
+        assertThrows(IllegalArgumentException.class,
+                () -> PanelAction.Argument.json("arguments", "Arguments", large));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PanelAction.Argument("a", "A", null, "[a-z]+", "{}"), "a pattern or a schema, not both");
+    }
+
+    @Test
+    void anActionHasOneJsonArgumentAtMostBesideItsOtherArguments() {
+        PanelAction.Argument one = PanelAction.Argument.json("arguments", "Arguments", "{}");
+        PanelAction.Argument two = PanelAction.Argument.json("variables", "Variables", "{}");
+
+        PanelAction mixed = new PanelAction("call", "Call", null, List.of(one,
+                PanelAction.Argument.oneOf("mode", "Mode", "fast", "slow"),
+                PanelAction.Argument.matching("tag", "Tag", "[a-z]{1,10}")), a -> "ok");
+
+        assertEquals(3, mixed.arguments().size());
+        assertThrows(IllegalArgumentException.class,
+                () -> new PanelAction("call", "Call", null, List.of(one, two), a -> "ok"));
+    }
 }

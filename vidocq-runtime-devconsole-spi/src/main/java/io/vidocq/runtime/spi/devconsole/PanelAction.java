@@ -41,7 +41,9 @@ import java.util.regex.PatternSyntaxException;
  * <p><b>What it receives.</b> Only the arguments it declared, each a string the console checked against its
  * {@link Argument} before calling {@link #run}: a value among a list, or a whole match of a regular expression, 200
  * characters at most. An action never takes a class name, a file path or a URL to act on: it acts on what its
- * panel already holds, and an argument picks among those things, such as a pool by name or a level.
+ * panel already holds, and an argument picks among those things, such as a pool by name or a level. A
+ * {@link Argument#json json} argument is the exception: its value is the text of a JSON object, of any length the
+ * console's body limit lets through, described by a JSON Schema.
  *
  * <p><b>What it returns.</b> One short line of text, such as {@code 3 migrations applied}, that the page shows and the
  * console logs; {@code null} reads as {@code done}. It runs on a virtual thread of the console, one action at a time
@@ -88,6 +90,9 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
                         + " twice");
             }
         }
+        if (arguments.stream().filter(argument -> argument.schema() != null).count() > 1) {
+            throw new IllegalArgumentException("action '" + id + "' declares more than one json argument");
+        }
     }
 
     /**
@@ -103,20 +108,27 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
     }
 
     /**
-     * One string an action takes, and what the console accepts for it: a value of {@code allowedValues}, which the
-     * page offers as a list, or a whole match of {@code pattern}, which it offers as a text field. Exactly one of
-     * the two is set.
+     * One value an action takes, and what the console accepts for it: a value of {@code allowedValues}, which the
+     * page offers as a list; a whole match of {@code pattern}, which it offers as a text field; or a JSON object
+     * described by the JSON Schema {@code schema}, which it offers as a form when the schema is flat and as a JSON
+     * editor otherwise. Exactly one of the three is set.
      *
-     * @param name          the key of the value in the request and in the map {@link #run} receives; it follows
-     *                      the rule of {@link PanelSample#requireKey}, such as {@code level}
+     * @param name          the key of the value in the request and in the map the action receives; it follows the
+     *                      rule of {@link PanelSample#requireKey}, such as {@code level}
      * @param label         what the page writes next to its field; neither {@code null} nor blank
      * @param allowedValues the values accepted, in the order the page lists them, at least one, none blank nor
      *                      longer than {@value #MAX_VALUE_LENGTH} characters; an immutable copy, or {@code null}
-     *                      when {@code pattern} is set
      * @param pattern       the regular expression, {@link Pattern} syntax, that a value must match as a whole, or
-     *                      {@code null} when {@code allowedValues} is set
+     *                      {@code null}
+     * @param schema        a JSON Schema, as the text of a JSON object of at most {@value #MAX_SCHEMA} characters,
+     *                      or {@code null}; the console never validates a value against it, the action's target does
      */
-    public record Argument(String name, String label, List<String> allowedValues, String pattern) {
+    public record Argument(String name, String label, List<String> allowedValues, String pattern, String schema) {
+
+        /** The longest schema of a {@link #json json} argument, in characters. */
+        public static final int MAX_SCHEMA = 32 * 1024;
+        /** How deep a {@link #json json} value or schema may nest. */
+        public static final int MAX_JSON_DEPTH = 64;
 
         public Argument {
             PanelSample.requireKey(name);
@@ -124,9 +136,10 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
             if (label.isBlank()) {
                 throw new IllegalArgumentException("argument '" + name + "' has a blank label");
             }
-            if ((allowedValues == null) == (pattern == null)) {
+            int kinds = (allowedValues == null ? 0 : 1) + (pattern == null ? 0 : 1) + (schema == null ? 0 : 1);
+            if (kinds != 1) {
                 throw new IllegalArgumentException("argument '" + name
-                        + "' needs either its allowed values or a pattern, and not both");
+                        + "' needs exactly one of its allowed values, a pattern or a schema");
             }
             if (allowedValues != null) {
                 allowedValues = List.copyOf(allowedValues);
@@ -139,13 +152,29 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
                                 + "longer than " + MAX_VALUE_LENGTH + " characters");
                     }
                 }
-            } else {
+            } else if (pattern != null) {
                 try {
                     Pattern.compile(pattern);
                 } catch (PatternSyntaxException invalid) {
                     throw new IllegalArgumentException("argument '" + name + "' has an invalid pattern", invalid);
                 }
+            } else if (schema.length() > MAX_SCHEMA || !JsonCheck.isObject(schema, MAX_JSON_DEPTH)) {
+                throw new IllegalArgumentException("argument '" + name + "' has a schema that is not a JSON object "
+                        + "of at most " + MAX_SCHEMA + " characters");
             }
+        }
+
+        /**
+         * A value among a list, or a whole match of a pattern: the two string kinds, as before the {@link #json json}
+         * kind existed.
+         *
+         * @param name          its name, by the key rule
+         * @param label         what the page writes next to it
+         * @param allowedValues the values accepted, or {@code null} when {@code pattern} is set
+         * @param pattern       the regular expression, or {@code null} when {@code allowedValues} is set
+         */
+        public Argument(String name, String label, List<String> allowedValues, String pattern) {
+            this(name, label, allowedValues, pattern, null);
         }
 
         /**
@@ -157,7 +186,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * @return the argument
          */
         public static Argument oneOf(String name, String label, String... values) {
-            return new Argument(name, label, List.of(values), null);
+            return new Argument(name, label, List.of(values), null, null);
         }
 
         /**
@@ -169,18 +198,40 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * @return the argument
          */
         public static Argument matching(String name, String label, String regex) {
-            return new Argument(name, label, null, Objects.requireNonNull(regex, "regex"));
+            return new Argument(name, label, null, Objects.requireNonNull(regex, "regex"), null);
         }
 
         /**
-         * Whether the console passes {@code value} to the action: not {@code null}, at most
-         * {@value #MAX_VALUE_LENGTH} characters, and one of the allowed values or a whole match of the pattern.
+         * An argument whose value is a JSON object, such as the arguments of an MCP tool. The action receives it as
+         * its JSON text. One action has one such argument at most.
+         *
+         * @param name   its name, by the key rule
+         * @param label  what the page writes next to it
+         * @param schema a JSON Schema describing the object, as the text of a JSON object
+         * @return the argument
+         * @throws IllegalArgumentException when {@code schema} is not a JSON object of at most
+         *                                  {@value #MAX_SCHEMA} characters
+         */
+        public static Argument json(String name, String label, String schema) {
+            return new Argument(name, label, null, null, Objects.requireNonNull(schema, "schema"));
+        }
+
+        /**
+         * Whether the console passes {@code value} to the action: not {@code null}, and for a {@link #json json}
+         * argument one JSON object, whatever its length; for a string argument at most {@value #MAX_VALUE_LENGTH}
+         * characters, and one of the allowed values or a whole match of the pattern.
          *
          * @param value the value a request carries
          * @return {@code true} when it is accepted
          */
         public boolean accepts(String value) {
-            if (value == null || value.length() > MAX_VALUE_LENGTH) {
+            if (value == null) {
+                return false;
+            }
+            if (schema != null) {
+                return JsonCheck.isObject(value, MAX_JSON_DEPTH);
+            }
+            if (value.length() > MAX_VALUE_LENGTH) {
                 return false;
             }
             return allowedValues != null ? allowedValues.contains(value) : Pattern.matches(pattern, value);
