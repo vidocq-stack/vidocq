@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * The MCP inspector of the {@code mcp} panel (spec §3): an action per item of the {@link McpCatalogue}, which calls
@@ -49,6 +50,9 @@ import java.util.Optional;
  * <p>Holds the {@link McpClient} of its endpoint, if any: {@link #close()} must be called once this inspector is
  * replaced or no longer needed, so that a dev reload never leaves the previous boot's {@link java.net.http.HttpClient}
  * running.
+ *
+ * <p>Each call is recorded in a {@link CallHistory} of 20, its secrets masked (see {@link Secrets}), which the
+ * sample publishes with what replays it.
  */
 final class McpInspector {
 
@@ -65,6 +69,7 @@ final class McpInspector {
     private final McpCatalogue catalogue;
     private final String absent;
     private final List<PanelAction> actions;
+    private final CallHistory history = new CallHistory();
 
     private McpInspector(McpClient client, McpCatalogue catalogue, String absent) {
         this.client = client;
@@ -141,6 +146,11 @@ final class McpInspector {
         return actions;
     }
 
+    /** The calls of this boot. */
+    CallHistory history() {
+        return history;
+    }
+
     /** Writes {@code inspector}: what it offers and where it calls, or why it offers nothing. */
     void sample(PanelSample out) {
         if (client == null) {
@@ -150,6 +160,7 @@ final class McpInspector {
             return;
         }
         out.text("inspector", catalogue.summary() + " at " + client.endpoint());
+        history.writeTo(out);
     }
 
     /**
@@ -187,19 +198,28 @@ final class McpInspector {
     }
 
     /**
-     * Calls {@code item} with the arguments the console checked.
+     * Calls {@code item} with the arguments the console checked, and records the call, its secrets masked.
      *
      * @param item  what to call
      * @param given its json argument's text by name, or nothing for a fixed resource
-     * @return what came back
+     * @return what came back, the summary and the details scrubbed of the secrets' values
      */
     PanelAction.ActionResult call(McpCatalogue.Item item, Map<String, String> given) {
+        long start = System.nanoTime();
         String argumentName = item.kind().argument();
         JsonObject values = argumentName == null ? JsonValue.EMPTY_JSON_OBJECT : parse(given.get(argumentName));
-        return send(item, values);
+        Set<String> secrets = Secrets.values(values);
+        PanelAction.ActionResult sent = send(item, values, secrets);
+        PanelAction.ActionResult result = new PanelAction.ActionResult(Secrets.scrub(sent.summary(), secrets),
+                sent.contentType(), sent.body(), sent.error(), sent.details());
+        JsonObject masked = (JsonObject) Secrets.mask(values);
+        history.add(new CallHistory.Call(System.currentTimeMillis(), item.id(), item.label(),
+                argumentName == null ? "" : masked.toString(), result.summary(), result.error(),
+                (System.nanoTime() - start) / 1_000_000, result.details(), replay(item.id(), argumentName, masked)));
+        return result;
     }
 
-    private PanelAction.ActionResult send(McpCatalogue.Item item, JsonObject values) {
+    private PanelAction.ActionResult send(McpCatalogue.Item item, JsonObject values, Set<String> secrets) {
         JsonObjectBuilder params = Json.createObjectBuilder();
         String method;
         String name;
@@ -230,28 +250,42 @@ final class McpInspector {
         JsonObject request = client.request(method, params.build());
         try {
             McpClient.Exchange exchange = client.send(request, name, headers);
-            return McpResults.of(item.kind(), exchange, details(request, exchange));
+            return McpResults.of(item.kind(), exchange, details(request, exchange, secrets));
         } catch (McpTransportException failed) {
-            return McpResults.transport(failed.getMessage(), details(request, null));
+            return McpResults.transport(failed.getMessage(), details(request, null, secrets));
         } catch (RuntimeException unexpected) {
             return McpResults.transport("/mcp call failed: " + unexpected.getClass().getSimpleName(),
-                    details(request, null));
+                    details(request, null, secrets));
         }
     }
 
-    /** The exchange as the page shows it: the request, and the HTTP status, the SSE events and the response. */
-    private static String details(JsonObject request, McpClient.Exchange exchange) {
-        JsonObjectBuilder out = Json.createObjectBuilder().add("request", request);
+    /**
+     * The exchange as the page shows it, secrets masked by name and scrubbed by value: the request, and the HTTP
+     * status, the SSE events and the response.
+     */
+    private static String details(JsonObject request, McpClient.Exchange exchange, Set<String> secrets) {
+        JsonObjectBuilder out = Json.createObjectBuilder().add("request", Secrets.mask(request));
         if (exchange != null) {
             out.add("status", exchange.status());
             if (!exchange.events().isEmpty()) {
                 JsonArrayBuilder events = Json.createArrayBuilder();
-                exchange.events().forEach(events::add);
+                exchange.events().forEach(event -> events.add(Secrets.mask(event)));
                 out.add("events", events);
             }
-            out.add("response", exchange.response());
+            out.add("response", Secrets.mask(exchange.response()));
         }
-        return out.build().toString();
+        return Secrets.scrub(out.build().toString(), secrets);
+    }
+
+    /**
+     * The replay cell of a call: its action id, a space, and its masked arguments by name, which the page puts back
+     * in the form; empty past {@link PanelSample#MAX_REPLAY_CELL} characters.
+     */
+    private static String replay(String id, String argumentName, JsonObject masked) {
+        JsonObject values = argumentName == null ? JsonValue.EMPTY_JSON_OBJECT
+                : Json.createObjectBuilder().add(argumentName, masked).build();
+        String cell = id + " " + values;
+        return cell.length() > PanelSample.MAX_REPLAY_CELL ? "" : cell;
     }
 
     /** The console checked that {@code text} is one JSON object; {@code null} reads as an empty one. */

@@ -317,6 +317,36 @@ class McpLivePanelTest {
         }
     }
 
+    @Test
+    void theHistoryHoldsTwentyCallsAndStopClearsIt() throws Exception {
+        try (StubMcp stub = StubMcp.start();
+             VaubanContainer container = McpTestContainers.container(InspectorFixtures.CATALOGUE_BEANS)) {
+            stub.respond(request -> StubMcp.result(request,
+                    "{\"contents\":[{\"uri\":\"time://utc\",\"text\":\"UTC\"}]}"));
+            McpEndpointLive.publish(List.of(stub.uri().toString()));
+            InspectorFixtures.fill(container.getBeanManager());
+            panel.start(new FakeExtensionContext(container));
+            PanelAction utc = panel.actions().stream().filter(a -> a.id().equals("res.860cd4a5")).findFirst()
+                    .orElseThrow();
+
+            for (int n = 0; n < 21; n++) {
+                utc.call().apply(Map.of());
+            }
+            RecordingSample full = new RecordingSample();
+            panel.sample(full);
+
+            assertEquals(20, full.text("calls").split("res\\.860cd4a5 \\{}", -1).length - 1,
+                    "twenty rows, each with its replay cell: " + full.text("calls"));
+
+            panel.stop();
+            panel.start(new FakeExtensionContext(container));
+            RecordingSample fresh = new RecordingSample();
+            panel.sample(fresh);
+
+            assertEquals("[]", fresh.text("calls"), "a new boot starts with no history");
+        }
+    }
+
     private static void awaitStubRequest(StubMcp stub) throws InterruptedException {
         long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
         while (stub.received().isEmpty() && System.nanoTime() < deadline) {

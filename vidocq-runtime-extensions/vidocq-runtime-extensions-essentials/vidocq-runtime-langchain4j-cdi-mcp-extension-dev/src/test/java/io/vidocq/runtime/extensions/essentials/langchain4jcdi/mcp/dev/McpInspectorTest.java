@@ -223,4 +223,41 @@ class McpInspectorTest {
         assertTrue(result.error(), "an aborted in-flight call must end as an error");
         assertNull(result.body(), "a transport line has no body");
     }
+
+    @Test
+    void aSecretIsMaskedInTheHistoryTheDetailsAndTheSummaryTheConsoleLogs() {
+        stub.respond(request -> StubMcp.error(request, 200, -32602, "Invalid key hunter22 for query"));
+        McpInspector inspector = McpInspector.of(McpCatalogue.of(List.of(InspectorFixtures.tool("search")),
+                List.of(), List.of(), List.of()), stub.uri(), Duration.ofSeconds(5));
+
+        PanelAction.ActionResult result = action(inspector, "tool.search").call()
+                .apply(Map.of("arguments", "{\"query\":\"cats\",\"apiKey\":\"hunter22\"}"));
+
+        assertTrue(stub.received().getFirst().body().contains("hunter22"), "the server receives the real value");
+        assertEquals("error -32602: Invalid key *** for query", result.summary(), "the console's INFO line");
+        assertFalse(result.details().contains("hunter22"), result.details());
+        assertTrue(result.details().contains("\"apiKey\":\"***\""), result.details());
+        CallHistory.Call call = inspector.history().calls().getFirst();
+        assertEquals("{\"query\":\"cats\",\"apiKey\":\"***\"}", call.arguments());
+        assertEquals("tool.search {\"arguments\":{\"query\":\"cats\",\"apiKey\":\"***\"}}", call.replay());
+        assertFalse(call.details().contains("hunter22"));
+        assertTrue(call.error());
+    }
+
+    @Test
+    void everyCallIsRecordedWithWhatReplaysIt() {
+        stub.respond(request -> StubMcp.result(request, "{\"contents\":[{\"uri\":\"time://utc\",\"text\":\"UTC\"}]}"));
+        McpInspector inspector = inspector();
+
+        action(inspector, "res.860cd4a5").call().apply(Map.of());
+        action(inspector, "tpl.72bba68d").call().apply(Map.of("variables", "{\"zone\":\"UTC\"}"));
+
+        List<CallHistory.Call> calls = inspector.history().calls();
+        assertEquals("tpl.72bba68d {\"variables\":{\"zone\":\"UTC\"}}", calls.get(0).replay());
+        assertEquals("res.860cd4a5 {}", calls.get(1).replay());
+        assertEquals("time://utc", calls.get(1).label());
+        RecordingSample sample = new RecordingSample();
+        inspector.sample(sample);
+        assertEquals("table", sample.kind("calls"));
+    }
 }
