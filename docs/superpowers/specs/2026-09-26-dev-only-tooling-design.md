@@ -62,7 +62,8 @@ The maintainer's decisions (brainstorming):
 | Brick | `mansart`, `cassini` | Its read-only public API | Nothing of the console |
 | Runtime extension | `vidocq-runtime-mansart-pool-extension` | The integration, the startup-report section, the descriptor | `vidocq-runtime-spi`, never `vidocq-runtime-devconsole-spi` |
 | `-dev` module (new) | `vidocq-runtime-mansart-pool-extension-dev` | The live panel | Its runtime extension, `vidocq-runtime-devconsole-spi` |
-| Dev-only infrastructure | `vidocq-runtime-devconsole-extension`, `vidocq-runtime-devconsole-spi`, `vidocq-runtime-devservices-extension` | The console and its own panels (config, cdi, logs, tests, jvm); the dev services | — |
+| Dev-only infrastructure | `vidocq-runtime-devconsole-extension`, `vidocq-runtime-devservices-extension` | The console and its own panels (config, cdi, logs, tests, jvm); the dev services | — |
+| Console SPI (not dev-only) | `vidocq-runtime-devconsole-spi` | Five API types | `vidocq-runtime-spi` |
 
 The six new `-dev` modules sit next to their runtime extension, in the same parent: `cassini-rest`, `mansart-pool`,
 `dirac-metrics`, `knock-health`, `migration`, `langchain4j-cdi-mcp`. Each `-dev` module is a JPMS module named after its
@@ -113,8 +114,13 @@ Rules, each logged once per boot as a WARNING anomaly:
   from the extension artifact itself. Blank lines and lines starting with `#` are ignored; a file that holds more than
   one artifactId, or an artifactId that is not a valid Maven identifier, is unreadable (§8).
 - **Marking.** Every dev-only jar carries `Vidocq-Dev-Only: true` in its `META-INF/MANIFEST.MF`, set by the module's
-  POM. This covers the console, the console SPI, every `-dev` module and the dev services extension. The marking is
+  POM. This covers the console, every `-dev` module and the dev services extension. The marking is
   what the packaging goals and `checkpom` read, whatever the declaring scope.
+- **The console SPI is not marked.** It is an ordinary API jar of five types. An extension that keeps the all-in-one
+  `DevConsolePanel` form requires it (`requires transitive io.vidocq.runtime.spi.devconsole`), so it must resolve in
+  every binary that has such an extension (§9); dropping it would break that module graph under `vidocq:run` and the
+  packaged launcher, and fail `jlink`. `vidocq:dev` adds it with the console, and a companion may bring it among its
+  runtime dependencies although it is not marked.
 
 ## 5. `vidocq:dev`
 

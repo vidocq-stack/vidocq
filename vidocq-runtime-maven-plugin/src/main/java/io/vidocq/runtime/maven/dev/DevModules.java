@@ -43,7 +43,9 @@ import java.util.zip.ZipEntry;
  * The {@code -dev} companions of the project's extensions (Vidocq/vidocq#143): each runtime extension with a live
  * panel names its companion in {@value #DESCRIPTOR}, same groupId and version. {@code vidocq:dev} adds each companion
  * with its dev-only runtime dependencies, never a module already on the path, and never a companion that would bring
- * runtime code the application does not have. A companion that cannot be resolved costs its live panel only.
+ * runtime code the application does not have. The console SPI is the one exception: an ordinary API jar, not marked
+ * dev-only, that every companion needs and that comes with the console anyway. A companion that cannot be resolved
+ * costs its live panel only.
  */
 final class DevModules {
 
@@ -125,7 +127,8 @@ final class DevModules {
             if (onPath.contains(key)) {
                 continue;
             }
-            String coordinates = key + ":" + artifact.getVersion();
+            // The base version: a remote snapshot resolves at its timestamp, the companion has a build number of its own.
+            String coordinates = key + ":" + artifact.getBaseVersion();
             List<Resolved> resolved;
             try {
                 resolved = resolver.resolve(coordinates);
@@ -141,7 +144,7 @@ final class DevModules {
                 if (onPath.contains(jar.key())) {
                     continue;
                 }
-                if (!DevOnlyJars.isDevOnly(jar.file())) {
+                if (!DevConsoleJars.SPI_KEY.equals(jar.key()) && !DevOnlyJars.isDevOnly(jar.file())) {
                     foreign = jar.key();
                     break;
                 }

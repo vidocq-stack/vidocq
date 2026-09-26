@@ -56,7 +56,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
 }
 ----
 
-It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
+It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. It is an ordinary API jar, not a dev tool: unlike the console, it ships in the binary with an extension that requires it. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
 
 [#dev-module]
 == A `-dev` module, never packaged [.tag-new]#NEW#

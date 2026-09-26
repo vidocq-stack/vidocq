@@ -239,7 +239,8 @@ contains it (Vidocq/vidocq#143).
 
 * **Remove `vidocq-runtime-devconsole-extension` from the pom.** `vidocq:checkpom` already warns about it if
   you do not — a dev-only dependency declared outside `test` scope — and every packaging goal drops it anyway,
-  with a warning, whether or not you remove it.
+  with a warning, whether or not you remove it. Its SPI, `vidocq-runtime-devconsole-spi`, a small API jar,
+  stays in the binary as long as the console, or an extension that requires the SPI, is declared.
 * **Unless a test reads the console**, such as one that calls its `/api/snapshot`: keep the dependency, moved
   to `<scope>test</scope>`, together with the `-dev` module of any extension whose live panel the same test
   reads (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]). `test` scope is never

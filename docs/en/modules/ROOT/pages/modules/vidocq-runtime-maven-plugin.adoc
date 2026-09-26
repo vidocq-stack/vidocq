@@ -437,9 +437,11 @@ one, never every interface.
 [#dev-tools]
 == Dev tools and binaries [.tag-new]#NEW#
 
-The dev console, its SPI and every extension's `-dev` panel module (xref:dev-console-panels.adoc#dev-module[A
-`-dev` module, never packaged]) are development tools: only `vidocq:dev` ever adds them, to the child JVM's
-module path, and no binary this plugin produces ever contains them (Vidocq/vidocq#143).
+The dev console and every extension's `-dev` panel module (xref:dev-console-panels.adoc#dev-module[A `-dev`
+module, never packaged]) are development tools: only `vidocq:dev` ever adds them, to the child JVM's module
+path, and no binary this plugin produces ever contains them (Vidocq/vidocq#143). The console's SPI,
+`vidocq-runtime-devconsole-spi`, is not one: an ordinary API jar, `vidocq:dev` adds it with the console, and it
+ships in a binary whenever an extension that keeps the all-in-one `DevConsolePanel` form requires it.
 
 **What `vidocq:dev` adds, and when.** After building the child's module path as it always has, the goal:
 
@@ -448,8 +450,8 @@ module path, and no binary this plugin produces ever contains them (Vidocq/vidoc
   `vidocq-runtime-chappe-webserver-extension`: the console serves its page through Chappe, so without it there
   is nothing to serve the page, and nothing is added;
 . for every runtime extension the project resolves, reads its `META-INF/vidocq/dev-module` descriptor, if it has
-  one, and resolves that companion `-dev` module and its own dev-only runtime dependencies, at the extension's
-  own `groupId` and version;
+  one, and resolves that companion `-dev` module and its own dev-only runtime dependencies, plus the console SPI,
+  at the extension's own `groupId` and version;
 . never adds a module twice: a jar the console step already put on the path is not added again by a
   companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
   declaration, kept working — is left where it is, not duplicated;
@@ -481,7 +483,7 @@ invalid one, costs the same, naming the jar. Both are warnings, never failures.
 
 **`vidocq:run`, the packaging goals, and never twice.** `vidocq:run`, `vidocq:package`, `vidocq:jlink`,
 `vidocq:jpackage` and `vidocq:docker` add none of this. They also drop every jar marked `Vidocq-Dev-Only: true`
-in its manifest from what they launch or ship — the console, its SPI, every `-dev` module, and the dev services
+in its manifest from what they launch or ship — the console, every `-dev` module, and the dev services
 extension — even when the project declares one directly, at any scope but `test`. Each dropped jar logs one
 WARNING per goal run, never fails the build:
 

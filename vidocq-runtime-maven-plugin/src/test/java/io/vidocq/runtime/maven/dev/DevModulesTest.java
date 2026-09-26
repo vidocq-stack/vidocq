@@ -127,6 +127,43 @@ class DevModulesTest {
         assertEquals(List.of(dev), added, "the SPI jar the console step already added must not be added twice");
     }
 
+    /**
+     * The console SPI is an ordinary API jar, not marked dev-only, yet a companion that implements a live panel always
+     * needs it; the console step adds it anyway, so it is the one unmarked dependency a companion may bring.
+     */
+    @Test
+    void theConsoleSpiIsAnAllowedCompanionDependency(@TempDir Path dir) throws Exception {
+        Artifact knock = artifact("g", "ext", withDescriptor(dir, "ext.jar", "ext-dev"));
+        Path dev = markedJar(dir, "ext-dev.jar");
+        Path spi = plainJar(dir, "spi.jar");
+        List<String> warnings = new ArrayList<>();
+
+        List<Path> added = DevModules.collect(List.of(knock), coords -> List.of(
+                new DevModules.Resolved("g:ext-dev", dev),
+                new DevModules.Resolved(DevConsoleJars.SPI_KEY, spi)),
+                warnings::add, i -> {});
+
+        assertEquals(List.of(dev, spi), added);
+        assertEquals(List.of(), warnings);
+    }
+
+    /** A remote snapshot resolves at its timestamped version; its companion has its own build number. */
+    @Test
+    void aSnapshotCompanionIsResolvedAtTheBaseVersion(@TempDir Path dir) throws Exception {
+        Artifact knock = new DefaultArtifact("g", "ext", "0.4.0-20260926.101010-3", "runtime", "jar", null,
+                new DefaultArtifactHandler("jar"));
+        knock.setFile(withDescriptor(dir, "ext.jar", "ext-dev").toFile());
+        Path dev = markedJar(dir, "ext-dev.jar");
+        List<String> asked = new ArrayList<>();
+
+        DevModules.collect(List.of(knock), coords -> {
+            asked.add(coords);
+            return List.of(new DevModules.Resolved("g:ext-dev", dev));
+        }, w -> {}, i -> {});
+
+        assertEquals(List.of("g:ext-dev:0.4.0-SNAPSHOT"), asked);
+    }
+
     /** A jar carrying the {@code META-INF/vidocq/dev-module} descriptor, no manifest attribute of its own. */
     static Path withDescriptor(Path dir, String name, String content) throws Exception {
         Path jar = dir.resolve(name);

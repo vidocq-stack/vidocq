@@ -32,7 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Vidocq/vidocq#143: a project that declares the dev console at compile scope still gets a distribution without it
- * — {@code vidocq:package} drops every dev-only jar, even when the project asks for it, and logs a WARNING once.
+ * — {@code vidocq:package} drops every dev-only jar, even when the project asks for it, and logs a WARNING once. The
+ * console's SPI, an ordinary API jar that an all-in-one extension may require, is kept.
  */
 @DisabledOnOs(OS.WINDOWS)
 class DevToolsPackagingIT {
@@ -49,7 +50,10 @@ class DevToolsPackagingIT {
 
         assertTrue(Fixture.read(log).contains("vidocq-runtime-devconsole-extension is dev-only: not packaged"));
         try (var zip = new ZipFile(Fixture.distZip(project).toFile())) {
-            assertTrue(zip.stream().noneMatch(e -> e.getName().contains("devconsole")), "no dev console in the zip");
+            assertTrue(zip.stream().noneMatch(e -> e.getName().contains("devconsole-extension")),
+                    "no dev console in the zip");
+            assertTrue(zip.stream().anyMatch(e -> e.getName().contains("vidocq-runtime-devconsole-spi")),
+                    "the console SPI ships: a module that requires it must resolve in the binary");
         }
     }
 }

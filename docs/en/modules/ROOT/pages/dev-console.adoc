@@ -41,8 +41,8 @@ with the `-dev` modules it needs, at `test` scope: `mvn test`, `vidocq:test` and
 </dependency>
 ----
 
-`vidocq:run`, `vidocq:package`, `vidocq:jlink`, `vidocq:jpackage` and `vidocq:docker` never contain the console,
-its SPI or any `-dev` module: every one of their jars carries `Vidocq-Dev-Only: true` in its manifest, and these
+`vidocq:run`, `vidocq:package`, `vidocq:jlink`, `vidocq:jpackage` and `vidocq:docker` never contain the console
+or any `-dev` module: every one of their jars carries `Vidocq-Dev-Only: true` in its manifest, and these
 goals drop such a jar from what they launch or ship, even when the project declares it — a declared console, for
 instance, kept from before this changed. Each dropped jar logs one WARNING per goal run, never fails the build,
 and names what to remove:
@@ -55,6 +55,11 @@ and names what to remove:
 `vidocq:checkpom` gives the same advice earlier, at `validate`: a warning, never a failure, for a dev-only
 dependency declared in any scope but `test`. See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev
 tools and binaries] for the full picture, companions included.
+
+The console's SPI, `vidocq-runtime-devconsole-spi`, is not marked: it is an ordinary API jar of five small types,
+and it ships in a binary whenever an extension that keeps the all-in-one `DevConsolePanel` form
+(xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]) requires it, so that such an extension
+still resolves outside `vidocq:dev`.
 
 Then run the application in dev mode:
 
