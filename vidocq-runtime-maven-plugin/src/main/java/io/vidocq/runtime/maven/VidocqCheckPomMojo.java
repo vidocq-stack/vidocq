@@ -85,6 +85,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     private static final String VIDOCQ_RUNTIME_GROUP = "io.vidocq.runtime";
     private static final String CORE_CODEGEN = "vidocq-runtime-core-codegen";
     private static final String MAVEN_COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
+    private static final String MAVEN_JAR_KEY = "org.apache.maven.plugins:maven-jar-plugin";
     /** Matches a runtime extension artifact, e.g. {@code vidocq-runtime-cassini-rest-extension}. */
     private static final Pattern EXTENSION_PATTERN =
             Pattern.compile("^vidocq-runtime-(.+)-extension$");
@@ -138,7 +139,29 @@ public class VidocqCheckPomMojo extends AbstractMojo {
      * Resolve a dependency to its jar file. Returns {@link Optional#empty()} on any
      * resolution failure, so the calling code never crashes on unavailable artifacts.
      */
-    private Optional<Path> resolvedJar(Dependency d) {
+    /**
+     * Whether {@code project} builds a dev-only jar itself (a {@code -dev} companion, the console): its
+     * maven-jar-plugin writes {@code Vidocq-Dev-Only: true} into the manifest. Such a module depends on dev tools by
+     * design.
+     */
+    static boolean isDevOnlyProject(MavenProject project) {
+        Plugin jar = project.getPlugin(MAVEN_JAR_KEY);
+        if (jar == null) return false;
+        return Stream.concat(
+                        Stream.ofNullable(jar.getConfiguration()),
+                        jar.getExecutions().stream().map(PluginExecution::getConfiguration))
+                .filter(Xpp3Dom.class::isInstance)
+                .map(Xpp3Dom.class::cast)
+                .map(c -> c.getChild("archive"))
+                .filter(Objects::nonNull)
+                .map(a -> a.getChild("manifestEntries"))
+                .filter(Objects::nonNull)
+                .map(m -> m.getChild(DevOnlyJars.MANIFEST_ENTRY))
+                .anyMatch(e -> e != null && "true".equalsIgnoreCase(e.getValue() == null ? "" : e.getValue().strip()));
+    }
+
+    // package-private: a test resolves every dependency to a jar of its own.
+    Optional<Path> resolvedJar(Dependency d) {
         if (d.getVersion() == null) return Optional.empty();
         try {
             ArtifactRequest req = new ArtifactRequest();
@@ -164,6 +187,14 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         if ("pom".equals(project.getPackaging())) {
             getLog().debug("Vidocq checkpom: skipping POM-only module " + project.getArtifactId());
             return;
+        }
+
+        // Warned about first, whatever the checks below find: a warning, never a failure. A dev-only module
+        // depends on dev tools by design.
+        if (!isDevOnlyProject(project)) {
+            for (String issue : findDevOnlyDeclarations(project.getDependencies(), this::resolvedJar)) {
+                getLog().warn(issue);
+            }
         }
 
         Map<String, String> extensionGroups = new LinkedHashMap<>();
@@ -197,12 +228,6 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         if (failOnMissing) {
             throw new MojoFailureException("Vidocq checkpom found " + issues.size()
                     + " issue(s). Fix them or downgrade to warnings via -Dvidocq.checkpom.failOnMissing=false.");
-        }
-
-        // Always warn about declared dev-only dependencies outside test scope,
-        // never fail.
-        for (String issue : findDevOnlyDeclarations(project.getDependencies(), this::resolvedJar)) {
-            getLog().warn(issue);
         }
     }
 

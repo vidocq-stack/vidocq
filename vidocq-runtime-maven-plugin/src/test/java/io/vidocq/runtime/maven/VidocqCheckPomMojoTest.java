@@ -19,14 +19,20 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,6 +115,71 @@ class VidocqCheckPomMojoTest {
 
         assertEquals(List.of(DevOnlyJars.droppedWarning("vidocq-runtime-devconsole-extension")),
                 issues);
+    }
+
+    /**
+     * The dev-only warning does not depend on the codegen checks: a module with no extension/codegen coupling still
+     * learns that its declared dev-only dependency is never packaged.
+     */
+    @Test
+    void aDevOnlyDependencyIsReportedEvenWithNothingElseToCheck(@TempDir Path dir) throws Exception {
+        Path marked = DevOnlyJarsTest.jar(dir, "knock-dev.jar", "true");
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(dependency("vidocq-runtime-knock-health-extension-dev", "compile"));
+        List<String> warnings = new ArrayList<>();
+
+        checkpom(new MavenProject(model), marked, warnings).execute();
+
+        assertEquals(List.of(DevOnlyJars.droppedWarning("vidocq-runtime-knock-health-extension-dev")), warnings);
+    }
+
+    /** A dev-only module (a {@code -dev} companion, the console) depends on dev tools by design: no warning. */
+    @Test
+    void aDevOnlyModuleIsNotWarnedAboutItsDevOnlyDependencies(@TempDir Path dir) throws Exception {
+        Path marked = DevOnlyJarsTest.jar(dir, "console.jar", "true");
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(dependency("vidocq-runtime-knock-health-extension-dev", "compile"));
+        Plugin jar = new Plugin();
+        jar.setGroupId("org.apache.maven.plugins");
+        jar.setArtifactId("maven-jar-plugin");
+        jar.setConfiguration(Xpp3DomBuilder.build(new StringReader("<configuration><archive><manifestEntries>"
+                + "<Vidocq-Dev-Only>true</Vidocq-Dev-Only></manifestEntries></archive></configuration>")));
+        Build build = new Build();
+        build.addPlugin(jar);
+        model.setBuild(build);
+        MavenProject project = new MavenProject(model);
+        List<String> warnings = new ArrayList<>();
+
+        assertTrue(VidocqCheckPomMojo.isDevOnlyProject(project));
+        assertFalse(VidocqCheckPomMojo.isDevOnlyProject(new MavenProject(new Model())));
+        checkpom(project, marked, warnings).execute();
+
+        assertEquals(List.of(), warnings);
+    }
+
+    /** A checkpom mojo on {@code project} whose every dependency resolves to {@code jar}, warnings captured. */
+    private static VidocqCheckPomMojo checkpom(MavenProject project, Path jar, List<String> warnings)
+            throws Exception {
+        VidocqCheckPomMojo mojo = new VidocqCheckPomMojo() {
+            @Override
+            Optional<Path> resolvedJar(Dependency d) {
+                return Optional.of(jar);
+            }
+        };
+        setProject(mojo, project);
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void warn(CharSequence content) {
+                warnings.add(content.toString());
+            }
+
+            @Override
+            public void info(CharSequence content) {
+            }
+        });
+        return mojo;
     }
 
     private static Path jarRethrowsUnchecked(Path dir, String name, String devOnly) {
