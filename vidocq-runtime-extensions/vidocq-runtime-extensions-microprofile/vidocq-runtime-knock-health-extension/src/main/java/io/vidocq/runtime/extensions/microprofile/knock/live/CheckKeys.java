@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.knock;
+package io.vidocq.runtime.extensions.microprofile.knock.live;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -35,13 +35,13 @@ import java.util.Set;
  *
  * <p>Not thread safe: one instance per group and per sample.
  */
-final class CheckKeys {
+public final class CheckKeys {
 
     /** The longest key the dev console accepts. */
     static final int MAX_LENGTH = 40;
 
     /** The suffix of the key that holds when a check answered. */
-    static final String AT = ".at";
+    public static final String AT = ".at";
 
     /** The suffix Vauban gives the client proxy of a scoped bean. */
     private static final String CLIENT_PROXY = "_ClientProxy";
@@ -51,7 +51,7 @@ final class CheckKeys {
     /**
      * @param reserved the keys the group writes itself, which no check may take
      */
-    CheckKeys(Set<String> reserved) {
+    public CheckKeys(Set<String> reserved) {
         this.taken = new HashSet<>(reserved);
     }
 
@@ -61,7 +61,7 @@ final class CheckKeys {
      * @param registrationName the name Knock registers the check under, usually a binary class name
      * @return the name to show
      */
-    static String display(String registrationName) {
+    public static String display(String registrationName) {
         String name = registrationName;
         int generated = name.indexOf("$$");
         if (generated >= 0) {
@@ -81,7 +81,7 @@ final class CheckKeys {
      * @param displayName the name a check is shown under
      * @return its key before it is cut
      */
-    static String normalize(String displayName) {
+    public static String normalize(String displayName) {
         StringBuilder key = new StringBuilder(displayName.length() + 4);
         for (int i = 0; i < displayName.length(); i++) {
             char c = displayName.charAt(i);
@@ -115,7 +115,7 @@ final class CheckKeys {
      * @param displayName the name the check is shown under
      * @return the key
      */
-    String allocate(String displayName) {
+    public String allocate(String displayName) {
         String base = normalize(displayName);
         int room = MAX_LENGTH - AT.length();
         for (int n = 1; ; n++) {

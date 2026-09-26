@@ -65,16 +65,13 @@
         </dependency>
 
         <!--
-            The health panel of the dev console (KnockHealthExtension, Vidocq/vidocq#114): the extension SPI
-            and the dev console SPI it implements.
+            KnockHealthExtension (Vidocq/vidocq#114): the extension SPI it implements. Its live panel of the
+            dev console moved to the vidocq-runtime-knock-health-extension-dev companion (Vidocq/vidocq#143),
+            so this module no longer depends on the dev console SPI.
         -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.vidocq.runtime</groupId>
-            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
         </dependency>
 
         <dependency>
@@ -86,6 +83,17 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Test only (Vidocq/vidocq#143): CheckKeysTest checks that CheckKeys.allocate produces a key the dev
+            console accepts, via PanelSample.requireKey. A dev-only dependency outside test scope would get a
+            checkpom warning; here it is test scope, which the tool accepts.
+        -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

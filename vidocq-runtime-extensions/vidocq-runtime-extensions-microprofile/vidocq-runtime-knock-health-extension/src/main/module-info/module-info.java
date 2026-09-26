@@ -24,8 +24,10 @@
  * vidocq deployment — see
  * {@code docs/adr/ADR-002-vidocq-runtime-integration-strategy.md} in the repo
  * {@code knock}. Its one class, {@code KnockHealthExtension}, reads the registry
- * for the {@code health} section of the startup report and panel of the dev
- * console; it takes no part in the integration itself, and never calls a check.</p>
+ * for the {@code health} section of the startup report; it takes no part in the
+ * integration itself, and never calls a check. The live panel of the dev console
+ * lives in the companion module {@code vidocq-runtime-knock-health-extension-dev}
+ * (Vidocq/vidocq#143), which only {@code vidocq:dev} adds.</p>
  *
  * <p>The integration is 100% based on standard SPIs:</p>
  * <ul>
@@ -55,9 +57,12 @@ module io.vidocq.runtime.extensions.microprofile.knock {
     requires jakarta.cdi;
     requires jakarta.ws.rs;
 
-    // KnockHealthExtension: the health section of the startup report, shown live as a panel of the
-    // dev console (Vidocq/vidocq#114). The dev console SPI brings io.vidocq.runtime.spi with it.
-    requires transitive io.vidocq.runtime.spi.devconsole;
+    // KnockHealthExtension: the health section of the startup report. The devconsole SPI no longer
+    // brings io.vidocq.runtime.spi transitively (Vidocq/vidocq#143), so it is required directly.
+    requires transitive io.vidocq.runtime.spi;
+
+    // What the health panel of the -dev module reads (Vidocq/vidocq#143); no other module sees it.
+    exports io.vidocq.runtime.extensions.microprofile.knock.live to io.vidocq.runtime.extensions.microprofile.knock.dev;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.microprofile.knock.KnockHealthExtension;

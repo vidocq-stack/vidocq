@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.microprofile.knock;
 import io.vidocq.knock.runtime.HealthCheckRegistries;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
+import io.vidocq.runtime.extensions.microprofile.knock.live.KnockLiveBean;
 import io.vidocq.runtime.spi.report.Verbosity;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;

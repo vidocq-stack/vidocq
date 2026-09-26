@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.knock;
+package io.vidocq.runtime.extensions.microprofile.knock.live;
 
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import jakarta.enterprise.context.spi.Context;
@@ -25,7 +25,8 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 /**
- * The {@link HealthCheckRegistry} bean, resolved once in {@link KnockHealthExtension#onStart} and never created: the
+ * The {@link HealthCheckRegistry} bean, resolved once in
+ * {@link io.vidocq.runtime.extensions.microprofile.knock.KnockHealthExtension#onStart} and never created: the
  * immutable snapshot the {@code health} section and panel read.
  *
  * <p><b>Why bean metadata rather than a proxy.</b> Knock's registry bean is application scoped: calling a client proxy
@@ -38,17 +39,17 @@ import jakarta.enterprise.inject.spi.BeanManager;
  * @param beans    the bean manager of the started container, {@code null} for {@link #NONE}
  * @param registry the {@link HealthCheckRegistry} bean, or {@code null} when the container has none
  */
-record KnockLiveBean(BeanManager beans, Bean<?> registry) {
+public record KnockLiveBean(BeanManager beans, Bean<?> registry) {
 
     /** Before {@code onStart} and after {@code onStop}: nothing to read. */
-    static final KnockLiveBean NONE = new KnockLiveBean(null, null);
+    public static final KnockLiveBean NONE = new KnockLiveBean(null, null);
 
     /** Before {@code onStart}, or after {@code onStop}. */
-    static final String NOT_STARTED = "not started";
+    public static final String NOT_STARTED = "not started";
     /** No registry bean in this container, or more than one. */
-    static final String NOT_DEPLOYED = "no Knock registry in this container";
+    public static final String NOT_DEPLOYED = "no Knock registry in this container";
     /** The registry exists as a bean, but no check was ever registered in it. */
-    static final String NOT_CREATED_YET = "registry not created yet";
+    public static final String NOT_CREATED_YET = "registry not created yet";
 
     /**
      * Resolves the registry bean, once, without creating it.
@@ -56,7 +57,7 @@ record KnockLiveBean(BeanManager beans, Bean<?> registry) {
      * @param beans the bean manager of the started container
      * @return the bean, which may be absent; {@link #NONE} when there is no bean manager
      */
-    static KnockLiveBean of(BeanManager beans) {
+    public static KnockLiveBean of(BeanManager beans) {
         if (beans == null) {
             return NONE;
         }
@@ -74,7 +75,7 @@ record KnockLiveBean(BeanManager beans, Bean<?> registry) {
      *
      * @return the registry, or {@code null}; {@link #absence()} then says why
      */
-    HealthCheckRegistry read() {
+    public HealthCheckRegistry read() {
         if (beans == null || registry == null) {
             return null;
         }
@@ -91,7 +92,7 @@ record KnockLiveBean(BeanManager beans, Bean<?> registry) {
      *
      * @return the reason, shown greyed in the panel
      */
-    String absence() {
+    public String absence() {
         if (beans == null) {
             return NOT_STARTED;
         }

@@ -20,36 +20,34 @@
 package io.vidocq.runtime.extensions.microprofile.knock;
 
 import io.vidocq.knock.spi.HealthCheckRegistry;
+import io.vidocq.runtime.extensions.microprofile.knock.live.KnockLiveBean;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.devconsole.Chart;
-import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
-import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 
-import java.time.ZoneId;
-import java.util.List;
-
 /**
- * The {@code health} section of the startup report and panel of the dev console: Knock's checks by probe, and the
- * last answer of each.
+ * The {@code health} section of the startup report: Knock's checks by probe, and the last answer of each. The live
+ * panel of the dev console moved to {@code vidocq-runtime-knock-health-extension-dev} (Vidocq/vidocq#143): only
+ * {@code vidocq:dev} adds it, so this runtime extension no longer depends on the dev console SPI.
  *
  * <p>Knock itself needs no Vidocq code: its CDI integration and its JAX-RS resource do the integration (see the
  * module description). This class only reads what Knock keeps in memory, from the {@link HealthCheckRegistry}
  * instance the application created, and never creates it: see {@link KnockLiveBean}. It never calls a check either:
  * a check is application code and may do I/O, so the panel shows each check's last answer to a probe request.
- * {@link HealthStartupSection} writes the boot facts, {@link HealthPanel} the live values.
+ * {@link HealthStartupSection} writes the boot facts; the {@code -dev} module's {@code HealthLivePanel} and
+ * {@code HealthPanel} write the live values.
  */
-public final class KnockHealthExtension implements VidocqExtension, DevConsolePanel {
+public final class KnockHealthExtension implements VidocqExtension, StartupReportContributor {
 
     static final String NAME = "knock-health";
     static final String SECTION_ID = "health";
     static final String SECTION_TITLE = "Health (Knock)";
 
     /**
-     * The registry bean {@link #sample} reads, resolved once in {@link #onStart}; {@link KnockLiveBean#NONE} before
-     * it and after {@link #onStop}.
+     * The registry bean {@link #contribute} reads, resolved once in {@link #onStart}; {@link KnockLiveBean#NONE}
+     * before it and after {@link #onStop}.
      */
     private volatile KnockLiveBean live = KnockLiveBean.NONE;
 
@@ -87,29 +85,5 @@ public final class KnockHealthExtension implements VidocqExtension, DevConsolePa
     public void contribute(StartupReportContext context, StartupReportSection section) {
         KnockLiveBean read = live;
         HealthStartupSection.write(read.read(), read.absence(), context, section);
-    }
-
-    @Override
-    public List<Chart> charts() {
-        return HealthPanel.CHARTS;
-    }
-
-    /**
-     * The last answer of each check, read in memory. No check is called and no bean is created: when the registry
-     * does not exist yet, a single absent {@code checks} says why. Nothing before {@code onStart}, nothing after
-     * {@code onStop}.
-     */
-    @Override
-    public void sample(PanelSample sample) {
-        KnockLiveBean read = live;
-        if (read.beans() == null) {
-            return;
-        }
-        HealthCheckRegistry registry = read.read();
-        if (registry == null) {
-            sample.absent("checks", read.absence());
-        } else {
-            HealthPanel.write(registry, ZoneId.systemDefault(), sample);
-        }
     }
 }

@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.microprofile.knock;
 
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
+import io.vidocq.runtime.extensions.microprofile.knock.live.CheckKeys;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.runtime.spi.report.Verbosity;

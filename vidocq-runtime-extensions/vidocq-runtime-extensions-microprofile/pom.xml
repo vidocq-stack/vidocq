@@ -26,6 +26,7 @@
         <module>vidocq-runtime-grimm-openapi-ui-extension</module>
         <module>vidocq-runtime-humboldt-telemetry-extension</module>
         <module>vidocq-runtime-knock-health-extension</module>
+        <module>vidocq-runtime-knock-health-extension-dev</module>
     </modules>
 
     <build>

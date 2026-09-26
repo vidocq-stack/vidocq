@@ -17,26 +17,28 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.knock;
+package io.vidocq.runtime.extensions.microprofile.knock.dev;
 
 import io.vidocq.knock.runtime.HealthCheckRegistries;
+import io.vidocq.knock.runtime.KnockHealthService;
 import io.vidocq.knock.spi.CheckResult;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
-import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.runtime.spi.report.Verbosity;
+import io.vidocq.runtime.extensions.microprofile.knock.live.KnockLiveBean;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.spi.Context;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -44,11 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code health} section of the startup report: it reads the last results of the existing
- * {@link HealthCheckRegistry} bean, never creates it and never calls a check. The live values of the dev console
- * panel are covered by {@code HealthLivePanelTest} in {@code vidocq-runtime-knock-health-extension-dev}.
+ * The {@code health} panel on a real Vauban container: it reads the last results of the existing
+ * {@link HealthCheckRegistry} bean, never creates it and never calls a check.
  */
-class KnockHealthExtensionTest {
+class HealthLivePanelTest {
 
     /** A registry bean, as {@code KnockCdiHealthCheckRegistry} is: application scoped, delegating to Knock's core. */
     @ApplicationScoped
@@ -92,41 +93,95 @@ class KnockHealthExtensionTest {
         }
     }
 
-    private final KnockHealthExtension extension = new KnockHealthExtension();
+    private final HealthLivePanel panel = new HealthLivePanel();
+    private final AtomicInteger calls = new AtomicInteger();
 
     @AfterEach
     void stop() {
-        extension.onStop();
+        panel.stop();
     }
 
     @Test
-    void itIsAVidocqExtensionFoundByTheServiceLoaderAndContributesItsSection() {
-        assertTrue(ServiceLoader.load(VidocqExtension.class).stream()
-                .anyMatch(provider -> provider.type() == KnockHealthExtension.class));
-        assertEquals("health", extension.id());
-        assertEquals("Health (Knock)", extension.title());
-        assertEquals("knock-health", extension.name());
+    void itMakesTheHealthSectionLiveWithItsChart() {
+        HealthLivePanel panel = new HealthLivePanel();
+
+        assertEquals("health", panel.id());
+        assertEquals(HealthPanel.CHARTS, panel.charts());
     }
 
     @Test
-    void aRegistryNotCreatedYetContributesNoCheckCreated() {
+    void beforeStartTheSampleIsEmpty() {
+        RecordingSample out = new RecordingSample();
+
+        panel.sample(out);
+
+        assertTrue(out.isEmpty());
+    }
+
+    @Test
+    void aRegistryNotCreatedYetIsShownAbsentAndSamplingDoesNotCreateIt() {
         try (VaubanContainer container = started(TestRegistry.class)) {
-            RecordingSection section = new RecordingSection();
-            extension.contribute(new FakeReportContext(Verbosity.DETAILED), section);
+            RecordingSample out = new RecordingSample();
+            panel.sample(out);
 
-            assertEquals("no health check (registry not created yet)", section.summary);
-            assertNull(existing(container.getBeanManager()), "the report created the registry bean");
+            assertEquals("absent", out.kind("checks"));
+            assertEquals(KnockLiveBean.NOT_CREATED_YET, out.text("checks"));
+            assertNull(existing(container.getBeanManager()), "sampling created the registry bean");
         }
     }
 
-    /** A container holding {@code beans}, with the extension started on it. */
+    @Test
+    void theLastResultsOfTheExistingRegistryAreShownWithoutCallingACheck() {
+        try (VaubanContainer container = started(TestRegistry.class)) {
+            HealthCheckRegistry registry = create(container.getBeanManager());
+            registry.register(ProbeType.LIVENESS, "com.acme.AppLivenessCheck_ClientProxy", () -> {
+                calls.incrementAndGet();
+                return HealthCheckResponse.up("app");
+            });
+            RecordingSample before = new RecordingSample();
+            panel.sample(before);
+
+            new KnockHealthService(registry).report(ProbeType.ALL);
+            RecordingSample after = new RecordingSample();
+            panel.sample(after);
+
+            assertEquals(HealthPanel.NEVER_CALLED, before.groups().get("liveness").text("app-liveness-check"));
+            assertEquals(1, after.groups().get("liveness").number("app-liveness-check"));
+            assertEquals(1, calls.get(), "only the probe request called the check");
+        }
+    }
+
+    @Test
+    void aContainerWithoutKnockSaysSo() {
+        try (VaubanContainer container = started()) {
+            RecordingSample out = new RecordingSample();
+            panel.sample(out);
+
+            assertEquals(KnockLiveBean.NOT_DEPLOYED, out.text("checks"));
+        }
+    }
+
+    @Test
+    void afterStopTheSampleIsEmpty() {
+        try (VaubanContainer container = started(TestRegistry.class)) {
+            create(container.getBeanManager());
+            panel.stop();
+            RecordingSample out = new RecordingSample();
+
+            panel.sample(out);
+
+            assertTrue(out.isEmpty());
+        }
+    }
+
+    /** A container holding {@code beans}, with the panel started on it. */
     private VaubanContainer started(Class<?>... beans) {
         var builder = VaubanContainer.builder();
         for (Class<?> bean : beans) {
             builder.addBeanClass(bean);
         }
         VaubanContainer container = builder.build();
-        extension.onStart(new FakeExtensionContext(container));
+        panel.start(new FakeExtensionContext(container));
         return container;
     }
 
@@ -139,5 +194,13 @@ class KnockHealthExtensionTest {
     private static Object existing(BeanManager beans) {
         Bean<?> bean = registryBean(beans);
         return beans.getContext(bean.getScope()).get(bean);
+    }
+
+    /** Creates the registry bean as the application would, by asking its context for it. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static HealthCheckRegistry create(BeanManager beans) {
+        Bean bean = registryBean(beans);
+        Context context = beans.getContext(bean.getScope());
+        return (HealthCheckRegistry) context.get(bean, beans.createCreationalContext(bean));
     }
 }

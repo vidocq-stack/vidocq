@@ -17,11 +17,12 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.extensions.microprofile.knock;
+package io.vidocq.runtime.extensions.microprofile.knock.dev;
 
 import io.vidocq.knock.spi.CheckResult;
 import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
+import io.vidocq.runtime.extensions.microprofile.knock.live.CheckKeys;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
