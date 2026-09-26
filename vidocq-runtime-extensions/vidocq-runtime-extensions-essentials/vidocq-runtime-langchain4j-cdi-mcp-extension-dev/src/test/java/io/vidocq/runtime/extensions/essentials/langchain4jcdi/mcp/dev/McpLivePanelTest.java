@@ -25,8 +25,10 @@ import dev.langchain4j.cdi.mcp.server.transport.McpRootsManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpServerRequestManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSessionManager;
 import dev.langchain4j.cdi.mcp.server.transport.McpSubscriptionRegistry;
+import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpEndpointLive;
 import io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live.McpInspection;
 import io.vidocq.runtime.spi.devconsole.Chart;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.vauban.core.container.VaubanContainer;
@@ -35,7 +37,13 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,11 +68,16 @@ class McpLivePanelTest {
     private static final List<String> ALL_KEYS = List.of(
             "sessions", "streams", "listens", "pending", "invoker.methods", "invoker.matches", "invoker.misses");
 
+    /** {@link #ALL_KEYS} plus the inspector's own key, which every sample of the panel now writes. */
+    private static final List<String> PANEL_KEYS = List.of("sessions", "streams", "listens", "pending",
+            "invoker.methods", "invoker.matches", "invoker.misses", "inspector");
+
     private final McpLivePanel panel = new McpLivePanel();
 
     @AfterEach
     void stop() {
         panel.stop();
+        McpEndpointLive.clear();
     }
 
     @Test
@@ -91,7 +104,8 @@ class McpLivePanelTest {
 
             panel.sample(sample);
 
-            assertEquals(ALL_KEYS, List.copyOf(sample.keys()));
+            assertEquals(PANEL_KEYS, List.copyOf(sample.keys()));
+            assertEquals("no MCP server in this container", sample.text("inspector"));
             assertEquals("absent", sample.kind("sessions"));
             assertEquals("no request served yet", sample.text("sessions"));
             // Never a zero, which would claim a measure the panel does not have.
@@ -217,6 +231,97 @@ class McpLivePanelTest {
         new McpLivePanel().sample(sample);
 
         assertTrue(sample.isEmpty());
+    }
+
+    @Test
+    void aStartedInspectorOffersAnActionPerItemAndSaysWhereItCalls() {
+        McpEndpointLive.publish(List.of("http://127.0.0.1:18097/mcp"));
+        try (VaubanContainer container = McpTestContainers.container(InspectorFixtures.CATALOGUE_BEANS)) {
+            InspectorFixtures.fill(container.getBeanManager());
+            panel.start(new FakeExtensionContext(container));
+            RecordingSample sample = new RecordingSample();
+
+            panel.sample(sample);
+
+            assertEquals(8, panel.actions().size());
+            assertEquals("tool.a-tool-whose-name-is-far-longer-tha", panel.actions().getFirst().id());
+            assertEquals("5 tools, 1 prompt, 1 resource, 1 resource template at http://127.0.0.1:18097/mcp",
+                    sample.text("inspector"));
+            assertEquals("gauge", sample.kind("streams"), "the live values keep working");
+        }
+    }
+
+    @Test
+    void withoutABoundAddressThePanelOffersNoActionAndSaysWhy() {
+        try (VaubanContainer container = McpTestContainers.container(InspectorFixtures.CATALOGUE_BEANS)) {
+            InspectorFixtures.fill(container.getBeanManager());
+            panel.start(new FakeExtensionContext(container));
+            RecordingSample sample = new RecordingSample();
+
+            panel.sample(sample);
+
+            assertEquals(List.<PanelAction>of(), panel.actions());
+            assertEquals("absent", sample.kind("inspector"));
+            assertEquals("/mcp has no bound address", sample.text("inspector"));
+        }
+    }
+
+    @Test
+    void stopDropsTheActions() {
+        McpEndpointLive.publish(List.of("http://127.0.0.1:18097/mcp"));
+        try (VaubanContainer container = McpTestContainers.container(InspectorFixtures.CATALOGUE_BEANS)) {
+            InspectorFixtures.fill(container.getBeanManager());
+            panel.start(new FakeExtensionContext(container));
+            assertFalse(panel.actions().isEmpty());
+
+            panel.stop();
+
+            assertEquals(List.<PanelAction>of(), panel.actions());
+        }
+    }
+
+    /**
+     * The ruling behind {@link McpClient#close()} using {@code HttpClient.shutdownNow()} rather than {@code close()}:
+     * a dev reload during a running call must not block {@link McpLivePanel#stop()} up to the 55 s call timeout.
+     */
+    @Test
+    void stopReturnsPromptlyWhileACallIsInFlightAndThatCallEndsWithATransportLine() throws Exception {
+        try (StubMcp stub = StubMcp.start()) {
+            stub.respondWithEndlessSlowStream(20);
+            McpEndpointLive.publish(List.of(stub.uri().toString()));
+            try (VaubanContainer container = McpTestContainers.container(InspectorFixtures.CATALOGUE_BEANS)) {
+                InspectorFixtures.fill(container.getBeanManager());
+                panel.start(new FakeExtensionContext(container));
+                PanelAction tool = panel.actions().stream().filter(a -> "Tools".equals(a.group())).findFirst()
+                        .orElseThrow();
+                ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+                try {
+                    Future<PanelAction.ActionResult> inFlight = executor.submit(
+                            () -> tool.call().apply(Map.of("arguments", "{\"zone\":\"UTC\"}")));
+                    awaitStubRequest(stub);
+
+                    long start = System.nanoTime();
+                    panel.stop();
+                    long elapsedMillis = (System.nanoTime() - start) / 1_000_000;
+
+                    assertTrue(elapsedMillis < 5_000,
+                            "stop() took " + elapsedMillis + " ms while a call was in flight");
+                    PanelAction.ActionResult result =
+                            inFlight.get(McpLivePanel.CALL_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+                    assertTrue(result.error(), "an aborted in-flight call must end as an error");
+                    assertNull(result.body(), "a transport line has no body");
+                } finally {
+                    executor.shutdown();
+                }
+            }
+        }
+    }
+
+    private static void awaitStubRequest(StubMcp stub) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (stub.received().isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
     }
 
     /** A container with the MCP server's beans, with {@code panel} started on it. */

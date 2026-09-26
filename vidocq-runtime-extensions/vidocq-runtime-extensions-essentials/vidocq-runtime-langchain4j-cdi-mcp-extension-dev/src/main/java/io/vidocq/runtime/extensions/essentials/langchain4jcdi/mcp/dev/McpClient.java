@@ -76,7 +76,9 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Holds its own {@link HttpClient}, which JDK 21+ makes {@link AutoCloseable} with its own executor: this class
  * is {@link AutoCloseable} too, and {@link #close()} must be called once the client is no longer needed, or a
- * dev reload leaks the executor.
+ * dev reload leaks the executor. {@link #close()} calls {@link HttpClient#shutdownNow()} rather than
+ * {@link HttpClient#close()}: the latter waits for in-flight requests to finish, which would block a dev reload
+ * during a running call up to this client's own {@code timeout}.
  */
 final class McpClient implements AutoCloseable {
 
@@ -212,11 +214,14 @@ final class McpClient implements AutoCloseable {
         return new McpTransportException("/mcp unreachable at " + endpoint);
     }
 
-    /** Closes the underlying {@link HttpClient} and its executor. Safe to call more than once. */
+    /**
+     * Closes the underlying {@link HttpClient} and its executor, aborting any in-flight request rather than
+     * waiting for it. Safe to call more than once.
+     */
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            http.close();
+            http.shutdownNow();
         }
     }
 
