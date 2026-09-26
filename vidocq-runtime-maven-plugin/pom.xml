@@ -46,6 +46,11 @@
             <artifactId>vidocq-runtime-devservices-extension</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- vidocq-runtime-devconsole-extension is deliberately NOT a dependency here (Vidocq/vidocq#143): it lives
+             under vidocq-runtime-extensions, whose parent pom activates this very plugin (checkpom) as a build
+             tool on every extension module, so a compile/runtime edge back onto it would make the reactor cyclic.
+             DevConsoleJars resolves it and its SPI through Aether instead (VidocqDevMojo#resolveConsoleArtifact),
+             the same repositories/local cache as any other artifact, under this plugin's own version. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

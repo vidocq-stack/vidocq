@@ -78,6 +78,12 @@ class PluginDescriptorContinuousTestingTest {
     }
 
     @Test
+    void devResolvesCompanionsThroughMavenResolver() throws Exception {
+        assertParametersAreFields("dev", VidocqDevMojo.class);
+        assertTrue(child(mojo("dev"), "requirements") != null, "the dev mojo needs the RepositorySystem");
+    }
+
+    @Test
     void theTestGoalIsDeclaredForItsMojo() throws Exception {
         Element mojo = mojo("test");
         assertNotNull(mojo, "no <mojo> with <goal>test</goal>");

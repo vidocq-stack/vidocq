@@ -30,14 +30,28 @@ import io.vidocq.runtime.maven.JdwpAgent;
 import io.vidocq.runtime.maven.VidocqRunMojo;
 import io.vidocq.runtime.maven.dev.TestResults.Trigger;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.ArtifactRequest;
+import org.eclipse.aether.resolution.ArtifactResolutionException;
+import org.eclipse.aether.resolution.ArtifactResult;
+import org.eclipse.aether.resolution.DependencyRequest;
+import org.eclipse.aether.resolution.DependencyResult;
+import org.eclipse.aether.util.filter.DependencyFilterUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -238,6 +252,25 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${plugin.artifactMap}", readonly = true)
     private Map<String, Artifact> pluginArtifactMap;
 
+    /** Aether repository session, for {@link #resolveRuntime}'s resolution of each companion (Vidocq/vidocq#143). */
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
+    private RepositorySystemSession repoSession;
+
+    /** The project's own remote repositories, for {@link #resolveRuntime}. */
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
+
+    @Component
+    private RepositorySystem repoSystem;
+
+    /**
+     * This plugin's own version, for resolving the dev console and its SPI through Aether ({@link
+     * #resolveConsoleArtifact}): those artifacts are released in lockstep with this plugin, and are never a
+     * {@code vidocq-runtime-maven-plugin} dependency (see the note in this module's {@code pom.xml}).
+     */
+    @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
+    private String pluginVersion;
+
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
@@ -309,6 +342,17 @@ public class VidocqDevMojo extends AbstractMojo {
             modulePath.addAll(extensionJars);
         }
         final DevServicesSession devServicesRef = devs;
+
+        // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
+        // path only. No binary ever contains them.
+        try {
+            modulePath.addAll(resolveDevConsole());
+        } catch (MojoExecutionException broken) {
+            closeDevServices(devServicesRef);
+            throw broken;
+        }
+        modulePath.addAll(DevModules.collect(project.getArtifacts(), this::resolveRuntime, getLog()::warn,
+                getLog()::info));
 
         // Continuous testing (#122): the test directories are watched too, the child's dev console learns where
         // the results are, and every run gets the dev session's keys, so the tests use its containers.
@@ -567,6 +611,60 @@ public class VidocqDevMojo extends AbstractMojo {
     /** The application archives of the layer mode: the project's own build output. */
     private List<Path> buildAppPath() {
         return ApplicationLaunch.appPath(classesDir.toPath(), layerMode);
+    }
+
+    /**
+     * The dev console and its SPI (Vidocq/vidocq#143, Ruling 5), resolved through Aether under this plugin's own
+     * version, unless the application already has both or lacks Chappe. Never a {@code vidocq-runtime-maven-plugin}
+     * dependency: {@code vidocq-runtime-devconsole-extension} sits inside the {@code vidocq-runtime-extensions}
+     * reactor tree, whose parent pom activates this very plugin (checkpom) as a build tool on every extension —
+     * a compile/runtime edge back onto it from here would make the reactor cyclic.
+     */
+    private List<Path> resolveDevConsole() throws MojoExecutionException {
+        if (!DevConsoleJars.needsConsole(project.getArtifacts())) {
+            getLog().info("Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension");
+            return List.of();
+        }
+        Map<String, Artifact> consoleArtifacts = new LinkedHashMap<>();
+        for (String key : List.of(DevConsoleJars.CONSOLE_KEY, DevConsoleJars.SPI_KEY)) {
+            consoleArtifacts.put(key, resolveConsoleArtifact(key));
+        }
+        return DevConsoleJars.resolve(consoleArtifacts, project.getArtifacts(), getLog()::info);
+    }
+
+    /** {@code key} ({@code groupId:artifactId}) at {@link #pluginVersion}, resolved through Aether as a jar. */
+    private Artifact resolveConsoleArtifact(String key) throws MojoExecutionException {
+        int colon = key.indexOf(':');
+        String groupId = key.substring(0, colon);
+        String artifactId = key.substring(colon + 1);
+        ArtifactRequest request = new ArtifactRequest();
+        request.setArtifact(new DefaultArtifact(groupId, artifactId, "jar", pluginVersion));
+        request.setRepositories(remoteRepos);
+        try {
+            ArtifactResult result = repoSystem.resolveArtifact(repoSession, request);
+            Artifact resolved = new org.apache.maven.artifact.DefaultArtifact(groupId, artifactId, pluginVersion,
+                    "runtime", "jar", "", new DefaultArtifactHandler("jar"));
+            resolved.setFile(result.getArtifact().getFile());
+            return resolved;
+        } catch (ArtifactResolutionException e) {
+            throw new MojoExecutionException("Cannot resolve " + key + ":" + pluginVersion
+                    + " (the dev console): a broken plugin installation", e);
+        }
+    }
+
+    /** {@code coordinates} and its runtime dependencies, through Maven's own resolution and repositories. */
+    private List<DevModules.Resolved> resolveRuntime(String coordinates) throws Exception {
+        Dependency root = new Dependency(new DefaultArtifact(coordinates), "runtime");
+        CollectRequest collect = new CollectRequest(root, remoteRepos);
+        DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.classpathFilter("runtime"));
+        List<DevModules.Resolved> jars = new ArrayList<>();
+        DependencyResult result = repoSystem.resolveDependencies(repoSession, request);
+        for (ArtifactResult artifactResult : result.getArtifactResults()) {
+            org.eclipse.aether.artifact.Artifact artifact = artifactResult.getArtifact();
+            jars.add(new DevModules.Resolved(artifact.getGroupId() + ":" + artifact.getArtifactId(),
+                    artifact.getFile().toPath()));
+        }
+        return jars;
     }
 
     /**
