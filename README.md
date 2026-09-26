@@ -11,7 +11,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/JDK-25-orange" alt="JDK">
-  <img src="https://img.shields.io/badge/Maven-4.0--rc--5-purple" alt="Maven">
+  <img src="https://img.shields.io/badge/Maven-3.9.16-purple" alt="Maven">
+  <img src="https://img.shields.io/badge/Jakarta_EE-Core_Profile_11_certified-brightgreen" alt="Jakarta EE Core Profile 11 certified">
   <img src="https://img.shields.io/badge/CDI-4.1_Lite-blue" alt="CDI">
   <img src="https://img.shields.io/badge/JAX--RS-4.0-green" alt="JAX-RS">
   <img src="https://img.shields.io/badge/license-EPL--2.0%20OR%20EUPL--1.2%20OR%20GPL--2.0--or--later-blue.svg" alt="License">
@@ -21,7 +22,10 @@
 
 ## What is Vidocq?
 
-Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.1 specifications via a lightweight extension system inspired by Quarkus.
+Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It assembles the Vidocq bricks — Chappe (HTTP), Cassini (Jakarta REST), Champollion (JSON), Mansart (Data, Transactions) and the MicroProfile implementations — through a lightweight extension system inspired by Quarkus.
+
+- **Jakarta EE Core Profile 11 certified** (Vidocq 0.3.0, approved 2026-09-09 — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351), results at [vidocq.dev/certification](https://vidocq.dev/certification/)). Details: [`CERTIFICATION.md`](CERTIFICATION.md).
+- **MicroProfile 7.1**: every MicroProfile spec of the platform (plus the standalone Metrics 5.1) is delivered as an extension, and the 8 official TCK runners pass on the assembled runtime (1868 tests, 2026-08-27 — see [`TCK.md`](vidocq-runtime-integration-tests/TCK.md)).
 
 ### Why Vidocq?
 
@@ -51,32 +55,31 @@ Vidocq is a modular Java SE application runtime built on [Vauban](https://codefl
 sdk env install
 ```
 
-### Build
+### Create an application with the CLI
 
 ```bash
-mvn clean install
+curl -fsSL https://vidocq.dev/install.sh | sh    # PowerShell: irm https://vidocq.dev/install.ps1 | iex
+vidocq create --name todo
 ```
+
+`vidocq create` scaffolds the `pom.xml` (parent `vidocq-runtime-parent` + `vidocq-runtime-maven-plugin`), the `module-info.java`, the entry point and a `vidocq.properties`. Full walkthrough: [getting started](https://doc.vidocq.dev) (`docs/en/modules/ROOT/pages/getting-started.adoc`).
 
 ### Hello World REST
 
 ```java
 @Path("/hello")
+@ApplicationScoped
 public class HelloResource {
-
-    @Inject
-    public HelloResource(MyService service) {
-        this.service = service;
-    }
 
     @GET
     @Produces(MediaType.TEXT_PLAIN)
     public String hello() {
-        return "Hello from Vidocq! " + service.greet();
+        return "Hello from Vidocq!";
     }
 }
 ```
 
-No need for `@RequestScoped`: the `RestScopeExtension` (CDI Build Compatible Extension) adds it automatically to `@Path` classes without an explicit scope.
+No further wiring: the Cassini annotation processor generates the dispatch adapter at compile time — no runtime reflection.
 
 Entry point:
 
@@ -89,8 +92,16 @@ public class App {
 ```
 
 ```bash
+$ mvn package
+$ sh target/todo-<version>/bin/todo.sh
 $ curl http://localhost:8080/hello
-Hello from Vidocq! ...
+Hello from Vidocq!
+```
+
+### Build Vidocq itself
+
+```bash
+./mvnw -ntp install -DskipTests
 ```
 
 ## Architecture
@@ -105,7 +116,8 @@ graph TB
         LOADER[ExtensionLoader<br/><i>ServiceLoader</i>]
     end
     subgraph "vidocq-runtime-extensions"
-        REST[vidocq-runtime-cassini-rest-extension<br/><i>JAX-RS 4.0 + Grizzly</i>]
+        REST[vidocq-runtime-cassini-rest-extension<br/><i>Jakarta REST 4.0 (Cassini)</i>]
+        HTTP[vidocq-runtime-chappe-webserver-extension<br/><i>Chappe HTTP/1.1 + HTTP/2</i>]
     end
     subgraph "Build tools"
         PLUGIN[vidocq-runtime-maven-plugin<br/><i>generate + package</i>]
@@ -114,6 +126,8 @@ graph TB
     SPI --> BOOT
     LOADER --> BOOT
     REST --> SPI
+    REST --> HTTP
+    HTTP --> SPI
     BOOT --> VAUBAN[Vauban CDI Lite<br/><i>4.1</i>]
     PLUGIN --> VAUBAN
     style BOOT fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
@@ -124,15 +138,17 @@ graph TB
 vidocq/
 ├── vidocq-runtime-spi                   Extension interfaces (VidocqExtension, VidocqConfiguration)
 ├── vidocq-runtime-core                  Bootstrap, extension discovery, lifecycle
-├── vidocq-runtime-maven-plugin          Bean indexing (vauban-beans.list) + ZIP packaging
+├── vidocq-runtime-maven-plugin          Codegen, packaging (ZIP, jlink, jpackage, Docker), dev mode, continuous testing
+├── vidocq-runtime-cli                   `vidocq` command line (create, dev, start, extension, build, doctor…)
+├── vidocq-runtime-devservices           Dev Services (containers started for dev mode and tests)
 ├── vidocq-runtime-extensions/           Runtime extensions, grouped by domain
-│   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport
+│   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport, dev console, schema migration, langchain4j-cdi MCP
 │   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
-│   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / pool
-│   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health
+│   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Transactions / JDBC pool
+│   ├── vidocq-runtime-extensions-microprofile/     Config, Fault Tolerance, Health, JWT, Metrics, OpenAPI (+ Swagger UI), Rest Client, Telemetry
 │   └── vidocq-runtime-extensions-module-repackaged/  Third-party Java Modules repackages (H2)
-└── vidocq-runtime-examples/             Examples
-    └── vidocq-runtime-cassini-rest-example      Sample REST application
+├── vidocq-runtime-examples/             Examples (cassini-rest, cervantes-jwt, knock-health, mansart-h2, petstore, external-rest-lib)
+└── vidocq-runtime-integration-tests/    Arquillian ITs + MicroProfile TCK runners on the assembled runtime
 ```
 
 ## Extension Mechanism
@@ -168,46 +184,43 @@ Registration via `META-INF/services/io.vidocq.runtime.spi.VidocqExtension` or `m
 provides VidocqExtension with MyExtension;
 ```
 
-## REST Extension (JAX-RS 4.0)
+## REST Extension (Jakarta REST 4.0)
 
-The REST extension integrates Jersey 4 + Grizzly with the Vauban CDI container:
+`vidocq-runtime-cassini-rest-extension` plugs [Cassini](https://codefloe.com/Vidocq/cassini) (standalone Jakarta REST 4.0) into the [Chappe](https://codefloe.com/Vidocq/chappe) HTTP engine provided by `vidocq-runtime-chappe-webserver-extension`:
 
-| Component | Role |
-|-----------|------|
-| `RestExtension` | Vidocq extension — HTTP server lifecycle |
-| `JerseyBridge` | `@Path`/`@Provider` discovery via `BeanManager`, HK2 factories delegating to CDI |
-| `EmbeddedServer` | Grizzly server with `@RequestScoped` activation via `ScopedValue` |
-| `RestScopeExtension` | BCE adding `@RequestScoped` to `@Path` classes without a scope |
+- `@Path` / `@Provider` classes are discovered as CDI beans in the Vauban container and exposed to Cassini through a `VaubanBeanProvider`.
+- The dispatch adapters are generated at compile time by the Cassini annotation processor (companion `vidocq-runtime-cassini-rest-extension-codegen`, checked by `vidocq:checkpom`).
+- The extension mounts a Cassini stack on a Chappe listener; declarative mounts (`vidocq.http.mount.<n>.type=restful`) take over when present.
+- The startup report lists the mounted routes, and the dev console shows live request figures per mount.
 
 ### Configuration
 
 | Property | Default | Description |
 |-----------|--------|-------------|
-| `vidocq.rest.host` | `0.0.0.0` | Listen host |
-| `vidocq.rest.port` | `8080` | Listen port |
-
-### CDI / Jersey Integration
-
-The CDI-Jersey bridge works as follows:
-
-1. `@Path` **classes** are registered in Jersey for routing
-2. **HK2 factories** delegate instance creation to the CDI `BeanManager` (`@Any`)
-3. Each HTTP request is wrapped in `RequestContext.runInScope()` to activate the CDI `@RequestScoped` context (via JDK 25 `ScopedValue`)
+| `vidocq.http.host` | `0.0.0.0` | Host of the `default` Chappe listener (alias of `vidocq.chappe.listener.default.host`) |
+| `vidocq.http.port` | `8080` | Port of the `default` Chappe listener (alias of `vidocq.chappe.listener.default.port`) |
+| `vidocq.rest.context-path` | `/` | Mount prefix of the REST application |
+| `vidocq.rest.listener` | `default` | Chappe listener the REST application is mounted on |
 
 ## Configuration
 
-Properties are resolved in order:
+Without a MicroProfile Config provider, the native sources are used, highest ordinal first:
 
-1. System properties (`-Dkey=value`)
-2. Environment variables (`KEY_NAME`)
-3. `vidocq.properties` file on the classpath
+1. System properties (`-Dkey=value`) — ordinal 400
+2. Environment variables (`KEY_NAME`) — ordinal 300
+3. External `vidocq.properties` (`-Dvidocq.config.dir`, `VIDOCQ_CONFIG_DIR`, `${java.home}/conf` for a jlink image, or `./conf`) — ordinal 250
+4. `vidocq.properties` / `application.properties` on the classpath — ordinal 100
 
-## Packaging
+With `vidocq-runtime-ravel-config-extension` (MicroProfile Config 3.1), Ravel's sources replace the native ones.
+
+
+## Packaging and tooling
 
 ```xml
 <plugin>
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-maven-plugin</artifactId>
+    <version>0.3.0</version>
     <executions>
         <execution>
             <goals>
@@ -219,7 +232,7 @@ Properties are resolved in order:
 </plugin>
 ```
 
-Produces a ZIP distribution:
+`package` produces a ZIP distribution:
 
 ```
 myapp-1.0/
@@ -228,59 +241,44 @@ myapp-1.0/
   lib/*.jar       Application + dependencies
 ```
 
-## MicroProfile 7.1 Extensions
+Other goals of `vidocq-runtime-maven-plugin`:
 
-| Spec | Extension | Status |
-|------|-----------|--------|
-| JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
-| Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
-| MicroProfile Config | - | Planned |
-| MicroProfile Health | - | Planned |
-| MicroProfile Metrics | - | Planned |
-| MicroProfile OpenAPI | - | Planned |
-| MicroProfile JWT Auth | - | Planned |
+| Goal | Purpose |
+|------|---------|
+| `generate` | CDI bean index + proxies/interceptors for dependencies not processed by the Vauban APT |
+| `jlink` / `jpackage` / `docker` | Standalone runtime image (see [`JLINK.md`](JLINK.md)), native installers, minimal Docker image |
+| `run` | Runs the application once in a forked JVM, like the production launcher |
+| `dev` | Dev mode: reload on change, dev console, Dev Services (see [`DEBUGMODE.md`](DEBUGMODE.md), [`DEV_SERVICES.md`](DEV_SERVICES.md)) |
+| `test` | Continuous testing: re-runs the tests on every change |
+| `checkpom` / `check-module-info` / `complete-module-info` | Check the codegen companions and the `module-info.java` directives the extensions need |
+| `idea` | *(experimental)* IntelliJ IDEA run configurations |
 
-## Jakarta Servlet 6.1 TCK
+## Extensions
 
-The `vidocq-servlet-chappe-extension` is validated against the **official
-Jakarta Servlet 6.1 TCK** (Eclipse Foundation), with a current pass rate
-of ~90% on the `api.*` packages.
+| Spec / feature | Brick | Vidocq extension | Status |
+|------|-------|-----------|--------|
+| Jakarta REST 4.0 | [cassini](https://codefloe.com/Vidocq/cassini) | `vidocq-runtime-cassini-rest-extension` | ✅ Core Profile 11 certified |
+| HTTP/1.1 + HTTP/2 server | [chappe](https://codefloe.com/Vidocq/chappe) | `vidocq-runtime-chappe-webserver-extension` | ✅ |
+| Jakarta Data 1.0 | [mansart](https://codefloe.com/Vidocq/mansart) | `vidocq-runtime-mansart-data-extension` | ✅ |
+| Jakarta Transactions 2.0 | mansart | `vidocq-runtime-mansart-transactions-extension` | ✅ |
+| Virtual-thread-native JDBC pool | mansart | `vidocq-runtime-mansart-pool-extension` | ✅ |
+| Jakarta Persistence 3.2 | mansart | — | ⏸️ suspended (M7 Mansart) |
+| MicroProfile Config 3.1 | [ravel](https://codefloe.com/Vidocq/ravel) | `vidocq-runtime-ravel-config-extension` | ✅ TCK green on the runtime |
+| MicroProfile Fault Tolerance 4.1 | [heisenberg](https://codefloe.com/Vidocq/heisenberg) | `vidocq-runtime-heisenberg-fault-tolerance-extension` | ✅ TCK green on the runtime |
+| MicroProfile Health 4.0 | [knock](https://codefloe.com/Vidocq/knock) | `vidocq-runtime-knock-health-extension` | ✅ TCK green on the runtime |
+| MicroProfile JWT Auth 2.1 | [cervantes](https://codefloe.com/Vidocq/cervantes) | `vidocq-runtime-cervantes-jwt-extension` | ✅ TCK green on the runtime |
+| MicroProfile OpenAPI 4.1 | [grimm](https://codefloe.com/Vidocq/grimm) | `vidocq-runtime-grimm-openapi-extension` (+ `-openapi-ui-extension`, Swagger UI) | ✅ TCK green on the runtime |
+| MicroProfile Rest Client 4.0 | [cyrano](https://codefloe.com/Vidocq/cyrano) | `vidocq-runtime-cyrano-rest-client-extension` | ✅ TCK green on the runtime |
+| MicroProfile Telemetry 2.1 | [humboldt](https://codefloe.com/Vidocq/humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ TCK green on the runtime |
+| MicroProfile Metrics 5.1 (standalone spec) | [dirac](https://codefloe.com/Vidocq/dirac) | `vidocq-runtime-dirac-metrics-extension` | ✅ TCK green on the runtime |
+| Schema migration | — | `vidocq-runtime-migration-extension` (+ Flyway / Liquibase) | ✅ |
+| Dev console | — | `vidocq-runtime-devconsole-extension` | ✅ (includes a read-only Dev MCP for coding agents) |
+| MCP server | langchain4j-cdi | `vidocq-runtime-langchain4j-cdi-mcp-extension` | ✅ |
 
-> ⚠️ The TCK runner module is intentionally **outside the main Maven reactor**:
-> ShrinkWrap Maven Resolver (transitive dependency of the TCK) cannot parse
-> `Model 4.1.0` POMs. Launch it via the dedicated script.
+## Jakarta Servlet 6.1
 
-### Prerequisites
+Servlet 6.1 is implemented by the standalone [Foy](https://codefloe.com/Vidocq/foy) project (transport via Chappe, CDI via Vauban), which carries its own official TCK runner (`run-official-tck-servlet6.1.sh`). It is not packaged as a Vidocq extension yet; it is part of the Web Profile 11 planning ([`WEB-PROFILE.md`](WEB-PROFILE.md)).
 
-The TCK artifacts are not on Maven Central. Install them once:
-
-```bash
-curl -Lo /tmp/tck.zip \
-  https://download.eclipse.org/jakartaee/servlet/6.1/jakarta-servlet-tck-6.1.0.zip
-unzip /tmp/tck.zip -d /tmp/servlet-tck
-
-mvn install:install-file \
-  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-runtime-6.1.0.jar \
-  -DgroupId=jakarta.tck -DartifactId=servlet-tck-runtime -Dversion=6.1.0 -Dpackaging=jar
-mvn install:install-file \
-  -Dfile=/tmp/servlet-tck/jakarta-servlet-tck/lib/servlet-tck-util-6.1.0.jar \
-  -DgroupId=jakarta.tck -DartifactId=servlet-tck-util -Dversion=6.1.0 -Dpackaging=jar
-```
-
-### Launch
-
-From the project root:
-
-```bash
-./run-official-tck-servlet6.1.sh                     # smoke test
-./run-official-tck-servlet6.1.sh --all               # full suite (~10 min)
-./run-official-tck-servlet6.1.sh -Dtest=ServletTests # a targeted class
-```
-
-The script installs Vidocq modules into the local M2, changes to the
-TCK module (ShrinkWrap-compatible cwd), then runs the `tck-official` profile.
-
-Details in [`vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
 
 ## License
 
