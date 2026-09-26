@@ -33,16 +33,20 @@ import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -111,6 +115,43 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     @Component
     private RepositorySystem repoSystem;
 
+    /**
+     * The dependencies on a dev-only jar declared in a scope other than {@code test}
+     * (Vidocq/vidocq#143): the packaging goals drop them anyway, and vidocq:dev brings
+     * them. A warning, never a failure.
+     */
+    static List<String> findDevOnlyDeclarations(List<Dependency> declared,
+                                                Function<Dependency, Optional<Path>> jarOf) {
+        List<String> issues = new ArrayList<>();
+        for (Dependency d : declared) {
+            if ("test".equals(d.getScope()) || !isVidocqRuntimeGroup(d.getGroupId())) {
+                continue;
+            }
+            if (jarOf.apply(d).map(DevOnlyJars::isDevOnly).orElse(false)) {
+                issues.add(DevOnlyJars.droppedWarning(d.getArtifactId()));
+            }
+        }
+        return issues;
+    }
+
+    /**
+     * Resolve a dependency to its jar file. Returns {@link Optional#empty()} on any
+     * resolution failure, so the calling code never crashes on unavailable artifacts.
+     */
+    private Optional<Path> resolvedJar(Dependency d) {
+        if (d.getVersion() == null) return Optional.empty();
+        try {
+            ArtifactRequest req = new ArtifactRequest();
+            req.setArtifact(new DefaultArtifact(d.getGroupId(), d.getArtifactId(), "jar",
+                    d.getVersion()));
+            req.setRepositories(remoteRepos);
+            Artifact resolved = repoSystem.resolveArtifact(repoSession, req).getArtifact();
+            return Optional.of(resolved.getFile().toPath());
+        } catch (ArtifactResolutionException ignored) {
+            return Optional.empty();
+        }
+    }
+
     @Override
     public void execute() throws MojoFailureException {
         if (skip) {
@@ -156,6 +197,12 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         if (failOnMissing) {
             throw new MojoFailureException("Vidocq checkpom found " + issues.size()
                     + " issue(s). Fix them or downgrade to warnings via -Dvidocq.checkpom.failOnMissing=false.");
+        }
+
+        // Always warn about declared dev-only dependencies outside test scope,
+        // never fail.
+        for (String issue : findDevOnlyDeclarations(project.getDependencies(), this::resolvedJar)) {
+            getLog().warn(issue);
         }
     }
 

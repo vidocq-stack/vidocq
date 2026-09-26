@@ -23,10 +23,14 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -88,6 +92,39 @@ class VidocqCheckPomMojoTest {
         d.setGroupId(groupId);
         d.setArtifactId(artifactId);
         d.setVersion(version);
+        return d;
+    }
+
+    @Test
+    void aDevOnlyDependencyOutsideTestScopeIsReported(@TempDir Path dir) throws Exception {
+        Path marked = DevOnlyJarsTest.jar(dir, "console.jar", "true");
+        Dependency compile = dependency("vidocq-runtime-devconsole-extension", null);
+        Dependency test = dependency("vidocq-runtime-devconsole-extension", "test");
+        Dependency plain = dependency("vidocq-runtime-core", "compile");
+
+        List<String> issues = VidocqCheckPomMojo.findDevOnlyDeclarations(
+                List.of(compile, test, plain),
+                d -> d.getArtifactId().contains("devconsole") ? Optional.of(marked)
+                        : Optional.of(jarRethrowsUnchecked(dir, "core.jar", null)));
+
+        assertEquals(List.of(DevOnlyJars.droppedWarning("vidocq-runtime-devconsole-extension")),
+                issues);
+    }
+
+    private static Path jarRethrowsUnchecked(Path dir, String name, String devOnly) {
+        try {
+            return DevOnlyJarsTest.jar(dir, name, devOnly);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Dependency dependency(String artifactId, String scope) {
+        Dependency d = new Dependency();
+        d.setGroupId("io.vidocq.runtime.extensions.essentials");
+        d.setArtifactId(artifactId);
+        d.setVersion("0.2.0-SNAPSHOT");
+        d.setScope(scope);
         return d;
     }
 
