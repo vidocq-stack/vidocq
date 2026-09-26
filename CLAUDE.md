@@ -52,6 +52,11 @@ Extensions implement `io.vidocq.runtime.spi.VidocqExtension`, registered via
 `configure` → `beforeStart` (enrich `VaubanContainerBuilder`) → `onStart` (container ready) →
 `onStop` (reverse priority order). `priority()` orders extensions.
 
+An extension whose section of the startup report should be live in the dev console splits that live half —
+sampled values, charts, actions — into a companion `-dev` module next to it (`vidocq-runtime-<name>-extension-dev`,
+a `LivePanel` service): only `vidocq:dev` ever adds it, and no binary ever contains it (Vidocq/vidocq#143). See
+`docs/en/modules/ROOT/pages/dev-console-panels.adoc#dev-module`.
+
 Each extension is named after a **codename** mapping to its spec — keep this mapping when adding modules:
 
 | Codename | Spec / role | Extension artifact |
@@ -79,11 +84,16 @@ inherited indexer entry is preserved. Canonical example:
 ## Maven plugin goals (`vidocq-runtime-maven-plugin`)
 
 `generate` (bean index + codegen), `package` (fat-jar/ZIP distribution), `checkpom`
-(wired in `validate` via `pluginManagement`), `jlink`, `jpackage`, `docker`, `dev`,
-`run` (one forked run, after a forked lifecycle up to `process-classes`: compiles and indexes first),
-`test` (continuous testing without the application: the tests on every change, keys `r`/`f`/`q`),
-`idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`;
-a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind).
+(wired in `validate` via `pluginManagement`; also warns, never fails, on a dev-only jar declared outside
+`test` scope), `jlink`, `jpackage`, `docker`, `dev` (also adds the dev console — when the app has
+`vidocq-runtime-chappe-webserver-extension` — and each extension's `-dev` companion module, to the child's
+module path only, never packaged: Vidocq/vidocq#143), `run` (one forked run, after a forked lifecycle up to
+`process-classes`: compiles and indexes first), `test` (continuous testing without the application: the tests
+on every change, keys `r`/`f`/`q`), `idea` (experimental, command line only: IntelliJ run configurations in
+`.run/`, never `.idea/`; by default, per application, a Maven run of `vidocq:dev`, one of `vidocq:run` suffixed
+` (packaged)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
+Application run of the main class instead, with no console). `package`, `jlink`, `jpackage` and `docker` all
+drop a dev-only jar even if declared, with a warning.
 
 ## Documentation (Antora) conventions
 

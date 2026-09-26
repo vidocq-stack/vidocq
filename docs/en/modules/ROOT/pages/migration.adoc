@@ -227,6 +227,32 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 
 All eight extensions are certified on the assembled runtime by the MicroProfile TCK runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1837 TCK tests green. See xref:tck.adoc[TCK status].
 
+[#dev-console-dependency]
+== The dev console is no longer a dependency [.tag-new]#NEW#
+
+Before, an application declared `vidocq-runtime-devconsole-extension` itself to get the
+xref:dev-console.adoc[dev console], and that dependency shipped in every binary `vidocq:package`, `jlink`,
+`jpackage` and `docker` produced — off by default, but its code was there. `mvn vidocq:dev` now adds the
+console itself, from the plugin's own release, the moment the application already has
+`vidocq-runtime-chappe-webserver-extension`; no application ever needs to declare it, and no binary ever
+contains it (Vidocq/vidocq#143).
+
+* **Remove `vidocq-runtime-devconsole-extension` from the pom.** `vidocq:checkpom` already warns about it if
+  you do not — a dev-only dependency declared outside `test` scope — and every packaging goal drops it anyway,
+  with a warning, whether or not you remove it.
+* **Unless a test reads the console**, such as one that calls its `/api/snapshot`: keep the dependency, moved
+  to `<scope>test</scope>`, together with the `-dev` module of any extension whose live panel the same test
+  reads (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]). `test` scope is never
+  packaged, and `checkpom` accepts it.
+* **An application that got `vidocq-runtime-chappe-webserver-extension` only transitively through the
+  console** — the console depends on it, so declaring the console was enough to bring Chappe along — now
+  declares Chappe itself. Without it, `vidocq:dev` logs `Dev tools: no dev console, it needs
+  vidocq-runtime-chappe-webserver-extension` and starts without one, since nothing serves the console's page
+  any more.
+
+See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries] for the whole picture,
+including the six `-dev` panel modules this repository's own extensions now ship.
+
 == Next steps
 
 * xref:getting-started.adoc[Getting started]

@@ -7,7 +7,29 @@ The dev console is a page that the application serves to your browser while you 
 [#getting-it]
 == Getting it [.tag-new]#NEW#
 
-The console is an ordinary dependency of the application:
+Nothing to declare. `mvn vidocq:dev` adds the console itself, from the plugin's own release, the moment the
+application already has `vidocq-runtime-chappe-webserver-extension`: the console serves its page through
+Chappe, on a listener of its own, so without Chappe there is nothing to serve it and nothing is added. It also
+adds, for every runtime extension that has one, that extension's `-dev` panel module
+(xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]), so the extension's tab is live. One
+INFO line lists what was added:
+
+[source,text]
+----
+[INFO] Dev tools: vidocq-runtime-cassini-rest-extension-dev, vidocq-runtime-mansart-pool-extension-dev
+----
+
+An application that has never served HTTP — no Chappe, so no console either — logs why instead, and starts
+without it:
+
+[source,text]
+----
+[INFO] Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension
+----
+
+A test that reads the console — an assertion against its `/api/snapshot`, say — declares it itself, together
+with the `-dev` modules it needs, at `test` scope: `mvn test`, `vidocq:test` and the continuous tests of
+`vidocq:dev` add none of them.
 
 [source,xml,subs=attributes+]
 ----
@@ -15,10 +37,24 @@ The console is an ordinary dependency of the application:
     <groupId>io.vidocq.runtime.extensions.essentials</groupId>
     <artifactId>vidocq-runtime-devconsole-extension</artifactId>
     <version>{project-version}</version>
+    <scope>test</scope>
 </dependency>
 ----
 
-It has no codegen bundle to add to the annotation processor paths. It is packaged with the application like any extension: in production, its default, `auto`, keeps it off. It serves its page through Chappe, on a listener of its own, and brings the Chappe webserver extension with it. An application that already serves HTTP has it anyway; one that does not should know that Chappe then also starts its `default` listener, `0.0.0.0:8080` unless configured otherwise, in every launch mode.
+`vidocq:run`, `vidocq:package`, `vidocq:jlink`, `vidocq:jpackage` and `vidocq:docker` never contain the console,
+its SPI or any `-dev` module: every one of their jars carries `Vidocq-Dev-Only: true` in its manifest, and these
+goals drop such a jar from what they launch or ship, even when the project declares it — a declared console, for
+instance, kept from before this changed. Each dropped jar logs one WARNING per goal run, never fails the build,
+and names what to remove:
+
+[source,text]
+----
+[WARNING] vidocq-runtime-devconsole-extension is dev-only: not packaged; remove the dependency, vidocq:dev brings it
+----
+
+`vidocq:checkpom` gives the same advice earlier, at `validate`: a warning, never a failure, for a dev-only
+dependency declared in any scope but `test`. See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev
+tools and binaries] for the full picture, companions included.
 
 Then run the application in dev mode:
 
@@ -425,7 +461,7 @@ Each tool answers one JSON object, as `structuredContent` and, for a client that
 [#anomalies]
 == Anomaly codes [.tag-new]#NEW#
 
-The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, and the sixth from a refused action request, both on the console's own logger.
+The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, the sixth from a refused action request, and the seventh, eighth and ninth [.tag-new]#NEW# from matching the live panels the `-dev` modules bring against the report's sections, once per boot — all five on the console's own logger, `io.vidocq.devconsole`.
 
 [#vidocq-devc-001]
 === VIDOCQ-DEVC-001 — on outside development [.tag-new]#NEW#
@@ -502,6 +538,52 @@ In a `dev` launch, an action request was refused for its `Origin` or its `X-Vido
 
 The last one, from the console's own origin, is a tab that outlived its boot: reload it.
 
+[#vidocq-devc-007]
+=== VIDOCQ-DEVC-007 — two live panels for one section [.tag-new]#NEW#
+
+Two `-dev` modules' live panels (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged])
+name the same section id. The first one found wins; the second is skipped, never sampled. Logged once per
+boot, the first time the console reads the written report:
+
+[source,text]
+----
+[VIDOCQ-DEVC-007] Two live panels for the section 'mansart-pool': io.acme.dev.FirstLivePanel is kept, io.acme.dev.SecondLivePanel is skipped
+----
+
+Two extensions share an id by mistake, or the application declares two versions of the same `-dev` module on
+the module path. Remove the one that should not be there.
+
+[#vidocq-devc-008]
+=== VIDOCQ-DEVC-008 — a live panel with no section [.tag-new]#NEW#
+
+A `-dev` module's live panel names a section id that the startup report does not have — the runtime
+extension's own contributor failed, was skipped, or does not exist. The panel is never shown; it never invents
+a section:
+
+[source,text]
+----
+[VIDOCQ-DEVC-008] The live panel 'mansart-pool' has no section in the startup report: not shown
+----
+
+The application has the `-dev` module without its matching runtime extension, or that extension's contributor
+did not run. Check for `VIDOCQ-RPT-001` (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]) on
+the same boot.
+
+[#vidocq-devc-009]
+=== VIDOCQ-DEVC-009 — a panel shipped twice [.tag-new]#NEW#
+
+A section's own contributor already implements `DevConsolePanel` (the all-in-one form,
+xref:dev-console-panels.adoc[Writing a dev console panel]), and a `-dev` module's live panel also claims that
+section's id. The live panel wins; the contributor's own `sample` and `charts` are never called:
+
+[source,text]
+----
+[VIDOCQ-DEVC-009] The section 'mansart-pool' is written by io.acme.MansartPoolExtension, itself a panel, and a live panel makes it live: the live panel wins; the extension ships its panel twice
+----
+
+The extension should drop one of the two: either its own `DevConsolePanel` implementation, or the `-dev`
+module, not both.
+
 [#loggers]
 == Loggers [.tag-new]#NEW#
 
@@ -510,7 +592,7 @@ The last one, from the console's own origin, is a tab that outlived its boot: re
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. <<vidocq-devc-007>>, <<vidocq-devc-008>> and <<vidocq-devc-009>> [.tag-new]#NEW#, once per boot, the first time the report is read. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.

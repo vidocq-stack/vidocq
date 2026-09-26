@@ -58,10 +58,179 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
 
 It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
 
+[#dev-module]
+== A `-dev` module, never packaged [.tag-new]#NEW#
+
+The panel above is the *all-in-one* form: `AcmeCacheExtension` is both the extension and the panel, and whatever
+implements `DevConsolePanel` ships in every binary that has the extension, whether or not `vidocq:dev` is ever
+run (Vidocq/vidocq#143). Every extension the Vidocq Runtime itself ships — Mansart's pools, Knock's health,
+Cassini's REST mounts, Dirac's metrics, the schema migration extension, the langchain4j-cdi MCP server — instead
+splits its live half into a **`-dev` module**: a second, small JPMS module next to the runtime extension, that
+`vidocq:dev` alone puts on the child's module path. The all-in-one form still works, still ships in the binary,
+and stays the right shape for an extension of your own that has no packaging concerns of its own to keep small;
+the split below is what this repository's own extensions do, and what a `-dev` module of a component with a
+release cycle of its own — an application's, or a third-party extension's — should follow.
+
+=== Three modules, one section [.tag-new]#NEW#
+
+[cols="1,2,2"]
+|===
+| Module | Holds | Depends on
+
+| The brick
+| Its read-only public API — a counter kept in memory, a registry, a snapshot
+| Nothing of the console
+
+| The runtime extension
+| The integration, the startup-report section (boot facts, every mode), the descriptor
+| `vidocq-runtime-spi`, never `vidocq-runtime-devconsole-spi`
+
+| The `-dev` module
+| The live panel — sampled values, charts, actions
+| The runtime extension, `vidocq-runtime-devconsole-spi`
+|===
+
+The brick never changes for this: it is used outside Vidocq and depends on no Vidocq SPI, in or out of a
+`-dev` module. The runtime extension keeps the startup-report section — it is not a dev tool, it prints in
+every mode, production logs included — and drops only the live half, `sample`/`charts`/`actions`, into the
+`-dev` module next to it, same parent, same version, artifact id suffixed `-dev`, JPMS module name suffixed
+`.dev`: `vidocq-runtime-mansart-pool-extension-dev`, module `io.vidocq.runtime.extensions.jakartaee.web.
+mansart.pool.dev`. Nothing else ever depends on the `-dev` module, and it is never a dependency of anything
+that gets packaged.
+
+=== `LivePanel` [.tag-new]#NEW#
+
+The `-dev` module declares a `io.vidocq.runtime.spi.devconsole.LivePanel` as a service, not a
+`DevConsolePanel`:
+
+[source,java]
+----
+public interface LivePanel {
+    String id();                                       // the section this panel makes live
+    default void start(ExtensionContext context) {}     // once per boot, before the first sample
+    default void stop() {}                               // once per boot, when the console stops
+    default List<Chart> charts() { return List.of(); }
+    void sample(PanelSample sample);
+    default List<PanelAction> actions() { return List.of(); }
+}
+----
+
+It writes no section of its own: `id()` names the startup-report section the runtime extension already writes,
+and the console pairs the two — the section for the title and the boot facts, the live panel for everything
+sampled. Its Javadoc's rules: `start` and `stop` each run once per boot, a dev reload included, in that order
+around every `sample`; the rules of `DevConsolePanel` still apply to `sample` — memory only, never blocks,
+never creates a bean, no secret in a value. A live panel that has no matching section is never shown
+(xref:dev-console.adoc#vidocq-devc-008[`VIDOCQ-DEVC-008`]); a section whose own contributor is already a
+`DevConsolePanel` loses to a live panel of the same id
+(xref:dev-console.adoc#vidocq-devc-009[`VIDOCQ-DEVC-009`]) — never both.
+
+Declared as any service, `provides` for the module path and the file for the class path:
+
+[source,java]
+----
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev {
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+    requires io.vidocq.runtime.spi.devconsole;
+    requires io.vidocq.mansart.pool.api;
+    requires io.vidocq.mansart.pool.core;
+
+    provides io.vidocq.runtime.spi.devconsole.LivePanel
+            with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel;
+}
+----
+
+.`src/main/resources/META-INF/services/io.vidocq.runtime.spi.devconsole.LivePanel`
+[source,text]
+----
+io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel
+----
+
+The console loads every `LivePanel` it finds this way (`uses io.vidocq.runtime.spi.devconsole.LivePanel;` in
+its own `module-info`) and matches each to the section of the same id.
+
+=== The descriptor [.tag-new]#NEW#
+
+The runtime extension names its `-dev` companion in one file, so that an application declares nothing and
+`vidocq:dev` finds it on its own:
+
+.`src/main/resources/META-INF/vidocq/dev-module`
+[source,text]
+----
+vidocq-runtime-mansart-pool-extension-dev
+----
+
+One line, the companion's `artifactId` — its `groupId` and version are the runtime extension's own, which
+`vidocq:dev` reads from the resolved jar itself. Blank lines and lines starting with `#` are ignored. A file
+holding more than one artifactId, or one that is not a valid Maven identifier, is unreadable: `vidocq:dev` logs
+a warning naming the jar, and that extension gets no companion — it never fails the goal.
+
+=== What the panel reads [.tag-new]#NEW#
+
+The `-dev` module never reaches the runtime extension's implementation packages — those stay closed. The
+runtime extension exports one small `.live` package to its companion only, `exports <package>.live to
+<the -dev module>;`, and nothing else sees it: a qualified export to a module that happens to be absent (every
+binary, every launch but `vidocq:dev`) is legal, so the runtime extension works alone.
+
+[source,java]
+----
+// what the runtime extension's module-info.java adds, next to its usual exports
+exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live
+        to io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
+----
+
+What that package holds is either of two shapes, both public, read-only, and free of any Vidocq SPI type but
+`ExtensionContext`:
+
+* **A holder the extension publishes and clears**, when the extension already keeps the state the panel needs
+  in a field: Mansart's `MansartPoolsLive.publish(...)` at the end of `beforeStart`, once every pool is open,
+  `MansartPoolsLive.clear()` first thing in `onStop`, before any pool closes; the `-dev` module's panel only
+  ever reads `MansartPoolsLive.pools()`.
+* **A live bean recomputed from the `ExtensionContext`**, when the state is a CDI bean the panel can look up
+  itself: Knock's `KnockLiveBean.of(BeanManager)` and Dirac's `DiracLiveBean.of(BeanManager)`, both called from
+  the live panel's own `start(ExtensionContext context)` with `context.beanManager()` — recomputed on every
+  boot, nothing published by the extension itself.
+
+Either way, the `-dev` module's own class — `PoolsLivePanel`, `HealthLivePanel`, `RestLivePanel`,
+`MetricsLivePanel` — stays package-private: only its `LivePanel` service registration, never a compile-time
+dependency, is what the console needs.
+
+=== The manifest marking [.tag-new]#NEW#
+
+The `-dev` module's `pom.xml` marks its own jar `Vidocq-Dev-Only: true`, the block every dev-only module in
+this repository carries (xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries]):
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-jar-plugin</artifactId>
+    <configuration>
+        <archive>
+            <manifestEntries>
+                <Vidocq-Dev-Only>true</Vidocq-Dev-Only>
+            </manifestEntries>
+        </archive>
+    </configuration>
+</plugin>
+----
+
+That one entry is what `vidocq:run`, the packaging goals and `vidocq:checkpom` read: whatever the declaring
+scope, a jar that carries it never ships, and a project that declares it anyway is warned, never failed.
+
 [#where-it-lives]
 == Where the panel lives [.tag-new]#NEW#
 
 **In the brick's existing runtime extension**, the module under `vidocq-runtime-extensions` that adapts a component — Mansart, Knock, Cassini — to Vidocq, a class-less wrapper included, which then gains its first class (<<wrapper-panel>>). Never in the component, and never in an artifact of its own.
+
+[NOTE]
+.The all-in-one form still ships in the binary
+====
+Everything below this note describes a panel that is its extension's own `DevConsolePanel`, the shape this page
+opened with. It still works, and third-party extensions may keep it — `DevConsolePanel` is unchanged. But
+whatever implements it ships in every binary that has the extension, `vidocq:dev` or not: prefer a
+<<dev-module,`-dev` module>> above, the shape every extension this repository ships now uses, so that the
+live half of a section is a dev tool that only `vidocq:dev` ever adds.
+====
 
 The runtime extension is the indirection between the component and Vidocq: the layer that configures the component and adapts it. It is the one module that knows both: it configures the component from `vidocq.*` keys, adapts it to the container and to Chappe, and reads what the component publishes. What the component has to say in the startup report and in the console is one more such adaptation, so it belongs there. Most runtime extensions hold code for that already: fifteen of the eighteen that bring a component in do, and only the Knock, Dirac and Heisenberg wrappers have none yet.
 
@@ -391,14 +560,14 @@ A `RuntimeException` or a `LinkageError` thrown by `sample` drops that poll's li
 [#worked-example]
 == Worked example: the Mansart pool panel [.tag-new]#NEW#
 
-`MansartPoolExtension`, in `vidocq-runtime-mansart-pool-extension`, opens one pool for `vidocq.pool.url` and one per `vidocq.pool.<name>.url`. Its panel shows each of them. The excerpts below are its code.
+`MansartPoolExtension`, in `vidocq-runtime-mansart-pool-extension`, opens one pool for `vidocq.pool.url` and one per `vidocq.pool.<name>.url`. Its live values are `vidocq-runtime-mansart-pool-extension-dev`'s `PoolsLivePanel`, in the package suffixed `.dev`; the excerpts below are the two modules' code, following the shape of <<dev-module,A `-dev` module, never packaged>>.
 
 [#example-step-1]
-=== Step 1: the extension is the panel [.tag-new]#NEW#
+=== Step 1: the extension keeps its section; the `-dev` module makes it live [.tag-new]#NEW#
 
 [source,java]
 ----
-public final class MansartPoolExtension implements VidocqExtension, DevConsolePanel {
+public final class MansartPoolExtension implements VidocqExtension, StartupReportContributor {
 
     @Override
     public String name() {
@@ -416,12 +585,12 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
     }
 ----
 
-The module requires `io.vidocq.runtime.spi.devconsole` transitively, since it exports the extension class, and its pom depends on `vidocq-runtime-devconsole-spi`. Nothing else is declared: the extension is already a service.
+`MansartPoolExtension` no longer implements `DevConsolePanel`: `charts()` and `sample(PanelSample)` moved out, and its module no longer requires `io.vidocq.runtime.spi.devconsole` at all — `contribute`, the boot facts below, is all a `StartupReportContributor` needs. `PoolsLivePanel`, in the `-dev` module, is the `LivePanel` service that makes the `mansart-pool` section live; see <<example-step-4>>.
 
 [#example-step-2]
-=== Step 2: publish the state `sample()` reads [.tag-new]#NEW#
+=== Step 2: publish what the live panel reads [.tag-new]#NEW#
 
-One record per open pool, built once when the pool opens, that holds no secret — the URL is already redacted:
+One record per open pool, built once when the pool opens, that holds no secret — the URL is already redacted. This is unchanged by the split: it still feeds the boot facts of <<example-step-3>>.
 
 [source,java]
 ----
@@ -431,7 +600,7 @@ private record PoolView(String label, boolean isDefault, MansartDataSource pool,
 private volatile List<PoolView> views = List.of();
 ----
 
-The pools open in `beforeStart`, before the container, so that the extensions after this one find them. The list is published once they are all open:
+The pools open in `beforeStart`, before the container, so that the extensions after this one find them. Once every pool is open, the extension publishes two things: its own `views`, for `contribute`, and, to `MansartPoolsLive` — the small public holder in the module's qualified-exported `.live` package — the label and the `MansartDataSource` of each pool, for the `-dev` module's panel:
 
 [source,java]
 ----
@@ -449,21 +618,58 @@ public void beforeStart(VaubanContainerBuilder builder) {
         opened.add(view(e.getKey(), false, PREFIX + e.getKey() + ".", ds));
     }
     views = List.copyOf(opened);
+    MansartPoolsLive.publish(
+            opened.stream().map(v -> new MansartPoolsLive.Pool(v.label(), v.pool())).toList());
 }
 ----
 
-and emptied before any pool is closed:
+and both are emptied before any pool is closed, the holder first — a dev console poll from that instant reads no pool:
 
 [source,java]
 ----
 @Override
 public void onStop() {
     // First, before any pool is closed: a dev console poll from now on reads no pool.
+    MansartPoolsLive.clear();
     views = List.of();
     namedWithoutBean = Set.of();
     prefillFailed = Set.of();
     // ... then close the pools
 }
+----
+
+`MansartPoolsLive` itself, in `io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live`, is the whole of what the `-dev` module ever reads from this extension — a holder, not a proxy, with no lifecycle of its own:
+
+[source,java]
+----
+public final class MansartPoolsLive {
+
+    /** An open pool and its label, such as {@code @Default}. */
+    public record Pool(String label, MansartDataSource pool) {}
+
+    private static volatile List<Pool> pools = List.of();
+
+    public static List<Pool> pools() {
+        return pools;
+    }
+
+    public static void publish(List<Pool> opened) {
+        pools = List.copyOf(opened);
+    }
+
+    public static void clear() {
+        pools = List.of();
+    }
+}
+----
+
+and the module exports that package to its companion only:
+
+[source,java]
+----
+// what MansartPoolExtension's module-info.java adds, next to its usual exports
+exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live
+        to io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
 ----
 
 The unnamed pool is labelled `@Default`, which no pool name can be mistaken for, a pool named `default` included. Named pools follow in name order.
@@ -537,37 +743,51 @@ mansart-pool  Mansart pools | 1 ms
 In `prod`, the same rows read `@Default  h2 mem`, and there is no `user` row.
 
 [#example-step-4]
-=== Step 4: the live values, one group per pool [.tag-new]#NEW#
+=== Step 4: the `-dev` module's live values, one group per pool [.tag-new]#NEW#
 
-`sample` reads the list once and writes one group per pool, from the pool's own counters: `MansartDataSource.snapshot()` reads them without a lock and without I/O.
+`PoolsLivePanel`, in `vidocq-runtime-mansart-pool-extension-dev`, is the whole of the live half. It opens no
+pool and closes none — it only reads `MansartPoolsLive.pools()`, the holder <<example-step-2,Step 2>> publishes
+and clears. Its `sample` writes one group per pool, from the pool's own counters:
+`MansartDataSource.snapshot()` reads them without a lock and without I/O:
 
 [source,java]
 ----
-@Override
-public void sample(PanelSample sample) {
-    List<PoolView> opened = views;
-    for (PoolView v : opened) {
-        PoolConfig c = v.pool().config();
-        PoolMetrics m = v.pool().snapshot();
-        PanelSample pool = sample.group(v.label())
-                .gauge("active", m.active(), c.maxSize(), Unit.COUNT)
-                .gauge("idle", m.idle(), c.maxSize(), Unit.COUNT)
-                .gauge("waiting", m.waiting(), Unit.COUNT)
-                .counter("borrows", m.totalBorrows(), Unit.COUNT)
-                .counter("timeouts", m.totalTimeouts(), Unit.COUNT);
-        if (c.leakDetectionThreshold().isZero()) {
-            pool.absent("leaks", "leak detection off");
-        } else {
-            pool.counter("leaks", m.totalLeaks(), Unit.COUNT);
-        }
-        if (m.totalBorrows() == 0) {
-            pool.absent("mean-borrow", "no borrow yet");
-        } else {
-            pool.duration("mean-borrow", m.meanBorrowDuration());
+public final class PoolsLivePanel implements LivePanel {
+
+    @Override
+    public String id() {
+        return "mansart-pool";
+    }
+
+    @Override
+    public void sample(PanelSample sample) {
+        for (MansartPoolsLive.Pool v : MansartPoolsLive.pools()) {
+            PoolConfig c = v.pool().config();
+            PoolMetrics m = v.pool().snapshot();
+            PanelSample pool = sample.group(v.label())
+                    .gauge("active", m.active(), c.maxSize(), Unit.COUNT)
+                    .gauge("idle", m.idle(), c.maxSize(), Unit.COUNT)
+                    .gauge("waiting", m.waiting(), Unit.COUNT)
+                    .counter("borrows", m.totalBorrows(), Unit.COUNT)
+                    .counter("timeouts", m.totalTimeouts(), Unit.COUNT);
+            if (c.leakDetectionThreshold().isZero()) {
+                pool.absent("leaks", "leak detection off");
+            } else {
+                pool.counter("leaks", m.totalLeaks(), Unit.COUNT);
+            }
+            if (m.totalBorrows() == 0) {
+                pool.absent("mean-borrow", "no borrow yet");
+            } else {
+                pool.duration("mean-borrow", m.meanBorrowDuration());
+            }
         }
     }
-}
 ----
+
+No `start(ExtensionContext)` override: `MansartPoolsLive` is filled and cleared entirely by the runtime
+extension's own `beforeStart`/`onStop`, so the panel has nothing to resolve on its own when the console starts
+it. Once the holder is cleared — the boot stopped, or a dev reload is between two boots — `sample` writes no
+group at all: an empty loop, not an anomaly.
 
 * `active` and `idle` have `maxSize` as their max, for the fill bar and the ceiling; `waiting` is an estimate and has none.
 * `leaks` is absent, with the reason, while leak detection is off: `0` would claim that leaks were looked for.
@@ -592,20 +812,46 @@ The panel's documentation also says how *not* to read these gauges: `maxSize - a
 [#example-step-5]
 === Step 5: two charts, repeated per pool [.tag-new]#NEW#
 
+`charts()` moved to `PoolsLivePanel` too — the same two charts, unchanged:
+
 [source,java]
 ----
-private static final List<Chart> CHARTS = List.of(
-        new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
-                Series.line("waiting"), Series.ceiling("active"))),
-        new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
+    private static final List<Chart> CHARTS = List.of(
+            new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
+                    Series.line("waiting"), Series.ceiling("active"))),
+            new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
 
-@Override
-public List<Chart> charts() {
-    return CHARTS;
+    @Override
+    public List<Chart> charts() {
+        return CHARTS;
+    }
 }
 ----
 
 `connections` stacks the idle connections on the active ones under the dashed `maxSize`, with the waiting borrowers as a line; `throughput` plots borrows and timeouts per second. Both are declared once and drawn on each pool's card, since each group holds their keys.
+
+`PoolsLivePanel`'s `module-info.java` declares the service, and nothing else about the runtime extension's own package:
+
+[source,java]
+----
+module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev {
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+    requires io.vidocq.runtime.spi.devconsole;
+    requires io.vidocq.mansart.pool.api;
+    requires io.vidocq.mansart.pool.core;
+
+    provides io.vidocq.runtime.spi.devconsole.LivePanel
+            with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel;
+}
+----
+
+and its descriptor is what the runtime extension carries, so that `vidocq:dev` finds this whole module on its own:
+
+.`vidocq-runtime-mansart-pool-extension`'s `src/main/resources/META-INF/vidocq/dev-module`
+[source,text]
+----
+vidocq-runtime-mansart-pool-extension-dev
+----
 
 [#testing]
 == Testing a panel [.tag-new]#NEW#

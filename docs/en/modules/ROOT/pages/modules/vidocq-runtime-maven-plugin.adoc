@@ -22,10 +22,10 @@
 | Generates the CDI bean index (`META-INF/vauban-beans.list`) and pre-generates proxies/interceptors at compile time. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
 
 | `vidocq:package`
-| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact.
+| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
 
 | `vidocq:dev`
-| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing].
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing]. It also adds the dev tools — the dev console and, per extension, its `-dev` panel module — to the child's module path only: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
 
 | `vidocq:run` [.tag-new]#NEW#
 | Runs the application once in a forked JVM, after compiling and indexing it: the goal forks the lifecycle up to `process-classes`, so `mvn vidocq:run` alone is a complete run. See <<run,the `vidocq:run` goal>>.
@@ -34,7 +34,7 @@
 | Continuous testing without the application: runs the tests, then again on every change of the main or test sources, with a summary and keys in the terminal. See <<test,the `vidocq:test` goal>>.
 
 | `vidocq:checkpom`
-| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`.
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
 
 | `vauban:modularize` (Vauban plugin)
 | Gives the non-modular dependency jars a `module-info` in `target/vauban-modularized/`, picked up automatically by `dev`, `jlink` and `package`. No longer a goal of this plugin — see <<modularize>>.
@@ -434,13 +434,89 @@ Open it only when the debugger really runs elsewhere — a container, a VM, anot
 you trust: `mvn vidocq:dev -Dvidocq.dev.debugHost='*'` (quote the `*` for the shell). An empty host is the default
 one, never every interface.
 
+[#dev-tools]
+== Dev tools and binaries [.tag-new]#NEW#
+
+The dev console, its SPI and every extension's `-dev` panel module (xref:dev-console-panels.adoc#dev-module[A
+`-dev` module, never packaged]) are development tools: only `vidocq:dev` ever adds them, to the child JVM's
+module path, and no binary this plugin produces ever contains them (Vidocq/vidocq#143).
+
+**What `vidocq:dev` adds, and when.** After building the child's module path as it always has, the goal:
+
+. resolves the dev console and its SPI itself, through Maven's own resolver (Aether), at this plugin's own
+  version — the console and the plugin are released in lockstep — the moment the application already has
+  `vidocq-runtime-chappe-webserver-extension`: the console serves its page through Chappe, so without it there
+  is nothing to serve the page, and nothing is added;
+. for every runtime extension the project resolves, reads its `META-INF/vidocq/dev-module` descriptor, if it has
+  one, and resolves that companion `-dev` module and its own dev-only runtime dependencies, at the extension's
+  own `groupId` and version;
+. never adds a module twice: a jar the console step already put on the path is not added again by a
+  companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
+  declaration, kept working — is left where it is, not duplicated;
+. logs one INFO line naming what it added:
++
+[source,text]
+----
+[INFO] Dev tools: vidocq-runtime-cassini-rest-extension-dev, vidocq-runtime-mansart-pool-extension-dev
+----
+
+An application with no Chappe gets no console, and says so instead of adding one:
+
+[source,text]
+----
+[INFO] Dev tools: no dev console, it needs vidocq-runtime-chappe-webserver-extension
+----
+
+Offline, or before the console was ever built locally, costs the console only — a warning, never a failed
+goal, and `vidocq:dev` continues without it:
+
+[source,text]
+----
+[WARNING] Dev tools: cannot resolve io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension:{project-version} (the dev console); vidocq:dev continues without it. Run the build once online, or mvn -U.
+----
+
+A companion that cannot be resolved the same way costs only that one extension's live panel — its section keeps
+its boot facts, unaffected — and a descriptor that cannot be read, or that names more than one artifact or an
+invalid one, costs the same, naming the jar. Both are warnings, never failures.
+
+**`vidocq:run`, the packaging goals, and never twice.** `vidocq:run`, `vidocq:package`, `vidocq:jlink`,
+`vidocq:jpackage` and `vidocq:docker` add none of this. They also drop every jar marked `Vidocq-Dev-Only: true`
+in its manifest from what they launch or ship — the console, its SPI, every `-dev` module, and the dev services
+extension — even when the project declares one directly, at any scope but `test`. Each dropped jar logs one
+WARNING per goal run, never fails the build:
+
+[source,text]
+----
+[WARNING] vidocq-runtime-devconsole-extension is dev-only: not packaged; remove the dependency, vidocq:dev brings it
+----
+
+The one exception, kept from `vidocq:run`'s dev services opt-in (Vidocq/vidocq#123): `mvn vidocq:run
+-Dvidocq.dev.devServices=true` still adds `vidocq-runtime-devservices-extension`, from the plugin's own
+dependencies, for that one run — it is never packaged either, and it brings no console.
+
+**`vidocq:checkpom`.** At `validate`, it warns — never fails — about a dependency on a dev-only artifact
+declared in any scope but `test`, with the same message as above. The fix is either to remove the dependency
+(`vidocq:dev` brings it on its own) or to move it to `test` scope.
+
+**Tests.** `mvn test`, `vidocq:test` and the continuous tests of `vidocq:dev` get no dev tool from the plugin
+either: a test that reads the console, or an extension's live panel, declares it itself, at `<scope>test</scope>`,
+together with the `-dev` modules it needs. `test` scope is never packaged, and `checkpom` accepts it without a
+warning. The dev services JUnit host (Vidocq/vidocq#123) is unaffected: it was already a `test`-scope
+dependency.
+
+**`vidocq:idea`.** The Dev, packaged and debug configurations it writes are covered under
+<<idea,the `vidocq:idea` goal>>.
+
 [#idea]
 == `vidocq:idea` goal [.tag-new]#NEW#
 
-*Experimental.* `vidocq:idea` writes one IntelliJ IDEA shared run configuration (`.run/<name>.run.xml`) per
-Vidocq application of the reactor, from what the poms already declare. By default that configuration is a
-**Maven** run of <<run,`vidocq:run`>> on the application's own pom, so that clicking Run compiles the module,
-completes the bean index and starts the application — all three through Maven.
+*Experimental.* `vidocq:idea` writes IntelliJ IDEA shared run configurations, in `.run/`, per Vidocq application
+of the reactor, from what the poms already declare. By default that is three files per application — a
+**Maven** run of `vidocq:dev`, the configuration a developer already runs day to day (the console, hot reload,
+continuous testing), one of <<run,`vidocq:run`>> suffixed ` (packaged)` — that one still compiles the module,
+completes the bean index and starts the application, the three through Maven — and a Remote JVM Debug one
+suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent [.tag-new]#NEW# (Vidocq/vidocq#143); see
+<<dev-tools,Dev tools and binaries>>.
 
 [source,bash]
 ----
@@ -473,9 +549,26 @@ the goal by its coordinates (`mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:
 === What it generates
 
 For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
-`<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, `.run/McpTimeServerApp.run.xml` — a Maven
-run of `vidocq:run` on `mcp-time-server/pom.xml`, from the project directory (shortened here; the file also
-carries the options IntelliJ leaves at their default, in the order it writes them):
+`<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, the Maven kind writes three files
+(Vidocq/vidocq#143):
+
+[cols="2,3"]
+|===
+| File | Runs
+
+| `.run/McpTimeServerApp.run.xml`
+| A Maven run of `vidocq:dev` — the existing file, and the existing name: this is the configuration a developer
+  already runs.
+
+| `.run/McpTimeServerApp (packaged).run.xml`
+| A Maven run of `vidocq:run` — what the goal wrote before this repository's #143, unchanged in substance.
+
+| `.run/McpTimeServerApp (debug).run.xml`
+| A Remote JVM Debug configuration that attaches to `vidocq:dev`'s own debug agent.
+|===
+
+The first file (shortened here; it also carries the options IntelliJ leaves at their default, in the order it
+writes them):
 
 [source,xml]
 ----
@@ -494,7 +587,7 @@ carries the options IntelliJ leaves at their default, in the order it writes the
         <MavenRunnerParameters>
           <option name="goals">
             <list>
-              <option value="vidocq:run" />
+              <option value="vidocq:dev" />
             </list>
           </option>
           <option name="pomFileName" value="mcp-time-server/pom.xml" />
@@ -508,29 +601,66 @@ carries the options IntelliJ leaves at their default, in the order it writes the
 </component>
 ----
 
-* **Before launch** — nothing, and that is the point: IntelliJ disables its Build step for a Maven run
-  configuration, and `vidocq:run` compiles and indexes by itself.
-* **JDK** — `vidocq.idea.jre` writes an IntelliJ SDK *name* (such as `temurin-25`) as the Maven runner JRE,
-  which is also the JDK the application runs on: `vidocq:run` forks it from the JVM running Maven. Declare it in
-  the top-level pom, since that name must exist on every machine; an absolute path is accepted with a warning.
-  Without it, IntelliJ runs Maven on the JDK of its Maven settings, which can be another one than the JDK you
-  build and test with, and the goal warns.
-* **Maven settings** — `myGeneralSettings` is left empty on purpose. A run configuration that carries its own
-  replaces the user's Maven settings (settings file, local repository, offline mode, threads) with what the file
-  holds, and those belong to the machine, not to the repository.
+The `(packaged)` file is the same shape with `vidocq:run` in place of `vidocq:dev`, and its own name in
+`name="…"`. The `(debug)` file is a different type entirely:
+
+[source,xml]
+----
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="McpTimeServerApp (debug)" type="Remote">
+    <option name="USE_SOCKET_TRANSPORT" value="true" />
+    <option name="SERVER_MODE" value="false" />
+    <option name="SHMEM_ADDRESS" />
+    <option name="HOST" value="127.0.0.1" />
+    <option name="PORT" value="5005" />
+    <option name="AUTO_RESTART" value="false" />
+    <RunnerSettings RunnerId="Debug">
+      <option name="DEBUG_PORT" value="5005" />
+      <option name="LOCAL" value="false" />
+    </RunnerSettings>
+    <method v="2" />
+  </configuration>
+</component>
+----
+
+`127.0.0.1` and `5005` are the same defaults as <<debugger,the debug agent>>'s own. Overriding them for this
+file is deliberately narrower than overriding the running agent: the goal reads `vidocq.dev.debugHost` and
+`vidocq.dev.debugPort` from the module's own pom `<properties>` only, never from the command line — a `-D` for
+either is ignored, with a warning, the same treatment `vidocq.idea.configurationName` and the other per-module
+settings already get (<<applications,Which modules are applications>>), so that the committed file does not
+depend on how `vidocq:idea` was invoked. There is no `vidocq.idea.*` prefix on these two: they name the debug
+agent itself, which `vidocq:dev` and `vidocq:idea` both read the same way.
+
+* **Before launch** — nothing on any of the three files: IntelliJ disables its Build step for a Maven run
+  configuration, and neither `vidocq:dev` nor `vidocq:run` needs one; the `(debug)` file has no before-launch
+  step of its own; it only attaches.
+* **JDK** — `vidocq.idea.jre` writes an IntelliJ SDK *name* (such as `temurin-25`) as the Maven runner JRE for
+  the first two files, which is also the JDK the application runs on: the forked JVM comes from the JVM running
+  Maven. Declare it in the top-level pom, since that name must exist on every machine; an absolute path is
+  accepted with a warning. Without it, IntelliJ runs Maven on the JDK of its Maven settings, which can be
+  another one than the JDK you build and test with, and the goal warns. The `(debug)` file has no JDK option:
+  it only attaches to a JVM already running.
+* **Maven settings** — `myGeneralSettings` is left empty on purpose, on the two Maven files. A run configuration
+  that carries its own replaces the user's Maven settings (settings file, local repository, offline mode,
+  threads) with what the file holds, and those belong to the machine, not to the repository.
 * **Format** — the one IntelliJ writes itself: the element order, the options left at their default and the
   2-space indentation of `XmlSerializer`, LF, no XML declaration. Measured against IntelliJ IDEA 2026.2.3's own
   serialiser — a generated file deserialised and serialised back comes out identical — so IntelliJ has no reason
-  to rewrite it, and the marker it carries survives.
-* **File name** — the configuration name with the characters IntelliJ replaces in file names (`/ \ ? < > : * | "`
+  to rewrite it, and the marker it carries survives. The `(debug)` file carries no marker comment of its own
+  kind that `Remote` configurations do not have; its ownership and drift checks are the same as the other two.
+* **File name** — the configuration name (`McpTimeServerApp`, `McpTimeServerApp (packaged)`,
+  `McpTimeServerApp (debug)`) with the characters IntelliJ replaces in file names (`/ \ ? < > : * | "`
   and control characters) turned into `_`, truncated to 255 characters. Two names that differ only by case
   fail the goal: they are one file on macOS and Windows.
 
 ==== The `application` kind
 
-`-Dvidocq.idea.kind=application` writes what the goal wrote before: an Application run configuration of the
-main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the application's own
-pom.
+`-Dvidocq.idea.kind=application` writes what the goal wrote before: one Application run configuration per
+application, of the main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
+application's own pom. Unlike the Maven kind's three files, there is only ever this one: the application runs
+in the JVM IntelliJ starts directly, never under `vidocq:dev`, so it never has the dev console or any `-dev`
+module [.tag-new]#NEW# (<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
+separate debugger to — attach IntelliJ's own debugger to this configuration instead.
 
 [source,xml]
 ----
@@ -562,6 +692,7 @@ The goal never writes `.idea/`, `*.iml` or any other project file — those belo
 import — nor run configuration templates, nor Eclipse launch configurations. It never deletes a file, and it
 refuses to run when a pom binds it to a lifecycle phase.
 
+[#applications]
 === Which modules are applications
 
 A project of the build gets a run configuration when:
@@ -577,8 +708,9 @@ A project of the build gets a run configuration when:
 A `<mainClass>` set on an execution (for example the `jlink` one) is not read; when it is the module's only main
 class, the goal warns. These values
 are read from each module's pom, never from the command line: a `-Dvidocq.mainClass`, `-Dvidocq.mainModule`,
-`-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName` or `-Dvidocq.idea.exclude` is ignored with a warning,
-so that the committed files do not depend on how Maven was invoked.
+`-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName`, `-Dvidocq.idea.exclude`, `-Dvidocq.dev.debugHost`
+or `-Dvidocq.dev.debugPort` [.tag-new]#NEW# is ignored with a warning, so that the committed files do not depend
+on how Maven was invoked.
 
 [cols="2,1,3"]
 |===
@@ -597,6 +729,16 @@ so that the committed files do not depend on how Maven was invoked.
 | `vidocq.idea.exclude`
 | `false`
 | No run configuration for this module, nor for the modules that inherit its properties.
+
+| `vidocq.dev.debugHost` [.tag-new]#NEW#
+| `127.0.0.1`
+| The host the `(debug)` file attaches to. Same key `vidocq:dev` reads for its own debug agent
+  (<<debugger,the debug agent>>); blank or unset keeps the default.
+
+| `vidocq.dev.debugPort` [.tag-new]#NEW#
+| `5005`
+| The port the `(debug)` file attaches to, `1`-`65535`. An invalid value is a configuration error, reported with
+  the goal's other errors, and the default is used.
 |===
 
 === Goal parameters
