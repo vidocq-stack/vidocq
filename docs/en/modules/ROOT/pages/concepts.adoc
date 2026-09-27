@@ -28,6 +28,9 @@ Four are lifecycle hooks, all with empty default implementations so an extension
 3. `onStart(ExtensionContext)` — the CDI container is up. The extension resolves beans, mounts HTTP handlers, opens listeners.
 4. `onStop()` — server shutdown; release resources. Extensions are stopped in **reverse** priority order.
 
+[#failed-boot]
+A boot that fails after the first `beforeStart` stops what it started [.tag-new]#NEW#: every extension whose `beforeStart` was called, the one that failed included, gets its `onStop`, in reverse order, then the container is closed if it was built. So `onStop` must also work when `onStart` never ran, and when it failed halfway: it releases what exists and leaves the rest. A failing `onStop` is logged and the next one still runs; the exception of the boot goes through untouched. A boot that fails in `configure` stops nothing, since no extension has started yet.
+
 The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` keys (or `prefix.*` patterns) it consumes, so the runtime's `ConfigKeyAudit` can warn at startup about configured keys that no extension reads.
 
 == ExtensionContext

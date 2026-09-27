@@ -73,7 +73,9 @@ public interface VidocqExtension {
 
     /**
      * Shutdown phase: release resources.
-     * <p>Stop phase: release resources.</p>
+     * <p>Stop phase: release resources. Also called when the boot fails after this extension's
+     * {@link #beforeStart beforeStart} was called, even if {@link #onStart onStart} never ran or failed halfway:
+     * release what exists and leave the rest.</p>
      */
     default void onStop() {}
 

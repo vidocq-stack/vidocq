@@ -82,7 +82,9 @@ import java.util.function.Predicate;
  * every {@code onStart}, each isolated: one that fails loses its section, never the boot. A boot that fails, in
  * {@link #configure()} or in {@link #start()}, logs one WARNING record naming the phase that failed, the time
  * spent and the anomalies already logged (in a dev launch, with the partial report), then lets the same
- * exception through, untouched.
+ * exception through, untouched. A boot that fails in {@link #start()} then stops what it started: every extension
+ * whose {@code beforeStart} was called gets its {@code onStop}, in reverse order, the container is closed if it was
+ * built, and the bootstrap counts as stopped; a failure of that cleanup is logged, never thrown in place of the first.
  *
  * <p>The extensions read the report through {@link ExtensionContext#startupReport()}, a read-only view published
  * once it is written and withdrawn when the boot {@linkplain #shutdown() stops}: the dev console shows it while
@@ -121,6 +123,8 @@ public final class VidocqBootstrap {
     private VidocqConfig config;
     private VidocqConfiguration configuration;
     private List<VidocqExtension> extensions = List.of();
+    /** How many extensions, from the first, had their {@code beforeStart} called: those a failed boot stops. */
+    private int beforeStartCalled;
     private List<String> additionalBeanClassNames;
     private VaubanContainer container;
     /** The banner mode forced by the embedding code, or {@code null} when the configuration decides. */
@@ -243,7 +247,7 @@ public final class VidocqBootstrap {
 
     /**
      * Phase 2: booting the CDI container and starting the extensions, then the startup report. A failure is
-     * reported (see the class description) and thrown as it is.
+     * reported, what the boot started is stopped (see the class description), and the failure is thrown as it is.
      */
     public VidocqBootstrap start() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Starting");
@@ -256,6 +260,7 @@ public final class VidocqBootstrap {
             report(recorder);
         } catch (RuntimeException | Error e) {
             bootFailed(e);
+            stopFailedBoot();
             throw e;
         }
 
@@ -316,6 +321,7 @@ public final class VidocqBootstrap {
         recorder.begin("beforeStart");
         for (VidocqExtension ext : extensions) {
             recorder.step("beforeStart " + nameOf(ext));
+            beforeStartCalled++;
             ext.beforeStart(builder);
         }
         recorder.end();
@@ -430,6 +436,46 @@ public final class VidocqBootstrap {
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);
         } catch (RuntimeException | LinkageError unreported) {
             // the failure of the boot is what matters, and the caller rethrows it untouched
+        }
+    }
+
+    /**
+     * Stops what a boot that failed in {@link #start()} started: the {@code onStop} of every extension whose
+     * {@code beforeStart} was called, the one that failed included, in reverse order, then the container if it was
+     * built. The bootstrap then counts as stopped, so a later {@link #shutdown()} stops nothing twice. Never throws:
+     * the caller rethrows the failure of the boot, which nothing may hide.
+     */
+    private void stopFailedBoot() {
+        try {
+            List<VidocqExtension> started = extensions.subList(0, Math.min(beforeStartCalled, extensions.size()));
+            if (!started.isEmpty() || container != null) {
+                LOG.log(System.Logger.Level.INFO, "Vidocq - Stopping what the failed boot started");
+            }
+            stopInReverse(started);
+            if (container != null) {
+                try {
+                    container.close();
+                } catch (RuntimeException | LinkageError e) {
+                    LOG.log(System.Logger.Level.ERROR, "Error closing the container of the failed boot", e);
+                }
+            }
+        } catch (RuntimeException | LinkageError unstopped) {
+            LOG.log(System.Logger.Level.ERROR, "Error stopping the failed boot", unstopped);
+        } finally {
+            shutdownLatch.countDown();
+        }
+    }
+
+    /** Calls the {@code onStop} of each of {@code extensions}, last first; one that fails is logged. */
+    private static void stopInReverse(List<VidocqExtension> extensions) {
+        List<VidocqExtension> reversed = new ArrayList<>(extensions);
+        Collections.reverse(reversed);
+        for (VidocqExtension ext : reversed) {
+            try {
+                ext.onStop();
+            } catch (Exception | LinkageError e) {
+                LOG.log(System.Logger.Level.ERROR, "Error stopping extension: " + nameOf(ext), e);
+            }
         }
     }
 
@@ -640,15 +686,7 @@ public final class VidocqBootstrap {
         reportContributors = List.of();
 
         // Stop extensions in reverse order
-        List<VidocqExtension> reversed = new java.util.ArrayList<>(extensions);
-        Collections.reverse(reversed);
-        for (VidocqExtension ext : reversed) {
-            try {
-                ext.onStop();
-            } catch (Exception e) {
-                LOG.log(System.Logger.Level.ERROR, "Error stopping extension: " + ext.name(), e);
-            }
-        }
+        stopInReverse(extensions);
 
         // Close CDI container
         if (container != null) {
