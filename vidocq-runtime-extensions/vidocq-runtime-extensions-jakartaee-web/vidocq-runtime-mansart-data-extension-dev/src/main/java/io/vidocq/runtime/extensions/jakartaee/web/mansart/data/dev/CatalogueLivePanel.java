@@ -19,24 +19,37 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
+import io.vidocq.mansart.data.core.EntityModels;
+import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue.Column;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue.Entity;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue.Repository;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataLive;
+import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
+import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
- * The Mansart Data section, live: the catalogue the runtime extension built at boot, from {@link MansartDataLive},
- * one group per entity with its table, its columns and its repositories, then a group for the repositories with no
- * primary entity. It reads that holder only: no bean, no connection, no query.
+ * The Mansart Data section, live. Its <i>Monitoring</i> tab is the catalogue the runtime extension built at boot,
+ * from {@link MansartDataLive}: one group per entity with its table, its columns and its repositories, then a group
+ * for the repositories with no primary entity. {@link #sample} reads that holder and the calls kept in memory: no
+ * bean, no connection, no query.
+ *
+ * <p>Its actions run the repositories' methods, one tab per repository (see {@link RepositoryActions}): built once
+ * per boot by {@link #actions()}, which the console calls after {@link #start}, from the repository interfaces
+ * {@link MansartDataLive} holds and the {@link BeanManager} {@code start} keeps; dropped by {@link #stop}.
  *
  * <p>A value key must match {@code [a-z][a-z0-9.-]{0,39}}: a repository's table is keyed by its name in kebab case,
  * {@code TaskRepository} as {@code task-repository}, its inherited methods by {@code <key>.inherits}, and the count
@@ -54,12 +67,72 @@ public final class CatalogueLivePanel implements LivePanel {
     /** The keys an entity group already uses. */
     private static final Set<String> RESERVED = Set.of("table", "columns", "model");
 
+    private static final System.Logger LOG = System.getLogger(CatalogueLivePanel.class.getName());
+
+    /** The bean manager of this boot, {@code null} before {@link #start} and after {@link #stop}. */
+    private volatile BeanManager beans;
+    /** The actions of this boot, {@link RepositoryActions#NONE} until {@link #actions()} builds them. */
+    private volatile RepositoryActions run = RepositoryActions.NONE;
+
     /** Created by the service loader. */
     public CatalogueLivePanel() {}
 
     @Override
     public String id() {
         return "mansart-data";
+    }
+
+    /** Keeps the bean manager the actions resolve the repositories and the transaction manager with. */
+    @Override
+    public void start(ExtensionContext context) {
+        run = RepositoryActions.NONE;
+        try {
+            beans = context.beanManager();
+        } catch (RuntimeException | LinkageError unavailable) {
+            beans = null;
+            LOG.log(System.Logger.Level.DEBUG, "Mansart Data: no bean manager, no action: "
+                    + unavailable.getClass().getName());
+        }
+    }
+
+    /** Drops the bean manager, the actions and their history: nothing of this boot outlives a dev reload. */
+    @Override
+    public void stop() {
+        beans = null;
+        run = RepositoryActions.NONE;
+    }
+
+    /** The run actions of this boot, built now; none before {@link #start}, or without a catalogue. */
+    @Override
+    public List<PanelAction> actions() {
+        BeanManager manager = beans;
+        if (manager == null) {
+            return List.of();
+        }
+        return actions(BeanLookup.of(manager), TransactionRunner.of(manager), type -> EntityModels.of(type),
+                RepositoryActions::accessible);
+    }
+
+    /** Builds the actions from what {@link MansartDataLive} holds, and keeps them for {@link #sample}. */
+    List<PanelAction> actions(BeanLookup lookup, TransactionRunner transactions,
+                              Function<Class<?>, EntityModel<?>> models, Predicate<Method> accessible) {
+        Optional<MansartDataCatalogue> catalogue = MansartDataLive.catalogue();
+        List<Class<?>> repositories = MansartDataLive.repositories();
+        if (catalogue.isEmpty() || repositories.isEmpty()) {
+            run = RepositoryActions.NONE;
+            return List.of();
+        }
+        try {
+            RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(), lookup, transactions,
+                    models, accessible, RepositoryActions.MAX_ACTIONS);
+            run = built;
+            return built.actions();
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Mansart Data: the run actions could not be built: "
+                    + failed.getClass().getName());
+            run = RepositoryActions.NONE;
+            return List.of();
+        }
     }
 
     @Override
@@ -97,6 +170,7 @@ public final class CatalogueLivePanel implements LivePanel {
         if (catalogue.moreRepositories() > 0) {
             sample.text("more-repositories", "and " + catalogue.moreRepositories() + " more");
         }
+        run.sample(sample);
     }
 
     private static List<String> row(Column column) {

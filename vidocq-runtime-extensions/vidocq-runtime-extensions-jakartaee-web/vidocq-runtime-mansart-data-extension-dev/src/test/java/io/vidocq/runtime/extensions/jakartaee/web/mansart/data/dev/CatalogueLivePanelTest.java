@@ -28,12 +28,20 @@ import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataC
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue.Method;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue.Repository;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataLive;
+import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.VidocqConfiguration;
+import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
+import io.vidocq.vauban.core.container.VaubanContainer;
+import jakarta.enterprise.inject.spi.BeanManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -50,6 +58,7 @@ class CatalogueLivePanelTest {
 
     @AfterEach
     void clear() {
+        panel.stop();
         MansartDataLive.clear();
     }
 
@@ -182,6 +191,96 @@ class CatalogueLivePanelTest {
         for (String key : keys) {
             assertDoesNotThrow(() -> PanelSample.requireKey(key + ".inherits"), key);
             assertTrue(key.length() <= 31, key);
+        }
+    }
+
+    @Test
+    void aKeyFitsTheRoomItIsGiven() {
+        Set<String> used = new HashSet<>();
+
+        assertEquals("count-by-stock-greate", CatalogueLivePanel.key("countByStockGreaterThan", used, 21));
+        assertEquals("count-by-stock-grea-2", CatalogueLivePanel.key("countByStockGreaterThan", used, 21));
+    }
+
+    @Test
+    void withoutAStartThereIsNoAction() {
+        publishRunFixtures();
+
+        assertEquals(List.of(), panel.actions());
+    }
+
+    @Test
+    void startKeepsTheBeanManagerTheActionsAreBuiltFrom() {
+        publishRunFixtures();
+        panel.start(new FakeContext(emptyBeanManager()));
+
+        List<PanelAction> actions = panel.actions();
+
+        assertEquals(23, actions.size());
+        PanelAction save = actions.stream().filter(a -> a.id().equals("m.gizmo-repository.save")).findFirst()
+                .orElseThrow();
+        assertEquals(List.of("commit"), save.arguments().get(1).allowedValues(), "no TransactionManager bean");
+        assertEquals("no bean for GizmoRepository", save.call()
+                .apply(Map.of("arguments", "{\"entity\":{}}", "transaction", "commit")).summary());
+    }
+
+    @Test
+    void theMonitoringTabAlsoListsWhatCannotRunAndTheCalls() {
+        publishRunFixtures();
+        panel.actions(type -> {
+            throw new BeanLookup.NoBean();
+        }, TransactionRunner.NONE, RunFixtures::model, method -> true);
+
+        RecordedSample sample = sample();
+
+        assertEquals(List.of("not-runnable", "calls"), sample.keys());
+        assertEquals(List.of("Gizmo", "Part", "Other repositories"), sample.groupNames(), "the catalogue as before");
+    }
+
+    @Test
+    void stopDropsTheActionsAndTheirCalls() {
+        publishRunFixtures();
+        panel.start(new FakeContext(emptyBeanManager()));
+        panel.actions();
+
+        panel.stop();
+
+        assertEquals(List.of(), panel.actions());
+        assertEquals(List.of(), sample().keys());
+    }
+
+    private static void publishRunFixtures() {
+        MansartDataLive.publish(RunFixtures.catalogue());
+        MansartDataLive.publishRepositories(RunFixtures.REPOSITORIES);
+    }
+
+    /** A bean manager with no bean at all: no repository bean, no TransactionManager. */
+    private static BeanManager emptyBeanManager() {
+        return (BeanManager) Proxy.newProxyInstance(BeanManager.class.getClassLoader(),
+                new Class<?>[] {BeanManager.class}, (proxy, method, arguments) -> {
+                    if (method.getName().equals("getBeans")) {
+                        return Set.of();
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    /** What {@code start} reads: the bean manager only. */
+    private record FakeContext(BeanManager beanManager) implements ExtensionContext {
+
+        @Override
+        public VaubanContainer container() {
+            throw new UnsupportedOperationException("start reads the bean manager only");
+        }
+
+        @Override
+        public VidocqConfiguration configuration() {
+            throw new UnsupportedOperationException("start reads the bean manager only");
+        }
+
+        @Override
+        public VidocqConfig config() {
+            throw new UnsupportedOperationException("start reads the bean manager only");
         }
     }
 }
