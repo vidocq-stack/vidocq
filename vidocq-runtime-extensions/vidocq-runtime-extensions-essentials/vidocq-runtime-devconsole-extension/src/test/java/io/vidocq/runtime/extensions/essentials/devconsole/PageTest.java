@@ -212,6 +212,25 @@ class PageTest {
                 "a history with no row of the group says so");
     }
 
+    @Test
+    void aPanelWhoseActionsHaveGroupsGetsSubTabsMonitoringFirst() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("const MONITORING = \"\""), "Monitoring's id, which no group has");
+        assertTrue(script.contains("[[MONITORING, \"Monitoring\"], ...[...byGroup.keys()].map((g) => [g, g])]"),
+                "Monitoring first, then one tab per group in order of first appearance");
+        assertTrue(script.contains("strip.setAttribute(\"role\", \"tablist\")"), "the markup of the top tabs");
+        assertTrue(script.contains("const box = byGroup.size ? el(\"div\", \"subpanel\") : panelArea;"),
+                "a panel without a grouped action renders as before");
+        assertTrue(script.contains("body.hidden = tabId !== id"), "a sub-tab is shown, never drawn again");
+        assertTrue(script.contains("v.columns.includes(REPLAY_COLUMN)"), "the replay tables move to the group tabs");
+        assertTrue(script.contains("store(SUBTAB_KEY + panel.id, id)"), "the open sub-tab is remembered");
+        assertTrue(script.contains("if (!byGroup.has(state.tab)) state.tab = MONITORING;"),
+                "a group a dev reload removed falls back to Monitoring");
+        assertTrue(script.contains("state.results.delete(id)"), "the result of a removed action is forgotten");
+        assertFalse(script.contains("action-group"), "grouped actions are no longer folded sections");
+    }
+
     /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
     private static String rule(String style, String opening) {
         int start = style.indexOf(opening);

@@ -29,7 +29,7 @@
 //   asks for what this page is missing with ?since=<its newest point>. That is why a tab that comes back after three
 //   minutes away draws a complete curve instead of a hole. The page forgets it all when console.boot changes — a new
 //   boot, a dev reload included — and then asks for the whole ring again. Time is the server's, never this browser's.
-// - localStorage keeps the selected panel and the pause, nothing else, and may refuse both.
+// - localStorage keeps the selected panel, the pause and each panel's open sub-tab, nothing else, and may refuse all.
 // - In a dev launch, a panel's actions are buttons. Each sends one same-origin POST, application/json, with the
 //   token of the boot the snapshot carries (console.actionToken); a confirmation is asked inline, never with a
 //   blocking dialog. The page shows the line the action returned, or the class of what it threw.
@@ -38,6 +38,10 @@
 //   the JSON viewer (jsonViewer) when it is JSON, and its details folded under "Exchange", through it too. A cell of
 //   a sample table column named "replay" that reads as "<action id> <JSON object>" of an action of that panel is a
 //   button that fills its form: nothing is sent until the user submits. Any other cell of such a column stays text.
+// - A panel whose actions have groups gets sub-tabs: Monitoring, with everything else the panel shows, then one per
+//   group, in order of first appearance, which picks one action in a combo and shows its form, its last result apart
+//   and the rows of the panel's replay tables that name one of the group's actions. The page keeps, per panel, the
+//   open sub-tab, the action picked in each group and the last result of each action (panelState).
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -604,71 +608,27 @@ const actionKey = (panelId, actionId) => panelId + "\u0000" + actionId;
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /**
- * The actions a panel offers, in a dev launch only (the snapshot then carries console.actionToken): one form each.
- * Actions with a group go into a folded section per group, in order of first appearance; past FILTER_FROM actions a
- * text filter narrows them. A confirmation is asked inline, never with the browser's blocking dialog. The request is
- * a same-origin fetch with the token of the boot.
+ * The panel's own action bar, in a dev launch only (the snapshot then carries console.actionToken): the ungrouped
+ * actions, one form each, a text filter above them past FILTER_FROM. A confirmation is asked inline, never with the
+ * browser's blocking dialog. The request is a same-origin fetch with the token of the boot.
  */
-function actionsBar(panel) {
-  const actions = Array.isArray(panel.actions) ? panel.actions : [];
-  if (!actions.length) return null;
+function actionsBar(rows) {
+  if (!rows.length) return null;
   const bar = el("div", "actions");
-  const rows = actions.map((action) => actionRow(panel.id, action, inlineOutlet()));
-  for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
-  for (const row of rows) actionRows.set(actionKey(panel.id, row.id), row);
-
-  let filter = null;
   if (rows.length > FILTER_FROM) {
-    filter = el("input", "action-filter");
+    const filter = el("input", "action-filter");
     filter.type = "search";
     filter.placeholder = "Filter " + rows.length + " actions";
     filter.autocomplete = "off";
     filter.spellcheck = false;
-    bar.append(filter);
-  }
-  const sections = new Map();
-  for (const row of rows) {
-    if (!row.group) { bar.append(row.root); continue; }
-    let section = sections.get(row.group);
-    if (!section) {
-      const box = el("details", "action-group");
-      const title = el("summary");
-      box.append(title);
-      bar.append(box);
-      section = { name: row.group, box, title, rows: [] };
-      sections.set(row.group, section);
-    }
-    section.box.append(row.root);
-    section.rows.push(row);
-    const box = section.box;
-    row.reveal = () => { row.root.hidden = false; box.hidden = false; box.open = true; };
-  }
-  const titles = () => {
-    for (const s of sections.values()) {
-      const shown = s.rows.filter((r) => !r.root.hidden).length;
-      s.title.textContent = s.name + " (" + (shown === s.rows.length ? shown : shown + " of " + s.rows.length) + ")";
-    }
-  };
-  titles();
-  if (filter) {
     filter.addEventListener("input", () => {
       const words = filter.value.trim().toLowerCase();
       for (const row of rows) row.root.hidden = words !== "" && !row.text.includes(words);
-      for (const s of sections.values()) {
-        const any = s.rows.some((r) => !r.root.hidden);
-        s.box.hidden = !any;
-        if (words !== "" && any) s.box.open = true;
-      }
-      titles();
     });
+    bar.append(filter);
   }
-  return {
-    root: bar,
-    update(current) {
-      const now = (current.actions || []);
-      for (const row of rows) row.update(now.find((a) => a.id === row.id));
-    },
-  };
+  bar.append(...rows.map((row) => row.root));
+  return bar;
 }
 
 /** A string argument: a list when the server named the values it accepts, a text field otherwise. */
@@ -1592,7 +1552,8 @@ function startupView(snapshot) {
 function structure(panel) {
   const sample = panel.sample;
   // the actions a panel offers draw their buttons once: a change of them draws the panel again
-  const acts = Array.isArray(panel.actions) ? "#" + panel.actions.map((a) => a.id).join(",") : "";
+  const acts = Array.isArray(panel.actions)
+    ? "#" + panel.actions.map((a) => a.id + "@" + (groupName(a) || "")).join(",") : "";
   if (!sample) return "facts" + acts;
   if (sample.error) return "error" + acts;
   const keys = (values) => (values || []).map((v) => v.key + (v.kind === "table" ? "#" : "")).join(",");
@@ -1640,27 +1601,114 @@ function scopeView(container, panel, group, values, charts) {
 
 function panelView(panel, snapshot) {
   panelArea.append(panelHead(panel.title || panel.id, panel.id + (panel.live ? " · live" : " · boot facts only")));
-  if (panel.summary) panelArea.append(el("p", "summary", panel.summary));
+  const state = panelState(panel.id);
+  const actions = Array.isArray(panel.actions) ? panel.actions : [];
+  // a result is kept for as long as its action exists: a dev reload that removes the action forgets it (spec §4)
+  for (const id of [...state.results.keys()]) if (!actions.some((a) => a.id === id)) state.results.delete(id);
+  const groupTabs = new Map();
+  for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
+  const rows = actions.map((action) => {
+    const group = groupName(action);
+    const outlet = group === null ? inlineOutlet() : groupOutlet(state, action.id, (id) => {
+      const tab = groupTabs.get(group);
+      if (tab) tab.changed(id);
+    });
+    const row = actionRow(panel.id, action, outlet);
+    actionRows.set(actionKey(panel.id, row.id), row);
+    return row;
+  });
+  const byGroup = new Map();              // the grouped rows, by group in order of first appearance
+  for (const row of rows) {
+    if (!row.group) continue;
+    if (!byGroup.has(row.group)) byGroup.set(row.group, []);
+    byGroup.get(row.group).push(row);
+  }
+  const groupOf = new Map(rows.filter((row) => row.group).map((row) => [row.id, row.group]));
+
+  // Monitoring: everything the panel shows but its grouped actions and its replay tables. With no grouped action, the
+  // panel itself, drawn as it always was.
+  const box = byGroup.size ? el("div", "subpanel") : panelArea;
+  if (byGroup.size) {
+    if (!byGroup.has(state.tab)) state.tab = MONITORING;
+    box.setAttribute("role", "tabpanel");
+    box.setAttribute("aria-label", "Monitoring");
+    const strip = el("div", "subtabs");
+    strip.setAttribute("role", "tablist");
+    strip.setAttribute("aria-label", (panel.title || panel.id) + " views");
+    const bodies = new Map([[MONITORING, box]]);
+    const buttons = [];
+    const openTab = (id) => {
+      state.tab = id;
+      store(SUBTAB_KEY + panel.id, id);
+      for (const [tabId, body] of bodies) body.hidden = tabId !== id;
+      for (const b of buttons) {
+        const on = b.dataset.tab === id;
+        b.setAttribute("aria-selected", String(on));
+        b.tabIndex = on ? 0 : -1;
+      }
+    };
+    for (const [id, title] of [[MONITORING, "Monitoring"], ...[...byGroup.keys()].map((g) => [g, g])]) {
+      const b = el("button", "subtab", title);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.dataset.tab = id;
+      b.addEventListener("click", () => openTab(id));
+      buttons.push(b);
+    }
+    strip.append(...buttons);
+    strip.addEventListener("keydown", (event) => {
+      const at = buttons.indexOf(document.activeElement);
+      if (at < 0) return;
+      const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+      if (!step) return;
+      event.preventDefault();
+      const next = buttons[(at + step + buttons.length) % buttons.length];
+      openTab(next.dataset.tab);
+      next.focus();
+    });
+    panelArea.append(strip, box);
+    for (const [name, groupRows] of byGroup) {
+      const tab = groupTab(panel.id, name, groupRows, state, () => openTab(name));
+      groupTabs.set(name, tab);
+      bodies.set(name, tab.root);
+      panelArea.append(tab.root);
+    }
+    openTab(state.tab);
+  }
+
+  if (panel.summary) box.append(el("p", "summary", panel.summary));
   const opens = openButtons(panel.lines);
-  if (opens) panelArea.append(opens);
-  const actions = actionsBar(panel);
-  if (actions) panelArea.append(actions.root);
+  if (opens) box.append(opens);
+  const bar = actionsBar(rows.filter((row) => !row.group));
+  if (bar) box.append(bar);
   const anomalies = anomaliesOf(panel.id, snapshot);
   if (anomalies.length) {
     const list = el("div", "anoms");
     list.append(...anomalies.map(anomalyBox));
-    panelArea.append(list);
+    box.append(list);
   }
   const flags = el("div", "flags");
   const failure = el("div", "anom crit");
   failure.hidden = true;
-  panelArea.append(failure, flags);
+  box.append(failure, flags);
 
   const sample = panel.sample && !panel.sample.error ? panel.sample : null;
   const groups = sample ? sample.groups || [] : [];
   const charts = panel.charts || [];
+  // the tables with a replay column, [scope, key], move to the group tabs (spec §2.3)
+  const replayTables = [];
+  if (byGroup.size && sample) {
+    for (const [scope, values] of [["", sample.values || []], ...groups.map((g) => [g.name, g.values || []])]) {
+      for (const v of values) {
+        if (v.kind === "table" && Array.isArray(v.columns) && v.columns.includes(REPLAY_COLUMN)) {
+          replayTables.push([scope, v.key]);
+        }
+      }
+    }
+  }
+  const staying = (scope, values) => values.filter((v) => !replayTables.some(([s, k]) => s === scope && k === v.key));
   const scopes = [];
-  if (sample) scopes.push(["", scopeView(panelArea, panel, "", sample.values || [], charts)]);
+  if (sample) scopes.push(["", scopeView(box, panel, "", staying("", sample.values || []), charts)]);
 
   // the boot facts of a group are the lines whose key is its name, or starts with it: "@Default size"
   const lines = panel.lines || [];
@@ -1685,13 +1733,13 @@ function panelView(panel, snapshot) {
   });
 
   groups.forEach((group, index) => {
-    const box = el("article", "group");
+    const card = el("article", "group");
     const gh = el("div", "group-head");
     gh.append(el("h3", null, group.name));
     const facts = factsOf.get(group.name);
     if (facts.kind) gh.append(el("span", "kind", facts.kind));
-    box.append(gh);
-    scopes.push([group.name, scopeView(box, panel, group.name, group.values || [], charts)]);
+    card.append(gh);
+    scopes.push([group.name, scopeView(card, panel, group.name, staying(group.name, group.values || []), charts)]);
     if (facts.lines.length) {
       const id = panel.id + "\u0000" + group.name;
       const details = el("details");
@@ -1701,9 +1749,9 @@ function panelView(panel, snapshot) {
         else { page.closedGroups.add(id); page.openGroups.delete(id); }
       });
       details.append(el("summary", null, "Boot facts"), ...linesBlock(facts.lines, null));
-      box.append(details);
+      card.append(details);
     }
-    panelArea.append(box);
+    box.append(card);
   });
 
   const rest = lines.filter((line, i) => !claimed.has(i));
@@ -1711,14 +1759,15 @@ function panelView(panel, snapshot) {
     const block = el("section", "block");
     block.append(el("h3", null, "Boot facts"), ...linesBlock(rest, null));
     if (panel.truncated) block.append(el("p", "note", "The snapshot carries the first lines only."));
-    panelArea.append(block);
+    box.append(block);
   }
 
   return {
     update(current) {
       const now = current.panels.find((p) => p.id === panel.id);
       if (!now) return;
-      if (actions) actions.update(now);
+      const nowActions = Array.isArray(now.actions) ? now.actions : [];
+      for (const row of rows) row.update(nowActions.find((a) => a.id === row.id));
       const s = now.sample;
       failure.hidden = !(s && s.error);
       if (s && s.error) {
@@ -1732,6 +1781,11 @@ function panelView(panel, snapshot) {
       if (!s || s.error) return;
       const values = new Map([["", s.values], ...(s.groups || []).map((g) => [g.name, g.values])]);
       for (const [name, scope] of scopes) scope.update(values.get(name), current);
+      if (!groupTabs.size) return;
+      const tables = replayTables
+        .map(([scope, key]) => ({ key, value: (values.get(scope) || []).find((v) => v.key === key) }))
+        .filter((table) => table.value);
+      for (const tab of groupTabs.values()) tab.update(tables, groupOf);
     },
   };
 }
