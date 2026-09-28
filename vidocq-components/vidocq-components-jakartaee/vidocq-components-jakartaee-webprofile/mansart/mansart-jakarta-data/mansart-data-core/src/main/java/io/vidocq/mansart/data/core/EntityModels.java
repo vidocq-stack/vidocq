@@ -35,15 +35,36 @@ import java.util.concurrent.ConcurrentMap;
  *
  * <p>Used by {@link JdqlExecutor} and {@link io.vidocq.mansart.data.core.MethodNamePathResolver}
  * when resolving JDQL/method-name path expressions ({@code book.author.name}) — the dialect
- * needs the target table name and PK column to materialise the JOIN clause.
+ * needs the target table name and PK column to materialise the JOIN clause. Public through
+ * {@link #of(Class)} only, for tools that show what Mansart knows, such as the Vidocq dev console.
  *
  * <p>Cached per-class. Thread-safe.
  */
-final class EntityModels {
+public final class EntityModels {
 
     private EntityModels() {}
 
     private static final ConcurrentMap<Class<?>, EntityModel<?>> CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * The model Mansart uses for {@code entityType}: its generated metamodel, or one built at run time.
+     *
+     * <p>The generated {@code <pkg>._<EntitySimpleName>.$MODEL} wins; without it, the model is built from the
+     * class's fields and its {@code jakarta.persistence} mapping annotations, read by name. The model is cached:
+     * a second call returns the same instance.
+     *
+     * @param entityType the entity class
+     * @param <E>        the entity type
+     * @return its model, never {@code null}
+     * @throws MansartDataException when Mansart cannot map {@code entityType}: no id field, no no-arg constructor,
+     *                              a package not open to {@code io.vidocq.mansart.data.core}, or a generated
+     *                              metamodel without a public static {@code $MODEL} field; the initialisation of a
+     *                              generated metamodel may also throw its own error
+     */
+    @SuppressWarnings("unchecked")
+    public static <E> EntityModel<E> of(Class<E> entityType) {
+        return (EntityModel<E>) lookup(entityType);
+    }
 
     static EntityModel<?> lookup(Class<?> entityType) {
         return CACHE.computeIfAbsent(entityType, EntityModels::resolve);
