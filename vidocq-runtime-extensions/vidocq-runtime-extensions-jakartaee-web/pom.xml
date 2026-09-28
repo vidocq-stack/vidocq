@@ -21,6 +21,7 @@
         <module>vidocq-runtime-mansart-pool-extension-dev</module>
         <module>vidocq-runtime-mansart-pool-datasources-codegen</module>
         <module>vidocq-runtime-mansart-data-extension</module>
+        <module>vidocq-runtime-mansart-data-extension-dev</module>
         <module>vidocq-runtime-mansart-data-extension-codegen</module>
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>

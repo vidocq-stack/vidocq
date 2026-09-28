@@ -171,4 +171,14 @@ class MansartDataSectionTest {
         assertTrue(MansartDataLive.catalogue().isEmpty(), "a dev console poll now reads no catalogue");
         assertEquals("no catalogue: the extension did not start", section(ReportContext.detailed()).summary());
     }
+
+    @Test
+    void theJarNamesItsDevCompanionAndIsNoPanel() throws Exception {
+        try (var in = MansartDataIntegrationExtension.class.getClassLoader()
+                .getResourceAsStream("META-INF/vidocq/dev-module")) {
+            assertEquals("vidocq-runtime-mansart-data-extension-dev", new String(in.readAllBytes()).strip());
+        }
+        assertFalse(java.util.Arrays.stream(MansartDataIntegrationExtension.class.getInterfaces())
+                .anyMatch(type -> type.getName().startsWith("io.vidocq.runtime.spi.devconsole")));
+    }
 }
