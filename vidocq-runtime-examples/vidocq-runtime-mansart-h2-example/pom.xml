@@ -176,6 +176,15 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- DevConsoleSnapshotTest runs ProductRepository's methods from the console
+             (runsProductRepositoryMethodsFromTheConsole): the Mansart Data panel's actions live in this -dev
+             companion, needed at test scope for the same reason as the panels above. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-mansart-data-extension-dev</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

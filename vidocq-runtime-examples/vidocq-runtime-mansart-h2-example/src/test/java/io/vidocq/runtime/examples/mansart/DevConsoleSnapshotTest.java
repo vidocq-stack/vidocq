@@ -45,6 +45,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -217,6 +218,64 @@ class DevConsoleSnapshotTest {
         for (String password : PASSWORD_KEYS.stream().map(DevConsoleSnapshotTest::password).toList()) {
             assertFalse(after.contains(password), "the snapshot after an action holds a pool password");
             assertFalse(migrated.contains(password) || refused.contains(password), "an action's answer does");
+        }
+    }
+
+    /**
+     * Runs ProductRepository's methods from the Mansart Data panel against the in-memory H2 database, as a developer
+     * does from its page: a read, a save rolled back that leaves no row, a save committed that leaves one (then
+     * deleted, so that the other tests see the seeded rows), and a JDQL UPDATE rolled back.
+     */
+    @Test
+    void runsProductRepositoryMethodsFromTheConsole() throws Exception {
+        List<?> actions = (List<?>) panel("mansart-data").get("actions");
+        Map<?, ?> findById = actions.stream().map(a -> (Map<?, ?>) a)
+                .filter(a -> "m.product-repository.find-by-id".equals(a.get("id"))).findFirst()
+                .orElseGet(() -> fail("no findById action in " + actions));
+        assertEquals("ProductRepository", findById.get("group"));
+        String token = (String) ((Map<?, ?>) snapshot.get("console")).get("actionToken");
+
+        Map<?, ?> espresso = runProducts(token, "find-by-id", "{\"id\":1}", null);
+        assertEquals("1 row", espresso.get("result"));
+        assertEquals("Espresso", json((String) espresso.get("body")).get("name"));
+
+        long before = countProducts(token);
+        assertEquals("1 row · rolled back", runProducts(token, "save",
+                "{\"entity\":{\"name\":\"Mocha\",\"price\":4.5}}", "rollback").get("result"));
+        assertEquals(before, countProducts(token), "a save rolled back leaves no row");
+
+        Map<?, ?> saved = runProducts(token, "save", "{\"entity\":{\"name\":\"Mocha\",\"price\":4.5}}", "commit");
+        assertEquals("1 row · committed", saved.get("result"));
+        assertEquals(before + 1, countProducts(token), "a save committed leaves one");
+        long id = ((Number) json((String) saved.get("body")).get("id")).longValue();
+        assertEquals("done · committed",
+                runProducts(token, "delete-by-id", "{\"id\":" + id + "}", "commit").get("result"));
+        assertEquals(before, countProducts(token));
+
+        assertEquals("1 · rolled back", runProducts(token, "reprice",
+                "{\"name\":\"Espresso\",\"price\":9.99}", "rollback").get("result"));
+        assertEquals(2.5, ((Number) json((String) runProducts(token, "find-by-id", "{\"id\":1}", null)
+                .get("body")).get("price")).doubleValue(), "the UPDATE was rolled back");
+    }
+
+    /** Runs {@code m.product-repository.<method>} with these arguments; its answer, which must be no error. */
+    private static Map<?, ?> runProducts(String token, String method, String arguments, String transaction)
+            throws Exception {
+        String body = "{\"arguments\":\"" + arguments.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+                + (transaction == null ? "" : ",\"transaction\":\"" + transaction + "\"") + "}";
+        Map<?, ?> answer = json(postAction("mansart-data/m.product-repository." + method, token, body));
+        assertNotEquals(Boolean.TRUE, answer.get("error"), method + ": " + answer);
+        return answer;
+    }
+
+    /** {@code ProductRepository.count()}, from the console. */
+    private static long countProducts(String token) throws Exception {
+        return Long.parseLong((String) runProducts(token, "count", "{}", null).get("result"));
+    }
+
+    private static Map<?, ?> json(String text) throws Exception {
+        try (Jsonb jsonb = JsonbBuilder.create()) {
+            return (Map<?, ?>) jsonb.fromJson(text, Object.class);
         }
     }
 

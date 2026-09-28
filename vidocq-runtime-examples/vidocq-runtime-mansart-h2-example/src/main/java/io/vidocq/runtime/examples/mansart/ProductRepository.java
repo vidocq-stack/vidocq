@@ -20,6 +20,8 @@
 package io.vidocq.runtime.examples.mansart;
 
 import jakarta.data.repository.BasicRepository;
+import jakarta.data.repository.Param;
+import jakarta.data.repository.Query;
 import jakarta.data.repository.Repository;
 import jakarta.transaction.Transactional;
 
@@ -37,4 +39,13 @@ public interface ProductRepository extends BasicRepository<Product, Long> {
     long count();
 
     List<Product> findByNameLike(String pattern);
+
+    /**
+     * Sets the price of the products of a name, in one {@code UPDATE}; DevConsoleSnapshotTest runs it from the dev
+     * console's Mansart Data panel, in a transaction rolled back.
+     *
+     * @return how many products changed
+     */
+    @Query("UPDATE Product SET price = :price WHERE name = :name")
+    long reprice(@Param("name") String name, @Param("price") double price);
 }
