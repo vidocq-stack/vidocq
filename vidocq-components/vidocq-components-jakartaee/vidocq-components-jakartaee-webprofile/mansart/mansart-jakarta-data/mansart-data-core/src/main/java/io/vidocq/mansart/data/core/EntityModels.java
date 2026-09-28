@@ -22,8 +22,6 @@ package io.vidocq.mansart.data.core;
 import io.vidocq.mansart.data.dialect.EntityModel;
 
 import java.lang.reflect.Field;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * M8-3 — central lookup of {@link EntityModel} by entity class. Resolution order:
@@ -44,14 +42,29 @@ public final class EntityModels {
 
     private EntityModels() {}
 
-    private static final ConcurrentMap<Class<?>, EntityModel<?>> CACHE = new ConcurrentHashMap<>();
+    /**
+     * One model per class, kept with the class itself rather than in a map: a class whose loader is dropped, such as
+     * the entities of an application layer a dev reload replaces, takes its model with it instead of staying
+     * reachable from here.
+     */
+    private static final ClassValue<EntityModel<?>> CACHE = new ClassValue<>() {
+        @Override
+        protected EntityModel<?> computeValue(Class<?> entityType) {
+            return resolve(entityType);
+        }
+    };
 
     /**
      * The model Mansart uses for {@code entityType}: its generated metamodel, or one built at run time.
      *
      * <p>The generated {@code <pkg>._<EntitySimpleName>.$MODEL} wins; without it, the model is built from the
-     * class's fields and its {@code jakarta.persistence} mapping annotations, read by name. The model is cached:
-     * a second call returns the same instance.
+     * class's fields and its {@code jakarta.persistence} mapping annotations, read by name. The model is cached with
+     * the class: a second call returns the same instance, and the model goes away with the class's loader.
+     *
+     * <p>The model's attributes carry the {@link java.lang.invoke.MethodHandle getter and setter} Mansart reads and
+     * writes the entity's fields with, built with a lookup the entity's package opens to Mansart; the generated
+     * {@code $MODEL} is public and carries the same. A caller reads the model to describe the entity, as the
+     * Vidocq dev console does, and does not use those handles.
      *
      * @param entityType the entity class
      * @param <E>        the entity type
@@ -67,7 +80,7 @@ public final class EntityModels {
     }
 
     static EntityModel<?> lookup(Class<?> entityType) {
-        return CACHE.computeIfAbsent(entityType, EntityModels::resolve);
+        return CACHE.get(entityType);
     }
 
     private static EntityModel<?> resolve(Class<?> entityType) {

@@ -25,6 +25,9 @@ import io.vidocq.mansart.data.dialect.Attribute;
 import io.vidocq.mansart.data.dialect.EntityModel;
 import org.junit.jupiter.api.Test;
 
+import java.io.InputStream;
+import java.lang.ref.WeakReference;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -55,5 +58,46 @@ class EntityModelsOfTest {
         assertThatThrownBy(() -> EntityModels.of(NotAnEntity.class))
                 .isInstanceOf(MansartDataException.class)
                 .hasMessageContaining("has no @Id field");
+    }
+
+    @Test
+    void aModelKeepsNoClassLoaderReachable() throws Exception {
+        WeakReference<ClassLoader> loader = modelOfAGadgetInAThrowawayLoader();
+
+        for (int i = 0; i < 100 && loader.get() != null; i++) {
+            System.gc();
+            Thread.sleep(20);
+        }
+
+        assertThat(loader.get())
+                .as("a tool that asks for the model of a class of a dropped loader, such as a reloaded application "
+                        + "layer, must not keep that loader alive")
+                .isNull();
+    }
+
+    /** Loads a copy of {@link UnscannedGadget} in a loader of its own, asks for its model, and lets both go. */
+    private static WeakReference<ClassLoader> modelOfAGadgetInAThrowawayLoader() throws Exception {
+        ClassLoader parent = EntityModelsOfTest.class.getClassLoader();
+        String name = UnscannedGadget.class.getName();
+        byte[] bytes;
+        try (InputStream in = parent.getResourceAsStream(name.replace('.', '/') + ".class")) {
+            bytes = in.readAllBytes();
+        }
+        ClassLoader loader = new ClassLoader(parent) {
+            @Override
+            protected Class<?> loadClass(String n, boolean resolve) throws ClassNotFoundException {
+                if (!n.equals(name)) {
+                    return super.loadClass(n, resolve);
+                }
+                synchronized (getClassLoadingLock(n)) {
+                    Class<?> loaded = findLoadedClass(n);
+                    return loaded != null ? loaded : defineClass(n, bytes, 0, bytes.length);
+                }
+            }
+        };
+        Class<?> gadget = loader.loadClass(name);
+        assertThat(gadget).isNotSameAs(UnscannedGadget.class);
+        assertThat(EntityModels.of(gadget).entityClass()).isSameAs(gadget);
+        return new WeakReference<>(loader);
     }
 }
