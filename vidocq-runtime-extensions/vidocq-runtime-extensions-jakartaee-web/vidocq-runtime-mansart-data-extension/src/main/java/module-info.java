@@ -19,8 +19,9 @@
  */
 /**
  * Vidocq extension that fails fast on boot if Mansart Data cannot reach its {@link
- * javax.sql.DataSource} and logs the {@code @Repository} interfaces wired by the underlying
- * {@code mansart-data-cdi} BCE.
+ * javax.sql.DataSource}, logs the {@code @Repository} interfaces wired by the underlying
+ * {@code mansart-data-cdi} BCE, and writes their catalogue — entities, columns, repositories and methods — as the
+ * {@code mansart-data} section of the startup report.
  *
  * <p>The actual repository discovery is done by Vauban's automatic scan of
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}
