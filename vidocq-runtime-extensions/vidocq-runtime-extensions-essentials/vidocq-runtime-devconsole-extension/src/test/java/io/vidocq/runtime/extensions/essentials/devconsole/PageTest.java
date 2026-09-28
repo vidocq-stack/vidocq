@@ -193,6 +193,25 @@ class PageTest {
         }
     }
 
+    @Test
+    void aGroupTabPicksOneActionAndShowsItsResultApartThenItsHistory() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function groupTab(panelId, name, rows, state, open)"), "a tab per group");
+        assertTrue(script.contains("el(\"select\", \"action-select\")"), "a native combo of the group's actions");
+        assertTrue(script.contains("rows.length > FILTER_FROM"), "a filter past ten actions of the group");
+        assertTrue(script.contains("formSlot.replaceChildren(byId.get(id).root)"),
+                "the selected action's own form, kept while it is typed in");
+        assertTrue(script.contains("byId.has(state.chosen.get(name))"),
+                "a selected action a dev reload removed falls back to the group's first");
+        assertTrue(script.contains("function resultBlock(result)"), "the result, apart from the form");
+        assertTrue(script.contains("\"No call yet\""), "before the first call");
+        assertTrue(script.contains("function sampleTable(value, panelId, keep)"), "a table filtered to a group");
+        assertTrue(script.contains("(id) => groupOf.get(id) === name"), "the rows of this group's actions only");
+        assertTrue(script.contains("if (keep && !kept) return el(\"p\", \"absent\", \"No call yet\");"),
+                "a history with no row of the group says so");
+    }
+
     /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
     private static String rule(String style, String opening) {
         int start = style.indexOf(opening);

@@ -48,6 +48,10 @@ const REQUEST_TIMEOUT_MILLIS = 10_000;
 const SVG = "http://www.w3.org/2000/svg";
 const PANEL_KEY = "vidocq.devconsole.panel";
 const PAUSED_KEY = "vidocq.devconsole.paused";
+/** Prefix of the key, by panel id, of a panel's open sub-tab. */
+const SUBTAB_KEY = "vidocq.devconsole.subtab.";
+/** The id of a panel's Monitoring sub-tab: a group title is never blank, so no group has it. */
+const MONITORING = "";
 const STARTUP = "startup";
 /** The sections the core writes, by id, with the title the page gives them. */
 const CORE_SECTIONS = new Map([["launch", "Launch"], ["vidocq", "Vidocq"], ["phases", "Phases"], ["layer", "Layer"],
@@ -83,6 +87,21 @@ const page = {
  * The page appends to it what each poll brings and never invents a point of its own.
  */
 const history = new Map();
+/**
+ * What the page keeps of each panel with action groups, by panel id, across polls and redraws (spec §4): the open
+ * sub-tab (also in localStorage), the action picked per group, and the last result of each action, which a dev
+ * reload that removes the action forgets.
+ */
+const panelStates = new Map();
+
+function panelState(panelId) {
+  let state = panelStates.get(panelId);
+  if (!state) {
+    state = { tab: stored(SUBTAB_KEY + panelId) || MONITORING, chosen: new Map(), results: new Map() };
+    panelStates.set(panelId, state);
+  }
+  return state;
+}
 
 const $ = (id) => document.getElementById(id);
 const tabs = $("tabs");
@@ -497,15 +516,20 @@ function setTile(t, value, before) {
 
 /**
  * A table of a sample, its columns and rows; a cell of a REPLAY_COLUMN column that replays an action is drawn as a
- * Replay button, and that column's header left blank when at least one cell is.
+ * Replay button, and that column's header left blank when at least one cell is. {@code keep}, when given, keeps only
+ * the rows whose replay cell names an action it accepts, by id, as a group tab does; with no row kept, the table is
+ * a line that says so.
  */
-function sampleTable(value, panelId) {
+function sampleTable(value, panelId, keep) {
   const table = el("table", "ext");
   const columns = value.columns || [];
   const replayAt = columns.indexOf(REPLAY_COLUMN);
   const body = el("tbody");
   let buttons = 0;
+  let kept = 0;
   for (const row of value.rows || []) {
+    if (keep && !(replayAt >= 0 && keep(replayTarget(row[replayAt])))) continue;
+    kept++;
     const tr = el("tr");
     row.forEach((cell, i) => {
       const button = i === replayAt ? replayButton(panelId, cell) : null;
@@ -520,6 +544,7 @@ function sampleTable(value, panelId) {
     });
     body.append(tr);
   }
+  if (keep && !kept) return el("p", "absent", "No call yet");
   const head = el("tr");
   columns.forEach((column, i) => head.append(el("th", null, i === replayAt && buttons ? "" : column)));
   const thead = el("thead");
@@ -1258,6 +1283,152 @@ function replayButton(panelId, cell) {
   button.title = "Fill the form of this action with these arguments";
   button.addEventListener("click", () => row.fill(values));
   return button;
+}
+
+/** The action id a REPLAY_COLUMN cell names, the text before its first space, or null. */
+function replayTarget(cell) {
+  const space = typeof cell === "string" ? cell.indexOf(" ") : -1;
+  return space > 0 ? cell.slice(0, space) : null;
+}
+
+// ------------------------------------------------------------------------------------------------ a group tab
+
+/**
+ * Where an action of a group tab shows its results: the panel's page state, which keeps the last result of each
+ * action across polls and redraws; {@code changed} redraws the result block when that action is the one on screen.
+ */
+function groupOutlet(state, actionId, changed) {
+  return {
+    nodes: [],
+    current: () => state.results.get(actionId) || null,
+    publish(next) {
+      state.results.set(actionId, next);
+      changed(actionId);
+    },
+  };
+}
+
+/**
+ * The result of the selected action, apart from its form (spec §2.1): a header with the state in colour, the line,
+ * the round trip the page measured and the viewer's tools, then the body, then the exchange folded under "Exchange".
+ */
+function resultBlock(result) {
+  const block = el("section", "result-block");
+  if (!result) {
+    block.dataset.state = "none";
+    block.append(el("p", "result-none", "No call yet"));
+    return block;
+  }
+  block.dataset.state = result.state;
+  const head = el("div", "result-head");
+  const stateText = result.state === "running" ? "running…" : result.state;
+  head.append(el("span", "result-state " + STATE_CLASS.get(result.state), stateText));
+  if (result.summary !== stateText) head.append(el("span", "result-summary", result.summary));
+  if (typeof result.millis === "number") head.append(el("span", "result-time", result.millis + " ms"));
+  block.append(head);
+  const answer = result.answer;
+  if (answer && typeof answer.body === "string") {
+    const body = textOrJson(answer.body, isJsonType(answer.contentType), result.nodes.body);
+    if (body.tools) head.append(body.tools);
+    block.append(body.view);
+  }
+  if (answer && typeof answer.details === "string") block.append(exchangeFold(answer.details, result));
+  return block;
+}
+
+/**
+ * The tab of one group (spec §2.1): a combo of its actions by label, in declaration order, with a text filter above
+ * it past FILTER_FROM of them; the selected action's description and form; its result block; the group's history.
+ * {@code rows} are the group's action rows, built once per panel structure with a groupOutlet: a form keeps what was
+ * typed in while the combo shows another action. {@code open} shows this tab, for a Replay.
+ */
+function groupTab(panelId, name, rows, state, open) {
+  const root = el("div", "subpanel");
+  root.setAttribute("role", "tabpanel");
+  root.setAttribute("aria-label", name);
+  const picker = el("div", "action-picker");
+  const combo = el("select", "action-select");
+  combo.setAttribute("aria-label", name);
+  let filter = null;
+  if (rows.length > FILTER_FROM) {
+    filter = el("input", "action-filter");
+    filter.type = "search";
+    filter.placeholder = "Filter " + rows.length + " actions";
+    filter.autocomplete = "off";
+    filter.spellcheck = false;
+    picker.append(filter);
+  }
+  picker.append(combo);
+  const formSlot = el("div", "action-slot");
+  const resultSlot = el("div", "result-slot");
+  resultSlot.setAttribute("aria-live", "polite");
+  const historyBox = el("div", "history");
+  root.append(picker, formSlot, resultSlot, historyBox);
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  let selected = byId.has(state.chosen.get(name)) ? state.chosen.get(name) : rows[0].id;
+
+  /** Lists the rows whose text holds {@code words} in the combo, and returns them. */
+  function options(words) {
+    const shown = words === "" ? rows : rows.filter((row) => row.text.includes(words));
+    combo.replaceChildren(...shown.map((row) => {
+      const option = el("option", null, row.label);
+      option.value = row.id;
+      return option;
+    }));
+    if (!shown.length) {
+      const none = el("option", null, "no action matches");
+      none.value = "";
+      none.disabled = true;
+      combo.append(none);
+    }
+    return shown;
+  }
+  const showResult = () => resultSlot.replaceChildren(resultBlock(state.results.get(selected) || null));
+  function choose(id) {
+    selected = id;
+    state.chosen.set(name, id);
+    combo.value = id;
+    formSlot.replaceChildren(byId.get(id).root);
+    showResult();
+  }
+
+  combo.addEventListener("change", () => { if (byId.has(combo.value)) choose(combo.value); });
+  if (filter) {
+    filter.addEventListener("input", () => {
+      const shown = options(filter.value.trim().toLowerCase());
+      if (shown.length && !shown.some((row) => row.id === selected)) choose(shown[0].id);
+      else combo.value = selected;
+    });
+  }
+  for (const row of rows) {
+    row.reveal = () => {
+      if (filter && filter.value !== "") { filter.value = ""; options(""); }
+      open();
+      choose(row.id);
+    };
+  }
+  options("");
+  choose(selected);
+
+  return {
+    root,
+    /** Redraws the result block when {@code actionId} is the action on screen. */
+    changed(actionId) { if (actionId === selected) showResult(); },
+    /**
+     * Draws the history (spec §2.3): each of {@code tables}, { key, value } of the panel's tables with a replay
+     * column, keeping the rows whose action {@code groupOf} places in this group; a row of an unknown action is
+     * dropped.
+     */
+    update(tables, groupOf) {
+      historyBox.replaceChildren();
+      for (const { key, value } of tables) {
+        historyBox.append(el("h4", "table-key", label(key)), value.kind === "table"
+          ? sampleTable(value, panelId, (id) => groupOf.get(id) === name)
+          : el("p", "absent", value.reason || "not available"));
+      }
+    },
+  };
 }
 
 /** The key, values and href of a line of the report: a line that points somewhere ends with {href}. */
