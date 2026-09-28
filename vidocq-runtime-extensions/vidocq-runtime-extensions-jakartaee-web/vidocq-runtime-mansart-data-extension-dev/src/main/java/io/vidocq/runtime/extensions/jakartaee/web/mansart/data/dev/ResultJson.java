@@ -1,0 +1,149 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
+
+/**
+ * What a repository method returned, as the JSON body of its result and the first words of its summary (spec §6): an
+ * entity as an object, a {@code List}, {@code Collection}, {@code Stream} or array as an array of at most
+ * {@value #MAX_ROWS} elements (a {@code Stream} read to the next one only, then closed), an {@code Optional} as its
+ * value or {@code null}, {@code void} as nothing.
+ */
+final class ResultJson {
+
+    /** The most elements an array holds. */
+    static final int MAX_ROWS = 100;
+
+    /** How deep nested collections are followed; past it an element is its text. */
+    private static final int MAX_DEPTH = 8;
+
+    /**
+     * @param body the JSON text, {@code null} for {@code void}
+     * @param what {@code 3 rows}, {@code first 100 rows}, {@code 1 row}, {@code no row}, the value such as
+     *             {@code 42}, or {@code done}
+     * @param rows whether it was a list of rows, whose summary says how long it took
+     */
+    record Result(String body, String what, boolean rows) {}
+
+    private ResultJson() {}
+
+    /**
+     * @param value    what the method returned
+     * @param isVoid   whether it returns {@code void}
+     * @param entities how entities are written
+     */
+    static Result of(Object value, boolean isVoid, EntityJson entities) {
+        if (isVoid) {
+            return new Result(null, "done", false);
+        }
+        if (value == null) {
+            return new Result("null", "no row", false);
+        }
+        if (value instanceof Optional<?> optional) {
+            return optional.isPresent()
+                    ? new Result(Json.write(node(optional.get(), entities, 0)), "1 row", false)
+                    : new Result("null", "no row", false);
+        }
+        if (value instanceof Stream<?> stream) {
+            try (stream) {
+                List<Object> read = new ArrayList<>();
+                Iterator<?> iterator = stream.iterator();
+                while (read.size() <= MAX_ROWS && iterator.hasNext()) {
+                    read.add(iterator.next());
+                }
+                return rows(read, entities);
+            }
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> read = new ArrayList<>();
+            for (Object row : collection) {
+                if (read.size() > MAX_ROWS) {
+                    break;
+                }
+                read.add(row);
+            }
+            return rows(read, entities);
+        }
+        if (value.getClass().isArray()) {
+            List<Object> read = new ArrayList<>();
+            int length = Array.getLength(value);
+            for (int i = 0; i < length && i <= MAX_ROWS; i++) {
+                read.add(Array.get(value, i));
+            }
+            return rows(read, entities);
+        }
+        Object node = node(value, entities, 0);
+        return new Result(Json.write(node), entities.isEntity(value.getClass()) ? "1 row" : String.valueOf(node),
+                false);
+    }
+
+    /** {@code read} holds up to {@value #MAX_ROWS} + 1 rows: the last one only says there were more. */
+    private static Result rows(List<Object> read, EntityJson entities) {
+        boolean more = read.size() > MAX_ROWS;
+        List<Object> kept = more ? read.subList(0, MAX_ROWS) : read;
+        List<Object> json = new ArrayList<>(kept.size());
+        for (Object row : kept) {
+            json.add(node(row, entities, 1));
+        }
+        int n = kept.size();
+        String what = more ? "first " + MAX_ROWS + " rows" : n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
+        return new Result(Json.write(json), what, true);
+    }
+
+    private static Object node(Object value, EntityJson entities, int depth) {
+        if (value == null) {
+            return null;
+        }
+        if (entities.isEntity(value.getClass())) {
+            return entities.toJson(value);
+        }
+        if (depth < MAX_DEPTH) {
+            if (value instanceof Optional<?> optional) {
+                return optional.isPresent() ? node(optional.get(), entities, depth + 1) : null;
+            }
+            if (value instanceof Collection<?> collection) {
+                List<Object> out = new ArrayList<>();
+                for (Object element : collection) {
+                    if (out.size() == MAX_ROWS) {
+                        break;
+                    }
+                    out.add(node(element, entities, depth + 1));
+                }
+                return out;
+            }
+            if (value.getClass().isArray()) {
+                List<Object> out = new ArrayList<>();
+                int length = Math.min(Array.getLength(value), MAX_ROWS);
+                for (int i = 0; i < length; i++) {
+                    out.add(node(Array.get(value, i), entities, depth + 1));
+                }
+                return out;
+            }
+        }
+        return Scalars.toJson(value);
+    }
+}
