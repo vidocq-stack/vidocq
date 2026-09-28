@@ -560,6 +560,22 @@ function sampleTable(value, panelId, keep) {
 }
 
 /**
+ * Puts {@code next}, a table or the line that stands for it, in {@code holder} on every poll. A table goes into the
+ * scrolling box already there rather than a new one: its horizontal scroll, and a drag of its scrollbar under way,
+ * survive the poll instead of jumping back to the left.
+ */
+function redrawTable(holder, next) {
+  const box = holder.childElementCount === 1 ? holder.firstElementChild : null;
+  if (box && box.classList.contains("scroll") && next.classList.contains("scroll")) {
+    const left = box.scrollLeft;
+    box.replaceChildren(...next.childNodes);
+    box.scrollLeft = left;
+    return;
+  }
+  holder.replaceChildren(next);
+}
+
+/**
  * A link the server vouched for: an absolute http or https URL, opened in a new tab that cannot reach this page.
  * Anything else stays text: the page never builds a link from a string a panel wrote.
  */
@@ -1324,6 +1340,8 @@ function groupTab(panelId, name, rows, state, open) {
   const resultSlot = el("div", "result-slot");
   resultSlot.setAttribute("aria-live", "polite");
   const historyBox = el("div", "history");
+  const historyHolders = new Map();       // a holder per history table, by key, kept while the keys stay the same
+  let historyKeys = null;
   root.append(picker, formSlot, resultSlot, historyBox);
 
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -1382,9 +1400,19 @@ function groupTab(panelId, name, rows, state, open) {
      * dropped.
      */
     update(tables, groupOf) {
-      historyBox.replaceChildren();
+      const keys = tables.map((table) => table.key).join("\u0000");
+      if (keys !== historyKeys) {
+        historyKeys = keys;
+        historyHolders.clear();
+        historyBox.replaceChildren();
+        for (const { key } of tables) {
+          const holder = el("div");
+          historyHolders.set(key, holder);
+          historyBox.append(el("h4", "table-key", label(key)), holder);
+        }
+      }
       for (const { key, value } of tables) {
-        historyBox.append(el("h4", "table-key", label(key)), value.kind === "table"
+        redrawTable(historyHolders.get(key), value.kind === "table"
           ? sampleTable(value, panelId, (id) => groupOf.get(id) === name)
           : el("p", "absent", value.reason || "not available"));
       }
@@ -1592,7 +1620,7 @@ function scopeView(container, panel, group, values, charts) {
         const t = tiles.get(value.key);
         if (t) setTile(t, value, previous(panel.id, group, value.key));
         const holder = tableBoxes.get(value.key);
-        if (holder) holder.replaceChildren(value.kind === "table" ? sampleTable(value, panel.id)
+        if (holder) redrawTable(holder, value.kind === "table" ? sampleTable(value, panel.id)
           : el("p", "absent", value.reason || "not available"));
       }
       for (const box of boxes) drawChart(box, panel.id, group, snapshot.console.time, pollMillis(snapshot));

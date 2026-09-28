@@ -243,6 +243,20 @@ class PageTest {
                 "a snapshot taken while a dev reload has no action yet forgets no result");
     }
 
+    @Test
+    void aPolledTableKeepsItsScrollingBoxSoItsHorizontalScrollSurvives() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function redrawTable(holder, next)"), "one way to redraw a polled table");
+        assertTrue(script.contains("box.replaceChildren(...next.childNodes);"),
+                "the new table goes into the scrolling box already on the page, which a drag keeps holding");
+        assertTrue(script.contains("box.scrollLeft = left;"), "the horizontal scroll is put back");
+        assertTrue(script.contains("redrawTable(holder, value.kind === \"table\""), "a panel's tables");
+        assertTrue(script.contains("redrawTable(historyHolders.get(key), value.kind === \"table\""),
+                "a group tab's history");
+        assertFalse(script.contains("holder.replaceChildren(value.kind"), "no table redrawn with a new scrolling box");
+    }
+
     /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
     private static String rule(String style, String opening) {
         int start = style.indexOf(opening);
