@@ -543,7 +543,7 @@ The 7-argument constructor, `PanelAction(id, label, confirmation, arguments, cal
 * `summary` is what `run` used to return: the line the page shows and the console logs, at most 200 characters,
   `null` reading as `done`.
 * `body` is optional content shown under the line, at most 256 KiB: `contentType` is `text/plain` or
-  `application/json`, the page pretty-printing JSON.
+  `application/json`, the page showing JSON in its xref:dev-console.adoc#json-viewer[JSON viewer].
 * `error` is `true` when the call went through but its outcome is an error of the action's target, such as a tool
   returning `isError`; it is distinct from an exception `call` throws, which stays the usual `500` with the
   exception's simple class name, never its message.
@@ -570,14 +570,18 @@ longer equal.
 
 Two more optional fields, both on every constructor:
 
-* `group`, at most 40 characters, such as `Tools`: the page folds the actions of a panel into sections by group,
-  in the order each group is first seen, rather than listing every button flat.
+* `group`, at most 40 characters, such as `Tools`: the page shows each group as a sub-tab of the panel, in the
+  order each group is first seen, after a *Monitoring* sub-tab that keeps everything else — the summary, the links,
+  the ungrouped actions, the values, the charts and the boot facts. A group's sub-tab picks one action at a time
+  from a list, shows its form, then its result in a block of its own; a `table` with a
+  <<replay-column,replay column>> moves out of *Monitoring* to the group sub-tabs. A panel with no grouped action has
+  no sub-tab and looks as before.
 * `description`, at most 2,000 characters, line breaks kept, such as a tool's own description: shown under the
   action's label.
 
-Past ten actions, whatever their groups, the page adds a text filter that narrows the list and opens the groups
-that match. A panel keeps 128 actions at most; an id seen again, or one past the 128th, is dropped, as an id
-`actions()` returns twice always was.
+Past ten actions of a group, the page adds a text filter above its list; past ten ungrouped actions, one above the
+panel's own buttons. A panel keeps 128 actions at most; an id seen again, or one past the 128th, is dropped, as an
+id `actions()` returns twice always was.
 
 [#replay-column]
 === A replay column [.tag-new]#NEW#
@@ -592,6 +596,10 @@ The console keeps such a cell whole up to `PanelSample.MAX_REPLAY_CELL`, 4,096 c
 rather than truncate it into something that would not parse. A cell of that column that is not of this form, or
 whose id is no action of the panel, is shown as text, cut at 200 characters as any other cell; the column keeps its
 header unless at least one of its cells is a Replay button.
+
+When the panel's actions have groups, the table is shown in the group sub-tabs rather than in *Monitoring*, each
+sub-tab keeping the rows whose cell names one of its own actions. A row whose cell names no action of the panel —
+one a dev reload orphaned, or a cell emptied for its length — is left out there.
 
 [#rules]
 == The rules [.tag-new]#NEW#
