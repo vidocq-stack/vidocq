@@ -52,7 +52,7 @@
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
-| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact).
+| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel [.tag-new]#NEW# (<<mansart-data-catalogue>>).
 
 | `vidocq-runtime-mansart-transactions-extension` [.tag-new]#NEW#
 | `jakartaee-web`
@@ -487,6 +487,80 @@ A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the b
 ----
 
 When the container cannot say which beans it has, no pool is flagged: the report never guesses.
+
+[#mansart-data-catalogue]
+== The Mansart Data catalogue in the startup report and the dev console [.tag-new]#NEW#
+
+`vidocq-runtime-mansart-data-extension` writes the section `mansart-data`, *Mansart Data*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]: what Mansart Data knows about the application, read once per boot from the CDI container and by reflection. Under `mvn vidocq:dev`, its companion `vidocq-runtime-mansart-data-extension-dev` shows it in the xref:dev-console.adoc[dev console] as the *Mansart Data* tab, one card per entity with its repositories inside. Nothing here opens a connection or runs a query.
+
+*Repositories.* Every `@Repository` interface a bean implements, once: the implementation `mansart-data-processor` generates and its interface count as one. The primary entity and the id type come from the type arguments of `BasicRepository`, `CrudRepository` or `DataRepository`, however deep in the super-interfaces; a repository without one is listed under *Other repositories*. Its declared methods, in name order:
+
+[cols="1,3"]
+|===
+| Column | Value
+
+| `method`
+| The method name.
+
+| `kind`
+| `JDQL` for `@Query`; `@Find`, `@Insert`, `@Update`, `@Delete` or `@Save`; `derived` for a name that starts with `find`, `count`, `exists` or `delete` and holds `By`; `other` otherwise.
+
+| `query`
+| The `@Query` text as written, cut after 1,000 characters; empty for the other kinds. The console shows the first 200.
+
+| `parameters`
+| `name: Type`, comma-separated. The name comes from `@Param`, else from the class file when the application is compiled with `-parameters`, else it is `arg0`, `arg1`…
+
+| `returns`
+| The generic return type in simple names: `List<Task>`, `Optional<Task>`, `long`, `void`.
+|===
+
+The methods inherited from Jakarta Data are one line under the table: `inherits BasicRepository: delete, deleteAll, deleteById, findAll, findById, save, saveAll`.
+
+*Entities.* The primary entities of the repositories, each with the model Mansart itself uses, `EntityModels.of`: the generated `_Entity.$MODEL`, or the one Mansart builds at run time. The card shows its table, `schema.table` when it has a schema, and its columns, the id first, then the version, then the others in model order:
+
+[cols="1,3"]
+|===
+| Column | Value
+
+| `field`, `column`, `type`
+| The attribute, its column, the simple name of its Java type.
+
+| `key`
+| `id`, or `id, generated`; `version`; `enum`; `→ <Entity>` for a reference; `joined` for an attribute reached through a relation; empty otherwise.
+
+| `nullable`, `unique`
+| `yes`, or empty.
+|===
+
+The summary counts the entities, the repositories and the methods they declare: `2 entities, 2 repositories, 7 methods`. The detailed report, which the console always has, adds a row per entity, its table and column count, then a row per repository, its entity and method count, the repositories without a primary entity last:
+
+.A tasks application (shape of the section)
+[source,text]
+----
+mansart-data  Mansart Data
+  2 entities, 2 repositories, 7 methods
+  Task                 tasks, 10 columns
+  TaskEvent            task_events, 5 columns
+  TaskEventRepository  TaskEvent, 1 method
+  TaskRepository       Task, 6 methods
+----
+
+Two entities, or two repositories, with the same simple name are shown under their full names. The catalogue lists at most 200 entities, 200 repositories and 200 methods per repository; the rest is counted, not listed: `more entities  and 3 more`. The console keeps 64 cards and 100 rows per table.
+
+The panel does not show the SQL of a derived method, which Mansart does not keep at run time, nor any statistic, nor Mansart persistence.
+
+[#mansart-data-001]
+=== MANSART-DATA-001 — the model of an entity cannot be read [.tag-new]#NEW#
+
+Mansart could not build the model of a repository's primary entity: its generated metamodel failed, or the entity has no id field, no no-arg constructor, or a package Mansart cannot open. The entity keeps its place in the catalogue, without its columns, and its card says `unavailable:` with the class of the exception. The exception's message is never shown. The boot goes on, but the repositories of that entity will likely fail on their first call:
+
+[source,text]
+----
+[MANSART-DATA-001] The model of entity com.acme.Invoice could not be read (io.vidocq.mansart.data.core.MansartDataException) Check its mapping annotations; Mansart could not build its model, so its repositories may fail too.
+----
+
+Check the entity's `jakarta.persistence` annotations, its id and its constructor, and that its package is open to `io.vidocq.mansart.data.core`.
 
 [#mansart-transactions-jdbc-bridge]
 == Mansart Data writes join the transaction [.tag-new]#NEW#

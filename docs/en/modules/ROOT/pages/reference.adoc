@@ -397,6 +397,10 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[`MANSART-POOL-002`] [.tag-new]#NEW#
 | A named Mansart pool is open, but no `@Named` `DataSource` bean serves it.
 
+
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`] [.tag-new]#NEW#
+| Mansart could not build the model of a repository's entity; the catalogue shows the entity without its columns.
+
 | xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-001[`VIDOCQ-MCP-001`] [.tag-new]#NEW#
 | The langchain4j-cdi MCP server module does not provide `McpServerSPI`, or is not open.
 

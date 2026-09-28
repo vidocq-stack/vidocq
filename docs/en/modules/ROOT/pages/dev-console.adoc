@@ -248,6 +248,9 @@ The panels shipped today:
 | *Mansart pools*
 | One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section].
 
+| *Mansart Data* [.tag-new]#NEW#
+| The catalogue of `vidocq-runtime-mansart-data-extension`, one card per entity: its table and columns, then each of its repositories with its methods, their kind, `@Query` text, parameters and return type, and the methods inherited from Jakarta Data. Read once per boot; no connection, no query. See xref:modules/vidocq-runtime-extensions.adoc#mansart-data-catalogue[the Mansart Data catalogue].
+
 | *REST (Cassini)* [.tag-new]#NEW#
 | The routes of `vidocq-runtime-cassini-rest-extension`, in match order, each mount, the resource classes and the providers by contract, then live, one card per mount: requests per second, responses by status class, requests in flight, the share of time spent in handlers, and the mean and longest time to answer. See xref:modules/vidocq-runtime-extensions.adoc#cassini-rest-live[the `rest` panel].
 
