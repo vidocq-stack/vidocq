@@ -588,7 +588,7 @@ function actionsBar(panel) {
   const actions = Array.isArray(panel.actions) ? panel.actions : [];
   if (!actions.length) return null;
   const bar = el("div", "actions");
-  const rows = actions.map((action) => actionRow(panel.id, action));
+  const rows = actions.map((action) => actionRow(panel.id, action, inlineOutlet()));
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   for (const row of rows) actionRows.set(actionKey(panel.id, row.id), row);
 
@@ -615,6 +615,8 @@ function actionsBar(panel) {
     }
     section.box.append(row.root);
     section.rows.push(row);
+    const box = section.box;
+    row.reveal = () => { row.root.hidden = false; box.hidden = false; box.open = true; };
   }
   const titles = () => {
     for (const s of sections.values()) {
@@ -1037,24 +1039,78 @@ function textOrJson(text, json, nodes) {
   return { view: viewer.root, tools: viewerTools(viewer) };
 }
 
-/** What an answer shows under its line: its body, then its details folded under "Exchange". */
-function resultOutput(answer) {
+// ------------------------------------------------------------------------------------------------ results
+
+/** The class a result's state takes on the page: ok green, error red, running neutral. */
+const STATE_CLASS = new Map([["ok", "ok"], ["error", "failed"], ["running", "running"]]);
+
+/** The group of an action, or null: a blank group is none. */
+const groupName = (action) => typeof action.group === "string" && action.group ? action.group : null;
+
+/** A new fold state for the two viewers of a result: its body and its details. */
+const freshNodes = () => ({ body: new Map(), details: new Map() });
+
+/**
+ * A result as the page keeps it (spec §2.2): its state, "ok", "error" or "running"; its line; the round trip the
+ * page measured, in milliseconds, or null; the structured answer, or null; the time of the snapshot outcome it
+ * reflects; the fold state of its viewers, by node path; whether its "Exchange" is open.
+ */
+function outcome(state, summary, fields) {
+  return { state, summary, millis: null, answer: null, time: null, nodes: freshNodes(), exchangeOpen: false,
+    ...fields };
+}
+
+/** The details of an answer, the JSON-RPC exchange for the MCP inspector, folded under "Exchange". */
+function exchangeFold(details, result) {
+  const exchange = el("details", "exchange");
+  exchange.open = result.exchangeOpen;
+  exchange.addEventListener("toggle", () => { result.exchangeOpen = exchange.open; });
+  const shown = textOrJson(details, true, result.nodes.details);
+  exchange.append(el("summary", null, "Exchange"), ...(shown.tools ? [shown.tools] : []), shown.view);
+  return exchange;
+}
+
+/** What a result shows under its line in the panel's own bar: its body, with the viewer's tools, then its details. */
+function resultOutput(result) {
+  const answer = result.answer;
   const out = [];
   if (typeof answer.body === "string") {
-    const body = textOrJson(answer.body, isJsonType(answer.contentType), new Map());
+    const body = textOrJson(answer.body, isJsonType(answer.contentType), result.nodes.body);
     if (body.tools) out.push(body.tools);
     out.push(body.view);
   }
-  if (typeof answer.details === "string") {
-    const exchange = el("details", "exchange");
-    const details = textOrJson(answer.details, true, new Map());
-    exchange.append(el("summary", null, "Exchange"), ...(details.tools ? [details.tools] : []), details.view);
-    out.push(exchange);
-  }
+  if (typeof answer.details === "string") out.push(exchangeFold(answer.details, result));
   return out;
 }
 
-function actionRow(panelId, action) {
+/**
+ * Where an action of the panel's own bar shows its results, as it always did: the line next to its button, the body
+ * and the exchange under it. It keeps the last result for the life of the form; a new line over the same answer
+ * leaves the body as it is.
+ */
+function inlineOutlet() {
+  const message = el("span", "msg");
+  const output = el("div", "result");
+  let last = null;
+  return {
+    nodes: [message, output],
+    current: () => last,
+    publish(next) {
+      const sameAnswer = last !== null && next.answer === last.answer;
+      last = next;
+      message.textContent = next.summary;
+      message.className = "msg " + STATE_CLASS.get(next.state);
+      if (!sameAnswer) output.replaceChildren(...(next.answer ? resultOutput(next) : []));
+    },
+  };
+}
+
+/**
+ * The form of one action: its description, its fields, its button and inline confirmation. Where its results show
+ * is {@code outlet}'s, { nodes, current(), publish(result) }: inlineOutlet for the panel's own bar, groupOutlet for a
+ * group tab. A refusal, a network failure and an invalid field are results too, in state "error".
+ */
+function actionRow(panelId, action, outlet) {
   const root = el("form", "action");
   root.noValidate = true;
   if (typeof action.description === "string" && action.description) {
@@ -1075,40 +1131,34 @@ function actionRow(panelId, action) {
   const no = el("button", null, "Cancel");
   no.type = "button";
   ask.append(el("span", "question", action.confirmation || ""), yes, no);
-  const message = el("span", "msg");
-  const output = el("div", "result");
-  root.append(go, ask, message, output);
+  root.append(go, ask, ...outlet.nodes);
 
   let sending = false;
-  let shown = null;            // the time of the outcome of the snapshot last shown; a newer one replaces the message
+  const kept = outlet.current();
+  let shown = kept ? kept.time : null;   // the time of the snapshot outcome last shown; a newer one replaces it
   const busy = (on) => {
     for (const c of [go, yes, no]) c.disabled = on;
     for (const field of fields) field.disable(on);
   };
-  const say = (text, cls) => { message.textContent = text; message.className = "msg" + (cls ? " " + cls : ""); };
+  const publish = (state, summary, more) => outlet.publish(outcome(state, summary, { time: shown, ...more }));
   const closeAsk = () => { ask.hidden = true; go.hidden = false; };
-  const reveal = () => {
-    root.hidden = false;
-    const box = root.closest("details");
-    if (box) { box.hidden = false; box.open = true; }
-  };
 
   async function send() {
     const token = page.snapshot && page.snapshot.console && page.snapshot.console.actionToken;
-    if (typeof token !== "string") { say("No token: reload the page.", "failed"); return; }
+    if (typeof token !== "string") { publish("error", "No token: reload the page."); return; }
     // Object.create(null): an argument named "__proto__" (a server-declared name like any other) must still reach
     // the request body as an own property, not be swallowed by the prototype's own accessor of that name.
     const body = Object.create(null);
     try {
       for (const field of fields) body[field.name] = field.value();
     } catch (invalid) {
-      say(invalid.message, "failed");
+      publish("error", invalid.message);
       return;
     }
     sending = true;
     busy(true);
-    output.replaceChildren();
-    say("running…", "running");
+    publish("running", "running…");
+    const started = performance.now();
     try {
       const response = await fetch("api/action/" + encodeURIComponent(panelId) + "/" + encodeURIComponent(action.id), {
         method: "POST",
@@ -1118,15 +1168,20 @@ function actionRow(panelId, action) {
       });
       const type = response.headers.get("Content-Type") || "";
       const answer = type.startsWith("application/json") ? await response.json() : { text: await response.text() };
+      const millis = Math.round(performance.now() - started);
       if (response.status === 200 && typeof answer.result === "string") {
-        say(answer.result, answer.error === true ? "failed" : "ok");
-        output.replaceChildren(...resultOutput(answer));
-      } else if (response.status === 500 && typeof answer.error === "string") say("failed: " + answer.error, "failed");
-      else if (response.status === 202) say("still running after 60 s: the outcome will show here", "running");
-      else if (response.status === 409) say("another action of this panel is running", "failed");
-      else say("refused (" + response.status + ")" + (answer.text ? ": " + answer.text : ""), "failed");
+        publish(answer.error === true ? "error" : "ok", answer.result, { millis, answer });
+      } else if (response.status === 500 && typeof answer.error === "string") {
+        publish("error", "failed: " + answer.error, { millis });
+      } else if (response.status === 202) {
+        publish("running", "still running after 60 s: the outcome will show here", { millis });
+      } else if (response.status === 409) {
+        publish("error", "another action of this panel is running", { millis });
+      } else {
+        publish("error", "refused (" + response.status + ")" + (answer.text ? ": " + answer.text : ""), { millis });
+      }
     } catch (unreachable) {
-      say("the console did not answer", "failed");
+      publish("error", "the console did not answer");
     } finally {
       sending = false;
       busy(false);
@@ -1142,30 +1197,48 @@ function actionRow(panelId, action) {
   yes.addEventListener("click", () => { closeAsk(); send(); });
   no.addEventListener("click", closeAsk);
 
-  return {
+  /**
+   * Follows the snapshot: an action running elsewhere, or a newer outcome of it. The outcome of this page's own call
+   * keeps its body, round trip, fold state and exchange; any other outcome replaces it without a body.
+   */
+  function update(now) {
+    if (!now || sending) return;
+    busy(!!now.running);
+    const current = outlet.current();
+    if (now.running) {
+      if (!current || current.state !== "running") publish("running", "running…");
+      shown = null;
+      return;
+    }
+    const last = now.last;
+    if (!last || typeof last.text !== "string" || last.time === shown) return;
+    shown = last.time;
+    const own = current && current.state !== "running" ? current : null;
+    const failed = !last.ok || last.error === true;
+    outlet.publish(outcome(failed ? "error" : "ok",
+      (last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time),
+      own ? { millis: own.millis, answer: own.answer, nodes: own.nodes, exchangeOpen: own.exchangeOpen, time: shown }
+        : { time: shown }));
+  }
+
+  const row = {
     id: action.id,
-    group: typeof action.group === "string" && action.group ? action.group : null,
+    label: action.label || action.id,
+    group: groupName(action),
     text: [action.label, action.id, action.description].filter((t) => typeof t === "string").join(" ").toLowerCase(),
     root,
+    /** Shows the form; whoever lays the row out may replace it, as a group tab does to pick it in its combo. */
+    reveal() { root.hidden = false; },
     /** Fills the form with a replayed call's arguments, by name; sends nothing. */
     fill(values) {
       for (const field of fields) if (Object.hasOwn(values, field.name)) field.fill(values[field.name]);
-      reveal();
+      row.reveal();
       root.scrollIntoView({ block: "nearest" });
       go.focus();
     },
-    update(now) {
-      if (!now || sending) return;
-      busy(!!now.running);
-      if (now.running) { say("running…", "running"); shown = null; return; }
-      const last = now.last;
-      if (last && typeof last.text === "string" && last.time !== shown) {
-        shown = last.time;
-        say((last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time),
-          last.ok && last.error !== true ? "ok" : "failed");
-      }
-    },
+    update,
   };
+  return row;
 }
 
 /**

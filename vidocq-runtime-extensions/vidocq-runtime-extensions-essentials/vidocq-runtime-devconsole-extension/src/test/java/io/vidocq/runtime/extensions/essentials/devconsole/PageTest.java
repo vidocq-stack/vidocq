@@ -179,6 +179,20 @@ class PageTest {
                 "an integer past 2^53 is shown and copied as the server sent it");
     }
 
+    @Test
+    void anActionPublishesEveryOutcomeToItsOutletWithTheWordingOfToday() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function actionRow(panelId, action, outlet)"), "where results show is the outlet's");
+        assertTrue(script.contains("function inlineOutlet()"), "the panel's own bar keeps its look");
+        assertTrue(script.contains("const started = performance.now();"), "the round trip the page measures");
+        for (String wording : List.of("\"No token: reload the page.\"", "\"the console did not answer\"",
+                "\"another action of this panel is running\"", "\"still running after 60 s: the outcome will show here\"",
+                "\"failed: \" + answer.error", "\"refused (\" + response.status + \")\"")) {
+            assertTrue(script.contains(wording), "the wording the page uses today: " + wording);
+        }
+    }
+
     /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
     private static String rule(String style, String opening) {
         int start = style.indexOf(opening);
