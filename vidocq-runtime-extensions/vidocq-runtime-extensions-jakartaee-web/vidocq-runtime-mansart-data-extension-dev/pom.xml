@@ -33,6 +33,15 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-devconsole-spi</artifactId>
         </dependency>
+        <!-- A write runs in a transaction of the application's TransactionManager when it has one (spec §3): the
+             application brings the API with vidocq-runtime-mansart-transactions-extension, so it stays optional here,
+             as in mansart-data-cdi, and the module requires it static. -->
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <version>2.0.1</version>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

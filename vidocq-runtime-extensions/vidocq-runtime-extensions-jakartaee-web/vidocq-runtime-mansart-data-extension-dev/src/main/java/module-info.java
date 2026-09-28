@@ -17,10 +17,17 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-/** The Mansart Data catalogue panel of the dev console, which only vidocq:dev adds (Vidocq/vidocq#143). */
+/**
+ * The Mansart Data panel of the dev console, its catalogue and the actions that run the repositories' methods, which
+ * only vidocq:dev adds (Vidocq/vidocq#143).
+ */
 module io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev {
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.data;
     requires io.vidocq.runtime.spi.devconsole;
+    // The repository beans, resolved at the call.
+    requires jakarta.cdi;
+    // A write runs in the application's TransactionManager when it has one; without the API, commit only.
+    requires static jakarta.transaction;
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.CatalogueLivePanel;
