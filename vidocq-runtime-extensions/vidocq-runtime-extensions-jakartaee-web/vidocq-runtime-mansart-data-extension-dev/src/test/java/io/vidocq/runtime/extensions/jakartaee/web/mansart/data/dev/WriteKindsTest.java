@@ -102,4 +102,65 @@ class WriteKindsTest {
         assertFalse(WriteKinds.isWrite(BasicRepository.class.getMethod("findById", Object.class)));
         assertFalse(WriteKinds.isWrite(BasicRepository.class.getMethod("findAll")));
     }
+
+    /** Mansart runs a default method of a repository: what it does is unknown, so it asks first, like a write. */
+    public interface WithDefault {
+
+        java.util.Optional<Object> findById(Long id);
+
+        default long touch(long id) {
+            return findById(id).isPresent() ? 1 : 0;
+        }
+    }
+
+    @jakarta.transaction.Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
+    public interface OwnTransactions {
+
+        long deleteByName(String name);
+    }
+
+    public interface MixedTransactions {
+
+        @jakarta.transaction.Transactional(jakarta.transaction.Transactional.TxType.NOT_SUPPORTED)
+        long deleteByName(String name);
+
+        @jakarta.transaction.Transactional(jakarta.transaction.Transactional.TxType.NEVER)
+        long deleteById(Long id);
+
+        @jakarta.transaction.Transactional
+        long deleteByStock(int stock);
+
+        long deleteByLabel(String label);
+    }
+
+    @Test
+    void aDefaultMethodIsAWrite() throws Exception {
+        assertTrue(WriteKinds.isWrite(WithDefault.class.getMethod("touch", long.class)));
+        assertFalse(WriteKinds.isWrite(WithDefault.class.getMethod("findById", Long.class)));
+    }
+
+    @Test
+    void aTransactionOfItsOwnEscapesTheConsolesRollback() throws Exception {
+        assertTrue(WriteKinds.escapesTransaction(OwnTransactions.class.getMethod("deleteByName", String.class),
+                OwnTransactions.class), "REQUIRES_NEW on the repository");
+        assertTrue(WriteKinds.escapesTransaction(MixedTransactions.class.getMethod("deleteByName", String.class),
+                MixedTransactions.class), "NOT_SUPPORTED on the method");
+        assertTrue(WriteKinds.escapesTransaction(MixedTransactions.class.getMethod("deleteById", Long.class),
+                MixedTransactions.class), "NEVER on the method");
+        assertFalse(WriteKinds.escapesTransaction(MixedTransactions.class.getMethod("deleteByStock", int.class),
+                MixedTransactions.class), "REQUIRED joins the console's transaction");
+        assertFalse(WriteKinds.escapesTransaction(MixedTransactions.class.getMethod("deleteByLabel", String.class),
+                MixedTransactions.class), "no annotation");
+    }
+
+    @Test
+    void aWriteThatEscapesRunsOnItsOwnWithCommitOnly() throws Exception {
+        TransactionRunner console = new TransactionRunner(new JtaDemarcation(RecordingTransactionManager::new));
+        TransactionRunner own = RepositoryActions.runnerFor(
+                OwnTransactions.class.getMethod("deleteByName", String.class), OwnTransactions.class, console);
+        assertTrue(own == TransactionRunner.NONE, "no console transaction around it");
+        assertEquals(java.util.List.of(TransactionRunner.COMMIT), own.modes());
+        assertTrue(RepositoryActions.runnerFor(MixedTransactions.class.getMethod("deleteByLabel", String.class),
+                MixedTransactions.class, console) == console);
+    }
 }

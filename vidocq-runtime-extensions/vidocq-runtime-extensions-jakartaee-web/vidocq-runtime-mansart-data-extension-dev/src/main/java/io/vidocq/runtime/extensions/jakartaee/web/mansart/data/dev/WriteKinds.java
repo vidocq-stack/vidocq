@@ -25,8 +25,11 @@ import jakarta.data.repository.Query;
 import jakarta.data.repository.Save;
 import jakarta.data.repository.Update;
 
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Which methods write (spec §3), so that they ask first and run in a transaction: {@code save}, {@code saveAll},
@@ -38,7 +41,20 @@ final class WriteKinds {
 
     private WriteKinds() {}
 
+    /**
+     * The {@code @Transactional} kinds that do not join the console's transaction: the method commits in a transaction
+     * of its own, or runs outside any, so the console's rollback would not undo it.
+     */
+    private static final Set<String> ESCAPING = Set.of("REQUIRES_NEW", "NOT_SUPPORTED", "NEVER");
+
+    /** The annotation {@code jakarta.transaction.Transactional}, read by name: the API is optional here. */
+    private static final String TRANSACTIONAL = "jakarta.transaction.Transactional";
+
     static boolean isWrite(Method method) {
+        if (method.isDefault()) {
+            // Mansart runs a default method as it is written: what it does is unknown, so it asks first
+            return true;
+        }
         String name = method.getName();
         if (name.equals("save") || name.equals("saveAll") || name.startsWith("insert") || name.startsWith("update")
                 || name.startsWith("delete")) {
@@ -54,5 +70,31 @@ final class WriteKinds {
         }
         String text = query.value().stripLeading().toUpperCase(Locale.ROOT);
         return text.startsWith("UPDATE") || text.startsWith("DELETE");
+    }
+
+    /**
+     * Whether {@code method} of {@code repository} runs outside the console's transaction: a {@code @Transactional}
+     * on the method, else on the repository, else on the interface that declares the method, of kind
+     * {@code REQUIRES_NEW}, {@code NOT_SUPPORTED} or {@code NEVER}. Such a write can only be committed.
+     */
+    static boolean escapesTransaction(Method method, Class<?> repository) {
+        for (AnnotatedElement element : new AnnotatedElement[] {method, repository, method.getDeclaringClass()}) {
+            for (Annotation annotation : element.getAnnotations()) {
+                if (annotation.annotationType().getName().equals(TRANSACTIONAL)) {
+                    return ESCAPING.contains(kind(annotation));
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The {@code value()} of a {@code @Transactional}, by name; {@code REQUIRED} when it cannot be read. */
+    private static String kind(Annotation transactional) {
+        try {
+            Object value = transactional.annotationType().getMethod("value").invoke(transactional);
+            return value instanceof Enum<?> e ? e.name() : "REQUIRED";
+        } catch (ReflectiveOperationException | RuntimeException unreadable) {
+            return "REQUIRED";
+        }
     }
 }

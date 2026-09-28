@@ -589,7 +589,7 @@ Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev 
 | The name of one of its constants.
 
 | `LocalDate`; `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`; `LocalTime`
-| ISO text: `2026-09-28`; `2026-09-28T10:15:30Z`; `10:15`.
+| ISO text: `2026-09-28`; `2026-09-28T10:15:30` for a `LocalDateTime`, which has no zone, and `2026-09-28T10:15:30Z` or `2026-09-28T10:15:30+02:00` for the three others; `10:15`.
 
 | `UUID`
 | Its text.

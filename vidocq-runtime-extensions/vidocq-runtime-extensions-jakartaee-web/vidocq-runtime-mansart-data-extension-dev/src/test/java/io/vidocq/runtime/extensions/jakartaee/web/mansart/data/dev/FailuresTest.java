@@ -22,6 +22,8 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** What a failing method shows (spec §7): its class, its message cut at 500, a user:password@ masked. */
 class FailuresTest {
@@ -44,5 +46,24 @@ class FailuresTest {
     void aCutNeverSplitsASurrogatePair() {
         assertEquals("ab…", Failures.cut("ab\uD83D\uDE00cd", 3));
         assertEquals("abc", Failures.cut("abc", 3));
+    }
+
+    @Test
+    void passwordParametersAndAPasswordWithAnAtAreMasked() {
+        assertEquals("jdbc:h2:mem:x;USER=sa;PASSWORD=***", Failures.mask("jdbc:h2:mem:x;USER=sa;PASSWORD=hunter2"));
+        assertEquals("jdbc:postgresql://db/x?user=u&password=***&ssl=true",
+                Failures.mask("jdbc:postgresql://db/x?user=u&password=hunter2&ssl=true"));
+        assertEquals("pwd=*** then", Failures.mask("pwd=hunter2 then"));
+        String masked = Failures.mask("jdbc:mysql://user:p@ss@db:3306/x");
+        assertFalse(masked.contains("ss@db") || masked.contains("p@"), masked);
+        assertTrue(masked.endsWith("@db:3306/x"), masked);
+    }
+
+    @Test
+    void theSummaryIsOneLineAndTheBodyKeepsTheLines() {
+        IllegalStateException failure = new IllegalStateException("NULL non permis\nNULL not allowed\r\nSQL: INSERT");
+        assertEquals("java.lang.IllegalStateException: NULL non permis NULL not allowed SQL: INSERT",
+                Failures.line(Failures.text(failure)));
+        assertTrue(Failures.text(failure).contains("\nNULL not allowed"));
     }
 }

@@ -231,7 +231,8 @@ final class RepositoryActions {
         List<PanelAction.Argument> arguments = new ArrayList<>();
         arguments.add(PanelAction.Argument.json(ARGUMENTS, "Arguments", entry.signature().schema()));
         if (entry.write()) {
-            arguments.add(new PanelAction.Argument(TRANSACTION, "Transaction", transactions.modes(), null, null));
+            arguments.add(new PanelAction.Argument(TRANSACTION, "Transaction",
+                    runnerFor(entry.candidate().method(), entry.repository(), transactions).modes(), null, null));
         }
         String confirmation = entry.write() ? "Runs " + entry.repositoryName() + "."
                 + entry.candidate().method().getName() + " against the database." : null;
@@ -260,6 +261,15 @@ final class RepositoryActions {
         return Failures.cut(out.toString(), PanelAction.MAX_DESCRIPTION - 1);
     }
 
+    /**
+     * The transactions {@code method} runs in: none of the console's when its own {@code @Transactional} escapes it
+     * ({@link WriteKinds#escapesTransaction}), so that only {@code commit} is offered and no rollback is claimed;
+     * {@code transactions} otherwise.
+     */
+    static TransactionRunner runnerFor(Method method, Class<?> repository, TransactionRunner transactions) {
+        return WriteKinds.escapesTransaction(method, repository) ? TransactionRunner.NONE : transactions;
+    }
+
     /** Runs {@code entry} with the arguments the console checked, and keeps the call. */
     PanelAction.ActionResult call(Entry entry, Map<String, String> given) {
         long start = System.nanoTime();
@@ -271,7 +281,8 @@ final class RepositoryActions {
             parsed = parse(sent);
             result = run(entry, arguments(entry, parsed), bean(entry), parsed, mode, start);
         } catch (Refused refused) {
-            result = new PanelAction.ActionResult(refused.getMessage(), null, null, true, details(entry, parsed, mode));
+            result = new PanelAction.ActionResult(Failures.line(refused.getMessage()), null, null, true,
+                    details(entry, parsed, mode));
         }
         history.add(entry.group(), System.currentTimeMillis(), entry.label(),
                 (result.error() ? "error: " : "") + result.summary(), millis(start),
@@ -284,13 +295,15 @@ final class RepositoryActions {
         Method method = entry.candidate().method();
         boolean isVoid = method.getReturnType() == void.class;
         TransactionRunner.Outcome<ResultJson.Result> outcome =
-                transactions.run(mode, () -> ResultJson.of(invoke(method, bean, arguments), isVoid, entities));
+                runnerFor(method, entry.repository(), transactions)
+                        .run(mode, () -> ResultJson.of(invoke(method, bean, arguments), isVoid, entities));
         String details = details(entry, parsed, mode);
         if (outcome.failure() != null) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + entry.id() + " failed: "
                     + outcome.failure().getClass().getName());
             String text = Failures.text(outcome.failure());
-            return new PanelAction.ActionResult(text, PanelAction.ActionResult.TEXT, text, true, details);
+            return new PanelAction.ActionResult(Failures.line(text), PanelAction.ActionResult.TEXT, text, true,
+                    details);
         }
         ResultJson.Result value = outcome.value();
         String summary = value.what() + (value.rows() ? " in " + millis(start) + " ms" : "")

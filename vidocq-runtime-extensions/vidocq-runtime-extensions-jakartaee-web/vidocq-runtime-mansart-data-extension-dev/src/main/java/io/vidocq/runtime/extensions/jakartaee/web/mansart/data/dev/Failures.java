@@ -31,8 +31,17 @@ final class Failures {
     /** The longest message shown. */
     static final int MAX_MESSAGE = 500;
 
-    /** A user and a password before an {@code @}, as a URL carries them. */
-    private static final Pattern CREDENTIALS = Pattern.compile("[^\\s/:@]+:[^\\s/@]+@");
+    /**
+     * A user and a password before an {@code @}, as a URL carries them; the password runs to the last {@code @} of
+     * its segment, so that one holding an {@code @} is masked whole.
+     */
+    private static final Pattern CREDENTIALS = Pattern.compile("[^\\s/:@]+:[^\\s/]*@");
+
+    /** A password given as a parameter, {@code ;PASSWORD=…} or {@code ?password=…}, up to its separator. */
+    private static final Pattern PASSWORD_PARAMETER = Pattern.compile("(?i)\\b(password|pwd)=[^;&\\s]*");
+
+    /** A line break with the blanks around it. */
+    private static final Pattern LINE_BREAK = Pattern.compile("\\s*\\R\\s*");
 
     private Failures() {}
 
@@ -46,9 +55,15 @@ final class Failures {
         return name + ": " + cut(mask(message), MAX_MESSAGE);
     }
 
-    /** {@code text} with each {@code user:password@} replaced by {@code ***:***@}. */
+    /** {@code text} with each {@code user:password@} replaced by {@code ***:***@}, and each password parameter. */
     static String mask(String text) {
-        return CREDENTIALS.matcher(text).replaceAll("***:***@");
+        String masked = CREDENTIALS.matcher(text).replaceAll("***:***@");
+        return PASSWORD_PARAMETER.matcher(masked).replaceAll("$1=***");
+    }
+
+    /** {@code text} on one line, for a summary: each line break and the blanks around it become one space. */
+    static String line(String text) {
+        return LINE_BREAK.matcher(text).replaceAll(" ");
     }
 
     /** {@code text} cut after {@code max} characters with {@code …}, never inside a surrogate pair. */
