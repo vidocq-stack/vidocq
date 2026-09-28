@@ -562,6 +562,52 @@ Mansart could not build the model of a repository's primary entity: its generate
 
 Check the entity's `jakarta.persistence` annotations, its id and its constructor, and that its package is open to `io.vidocq.mansart.data.core`.
 
+[#mansart-data-run-method]
+== Running a repository method from the dev console [.tag-new]#NEW#
+
+Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] also runs the application's repository methods against its database: a query to see what it returns, a write to try it, then roll it back or keep it. The tab keeps the catalogue (<<mansart-data-catalogue>>) under *Monitoring*, then shows one tab per repository, titled with its name, whose list offers its methods by name: every method it declares, plus the `findById`, `findAll`, `save`, `deleteById` and `delete` it inherits from Jakarta Data.
+
+*Arguments.* A method's arguments are one JSON object, one property per parameter, named as the catalogue names it (`@Param`, else the real name when the application is compiled with `-parameters`, else `arg0`, `arg1`…), all required. The page shows a form, or a JSON editor when a parameter is an entity.
+
+[cols="2,3"]
+|===
+| Java type | JSON
+
+| `String`, `char`, `Character`
+| A string; one character for a `char`.
+
+| `int`, `long`, `short`, `byte`, their boxes, `BigInteger`
+| An integer; a fraction, or a value out of the type's range, is refused.
+
+| `double`, `float`, their boxes, `BigDecimal`
+| A number; a `BigDecimal` keeps the digits as written.
+
+| `boolean`, `Boolean`
+| `true` or `false`.
+
+| An `enum`
+| The name of one of its constants.
+
+| `LocalDate`; `LocalDateTime`, `Instant`, `OffsetDateTime`, `ZonedDateTime`; `LocalTime`
+| ISO text: `2026-09-28`; `2026-09-28T10:15:30Z`; `10:15`.
+
+| `UUID`
+| Its text.
+
+| An entity of a repository
+| An object, one property per column, each optional: an absent one keeps what the entity's no-arg constructor sets, so that an absent generated `id` is generated. A reference to another entity takes that entity's id. The entity is built through Mansart's own model, as Mansart builds it from a row.
+|===
+
+A boxed type takes `null`, a primitive does not. A value that does not convert fails the call before anything runs, with the parameter and why: `dueDate: not an ISO date`. A method with any other parameter type, such as `PageRequest`, `Sort`, `Limit` or a `List`, is listed under *Monitoring* in `not-runnable`, with the reason, and is not offered.
+
+*Writes.* `save`, `saveAll`, a method whose name starts with `insert`, `update` or `delete`, one annotated `@Insert`, `@Update`, `@Delete` or `@Save`, and a `@Query` that starts with `UPDATE` or `DELETE` are writes. The page asks before running one (`Runs TaskRepository.save against the database.`), and its *Transaction* list offers `rollback`, the default, then `commit`. The console runs the call in a transaction of the application's `jakarta.transaction.TransactionManager`, then rolls it back or commits it; an exception from the method always rolls it back. A rollback undoes only what was done on a connection enlisted in that transaction, which `vidocq-runtime-mansart-transactions-extension` sets up. An application without a `TransactionManager` bean gets `commit` only, and the call then runs as it would outside a transaction. Reads run as they are.
+
+*Results.* The answer is JSON, shown by the page's JSON viewer: an entity as an object, one property per column (a referenced entity as its id, a joined attribute left out), a `List`, `Collection`, `Stream` or array as an array of at most 100 elements, an `Optional` as its value or `null`. The line under the form says what came back and, for a write, what became of the transaction: `3 rows in 12 ms`, `first 100 rows in 40 ms`, `1 row · rolled back`, `42 · committed`, `done`. *Exchange* holds the method, each argument with its type and value, and the transaction asked. A method that throws shows the class of its exception and its message, cut after 500 characters, with a `user:password@` in it masked.
+
+*History.* Each repository tab lists its last 20 calls of the boot, newest first, each with *Replay*, which fills the form again; nothing is sent until you run it. A dev reload starts a new history, and builds the tabs again from the new boot.
+
+*Limits.* The console keeps 128 actions per panel: past them, *Monitoring* says `and N more methods`. A call longer than the console's 60 seconds keeps running, and its outcome shows on a later poll. The repository's package must be open to Vidocq — a Vidocq application is an `open module` by convention, or `opens` the package; otherwise its methods are listed as `package <p> not open to Vidocq`.
+
 [#mansart-transactions-jdbc-bridge]
 == Mansart Data writes join the transaction [.tag-new]#NEW#
 
