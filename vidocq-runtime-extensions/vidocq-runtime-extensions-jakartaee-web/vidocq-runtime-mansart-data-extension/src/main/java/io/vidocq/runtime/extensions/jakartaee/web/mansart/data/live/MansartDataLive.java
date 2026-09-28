@@ -19,17 +19,21 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The catalogue the Mansart Data extension built, for its {@code -dev} panel only: published at the end of
- * {@code onStart}, cleared first thing in {@code onStop}, so that a dev reload never shows the previous boot's
- * catalogue.
+ * What the Mansart Data extension found, for its {@code -dev} panel only: the catalogue it built and the repository
+ * interfaces of the boot. Both are published at the end of {@code onStart} and cleared first thing in
+ * {@code onStop}, so that a dev reload never shows the previous boot's catalogue nor lets the panel run the previous
+ * boot's classes. The catalogue holds names and texts only; the repository interfaces are the application's classes,
+ * which only the panel's actions hold, for one boot.
  */
 public final class MansartDataLive {
 
     private static volatile MansartDataCatalogue catalogue;
+    private static volatile List<Class<?>> repositories = List.of();
 
     private MansartDataLive() {}
 
@@ -42,7 +46,18 @@ public final class MansartDataLive {
         catalogue = Objects.requireNonNull(built, "catalogue");
     }
 
+    /** The {@code @Repository} interfaces of the running boot, by name; empty before and after it. */
+    public static List<Class<?>> repositories() {
+        return repositories;
+    }
+
+    public static void publishRepositories(List<Class<?>> found) {
+        repositories = List.copyOf(found);
+    }
+
+    /** Forgets the catalogue and the repository interfaces. */
     public static void clear() {
         catalogue = null;
+        repositories = List.of();
     }
 }

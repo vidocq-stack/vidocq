@@ -121,8 +121,9 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     }
 
     /**
-     * Finds the repositories among {@code beanClasses}, logs them and builds the catalogue; never throws, the boot never
-     * fails for it, not even when listing the beans or reading their interfaces does. Visible for tests.
+     * Finds the repositories among {@code beanClasses}, logs them, builds the catalogue and publishes the repository
+     * interfaces for the {@code -dev} panel's actions; never throws, the boot never fails for it, not even when
+     * listing the beans or reading their interfaces does. Visible for tests.
      */
     void start(Supplier<Iterable<Class<?>>> beanClasses, Function<Class<?>, EntityModel<?>> models) {
         List<Class<?>> repositories;
@@ -137,6 +138,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         }
         logRepositoryInventory(repositories);
         catalogue(repositories, models);
+        MansartDataLive.publishRepositories(repositories);
     }
 
     /** Builds the catalogue with the limits of the spec, keeps it and publishes it. Visible for tests. */

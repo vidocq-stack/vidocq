@@ -36,7 +36,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.data {
     requires jakarta.cdi;
     requires java.sql;        // javax.sql.DataSource
 
-    // What the catalogue panel of the -dev module reads; no other module sees it.
+    // What the -dev module's panel reads, the catalogue and the repository interfaces; no other module sees it.
     exports io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live
             to io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 

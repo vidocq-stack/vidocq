@@ -178,6 +178,35 @@ class MansartDataSectionTest {
     }
 
     @Test
+    void startPublishesTheRepositoryInterfacesForTheDevPanel() {
+        ext.start(() -> List.of(CatalogueFixtures.GadgetRepositoryImpl.class, OrderRepository.class),
+                CatalogueFixtures::model);
+
+        assertEquals(List.of(CatalogueFixtures.GadgetRepository.class, OrderRepository.class),
+                MansartDataLive.repositories());
+    }
+
+    @Test
+    void onStopClearsTheRepositoriesFirst() {
+        ext.start(() -> List.of(OrderRepository.class), CatalogueFixtures::model);
+        assertEquals(List.of(OrderRepository.class), MansartDataLive.repositories());
+
+        ext.onStop();
+
+        assertEquals(List.of(), MansartDataLive.repositories(), "a dev reload reads no class of this boot");
+    }
+
+    @Test
+    void noRepositoryIsPublishedWhenTheyCannotBeListed() {
+        ext.start(() -> List.of(OrderRepository.class), CatalogueFixtures::model);
+        ext.start(() -> {
+            throw new IllegalStateException("the container could not list its beans");
+        }, CatalogueFixtures::model);
+
+        assertEquals(List.of(), MansartDataLive.repositories());
+    }
+
+    @Test
     void onStopClearsTheCatalogueFirst() {
         buildFixtures();
         var published = MansartDataLive.catalogue().orElseThrow();
