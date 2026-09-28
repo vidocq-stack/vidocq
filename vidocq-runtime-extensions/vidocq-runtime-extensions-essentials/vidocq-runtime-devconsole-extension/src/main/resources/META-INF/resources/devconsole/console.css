@@ -43,6 +43,11 @@
   --crit: #B4392F;
   --crit-bg: #F5DFDC;
   --shade: rgba(24, 32, 43, 0.06);
+  --json-key: #1F5F8B;
+  --json-string: #2D7A4E;
+  --json-number: #9C5A12;
+  --json-literal: #8E3FA8;
+  --json-punct: #8B94A2;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --cond: "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -70,6 +75,11 @@
     --crit: #E6756A;
     --crit-bg: #3A1D1A;
     --shade: rgba(0, 0, 0, 0.35);
+    --json-key: #7FB2E0;
+    --json-string: #7CCB9A;
+    --json-number: #E2A94B;
+    --json-literal: #C99BE0;
+    --json-punct: #6E7988;
     color-scheme: dark;
   }
 }
@@ -94,6 +104,11 @@
   --crit: #E6756A;
   --crit-bg: #3A1D1A;
   --shade: rgba(0, 0, 0, 0.35);
+  --json-key: #7FB2E0;
+  --json-string: #7CCB9A;
+  --json-number: #E2A94B;
+  --json-literal: #C99BE0;
+  --json-punct: #6E7988;
   color-scheme: dark;
 }
 
@@ -282,6 +297,25 @@ button:disabled { opacity: 0.55; cursor: progress; }
 pre.result-body { background: var(--sunk); border-radius: 6px; padding: 10px 12px; margin: 6px 0 0;
   font-family: var(--mono); font-size: 12px; max-height: 24em; overflow: auto; white-space: pre-wrap;
   overflow-wrap: anywhere; color: var(--ink); }
+/* The JSON viewer: a result's body or its exchange, coloured, every object and array folding. */
+.jv { font-family: var(--mono); font-size: 12px; line-height: 1.55; background: var(--sunk); border-radius: 6px;
+  padding: 10px 12px; margin: 6px 0 0; max-height: 32em; overflow: auto; color: var(--ink); }
+.jv-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.jv-children { margin-left: 0.55em; padding-left: 1.2em; border-left: 1px dotted var(--rule); }
+.jv-toggle { font: inherit; font-size: 10px; line-height: 1; width: 1.6em; padding: 0; border: 0; border-radius: 3px;
+  background: transparent; color: var(--json-punct); cursor: pointer; }
+.jv-toggle:hover { background: var(--grid); }
+.jv-gap { display: inline-block; width: 1.6em; }
+.jv-key { color: var(--json-key); }
+.jv-string { color: var(--json-string); }
+.jv-number { color: var(--json-number); }
+.jv-literal { color: var(--json-literal); }
+.jv-punct { color: var(--json-punct); }
+.jv-summary { color: var(--json-punct); cursor: pointer; }
+.jv-summary:hover { text-decoration: underline; }
+.jv-tools { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.jv-tools button { font-size: 11.5px; padding: 1px 8px; }
+.exchange > .jv-tools { margin-top: 6px; }
 .action .exchange summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .action-group { border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; }
 .action-group > summary { cursor: pointer; font-size: 13px; font-weight: 600; }

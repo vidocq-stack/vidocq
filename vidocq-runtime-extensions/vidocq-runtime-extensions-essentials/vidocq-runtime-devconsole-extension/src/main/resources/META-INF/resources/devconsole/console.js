@@ -34,10 +34,10 @@
 //   token of the boot the snapshot carries (console.actionToken); a confirmation is asked inline, never with a
 //   blocking dialog. The page shows the line the action returned, or the class of what it threw.
 // - An action's json argument is a form generated from its JSON Schema when the schema is flat (isFlatSchema), a raw
-//   JSON editor otherwise, with a "JSON" switch that keeps the values. A structured answer shows its body, pretty
-//   printed when it is JSON, and its details folded under "Exchange". A cell of a sample table column named "replay"
-//   that reads as "<action id> <JSON object>" of an action of that panel is a button that fills its form: nothing is
-//   sent until the user submits. Any other cell of such a column stays text.
+//   JSON editor otherwise, with a "JSON" switch that keeps the values. A structured answer shows its body, through
+//   the JSON viewer (jsonViewer) when it is JSON, and its details folded under "Exchange", through it too. A cell of
+//   a sample table column named "replay" that reads as "<action id> <JSON object>" of an action of that panel is a
+//   button that fills its form: nothing is sent until the user submits. Any other cell of such a column stays text.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -846,21 +846,209 @@ function jsonField(argument) {
   };
 }
 
-/** {@code text} pretty-printed when it is JSON, as it is otherwise. */
-function prettyJson(text) {
-  try { return JSON.stringify(JSON.parse(text), null, 2); } catch (notJson) { return text; }
+// ------------------------------------------------------------------------------------------------ JSON viewer
+
+/** Past this many values, a JSON document opens its first level only. */
+const JSON_BIG = 500;
+/** The key, in a viewer's node state, of what Expand all or Collapse all last set for every node. */
+const ALL_NODES = "\u0001all";
+
+/**
+ * An integer of a JSON document past what a double holds exactly, such as 9007199254740993: the viewer shows and
+ * copies the text the server sent, never the nearest double.
+ */
+class JsonNumber {
+  constructor(source) { this.source = source; }
+}
+
+/** Whether {@code v} is an object or an array of a parsed document, which the viewer folds. */
+const isContainer = (v) => v !== null && typeof v === "object" && !(v instanceof JsonNumber);
+
+/**
+ * {@code text} parsed, an integer past 2^53 kept as its text where the browser gives the source of a value;
+ * undefined when it is not JSON. A key "__proto__" is an own property, as JSON.parse always makes it.
+ */
+function parseJson(text) {
+  try {
+    return JSON.parse(text, (key, value, context) => typeof value === "number" && !Number.isSafeInteger(value)
+      && context && typeof context.source === "string" && /^-?\d+$/.test(context.source)
+      ? new JsonNumber(context.source) : value);
+  } catch (notJson) {
+    return undefined;
+  }
+}
+
+/** {@code doc} as indented JSON text, a kept integer written as the server sent it where the browser can. */
+function jsonText(doc) {
+  return JSON.stringify(doc, (key, value) => !(value instanceof JsonNumber) ? value
+    : typeof JSON.rawJSON === "function" ? JSON.rawJSON(value.source) : Number(value.source), 2);
+}
+
+/** How many values {@code doc} holds, counting stopped past {@code limit}. */
+function countValues(doc, limit) {
+  let n = 0;
+  const stack = [doc];
+  while (stack.length && n <= limit) {
+    const v = stack.pop();
+    n++;
+    if (isContainer(v)) for (const child of Object.values(v)) stack.push(child);
+  }
+  return n;
+}
+
+/**
+ * A JSON document as a tree (spec §3): keys, strings, numbers and literals coloured, every object and array folding
+ * under a ▾/▸ toggle or a click on its summary, Alt+click flipping everything under it too. The first two levels
+ * start open, only the first past JSON_BIG values. {@code nodes} holds the fold state by node path, so that a redraw
+ * of the same result keeps it; a new result brings a new map. Built with DOM calls and textContent only. null when
+ * {@code text} is not JSON.
+ */
+function jsonViewer(text, nodes) {
+  const doc = parseJson(text);
+  if (doc === undefined) return null;
+  const openDepth = countValues(doc, JSON_BIG) > JSON_BIG ? 1 : 2;
+  const root = el("div", "jv");
+  const isOpen = (path, depth) => nodes.has(path) ? nodes.get(path)
+    : nodes.has(ALL_NODES) ? nodes.get(ALL_NODES) : depth < openDepth;
+
+  /** Sets every object and array under {@code value}, itself included, to {@code open}. */
+  function setDeep(value, path, open) {
+    const stack = [[value, path]];
+    while (stack.length) {
+      const [v, p] = stack.pop();
+      if (!isContainer(v)) continue;
+      nodes.set(p, open);
+      for (const [k, child] of Object.entries(v)) stack.push([child, p + "\u0000" + k]);
+    }
+  }
+
+  function leaf(value) {
+    if (value instanceof JsonNumber) return el("span", "jv-number", value.source);
+    if (Array.isArray(value)) return el("span", "jv-punct", "[]");
+    if (isContainer(value)) return el("span", "jv-punct", "{}");
+    if (value === null) return el("span", "jv-literal", "null");
+    if (typeof value === "string") return el("span", "jv-string", JSON.stringify(value));
+    if (typeof value === "number") return el("span", "jv-number", String(value));
+    return el("span", "jv-literal", String(value));
+  }
+
+  /** One value: {@code key} its name in its object, null in an array or at the root; {@code tail} its comma. */
+  function node(value, key, path, depth, tail) {
+    const head = key === null ? [] : [el("span", "jv-key", JSON.stringify(key)), el("span", "jv-punct", ": ")];
+    const entries = isContainer(value) ? Object.entries(value) : [];
+    if (!entries.length) {
+      const line = el("div", "jv-line");
+      line.append(el("span", "jv-gap"), ...head, leaf(value));
+      if (tail) line.append(el("span", "jv-punct", tail));
+      return line;
+    }
+    const array = Array.isArray(value);
+    const box = el("div", "jv-node");
+    const line = el("div", "jv-line");
+    const toggle = el("button", "jv-toggle");
+    toggle.type = "button";
+    const opening = el("span", "jv-punct", array ? "[" : "{");
+    const summary = el("span", "jv-summary", array ? "[…] " + plural(entries.length, "item", "items")
+      : "{…} " + plural(entries.length, "key", "keys"));
+    const summaryTail = el("span", "jv-punct", tail);
+    line.append(toggle, ...head, opening, summary, summaryTail);
+    const children = el("div", "jv-children");
+    const closing = el("div", "jv-line");
+    closing.append(el("span", "jv-gap"), el("span", "jv-punct", (array ? "]" : "}") + tail));
+    box.append(line, children, closing);
+    let built = false;
+    const show = (open) => {
+      if (open && !built) {
+        built = true;       // children are drawn the first time they are shown: a folded big document costs little
+        entries.forEach(([k, child], i) => children.append(node(child, array ? null : k, path + "\u0000" + k,
+          depth + 1, i < entries.length - 1 ? "," : "")));
+      }
+      toggle.textContent = open ? "▾" : "▸";
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? "Collapse" : "Expand");
+      opening.hidden = !open;
+      children.hidden = !open;
+      closing.hidden = !open;
+      summary.hidden = open;
+      summaryTail.hidden = open;
+    };
+    const flip = (event) => {
+      const open = !isOpen(path, depth);
+      if (event.altKey) {
+        setDeep(value, path, open);
+        box.replaceWith(node(value, key, path, depth, tail));
+        return;
+      }
+      nodes.set(path, open);
+      show(open);
+    };
+    toggle.addEventListener("click", flip);
+    summary.addEventListener("click", flip);
+    show(isOpen(path, depth));
+    return box;
+  }
+
+  const draw = () => root.replaceChildren(node(doc, null, "", 0, ""));
+  draw();
+  return {
+    root,
+    expandAll() { nodes.clear(); nodes.set(ALL_NODES, true); draw(); },
+    collapseAll() { nodes.clear(); nodes.set(ALL_NODES, false); draw(); },
+    text: () => jsonText(doc),
+  };
+}
+
+/** Expand all, Collapse all and Copy, for {@code viewer}; a refused clipboard is said on the button, nothing more. */
+function viewerTools(viewer) {
+  const tools = el("span", "jv-tools");
+  const button = (text, run) => {
+    const b = el("button", null, text);
+    b.type = "button";
+    b.addEventListener("click", run);
+    tools.append(b);
+    return b;
+  };
+  button("Expand all", () => viewer.expandAll());
+  button("Collapse all", () => viewer.collapseAll());
+  const copy = button("Copy", async () => {
+    let said;
+    try {
+      await navigator.clipboard.writeText(viewer.text());
+      said = "Copied";
+    } catch (refused) {
+      said = "Clipboard refused";
+    }
+    copy.textContent = said;
+    setTimeout(() => { copy.textContent = "Copy"; }, 2000);
+  });
+  return tools;
+}
+
+/** Whether a content type is JSON. */
+const isJsonType = (type) => typeof type === "string" && type.startsWith("application/json");
+
+/**
+ * {@code text} through the JSON viewer, with its tools, when {@code json} and it parses; as text otherwise, a body
+ * that claims JSON but is none included. {@code nodes} is the viewer's fold state.
+ */
+function textOrJson(text, json, nodes) {
+  const viewer = json ? jsonViewer(text, nodes) : null;
+  if (!viewer) return { view: el("pre", "result-body", text), tools: null };
+  return { view: viewer.root, tools: viewerTools(viewer) };
 }
 
 /** What an answer shows under its line: its body, then its details folded under "Exchange". */
 function resultOutput(answer) {
   const out = [];
   if (typeof answer.body === "string") {
-    const json = typeof answer.contentType === "string" && answer.contentType.startsWith("application/json");
-    out.push(el("pre", "result-body", json ? prettyJson(answer.body) : answer.body));
+    const body = textOrJson(answer.body, isJsonType(answer.contentType), new Map());
+    if (body.tools) out.push(body.tools);
+    out.push(body.view);
   }
   if (typeof answer.details === "string") {
     const exchange = el("details", "exchange");
-    exchange.append(el("summary", null, "Exchange"), el("pre", "result-body", prettyJson(answer.details)));
+    const details = textOrJson(answer.details, true, new Map());
+    exchange.append(el("summary", null, "Exchange"), ...(details.tools ? [details.tools] : []), details.view);
     out.push(exchange);
   }
   return out;

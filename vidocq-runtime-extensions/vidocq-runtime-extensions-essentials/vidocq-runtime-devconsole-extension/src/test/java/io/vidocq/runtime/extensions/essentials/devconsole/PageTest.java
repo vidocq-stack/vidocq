@@ -145,6 +145,48 @@ class PageTest {
     }
 
     @Test
+    void theStyleDefinesEveryJsonTokenInTheLightThemeAndInBothDarkBlocks() {
+        String style = file("console.css");
+        String light = rule(style, ":root {");
+        String system = rule(style, ":root:not([data-theme=\"light\"]) {");
+        String forced = rule(style, ":root[data-theme=\"dark\"] {");
+
+        assertTrue(style.indexOf("@media (prefers-color-scheme: dark)")
+                < style.indexOf(":root:not([data-theme=\"light\"]) {"), "the system's dark theme is a media query");
+        for (String token : List.of("--json-key", "--json-string", "--json-number", "--json-literal",
+                "--json-punct")) {
+            assertTrue(light.contains(token + ":"), token + " in the light theme");
+            assertTrue(system.contains(token + ":"), token + " in the system's dark theme");
+            assertTrue(forced.contains(token + ":"), token + " in data-theme=\"dark\"");
+        }
+    }
+
+    @Test
+    void everyJsonThePageShowsGoesThroughTheViewer() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("function jsonViewer(text, nodes)"), "the viewer, written once");
+        assertFalse(script.contains("prettyJson"), "the viewer replaced prettyJson everywhere");
+        assertTrue(script.contains("const JSON_BIG = 500"), "past 500 values, the first level only is open");
+        assertTrue(script.contains("event.altKey"), "Alt+click flips a node and everything under it");
+        for (String tool : List.of("\"Expand all\"", "\"Collapse all\"", "\"Copy\"", "\"Clipboard refused\"")) {
+            assertTrue(script.contains(tool), "the viewer's tools: " + tool);
+        }
+        assertTrue(script.contains("navigator.clipboard.writeText(viewer.text())"), "Copy goes through the clipboard");
+        assertTrue(script.contains("if (!viewer) return { view: el(\"pre\", \"result-body\", text), tools: null };"),
+                "a body that does not parse is shown as text");
+        assertTrue(script.contains("context.source") && script.contains("JSON.rawJSON"),
+                "an integer past 2^53 is shown and copied as the server sent it");
+    }
+
+    /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
+    private static String rule(String style, String opening) {
+        int start = style.indexOf(opening);
+        assertTrue(start >= 0, "no rule " + opening);
+        return style.substring(start, style.indexOf('}', start));
+    }
+
+    @Test
     void jsonArgumentsGetAFormForAFlatSchemaAndARawEditorOtherwise() {
         String script = file("console.js");
 
