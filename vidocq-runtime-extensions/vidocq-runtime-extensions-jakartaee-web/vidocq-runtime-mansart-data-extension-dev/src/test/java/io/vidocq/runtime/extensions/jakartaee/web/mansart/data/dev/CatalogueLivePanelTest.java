@@ -126,8 +126,9 @@ class CatalogueLivePanelTest {
                 List.of("countByProject", "derived", "", "project: String", "long"),
                 List.of("searchText", "JDQL", "FROM Task WHERE title LIKE :pattern", "pattern: String",
                         "List<Task>"))), task.value("task-repository"));
-        assertEquals(new Text("inherits BasicRepository: delete, deleteAll, deleteById, findAll, findById, save,"
-                + " saveAll"), task.value("task-repository.inherits"));
+        // the key already says "inherits": the value does not say it again
+        assertEquals(new Text("BasicRepository: delete, deleteAll, deleteById, findAll, findById, save, saveAll"),
+                task.value("task-repository.inherits"));
         assertEquals(new Text("and 3 more"), task.value("task-repository.more"));
     }
 

@@ -161,6 +161,23 @@ class MansartDataSectionTest {
     }
 
     @Test
+    void aFailureWhileFindingTheRepositoriesNeverFailsTheBoot() {
+        ext.start(() -> {
+            throw new IllegalStateException("the container could not list its beans");
+        }, CatalogueFixtures::model);
+
+        assertEquals("no catalogue (java.lang.IllegalStateException)", section(ReportContext.detailed()).summary());
+        assertTrue(MansartDataLive.catalogue().isEmpty());
+    }
+
+    @Test
+    void startBuildsTheCatalogueFromTheBeanClasses() {
+        ext.start(() -> List.of(OrderRepository.class), CatalogueFixtures::model);
+
+        assertTrue(MansartDataLive.catalogue().isPresent());
+    }
+
+    @Test
     void onStopClearsTheCatalogueFirst() {
         buildFixtures();
         var published = MansartDataLive.catalogue().orElseThrow();

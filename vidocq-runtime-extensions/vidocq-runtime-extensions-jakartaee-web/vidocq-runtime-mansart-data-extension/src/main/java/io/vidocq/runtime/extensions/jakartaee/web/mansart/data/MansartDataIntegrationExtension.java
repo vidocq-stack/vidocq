@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Glue between Vidocq lifecycle and the Mansart Jakarta Data 1.0 stack.
@@ -116,9 +117,26 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         if (context.config().getValue(P_CHECK_ON_START, Boolean.class, Boolean.TRUE)) {
             checkDataSourceReachable(bm);
         }
-        List<Class<?>> repositories = CatalogueBuilder.repositoryInterfaces(beanClasses(bm));
+        start(() -> beanClasses(bm), type -> EntityModels.of(type));
+    }
+
+    /**
+     * Finds the repositories among {@code beanClasses}, logs them and builds the catalogue; never throws, the boot never
+     * fails for it, not even when listing the beans or reading their interfaces does. Visible for tests.
+     */
+    void start(Supplier<Iterable<Class<?>>> beanClasses, Function<Class<?>, EntityModel<?>> models) {
+        List<Class<?>> repositories;
+        try {
+            repositories = CatalogueBuilder.repositoryInterfaces(beanClasses.get());
+        } catch (RuntimeException | LinkageError failure) {
+            catalogue = null;
+            unavailable = failure.getClass().getName();
+            MansartDataLive.clear();
+            LOG.log(System.Logger.Level.WARNING, "Mansart Data: the repositories could not be listed", failure);
+            return;
+        }
         logRepositoryInventory(repositories);
-        catalogue(repositories, type -> EntityModels.of(type));
+        catalogue(repositories, models);
     }
 
     /** Builds the catalogue with the limits of the spec, keeps it and publishes it. Visible for tests. */

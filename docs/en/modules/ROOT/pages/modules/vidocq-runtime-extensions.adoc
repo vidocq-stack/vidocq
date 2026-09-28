@@ -515,7 +515,7 @@ When the container cannot say which beans it has, no pool is flagged: the report
 | The generic return type in simple names: `List<Task>`, `Optional<Task>`, `long`, `void`.
 |===
 
-The methods inherited from Jakarta Data are one line under the table: `inherits BasicRepository: delete, deleteAll, deleteById, findAll, findById, save, saveAll`.
+The methods inherited from Jakarta Data are a value next to the table, `task-repository.inherits`: `BasicRepository: delete, deleteAll, deleteById, findAll, findById, save, saveAll`.
 
 *Entities.* The primary entities of the repositories, each with the model Mansart itself uses, `EntityModels.of`: the generated `_Entity.$MODEL`, or the one Mansart builds at run time. The card shows its table, `schema.table` when it has a schema, and its columns, the id first, then the version, then the others in model order:
 

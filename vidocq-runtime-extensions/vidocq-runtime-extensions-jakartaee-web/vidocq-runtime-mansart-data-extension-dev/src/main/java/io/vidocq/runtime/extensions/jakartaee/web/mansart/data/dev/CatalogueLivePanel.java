@@ -110,7 +110,8 @@ public final class CatalogueLivePanel implements LivePanel {
                 .map(m -> Arrays.asList(m.name(), m.kind(), m.query(), m.parameters(), m.returns()))
                 .toList());
         if (repository.inherits() != null && !repository.inherits().isEmpty()) {
-            group.text(key + ".inherits", repository.inherits());
+            // the key says "inherits" already: the value keeps what follows it
+            group.text(key + ".inherits", repository.inherits().replaceFirst("^inherits ", ""));
         }
         if (repository.moreMethods() > 0) {
             group.text(key + ".more", "and " + repository.moreMethods() + " more");
