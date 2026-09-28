@@ -1038,11 +1038,12 @@ const freshNodes = () => ({ body: new Map(), details: new Map() });
 /**
  * A result as the page keeps it (spec §2.2): its state, "ok", "error" or "running"; its line; the round trip the
  * page measured, in milliseconds, or null; the structured answer, or null; the time of the snapshot outcome it
- * reflects; the fold state of its viewers, by node path; whether its "Exchange" is open.
+ * reflects; the fold state of its viewers, by node path; whether its "Exchange" is open; whether it is the answer
+ * of this page's own call, whose body the server's echo of that call keeps, and no later outcome.
  */
 function outcome(state, summary, fields) {
   return { state, summary, millis: null, answer: null, time: null, nodes: freshNodes(), exchangeOpen: false,
-    ...fields };
+    mine: false, ...fields };
 }
 
 /** The details of an answer, the JSON-RPC exchange for the MCP inspector, folded under "Exchange". */
@@ -1155,7 +1156,7 @@ function actionRow(panelId, action, outlet) {
       const answer = type.startsWith("application/json") ? await response.json() : { text: await response.text() };
       const millis = Math.round(performance.now() - started);
       if (response.status === 200 && typeof answer.result === "string") {
-        publish(answer.error === true ? "error" : "ok", answer.result, { millis, answer });
+        publish(answer.error === true ? "error" : "ok", answer.result, { millis, answer, mine: true });
       } else if (response.status === 500 && typeof answer.error === "string") {
         publish("error", "failed: " + answer.error, { millis });
       } else if (response.status === 202) {
@@ -1198,7 +1199,7 @@ function actionRow(panelId, action, outlet) {
     const last = now.last;
     if (!last || typeof last.text !== "string" || last.time === shown) return;
     shown = last.time;
-    const own = current && current.state !== "running" ? current : null;
+    const own = current && current.mine && current.state !== "running" ? current : null;
     const failed = !last.ok || last.error === true;
     outlet.publish(outcome(failed ? "error" : "ok",
       (last.ok ? "" : "failed: ") + last.text + " · " + clockTime(last.time),
@@ -1604,7 +1605,10 @@ function panelView(panel, snapshot) {
   const state = panelState(panel.id);
   const actions = Array.isArray(panel.actions) ? panel.actions : [];
   // a result is kept for as long as its action exists: a dev reload that removes the action forgets it (spec §4)
-  for (const id of [...state.results.keys()]) if (!actions.some((a) => a.id === id)) state.results.delete(id);
+  // (not while a dev reload has withdrawn every action: the next boot brings the surviving ones back)
+  if (actions.length) for (const id of [...state.results.keys()]) if (!actions.some((a) => a.id === id)) {
+    state.results.delete(id);
+  }
   const groupTabs = new Map();
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   const rows = actions.map((action) => {

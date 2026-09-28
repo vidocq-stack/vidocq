@@ -395,8 +395,8 @@ the application's tools, prompts, resources and resource templates, and can call
 sub-tabs: *Monitoring*, with the panel's values, charts and boot facts, then *Tools*, *Prompts* and *Resources*,
 resources and resource templates sharing the last. A sub-tab of a kind is a list to pick the item from, its
 description and its form under it, then its result in a block of its own, then the history of that kind's calls;
-past ten items a text filter above the list narrows it. The page remembers the open sub-tab, in this browser, and
-the item picked in each.
+past ten items a text filter above the list narrows it. The page remembers the open sub-tab in this browser, and,
+until the page is reloaded, the item picked in each.
 
 A tool's arguments are a form generated from its input schema when the schema is flat — its root is
 `"type": "object"` and every property is a `string`, `number`, `integer` or `boolean`, or an `enum` of strings, with
@@ -497,7 +497,9 @@ everything under it. The first two levels start open, only the first when the do
 *Expand all*, *Collapse all* and *Copy* sit next to what they act on: in the result's header for the body, at the
 top of "Exchange" for the details. *Copy* writes the JSON indented, masked values as the server sent them; when the
 browser refuses the clipboard, the button says `Clipboard refused` and nothing else happens. An integer too large
-for a JavaScript number, such as `9007199254740993`, is shown as the server wrote it.
+for a JavaScript number, such as `9007199254740993`, is shown and copied as the server wrote it in a browser that
+gives `JSON.parse` the source text of a number, such as a current Chrome; elsewhere it is rounded to the nearest
+JavaScript number.
 
 The viewer keeps what is folded while the page polls, and forgets it when a new result replaces the one on screen.
 A body that does not parse as JSON is shown as text. The tree is built with DOM calls only, never as markup, so a

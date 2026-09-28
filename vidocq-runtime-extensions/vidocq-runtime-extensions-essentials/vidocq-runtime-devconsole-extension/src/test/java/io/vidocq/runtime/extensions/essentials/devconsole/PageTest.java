@@ -231,6 +231,18 @@ class PageTest {
         assertFalse(script.contains("action-group"), "grouped actions are no longer folded sections");
     }
 
+    @Test
+    void aServerOutcomeKeepsTheBodyOfThisPagesOwnCallOnlyAndADevReloadKeepsTheResults() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("publish(answer.error === true ? \"error\" : \"ok\", answer.result, { millis, answer, mine: true });"),
+                "the answer of this page's own call is marked as such");
+        assertTrue(script.contains("const own = current && current.mine && current.state !== \"running\" ? current : null;"),
+                "a newer server outcome carries the body over only from this page's own call, once");
+        assertTrue(script.contains("if (actions.length) for (const id of [...state.results.keys()])"),
+                "a snapshot taken while a dev reload has no action yet forgets no result");
+    }
+
     /** The declarations of the first rule of {@code style} that starts with {@code opening}, to its closing brace. */
     private static String rule(String style, String opening) {
         int start = style.indexOf(opening);
