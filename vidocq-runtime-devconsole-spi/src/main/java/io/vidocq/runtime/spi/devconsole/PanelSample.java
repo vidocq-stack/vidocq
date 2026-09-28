@@ -66,7 +66,10 @@ public interface PanelSample {
      * {@code tool.weather {"arguments":{"city":"Paris"}}}. The button fills that action's form with them and sends
      * nothing; a value {@code "***"} is left empty for the user to type. The console keeps such a cell whole up to
      * {@value #MAX_REPLAY_CELL} characters, and empties a longer one. A cell of this column that is no such replay,
-     * or whose id is no action of the panel, is shown as text, cut as any other cell.
+     * or whose id is no action of the panel, is shown as text, cut as any other cell. When the panel's actions have
+     * {@link PanelAction#group() groups}, the page shows such a table in the group tabs rather than in the
+     * <i>Monitoring</i> tab, each tab keeping the rows whose cell names one of its own actions; a row whose cell
+     * names no action of the panel is left out there.
      */
     String REPLAY_COLUMN = "replay";
 

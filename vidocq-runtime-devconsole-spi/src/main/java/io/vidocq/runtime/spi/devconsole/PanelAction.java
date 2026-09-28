@@ -66,8 +66,10 @@ import java.util.regex.PatternSyntaxException;
  *                     click, never blank
  * @param arguments    what the page asks for before sending, in that order, each name once; an immutable copy
  * @param call         does the work with the checked arguments, by name, and returns its result
- * @param group        a short title such as {@code Tools}: the page folds the actions of a panel by group, in
- *                     order of first appearance, and adds a filter past ten actions; {@code null} for none
+ * @param group        a short title such as {@code Tools}: the page shows each group as a tab of the panel, next to
+ *                     a <i>Monitoring</i> tab, in order of first appearance, and adds a filter past ten actions of a
+ *                     group; a table with a {@link PanelSample#REPLAY_COLUMN replay} column moves to the group tabs,
+ *                     filtered to their actions; {@code null} for none
  * @param description  a longer text shown under the label, such as a tool's description, line breaks kept;
  *                     {@code null} for none
  */
