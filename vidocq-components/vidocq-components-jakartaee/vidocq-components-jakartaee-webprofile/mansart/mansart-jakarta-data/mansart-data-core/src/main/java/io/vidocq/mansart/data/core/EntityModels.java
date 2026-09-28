@@ -63,8 +63,9 @@ public final class EntityModels {
      *
      * <p>The model's attributes carry the {@link java.lang.invoke.MethodHandle getter and setter} Mansart reads and
      * writes the entity's fields with, built with a lookup the entity's package opens to Mansart; the generated
-     * {@code $MODEL} is public and carries the same. A caller reads the model to describe the entity, as the
-     * Vidocq dev console does, and does not use those handles.
+     * {@code $MODEL} is public and carries the same. A tool may use them as Mansart does: the Vidocq dev console
+     * reads the model to describe the entity and, in a {@code dev} launch, reads and builds with those handles the
+     * entities of the repository methods a developer runs from it. It never changes the model.
      *
      * @param entityType the entity class
      * @param <E>        the entity type
