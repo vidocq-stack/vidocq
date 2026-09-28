@@ -124,6 +124,14 @@ public final class CatalogueLivePanel implements LivePanel {
      * already holds it. Adds the key to {@code used}.
      */
     static String key(String name, Set<String> used) {
+        return key(name, used, MAX_BASE);
+    }
+
+    /**
+     * {@code name} in kebab case as {@link #key(String, Set)} makes it, at most {@code max} characters, the suffix of a
+     * clash included: the run actions build their ids {@code m.<repository>.<method>} with it. Adds it to {@code used}.
+     */
+    static String key(String name, Set<String> used, int max) {
         StringBuilder out = new StringBuilder();
         char previous = 0;
         for (int i = 0; i < name.length(); i++) {
@@ -145,11 +153,11 @@ public final class CatalogueLivePanel implements LivePanel {
         if (base.isEmpty() || base.charAt(0) < 'a' || base.charAt(0) > 'z') {
             base = "r-" + base;
         }
-        base = trim(base, MAX_BASE);
+        base = trim(base, max);
         String key = base;
         for (int n = 2; !used.add(key); n++) {
             String suffix = "-" + n;
-            key = trim(base, MAX_BASE - suffix.length()) + suffix;
+            key = trim(base, max - suffix.length()) + suffix;
         }
         return key;
     }
