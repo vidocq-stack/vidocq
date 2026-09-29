@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,6 +109,24 @@ class EntityJsonTest {
         assertEquals(List.of("id", "year", "label"), entities.names(RunFixtures.Slot.class),
                 "a Year is read, as its text");
         assertEquals(7L, entities.idOf(RunFixtures.gizmo(7L, "bolt", 3, Level.LOW, null, null)));
+    }
+
+    @Test
+    void anImportSetsTheAttributesThatConvertAReferenceByItsId() throws ArgumentException {
+        assertEquals(List.of("id", "name", "stock", "level", "due", "price"), entities.columns(Gizmo.class));
+        assertEquals(List.of("id", "gizmo", "label"), entities.columns(Part.class));
+        assertEquals(List.of("id", "label"), entities.columns(RunFixtures.Slot.class), "a Year cannot be converted");
+
+        EntityJson.TextRows parts = entities.textRows(Part.class, List.of("label", "gizmo"));
+
+        assertEquals("{\"id\":null,\"gizmo\":7,\"label\":\"left\"}",
+                Json.write(entities.toJson(parts.build(Arrays.asList("left", "7")))));
+        assertEquals("{\"id\":null,\"gizmo\":null,\"label\":null}",
+                Json.write(entities.toJson(parts.build(Arrays.asList(null, null)))));
+        assertEquals("gizmo: not an integer",
+                assertThrows(ArgumentException.class, () -> parts.build(Arrays.asList("x", "seven"))).getMessage());
+        assertEquals("year: not an attribute that can be set", assertThrows(ArgumentException.class,
+                () -> entities.textRows(RunFixtures.Slot.class, List.of("year"))).getMessage());
     }
 
     @Test

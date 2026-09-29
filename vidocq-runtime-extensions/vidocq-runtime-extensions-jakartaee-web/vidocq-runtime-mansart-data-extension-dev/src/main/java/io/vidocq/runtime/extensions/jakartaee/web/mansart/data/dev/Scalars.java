@@ -192,6 +192,35 @@ final class Scalars {
     }
 
     /**
+     * {@code text}, a field of a CSV file (CSV spec §4, §5), as a {@code type}: read as the JSON value the page would
+     * send for it — a number from its text ({@code new BigDecimal}), exactly {@code true} or {@code false} as a
+     * boolean, anything else as a string, never trimmed — then converted as {@link #fromJson} does, its refusals
+     * included. {@code null}, an empty unquoted field, stays {@code null}; a primitive refuses it.
+     *
+     * @param name the column it is for, which a refusal names
+     * @throws ArgumentException when it does not convert
+     */
+    static Object fromText(Class<?> type, String text, String name) throws ArgumentException {
+        if (text == null) {
+            return fromJson(type, null, name);
+        }
+        if (INTEGERS.contains(type) || NUMBERS.contains(type)) {
+            BigDecimal number;
+            try {
+                number = new BigDecimal(text);
+            } catch (NumberFormatException notANumber) {
+                throw new ArgumentException(name, INTEGERS.contains(type) ? "not an integer" : "not a number");
+            }
+            return fromJson(type, number, name);
+        }
+        if (type == boolean.class || type == Boolean.class) {
+            return fromJson(type, "true".equals(text) ? Boolean.TRUE : "false".equals(text) ? Boolean.FALSE : text,
+                    name);
+        }
+        return fromJson(type, text, name);
+    }
+
+    /**
      * The JSON of a value a method returns (spec §6): {@code null}, a number, a boolean or a string as it is, an enum
      * as its name, a {@code char} as a string, anything else — a {@code java.time} value, a {@code UUID} — as its
      * text; a number JSON cannot hold, such as {@code NaN}, as its text too.

@@ -94,15 +94,69 @@ final class EntityJson {
             if (property == null) {
                 throw new ArgumentException(path, "unknown property");
             }
-            Object value = Scalars.fromJson(property.type(), member.getValue(), path);
-            if (property.referenced() != null && value != null) {
-                Object reference = construct(property.referenced());
-                set(property.referenced().id().setter(), reference, value);
-                value = reference;
-            }
-            set(property.attribute().setter(), instance, value);
+            put(instance, property, Scalars.fromJson(property.type(), member.getValue(), path));
         }
         return instance;
+    }
+
+    /**
+     * The names a CSV import may give {@code entity}'s attributes (CSV spec §4), in model order: those
+     * {@link #fromJson} sets, each with a setter and a type {@link Scalars} converts, a reference by its id.
+     *
+     * @throws RuntimeException when its model cannot be read, as {@code EntityModels.of} throws it
+     */
+    List<String> columns(Class<?> entity) {
+        return List.copyOf(settable(model(entity)).keySet());
+    }
+
+    /**
+     * Builds {@code entity} instances from CSV records whose header is {@code columns}, the model read once: for each
+     * record its no-arg constructor, then each column's text converted by the attribute's type
+     * ({@link Scalars#fromText}) and set with its setter handle, a reference as a new instance of the referenced
+     * entity holding that id. An attribute without a column keeps the constructor's value.
+     *
+     * @throws ArgumentException for a column no attribute of {@link #columns} has
+     */
+    TextRows textRows(Class<?> entity, List<String> columns) throws ArgumentException {
+        EntityModel<?> model = model(entity);
+        Map<String, Settable> settable = settable(model);
+        List<Settable> properties = new ArrayList<>(columns.size());
+        for (String column : columns) {
+            Settable property = settable.get(column);
+            if (property == null) {
+                throw new ArgumentException(column, "not an attribute that can be set");
+            }
+            properties.add(property);
+        }
+        return values -> {
+            Object instance = construct(model);
+            for (int i = 0; i < properties.size(); i++) {
+                Settable property = properties.get(i);
+                put(instance, property, Scalars.fromText(property.type(), values.get(i), property.attribute().name()));
+            }
+            return instance;
+        };
+    }
+
+    /** One entity from each CSV record of a {@link #textRows} call. */
+    @FunctionalInterface
+    interface TextRows {
+
+        /**
+         * @param values the record's fields, one per column, {@code null} for an empty unquoted one
+         * @throws ArgumentException naming the column whose field does not convert: {@code price: not a number}
+         */
+        Object build(List<String> values) throws ArgumentException;
+    }
+
+    /** Sets {@code value} on {@code instance}; for a reference, a new instance of the referenced entity with that id. */
+    private static void put(Object instance, Settable property, Object value) {
+        Object set = value;
+        if (property.referenced() != null && value != null) {
+            set = construct(property.referenced());
+            set(property.referenced().id().setter(), set, value);
+        }
+        set(property.attribute().setter(), instance, set);
     }
 
     /** {@code entity} as an object, one property per attribute in model order, a reference as its id. */

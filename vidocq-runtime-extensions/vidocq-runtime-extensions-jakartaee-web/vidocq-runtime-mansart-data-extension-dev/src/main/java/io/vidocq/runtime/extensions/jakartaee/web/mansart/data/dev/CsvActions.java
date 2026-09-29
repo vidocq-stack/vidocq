@@ -113,9 +113,20 @@ final class CsvActions {
         this.group = Objects.requireNonNull(group, "group");
     }
 
-    /** The tab's CSV actions: {@value #EXPORT}. */
+    /** The tab's CSV actions: {@value #EXPORT}, then {@value #IMPORT}. */
     List<PanelAction> actions() {
-        return List.of(exportAction());
+        return List.of(exportAction(), importAction());
+    }
+
+    private PanelAction importAction() {
+        return new PanelAction(IMPORT, IMPORT_LABEL, CONFIRMATION, List.of(
+                PanelAction.Argument.json(FILE, "File", importSchema(jdql.names())),
+                new PanelAction.Argument(RepositoryActions.TRANSACTION, "Transaction", transactions.modes(), null,
+                        null)), this::importCsv, group,
+                Failures.cut("Saves each row of a CSV file as an entity, in one transaction rolled back unless commit "
+                        + "is asked: an insert when its id is empty, else an update or an insert with that id. The "
+                        + "header names the attributes; an empty field is null, \"\" the empty text. At most 5000 "
+                        + "rows, a file of at most 60 KiB.", PanelAction.MAX_DESCRIPTION - 1));
     }
 
     private PanelAction exportAction() {
@@ -311,6 +322,202 @@ final class CsvActions {
                 "query", export == null ? null : export.query(),
                 "params", export == null ? Map.of() : export.params(),
                 "separator", export == null ? null : String.valueOf(export.separator())));
+    }
+
+    /**
+     * An import's arguments.
+     *
+     * @param entity    the entity, as the catalogue names it
+     * @param csv       the CSV text
+     * @param separator between the fields
+     */
+    private record Load(String entity, String csv, char separator) {}
+
+    /**
+     * One row read.
+     *
+     * @param line   the line of the text it starts on
+     * @param entity the entity it built
+     */
+    private record Row(int line, Object entity) {}
+
+    /** The JSON Schema of {@value #FILE}: the entity, one of {@code entities}; the CSV text; the separator. */
+    static String importSchema(List<String> entities) {
+        return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
+                        ENTITY_MEMBER, Scalars.object("type", "string", "enum", entities,
+                                "description", "the entity each row becomes"),
+                        CSV_MEMBER, Scalars.object("type", "string", "format", "textarea",
+                                "contentMediaType", "text/csv",
+                                "description", "a header of attribute names, then one row per entity"),
+                        SEPARATOR_MEMBER, separatorSchema()),
+                "required", List.of(ENTITY_MEMBER, CSV_MEMBER)));
+    }
+
+    /**
+     * Reads the CSV file the page sent, then saves its rows (CSV spec §4), with the arguments the console checked;
+     * keeps the call. Nothing is saved, nor any transaction begun, before every row is read.
+     */
+    PanelAction.ActionResult importCsv(Map<String, String> given) {
+        long start = System.nanoTime();
+        String sent = given.getOrDefault(FILE, "{}");
+        String mode = given.getOrDefault(RepositoryActions.TRANSACTION, transactions.modes().getFirst());
+        Object parsed = null;
+        Load load = null;
+        Class<?> entity = null;
+        List<Row> rows = null;
+        PanelAction.ActionResult result;
+        try {
+            parsed = JdqlActions.parse(FILE, sent);
+            load = readFile(parsed);
+            entity = jdql.named(load.entity());
+            EntityModel<?> model = jdql.model(entity);
+            rows = read(load, entity);
+            Object runtime = jdql.runtime();
+            result = save(entity, model, rows, runtime, mode, importDetails(entity, rows, load, mode));
+        } catch (JdqlActions.Refused refused) {
+            result = new PanelAction.ActionResult(Failures.line(refused.getMessage()), null, null, true,
+                    importDetails(entity, rows, load, mode));
+        }
+        history.add(group, System.currentTimeMillis(), IMPORT_LABEL,
+                (result.error() ? "error: " : "") + result.summary(), millis(start),
+                parsed == null ? sent : Json.write(parsed), parsed instanceof Map<?, ?>
+                        ? IMPORT + " " + Json.write(Scalars.object(FILE, parsed, RepositoryActions.TRANSACTION, mode))
+                        : "");
+        return result;
+    }
+
+    /** An import's members: {@code entity}, {@code csv}, {@code separator} optional; nothing else. */
+    private static Load readFile(Object parsed) throws JdqlActions.Refused {
+        Map<?, ?> members = members(parsed, FILE, Set.of(ENTITY_MEMBER, CSV_MEMBER, SEPARATOR_MEMBER));
+        return new Load(text(members, ENTITY_MEMBER).strip(), text(members, CSV_MEMBER), separator(members));
+    }
+
+    /** Phase 1: the header, then each row built into an entity; the first failure stops it with its line. */
+    private List<Row> read(Load load, Class<?> entity) throws JdqlActions.Refused {
+        List<Csv.Record> records;
+        try {
+            records = Csv.read(load.csv(), load.separator());
+        } catch (Csv.Malformed malformed) {
+            throw new JdqlActions.Refused(malformed.getMessage());
+        }
+        if (records.isEmpty()) {
+            throw new JdqlActions.Refused(CSV_MEMBER + ": missing");
+        }
+        List<String> header = header(records.getFirst().fields(), entity);
+        List<Csv.Record> lines = records.subList(1, records.size());
+        if (lines.isEmpty()) {
+            throw new JdqlActions.Refused("no row: the file has a header only");
+        }
+        if (lines.size() > MAX_ROWS) {
+            throw new JdqlActions.Refused("more than " + MAX_ROWS + " rows: split the file");
+        }
+        EntityJson.TextRows build;
+        try {
+            build = json.textRows(entity, header);
+        } catch (ArgumentException refused) {
+            throw new JdqlActions.Refused("header: " + refused.getMessage());
+        } catch (RuntimeException | LinkageError unreadable) {
+            throw new JdqlActions.Refused(Failures.text(unreadable));
+        }
+        List<Row> rows = new ArrayList<>(lines.size());
+        for (Csv.Record record : lines) {
+            int count = record.fields().size();
+            if (count != header.size()) {
+                throw new JdqlActions.Refused("line " + record.line() + ": " + count
+                        + (count == 1 ? " field" : " fields") + ", the header has " + header.size());
+            }
+            try {
+                rows.add(new Row(record.line(), build.build(record.fields())));
+            } catch (ArgumentException refused) {
+                throw new JdqlActions.Refused("line " + record.line() + ", " + refused.getMessage());
+            } catch (RuntimeException | LinkageError failed) {
+                throw new JdqlActions.Refused("line " + record.line() + ": " + Failures.text(failed));
+            }
+        }
+        return rows;
+    }
+
+    /** The header: each name an attribute an import may set, once each. */
+    private List<String> header(List<String> names, Class<?> entity) throws JdqlActions.Refused {
+        List<String> columns;
+        List<String> known;
+        try {
+            columns = json.columns(entity);
+            known = json.names(entity);
+        } catch (RuntimeException | LinkageError unreadable) {
+            throw new JdqlActions.Refused(Failures.text(unreadable));
+        }
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < names.size(); i++) {
+            String name = names.get(i);
+            if (name == null || name.isEmpty()) {
+                throw new JdqlActions.Refused("header: column " + (i + 1) + " has no name");
+            }
+            if (!columns.contains(name)) {
+                throw new JdqlActions.Refused("header: " + (known.contains(name) ? name + " cannot be imported"
+                        : "unknown attribute " + name) + "; attributes: " + String.join(", ", columns));
+            }
+            if (!seen.add(name)) {
+                throw new JdqlActions.Refused("header: " + name + " twice");
+            }
+        }
+        return names;
+    }
+
+    /** Phase 2: every entity saved, in order, in one transaction; a save that throws rolls it back with its line. */
+    private PanelAction.ActionResult save(Class<?> entity, EntityModel<?> model, List<Row> rows, Object runtime,
+                                          String mode, String details) {
+        int[] saved = {0};
+        TransactionRunner.Outcome<Integer> outcome = transactions.run(mode, () -> {
+            for (Row row : rows) {
+                try {
+                    saver.save(model, row.entity(), runtime);
+                } catch (RuntimeException | LinkageError failed) {
+                    throw new RowFailed(row.line(), failed);
+                }
+                saved[0]++;
+            }
+            return saved[0];
+        });
+        if (outcome.failure() != null) {
+            Throwable failure = outcome.failure();
+            LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + IMPORT + " failed: "
+                    + failure.getClass().getName());
+            String text = failure instanceof RowFailed row
+                    ? "line " + row.line + ": " + Failures.text(row.getCause()) : Failures.text(failure);
+            if (!transactions.available() && saved[0] > 0) {
+                // no transaction to roll back: each row was committed as it was saved
+                text += saved[0] == 1 ? " · 1 row before it stays committed"
+                        : " · " + saved[0] + " rows before it stay committed";
+            }
+            return new PanelAction.ActionResult(Failures.line(text), PanelAction.ActionResult.TEXT, text, true,
+                    details);
+        }
+        int count = outcome.value();
+        String summary = ResultJson.count(count) + " saved" + (outcome.state() == null ? "" : " · " + outcome.state());
+        return new PanelAction.ActionResult(summary, PanelAction.ActionResult.JSON, Json.write(Scalars.object(
+                "entity", entity.getName(), "saved", count, "transaction", mode)), false, details);
+    }
+
+    /** What the page shows under "Exchange" for an import: the entity, the rows read, the separator, the transaction. */
+    private static String importDetails(Class<?> entity, List<Row> rows, Load load, String mode) {
+        return Json.write(Scalars.object("entity", entity == null ? null : entity.getName(),
+                "rows", rows == null ? null : rows.size(),
+                "separator", load == null ? null : String.valueOf(load.separator()),
+                "transaction", mode));
+    }
+
+    /** A save that threw: the line of its row, and what it threw as the cause. */
+    private static final class RowFailed extends Exception {
+
+        private static final long serialVersionUID = 1L;
+
+        private final int line;
+
+        RowFailed(int line, Throwable cause) {
+            super(null, cause, false, false);
+            this.line = line;
+        }
     }
 
     private static long millis(long start) {

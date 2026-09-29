@@ -305,6 +305,212 @@ class CsvActionsTest {
         assertEquals("256.0 KiB", CsvActions.size(256 * 1024));
     }
 
+    private static ActionResult load(CsvActions tab, String entity, String csv, String separator, String transaction) {
+        Map<String, Object> file = new LinkedHashMap<>();
+        file.put("entity", entity);
+        file.put("csv", csv);
+        if (separator != null) {
+            file.put("separator", separator);
+        }
+        Map<String, String> given = new HashMap<>();
+        given.put(CsvActions.FILE, Json.write(file));
+        if (transaction != null) {
+            given.put("transaction", transaction);
+        }
+        return tab.importCsv(given);
+    }
+
+    private String saved(int i) {
+        return Json.write(json.toJson(saver.saved.get(i)));
+    }
+
+    private void assertNothingSaved() {
+        assertEquals(List.of(), saver.saved, "nothing saved");
+        assertEquals(List.of(), manager.events, "no transaction begun");
+    }
+
+    @Test
+    void theImportActionAsksFirstAndTakesAFileAndATransaction() {
+        List<PanelAction> actions = tab().actions();
+
+        assertEquals(List.of(CsvActions.EXPORT, CsvActions.IMPORT), actions.stream().map(PanelAction::id).toList());
+        PanelAction load = actions.get(1);
+        assertEquals("Import CSV", load.label());
+        assertEquals("JDQL", load.group());
+        assertEquals("Saves these CSV rows against the database.", load.confirmation());
+        assertEquals(List.of("file", "transaction"), load.arguments().stream().map(PanelAction.Argument::name)
+                .toList());
+        assertEquals(List.of("rollback", "commit"), load.arguments().get(1).allowedValues());
+        String schema = load.arguments().getFirst().schema();
+        assertTrue(schema.contains("\"entity\":{\"type\":\"string\",\"enum\":[\"Gizmo\",\"Part\",\"Slot\"]"), schema);
+        assertTrue(schema.contains("\"csv\":{\"type\":\"string\",\"format\":\"textarea\","
+                + "\"contentMediaType\":\"text/csv\""), schema);
+        assertTrue(schema.endsWith("\"required\":[\"entity\",\"csv\"]}"), schema);
+    }
+
+    @Test
+    void eachRowIsAnEntitySavedInOrderInOneTransactionRolledBackByDefault() {
+        ActionResult result = load(tab(), "Gizmo",
+                "id,name,stock,level,due,price\r\n,bolt,3,LOW,2026-10-01,2.50\n7,\"\",0,HIGH,,\r\n", null, null);
+
+        assertFalse(result.error(), result.summary());
+        assertEquals("2 rows saved · rolled back", result.summary());
+        assertEquals(ActionResult.JSON, result.contentType());
+        assertEquals("{\"entity\":\"" + Gizmo.class.getName() + "\",\"saved\":2,\"transaction\":\"rollback\"}",
+                result.body());
+        assertEquals("{\"id\":null,\"name\":\"bolt\",\"stock\":3,\"level\":\"LOW\",\"due\":\"2026-10-01\","
+                + "\"price\":2.50}", saved(0), "an empty id: an insert, its id generated");
+        assertEquals("{\"id\":7,\"name\":\"\",\"stock\":0,\"level\":\"HIGH\",\"due\":null,\"price\":null}", saved(1),
+                "an id kept for an upsert; \"\" the empty text, an empty field null");
+        assertEquals(List.of(Gizmo.class, Gizmo.class), saver.models);
+        assertEquals(List.of(List.of("begin"), List.of("begin")), saver.eventsDuringSave, "saved inside one transaction");
+        assertEquals(List.of("begin", "rollback"), manager.events);
+        assertEquals("{\"entity\":\"" + Gizmo.class.getName() + "\",\"rows\":2,\"separator\":\",\","
+                + "\"transaction\":\"rollback\"}", result.details());
+    }
+
+    @Test
+    void anImportCommitsWhenAsked() {
+        ActionResult result = load(tab(), "Gizmo", "name\r\nbolt\r\n", null, "commit");
+
+        assertEquals("1 row saved · committed", result.summary());
+        assertEquals(List.of("begin", "commit"), manager.events);
+    }
+
+    @Test
+    void withoutATransactionManagerAnImportCanOnlyBeCommitted() {
+        CsvActions tab = tab(TransactionRunner.NONE, BEANS);
+
+        assertEquals(List.of("commit"), tab.actions().get(1).arguments().get(1).allowedValues());
+        assertEquals("2 rows saved · committed", load(tab, "Gizmo", "name\r\nbolt\r\nnut\r\n", null, null).summary());
+        assertEquals(List.of(), manager.events);
+    }
+
+    @Test
+    void withoutATransactionManagerTheRowsBeforeAFailingOneStayAndTheLineSaysSo() {
+        saver.failAt = 2;
+
+        ActionResult result = load(tab(TransactionRunner.NONE, BEANS), "Gizmo", "name\r\nbolt\r\nnut\r\nscrew\r\n",
+                null, "commit");
+
+        assertTrue(result.error());
+        assertEquals("line 3: java.lang.IllegalStateException: duplicate key on jdbc:h2:tcp://***:***@db/x"
+                + " · 1 row before it stays committed", result.summary());
+        assertEquals(1, saver.saved.size());
+    }
+
+    @Test
+    void aSaveThatThrowsRollsEverythingBackNamingItsLine() {
+        saver.failAt = 2;
+        CsvActions tab = tab();
+
+        ActionResult result = load(tab, "Gizmo", "name\r\nbolt\r\nnut\r\nscrew\r\n", null, "commit");
+
+        String expected = "line 3: java.lang.IllegalStateException: duplicate key on jdbc:h2:tcp://***:***@db/x";
+        assertTrue(result.error());
+        assertEquals(expected, result.summary());
+        assertEquals(ActionResult.TEXT, result.contentType());
+        assertEquals(expected, result.body());
+        assertEquals(List.of("begin", "rollback"), manager.events, "rolled back although commit was asked");
+        CallHistory.Call call = history.calls(JdqlActions.GROUP).getFirst();
+        assertEquals("error: " + expected, call.outcome());
+        assertFalse(call.toString().contains(SECRET));
+    }
+
+    @Test
+    void theHeaderNamesAttributesThatCanBeSetOnceEach() {
+        CsvActions tab = tab();
+
+        assertRefused(load(tab, "Gizmo", "name,colour\r\nbolt,red\r\n", null, null),
+                "header: unknown attribute colour; attributes: id, name, stock, level, due, price");
+        assertRefused(load(tab, "Part", "label,name\r\nleft,bolt\r\n", null, null),
+                "header: unknown attribute name; attributes: id, gizmo, label");
+        assertRefused(load(tab, "Slot", "id,year,label\r\n1,2026,x\r\n", null, null),
+                "header: year cannot be imported; attributes: id, label");
+        assertRefused(load(tab, "Gizmo", "name,stock,name\r\nbolt,3,nut\r\n", null, null), "header: name twice");
+        assertRefused(load(tab, "Gizmo", "name,,stock\r\nbolt,,3\r\n", null, null), "header: column 2 has no name");
+        assertNothingSaved();
+    }
+
+    @Test
+    void aConversionErrorNamesTheLineOfTheTextAndTheAttribute() {
+        CsvActions tab = tab();
+
+        assertRefused(load(tab, "Part", "id,gizmo,label\r\n1,1,\"two\r\nlines\"\r\n2,x,y\r\n", null, null),
+                "line 4, gizmo: not an integer");
+        assertRefused(load(tab, "Gizmo", "name;price\r\nbolt;2,50\r\n", ";", null), "line 2, price: not a number");
+        assertRefused(load(tab, "Gizmo", "name,stock\r\nbolt,\r\n", null, null),
+                "line 2, stock: null is not allowed for int");
+        assertRefused(load(tab, "Gizmo", "name,level\r\nbolt,URGENT\r\n", null, null),
+                "line 2, level: no constant URGENT in Level");
+        assertRefused(load(tab, "Gizmo", "name,due\r\nbolt,tomorrow\r\n", null, null),
+                "line 2, due: not an ISO date");
+        assertRefused(load(tab, "Gizmo", "name,stock\r\nbolt\r\n", null, null), "line 2: 1 field, the header has 2");
+        assertRefused(load(tab, "Gizmo", "name,stock\r\nbolt,3,x\r\n", null, null),
+                "line 2: 3 fields, the header has 2");
+        assertRefused(load(tab, "Gizmo", "name\r\n\"bolt\r\n", null, null), "line 2: unterminated quoted field");
+        assertNothingSaved();
+    }
+
+    @Test
+    void aReferenceIsBuiltFromItsIdAndASemicolonFileKeepsItsQuotedFields() {
+        CsvActions tab = tab();
+
+        assertFalse(load(tab, "Part", "id;gizmo;label\r\n5;1;\"a;b\"\r\n", ";", null).error());
+        assertFalse(load(tab, "Gizmo", "\uFEFFname;price\r\n\"c,d\";2.50\r\n", ";", null).error());
+
+        assertEquals("{\"id\":5,\"gizmo\":1,\"label\":\"a;b\"}", saved(0));
+        assertEquals("{\"id\":null,\"name\":\"c,d\",\"stock\":0,\"level\":null,\"due\":null,\"price\":2.50}", saved(1),
+                "a byte order mark ignored; an attribute without a column keeps the constructor's value");
+    }
+
+    @Test
+    void atMost5000Rows() {
+        CsvActions tab = tab();
+
+        assertRefused(load(tab, "Gizmo", "name\r\n" + "b\r\n".repeat(5001), null, null),
+                "more than 5000 rows: split the file");
+        assertEquals(List.of(), saver.saved);
+        assertEquals("5000 rows saved · rolled back",
+                load(tab, "Gizmo", "name\r\n" + "b\r\n".repeat(5000), null, null).summary());
+        assertEquals(5000, saver.saved.size());
+    }
+
+    @Test
+    void whatIsRefusedBeforeReadingSavesNothing() {
+        CsvActions tab = tab();
+
+        assertRefused(load(tab, "Gizmo", "name\r\n", null, null), "no row: the file has a header only");
+        assertRefused(load(tab, "Gizmo", "  ", null, null), "csv: missing");
+        assertRefused(load(tab, "Nope", "name\r\nb\r\n", null, null), "unknown entity Nope; entities: Gizmo, Part, Slot");
+        assertRefused(load(tab, "Gizmo", "name\r\nb\r\n", "|", null), "separator: \",\" or \";\"");
+        assertRefused(tab.importCsv(Map.of(CsvActions.FILE, "{\"csv\":\"name\\r\\nb\"}")), "entity: missing");
+        assertRefused(tab.importCsv(Map.of(CsvActions.FILE, "{\"entity\":\"Gizmo\",\"csv\":\"a\",\"x\":1}")),
+                "x: unknown argument");
+        assertRefused(tab.importCsv(Map.of(CsvActions.FILE, "{\"query\":\"FROM Gizmo\"")),
+                "file: not valid JSON at character 22");
+        assertRefused(load(tab(TransactionRunner.NONE, type -> {
+            throw new BeanLookup.NoBean();
+        }), "Gizmo", "name\r\nb\r\n", null, null), "no RepositoryRuntime bean");
+        assertNothingSaved();
+    }
+
+    @Test
+    void anImportIsKeptWithItsArgumentsCutAndAReplayOnlyWhileItIsShort() {
+        CsvActions tab = tab();
+
+        load(tab, "Gizmo", "name\r\nbolt\r\n", null, "commit");
+        load(tab, "Gizmo", "name\r\n" + "b\r\n".repeat(2000), null, "rollback");
+
+        List<CallHistory.Call> calls = history.calls(JdqlActions.GROUP);
+        assertEquals("Import CSV", calls.get(1).method());
+        assertEquals("1 row saved · committed", calls.get(1).outcome());
+        assertEquals("jdql.import {\"file\":{\"entity\":\"Gizmo\",\"csv\":\"name\\r\\nbolt\\r\\n\"},"
+                + "\"transaction\":\"commit\"}", calls.get(1).replay());
+        assertEquals(201, calls.getFirst().arguments().length(), "200 characters and …");
+        assertEquals("", calls.getFirst().replay(), "past 4096 characters, no replay");
+    }
+
     @Test
     void anExportIsKeptInTheTabsHistoryWithItsReplay() {
         CsvActions tab = tab();
