@@ -141,6 +141,114 @@ class PostgresDevServiceTest {
         assertTrue(e.getMessage().contains("${db.port}"), e.getMessage());
     }
 
+    // ---- the rule: a container only for an application on PostgreSQL (spec 2026-09-29 §2) ----
+
+    @Test
+    void anExplicitUrlStartsNoContainerAndGivesNoReason() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.pool.url", "jdbc:h2:mem:x"),
+                Map.of("vidocq.pool.url", "jdbc:postgresql://prod:5432/db"), true);
+        PostgresDevService svc = new PostgresDevService();
+
+        assertFalse(svc.appliesWhen(ctx));
+        assertNull(svc.skipReason(ctx), "rule 1: the host keeps its 'already configured' line");
+    }
+
+    @Test
+    void aFileUrlOfAnotherDatabaseStartsNoContainerAndNamesItsScheme() {
+        Map<String, String> schemes = Map.of(
+                "jdbc:h2:mem:x", "jdbc:h2",
+                "jdbc:mysql://h/db", "jdbc:mysql",
+                "JDBC:H2:mem:x", "JDBC:H2",
+                "  jdbc:mariadb://h/db  ", "jdbc:mariadb",
+                "jdbc:tc:postgresql:16:///db", "jdbc:tc");
+        schemes.forEach((url, scheme) -> {
+            DevServiceContext ctx = ctx(Map.of(), Map.of("vidocq.pool.url", url), true);
+            PostgresDevService svc = new PostgresDevService();
+
+            assertFalse(svc.appliesWhen(ctx), url);
+            assertEquals("vidocq.pool.url is " + scheme + ", not PostgreSQL", svc.skipReason(ctx), url);
+        });
+    }
+
+    @Test
+    void aFilePostgresUrlStartsAContainerWhateverTheDriverAndTheCase() {
+        for (String url : List.of("jdbc:postgresql://prod:5432/db", "JDBC:PostgreSQL://prod:5432/db")) {
+            assertEquals(List.of("default"),
+                    names(PostgresDevService.plan(ctx(Map.of(), Map.of("vidocq.pool.url", url), false))), url);
+        }
+    }
+
+    @Test
+    void noUrlStartsAContainerOnlyWithTheDriverOnTheClassPath() {
+        assertEquals(List.of("default"), names(PostgresDevService.plan(ctx(Map.of(), Map.of(), true))));
+
+        DevServiceContext without = ctx(Map.of(), Map.of(), false);
+        PostgresDevService svc = new PostgresDevService();
+        assertFalse(svc.appliesWhen(without));
+        assertEquals("no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path",
+                svc.skipReason(without));
+    }
+
+    /** Review Focus: a value that is not a jdbc: URL — an expression the dev host never resolves — is rule 4. */
+    @Test
+    void aPlaceholderInTheFileIsNoUrlAtAll() {
+        Map<String, String> file = Map.of("vidocq.pool.url", "${db.url}");
+
+        assertEquals(List.of("default"), names(PostgresDevService.plan(ctx(Map.of(), file, true))),
+                "with the driver: a container");
+        assertEquals("no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path",
+                new PostgresDevService().skipReason(ctx(Map.of(), file, false)));
+    }
+
+    /** Review Focus: nothing of the URL past its scheme reaches a reason (the log, the state file, the report). */
+    @Test
+    void aReasonNeverHoldsAnythingPastTheScheme() {
+        String longName = "a".repeat(60);
+        Map<String, String> schemes = Map.of(
+                "jdbc:mysql://admin:s3cret@db.internal:3306/app?password=hunter2", "jdbc:mysql",
+                "jdbc:oracle:thin:scott/tiger@db.internal:1521/XE", "jdbc:oracle",
+                "jdbc:x@s3cret.internal/db", "jdbc:x",
+                "jdbc:" + longName, "jdbc:" + "a".repeat(27));
+        schemes.forEach((url, scheme) -> {
+            String reason = new PostgresDevService().skipReason(ctx(Map.of(), Map.of("vidocq.pool.url", url), true));
+
+            assertEquals("vidocq.pool.url is " + scheme + ", not PostgreSQL", reason, url);
+            for (String secret : List.of("admin", "s3cret", "hunter2", "scott", "tiger", "internal")) {
+                assertFalse(reason.contains(secret), reason);
+            }
+        });
+    }
+
+    @Test
+    void aNamedDatasourceFollowsTheSameRuleUnderItsOwnKey() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.dev.postgres.datasources", "audit,analytics"),
+                Map.of("vidocq.pool.url", "jdbc:postgresql://prod/app", "vidocq.pool.audit.url", "jdbc:h2:mem:audit"),
+                false);
+
+        List<PostgresDevService.Decision> decisions = PostgresDevService.decide(ctx);
+
+        assertEquals(List.of("default", "audit", "analytics"),
+                decisions.stream().map(PostgresDevService.Decision::name).toList());
+        assertEquals(List.of("default"), names(PostgresDevService.plan(ctx)));
+        assertEquals("vidocq.pool.audit.url is jdbc:h2, not PostgreSQL", decisions.get(1).reason());
+        assertEquals("no vidocq.pool.analytics.url and no PostgreSQL driver (org.postgresql.Driver) on the class path",
+                decisions.get(2).reason());
+        assertTrue(new PostgresDevService().appliesWhen(ctx), "the default datasource still gets its container");
+    }
+
+    /** Review Focus: the list of names and the named URL both in the application's file only. */
+    @Test
+    void aNamedDatasourceDeclaredOnlyInTheFileIsDecidedByTheFile() {
+        DevServiceContext ctx = ctx(Map.of(),
+                Map.of("vidocq.dev.postgres.datasources", "audit", "vidocq.pool.audit.url", "jdbc:h2:mem:audit"),
+                false);
+        PostgresDevService svc = new PostgresDevService();
+
+        assertFalse(svc.appliesWhen(ctx));
+        assertEquals("no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path; "
+                + "vidocq.pool.audit.url is jdbc:h2, not PostgreSQL", svc.skipReason(ctx));
+    }
+
     // ---- describe (pure, no Docker) ----
 
     @Test
@@ -192,16 +300,40 @@ class PostgresDevServiceTest {
         }
     }
 
+    /** An application on PostgreSQL by its driver, as every test written before the rule assumes. */
     private static DevServiceContext ctx(Map<String, String> props) {
+        return ctx(props, Map.of(), true);
+    }
+
+    /**
+     * As {@code DefaultDevServiceContext} answers: {@code props} are the explicit values; {@code file} the
+     * application's own, answering {@code applicationProperty} for any key and {@code property} for a
+     * {@code vidocq.dev.} key only; {@code driver} whether {@code org.postgresql.Driver} is on the class path.
+     */
+    private static DevServiceContext ctx(Map<String, String> props, Map<String, String> file, boolean driver) {
         return new DevServiceContext() {
             @Override public Optional<String> property(String key) {
                 String v = props.get(key);
+                if ((v == null || v.isBlank()) && key.startsWith("vidocq.dev.")) {
+                    v = file.get(key);
+                }
                 return (v == null || v.isBlank()) ? Optional.empty() : Optional.of(v);
+            }
+            @Override public Optional<String> applicationProperty(String key) {
+                String v = file.get(key);
+                return (v == null || v.isBlank()) ? Optional.empty() : Optional.of(v);
+            }
+            @Override public boolean onApplicationClasspath(String className) {
+                return driver && PostgresDevService.DRIVER.equals(className);
             }
             @Override public Map<String, String> properties() { return props; }
             @Override public Path basedir() { return Path.of("."); }
             @Override public Path resolve(String relative) { return Path.of(".").resolve(relative); }
             @Override public System.Logger log() { return System.getLogger("test"); }
         };
+    }
+
+    private static List<String> names(List<PostgresDevService.DatasourcePlan> plan) {
+        return plan.stream().map(PostgresDevService.DatasourcePlan::name).toList();
     }
 }

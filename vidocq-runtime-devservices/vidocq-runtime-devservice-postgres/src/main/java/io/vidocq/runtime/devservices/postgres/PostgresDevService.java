@@ -41,9 +41,10 @@ import java.util.Set;
  * <p><b>Multi-datasource.</b> Besides the {@code @Default} pool, every name listed in
  * {@code vidocq.dev.postgres.datasources} (e.g. {@code analytics,audit}) gets its own container, published
  * under {@code vidocq.pool.<name>.*}. The list is explicit because the dev service <i>creates</i> the URLs
- * — it cannot derive which names the application wants. Each datasource opts out individually: the
- * {@code @Default} is skipped when {@code vidocq.pool.url} is set, a named one when
- * {@code vidocq.pool.<name>.url} is set, so a developer pointing at their own database is never overridden.</p>
+ * — it cannot derive which names the application wants. Each datasource is decided individually ({@link #decide}):
+ * no container when its URL is given explicitly, so a developer pointing at their own database is never overridden,
+ * nor when the application's file names another database; a container when the file names PostgreSQL, or names
+ * nothing and the PostgreSQL driver is on the application's class path.</p>
  *
  * <p><b>Tunables</b> (all optional), per datasource via {@code vidocq.dev.postgres.<name>.} and globally via
  * {@code vidocq.dev.postgres.}: {@code image} (global default applies to every datasource), {@code db},
@@ -57,6 +58,12 @@ public final class PostgresDevService implements DevService {
     private static final String DEFAULT_USERNAME = "vidocq";
     private static final String DEFAULT_PASSWORD = "vidocq";
     private static final String DEFAULT_NAME     = "default";
+
+    /** On the application's class path, the sign that it talks to PostgreSQL when no URL says so (rule 4). */
+    static final String DRIVER = "org.postgresql.Driver";
+
+    /** The longest scheme a reason shows, {@code jdbc:} included. */
+    private static final int MAX_SCHEME = 32;
 
     private final List<PostgreSQLContainer<?>> containers = new ArrayList<>();
     private final List<String> images = new ArrayList<>();
@@ -75,6 +82,21 @@ public final class PostgresDevService implements DevService {
     @Override
     public boolean appliesWhen(DevServiceContext ctx) {
         return !plan(ctx).isEmpty();
+    }
+
+    /**
+     * Why no datasource gets a container: the reasons of the datasources that have one, in {@link #decide}'s order,
+     * joined with {@code "; "}; {@code null} when every one was given explicitly.
+     */
+    @Override
+    public String skipReason(DevServiceContext ctx) {
+        List<String> reasons = new ArrayList<>();
+        for (Decision decision : decide(ctx)) {
+            if (decision.reason() != null) {
+                reasons.add(decision.reason());
+            }
+        }
+        return reasons.isEmpty() ? null : String.join("; ", reasons);
     }
 
     @Override
@@ -148,23 +170,85 @@ public final class PostgresDevService implements DevService {
     }
 
     /**
-     * The datasources this provider must create: the {@code @Default} (unless {@code vidocq.pool.url} is set)
-     * plus every name in {@code vidocq.dev.postgres.datasources} whose {@code vidocq.pool.<name>.url} is not
-     * already configured. Names are single-segment; blank and dotted entries are ignored.
+     * What the rule decided for one datasource: a plan to provision, or none — with the reason, or {@code null}
+     * when its URL was given explicitly.
      */
+    record Decision(String name, DatasourcePlan plan, String reason) {
+    }
+
+    /** The datasources this provider must create: those of {@link #decide} that have a plan, in its order. */
     static List<DatasourcePlan> plan(DevServiceContext ctx) {
         List<DatasourcePlan> out = new ArrayList<>();
-        if (ctx.property("vidocq.pool.url").isEmpty()) {
-            out.add(specFor(ctx, DEFAULT_NAME, "vidocq.pool.", "vidocq.dev.postgres."));
-        }
-        for (String name : parseNames(ctx.property("vidocq.dev.postgres.datasources").orElse(""))) {
-            String poolPrefix = "vidocq.pool." + name + ".";
-            if (ctx.property(poolPrefix + "url").isPresent()) {
-                continue; // the application configured this named datasource itself
+        for (Decision decision : decide(ctx)) {
+            if (decision.plan() != null) {
+                out.add(decision.plan());
             }
-            out.add(specFor(ctx, name, poolPrefix, "vidocq.dev.postgres." + name + "."));
         }
         return out;
+    }
+
+    /**
+     * The rule (spec 2026-09-29-devservice-postgres-kind §2) for the {@code @Default} datasource
+     * ({@code vidocq.pool.url}), then for every name of {@code vidocq.dev.postgres.datasources}
+     * ({@code vidocq.pool.<name>.url}; names are single-segment, blank and dotted entries are ignored):
+     * <ol>
+     *   <li>the URL is given explicitly ({@link DevServiceContext#property}): no container, no reason;</li>
+     *   <li>the application's file gives a {@code jdbc:} URL that is not {@code jdbc:postgresql:} (any case): no
+     *       container, the reason naming the key and the URL's {@link #scheme} only;</li>
+     *   <li>the file gives a {@code jdbc:postgresql:} URL, the production one: a container, whose URL replaces it
+     *       under the dev host;</li>
+     *   <li>no URL, or a value that is not a {@code jdbc:} URL (such as {@code ${db.url}}): a container only when
+     *       {@value #DRIVER} is on the application's class path.</li>
+     * </ol>
+     */
+    static List<Decision> decide(DevServiceContext ctx) {
+        List<Decision> out = new ArrayList<>();
+        out.add(decide(ctx, DEFAULT_NAME, "vidocq.pool.", "vidocq.dev.postgres."));
+        for (String name : parseNames(ctx.property("vidocq.dev.postgres.datasources").orElse(""))) {
+            out.add(decide(ctx, name, "vidocq.pool." + name + ".", "vidocq.dev.postgres." + name + "."));
+        }
+        return out;
+    }
+
+    private static Decision decide(DevServiceContext ctx, String name, String poolPrefix, String devPrefix) {
+        String urlKey = poolPrefix + "url";
+        if (ctx.property(urlKey).isPresent()) {
+            return new Decision(name, null, null); // rule 1: the developer's own database
+        }
+        String fileUrl = ctx.applicationProperty(urlKey).map(String::strip).orElse("");
+        if (startsWithIgnoringCase(fileUrl, "jdbc:")) {
+            if (!startsWithIgnoringCase(fileUrl, "jdbc:postgresql:")) {
+                return new Decision(name, null, urlKey + " is " + scheme(fileUrl) + ", not PostgreSQL");
+            }
+            return new Decision(name, specFor(ctx, name, poolPrefix, devPrefix), null);
+        }
+        if (!ctx.onApplicationClasspath(DRIVER)) {
+            return new Decision(name, null,
+                    "no " + urlKey + " and no PostgreSQL driver (" + DRIVER + ") on the class path");
+        }
+        return new Decision(name, specFor(ctx, name, poolPrefix, devPrefix), null);
+    }
+
+    /**
+     * {@code jdbc:} and the name after it, never more: the run of ASCII letters, digits, {@code -} and {@code _}
+     * after {@code jdbc:}, so it stops at the second {@code :} and before any host, user or password, and at most
+     * {@value #MAX_SCHEME} characters. As written, case included: {@code JDBC:H2}.
+     */
+    static String scheme(String url) {
+        int end = "jdbc:".length();
+        int max = Math.min(url.length(), MAX_SCHEME);
+        while (end < max && isNameCharacter(url.charAt(end))) {
+            end++;
+        }
+        return url.substring(0, end);
+    }
+
+    private static boolean isNameCharacter(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+    }
+
+    private static boolean startsWithIgnoringCase(String text, String prefix) {
+        return text.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     private static DatasourcePlan specFor(DevServiceContext ctx, String name, String poolPrefix, String devPrefix) {
