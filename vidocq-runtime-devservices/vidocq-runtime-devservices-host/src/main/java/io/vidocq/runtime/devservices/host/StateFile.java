@@ -32,7 +32,8 @@ import java.util.Map;
 
 /**
  * Hand-writes {@code vidocq-dev-services.json} (spec §4.2): the keys come in the order {@code host}, {@code state},
- * {@code startedAt}, {@code services[id, image, endpoints, injected[key + value|configured]]}, and no library is
+ * {@code startedAt}, {@code services[id, image, endpoints, injected[key + value|configured]]},
+ * {@code skipped[id, reason]}, and no library is
  * pulled in for this one small, fixed-shape document. Secret values never reach the file — every value written
  * goes through {@link SecretMasking} first.
  */
@@ -53,6 +54,16 @@ public final class StateFile {
      */
     public static String json(String host, String state, Instant startedAt, List<DevServiceState> services,
             Map<String, String> injected) {
+        return json(host, state, startedAt, services, injected, List.of());
+    }
+
+    /**
+     * {@link #json(String, String, Instant, List, Map)} with the providers that did not start and why
+     * ({@link DevServiceManager#skipped()}), after the services: {@code "skipped":[{"id":…,"reason":…}]}, {@code []}
+     * when there are none. A reason goes through {@link SecretMasking#withoutCredentials}, as every other value.
+     */
+    public static String json(String host, String state, Instant startedAt, List<DevServiceState> services,
+            Map<String, String> injected, List<DevServiceManager.Skipped> skipped) {
         StringBuilder b = new StringBuilder(256);
         b.append("{\"host\":").append(str(host))
                 .append(",\"state\":").append(str(state))
@@ -63,6 +74,15 @@ public final class StateFile {
                 b.append(',');
             }
             appendService(b, services.get(i), injected);
+        }
+        b.append("],\"skipped\":[");
+        for (int i = 0; i < skipped.size(); i++) {
+            if (i > 0) {
+                b.append(',');
+            }
+            DevServiceManager.Skipped s = skipped.get(i);
+            b.append("{\"id\":").append(str(s.id()))
+                    .append(",\"reason\":").append(str(SecretMasking.withoutCredentials(s.reason()))).append('}');
         }
         return b.append("]}").toString();
     }

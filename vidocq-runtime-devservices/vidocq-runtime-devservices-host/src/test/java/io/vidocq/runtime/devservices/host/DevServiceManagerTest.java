@@ -222,6 +222,72 @@ class DevServiceManagerTest {
         assertFalse(log.lines.stream().anyMatch(line -> line.contains("boom-stop-secret")), log.lines.toString());
     }
 
+    /*
+     * CapturingLogger renders a line through MessageFormat, which drops the single quotes around a provider's id:
+     * "DevService 'postgres' not started: …" is captured as "INFO DevService postgres not started: …".
+     */
+
+    @Test
+    void aProviderThatDoesNotApplyAndSaysWhyIsLoggedAndRecorded() throws Exception {
+        DevService h2 = new Scripted("postgres") {
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
+            @Override public String skipReason(DevServiceContext ctx) {
+                return "vidocq.pool.url is jdbc:h2, not PostgreSQL";
+            }
+        };
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(h2), ctx(), log);
+
+        assertEquals(List.of(new DevServiceManager.Skipped("postgres", "vidocq.pool.url is jdbc:h2, not PostgreSQL")),
+                mgr.skipped());
+        assertTrue(log.lines.stream().anyMatch(line -> line.startsWith("INFO")
+                && line.contains("postgres not started: vidocq.pool.url is jdbc:h2, not PostgreSQL")), log.lines.toString());
+        assertTrue(mgr.collectedProperties().isEmpty());
+    }
+
+    @Test
+    void withoutAReasonTheOldLineIsLoggedAndNothingIsRecorded() throws Exception {
+        List<String> events = new ArrayList<>();
+        FakeDevService configured = new FakeDevService("keycloak", 100, false, Map.of(), false, null, events);
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(configured), ctx(), log);
+
+        assertEquals(List.of(), mgr.skipped());
+        assertTrue(log.lines.stream().anyMatch(line -> line.startsWith("INFO")
+                && line.contains("keycloak skipped (already configured)")), log.lines.toString());
+    }
+
+    /** Review Focus: a reason is one line with no credentials; a skipReason that throws is none, and never fatal. */
+    @Test
+    void aReasonIsOneLineWithoutCredentialsAndAThrowingOneIsNone() throws Exception {
+        DevService leaky = new Scripted("leaky") {
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
+            @Override public String skipReason(DevServiceContext ctx) {
+                return "  url jdbc:mysql://admin:hunter2@db/app\n   refused  ";
+            }
+        };
+        DevService broken = new Scripted("broken") {
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
+            @Override public String skipReason(DevServiceContext ctx) {
+                throw new IllegalStateException("secret-in-message");
+            }
+        };
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager mgr = DevServiceManager.start(List.of(leaky, broken), ctx(), log);
+
+        assertEquals(List.of(new DevServiceManager.Skipped("leaky", "url jdbc:mysql://***@db/app refused")),
+                mgr.skipped());
+        assertFalse(log.lines.toString().contains("hunter2"), log.lines.toString());
+        assertFalse(log.lines.toString().contains("secret-in-message"), log.lines.toString());
+        assertTrue(log.lines.stream().anyMatch(line -> line.startsWith("WARNING") && line.contains("broken")
+                && line.contains("IllegalStateException")), log.lines.toString());
+        assertTrue(log.lines.stream().anyMatch(line -> line.contains("broken skipped (already configured)")),
+                log.lines.toString());
+    }
+
     /** A provider that applies, starts with no output and stops quietly, for a test to override one step of. */
     private static class Scripted implements DevService {
         private final String id;

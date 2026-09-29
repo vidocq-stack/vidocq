@@ -89,6 +89,51 @@ class DevServicesSectionTest {
     }
 
     @Test
+    void aProviderNotStartedIsARowAtEveryVerbosityAndNothingStartedSaysSo() {
+        DevServicesSnapshot snapshot = StateReader.parse("""
+            {"host":"vidocq:dev","state":"running","startedAt":"x","services":[],"skipped":[\
+            {"id":"postgres","reason":"vidocq.pool.url is jdbc:h2, not PostgreSQL"}]}""");
+        for (Verbosity verbosity : List.of(Verbosity.SUMMARY, Verbosity.DETAILED)) {
+            RecordingSection section = new RecordingSection();
+            DevServicesSection.write(snapshot, null, null, new FakeReportContext(verbosity), section);
+            assertEquals("no dev service started", section.summary, verbosity.name());
+            assertEquals("not started: vidocq.pool.url is jdbc:h2, not PostgreSQL", section.rows.get("postgres"),
+                    verbosity.name());
+            assertNull(section.rows.get("started"), "nothing started: no started row");
+            assertTrue(section.anomalies.isEmpty());
+        }
+    }
+
+    /** Review Focus: a hand-edited entry without a reason shows "not started" and no "null" anywhere. */
+    @Test
+    void aProviderNotStartedBesideAStartedOneKeepsTheSummaryAndAddsItsRow() {
+        DevServicesSnapshot snapshot = StateReader.parse("""
+            {"host":"vidocq:dev","state":"running","startedAt":"2026-09-24T10:12:03Z","services":[{"id":"keycloak",\
+            "image":"quay.io/keycloak/keycloak:26","endpoints":{"issuer":"http://localhost:8180/realms/vidocq"},\
+            "injected":[]}],"skipped":[{"id":"postgres","reason":null}]}""");
+        RecordingSection section = new RecordingSection();
+
+        DevServicesSection.write(snapshot, null, null, new FakeReportContext(Verbosity.SUMMARY), section);
+
+        assertEquals("1 service: keycloak (quay.io/keycloak/keycloak:26 at http://localhost:8180/realms/vidocq)"
+                + " — vidocq:dev", section.summary);
+        assertEquals("2026-09-24T10:12:03Z by vidocq:dev", section.rows.get("started"));
+        assertEquals("not started", section.rows.get("postgres"));
+        assertFalse(section.everything().contains("null"), section.everything());
+    }
+
+    @Test
+    void anEmptySkippedListKeepsTheNoStateFileSummary() {
+        DevServicesSnapshot snapshot = StateReader.parse(
+                "{\"host\":\"test\",\"state\":\"running\",\"startedAt\":\"x\",\"services\":[],\"skipped\":[]}");
+        RecordingSection section = new RecordingSection();
+
+        DevServicesSection.write(snapshot, null, null, new FakeReportContext(Verbosity.DETAILED), section);
+
+        assertEquals("no dev service: not started by vidocq:dev, vidocq:run or the test launcher", section.summary);
+    }
+
+    @Test
     void valuesAreShownInADevLaunchOnly() {
         RecordingSection section = new RecordingSection();
         DevServicesSection.write(StateReader.parse(StateReaderTest.JSON), null, null,

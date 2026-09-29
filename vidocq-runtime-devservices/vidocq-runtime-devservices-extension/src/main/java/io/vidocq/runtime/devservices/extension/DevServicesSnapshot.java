@@ -33,14 +33,23 @@ import java.util.Map;
  * @param state      {@code running} or {@code stopped}
  * @param startedAt  when the host started the services, as written
  * @param services   the services the host started, in file order
+ * @param skipped    the providers that did not start and said why, in file order; empty for a file written before
+ *                   the host kept them
  */
-public record DevServicesSnapshot(String host, String state, String startedAt, List<Service> services) {
+public record DevServicesSnapshot(String host, String state, String startedAt, List<Service> services,
+        List<Skipped> skipped) {
 
     /** No state property, no file, or a missing file: not an anomaly, see {@link DevServicesSection}. */
-    public static final DevServicesSnapshot NONE = new DevServicesSnapshot(null, null, null, List.of());
+    public static final DevServicesSnapshot NONE = new DevServicesSnapshot(null, null, null, List.of(), List.of());
 
     public DevServicesSnapshot {
         services = services == null ? List.of() : List.copyOf(services);
+        skipped = skipped == null ? List.of() : List.copyOf(skipped);
+    }
+
+    /** A snapshot with no skipped provider. */
+    public DevServicesSnapshot(String host, String state, String startedAt, List<Service> services) {
+        this(host, state, startedAt, services, List.of());
     }
 
     /**
@@ -71,4 +80,12 @@ public record DevServicesSnapshot(String host, String state, String startedAt, L
      * @param configured whether {@code key} is a secret the host masked
      */
     public record Injected(String key, String value, boolean configured) {}
+
+    /**
+     * A provider the host did not start.
+     *
+     * @param id     the provider's id, such as {@code postgres}
+     * @param reason why, one line with no secret; {@code null} only in a hand-edited file
+     */
+    public record Skipped(String id, String reason) {}
 }

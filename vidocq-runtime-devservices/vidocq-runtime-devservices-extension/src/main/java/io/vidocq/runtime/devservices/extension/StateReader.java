@@ -67,8 +67,18 @@ public final class StateReader {
                 services.add(toService(asObject(item, "a service")));
             }
         }
-        return new DevServicesSnapshot(
-                asString(root.get("host")), asString(root.get("state")), asString(root.get("startedAt")), services);
+        List<DevServicesSnapshot.Skipped> skipped = new ArrayList<>();
+        if (root.get("skipped") instanceof List<?> list) {
+            for (Object item : list) {
+                Map<?, ?> entry = asObject(item, "a skipped provider");
+                String id = asString(entry.get("id"));
+                if (id != null && !id.isBlank()) {
+                    skipped.add(new DevServicesSnapshot.Skipped(id, asString(entry.get("reason"))));
+                }
+            }
+        }
+        return new DevServicesSnapshot(asString(root.get("host")), asString(root.get("state")),
+                asString(root.get("startedAt")), services, skipped);
     }
 
     private static DevServicesSnapshot.Service toService(Map<?, ?> map) {

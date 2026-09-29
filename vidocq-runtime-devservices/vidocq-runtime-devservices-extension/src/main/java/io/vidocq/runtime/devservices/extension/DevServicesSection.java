@@ -66,13 +66,20 @@ public final class DevServicesSection {
         }
 
         List<DevServicesSnapshot.Service> services = snapshot.services();
+        List<DevServicesSnapshot.Skipped> skipped = snapshot.skipped();
         if (services.isEmpty()) {
-            section.summary("no dev service: not started by vidocq:dev, vidocq:run or the test launcher");
+            if (skipped.isEmpty()) {
+                section.summary("no dev service: not started by vidocq:dev, vidocq:run or the test launcher");
+                return;
+            }
+            section.summary("no dev service started");
+            writeSkipped(skipped, section);
             return;
         }
 
         section.summary(summaryLine(snapshot, services));
         section.row("started", snapshot.startedAt() + " by " + snapshot.host());
+        writeSkipped(skipped, section);
 
         if (context.verbosity() != Verbosity.DETAILED) {
             return;
@@ -88,6 +95,17 @@ public final class DevServicesSection {
             } else {
                 section.list(service.id() + " keys", keysOf(service));
             }
+        }
+    }
+
+    /**
+     * One row per provider that did not start, at every verbosity (spec 2026-09-29-devservice-postgres-kind §4):
+     * {@code not started: <reason>}, or {@code not started} alone when the file gives no reason.
+     */
+    private static void writeSkipped(List<DevServicesSnapshot.Skipped> skipped, StartupReportSection section) {
+        for (DevServicesSnapshot.Skipped provider : skipped) {
+            String reason = blankToNull(provider.reason());
+            section.row(provider.id(), reason == null ? "not started" : "not started: " + reason);
         }
     }
 

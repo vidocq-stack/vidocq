@@ -112,7 +112,8 @@ public final class DevServicesSession implements AutoCloseable {
         try {
             Instant startedAt = clock.instant();
             List<DevServiceState> states = mgr.states();
-            StateFile.write(stateFile, StateFile.json(host, "running", startedAt, states, mgr.collectedProperties()));
+            StateFile.write(stateFile,
+                    StateFile.json(host, "running", startedAt, states, mgr.collectedProperties(), mgr.skipped()));
             reportConnectionInformation(basedir, mgr.collectedProperties(), log);
             return new DevServicesSession(mgr, stateFile, host, startedAt, log);
         } catch (IOException e) {
@@ -181,7 +182,8 @@ public final class DevServicesSession implements AutoCloseable {
         }
         try {
             StateFile.write(stateFile,
-                    StateFile.json(host, "stopped", startedAt, mgr.states(), mgr.collectedProperties()));
+                    StateFile.json(host, "stopped", startedAt, mgr.states(), mgr.collectedProperties(),
+                            mgr.skipped()));
         } catch (IOException e) {
             log.log(System.Logger.Level.WARNING, "Could not rewrite " + stateFile + " as stopped: " + e.getMessage());
         } catch (RuntimeException e) {

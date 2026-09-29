@@ -20,6 +20,7 @@
 package io.vidocq.runtime.devservices.host;
 
 import io.vidocq.runtime.devservices.spi.DevService;
+import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.devservices.spi.DevServiceState;
 
 import java.util.ArrayList;
@@ -53,6 +54,7 @@ public final class DevServiceManager implements AutoCloseable {
     private final List<Map<String, String>> outputs = new ArrayList<>();
     private final Map<String, String> collected = new LinkedHashMap<>();
     private final Map<String, String> providers = new LinkedHashMap<>();
+    private final List<Skipped> skipped = new ArrayList<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private System.Logger log;
 
@@ -76,7 +78,13 @@ public final class DevServiceManager implements AutoCloseable {
         for (DevService p : ordered) {
             try {
                 if (!p.appliesWhen(ctx)) {
-                    log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' skipped (already configured)");
+                    String reason = skipReason(p, ctx, log);
+                    if (reason == null) {
+                        log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' skipped (already configured)");
+                    } else {
+                        log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' not started: " + reason);
+                        mgr.skipped.add(new Skipped(p.id(), reason));
+                    }
                     continue;
                 }
                 log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' starting…");
@@ -101,6 +109,39 @@ public final class DevServiceManager implements AutoCloseable {
             }
         }
         return mgr;
+    }
+
+    /**
+     * A provider that did not start and said why ({@link DevService#skipReason}).
+     *
+     * @param id     the provider's id
+     * @param reason one line, credentials masked
+     */
+    public record Skipped(String id, String reason) {}
+
+    /** The providers that did not start and said why, in start order; one that gave no reason is not here. */
+    public List<Skipped> skipped() {
+        return Collections.unmodifiableList(skipped);
+    }
+
+    /**
+     * {@code p.skipReason(ctx)} as one line — stripped, every run of whitespace a single space — with a URL's
+     * credentials masked ({@link SecretMasking#withoutCredentials}); {@code null} when it gives none or a blank one,
+     * or throws: then a WARNING names the provider and the exception's class, never its message.
+     */
+    static String skipReason(DevService p, DevServiceContext ctx, System.Logger log) {
+        String reason;
+        try {
+            reason = p.skipReason(ctx);
+        } catch (RuntimeException e) {
+            log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' skipReason() threw "
+                    + e.getClass().getName());
+            return null;
+        }
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+        return SecretMasking.withoutCredentials(reason.strip().replaceAll("\\s+", " "));
     }
 
     /** The {@code key=value} pairs to expose to the child JVM (provider outputs only). */

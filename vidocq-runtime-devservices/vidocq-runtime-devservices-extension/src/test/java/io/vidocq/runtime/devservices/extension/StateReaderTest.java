@@ -21,6 +21,7 @@ package io.vidocq.runtime.devservices.extension;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +55,21 @@ class StateReaderTest {
         assertEquals("postgres:16-alpine", pg.image());
         assertEquals(Map.of("default", "localhost:54321"), pg.endpoints());
         assertEquals(new DevServicesSnapshot.Injected("vidocq.pool.password", null, true), pg.injected().getFirst());
+    }
+
+    /** Review Focus: a file written before "skipped" existed, and hand-edited entries, read without a surprise. */
+    @Test
+    void readsTheSkippedProvidersAndAnOlderFileHasNone() {
+        DevServicesSnapshot s = StateReader.parse("""
+            {"host":"vidocq:dev","state":"running","startedAt":"x","services":[],"skipped":[\
+            {"id":"postgres","reason":"vidocq.pool.url is jdbc:h2, not PostgreSQL"},{"id":"acme","reason":null},\
+            {"reason":"an entry without an id is dropped"},{"id":" ","reason":"so is a blank one"}]}""");
+
+        assertEquals(List.of(
+                new DevServicesSnapshot.Skipped("postgres", "vidocq.pool.url is jdbc:h2, not PostgreSQL"),
+                new DevServicesSnapshot.Skipped("acme", null)), s.skipped());
+        assertEquals(List.of(), StateReader.parse(JSON).skipped(), "a file written before skipped existed");
+        assertEquals(List.of(), DevServicesSnapshot.NONE.skipped());
     }
 
     @Test

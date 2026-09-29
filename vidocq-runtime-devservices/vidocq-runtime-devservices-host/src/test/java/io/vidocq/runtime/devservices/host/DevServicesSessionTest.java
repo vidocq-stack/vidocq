@@ -139,6 +139,28 @@ class DevServicesSessionTest {
         assertEquals(1, a.stops);
     }
 
+    @Test
+    void bothStateFilesKeepWhyAProviderDidNotStart(@TempDir Path basedir) throws Exception {
+        DevService h2 = new DevService() {
+            @Override public String id() { return "postgres"; }
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
+            @Override public String skipReason(DevServiceContext ctx) {
+                return "vidocq.pool.url is jdbc:h2, not PostgreSQL";
+            }
+            @Override public Map<String, String> start(DevServiceContext ctx) { throw new AssertionError("started"); }
+            @Override public void stop() { }
+        };
+        String skipped = "\"skipped\":[{\"id\":\"postgres\",\"reason\":\"vidocq.pool.url is jdbc:h2, not PostgreSQL\"}]";
+
+        DevServicesSession s = DevServicesSession.open("vidocq:dev", basedir, List.of(h2), ctx(basedir), LOG, CLOCK);
+        String running = Files.readString(s.stateFile());
+        s.close();
+        String stopped = Files.readString(s.stateFile());
+
+        assertTrue(running.contains(skipped), running);
+        assertTrue(stopped.contains(skipped), stopped);
+    }
+
     /** A minimal {@link DevService} scripted to succeed or fail, recording how many times it was stopped. */
     private static final class Fake implements DevService {
         final String id;

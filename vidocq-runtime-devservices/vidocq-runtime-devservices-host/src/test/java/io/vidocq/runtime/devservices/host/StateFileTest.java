@@ -89,6 +89,24 @@ class StateFileTest {
     }
 
     @Test
+    void skippedProvidersAreWrittenWithTheirReasonAfterTheServices() {
+        String json = StateFile.json("vidocq:dev", "running", Instant.EPOCH, List.of(), Map.of(),
+                List.of(new DevServiceManager.Skipped("postgres", "vidocq.pool.url is jdbc:h2, not PostgreSQL"),
+                        new DevServiceManager.Skipped("acme", "tried jdbc:x://u:p@h/db")));
+
+        assertTrue(json.endsWith(",\"services\":[],\"skipped\":["
+                + "{\"id\":\"postgres\",\"reason\":\"vidocq.pool.url is jdbc:h2, not PostgreSQL\"},"
+                + "{\"id\":\"acme\",\"reason\":\"tried jdbc:x://***@h/db\"}]}"), json);
+    }
+
+    @Test
+    void theFiveArgumentFormWritesNoSkippedProvider() {
+        String json = StateFile.json("t", "running", Instant.EPOCH, List.of(), Map.of());
+
+        assertTrue(json.endsWith(",\"services\":[],\"skipped\":[]}"), json);
+    }
+
+    @Test
     void writeIsAtomic(@TempDir Path dir) throws Exception {
         Path file = dir.resolve("target").resolve(StateFile.FILE_NAME);
         StateFile.write(file, "{\"a\":1}");
