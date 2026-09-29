@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Hosts dev services for a whole JUnit Platform test run (spec 2026-09-24-devservices-visibility-run-tests §7):
@@ -55,16 +56,29 @@ public final class DevServicesSessionListener implements LauncherSessionListener
     public DevServicesSessionListener() {
         this(basedir -> {
             try {
+                Path classes = basedir.resolve("target").resolve("classes");
                 return DevServicesSession.open(
                         "test",
                         basedir,
                         Map.of(),
-                        ApplicationFiles.of(basedir.resolve("target").resolve("classes")),
+                        ApplicationFiles.of(classes),
+                        ApplicationFiles.allOf(classes),
+                        onTestClasspath(Thread.currentThread().getContextClassLoader()),
                         System.getLogger("vidocq.test.devservices"));
             } catch (DevServicesException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * The test JVM's own class path (spec 2026-09-29-devservice-postgres-kind §5), through {@code loader} — the
+     * thread context class loader — or this class's own loader when there is none: whether it holds a class, found as
+     * a {@code .class} resource (visible even inside a named module), never loaded.
+     */
+    static Predicate<String> onTestClasspath(ClassLoader loader) {
+        ClassLoader effective = loader != null ? loader : DevServicesSessionListener.class.getClassLoader();
+        return className -> effective.getResource(className.replace('.', '/') + ".class") != null;
     }
 
     /** For {@code vidocq-runtime-devservices-junit}'s own tests, which supply a fake opener. */

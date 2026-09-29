@@ -19,10 +19,13 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.devservices.host.ApplicationClasspath;
+import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
@@ -33,6 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +54,26 @@ class VidocqTestMojoTest {
         assertFalse(mojo.devServicesEnabled(OFF_IN_FILES));
         mojo.setDevServices(true);
         assertTrue(mojo.devServicesEnabled(OFF_IN_FILES));
+    }
+
+    /** The PostgreSQL dev service looks for its driver where the tests run: the test class path (spec §5). */
+    @Test
+    void theDevServicesSeeTheTestClassPath(@TempDir Path dir) throws Exception {
+        Path testClasses = dir.resolve("target/test-classes");
+        Files.createDirectories(testClasses.resolve("org/postgresql"));
+        Files.write(testClasses.resolve("org/postgresql/Driver.class"), new byte[0]);
+        Path classes = dir.resolve("target/classes");
+        VidocqTestMojo mojo = new VidocqTestMojo();
+        mojo.setProject(new MavenProject() {
+            @Override
+            public List<String> getTestClasspathElements() {
+                return List.of(testClasses.toString(), classes.toString());
+            }
+        });
+
+        assertEquals(List.of(testClasses, classes), mojo.testClasspath());
+        assertTrue(new ApplicationClasspath(mojo.testClasspath()).contains("org.postgresql.Driver"));
+        assertEquals(List.of(), new VidocqTestMojo().testClasspath(), "no project: an empty class path");
     }
 
     @Test

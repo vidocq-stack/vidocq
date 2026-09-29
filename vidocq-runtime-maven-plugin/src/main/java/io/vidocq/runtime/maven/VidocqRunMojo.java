@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
 import io.vidocq.runtime.devservices.host.DevServicesFlag;
@@ -233,8 +234,11 @@ public class VidocqRunMojo extends AbstractMojo {
             // plugin's own copy must come back here.
             List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap,
                     ApplicationLaunch.keptArtifacts(project.getArtifacts(), true));
+            // What the child will see, taken before the dev services extension joins the module path (spec §5).
+            ApplicationClasspath classpath = new ApplicationClasspath(ApplicationLaunch.classpathOf(modulePath, classes));
             try {
                 devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, applicationFiles,
+                        ApplicationFiles.allOf(classes), classpath::contains,
                         System.getLogger("vidocq.run.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);

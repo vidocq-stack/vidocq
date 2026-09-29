@@ -19,21 +19,26 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
 import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.maven.dev.TestResults.Trigger;
+import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProject;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +54,8 @@ import java.util.function.Function;
  * <p>Each run prints a summary; with a console, {@code r} runs every test, {@code f} the failed ones and {@code q}
  * quits. Ctrl+C always stops the goal, its run and its dev services.
  */
-@Mojo(name = "test", defaultPhase = LifecyclePhase.NONE, threadSafe = false)
+@Mojo(name = "test", defaultPhase = LifecyclePhase.NONE, requiresDependencyResolution = ResolutionScope.TEST,
+        threadSafe = false)
 public class VidocqTestMojo extends AbstractMojo {
 
     /** The dev services host this goal is. */
@@ -83,6 +89,10 @@ public class VidocqTestMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}", readonly = true)
     private File buildDir;
 
+    /** The project, for its test class path: where the PostgreSQL dev service looks for its driver. */
+    @Parameter(defaultValue = "${project}", readonly = true, required = true)
+    private MavenProject project;
+
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
@@ -91,8 +101,10 @@ public class VidocqTestMojo extends AbstractMojo {
         Function<String, Optional<String>> files = ApplicationFiles.of(classesDir.toPath());
         DevServicesSession devs = null;
         if (devServicesEnabled(files)) {
+            ApplicationClasspath classpath = new ApplicationClasspath(testClasspath());
             try {
                 devs = DevServicesSession.open(HOST, projectDir, new LinkedHashMap<>(), files,
+                        ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
                         System.getLogger("vidocq.test.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);
@@ -192,6 +204,31 @@ public class VidocqTestMojo extends AbstractMojo {
         if (session != null) {
             session.close();
         }
+    }
+
+    /**
+     * The test class path the tests run against (spec 2026-09-29-devservice-postgres-kind §5): an application on
+     * PostgreSQL at runtime and on H2 in its tests is seen as its tests are. Empty without a project, as in the unit
+     * tests that build this mojo by hand.
+     */
+    // package-private for the unit test.
+    List<Path> testClasspath() throws MojoExecutionException {
+        if (project == null) {
+            return List.of();
+        }
+        try {
+            List<Path> entries = new ArrayList<>();
+            for (String element : project.getTestClasspathElements()) {
+                entries.add(Path.of(element));
+            }
+            return entries;
+        } catch (DependencyResolutionRequiredException e) {
+            throw new MojoExecutionException("vidocq:test needs the test class path: " + e.getMessage(), e);
+        }
+    }
+
+    void setProject(MavenProject project) {
+        this.project = project;
     }
 
     void setDevServices(Boolean devServices) {

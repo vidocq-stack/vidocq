@@ -124,6 +124,20 @@ public final class ApplicationLaunch {
     }
 
     /**
+     * Everything the application's classes come from once launched: the module path as {@link #modulePath} built
+     * it, plus the classes directory, which layer mode keeps off it — once. What a dev service looks into to learn
+     * which driver the application has (spec 2026-09-29-devservice-postgres-kind §5); taken before the dev tools
+     * join the module path.
+     */
+    public static List<Path> classpathOf(List<Path> modulePath, Path classesDir) {
+        List<Path> entries = new ArrayList<>(modulePath);
+        if (!entries.contains(classesDir)) {
+            entries.add(classesDir);
+        }
+        return entries;
+    }
+
+    /**
      * The {@code --patch-module} options that re-attach the classes {@code vidocq:generate} parked in
      * {@code target/vidocq-patches/} to the dependency jar they belong to. Empty when nothing was parked.
      *

@@ -28,6 +28,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -35,6 +37,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -150,6 +153,27 @@ class DevServicesSessionListenerTest {
 
         assertEquals(1, calls.get(), "the explicit true wins over the file's false");
         listener.launcherSessionClosed(null);
+    }
+
+    /**
+     * Review Focus: the test JVM's class path is asked through the context class loader, the driver a test
+     * dependency; without one, the listener's own class loader answers.
+     */
+    @Test
+    void theDevServicesSeeTheTestClassPathThroughTheContextClassLoader(@TempDir Path dir) throws Exception {
+        Path driver = dir.resolve("org/postgresql/Driver.class");
+        Files.createDirectories(driver.getParent());
+        Files.write(driver, new byte[0]);
+
+        try (URLClassLoader loader =
+                new URLClassLoader(new URL[] {dir.toUri().toURL()}, ClassLoader.getPlatformClassLoader())) {
+            assertTrue(DevServicesSessionListener.onTestClasspath(loader).test("org.postgresql.Driver"));
+            assertFalse(DevServicesSessionListener.onTestClasspath(loader).test("com.mysql.cj.jdbc.Driver"));
+        }
+        assertFalse(DevServicesSessionListener.onTestClasspath(ClassLoader.getPlatformClassLoader())
+                .test("org.postgresql.Driver"));
+        assertTrue(DevServicesSessionListener.onTestClasspath(null)
+                .test("org.junit.platform.launcher.LauncherSessionListener"), "no context loader: the listener's own");
     }
 
     private static void writeVidocqProperties(Path basedir, String content) throws Exception {

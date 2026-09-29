@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
 import io.vidocq.runtime.devservices.host.DevServicesFlag;
@@ -339,8 +340,13 @@ public class VidocqDevMojo extends AbstractMojo {
             // container is started, never leave a running session with nothing left to close it.
             List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts(),
                     devToolsOnPath);
+            // What the child will see, taken before the dev services extension and the dev tools join the module
+            // path (spec 2026-09-29-devservice-postgres-kind §5).
+            ApplicationClasspath classpath =
+                    new ApplicationClasspath(ApplicationLaunch.classpathOf(modulePath, classesDir.toPath()));
             try {
                 devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
+                        ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
                         System.getLogger("vidocq.dev.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);

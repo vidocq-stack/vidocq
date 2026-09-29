@@ -107,6 +107,20 @@ class PluginDescriptorContinuousTestingTest {
         assertConfigured("test", "devServices", "java.lang.Boolean", "${vidocq.dev.devServices}", "");
     }
 
+    /** The PostgreSQL dev service looks for its driver on the test class path (spec 2026-09-29 §5). */
+    @Test
+    void theTestGoalResolvesTheTestClassPathAndGetsTheProject() throws Exception {
+        Element mojo = mojo("test");
+        assertEquals("test", text(mojo, "requiresDependencyResolution"));
+        assertEquals("org.apache.maven.project.MavenProject", text(parameter(mojo, "project"), "type"));
+        Element entry = child(child(mojo, "configuration"), "project");
+        assertNotNull(entry, "<configuration> of test has no project entry");
+        assertEquals("${project}", entry.getAttribute("default-value"));
+        assertEquals("org.apache.maven.project.MavenProject", entry.getAttribute("implementation"));
+        assertEquals("org.apache.maven.project.MavenProject",
+                VidocqTestMojo.class.getDeclaredField("project").getType().getName());
+    }
+
     static void assertConfigured(String goal, String name, String type, String expression, String defaultValue) {
         Element mojo = MOJOS.get(goal);
         assertNotNull(mojo, "no <mojo> with <goal>" + goal + "</goal>");

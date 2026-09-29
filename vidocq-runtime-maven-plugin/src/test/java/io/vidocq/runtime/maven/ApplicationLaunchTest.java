@@ -50,6 +50,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class ApplicationLaunchTest {
 
+    /** What the dev services look into for a driver (spec 2026-09-29-devservice-postgres-kind §5). */
+    @Test
+    void theClasspathOfALaunchIsItsModulePathAndItsClassesOnce(@TempDir Path dir) {
+        Path classes = dir.resolve("target/classes");
+        Path lib = dir.resolve("lib.jar");
+
+        assertEquals(List.of(lib, classes), ApplicationLaunch.classpathOf(List.of(lib), classes),
+                "layer mode keeps the classes off the module path: they are added");
+        assertEquals(List.of(classes, lib), ApplicationLaunch.classpathOf(List.of(classes, lib), classes),
+                "never twice");
+    }
+
     @Test
     void dropDevOnlyDropsAMarkedJarAndWarnsWithItsArtifactId(@TempDir Path dir) throws Exception {
         Path plainJar = jar(dir, "app-lib.jar", null);
