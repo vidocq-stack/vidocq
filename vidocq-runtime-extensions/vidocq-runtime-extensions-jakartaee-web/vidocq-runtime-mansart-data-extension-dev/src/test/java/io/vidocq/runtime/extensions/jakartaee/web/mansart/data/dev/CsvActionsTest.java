@@ -512,6 +512,47 @@ class CsvActionsTest {
     }
 
     @Test
+    void theJdqlTabEndsWithTheCsvActionsWhichCountAgainstThePanelsLimit() {
+        List<String> ids = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
+                        TransactionRunner.NONE, RunFixtures::model, method -> true, 7, runner, saver)
+                .actions().stream().map(PanelAction::id).toList();
+        List<String> without = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
+                        TransactionRunner.NONE, RunFixtures::model, method -> true, 7, runner)
+                .actions().stream().map(PanelAction::id).toList();
+
+        assertEquals(7, ids.size());
+        assertEquals(List.of(JdqlActions.QUERY, JdqlActions.WRITE, CsvActions.EXPORT, CsvActions.IMPORT),
+                ids.subList(3, 7), "the repositories get what is left");
+        assertEquals(List.of(JdqlActions.QUERY, JdqlActions.WRITE), without.subList(5, 7), "no saver, no CSV action");
+    }
+
+    @Test
+    void theCsvCallsGoIntoThePanelsCallsTable() {
+        RepositoryActions actions = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
+                new TransactionRunner(new JtaDemarcation(() -> manager)), RunFixtures::model, method -> true,
+                RepositoryActions.MAX_ACTIONS, runner, saver);
+        runner.answer = new JdqlResult.Count(3);
+        PanelAction export = actions.actions().stream().filter(a -> a.id().equals(CsvActions.EXPORT)).findFirst()
+                .orElseThrow();
+        PanelAction load = actions.actions().stream().filter(a -> a.id().equals(CsvActions.IMPORT)).findFirst()
+                .orElseThrow();
+
+        export.call().apply(Map.of("statement", "{\"query\":\"SELECT COUNT(this) FROM Gizmo\"}"));
+        load.call().apply(Map.of("file", "{\"entity\":\"Part\",\"csv\":\"label\\r\\nleft\\r\\n\"}",
+                "transaction", "rollback"));
+
+        RecordedSample sample = new RecordedSample();
+        actions.sample(sample);
+        Table calls = (Table) sample.value("calls");
+        assertEquals("Import CSV", calls.rows().get(0).get(1));
+        assertEquals("1 row saved · rolled back", calls.rows().get(0).get(2));
+        assertEquals("Export CSV", calls.rows().get(1).get(1));
+        assertEquals("jdql.export {\"statement\":{\"query\":\"SELECT COUNT(this) FROM Gizmo\"}}",
+                calls.rows().get(1).get(5));
+        assertEquals(List.of(Part.class), saver.models, "the catalogue's Part, by its name");
+    }
+
+    @Test
     void anExportIsKeptInTheTabsHistoryWithItsReplay() {
         CsvActions tab = tab();
         runner.answer = new JdqlResult.Count(3);

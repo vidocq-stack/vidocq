@@ -48,7 +48,8 @@ import java.util.function.Predicate;
  * bean, no connection, no query.
  *
  * <p>Its actions run the repositories' methods, one tab per repository (see {@link RepositoryActions}), then JDQL
- * statements in a <i>JDQL</i> tab (see {@link JdqlActions}, on Mansart's {@code JdqlExecutor.run}): built once
+ * statements in a <i>JDQL</i> tab (see {@link JdqlActions}, on Mansart's {@code JdqlExecutor.run}), which also
+ * exports a query as CSV and imports a CSV file (see {@link CsvActions}, on {@code RepositoryRuntime.save}): built once
  * per boot by {@link #actions()}, which the console calls after {@link #start}, from the repository interfaces
  * {@link MansartDataLive} holds and the {@link BeanManager} {@code start} keeps; dropped by {@link #stop}.
  *
@@ -125,7 +126,7 @@ public final class CatalogueLivePanel implements LivePanel {
         }
         try {
             RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(), lookup, transactions,
-                    models, accessible, RepositoryActions.MAX_ACTIONS, JdqlRunner.MANSART);
+                    models, accessible, RepositoryActions.MAX_ACTIONS, JdqlRunner.MANSART, EntitySaver.MANSART);
             run = built;
             return built.actions();
         } catch (RuntimeException | LinkageError failed) {

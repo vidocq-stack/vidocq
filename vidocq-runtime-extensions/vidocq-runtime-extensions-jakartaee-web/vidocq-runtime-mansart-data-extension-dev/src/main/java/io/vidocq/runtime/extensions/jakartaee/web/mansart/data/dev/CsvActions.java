@@ -58,6 +58,8 @@ final class CsvActions {
     static final int MAX_BYTES = 256 * 1024;
     /** The most rows an import reads. */
     static final int MAX_ROWS = 5000;
+    /** How many actions the CSV adds to the tab. */
+    static final int COUNT = 2;
 
     private static final String QUERY_MEMBER = "query";
     private static final String PARAMS_MEMBER = "params";

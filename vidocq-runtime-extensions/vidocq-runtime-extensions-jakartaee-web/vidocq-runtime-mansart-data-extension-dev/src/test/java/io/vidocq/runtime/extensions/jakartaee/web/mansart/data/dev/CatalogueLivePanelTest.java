@@ -216,9 +216,13 @@ class CatalogueLivePanelTest {
 
         List<PanelAction> actions = panel.actions();
 
-        assertEquals(25, actions.size());
-        assertEquals(List.of("jdql.query", "jdql.write"),
-                actions.subList(23, 25).stream().map(PanelAction::id).toList(), "the JDQL tab, last");
+        assertEquals(27, actions.size());
+        assertEquals(List.of("jdql.query", "jdql.write", "jdql.export", "jdql.import"),
+                actions.subList(23, 27).stream().map(PanelAction::id).toList(), "the JDQL tab, last");
+        assertEquals(List.of("commit"), actions.get(26).arguments().get(1).allowedValues(),
+                "an import without a TransactionManager bean: commit only");
+        assertEquals("no RepositoryRuntime bean", actions.get(25).call()
+                .apply(Map.of("statement", "{\"query\":\"FROM Gizmo\"}")).summary());
         assertEquals(List.of("commit"), actions.get(24).arguments().get(1).allowedValues(),
                 "no TransactionManager bean");
         assertEquals("no RepositoryRuntime bean",

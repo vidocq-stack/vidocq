@@ -47,7 +47,8 @@ import java.util.function.Predicate;
  * in a transaction — and turns its result into JSON inside that transaction, so that a {@code Stream} is read before
  * it is rolled back. Every call is kept in a {@link CallHistory}.
  *
- * <p>After the repositories' tabs comes the <i>JDQL</i> tab of {@link JdqlActions}, whose calls the same history keeps.
+ * <p>After the repositories' tabs comes the <i>JDQL</i> tab of {@link JdqlActions}, then its {@link CsvActions}, whose
+ * calls the same history keeps.
  *
  * <p>Holds the application's classes and bean manager for one boot: the panel drops it in {@code stop}.
  */
@@ -114,16 +115,32 @@ final class RepositoryActions {
     }
 
     /**
-     * The actions of {@code repositories}, in the catalogue's name order, then, when {@code jdql} is given and the
-     * catalogue holds an entity, the {@value JdqlActions#COUNT} actions of the <i>JDQL</i> tab, which keep their calls
-     * in the same history; the repositories then get {@code maxActions} less those.
+     * The actions of {@code repositories} and the <i>JDQL</i> tab's {@link JdqlActions}, without its CSV actions.
      *
      * @param jdql runs a JDQL statement, {@link JdqlRunner#MANSART} outside tests; {@code null} for no JDQL tab
-     * @see #build(List, MansartDataCatalogue, BeanLookup, TransactionRunner, Function, Predicate, int)
+     * @see #build(List, MansartDataCatalogue, BeanLookup, TransactionRunner, Function, Predicate, int, JdqlRunner,
+     *      EntitySaver)
      */
     static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, BeanLookup beans,
                                    TransactionRunner transactions, Function<Class<?>, EntityModel<?>> models,
                                    Predicate<Method> accessible, int maxActions, JdqlRunner jdql) {
+        return build(repositories, catalogue, beans, transactions, models, accessible, maxActions, jdql, null);
+    }
+
+    /**
+     * The actions of {@code repositories}, in the catalogue's name order, then, when {@code jdql} is given and the
+     * catalogue holds an entity, the {@value JdqlActions#COUNT} actions of the <i>JDQL</i> tab, followed, when
+     * {@code saver} is given too, by its {@value CsvActions#COUNT} CSV actions; all keep their calls in the same
+     * history, and the repositories get {@code maxActions} less those.
+     *
+     * @param jdql  runs a JDQL statement, {@link JdqlRunner#MANSART} outside tests; {@code null} for no JDQL tab
+     * @param saver saves an imported entity, {@link EntitySaver#MANSART} outside tests; {@code null} for no CSV action
+     * @see #build(List, MansartDataCatalogue, BeanLookup, TransactionRunner, Function, Predicate, int)
+     */
+    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, BeanLookup beans,
+                                   TransactionRunner transactions, Function<Class<?>, EntityModel<?>> models,
+                                   Predicate<Method> accessible, int maxActions, JdqlRunner jdql,
+                                   EntitySaver saver) {
         Set<String> entityNames = new HashSet<>();
         for (MansartDataCatalogue.Entity entity : catalogue.entities()) {
             entityNames.add(entity.className());
@@ -141,17 +158,22 @@ final class RepositoryActions {
         Set<String> keys = new HashSet<>();
         Set<String> groups = new HashSet<>();
         boolean withJdql = jdql != null && !catalogue.entities().isEmpty();
-        int room = withJdql ? maxActions - JdqlActions.COUNT : maxActions;
+        boolean withCsv = withJdql && saver != null;
+        int room = maxActions - (withJdql ? JdqlActions.COUNT : 0) - (withCsv ? CsvActions.COUNT : 0);
         for (Class<?> repository : ordered) {
             String name = names.getOrDefault(repository.getName(), repository.getName());
             built.add(repository, name, CatalogueLivePanel.key(name, keys, MAX_REPOSITORY_KEY), group(name, groups),
                     accessible, room);
         }
         if (withJdql) {
+            String jdqlGroup = group(JdqlActions.GROUP, groups);
             JdqlActions tab = new JdqlActions(catalogue.entities(), className -> load(className, repositories),
-                    models, built.entities, beans, transactions, jdql, built.history,
-                    group(JdqlActions.GROUP, groups));
+                    models, built.entities, beans, transactions, jdql, built.history, jdqlGroup);
             built.actions.addAll(tab.actions());
+            if (withCsv) {
+                built.actions.addAll(new CsvActions(tab, built.entities, transactions, jdql, saver, built.history,
+                        jdqlGroup).actions());
+            }
         }
         return built;
     }
