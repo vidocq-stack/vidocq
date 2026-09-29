@@ -637,6 +637,32 @@ DELETE FROM TaskEvent WHERE type = 'REOPENED'
 
 *Limits.* JDQL has no `INSERT`: insert with a repository's `save`, or an `@Insert` method (<<mansart-data-run-method>>). A statement runs on the default data store, the `RepositoryRuntime` bean of the `@Default` datasource: a repository routed elsewhere with `@Repository(dataStore = …)` is not reached. Paths such as `author.name` go as far as Mansart's JDQL does. The whole result is read before the first 100 rows are shown: narrow a large table with a `WHERE`. The console runs Mansart's own `JdqlExecutor.run(jdql, parameters, model, runtime)`, which a tool of yours may call too.
 
+[#mansart-data-csv]
+== CSV export and import for Mansart Data [.tag-new]#NEW#
+
+The *JDQL* tab of the *Mansart Data* panel (<<mansart-data-jdql>>) has two more actions, which move rows between the application's database and a CSV file in your browser: *Export CSV* downloads the result of a query, *Import CSV* saves the rows of a file you paste or pick. Nothing is read from, or written to, the project's directory.
+
+*Export CSV* runs a JDQL query as *Query* does and answers its whole result as CSV, shown as text with a *Download* button, which saves it as `jdql.export-20260929-143012.csv`. `FROM Task` exports every attribute of every task; `SELECT title, priority FROM Task WHERE project = :p` some columns of some. An `UPDATE` or a `DELETE` is refused (`an UPDATE or DELETE: export a query`), and the query runs in a transaction that is always rolled back. The header is the entity's attributes in model order, a joined attribute left out, or the columns of a projection; a count is one column `count`, an aggregate one column `value`. The line says `42 rows · 3.1 KiB in 12 ms`. Every row is exported, but the file is at most 256 KiB in UTF-8: a larger one is refused, `larger than 256 KiB: narrow the query`, never cut.
+
+*Import CSV* takes an entity, picked in the list of the catalogue's, and the CSV text: paste it, or *Choose file* to load a file of at most 60 KiB. The page asks first (`Saves these CSV rows against the database.`). Its *Transaction* list offers `rollback`, the default, then `commit`: with `rollback` an import is a dry run, every row saved then the transaction rolled back, so that what goes through `rollback` goes through `commit`.
+
+. The file is read completely before anything is saved. Its first line is the header: each name an attribute of the entity, once. A joined attribute, or a name the entity does not have, is refused with the attributes it has (`header: unknown attribute colour; attributes: id, title, priority, dueDate`), and so is an attribute of a type the console does not convert (`header: attachment cannot be imported; …`). Then at least one row, at most 5000, each with as many fields as the header (`line 9: 3 fields, the header has 4`).
+. Each row becomes an entity: its no-arg constructor, then each column set, its text converted by the attribute's type as a repository method's argument is (<<mansart-data-run-method>>) — an enum by its constant's name, a date or a time as ISO text, a number exactly, `true` or `false`, a `UUID` as its text, a reference by the referenced entity's id. An attribute without a column keeps the constructor's value; an empty field for a primitive is refused. The first row that does not convert stops the import, nothing saved: `line 7, priority: no constant URGENT in Priority`, the line counted in the text, the header being line 1.
+. Every entity is then saved with Mansart's `RepositoryRuntime.save`, in order, in one transaction. A row whose id is empty is inserted, its id generated; a row with an id updates that row, or inserts one with that id. Re-importing an edited export therefore updates the rows it holds; empty its ids to add copies. A save that fails rolls everything back: `line 12: io.vidocq.mansart.data.core.MansartDataException: …`, the message cut and a `user:password@` masked. Without a `TransactionManager`, `commit` only, each row committed as it is saved: a failing row leaves the rows before it, and the line says so (`· 11 rows before it stay committed`).
+
+The result says `42 rows saved · rolled back` or `· committed`; *Exchange* holds the entity, the number of rows, the separator and the transaction, never the file.
+
+*The format* is RFC 4180, written and read by the console itself:
+
+* fields separated by `,`, or by `;` as a spreadsheet of a decimal-comma locale expects: the *separator* of both actions; records ended by `\r\n` when written, by `\r\n` or `\n` when read, the last one with or without; a UTF-8 byte order mark at the start ignored;
+* a field holding the separator, a `"`, a line end, or nothing at all is quoted, a `"` doubled;
+* `null` is an empty field, `a,,b`, and the empty text `""`, `a,"",b`: an export and an import keep them apart;
+* a number as Java writes it, `2.50` whatever the separator (a decimal comma is refused: `line 2, price: not a number`), `true` or `false`, an enum by its name, a date or a time in ISO, a `UUID` as its text, a reference as the referenced entity's id: the text an import reads back. An attribute of another type is exported as its `toString()`, and refused at import.
+
+*History.* Both actions join the *JDQL* tab's history, *Export CSV* and *Import CSV*; an export's *Replay* fills its form again, an import's is empty as soon as its call passes 4 KiB.
+
+*Limits.* A file picked with *Choose file* is at most 60 KiB, and the whole request at most the console's 64 KiB, which a CSV fills a little more than its size once sent as JSON: split a larger file. At most 5000 rows per import, 256 KiB per export: export a large table in slices, `FROM Task WHERE id <= 2000 ORDER BY id`. The default data store only, and no joined attribute, as in the JDQL console.
+
 [#mansart-transactions-jdbc-bridge]
 == Mansart Data writes join the transaction [.tag-new]#NEW#
 
