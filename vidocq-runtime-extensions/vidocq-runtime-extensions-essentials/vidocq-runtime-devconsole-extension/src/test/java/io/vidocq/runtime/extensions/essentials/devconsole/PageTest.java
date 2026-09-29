@@ -184,7 +184,7 @@ class PageTest {
         String script = file("console.js");
 
         assertTrue(script.contains("function actionRow(panelId, action, outlet)"), "where results show is the outlet's");
-        assertTrue(script.contains("function inlineOutlet()"), "the panel's own bar keeps its look");
+        assertTrue(script.contains("function inlineOutlet(actionId)"), "the panel's own bar keeps its look");
         assertTrue(script.contains("const started = performance.now();"), "the round trip the page measures");
         for (String wording : List.of("\"No token: reload the page.\"", "\"the console did not answer\"",
                 "\"another action of this panel is running\"", "\"still running after 60 s: the outcome will show here\"",
@@ -204,7 +204,7 @@ class PageTest {
                 "the selected action's own form, kept while it is typed in");
         assertTrue(script.contains("byId.has(state.chosen.get(name))"),
                 "a selected action a dev reload removed falls back to the group's first");
-        assertTrue(script.contains("function resultBlock(result)"), "the result, apart from the form");
+        assertTrue(script.contains("function resultBlock(result, actionId)"), "the result, apart from the form");
         assertTrue(script.contains("\"No call yet\""), "before the first call");
         assertTrue(script.contains("function sampleTable(value, panelId, keep)"), "a table filtered to a group");
         assertTrue(script.contains("(id) => groupOf.get(id) === name"), "the rows of this group's actions only");
@@ -291,6 +291,49 @@ class PageTest {
         assertTrue(textarea.contains("var(--mono)"), "monospace, as the JSON editor");
         assertTrue(textarea.contains("resize: vertical"), "taller when dragged");
         assertTrue(rule(style, ".action .arg.wide {").contains("flex-basis: 100%"), "the whole width of the form");
+    }
+
+    @Test
+    void aCsvResultIsTextWithADownloadThatSendsNoRequest() {
+        String script = file("console.js");
+
+        assertTrue(script.contains(
+                "const isCsvType = (type) => typeof type === \"string\" && type.startsWith(\"text/csv\");"),
+                "PanelAction.ActionResult.CSV");
+        assertTrue(script.contains("return { view: el(\"pre\", \"result-body\", answer.body), "
+                + "tools: downloadTools(answer.body, actionId) };"), "shown as text, with Download");
+        assertTrue(script.contains("new Blob([text], { type: \"text/csv;charset=utf-8\" })"),
+                "saved as the browser holds it, in UTF-8");
+        assertTrue(script.contains("String(actionId).replace(/[^A-Za-z0-9._-]/g, \"-\")"),
+                "the action id, kept to the characters of a file name");
+        assertTrue(script.contains("+ \"-\" + stamp + \".csv\""), "<action id>-<yyyyMMdd-HHmmss>.csv");
+        assertTrue(script.contains("URL.revokeObjectURL(url)"), "the Blob is released");
+        String download = script.substring(script.indexOf("function downloadTools("),
+                script.indexOf("function answerBody("));
+        assertFalse(download.contains("fetch("), "a download sends no request");
+        assertEquals(2, Pattern.compile(Pattern.quote("answerBody(answer, result.nodes.body, actionId)"))
+                .matcher(script).results().count(), "a group tab's result block and the panel's own bar");
+    }
+
+    @Test
+    void aCsvTextareaGetsAChooseFileThatReadsALocalFileOfAtMost60KiB() {
+        String script = file("console.js");
+        String style = file("console.css");
+
+        assertTrue(script.contains("if (definition.contentMediaType === \"text/csv\") chooser = fileChooser(input);"),
+                "a textarea whose schema says text/csv, and only such a one");
+        assertTrue(script.contains("file.type = \"file\";") && script.contains("file.accept = \".csv,text/csv\";"),
+                "a native file input for CSV files");
+        assertTrue(script.contains("const MAX_FILE_BYTES = 60 * 1024;"), "under the console's 64 KiB request");
+        assertTrue(script.contains("\"the file is larger than 60 KiB\""), "said under the field");
+        assertTrue(script.contains("reader.readAsText(chosen, \"UTF-8\");"), "read in the browser, as UTF-8");
+        assertTrue(script.contains("target.value = typeof reader.result === \"string\" ? reader.result : \"\";"),
+                "the file replaces the textarea's value");
+        String chooser = script.substring(script.indexOf("function fileChooser("),
+                script.indexOf("function jsonField("));
+        assertFalse(chooser.contains("fetch("), "nothing is sent until the form is");
+        assertTrue(script.contains("...choosers]) c.disabled = on;"), "disabled while the form is sent");
+        assertTrue(rule(style, ".action .file-note {").contains("var(--crit)"), "the refusal in the error colour");
     }
 
     @Test

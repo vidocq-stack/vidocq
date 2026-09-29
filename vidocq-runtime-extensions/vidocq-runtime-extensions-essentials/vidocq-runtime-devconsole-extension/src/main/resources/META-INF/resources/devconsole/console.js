@@ -42,6 +42,9 @@
 //   group, in order of first appearance, which picks one action in a combo and shows its form, its last result apart
 //   and the rows of the panel's replay tables that name one of the group's actions. The page keeps, per panel, the
 //   open sub-tab, the action picked in each group and the last result of each action (panelState).
+// - A text/csv answer is shown as text with a Download button, which saves it in the browser, no request sent. A
+//   textarea of a form whose schema says "contentMediaType": "text/csv" gets Choose file, which reads a local file of
+//   60 KiB at most into it; nothing is sent until the form is.
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -720,9 +723,43 @@ function skeleton(schema) {
 /** {@code values} without the members a panel masked: the user types those again. */
 const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED));
 
+/** Past this size a chosen file is not read: the console takes a request of 64 KiB at most. */
+const MAX_FILE_BYTES = 60 * 1024;
+
+/**
+ * A "Choose file" input for a textarea of CSV text (a string property of "contentMediaType": "text/csv"): the file
+ * chosen is read in this browser as UTF-8 text and replaces the textarea's value; nothing is sent until the form is.
+ * A file larger than 60 KiB is not read, and the line under the input says so.
+ */
+function fileChooser(target) {
+  const root = el("span", "file-choice");
+  const file = el("input");
+  file.type = "file";
+  file.accept = ".csv,text/csv";
+  const note = el("span", "file-note");
+  file.addEventListener("change", () => {
+    note.textContent = "";
+    const chosen = file.files && file.files[0];
+    if (!chosen) return;
+    if (chosen.size > MAX_FILE_BYTES) {
+      note.textContent = "the file is larger than 60 KiB";
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      target.value = typeof reader.result === "string" ? reader.result : "";
+    });
+    reader.addEventListener("error", () => { note.textContent = "the file could not be read"; });
+    reader.readAsText(chosen, "UTF-8");
+  });
+  root.append(file, note);
+  return { root, file };
+}
+
 /**
  * A json argument: a form generated from its schema when the schema is flat, using required, default, description,
- * enum and a string's "format": "textarea" (a field of several lines), and a raw JSON editor otherwise, starting from
+ * enum and a string's "format": "textarea" (a field of several lines, with Choose file when its "contentMediaType"
+ * is "text/csv"), and a raw JSON editor otherwise, starting from
  * the required properties. A "JSON" switch shows the form's
  * value as JSON; switching back keeps the values. value() returns the JSON text sent, or throws what is wrong.
  */
@@ -743,6 +780,7 @@ function jsonField(argument) {
   editor.value = JSON.stringify(skeleton(schema), null, 2);
   const form = el("div", "json-form");
   const inputs = new Map();
+  const choosers = [];                  // the file inputs of the CSV fields, disabled with the form
   const raw = el("input");
   raw.type = "checkbox";
   if (flat) {
@@ -751,6 +789,7 @@ function jsonField(argument) {
       const wrap = el("label", "arg");
       wrap.append(el("span", null, property + (required.has(property) ? " *" : "")));
       let input;
+      let chooser = null;
       if (kind === "enum" || kind === "boolean") {
         input = el("select");
         for (const v of ["", ...(kind === "enum" ? definition.enum : ["true", "false"])]) {
@@ -764,6 +803,7 @@ function jsonField(argument) {
         input.rows = 4;
         input.spellcheck = false;
         wrap.classList.add("wide");
+        if (definition.contentMediaType === "text/csv") chooser = fileChooser(input);
       } else {
         input = el("input");
         input.type = "text";
@@ -775,6 +815,10 @@ function jsonField(argument) {
       if (typeof definition.description === "string") input.title = definition.description;
       input.name = argument.name + "." + property;
       wrap.append(input);
+      if (chooser) {
+        wrap.append(chooser.root);
+        choosers.push(chooser.file);
+      }
       form.append(wrap);
       inputs.set(property, { input, kind });
     }
@@ -852,7 +896,7 @@ function jsonField(argument) {
       if (flat) toForm(kept);
       note.textContent = Object.keys(kept).length < Object.keys(values).length ? "masked values: type them again" : "";
     },
-    disable(on) { for (const c of [editor, raw, ...[...inputs.values()].map((i) => i.input)]) c.disabled = on; },
+    disable(on) { for (const c of [editor, raw, ...[...inputs.values()].map((i) => i.input), ...choosers]) c.disabled = on; },
   };
 }
 
@@ -1037,6 +1081,48 @@ function viewerTools(viewer) {
 /** Whether a content type is JSON. */
 const isJsonType = (type) => typeof type === "string" && type.startsWith("application/json");
 
+/** Whether a content type is CSV: a body shown as text, with a Download button. */
+const isCsvType = (type) => typeof type === "string" && type.startsWith("text/csv");
+
+/** {@code <action id>-<yyyyMMdd-HHmmss>.csv}, the id's characters outside [A-Za-z0-9._-] replaced by "-". */
+function csvFileName(actionId, now) {
+  const two = (n) => String(n).padStart(2, "0");
+  const stamp = now.getFullYear() + two(now.getMonth() + 1) + two(now.getDate()) + "-" + two(now.getHours())
+    + two(now.getMinutes()) + two(now.getSeconds());
+  return String(actionId).replace(/[^A-Za-z0-9._-]/g, "-") + "-" + stamp + ".csv";
+}
+
+/**
+ * A Download button that saves {@code text} as a CSV file: a Blob of type text/csv;charset=utf-8, named by
+ * csvFileName, handed to the browser through a link it clicks. No request is sent.
+ */
+function downloadTools(text, actionId) {
+  const tools = el("span", "jv-tools");
+  const button = el("button", null, "Download");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const link = el("a");
+    link.href = url;
+    link.download = csvFileName(actionId, new Date());
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  tools.append(button);
+  return tools;
+}
+
+/** The body of an answer: CSV as text with Download, JSON through the viewer, anything else as text. */
+function answerBody(answer, nodes, actionId) {
+  if (isCsvType(answer.contentType)) {
+    return { view: el("pre", "result-body", answer.body), tools: downloadTools(answer.body, actionId) };
+  }
+  return textOrJson(answer.body, isJsonType(answer.contentType), nodes);
+}
+
 /**
  * {@code text} through the JSON viewer, with its tools, when {@code json} and it parses; as text otherwise, a body
  * that claims JSON but is none included. {@code nodes} is the viewer's fold state.
@@ -1080,11 +1166,11 @@ function exchangeFold(details, result) {
 }
 
 /** What a result shows under its line in the panel's own bar: its body, with the viewer's tools, then its details. */
-function resultOutput(result) {
+function resultOutput(result, actionId) {
   const answer = result.answer;
   const out = [];
   if (typeof answer.body === "string") {
-    const body = textOrJson(answer.body, isJsonType(answer.contentType), result.nodes.body);
+    const body = answerBody(answer, result.nodes.body, actionId);
     if (body.tools) out.push(body.tools);
     out.push(body.view);
   }
@@ -1097,7 +1183,7 @@ function resultOutput(result) {
  * and the exchange under it. It keeps the last result for the life of the form; a new line over the same answer
  * leaves the body as it is.
  */
-function inlineOutlet() {
+function inlineOutlet(actionId) {
   const message = el("span", "msg");
   const output = el("div", "result");
   let last = null;
@@ -1109,7 +1195,7 @@ function inlineOutlet() {
       last = next;
       message.textContent = next.summary;
       message.className = "msg " + STATE_CLASS.get(next.state);
-      if (!sameAnswer) output.replaceChildren(...(next.answer ? resultOutput(next) : []));
+      if (!sameAnswer) output.replaceChildren(...(next.answer ? resultOutput(next, actionId) : []));
     },
   };
 }
@@ -1296,7 +1382,7 @@ function groupOutlet(state, actionId, changed) {
  * The result of the selected action, apart from its form (spec §2.1): a header with the state in colour, the line,
  * the round trip the page measured and the viewer's tools, then the body, then the exchange folded under "Exchange".
  */
-function resultBlock(result) {
+function resultBlock(result, actionId) {
   const block = el("section", "result-block");
   if (!result) {
     block.dataset.state = "none";
@@ -1312,7 +1398,7 @@ function resultBlock(result) {
   block.append(head);
   const answer = result.answer;
   if (answer && typeof answer.body === "string") {
-    const body = textOrJson(answer.body, isJsonType(answer.contentType), result.nodes.body);
+    const body = answerBody(answer, result.nodes.body, actionId);
     if (body.tools) head.append(body.tools);
     block.append(body.view);
   }
@@ -1370,7 +1456,7 @@ function groupTab(panelId, name, rows, state, open) {
     }
     return shown;
   }
-  const showResult = () => resultSlot.replaceChildren(resultBlock(state.results.get(selected) || null));
+  const showResult = () => resultSlot.replaceChildren(resultBlock(state.results.get(selected) || null, selected));
   function choose(id) {
     selected = id;
     state.chosen.set(name, id);
@@ -1648,7 +1734,7 @@ function panelView(panel, snapshot) {
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   const rows = actions.map((action) => {
     const group = groupName(action);
-    const outlet = group === null ? inlineOutlet() : groupOutlet(state, action.id, (id) => {
+    const outlet = group === null ? inlineOutlet(action.id) : groupOutlet(state, action.id, (id) => {
       const tab = groupTabs.get(group);
       if (tab) tab.changed(id);
     });
