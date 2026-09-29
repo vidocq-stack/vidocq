@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Reads the {@code vidocq.dev.*} tuning keys the application would itself read (spec §5): a lookup a
@@ -49,13 +50,26 @@ public final class ApplicationFiles {
      * never answered (spec §5).
      */
     public static Function<String, Optional<String>> of(Path classesDir) {
-        Map<String, String> tuning = new HashMap<>();
+        return read(classesDir, key -> key.startsWith("vidocq.dev."));
+    }
+
+    /**
+     * Every key of the same files, in the same order as {@link #of}, without its {@code vidocq.dev.} filter: what
+     * {@link DefaultDevServiceContext#applicationProperty} answers, for a provider to learn what the application is
+     * configured for (spec 2026-09-29-devservice-postgres-kind §3). Never a source of {@code property(key)}.
+     */
+    public static Function<String, Optional<String>> allOf(Path classesDir) {
+        return read(classesDir, key -> true);
+    }
+
+    private static Function<String, Optional<String>> read(Path classesDir, Predicate<String> keys) {
+        Map<String, String> values = new HashMap<>();
         // Lowest precedence first: a later source overwrites.
-        copyTuning(classpathSource(classesDir), tuning);
+        copy(classpathSource(classesDir), keys, values);
         if (System.getProperty("vidocq.config.dir") != null || System.getenv("VIDOCQ_CONFIG_DIR") != null) {
-            copyTuning(new ExternalFileConfigSource(), tuning);
+            copy(new ExternalFileConfigSource(), keys, values);
         }
-        Map<String, String> frozen = Map.copyOf(tuning);
+        Map<String, String> frozen = Map.copyOf(values);
         return key -> Optional.ofNullable(frozen.get(key));
     }
 
@@ -74,9 +88,9 @@ public final class ApplicationFiles {
         }
     }
 
-    private static void copyTuning(ConfigSource source, Map<String, String> into) {
+    private static void copy(ConfigSource source, Predicate<String> keys, Map<String, String> into) {
         for (String key : source.getPropertyNames()) {
-            if (key.startsWith("vidocq.dev.")) {
+            if (keys.test(key)) {
                 String value = source.getValue(key);
                 if (value != null) {
                     into.put(key, value);

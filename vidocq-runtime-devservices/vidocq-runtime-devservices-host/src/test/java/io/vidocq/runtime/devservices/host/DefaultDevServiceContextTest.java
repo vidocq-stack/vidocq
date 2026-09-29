@@ -116,6 +116,58 @@ class DefaultDevServiceContextTest {
     }
 
     @Test
+    void theApplicationsOwnValuesAnswerAnyKeyButNeverOptOut() {
+        Function<String, Optional<String>> values = key -> key.equals("vidocq.pool.url")
+                ? Optional.of("jdbc:h2:mem:x") : Optional.empty();
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(),
+                key -> Optional.empty(), values, name -> false);
+
+        assertEquals(Optional.of("jdbc:h2:mem:x"), ctx.applicationProperty("vidocq.pool.url"));
+        assertEquals(Optional.empty(), ctx.property("vidocq.pool.url"), "property(key) still ignores the files");
+    }
+
+    @Test
+    void aBlankApplicationValueIsAbsent() {
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(),
+                key -> Optional.empty(), key -> Optional.of("   "), name -> false);
+
+        assertEquals(Optional.empty(), ctx.applicationProperty("vidocq.pool.url"));
+    }
+
+    @Test
+    void theClassPathCheckIsTheOneGiven() {
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(),
+                key -> Optional.empty(), key -> Optional.empty(), name -> name.equals("org.postgresql.Driver"));
+
+        assertTrue(ctx.onApplicationClasspath("org.postgresql.Driver"));
+        assertFalse(ctx.onApplicationClasspath("org.h2.Driver"));
+    }
+
+    @Test
+    void theShorterConstructorsKnowNothingOfTheApplication() {
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(), key -> Optional.of("x"));
+
+        assertEquals(Optional.empty(), ctx.applicationProperty("vidocq.pool.url"));
+        assertFalse(ctx.onApplicationClasspath("org.postgresql.Driver"));
+    }
+
+    /**
+     * Review Focus: a named datasource declared in the application's file only — its name is a tuning key, read by
+     * property(key); its URL is not, so only applicationProperty(key) sees it.
+     */
+    @Test
+    void aNamedDatasourceOnlyInTheFilesIsSeenThroughBothLookups(@TempDir Path classes) throws Exception {
+        Files.writeString(classes.resolve("vidocq.properties"),
+                "vidocq.dev.postgres.datasources=audit\nvidocq.pool.audit.url=jdbc:h2:mem:audit\n");
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(),
+                ApplicationFiles.of(classes), ApplicationFiles.allOf(classes), name -> false);
+
+        assertEquals(Optional.of("audit"), ctx.property("vidocq.dev.postgres.datasources"));
+        assertEquals(Optional.empty(), ctx.property("vidocq.pool.audit.url"));
+        assertEquals(Optional.of("jdbc:h2:mem:audit"), ctx.applicationProperty("vidocq.pool.audit.url"));
+    }
+
+    @Test
     void applicationFilesReadVidocqPropertiesFromTheClassesDirectory(@TempDir Path classes) throws Exception {
         Files.writeString(classes.resolve("vidocq.properties"),
                 "vidocq.dev.postgres.port=55432\nvidocq.pool.url=jdbc:postgresql://x/y\n");

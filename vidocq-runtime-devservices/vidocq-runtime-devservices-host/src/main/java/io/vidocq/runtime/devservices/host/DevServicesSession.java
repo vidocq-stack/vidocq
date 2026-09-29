@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A running {@code vidocq:dev}/{@code vidocq:run}/test dev-services session: starts the {@link DevService}
@@ -69,7 +70,19 @@ public final class DevServicesSession implements AutoCloseable {
      */
     public static DevServicesSession open(String host, Path basedir, Map<String, String> seed,
             Function<String, Optional<String>> applicationFiles, System.Logger log) throws DevServicesException {
-        DefaultDevServiceContext ctx = new DefaultDevServiceContext(basedir, seed, applicationFiles);
+        return open(host, basedir, seed, applicationFiles, key -> Optional.empty(), className -> false, log);
+    }
+
+    /**
+     * {@link #open(String, Path, Map, Function, System.Logger)}, the providers also told what the application is
+     * configured for (spec 2026-09-29-devservice-postgres-kind §5): every value of its files
+     * ({@link ApplicationFiles#allOf}) and whether its class path holds a class ({@link ApplicationClasspath}).
+     */
+    public static DevServicesSession open(String host, Path basedir, Map<String, String> seed,
+            Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
+            Predicate<String> applicationClasspath, System.Logger log) throws DevServicesException {
+        DefaultDevServiceContext ctx =
+                new DefaultDevServiceContext(basedir, seed, applicationFiles, applicationValues, applicationClasspath);
         DevServiceManager mgr = DevServiceManager.start(ctx, log);
         return open(host, basedir, mgr, log, Clock.systemUTC());
     }
