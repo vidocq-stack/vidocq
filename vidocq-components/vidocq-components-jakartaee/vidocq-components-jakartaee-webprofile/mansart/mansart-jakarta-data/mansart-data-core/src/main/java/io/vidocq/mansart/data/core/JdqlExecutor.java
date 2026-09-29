@@ -88,6 +88,252 @@ public final class JdqlExecutor {
         return execute(stmt, CallShape.of(method), model, attrIndex, runtime, args);
     }
 
+    /**
+     * Runs one JDQL statement given as text, as a tool does — the Vidocq dev console, for one — rather than a
+     * {@code @Query} method: the statement is parsed against {@code model}, its named parameters take their values
+     * from {@code parameters}, and it runs on {@code runtime} as a {@code @Query} method's statement would, in
+     * whatever transaction the caller has begun.
+     *
+     * <p>A named parameter {@code :name} takes {@code parameters.get("name")}. A value compared to an attribute — a
+     * parameter, a literal, or a value of an {@code UPDATE … SET} — is converted to the attribute's Java type when it
+     * is a {@code String} and the attribute is not text: an enum by constant name, the {@code java.time} types by ISO
+     * parsing, the numeric types exactly ({@code BigDecimal} and {@code BigInteger} included), a {@code Boolean} from
+     * {@code true} or {@code false}, a {@code UUID} by {@link java.util.UUID#fromString}. A number is converted
+     * exactly to a numeric attribute's type, a collection (for {@code IN :names}) element by element; a value of the
+     * right type is kept. Every value is checked before anything runs.
+     *
+     * <p>The result is read whole: {@code run} returns all that the statement selects, and the caller cuts.
+     *
+     * @param jdql       one statement: {@code FROM …}, {@code SELECT … FROM …}, {@code UPDATE … SET …} or
+     *                   {@code DELETE FROM …}, naming {@code model}'s entity by its simple or its full class name
+     * @param parameters the value of each named parameter, by its name without the colon; {@code null} for none
+     * @param model      the model of the entity the statement names, such as {@link EntityModels#of} gives
+     * @param runtime    the runtime of the data store to run it on
+     * @return the entities, the rows of a projection, the rows counted or changed, or an aggregate's value
+     * @throws MansartDataException when the statement does not parse; when it uses a positional parameter
+     *                              ({@code ?1}), a named parameter that has no value, or when a value is given that
+     *                              no parameter uses; when a value does not convert ({@code :status: not a Status});
+     *                              and as a {@code @Query} method's statement throws when it runs
+     */
+    public static JdqlResult run(String jdql, Map<String, ?> parameters, EntityModel<?> model,
+                                 RepositoryRuntime runtime) {
+        java.util.Objects.requireNonNull(jdql, "jdql");
+        java.util.Objects.requireNonNull(model, "model");
+        java.util.Objects.requireNonNull(runtime, "runtime");
+        Map<String, ?> given = parameters == null ? Map.of() : parameters;
+        Map<String, Attribute<?, ?>> attrIndex = new HashMap<>();
+        for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
+        // the parser compares the entity it reads with this name: the full class name when the statement uses it
+        String entityName = target(jdql).filter(model.entityClass().getName()::equals)
+                .orElse(model.entityClass().getSimpleName());
+        JdqlAst.Stmt stmt;
+        try {
+            stmt = JdqlAst.parse(jdql, attrIndex.keySet(), entityName);
+        } catch (JdqlAst.ParseException e) {
+            throw new MansartDataException(e.getMessage(), e);
+        }
+        List<String> used = parameterNames(stmt);
+        for (String name : used) {
+            if (!given.containsKey(name)) throw new MansartDataException(":" + name + ": no value given");
+        }
+        for (String name : new java.util.TreeSet<>(given.keySet())) {
+            if (!used.contains(name)) throw new MansartDataException(":" + name + ": not used by the statement");
+        }
+        Map<String, Integer> names = new HashMap<>();
+        Object[] args = new Object[used.size()];
+        for (int i = 0; i < used.size(); i++) {
+            names.put(used.get(i), i);
+            args[i] = given.get(used.get(i));
+        }
+        Object result = execute(stmt, shapeOf(stmt, model, attrIndex, names), model, attrIndex, runtime, args);
+        return switch (stmt.kind) {
+            case SELECT -> new JdqlResult.Entities((List<?>) result);
+            case COUNT, UPDATE, DELETE -> new JdqlResult.Count(((Number) result).longValue());
+            case AGGREGATE -> new JdqlResult.Value(result);
+            case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr), columnRows((List<?>) result));
+            case PROJECT_MULTI -> new JdqlResult.Rows(stmt.projectAttrs, projectedRows(result));
+        };
+    }
+
+    /**
+     * Whether {@code jdql} is an {@code UPDATE} or a {@code DELETE}, read from its first keyword, without parsing it.
+     *
+     * @param jdql a statement, or {@code null}
+     */
+    public static boolean isWrite(String jdql) {
+        List<String> words = words(jdql);
+        return !words.isEmpty()
+                && (words.getFirst().equalsIgnoreCase("UPDATE") || words.getFirst().equalsIgnoreCase("DELETE"));
+    }
+
+    /**
+     * The entity {@code jdql} names: the identifier after {@code UPDATE}, or after its first {@code FROM}
+     * ({@code SELECT … FROM}, {@code DELETE FROM}), a dotted full class name kept whole; read without parsing, string
+     * literals and parameters skipped.
+     *
+     * @param jdql a statement, or {@code null}
+     * @return the name as written; empty when the statement names none, such as {@code WHERE price > :min}
+     */
+    public static java.util.Optional<String> target(String jdql) {
+        List<String> words = words(jdql);
+        if (words.isEmpty()) return java.util.Optional.empty();
+        if (words.getFirst().equalsIgnoreCase("UPDATE")) {
+            return words.size() > 1 && !isClauseKeyword(words.get(1))
+                    ? java.util.Optional.of(words.get(1)) : java.util.Optional.empty();
+        }
+        for (int i = 0; i + 1 < words.size(); i++) {
+            if (words.get(i).equalsIgnoreCase("FROM")) {
+                String next = words.get(i + 1);
+                return isClauseKeyword(next) ? java.util.Optional.empty() : java.util.Optional.of(next);
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    /** The keywords that may follow {@code UPDATE} or {@code FROM} where an entity name is left out. */
+    private static boolean isClauseKeyword(String word) {
+        return switch (word.toUpperCase(java.util.Locale.ROOT)) {
+            case "SET", "WHERE", "ORDER", "FROM" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * The words of {@code jdql} — keywords and identifiers, a dotted name kept whole — in order, without its string
+     * literals, its parameters ({@code :name}, {@code ?1}) and its numbers.
+     */
+    private static List<String> words(String jdql) {
+        List<String> out = new ArrayList<>();
+        if (jdql == null) return out;
+        int i = 0;
+        int n = jdql.length();
+        while (i < n) {
+            char c = jdql.charAt(i);
+            if (c == '\'') {
+                i++;
+                while (i < n) {
+                    if (jdql.charAt(i) == '\'') {
+                        // '' inside a literal is one quote
+                        if (i + 1 < n && jdql.charAt(i + 1) == '\'') { i += 2; continue; }
+                        i++;
+                        break;
+                    }
+                    i++;
+                }
+            } else if (c == ':' || c == '?' || Character.isDigit(c)) {
+                i++;
+                while (i < n && isWordPart(jdql.charAt(i))) i++;
+            } else if (Character.isLetter(c) || c == '_') {
+                int start = i;
+                while (i < n && isWordPart(jdql.charAt(i))) i++;
+                out.add(jdql.substring(start, i));
+            } else {
+                i++;
+            }
+        }
+        return out;
+    }
+
+    private static boolean isWordPart(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '.';
+    }
+
+    /** The named parameters {@code stmt} uses, each once, in the order they appear; a positional one is refused. */
+    private static List<String> parameterNames(JdqlAst.Stmt stmt) {
+        List<JdqlAst.ArgRef> refs = new ArrayList<>();
+        for (JdqlAst.SetAssign sa : stmt.setAssignments) collectArgs(sa.value(), refs);
+        if (stmt.where != null) collectArgs(stmt.where, refs);
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        for (JdqlAst.ArgRef ref : refs) {
+            if (ref.isLiteral) continue;
+            if (!ref.isNamed()) {
+                throw new MansartDataException("positional parameters are not supported here; use :name");
+            }
+            names.add(ref.named);
+        }
+        return List.copyOf(names);
+    }
+
+    private static void collectArgs(JdqlAst.Pred p, List<JdqlAst.ArgRef> out) {
+        switch (p) {
+            case JdqlAst.Cmp c -> out.add(c.arg());
+            case JdqlAst.FnCmp c -> out.add(c.arg());
+            case JdqlAst.IsNull ignored -> { /* no value */ }
+            case JdqlAst.FnIsNull ignored -> { /* no value */ }
+            case JdqlAst.Between b -> {
+                out.add(b.lo());
+                out.add(b.hi());
+            }
+            case JdqlAst.FnBetween b -> {
+                out.add(b.lo());
+                out.add(b.hi());
+            }
+            case JdqlAst.In in -> out.addAll(in.args());
+            case JdqlAst.FnIn in -> out.addAll(in.args());
+            case JdqlAst.And and -> and.children().forEach(c -> collectArgs(c, out));
+            case JdqlAst.Or or -> or.children().forEach(c -> collectArgs(c, out));
+            case JdqlAst.Not not -> collectArgs(not.child(), out);
+        }
+    }
+
+    private static void collectArgs(JdqlAst.Expr e, List<JdqlAst.ArgRef> out) {
+        switch (e) {
+            case JdqlAst.ExprArg a -> out.add(a.arg());
+            case JdqlAst.ExprAttr ignored -> { /* an attribute, no value */ }
+            case JdqlAst.ExprBin bin -> {
+                collectArgs(bin.left(), out);
+                collectArgs(bin.right(), out);
+            }
+            case JdqlAst.ExprFunc fn -> fn.args().forEach(arg -> collectArgs(arg, out));
+        }
+    }
+
+    /**
+     * The shape of a statement run as text: its result is a list (entities, a column, rows), a {@code long} (a count,
+     * the rows changed) or an aggregate's value, and its values are converted.
+     */
+    private static CallShape shapeOf(JdqlAst.Stmt stmt, EntityModel<?> model,
+                                     Map<String, Attribute<?, ?>> attrIndex, Map<String, Integer> names) {
+        return switch (stmt.kind) {
+            case SELECT -> new CallShape(List.class, model.entityClass(), names, true);
+            case PROJECT -> new CallShape(List.class,
+                    boxed(lookup(model, attrIndex, stmt.scalarAttr).javaType()), names, true);
+            case PROJECT_MULTI -> new CallShape(List.class, Object[].class, names, true);
+            case AGGREGATE -> new CallShape(
+                    aggregateType(stmt.aggregateOp, lookup(model, attrIndex, stmt.scalarAttr).javaType()),
+                    null, names, true);
+            case COUNT, UPDATE, DELETE -> new CallShape(long.class, null, names, true);
+        };
+    }
+
+    /**
+     * The type an aggregate is read as: {@code MIN} and {@code MAX} the attribute's; {@code SUM} a {@code Long} over
+     * an integral attribute, a {@code Double} over a floating one, else the attribute's; {@code AVG} a
+     * {@code Double}, a {@code BigDecimal} over a {@code BigDecimal}.
+     */
+    private static Class<?> aggregateType(String op, Class<?> attribute) {
+        Class<?> type = boxed(attribute);
+        boolean integral = type == Long.class || type == Integer.class || type == Short.class || type == Byte.class;
+        boolean floating = type == Double.class || type == Float.class;
+        return switch (op) {
+            case "AVG" -> type == java.math.BigDecimal.class ? java.math.BigDecimal.class : Double.class;
+            case "SUM" -> integral ? Long.class : floating ? Double.class : type;
+            default -> type;
+        };
+    }
+
+    /** A projected column as rows of one value. */
+    private static List<Object[]> columnRows(List<?> column) {
+        List<Object[]> rows = new ArrayList<>(column.size());
+        for (Object value : column) rows.add(new Object[] {value});
+        return rows;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object[]> projectedRows(Object rows) {
+        return (List<Object[]>) rows;
+    }
+
     /** Executes {@code stmt} as a call of {@code shape} makes it, with the call's {@code args}. */
     @SuppressWarnings({"rawtypes", "unchecked"})
     static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
