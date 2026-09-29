@@ -294,8 +294,9 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
      *
      * @param summary     one line, at most {@value #MAX_SUMMARY} characters, a longer one cut with {@code ...};
      *                    {@code null} reads as {@code done}
-     * @param contentType {@value #TEXT} or {@value #JSON}, which the page pretty-prints; {@code null} when there is
-     *                    no body, {@value #TEXT} when there is one and none was given
+     * @param contentType {@value #TEXT}, {@value #JSON}, which the page pretty-prints, or {@value #CSV}, which it
+     *                    shows as text with a Download button; {@code null} when there is no body,
+     *                    {@value #TEXT} when there is one and none was given
      * @param body        what to show, or {@code null}; at most {@value #MAX_CONTENT} characters, a longer one
      *                    truncated and ending with the marker {@code … truncated at 256 KiB}
      * @param error       {@code true} when the call went through but its outcome is an error of its target, such as
@@ -313,13 +314,19 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         public static final String TEXT = "text/plain";
         /** A body the page pretty-prints. */
         public static final String JSON = "application/json";
+        /**
+         * A CSV file: the page shows it as text with a Download button that saves it in the browser as
+         * {@code <action id>-<yyyyMMdd-HHmmss>.csv}, without a request. The body cap is the same.
+         */
+        public static final String CSV = "text/csv";
         /** What ends a body or details that was truncated. */
         public static final String TRUNCATED = "\n… truncated at 256 KiB";
 
         public ActionResult {
             summary = summary == null ? "done" : cut(summary);
-            if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)) {
-                throw new IllegalArgumentException("a result's content type is " + TEXT + " or " + JSON);
+            if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)
+                    && !CSV.equals(contentType)) {
+                throw new IllegalArgumentException("a result's content type is " + TEXT + ", " + JSON + " or " + CSV);
             }
             if (body == null) {
                 contentType = null;

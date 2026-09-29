@@ -49,6 +49,19 @@ class ActionResultTest {
     }
 
     @Test
+    void aBodyMayBeCsvWhichThePageOffersToDownload() {
+        assertEquals("text/csv", ActionResult.CSV);
+
+        ActionResult csv = new ActionResult("2 rows", ActionResult.CSV, "a,b\r\n1,2\r\n", false, null);
+
+        assertEquals("text/csv", csv.contentType());
+        assertEquals("a,b\r\n1,2\r\n", csv.body());
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> new ActionResult("ok", "text/csv;charset=utf-8", "a", false, null));
+        assertEquals("a result's content type is text/plain, application/json or text/csv", refused.getMessage());
+    }
+
+    @Test
     void aBodyOrDetailsPastTheLimitIsTruncatedAndSaysSo() {
         String big = "a".repeat(300_000);
 
