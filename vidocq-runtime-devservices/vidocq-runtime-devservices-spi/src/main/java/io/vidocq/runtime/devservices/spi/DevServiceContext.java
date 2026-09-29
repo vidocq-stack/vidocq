@@ -34,6 +34,9 @@ import java.util.Optional;
  * then environment variables. Keys starting with {@code vidocq.dev.} are also read from the application's
  * {@code vidocq.properties} and {@code application.properties}, after those; every other key never is, so that a
  * baked-in default such as {@code vidocq.pool.url} does not switch a dev service off.</p>
+ *
+ * <p>A provider may still learn what the application is configured for: {@link #applicationProperty} answers any key
+ * of the application's own files, {@link #onApplicationClasspath} whether its class path holds a class.</p>
  */
 public interface DevServiceContext {
 
@@ -68,4 +71,33 @@ public interface DevServiceContext {
      * A logger bound to the dev-mode output.
      */
     System.Logger log();
+
+    /**
+     * A value of the application's own configuration files ({@code vidocq.properties}, {@code application.properties},
+     * the external configuration directory), whatever its key — for a provider to learn what the application is
+     * configured for, such as the kind of database a URL names. Never a reason to switch a service off in place of
+     * {@link #property(String)}, whose explicit sources alone do that.
+     *
+     * <p>The default knows nothing: every host of this repository implements it.</p>
+     *
+     * @param key the property key, such as {@code "vidocq.pool.url"}
+     * @return the value if the files give a non-blank one, otherwise {@link Optional#empty()}
+     */
+    default Optional<String> applicationProperty(String key) {
+        return Optional.empty();
+    }
+
+    /**
+     * Whether the application's class path, as its launch will see it (runtime dependencies for {@code vidocq:dev}
+     * and {@code vidocq:run}, test dependencies for a test run), holds this class, found as a {@code .class} entry,
+     * never loaded.
+     *
+     * <p>The default knows nothing, so it says {@code false}: every host of this repository implements it.</p>
+     *
+     * @param className a binary class name, such as {@code "org.postgresql.Driver"}
+     * @return whether the class is there
+     */
+    default boolean onApplicationClasspath(String className) {
+        return false;
+    }
 }

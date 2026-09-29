@@ -58,12 +58,27 @@ public interface DevService {
     /**
      * Whether this provider should run for the current project. Mirrors the Quarkus DevServices
      * rule: a provider opts out when the application has already configured the dependency itself
-     * (e.g. the Postgres provider returns {@code false} when {@code vidocq.pool.url} is present).
+     * (e.g. the Postgres provider returns {@code false} when {@code vidocq.pool.url} is given explicitly), or when
+     * the application does not use it (the Postgres provider for an application on H2); {@link #skipReason} then
+     * says why.
      *
      * @param ctx access to the resolved application configuration
      * @return {@code true} to start this provider, {@code false} to skip it
      */
     boolean appliesWhen(DevServiceContext ctx);
+
+    /**
+     * Why this provider does not start, when {@link #appliesWhen} is {@code false}: one line, no secret. The host
+     * logs it as {@code DevService '<id>' not started: <reason>}, keeps it in the state file and shows it in the
+     * startup report and the dev console; {@code null}, the default, when there is none to give (the host then logs
+     * {@code skipped (already configured)}, as before).
+     *
+     * @param ctx the context {@link #appliesWhen} was given
+     * @return the reason, or {@code null}
+     */
+    default String skipReason(DevServiceContext ctx) {
+        return null;
+    }
 
     /**
      * Provision the service and return the system properties to inject into the child JVM. Blocks
