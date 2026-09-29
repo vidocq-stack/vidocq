@@ -310,4 +310,17 @@ class JdqlRunTest {
                 .contains("Shipment");
         assertThat(JdqlExecutor.target("SELECT reference WHERE reference = 'FROM Elsewhere'")).isEmpty();
     }
+
+    @Test
+    void aSelectClauseThenAWriteIsRefusedAndChangesNothing() {
+        long before = count("SELECT COUNT(this) FROM Shipment", Map.of());
+
+        assertThatThrownBy(() -> run("SELECT this DELETE FROM Shipment", Map.of()))
+                .isInstanceOf(MansartDataException.class);
+        assertThatThrownBy(() -> run("SELECT COUNT(this) UPDATE Shipment SET parcels = 0", Map.of()))
+                .isInstanceOf(MansartDataException.class);
+
+        assertThat(count("SELECT COUNT(this) FROM Shipment", Map.of())).isEqualTo(before);
+        assertThat(JdqlExecutor.isWrite("SELECT this DELETE FROM Shipment")).isFalse();
+    }
 }

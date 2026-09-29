@@ -235,7 +235,8 @@ public final class JdqlAst {
 
         Stmt parseStmt() {
             Stmt s = new Stmt();
-            if (peekKw("SELECT")) {
+            boolean selected = peekKw("SELECT");
+            if (selected) {
                 lex.consume();
                 if (peekKw("COUNT")) {
                     lex.consume();
@@ -277,6 +278,10 @@ public final class JdqlAst {
                 } else {
                     throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
                 }
+            }
+            if (selected && (peekKw("UPDATE") || peekKw("DELETE"))) {
+                // a SELECT clause reads: an UPDATE or a DELETE after one would run a write that reads as a query
+                throw new ParseException("An UPDATE or a DELETE cannot follow a SELECT clause");
             }
             if (peekKw("UPDATE")) {
                 lex.consume();
