@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,6 +99,15 @@ class EntityJsonTest {
                 + "\"price\":2.50}", Json.write(entities.toJson(gizmo)));
         assertEquals("{\"id\":5,\"gizmo\":7,\"label\":\"left\"}",
                 Json.write(entities.toJson(RunFixtures.part(5L, gizmo, "left"))));
+    }
+
+    @Test
+    void theNamesAnExportWritesAreEveryReadableAttributeButAJoinedOne() {
+        assertEquals(List.of("id", "name", "stock", "level", "due", "price"), entities.names(Gizmo.class));
+        assertEquals(List.of("id", "gizmo", "label"), entities.names(Part.class), "the joined name left out");
+        assertEquals(List.of("id", "year", "label"), entities.names(RunFixtures.Slot.class),
+                "a Year is read, as its text");
+        assertEquals(7L, entities.idOf(RunFixtures.gizmo(7L, "bolt", 3, Level.LOW, null, null)));
     }
 
     @Test

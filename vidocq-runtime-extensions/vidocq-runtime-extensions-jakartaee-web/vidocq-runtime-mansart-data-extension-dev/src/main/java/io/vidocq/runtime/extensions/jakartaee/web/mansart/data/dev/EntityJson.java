@@ -25,7 +25,9 @@ import io.vidocq.mansart.data.dialect.attribute.JoinedAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
 
 import java.lang.invoke.MethodHandle;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -118,6 +120,27 @@ final class EntityJson {
             out.put(attribute.name(), Scalars.toJson(value));
         }
         return out;
+    }
+
+    /**
+     * The names {@link #toJson} gives {@code entity}'s instances, in model order: every attribute but a joined one or
+     * one without a getter. The header of a CSV export (CSV spec §3).
+     *
+     * @throws RuntimeException when its model cannot be read, as {@code EntityModels.of} throws it
+     */
+    List<String> names(Class<?> entity) {
+        List<String> names = new ArrayList<>();
+        for (Attribute<?, ?> attribute : model(entity).attributes()) {
+            if (attribute != null && !(attribute instanceof JoinedAttribute<?, ?>) && attribute.getter() != null) {
+                names.add(attribute.name());
+            }
+        }
+        return names;
+    }
+
+    /** The id of {@code entity}, an instance of an entity: what a reference to it is written as. */
+    Object idOf(Object entity) {
+        return get(model(entity.getClass()).id().getter(), entity);
     }
 
     /**

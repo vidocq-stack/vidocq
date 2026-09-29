@@ -146,7 +146,7 @@ final class JdqlActions {
         Class<?> entity = null;
         PanelAction.ActionResult result;
         try {
-            parsed = parse(sent);
+            parsed = parse(STATEMENT, sent);
             statement = statement(parsed);
             refuseTheWrongAction(write, statement.query());
             entity = entity(statement.query());
@@ -200,11 +200,12 @@ final class JdqlActions {
         };
     }
 
-    private static Object parse(String sent) throws Refused {
+    /** {@code sent}, the text of the json argument {@code argument}; refused, naming it, when it does not parse. */
+    static Object parse(String argument, String sent) throws Refused {
         try {
             return Json.parse(sent);
         } catch (IllegalArgumentException unreadable) {
-            throw new Refused(STATEMENT + ": " + unreadable.getMessage());
+            throw new Refused(argument + ": " + unreadable.getMessage());
         }
     }
 
@@ -229,7 +230,7 @@ final class JdqlActions {
     }
 
     /** {@code params}: absent, blank, a JSON object or the text of one; each member a value or a list of values. */
-    private static Map<String, Object> params(Object given) throws Refused {
+    static Map<String, Object> params(Object given) throws Refused {
         Object value = given;
         if (value instanceof String text) {
             if (text.isBlank()) {
@@ -272,7 +273,7 @@ final class JdqlActions {
     }
 
     /** The class of the entity {@code query} names: by simple class name, then by full class name. */
-    private Class<?> entity(String query) throws Refused {
+    Class<?> entity(String query) throws Refused {
         Optional<String> named = JdqlExecutor.target(query);
         if (named.isEmpty()) {
             throw new Refused("no entity: name it, FROM <Entity>, UPDATE <Entity> or DELETE FROM <Entity>");
@@ -291,14 +292,31 @@ final class JdqlActions {
                     .map(MansartDataCatalogue.Entity::className).collect(Collectors.joining(", "))
                     + "; use its full name");
         }
+        return load(found.getFirst(), name);
+    }
+
+    /**
+     * The class of the catalogue's entity shown as {@code name}: its simple name, or its full class name when two
+     * entities share one. An import names its entity so (CSV spec §4).
+     */
+    Class<?> named(String name) throws Refused {
+        for (MansartDataCatalogue.Entity entity : entities) {
+            if (entity.name().equals(name)) {
+                return load(entity, name);
+            }
+        }
+        throw new Refused("unknown entity " + name + "; entities: " + entityNames());
+    }
+
+    private Class<?> load(MansartDataCatalogue.Entity entity, String name) throws Refused {
         try {
-            return classes.apply(found.getFirst().className());
+            return classes.apply(entity.className());
         } catch (RuntimeException | LinkageError missing) {
             throw new Refused("entity " + name + ": " + Failures.text(missing));
         }
     }
 
-    private EntityModel<?> model(Class<?> entity) throws Refused {
+    EntityModel<?> model(Class<?> entity) throws Refused {
         try {
             EntityModel<?> model = models.apply(entity);
             if (model == null) {
@@ -311,7 +329,7 @@ final class JdqlActions {
     }
 
     /** The default {@code RepositoryRuntime} bean, resolved now: the data store of the {@code @Default} datasource. */
-    private Object runtime() throws Refused {
+    Object runtime() throws Refused {
         try {
             return beans.reference(RepositoryRuntime.class);
         } catch (RuntimeException | LinkageError none) {
@@ -320,8 +338,13 @@ final class JdqlActions {
     }
 
     /** The catalogue's names of its entities, in alphabetical order. */
-    private String entityNames() {
-        return entities.stream().map(MansartDataCatalogue.Entity::name).sorted().collect(Collectors.joining(", "));
+    List<String> names() {
+        return entities.stream().map(MansartDataCatalogue.Entity::name).sorted().toList();
+    }
+
+    /** {@link #names()}, joined with commas. */
+    String entityNames() {
+        return String.join(", ", names());
     }
 
     /** {@code io.x.Outer$Gizmo} → {@code Gizmo}: the name a statement uses. */
@@ -353,8 +376,8 @@ final class JdqlActions {
         return (System.nanoTime() - start) / 1_000_000;
     }
 
-    /** A call refused before the statement runs: its message is the summary. */
-    private static final class Refused extends Exception {
+    /** A call of the tab refused before anything runs: its message is the summary. {@link CsvActions} throws it too. */
+    static final class Refused extends Exception {
 
         private static final long serialVersionUID = 1L;
 

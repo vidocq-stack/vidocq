@@ -25,6 +25,7 @@ import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.JoinPath;
 import io.vidocq.mansart.data.dialect.attribute.JoinedAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
+import io.vidocq.mansart.data.dialect.attribute.TemporalAttribute;
 import io.vidocq.mansart.data.dialect.attribute.TextAttribute;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
 import jakarta.data.page.Page;
@@ -42,6 +43,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Year;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -115,6 +117,23 @@ final class RunFixtures {
         private String label;
 
         public Broken() {}
+    }
+
+    /** Its model is {@link #slotModel()}: a {@code Year}, a type the console cannot convert, between an id and a label. */
+    public static class Slot {
+        private Long id;
+        private Year year;
+        private String label;
+
+        public Slot() {}
+    }
+
+    static Slot slot(Long id, Year year, String label) {
+        Slot slot = new Slot();
+        slot.id = id;
+        slot.year = year;
+        slot.label = label;
+        return slot;
     }
 
     static Gizmo gizmo(Long id, String name, int stock, Level level, LocalDate due, BigDecimal price) {
@@ -191,15 +210,19 @@ final class RunFixtures {
     }
 
     /** The entities of the catalogue, by class name. */
-    static final Set<String> ENTITIES = Set.of(Gizmo.class.getName(), Part.class.getName(), Broken.class.getName());
+    static final Set<String> ENTITIES = Set.of(Gizmo.class.getName(), Part.class.getName(), Broken.class.getName(),
+            Slot.class.getName());
 
     /** The repositories the panel runs, as MansartDataLive publishes them. */
     static final List<Class<?>> REPOSITORIES = List.of(GizmoRepository.class, PartRepository.class,
             ReportQueries.class);
 
-    /** The models: Part's by hand, the others from Mansart itself. */
+    /** The models: Part's and Slot's by hand, the others from Mansart itself. */
     static EntityModel<?> model(Class<?> type) {
-        return type == Part.class ? partModel() : EntityModels.of(type);
+        if (type == Part.class) {
+            return partModel();
+        }
+        return type == Slot.class ? slotModel() : EntityModels.of(type);
     }
 
     static EntityJson entities() {
@@ -219,6 +242,25 @@ final class RunFixtures {
         MansartDataCatalogue.Repository reports = new MansartDataCatalogue.Repository("ReportQueries",
                 ReportQueries.class.getName(), null, null, null, List.of(), 1, "");
         return new MansartDataCatalogue(List.of(gizmo, part), List.of(gizmos, parts, reports), 2, 3, 15);
+    }
+
+    /** The model of {@link Slot}, with real handles: its id, a {@code Year}, a label. */
+    static EntityModel<Slot> slotModel() {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        try {
+            IdAttribute<Slot, Long> id = new IdAttribute<>("id", "id", Long.class, Slot.class, true,
+                    lookup.findGetter(Slot.class, "id", Long.class), lookup.findSetter(Slot.class, "id", Long.class));
+            TemporalAttribute<Slot, Year> year = new TemporalAttribute<>("year", "year", Year.class, Slot.class, true,
+                    false, lookup.findGetter(Slot.class, "year", Year.class),
+                    lookup.findSetter(Slot.class, "year", Year.class));
+            TextAttribute<Slot> label = new TextAttribute<>("label", "label", Slot.class, true, false, 100,
+                    lookup.findGetter(Slot.class, "label", String.class),
+                    lookup.findSetter(Slot.class, "label", String.class));
+            return new EntityModel<>(Slot.class, "slots", "", id, Optional.empty(), List.of(id, year, label),
+                    lookup.findConstructor(Slot.class, MethodType.methodType(void.class)));
+        } catch (ReflectiveOperationException impossible) {
+            throw new IllegalStateException(impossible);
+        }
     }
 
     /** The model of {@link Part}, with real handles: its id, a reference to a gizmo, a label, a joined name. */
