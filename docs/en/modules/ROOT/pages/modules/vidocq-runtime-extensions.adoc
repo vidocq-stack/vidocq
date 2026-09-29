@@ -613,7 +613,7 @@ A boxed type takes `null`, a primitive does not. A value that does not convert f
 
 Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] ends with a *JDQL* tab, which runs a JDQL statement you type against the application's database: a query to look at data, an `UPDATE` or a `DELETE` to try a change, then roll it back or keep it. Its list offers two actions.
 
-* *Query* runs a `FROM …`, a projection `SELECT a, b FROM …`, a `SELECT COUNT(this) FROM …` or an aggregate such as `SELECT MAX(price) FROM …`, without asking first. An `UPDATE` or a `DELETE` is refused there: `an UPDATE or DELETE: use Update / Delete`.
+* *Query* runs a `FROM …`, a projection `SELECT a, b FROM …`, a `SELECT COUNT(this) FROM …` or an aggregate such as `SELECT MAX(price) FROM …`, without asking first. An `UPDATE` or a `DELETE` is refused there: `an UPDATE or DELETE: use Update / Delete`; and when the application has a transaction manager, a query runs in a transaction that is always rolled back, so that nothing it could hold is kept.
 * *Update / Delete* runs an `UPDATE … SET …` or a `DELETE FROM …`, and nothing else (`not an UPDATE or DELETE: use Query`). The page asks first (`Runs this JDQL statement against the database.`), and its *Transaction* list offers `rollback`, the default, then `commit`, as a repository method's write does (<<mansart-data-run-method>>): the statement runs in a transaction of the application's `TransactionManager`, rolled back unless `commit` is asked, and always rolled back when it fails. Without a `TransactionManager`, `commit` only.
 
 The form has two fields of several lines: `query`, the statement, and `params`, its named parameters as a JSON object.

@@ -165,7 +165,10 @@ final class JdqlActions {
 
     private PanelAction.ActionResult run(boolean write, Statement statement, EntityModel<?> model, Object runtime,
                                          String mode, long start, String details) {
-        TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(mode,
+        // A query runs in a transaction that is always rolled back, when there is a transaction manager: it is
+        // read-only whatever it holds, should a statement that writes ever pass for a query.
+        String runs = write ? mode : transactions.available() ? TransactionRunner.ROLLBACK : null;
+        TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(runs,
                 () -> answer(runner.run(statement.query(), statement.params(), model, runtime), write, json));
         if (outcome.failure() != null) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + (write ? WRITE : QUERY) + " failed: "
@@ -176,7 +179,7 @@ final class JdqlActions {
         }
         ResultJson.Result value = outcome.value();
         String summary = value.what() + (value.rows() ? " in " + millis(start) + " ms" : "")
-                + (outcome.state() == null ? "" : " · " + outcome.state());
+                + (!write || outcome.state() == null ? "" : " · " + outcome.state());
         return new PanelAction.ActionResult(summary, PanelAction.ActionResult.JSON, value.body(), false, details);
     }
 
@@ -332,7 +335,7 @@ final class JdqlActions {
         return Json.write(Scalars.object("entity", entity == null ? null : entity.getName(),
                 "query", statement == null ? null : statement.query(),
                 "params", statement == null ? Map.of() : statement.params(),
-                "transaction", mode == null ? "none" : mode));
+                "transaction", mode == null ? "read-only" : mode));
     }
 
     /** {@code <action id> {"statement": {...}, "transaction": "..."}}, or empty when the statement was no object. */

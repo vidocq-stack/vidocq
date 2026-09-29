@@ -159,7 +159,7 @@ class JdqlActionsTest {
     }
 
     @Test
-    void aQueryRunsOnTheEntityItNamesWithItsParametersOutsideATransaction() {
+    void aQueryRunsOnTheEntityItNamesWithItsParametersInATransactionRolledBack() {
         RepositoryActions actions = build();
         runner.answer = new JdqlResult.Entities(List.of(bolt(1), bolt(2)));
 
@@ -175,9 +175,11 @@ class JdqlActionsTest {
         assertEquals(List.of(Map.of("min", new BigDecimal("2"))), runner.parameters);
         assertEquals(List.of(Gizmo.class), runner.entities);
         assertSame(RUNTIME, runner.runtimes.getFirst());
-        assertEquals(List.of(), manager.events, "a query runs in no transaction of the console's");
+        // a query is read-only whatever it holds: should the parser ever take a write for a query, nothing is kept
+        assertEquals(List.of("begin", "rollback"), manager.events, "a query runs in a transaction rolled back");
+        assertFalse(result.summary().contains("rolled back"), "a query's summary says nothing of it");
         assertEquals("{\"entity\":\"" + Gizmo.class.getName() + "\",\"query\":\"FROM Gizmo WHERE stock > :min\","
-                + "\"params\":{\"min\":2},\"transaction\":\"none\"}", result.details());
+                + "\"params\":{\"min\":2},\"transaction\":\"read-only\"}", result.details());
     }
 
     @Test
