@@ -216,7 +216,13 @@ class CatalogueLivePanelTest {
 
         List<PanelAction> actions = panel.actions();
 
-        assertEquals(23, actions.size());
+        assertEquals(25, actions.size());
+        assertEquals(List.of("jdql.query", "jdql.write"),
+                actions.subList(23, 25).stream().map(PanelAction::id).toList(), "the JDQL tab, last");
+        assertEquals(List.of("commit"), actions.get(24).arguments().get(1).allowedValues(),
+                "no TransactionManager bean");
+        assertEquals("no RepositoryRuntime bean",
+                actions.get(23).call().apply(Map.of("statement", "{\"query\":\"FROM Gizmo\"}")).summary());
         PanelAction save = actions.stream().filter(a -> a.id().equals("m.gizmo-repository.save")).findFirst()
                 .orElseThrow();
         assertEquals(List.of("commit"), save.arguments().get(1).allowedValues(), "no TransactionManager bean");

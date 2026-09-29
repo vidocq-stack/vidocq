@@ -47,7 +47,8 @@ import java.util.function.Predicate;
  * for the repositories with no primary entity. {@link #sample} reads that holder and the calls kept in memory: no
  * bean, no connection, no query.
  *
- * <p>Its actions run the repositories' methods, one tab per repository (see {@link RepositoryActions}): built once
+ * <p>Its actions run the repositories' methods, one tab per repository (see {@link RepositoryActions}), then JDQL
+ * statements in a <i>JDQL</i> tab (see {@link JdqlActions}, on Mansart's {@code JdqlExecutor.run}): built once
  * per boot by {@link #actions()}, which the console calls after {@link #start}, from the repository interfaces
  * {@link MansartDataLive} holds and the {@link BeanManager} {@code start} keeps; dropped by {@link #stop}.
  *
@@ -124,7 +125,7 @@ public final class CatalogueLivePanel implements LivePanel {
         }
         try {
             RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(), lookup, transactions,
-                    models, accessible, RepositoryActions.MAX_ACTIONS);
+                    models, accessible, RepositoryActions.MAX_ACTIONS, JdqlRunner.MANSART);
             run = built;
             return built.actions();
         } catch (RuntimeException | LinkageError failed) {
