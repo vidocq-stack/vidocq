@@ -94,8 +94,10 @@ configuration directory) gives, for the `@Default` datasource and then for each 
 2. a file URL starting with `jdbc:` but not `jdbc:postgresql:` (whatever the case), such as
    `jdbc:h2:mem:app`: no container, and the log says
    `DevService 'postgres' not started: vidocq.pool.url is jdbc:h2, not PostgreSQL`;
-3. a file URL `jdbc:postgresql:…`: a container, whose URL replaces the file's under the dev host —
-   the file's URL is the production one, and never switches the dev container off;
+3. a file URL `jdbc:postgresql:…`, or a wrapper driver's in front of it such as
+   `jdbc:otel:postgresql:…` or `jdbc:p6spy:postgresql:…` (not Testcontainers' `jdbc:tc:`): a
+   container, whose URL replaces the file's under the dev host — the file's URL is the production
+   one, and never switches the dev container off;
 4. no URL anywhere, or a value that is not a `jdbc:` URL (such as `${db.url}`): a container only
    when `org.postgresql.Driver` is on the application's class path (runtime dependencies for
    `vidocq:dev`/`vidocq:run`, test dependencies for `vidocq:test` and a JUnit run); otherwise
@@ -105,6 +107,11 @@ A reason names the key and the URL's scheme only, never its host, user or passwo
 datasources and none started, the reasons are joined with `; `. It is kept in the state file
 (`"skipped"`) and shown as a `postgres` row, `not started: …`, in the startup report and the dev
 console's *Dev services* panel; with nothing started, the summary reads `no dev service started`.
+
+**Upgrading:** an application that relied on the container with no URL at all and the PostgreSQL
+driver in *test* scope only no longer gets one under `vidocq:dev` and `vidocq:run` (they look at
+the runtime class path). Write its production URL in `vidocq.properties`
+(`vidocq.pool.url=jdbc:postgresql://…`): rule 3 gives the container back.
 
 ## Where configuration comes from
 

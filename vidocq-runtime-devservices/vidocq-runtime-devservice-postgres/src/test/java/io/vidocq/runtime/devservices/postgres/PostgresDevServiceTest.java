@@ -178,6 +178,18 @@ class PostgresDevServiceTest {
         }
     }
 
+    /** A wrapper driver in front of PostgreSQL (tracing, logging, cloud) is PostgreSQL; Testcontainers' is not. */
+    @Test
+    void aWrapperDriverInFrontOfPostgresStartsAContainer() {
+        for (String url : List.of("jdbc:otel:postgresql://prod:5432/db", "jdbc:p6spy:postgresql://prod/db",
+                "JDBC:aws-wrapper:PostgreSQL://prod/db")) {
+            assertEquals(List.of("default"),
+                    names(PostgresDevService.plan(ctx(Map.of(), Map.of("vidocq.pool.url", url), false))), url);
+        }
+        assertEquals("vidocq.pool.url is jdbc:tc, not PostgreSQL", new PostgresDevService()
+                .skipReason(ctx(Map.of(), Map.of("vidocq.pool.url", "jdbc:tc:postgresql:16:///db"), true)));
+    }
+
     @Test
     void noUrlStartsAContainerOnlyWithTheDriverOnTheClassPath() {
         assertEquals(List.of("default"), names(PostgresDevService.plan(ctx(Map.of(), Map.of(), true))));

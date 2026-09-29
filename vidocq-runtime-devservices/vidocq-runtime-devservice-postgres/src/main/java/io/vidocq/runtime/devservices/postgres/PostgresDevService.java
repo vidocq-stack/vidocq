@@ -195,8 +195,9 @@ public final class PostgresDevService implements DevService {
      *   <li>the URL is given explicitly ({@link DevServiceContext#property}): no container, no reason;</li>
      *   <li>the application's file gives a {@code jdbc:} URL that is not {@code jdbc:postgresql:} (any case): no
      *       container, the reason naming the key and the URL's {@link #scheme} only;</li>
-     *   <li>the file gives a {@code jdbc:postgresql:} URL, the production one: a container, whose URL replaces it
-     *       under the dev host;</li>
+     *   <li>the file gives a {@code jdbc:postgresql:} URL, the production one, or a wrapper driver's
+     *       {@code jdbc:<name>:postgresql:} ({@link #isPostgres}): a container, whose URL replaces it under the dev
+     *       host;</li>
      *   <li>no URL, or a value that is not a {@code jdbc:} URL (such as {@code ${db.url}}): a container only when
      *       {@value #DRIVER} is on the application's class path.</li>
      * </ol>
@@ -217,7 +218,7 @@ public final class PostgresDevService implements DevService {
         }
         String fileUrl = ctx.applicationProperty(urlKey).map(String::strip).orElse("");
         if (startsWithIgnoringCase(fileUrl, "jdbc:")) {
-            if (!startsWithIgnoringCase(fileUrl, "jdbc:postgresql:")) {
+            if (!isPostgres(fileUrl)) {
                 return new Decision(name, null, urlKey + " is " + scheme(fileUrl) + ", not PostgreSQL");
             }
             return new Decision(name, specFor(ctx, name, poolPrefix, devPrefix), null);
@@ -245,6 +246,21 @@ public final class PostgresDevService implements DevService {
 
     private static boolean isNameCharacter(char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+    }
+
+    /**
+     * {@code jdbc:postgresql:…}, or a wrapper driver in front of it, {@code jdbc:<name>:postgresql:…} (tracing,
+     * logging or cloud drivers such as {@code jdbc:otel:}, {@code jdbc:p6spy:}, {@code jdbc:aws-wrapper:}) — any case.
+     * Not Testcontainers' {@code jdbc:tc:postgresql:}, which starts a container of its own.
+     */
+    private static boolean isPostgres(String url) {
+        if (startsWithIgnoringCase(url, "jdbc:postgresql:")) {
+            return true;
+        }
+        String scheme = scheme(url);
+        return scheme.length() > "jdbc:".length() && !scheme.equalsIgnoreCase("jdbc:tc")
+                && url.length() > scheme.length() && url.charAt(scheme.length()) == ':'
+                && url.regionMatches(true, scheme.length() + 1, "postgresql:", 0, "postgresql:".length());
     }
 
     private static boolean startsWithIgnoringCase(String text, String prefix) {

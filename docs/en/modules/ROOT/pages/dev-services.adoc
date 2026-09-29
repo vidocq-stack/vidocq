@@ -79,7 +79,7 @@ service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for 
 | No
 | `not started: vidocq.pool.url is jdbc:h2, not PostgreSQL`
 
-| The file gives a `jdbc:postgresql:` URL — the production one
+| The file gives a `jdbc:postgresql:` URL — the production one — or a wrapper driver's in front of it, such as `jdbc:otel:postgresql:` or `jdbc:p6spy:postgresql:` (not Testcontainers' `jdbc:tc:`)
 | Yes, and its URL replaces the file's under the dev host
 | The service, as before
 
@@ -92,6 +92,11 @@ The class path is the one the application will run with: its runtime dependencie
 `vidocq:dev` and `vidocq:run`, its test dependencies under `vidocq:test` and a JUnit run. An
 application on PostgreSQL at runtime and on H2 in its tests, whose file names PostgreSQL, still gets
 its container in a test run. The driver is looked up as a `.class` entry, never loaded.
+
+IMPORTANT: An application that relied on the container with no URL anywhere and the PostgreSQL
+driver in *test* scope only no longer gets one under `vidocq:dev` and `vidocq:run`, which look at
+the runtime class path. Write its production URL in `vidocq.properties`
+(`vidocq.pool.url=jdbc:postgresql://…`): the container is back, its URL replacing that one.
 
 A reason names the key and the URL's scheme — `jdbc:h2`, as written — never the rest of the URL,
 which may carry a host, a user or a password. When no datasource gets a container, the reasons of
