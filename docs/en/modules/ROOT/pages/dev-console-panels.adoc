@@ -533,6 +533,19 @@ new PanelAction("tool.weather", "Weather", null,
         }, "Tools", "The weather in a city.\nIn Celsius.");
 ----
 
+A string property whose schema also says `"format": "textarea"` [.tag-new]#NEW# is a field of several lines in that
+form rather than a one-line one: four lines of monospace text to start with, taller when dragged, its value sent as
+any other string's. The Mansart Data panel's *JDQL* tab uses it for its statement and its parameters
+(xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]):
+
+[source,json]
+----
+{"type": "object",
+ "properties": {"query": {"type": "string", "format": "textarea"},
+                "params": {"type": "string", "format": "textarea"}},
+ "required": ["query"]}
+----
+
 [#action-result]
 === A structured result [.tag-new]#NEW#
 

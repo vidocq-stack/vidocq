@@ -721,8 +721,9 @@ function skeleton(schema) {
 const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED));
 
 /**
- * A json argument: a form generated from its schema when the schema is flat, using required, default, description
- * and enum, and a raw JSON editor otherwise, starting from the required properties. A "JSON" switch shows the form's
+ * A json argument: a form generated from its schema when the schema is flat, using required, default, description,
+ * enum and a string's "format": "textarea" (a field of several lines), and a raw JSON editor otherwise, starting from
+ * the required properties. A "JSON" switch shows the form's
  * value as JSON; switching back keeps the values. value() returns the JSON text sent, or throws what is wrong.
  */
 function jsonField(argument) {
@@ -757,6 +758,12 @@ function jsonField(argument) {
           option.value = v;
           input.append(option);
         }
+      } else if (kind === "string" && definition.format === "textarea") {
+        // A text of several lines, such as a query: a textarea, read, filled and sent as an input is.
+        input = el("textarea", "json-text");
+        input.rows = 4;
+        input.spellcheck = false;
+        wrap.classList.add("wide");
       } else {
         input = el("input");
         input.type = "text";

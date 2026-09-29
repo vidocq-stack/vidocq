@@ -278,6 +278,22 @@ class PageTest {
     }
 
     @Test
+    void aStringPropertyOfFormatTextareaIsAMultiLineFieldOfTheForm() {
+        String script = file("console.js");
+        String style = file("console.css");
+
+        assertTrue(script.contains("} else if (kind === \"string\" && definition.format === \"textarea\") {"),
+                "a string property of \"format\": \"textarea\", and only such a property, gets a textarea");
+        assertTrue(script.contains("input = el(\"textarea\", \"json-text\");"), "a textarea of its own class");
+        assertTrue(script.contains("input.rows = 4;"), "four lines to start with");
+        assertTrue(script.contains("wrap.classList.add(\"wide\");"), "on a line of its own");
+        String textarea = rule(style, ".action textarea.json-text {");
+        assertTrue(textarea.contains("var(--mono)"), "monospace, as the JSON editor");
+        assertTrue(textarea.contains("resize: vertical"), "taller when dragged");
+        assertTrue(rule(style, ".action .arg.wide {").contains("flex-basis: 100%"), "the whole width of the form");
+    }
+
+    @Test
     void aReplayColumnCellThatReplaysNoActionOfThePanelStaysText() {
         String script = file("console.js");
 
