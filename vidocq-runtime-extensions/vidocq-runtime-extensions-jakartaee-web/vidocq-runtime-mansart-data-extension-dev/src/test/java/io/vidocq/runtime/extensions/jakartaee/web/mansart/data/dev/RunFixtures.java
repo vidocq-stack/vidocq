@@ -128,6 +128,14 @@ final class RunFixtures {
         public Slot() {}
     }
 
+    /** Its model is {@link #tallyModel()}: a primitive {@code long} id, which Mansart never generates, and a label. */
+    public static class Tally {
+        private long id;
+        private String label;
+
+        public Tally() {}
+    }
+
     static Slot slot(Long id, Year year, String label) {
         Slot slot = new Slot();
         slot.id = id;
@@ -211,16 +219,19 @@ final class RunFixtures {
 
     /** The entities of the catalogue, by class name. */
     static final Set<String> ENTITIES = Set.of(Gizmo.class.getName(), Part.class.getName(), Broken.class.getName(),
-            Slot.class.getName());
+            Slot.class.getName(), Tally.class.getName());
 
     /** The repositories the panel runs, as MansartDataLive publishes them. */
     static final List<Class<?>> REPOSITORIES = List.of(GizmoRepository.class, PartRepository.class,
             ReportQueries.class);
 
-    /** The models: Part's and Slot's by hand, the others from Mansart itself. */
+    /** The models: Part's, Slot's and Tally's by hand, the others from Mansart itself. */
     static EntityModel<?> model(Class<?> type) {
         if (type == Part.class) {
             return partModel();
+        }
+        if (type == Tally.class) {
+            return tallyModel();
         }
         return type == Slot.class ? slotModel() : EntityModels.of(type);
     }
@@ -245,6 +256,22 @@ final class RunFixtures {
     }
 
     /** The model of {@link Slot}, with real handles: its id, a {@code Year}, a label. */
+    /** The model of {@link Tally}, with real handles: its primitive id, a label. */
+    static EntityModel<Tally> tallyModel() {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        try {
+            IdAttribute<Tally, Long> id = new IdAttribute<>("id", "id", long.class, Tally.class, true,
+                    lookup.findGetter(Tally.class, "id", long.class), lookup.findSetter(Tally.class, "id", long.class));
+            TextAttribute<Tally> label = new TextAttribute<>("label", "label", Tally.class, true, false, 100,
+                    lookup.findGetter(Tally.class, "label", String.class),
+                    lookup.findSetter(Tally.class, "label", String.class));
+            return new EntityModel<>(Tally.class, "tallies", "", id, Optional.empty(), List.of(id, label),
+                    lookup.findConstructor(Tally.class, MethodType.methodType(void.class)));
+        } catch (ReflectiveOperationException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
     static EntityModel<Slot> slotModel() {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {

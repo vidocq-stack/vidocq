@@ -553,6 +553,37 @@ class CsvActionsTest {
     }
 
     @Test
+    void aPrimitiveIdIsNeverGeneratedSoItsColumnIsRequired() {
+        List<MansartDataCatalogue.Entity> entities = new ArrayList<>(RunFixtures.catalogue().entities());
+        entities.add(new MansartDataCatalogue.Entity("Tally", RunFixtures.Tally.class.getName(), "tallies", List.of(),
+                null));
+        TransactionRunner transactions = new TransactionRunner(new JtaDemarcation(() -> manager));
+        JdqlActions jdql = new JdqlActions(entities,
+                className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES), RunFixtures::model, json,
+                BEANS, transactions, runner, history, JdqlActions.GROUP);
+        CsvActions tab = new CsvActions(jdql, json, transactions, runner, saver, history, JdqlActions.GROUP);
+
+        assertRefused(load(tab, "Tally", "label\r\na\r\nb\r\n", null, "commit"),
+                "header: id is a long, which is never generated: give each row its id");
+        assertNothingSaved();
+        assertEquals("2 rows saved · committed", load(tab, "Tally", "id,label\r\n1,a\r\n2,b\r\n", null, "commit")
+                .summary());
+    }
+
+    @Test
+    void blankLinesAtTheEndOfTheFileAreNoRows() {
+        CsvActions tab = tab();
+
+        assertEquals("2 rows saved · rolled back", load(tab, "Gizmo", "name\r\nA\r\nB\r\n\r\n\n", null, null)
+                .summary(), "one column: a blank line at the end is no entity of null");
+        assertEquals("1 row saved · rolled back", load(tab, "Gizmo", "name,stock\r\nbolt,3\r\n\r\n", null, null)
+                .summary(), "several columns: no field-count refusal for it");
+        assertRefused(load(tab, "Gizmo", "name\r\n\r\n", null, null), "no row: the file has a header only");
+        assertRefused(load(tab, "Gizmo", "name,stock\r\n\r\nbolt,3\r\n", null, null),
+                "line 2: 1 field, the header has 2");
+    }
+
+    @Test
     void anExportIsKeptInTheTabsHistoryWithItsReplay() {
         CsvActions tab = tab();
         runner.answer = new JdqlResult.Count(3);

@@ -373,7 +373,7 @@ final class CsvActions {
             load = readFile(parsed);
             entity = jdql.named(load.entity());
             EntityModel<?> model = jdql.model(entity);
-            rows = read(load, entity);
+            rows = read(load, entity, model);
             Object runtime = jdql.runtime();
             result = save(entity, model, rows, runtime, mode, importDetails(entity, rows, load, mode));
         } catch (JdqlActions.Refused refused) {
@@ -394,8 +394,11 @@ final class CsvActions {
         return new Load(text(members, ENTITY_MEMBER).strip(), text(members, CSV_MEMBER), separator(members));
     }
 
-    /** Phase 1: the header, then each row built into an entity; the first failure stops it with its line. */
-    private List<Row> read(Load load, Class<?> entity) throws JdqlActions.Refused {
+    /**
+     * Phase 1: the header, then each row built into an entity; the first failure stops it with its line. Blank lines
+     * at the end of the file are no rows.
+     */
+    private List<Row> read(Load load, Class<?> entity, EntityModel<?> model) throws JdqlActions.Refused {
         List<Csv.Record> records;
         try {
             records = Csv.read(load.csv(), load.separator());
@@ -406,7 +409,17 @@ final class CsvActions {
             throw new JdqlActions.Refused(CSV_MEMBER + ": missing");
         }
         List<String> header = header(records.getFirst().fields(), entity);
-        List<Csv.Record> lines = records.subList(1, records.size());
+        // Mansart inserts only a null id: a primitive one is never generated, each row must give it
+        Class<?> idType = model.id().javaType();
+        if (idType.isPrimitive() && !header.contains(model.id().name())) {
+            throw new JdqlActions.Refused("header: " + model.id().name() + " is a " + idType.getName()
+                    + ", which is never generated: give each row its id");
+        }
+        int end = records.size();
+        while (end > 1 && isBlank(records.get(end - 1))) {
+            end--;
+        }
+        List<Csv.Record> lines = records.subList(1, end);
         if (lines.isEmpty()) {
             throw new JdqlActions.Refused("no row: the file has a header only");
         }
@@ -437,6 +450,11 @@ final class CsvActions {
             }
         }
         return rows;
+    }
+
+    /** Whether a record is what a blank line reads as: one empty unquoted field. */
+    private static boolean isBlank(Csv.Record record) {
+        return record.fields().size() == 1 && record.fields().getFirst() == null;
     }
 
     /** The header: each name an attribute an import may set, once each. */
