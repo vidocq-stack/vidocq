@@ -258,6 +258,51 @@ class DevConsoleSnapshotTest {
                 .get("body")).get("price")).doubleValue(), "the UPDATE was rolled back");
     }
 
+    /**
+     * Runs JDQL from the Mansart Data panel's JDQL tab against the in-memory H2 database, as a developer does from its
+     * page: a query with a parameter given as a JSON number, then an UPDATE of every product rolled back, which leaves
+     * every price as it was.
+     */
+    @Test
+    void runsJdqlFromTheConsole() throws Exception {
+        List<?> actions = (List<?>) panel("mansart-data").get("actions");
+        Map<?, ?> query = actions.stream().map(a -> (Map<?, ?>) a)
+                .filter(a -> "jdql.query".equals(a.get("id"))).findFirst()
+                .orElseGet(() -> fail("no JDQL query action in " + actions));
+        assertEquals("JDQL", query.get("group"));
+        String token = (String) ((Map<?, ?>) snapshot.get("console")).get("actionToken");
+
+        Map<?, ?> dear = runJdql(token, "query",
+                "{\"query\":\"FROM Product WHERE price > :min ORDER BY name\",\"params\":{\"min\":3}}", null);
+        assertTrue(((String) dear.get("result")).matches("2 rows in \\d+ ms"), "result: " + dear);
+        assertEquals(List.of("Cappuccino", "Latte"),
+                rows((String) dear.get("body")).stream().map(r -> ((Map<?, ?>) r).get("name")).toList());
+
+        long products = Long.parseLong((String) runJdql(token, "query",
+                "{\"query\":\"SELECT COUNT(this) FROM Product\"}", null).get("result"));
+        assertEquals(products + (products == 1 ? " row" : " rows") + " · rolled back", runJdql(token, "write",
+                "{\"query\":\"UPDATE Product SET price = price * 2\"}", "rollback").get("result"));
+        Map<?, ?> espresso = runJdql(token, "query", "{\"query\":\"FROM Product WHERE name = 'Espresso'\"}", null);
+        assertEquals(2.5, ((Number) ((Map<?, ?>) rows((String) espresso.get("body")).getFirst()).get("price"))
+                .doubleValue(), "the UPDATE was rolled back");
+    }
+
+    /** Runs {@code jdql.<action>} with this statement; its answer, which must be no error. */
+    private static Map<?, ?> runJdql(String token, String action, String statement, String transaction)
+            throws Exception {
+        String body = "{\"statement\":\"" + statement.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+                + (transaction == null ? "" : ",\"transaction\":\"" + transaction + "\"") + "}";
+        Map<?, ?> answer = json(postAction("mansart-data/jdql." + action, token, body));
+        assertNotEquals(Boolean.TRUE, answer.get("error"), action + ": " + answer);
+        return answer;
+    }
+
+    private static List<?> rows(String text) throws Exception {
+        try (Jsonb jsonb = JsonbBuilder.create()) {
+            return (List<?>) jsonb.fromJson(text, Object.class);
+        }
+    }
+
     /** Runs {@code m.product-repository.<method>} with these arguments; its answer, which must be no error. */
     private static Map<?, ?> runProducts(String token, String method, String arguments, String transaction)
             throws Exception {
