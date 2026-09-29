@@ -33,6 +33,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Handler;
@@ -285,6 +286,61 @@ class DevConsoleSnapshotTest {
         Map<?, ?> espresso = runJdql(token, "query", "{\"query\":\"FROM Product WHERE name = 'Espresso'\"}", null);
         assertEquals(2.5, ((Number) ((Map<?, ?>) rows((String) espresso.get("body")).getFirst()).get("price"))
                 .doubleValue(), "the UPDATE was rolled back");
+    }
+
+    /**
+     * Exports the three seeded products as CSV from the JDQL tab, then imports that CSV again with its ids emptied:
+     * rolled back it leaves the table as it was, committed it adds one product per line — each with a new id — which
+     * the test deletes again, so that the table ends as it began.
+     */
+    @Test
+    void exportsAndImportsCsvFromTheConsole() throws Exception {
+        List<?> actions = (List<?>) panel("mansart-data").get("actions");
+        List<?> ids = actions.stream().map(a -> ((Map<?, ?>) a).get("id")).toList();
+        assertTrue(ids.containsAll(List.of("jdql.export", "jdql.import")), "the CSV actions: " + ids);
+        String token = (String) ((Map<?, ?>) snapshot.get("console")).get("actionToken");
+
+        Map<?, ?> export = runCsv(token, "export", Map.of("query", "FROM Product WHERE id <= 3 ORDER BY id"), null);
+        assertEquals("text/csv", export.get("contentType"));
+        String csv = (String) export.get("body");
+        assertEquals("id,name,price\r\n1,Espresso,2.5\r\n2,Cappuccino,3.5\r\n3,Latte,4.0\r\n", csv);
+        assertTrue(((String) export.get("result")).matches("3 rows · \\d+ B in \\d+ ms"), "result: " + export);
+
+        String emptied = csv.replaceAll("(?m)^\\d+,", ",");
+        long before = countProducts(token);
+        long maxId = Long.parseLong((String) runJdql(token, "query", "{\"query\":\"SELECT MAX(id) FROM Product\"}",
+                null).get("result"));
+
+        assertEquals("3 rows saved · rolled back", runCsv(token, "import",
+                Map.of("entity", "Product", "csv", emptied), "rollback").get("result"));
+        assertEquals(before, countProducts(token), "an import rolled back leaves no row");
+
+        assertEquals("3 rows saved · committed", runCsv(token, "import",
+                Map.of("entity", "Product", "csv", emptied), "commit").get("result"));
+        assertEquals(before + 3, countProducts(token), "an import committed adds a row per line, its id generated");
+
+        assertEquals("3 rows · committed", runJdql(token, "write",
+                "{\"query\":\"DELETE FROM Product WHERE id > :max\",\"params\":{\"max\":" + maxId + "}}", "commit")
+                .get("result"));
+        assertEquals(before, countProducts(token));
+    }
+
+    /**
+     * Runs {@code jdql.<action>}, {@code export} with its {@code statement} or {@code import} with its {@code file},
+     * both written as the page writes them; its answer, which must be no error.
+     */
+    private static Map<?, ?> runCsv(String token, String action, Map<String, String> argument, String transaction)
+            throws Exception {
+        Map<String, String> body = new LinkedHashMap<>();
+        try (Jsonb jsonb = JsonbBuilder.create()) {
+            body.put("export".equals(action) ? "statement" : "file", jsonb.toJson(argument));
+            if (transaction != null) {
+                body.put("transaction", transaction);
+            }
+            Map<?, ?> answer = json(postAction("mansart-data/jdql." + action, token, jsonb.toJson(body)));
+            assertNotEquals(Boolean.TRUE, answer.get("error"), action + ": " + answer);
+            return answer;
+        }
     }
 
     /** Runs {@code jdql.<action>} with this statement; its answer, which must be no error. */
