@@ -123,6 +123,31 @@ class ResultJsonTest {
     }
 
     @Test
+    void aTableIsOneObjectPerRowByColumnCutAtOneHundred() {
+        ResultJson.Result result = ResultJson.table(List.of("name", "stock"),
+                List.of(new Object[] {"bolt", 3}, new Object[] {"nut", null}), entities);
+
+        assertEquals("[{\"name\":\"bolt\",\"stock\":3},{\"name\":\"nut\",\"stock\":null}]", result.body());
+        assertEquals("2 rows", result.what());
+        assertTrue(result.rows());
+        List<Object[]> many = LongStream.rangeClosed(1, 150).mapToObj(n -> new Object[] {n}).toList();
+        ResultJson.Result first = ResultJson.table(List.of("id"), many, entities);
+        assertEquals("first 100 rows", first.what());
+        assertEquals(100, ((List<?>) Json.parse(first.body())).size());
+        assertEquals("no row", ResultJson.table(List.of("id"), List.of(), entities).what());
+        assertEquals("[{\"gizmo\":{\"id\":7,\"name\":\"bolt\",\"stock\":3,\"level\":\"LOW\",\"due\":null,"
+                + "\"price\":null}}]", ResultJson.table(List.of("gizmo"), List.<Object[]>of(new Object[] {bolt(7)}),
+                entities).body(), "an entity in a column is an object");
+    }
+
+    @Test
+    void aCountIsWordedAsRows() {
+        assertEquals("no row", ResultJson.count(0));
+        assertEquals("1 row", ResultJson.count(1));
+        assertEquals("4 rows", ResultJson.count(4));
+    }
+
+    @Test
     void anArrayIsRows() {
         ResultJson.Result result = ResultJson.of(new int[] {1, 2}, false, entities);
 

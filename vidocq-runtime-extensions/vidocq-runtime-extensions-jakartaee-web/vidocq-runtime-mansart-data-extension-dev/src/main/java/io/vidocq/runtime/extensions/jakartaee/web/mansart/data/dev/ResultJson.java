@@ -23,7 +23,9 @@ import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -109,9 +111,35 @@ final class ResultJson {
         for (Object row : kept) {
             json.add(node(row, entities, 1));
         }
-        int n = kept.size();
-        String what = more ? "first " + MAX_ROWS + " rows" : n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
-        return new Result(Json.write(json), what, true);
+        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(kept.size()), true);
+    }
+
+    /** {@code no row}, {@code 1 row} or {@code N rows}. */
+    static String count(long n) {
+        return n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
+    }
+
+    /**
+     * The rows of a projection (JDQL console spec §3): an array of at most {@value #MAX_ROWS} objects, one member per
+     * column in the columns' order, each value written as an element of a list is; a column named twice keeps its
+     * last value.
+     */
+    static Result table(List<String> columns, List<Object[]> rows, EntityJson entities) {
+        boolean more = rows.size() > MAX_ROWS;
+        List<Object> json = new ArrayList<>();
+        for (Object[] row : more ? rows.subList(0, MAX_ROWS) : rows) {
+            Map<String, Object> object = new LinkedHashMap<>();
+            for (int i = 0; i < columns.size(); i++) {
+                object.put(columns.get(i), node(i < row.length ? row[i] : null, entities, 1));
+            }
+            json.add(object);
+        }
+        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(json.size()), true);
+    }
+
+    /** {@code value} as JSON, as an element of a list is written: an entity as an object, a scalar as itself. */
+    static Object node(Object value, EntityJson entities) {
+        return node(value, entities, 1);
     }
 
     private static Object node(Object value, EntityJson entities, int depth) {
