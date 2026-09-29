@@ -39,10 +39,11 @@ has no Testcontainers, no Maven API and no JSON library of its own.
 A provider's keys are one of two kinds:
 
 * **Opt-out keys** decide whether a service starts at all — `vidocq.pool[.<name>].url`,
-  `mp.jwt.verify.issuer`. They are read from an explicit `-D`, an environment variable, or the
-  dev-goal configuration, and **never** from `vidocq.properties`/`application.properties`: a
-  production default baked into the application's own file must never silently switch a dev
-  container off.
+  `mp.jwt.verify.issuer`. Only an explicit `-D`, an environment variable, or the dev-goal
+  configuration switches a service off through them, **never** `vidocq.properties`/`application.properties`:
+  a production default baked into the application's own file must never silently switch a dev
+  container off. A provider may still read that file to learn what the application is configured
+  for (<<postgres-only-for-postgres>>).
 * **Tuning keys**, everything under `vidocq.dev.` — `vidocq.dev.postgres.port`,
   `vidocq.dev.postgres.datasources`, `vidocq.dev.reuse`, `vidocq.dev.devServices` — say how to
   start a service that is already going to start. These are read from the application's own files
@@ -56,8 +57,46 @@ vidocq.dev.postgres.port=55432
 vidocq.dev.reuse=true
 ----
 
-`vidocq.pool.url` in that same file still never disables the PostgreSQL dev service — it is an
-opt-out key, not a tuning key.
+`vidocq.pool.url` in that same file is still no opt-out: a PostgreSQL URL there never disables the
+PostgreSQL dev service. What the file tells the provider is which database the application uses.
+
+[#postgres-only-for-postgres]
+=== A PostgreSQL container only for a PostgreSQL application [.tag-new]#NEW#
+
+With `vidocq-runtime-devservice-postgres` among the plugin's dependencies, the PostgreSQL dev
+service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for each name of
+`vidocq.dev.postgres.datasources` (`vidocq.pool.<name>.url`), in this order:
+
+[cols="3,2,4"]
+|===
+| When | Container | What it says
+
+| The URL is given explicitly: a `-D`, an environment variable, the goal's configuration
+| No
+| Nothing in the report; the log keeps `DevService 'postgres' skipped (already configured)`
+
+| The application's file gives a `jdbc:` URL of another database — `jdbc:h2:mem:app`, `jdbc:mysql://db/app`, whatever the case
+| No
+| `not started: vidocq.pool.url is jdbc:h2, not PostgreSQL`
+
+| The file gives a `jdbc:postgresql:` URL — the production one
+| Yes, and its URL replaces the file's under the dev host
+| The service, as before
+
+| No URL at all, or a value that is not a `jdbc:` URL, such as a `${db.url}` expression
+| Only when `org.postgresql.Driver` is on the application's class path
+| Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`
+|===
+
+The class path is the one the application will run with: its runtime dependencies under
+`vidocq:dev` and `vidocq:run`, its test dependencies under `vidocq:test` and a JUnit run. An
+application on PostgreSQL at runtime and on H2 in its tests, whose file names PostgreSQL, still gets
+its container in a test run. The driver is looked up as a `.class` entry, never loaded.
+
+A reason names the key and the URL's scheme — `jdbc:h2`, as written — never the rest of the URL,
+which may carry a host, a user or a password. When no datasource gets a container, the reasons of
+all of them are joined with `; `. The log says `DevService 'postgres' not started: <reason>`, the
+state file keeps it, and the report shows it (<<the-report-section>>).
 
 [#vidocq-run]
 == vidocq:run (opt-in) [.tag-new]#NEW#
@@ -165,6 +204,13 @@ mode. Without a state file or the `vidocq.devservices.state` system property, th
 ordinary state of an application nobody has started with a dev service yet. The extension never
 scans `target/` for a stray file on its own: a killed session's leftover file is read again only
 when a later host overwrites `vidocq.devservices.state`, never merely because the file exists.
+
+A provider that did not start and said why (<<postgres-only-for-postgres>>) gets a row of its own,
+at every verbosity: the row `postgres`, its value
+`not started: vidocq.pool.url is jdbc:h2, not PostgreSQL`. When no service started and at least one
+said why, the summary reads `no dev service started`. The dev console's *Dev services* panel shows
+the same rows. The state file keeps them as `"skipped": [{"id": "postgres", "reason": "…"}]`; a file
+written before that key existed reads as none.
 
 [#vidocq-devs-001]
 === VIDOCQ-DEVS-001 [.tag-new]#NEW#

@@ -16,7 +16,10 @@ are discovered by `ServiceLoader` **on the Maven plugin classpath** — fed by y
 application JVM. Each provider:
 
 1. decides whether it `appliesWhen(...)` (it opts out when you configured the dependency
-   yourself),
+   yourself, or when the application does not use what it provides) and, when it does not start,
+   may say why through `skipReason(...)` — one line, no secret — which the host logs as
+   `DevService '<id>' not started: <reason>`, keeps in the state file and shows in the startup
+   report,
 2. provisions the service (a Testcontainers container) and returns a map of `key=value`
    coordinates,
 3. those coordinates are injected into the child JVM as `-D` system properties (folded with
@@ -32,6 +35,18 @@ application JVM. Each provider:
 This keeps the heavy machinery (Testcontainers, the Docker client) entirely **off the runtime
 module-path** and out of the AOT / native image — the application module-path is identical to
 production.
+
+Besides `property(key)` — the explicit sources, then the `vidocq.dev.*` keys of the application's
+files — the `DevServiceContext` a provider gets has two `default` methods, which every host of this
+repository implements (an older one answers "unknown": empty, `false`):
+
+- `applicationProperty(key)` — any key of the application's own files (`vidocq.properties`,
+  `application.properties`, the external configuration directory), to learn what the application
+  is configured for, such as the database a URL names. Never a reason to switch a service off in
+  place of `property(key)`.
+- `onApplicationClasspath(className)` — whether the application's class path, as its launch will
+  see it (runtime dependencies for `vidocq:dev` and `vidocq:run`, test dependencies for
+  `vidocq:test` and a JUnit run), holds that class, found as a `.class` entry, never loaded.
 
 Providers start **once**, before the first child fork, and survive source reloads: a
 recompile/restart respawns the child but never touches the running containers. They stop once,
@@ -67,10 +82,29 @@ Add the provider to the **plugin**'s `<dependencies>` (not the project's):
 
 A provider only applies when the dependency is **not explicitly configured**. For Postgres,
 the `@Default` datasource is skipped when `vidocq.pool.url` is set **as an explicit `-D`, an
-environment variable, or in the dev-goal configuration** — a baked-in default in
-`vidocq.properties` does **not** count, so your production default URL never suppresses a dev
-container. Point dev mode at your own database by passing `-Dvidocq.pool.url=…` (the container
-is then not started, and your URL is used as-is).
+environment variable, or in the dev-goal configuration**. Point dev mode at your own database by
+passing `-Dvidocq.pool.url=…` (the container is then not started, and your URL is used as-is).
+
+A provider also stays off for an application that does not use what it provides. The Postgres
+provider reads the URL your `vidocq.properties` (or `application.properties`, or the external
+configuration directory) gives, for the `@Default` datasource and then for each name of
+`vidocq.dev.postgres.datasources`, in this order:
+
+1. an explicit URL (`-D`, environment variable, goal configuration): no container;
+2. a file URL starting with `jdbc:` but not `jdbc:postgresql:` (whatever the case), such as
+   `jdbc:h2:mem:app`: no container, and the log says
+   `DevService 'postgres' not started: vidocq.pool.url is jdbc:h2, not PostgreSQL`;
+3. a file URL `jdbc:postgresql:…`: a container, whose URL replaces the file's under the dev host —
+   the file's URL is the production one, and never switches the dev container off;
+4. no URL anywhere, or a value that is not a `jdbc:` URL (such as `${db.url}`): a container only
+   when `org.postgresql.Driver` is on the application's class path (runtime dependencies for
+   `vidocq:dev`/`vidocq:run`, test dependencies for `vidocq:test` and a JUnit run); otherwise
+   `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`.
+
+A reason names the key and the URL's scheme only, never its host, user or password; with several
+datasources and none started, the reasons are joined with `; `. It is kept in the state file
+(`"skipped"`) and shown as a `postgres` row, `not started: …`, in the startup report and the dev
+console's *Dev services* panel; with nothing started, the summary reads `no dev service started`.
 
 ## Where configuration comes from
 
@@ -84,11 +118,14 @@ A provider's keys fall into two kinds, and only the second one is read from your
 This split exists so that a baked-in default never silently switches a dev container off: a
 `vidocq.pool.url=jdbc:postgresql://prod-host/app` your production `vidocq.properties` already
 carries must never suppress the Postgres dev service just because the file happens to be on the
-build's classpath. `vidocq.pool.url` (and any other opt-out key) is therefore read from nowhere
-but an explicit `-D`, an environment variable or the dev-goal configuration, exactly as before —
-**this did not change**. Only the `vidocq.dev.*` tuning keys gained `vidocq.properties` as a
-source, which is what makes the stable-port example below, and the file-based `vidocq:run`
-opt-in further down, work.
+build's classpath. `vidocq.pool.url` (and any other opt-out key) therefore switches a provider off
+only from an explicit `-D`, an environment variable or the dev-goal configuration, exactly as
+before. A provider may still **read** the file to learn what the application is configured for:
+the Postgres provider reads the file's URL for its database kind only (see
+[Opt-out semantics](#opt-out-semantics)) — an H2 or MySQL URL there means the application is not on
+PostgreSQL, while a PostgreSQL one still gets its container. The `vidocq.dev.*` tuning keys are read
+from `vidocq.properties` as before, which is what makes the stable-port example below, and the
+file-based `vidocq:run` opt-in further down, work.
 
 Resolution order for a `vidocq.dev.*` key, first match wins: the goal's own `-D`/configuration,
 then `vidocq.dev.systemProperties`, then an earlier provider's own output, then the host JVM's
