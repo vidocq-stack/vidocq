@@ -728,8 +728,12 @@ const MAX_FILE_BYTES = 60 * 1024;
 
 /**
  * A "Choose file" input for a textarea of CSV text (a string property of "contentMediaType": "text/csv"): the file
- * chosen is read in this browser as UTF-8 text and replaces the textarea's value; nothing is sent until the form is.
- * A file larger than 60 KiB is not read, and the line under the input says so.
+ * chosen is read in this browser and replaces the textarea's value; nothing is sent until the form is. It is read as
+ * UTF-8, then again as Windows-1252 when that shows a replacement character (a spreadsheet of a decimal-comma locale
+ * saves CSV so), the line under the input saying so. A file larger than 60 KiB is not read. The input is cleared after
+ * each choice, so the same file can be chosen again; a read overtaken by a newer one, or ending while the form is
+ * sent, is dropped. text() is what the form sends: the file's own text, its line ends kept, while the textarea still
+ * shows it (a textarea turns \r\n into \n), else the textarea's value.
  */
 function fileChooser(target) {
   const root = el("span", "file-choice");
@@ -737,23 +741,48 @@ function fileChooser(target) {
   file.type = "file";
   file.accept = ".csv,text/csv";
   const note = el("span", "file-note");
+  let reads = 0;
+  let raw = null;                        // the text of the file last read, as read
   file.addEventListener("change", () => {
     note.textContent = "";
     const chosen = file.files && file.files[0];
+    file.value = "";
     if (!chosen) return;
     if (chosen.size > MAX_FILE_BYTES) {
       note.textContent = "the file is larger than 60 KiB";
       return;
     }
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      target.value = typeof reader.result === "string" ? reader.result : "";
-    });
-    reader.addEventListener("error", () => { note.textContent = "the file could not be read"; });
-    reader.readAsText(chosen, "UTF-8");
+    const token = ++reads;
+    const read = (encoding) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        if (token !== reads) return;
+        if (file.disabled) {
+          note.textContent = "the form was sent before the file was read: choose it again";
+          return;
+        }
+        const text = typeof reader.result === "string" ? reader.result : "";
+        if (encoding === "UTF-8" && text.includes("\uFFFD")) {
+          read("windows-1252");
+          return;
+        }
+        raw = text;
+        target.value = raw;
+        if (encoding !== "UTF-8") note.textContent = "read as Windows-1252 (not UTF-8)";
+      });
+      reader.addEventListener("error", () => {
+        if (token === reads) note.textContent = "the file could not be read";
+      });
+      reader.readAsText(chosen, encoding);
+    };
+    read("UTF-8");
   });
   root.append(file, note);
-  return { root, file };
+  return {
+    root,
+    file,
+    text: () => raw !== null && target.value === raw.replace(/\r\n?/g, "\n") ? raw : target.value,
+  };
 }
 
 /**
@@ -820,7 +849,7 @@ function jsonField(argument) {
         choosers.push(chooser.file);
       }
       form.append(wrap);
-      inputs.set(property, { input, kind });
+      inputs.set(property, { input, kind, text: chooser ? chooser.text : null });
     }
     const toggle = el("label", "json-switch");
     toggle.append(raw, el("span", null, "JSON"));
@@ -841,7 +870,7 @@ function jsonField(argument) {
    */
   function formObject(strict) {
     const object = Object.create(null);
-    for (const [property, { input, kind }] of inputs) {
+    for (const [property, { input, kind, text: fileText }] of inputs) {
       const text = input.value.trim();
       if (text === "") continue;
       if (kind === "integer" || kind === "number") {
@@ -852,7 +881,7 @@ function jsonField(argument) {
       } else if (kind === "boolean") {
         object[property] = text === "true";
       } else {
-        object[property] = input.value;
+        object[property] = fileText ? fileText() : input.value;
       }
     }
     if (strict) {

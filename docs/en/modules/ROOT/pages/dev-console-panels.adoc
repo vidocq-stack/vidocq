@@ -547,8 +547,11 @@ any other string's. The Mansart Data panel's *JDQL* tab uses it for its statemen
 ----
 
 Such a field whose schema also says `"contentMediaType": "text/csv"` [.tag-new]#NEW# gets a *Choose file* input next
-to it: the file picked is read by the browser as UTF-8 text and replaces the field's value, nothing being sent until
-the form is. A file larger than 60 KiB is not read, `the file is larger than 60 KiB` showing under the input. The
+to it: the file picked is read by the browser and replaces the field's value, nothing being sent until the form is.
+It is read as UTF-8, then again as Windows-1252 when it is not UTF-8 (as a spreadsheet of a decimal-comma locale
+saves CSV), the line under the input saying `read as Windows-1252 (not UTF-8)`. While the field still shows the file
+unedited, the form sends the file's own text, its `\r\n` line ends kept. The same file can be chosen again; a file
+whose reading ends after the form was sent is dropped (`the form was sent before the file was read: choose it again`). A file larger than 60 KiB is not read, `the file is larger than 60 KiB` showing under the input. The
 console's 64 KiB limit on a request stays the last word, and a CSV text grows a little once sent as JSON. The Mansart
 Data panel's *Import CSV* uses it
 (xref:modules/vidocq-runtime-extensions.adoc#mansart-data-csv[CSV export and import for Mansart Data]):

@@ -326,14 +326,51 @@ class PageTest {
                 "a native file input for CSV files");
         assertTrue(script.contains("const MAX_FILE_BYTES = 60 * 1024;"), "under the console's 64 KiB request");
         assertTrue(script.contains("\"the file is larger than 60 KiB\""), "said under the field");
-        assertTrue(script.contains("reader.readAsText(chosen, \"UTF-8\");"), "read in the browser, as UTF-8");
-        assertTrue(script.contains("target.value = typeof reader.result === \"string\" ? reader.result : \"\";"),
-                "the file replaces the textarea's value");
+        assertTrue(script.contains("read(\"UTF-8\");"), "read in the browser, as UTF-8 first");
+        assertTrue(script.contains("target.value = raw;"), "the file replaces the textarea's value");
         String chooser = script.substring(script.indexOf("function fileChooser("),
                 script.indexOf("function jsonField("));
         assertFalse(chooser.contains("fetch("), "nothing is sent until the form is");
         assertTrue(script.contains("...choosers]) c.disabled = on;"), "disabled while the form is sent");
         assertTrue(rule(style, ".action .file-note {").contains("var(--crit)"), "the refusal in the error colour");
+    }
+
+    @Test
+    void aChosenFileThatIsNotUtf8IsReadAgainAsWindows1252AndSaidSo() {
+        String chooser = chooser(file("console.js"));
+
+        assertTrue(chooser.contains("if (encoding === \"UTF-8\" && text.includes(\"\\uFFFD\")) {"),
+                "a replacement character: the bytes were not UTF-8");
+        assertTrue(chooser.contains("read(\"windows-1252\");"), "as a spreadsheet of a decimal-comma locale saves CSV");
+        assertTrue(chooser.contains("\"read as Windows-1252 (not UTF-8)\""), "said under the input, not refused");
+    }
+
+    @Test
+    void theSameFileMayBeChosenAgainAndALateReadIsIgnored() {
+        String chooser = chooser(file("console.js"));
+
+        assertTrue(chooser.contains("file.value = \"\";"), "cleared after each read: choosing it again fires change");
+        assertTrue(chooser.contains("const token = ++reads;"), "each read has its token");
+        assertTrue(chooser.contains("if (token !== reads) return;"), "a read overtaken by a newer one is dropped");
+        assertTrue(chooser.contains("if (file.disabled) {"), "a read ending while the form is sent is dropped");
+        assertTrue(chooser.contains("\"the form was sent before the file was read: choose it again\""),
+                "and said so");
+    }
+
+    @Test
+    void anUneditedFileIsSentAsReadItsLineEndsKept() {
+        String script = file("console.js");
+        String chooser = chooser(script);
+
+        assertTrue(chooser.contains("text: () => raw !== null && target.value === raw.replace(/\\r\\n?/g, \"\\n\") ? raw"
+                + " : target.value,"), "the file's own text while the textarea still shows it, else the textarea");
+        assertTrue(script.contains("inputs.set(property, { input, kind, text: chooser ? chooser.text : null });"),
+                "the form keeps it");
+        assertTrue(script.contains("object[property] = fileText ? fileText() : input.value;"), "and sends it");
+    }
+
+    private static String chooser(String script) {
+        return script.substring(script.indexOf("function fileChooser("), script.indexOf("function jsonField("));
     }
 
     @Test
