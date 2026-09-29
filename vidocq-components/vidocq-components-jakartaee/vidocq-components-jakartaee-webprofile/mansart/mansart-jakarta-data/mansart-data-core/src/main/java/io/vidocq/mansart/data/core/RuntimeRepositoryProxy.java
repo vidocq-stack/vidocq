@@ -388,9 +388,9 @@ public final class RuntimeRepositoryProxy {
         }
         Map<String, Attribute<?, ?>> attrIdx = new java.util.HashMap<>();
         for (Attribute<?, ?> a : model.attributes()) attrIdx.put(a.name(), a);
-        Map<String, Integer> nameToIdx = JdqlExecutor.nameToIndexFor(m);
-        return (rt, em, args) -> JdqlExecutor.execute(stmt, m, em, attrIdx, rt,
-                args == null ? new Object[0] : args, nameToIdx);
+        JdqlExecutor.CallShape shape = JdqlExecutor.CallShape.of(m);
+        return (rt, em, args) -> JdqlExecutor.execute(stmt, shape, em, attrIdx, rt,
+                args == null ? new Object[0] : args);
     }
 
     private static String readQueryAnnotationValue(Method m) {

@@ -38,6 +38,10 @@ import java.util.Map;
  * <p>Mirror of the compile-time JdqlParser code emitter: same lowering of predicates to
  * {@link Where}, same Order resolution, same dispatch by return type, same dynamic In(Collection)
  * with empty short-circuit. Aggregate / projection / UPDATE / DELETE statements are honoured.
+ *
+ * <p>What an execution takes from its call — the return type the result is dispatched to, the element type of a
+ * projection, the index of each named parameter — is a {@link CallShape}: a {@code @Query} method's, or one built
+ * from the statement itself when a tool runs a statement given as text.
  */
 // M8-2 — promoted from package-private to public so generated repository impls in user packages
 // can call the shared dispatchMultiProjection helper. The other static methods remain
@@ -45,6 +49,23 @@ import java.util.Map;
 public final class JdqlExecutor {
 
     private JdqlExecutor() {}
+
+    /**
+     * What executing a statement takes from its call.
+     *
+     * @param returnType the type the result is dispatched to: a {@code @Query} method's return type
+     * @param element    the element type of a projection: the return type's type argument or array component
+     * @param names      the index, in the call's arguments, of each named parameter
+     * @param convert    whether a value compared to an attribute, or assigned to one, is converted to the attribute's
+     *                   type ({@link JdqlValues}); never for a {@code @Query} method, whose parameters type its values
+     */
+    record CallShape(Class<?> returnType, Class<?> element, Map<String, Integer> names, boolean convert) {
+
+        /** The shape of a {@code @Query} method: its return type, its projection element, its parameter names. */
+        static CallShape of(Method method) {
+            return new CallShape(method.getReturnType(), projectionElement(method), nameToIndexFor(method), false);
+        }
+    }
 
     /**
      * M8-1f — public entry point used by compile-time generated repository impls when the JDQL
@@ -64,14 +85,14 @@ public final class JdqlExecutor {
         for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
         java.util.Set<String> attrNames = attrIndex.keySet();
         JdqlAst.Stmt stmt = JdqlAst.parse(jdql, attrNames, model.entityClass().getSimpleName());
-        Map<String, Integer> nameToIdx = nameToIndexFor(method);
-        return execute(stmt, method, model, attrIndex, runtime, args, nameToIdx);
+        return execute(stmt, CallShape.of(method), model, attrIndex, runtime, args);
     }
 
+    /** Executes {@code stmt} as a call of {@code shape} makes it, with the call's {@code args}. */
     @SuppressWarnings({"rawtypes", "unchecked"})
-    static Object execute(JdqlAst.Stmt stmt, Method method, EntityModel<?> model,
+    static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,
-                          RepositoryRuntime runtime, Object[] args, Map<String, Integer> nameToIdx) {
+                          RepositoryRuntime runtime, Object[] args) {
         OrderBy orderBy = buildOrderBy(stmt.orderBy, model, attrIndex);
         // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
         // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
@@ -79,12 +100,12 @@ public final class JdqlExecutor {
 
         return switch (stmt.kind) {
             case SELECT, COUNT -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 if (stmt.kind == JdqlAst.Stmt.Kind.COUNT) {
                     yield bw.where == Where.ALWAYS_FALSE ? 0L
                             : runtime.countWhere((EntityModel) model, bw.where, bw.args);
                 }
-                Class<?> rt = method.getReturnType();
+                Class<?> rt = shape.returnType();
                 boolean optional = rt == java.util.Optional.class;
                 boolean stream   = rt == java.util.stream.Stream.class;
                 boolean list     = java.util.List.class.isAssignableFrom(rt)
@@ -137,21 +158,21 @@ public final class JdqlExecutor {
                 yield one.get();
             }
             case AGGREGATE -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
-                Class<?> rt = method.getReturnType();
+                Class<?> rt = shape.returnType();
                 Class<?> boxed = boxed(rt);
                 Object v = runtime.aggregate((EntityModel) model, stmt.aggregateOp, attr, boxed, bw.where, bw.args);
                 if (v == null && rt.isPrimitive()) yield zeroFor(rt);
                 yield v;
             }
             case PROJECT_MULTI -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 java.util.List<Attribute<?, ?>> attrs = new ArrayList<>(stmt.projectAttrs.size());
                 for (String name : stmt.projectAttrs) {
                     attrs.add(lookup(model, attrIndex, name));
                 }
-                Class<?> rt = method.getReturnType();
+                Class<?> rt = shape.returnType();
                 List<Object[]> rows = runtime.projectColumns((EntityModel) model, attrs,
                         bw.where, orderBy, bw.args);
                 jakarta.data.Limit lim = findLimit(args);
@@ -161,13 +182,13 @@ public final class JdqlExecutor {
                     rows = (from >= rows.size()) ? java.util.List.of()
                                                   : new ArrayList<>(rows.subList(from, to));
                 }
-                yield dispatchMultiProjection(rt, method, rows, attrs, args);
+                yield dispatchMultiProjection(rt, shape.element(), rows, attrs);
             }
             case PROJECT -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
-                Class<?> rt = method.getReturnType();
-                Class<?> elem = projectionElement(method);
+                Class<?> rt = shape.returnType();
+                Class<?> elem = shape.element();
                 List<Object> col = runtime.projectColumn((EntityModel) model, attr,
                         (Class) elem, bw.where, orderBy, bw.args);
                 // Apply a Limit argument (Jakarta Data control parameter) by slicing.
@@ -223,24 +244,23 @@ public final class JdqlExecutor {
                     if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
                     if (!firstSet) setSql.append(", ");
                     setSql.append('"').append(a.columnName()).append("\" = ");
-                    renderExpr(setSql, sa.value(), attrIndex, args, nameToIdx, setVals, setTypes, a.javaType());
+                    renderExpr(setSql, sa.value(), attrIndex, args, shape, setVals, setTypes, a.javaType());
                     firstSet = false;
                 }
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 long n = runtime.executeUpdateRaw((EntityModel) model, setSql.toString(),
                         setVals, setTypes, bw.where, bw.args);
-                yield wrapLongResult(method, n);
+                yield wrapLongResult(shape.returnType(), n);
             }
             case DELETE -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, nameToIdx);
+                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
                 long n = runtime.deleteWhere((EntityModel) model, bw.where, bw.args);
-                yield wrapLongResult(method, n);
+                yield wrapLongResult(shape.returnType(), n);
             }
         };
     }
 
-    private static Object wrapLongResult(Method m, long n) {
-        Class<?> rt = m.getReturnType();
+    private static Object wrapLongResult(Class<?> rt, long n) {
         if (rt == void.class) return null;
         if (rt == boolean.class || rt == Boolean.class) return n > 0;
         if (rt == int.class || rt == Integer.class) return (int) n;
@@ -262,29 +282,29 @@ public final class JdqlExecutor {
 
     private static BuiltWhere buildWhere(JdqlAst.Pred p, EntityModel<?> model,
                                          Map<String, Attribute<?, ?>> attrIndex,
-                                         Object[] callArgs, Map<String, Integer> nameToIdx) {
+                                         Object[] callArgs, CallShape shape) {
         if (p == null) return new BuiltWhere(Where.ALWAYS_TRUE, new Object[0]);
         List<Object> argsOut = new ArrayList<>();
         boolean[] alwaysFalse = { false };
-        Where w = build(p, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse);
+        Where w = build(p, model, attrIndex, callArgs, shape, argsOut, alwaysFalse);
         if (alwaysFalse[0]) return new BuiltWhere(Where.ALWAYS_FALSE, new Object[0]);
         return new BuiltWhere(w, argsOut.toArray());
     }
 
     private static Where build(JdqlAst.Pred p, EntityModel<?> model,
                                Map<String, Attribute<?, ?>> attrIndex,
-                               Object[] callArgs, Map<String, Integer> nameToIdx,
+                               Object[] callArgs, CallShape shape,
                                List<Object> argsOut, boolean[] alwaysFalse) {
         Attribute<?, ?> a;
         switch (p) {
             case JdqlAst.Cmp c -> {
                 a = lookup(model, attrIndex, c.attr());
-                argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
+                argsOut.add(resolveArg(c.arg(), callArgs, shape, a.javaType()));
                 return cmpOf(a, c.op());
             }
             case JdqlAst.FnCmp c -> {
                 a = lookup(model, attrIndex, c.attr());
-                argsOut.add(resolveArg(c.arg(), callArgs, nameToIdx));
+                argsOut.add(resolveArg(c.arg(), callArgs, shape, comparedType(c.fn(), a)));
                 return new Where.Func(c.fn(), cmpOf(a, c.op()));
             }
             case JdqlAst.IsNull n -> {
@@ -297,38 +317,46 @@ public final class JdqlExecutor {
             }
             case JdqlAst.Between b -> {
                 a = lookup(model, attrIndex, b.attr());
-                argsOut.add(resolveArg(b.lo(), callArgs, nameToIdx));
-                argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
+                argsOut.add(resolveArg(b.lo(), callArgs, shape, a.javaType()));
+                argsOut.add(resolveArg(b.hi(), callArgs, shape, a.javaType()));
                 return new Where.Between(a);
             }
             case JdqlAst.FnBetween b -> {
                 a = lookup(model, attrIndex, b.attr());
-                argsOut.add(resolveArg(b.lo(), callArgs, nameToIdx));
-                argsOut.add(resolveArg(b.hi(), callArgs, nameToIdx));
+                argsOut.add(resolveArg(b.lo(), callArgs, shape, comparedType(b.fn(), a)));
+                argsOut.add(resolveArg(b.hi(), callArgs, shape, comparedType(b.fn(), a)));
                 return new Where.Func(b.fn(), new Where.Between(a));
             }
             case JdqlAst.In in -> {
                 a = lookup(model, attrIndex, in.attr());
-                return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, null);
+                return buildIn(a, in.args(), in.collection(), callArgs, shape, argsOut, alwaysFalse, null);
             }
             case JdqlAst.FnIn in -> {
                 a = lookup(model, attrIndex, in.attr());
-                return buildIn(a, in.args(), in.collection(), callArgs, nameToIdx, argsOut, alwaysFalse, in.fn());
+                return buildIn(a, in.args(), in.collection(), callArgs, shape, argsOut, alwaysFalse, in.fn());
             }
             case JdqlAst.And and -> {
                 List<Where> cs = new ArrayList<>(and.children().size());
-                for (JdqlAst.Pred c : and.children()) cs.add(build(c, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                for (JdqlAst.Pred c : and.children()) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
                 return new Where.And(cs);
             }
             case JdqlAst.Or or -> {
                 List<Where> cs = new ArrayList<>(or.children().size());
-                for (JdqlAst.Pred c : or.children()) cs.add(build(c, model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                for (JdqlAst.Pred c : or.children()) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
                 return new Where.Or(cs);
             }
             case JdqlAst.Not n -> {
-                return new Where.Not(build(n.child(), model, attrIndex, callArgs, nameToIdx, argsOut, alwaysFalse));
+                return new Where.Not(build(n.child(), model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
             }
         }
+    }
+
+    /**
+     * The type a value compared to {@code fn(attr)} is bound as, as {@link WhereBinder} binds it: an {@code Integer}
+     * for {@code LENGTH}, which counts characters, else the attribute's own.
+     */
+    private static Class<?> comparedType(String fn, Attribute<?, ?> a) {
+        return "LENGTH".equals(fn) ? Integer.class : a.javaType();
     }
 
     private static Where cmpOf(Attribute<?, ?> a, JdqlAst.Op op) {
@@ -344,11 +372,12 @@ public final class JdqlExecutor {
     }
 
     private static Where buildIn(Attribute<?, ?> a, List<JdqlAst.ArgRef> argRefs, boolean collection,
-                                 Object[] callArgs, Map<String, Integer> nameToIdx,
+                                 Object[] callArgs, CallShape shape,
                                  List<Object> argsOut, boolean[] alwaysFalse, String wrapFn) {
+        Class<?> target = wrapFn == null ? a.javaType() : comparedType(wrapFn, a);
         Where inner;
         if (collection) {
-            Object v = resolveArg(argRefs.get(0), callArgs, nameToIdx);
+            Object v = resolveArg(argRefs.get(0), callArgs, shape, target);
             if (v instanceof Collection<?> col) {
                 if (col.isEmpty()) {
                     alwaysFalse[0] = true;
@@ -361,7 +390,7 @@ public final class JdqlExecutor {
                 inner = new Where.In(a, 1);
             }
         } else {
-            for (JdqlAst.ArgRef r : argRefs) argsOut.add(resolveArg(r, callArgs, nameToIdx));
+            for (JdqlAst.ArgRef r : argRefs) argsOut.add(resolveArg(r, callArgs, shape, target));
             inner = new Where.In(a, argRefs.size());
         }
         return wrapFn == null ? inner : new Where.Func(wrapFn, inner);
@@ -381,15 +410,33 @@ public final class JdqlExecutor {
         return PathResolver.resolve(model, name);
     }
 
-    private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, Map<String, Integer> nameToIdx) {
-        if (ref.isLiteral) return resolveLiteral(ref.literal);
+    /**
+     * The value {@code ref} stands for in this call: a literal lifted by {@link #resolveLiteral}, or the argument of
+     * a named or positional parameter; converted to {@code target}, the type of the attribute it meets, when the
+     * shape says so ({@link JdqlValues}), as is otherwise.
+     */
+    private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, CallShape shape, Class<?> target) {
+        if (ref.isLiteral) {
+            Object value = resolveLiteral(ref.literal);
+            return shape.convert() ? JdqlValues.convert(value, target, literalLabel(ref.literal)) : value;
+        }
+        Object value;
         if (ref.isNamed()) {
-            Integer i = nameToIdx.get(ref.named);
+            Integer i = shape.names().get(ref.named);
             if (i == null) throw new MansartDataException("@Query references :" + ref.named
                     + " but the method has no parameter with that name (compile with -parameters or use ?N)");
-            return args[i];
+            value = args[i];
+        } else {
+            value = args[ref.positional - 1];
         }
-        return args[ref.positional - 1];
+        return shape.convert()
+                ? JdqlValues.convert(value, target, ref.isNamed() ? ":" + ref.named : "?" + ref.positional)
+                : value;
+    }
+
+    /** How an error names a literal: a text in quotes, {@code 'LOST'}, anything else as it reads. */
+    private static String literalLabel(Object literal) {
+        return literal instanceof String text ? "'" + text + "'" : String.valueOf(literal);
     }
 
     /**
@@ -433,16 +480,6 @@ public final class JdqlExecutor {
     /* ---- helpers ---- */
 
     /**
-     * Maps named parameters to method-arg indices. Resolution order:
-     * <ol>
-     *   <li>{@code @jakarta.data.repository.Param("name")} on the parameter (authoritative).</li>
-     *   <li>{@code Parameter.getName()} when {@code -parameters} is honoured by javac.</li>
-     * </ol>
-     * Both are read so deployments compiled without {@code -parameters} (e.g. the official
-     * Jakarta Data TCK jar built with maven-compiler-plugin 4.0.0-beta-4 — see BUG-20260505-01,
-     * M7-9) still resolve {@code @Query} {@code :name} bindings via {@code @Param}.
-     */
-    /**
      * M7-24 — render a JDQL value expression (supports + - * /, attribute references, and arg
      * references) into a SQL fragment. Bindings flow into {@code outVals} / {@code outTypes}
      * in the order the placeholders appear, paired with {@code targetType} for the dialect to
@@ -451,7 +488,7 @@ public final class JdqlExecutor {
     @SuppressWarnings("unchecked")
     private static void renderExpr(StringBuilder sb, JdqlAst.Expr expr,
                                    Map<String, Attribute<?, ?>> attrIndex,
-                                   Object[] callArgs, Map<String, Integer> nameToIdx,
+                                   Object[] callArgs, CallShape shape,
                                    List<Object> outVals, List<Class<?>> outTypes,
                                    Class<?> targetType) {
         switch (expr) {
@@ -461,15 +498,15 @@ public final class JdqlExecutor {
                 sb.append('"').append(attr.columnName()).append('"');
             }
             case JdqlAst.ExprArg ar -> {
-                outVals.add(resolveArg(ar.arg(), callArgs, nameToIdx));
+                outVals.add(resolveArg(ar.arg(), callArgs, shape, targetType));
                 outTypes.add(targetType);
                 sb.append('?');
             }
             case JdqlAst.ExprBin bin -> {
                 sb.append('(');
-                renderExpr(sb, bin.left(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
+                renderExpr(sb, bin.left(), attrIndex, callArgs, shape, outVals, outTypes, targetType);
                 sb.append(' ').append(bin.op()).append(' ');
-                renderExpr(sb, bin.right(), attrIndex, callArgs, nameToIdx, outVals, outTypes, targetType);
+                renderExpr(sb, bin.right(), attrIndex, callArgs, shape, outVals, outTypes, targetType);
                 sb.append(')');
             }
             // M8-1 — render scalar functions in SET RHS. LENGTH → CHAR_LENGTH (SQL-portable).
@@ -483,7 +520,7 @@ public final class JdqlExecutor {
                 List<JdqlAst.Expr> args = fn.args();
                 for (int i = 0; i < args.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    renderExpr(sb, args.get(i), attrIndex, callArgs, nameToIdx, outVals, outTypes, innerType);
+                    renderExpr(sb, args.get(i), attrIndex, callArgs, shape, outVals, outTypes, innerType);
                 }
                 sb.append(')');
             }
@@ -532,6 +569,16 @@ public final class JdqlExecutor {
         return null;
     }
 
+    /**
+     * Maps named parameters to method-arg indices. Resolution order:
+     * <ol>
+     *   <li>{@code @jakarta.data.repository.Param("name")} on the parameter (authoritative).</li>
+     *   <li>{@code Parameter.getName()} when {@code -parameters} is honoured by javac.</li>
+     * </ol>
+     * Both are read so deployments compiled without {@code -parameters} (e.g. the official
+     * Jakarta Data TCK jar built with maven-compiler-plugin 4.0.0-beta-4 — see BUG-20260505-01,
+     * M7-9) still resolve {@code @Query} {@code :name} bindings via {@code @Param}.
+     */
     static Map<String, Integer> nameToIndexFor(Method m) {
         Map<String, Integer> map = new HashMap<>();
         java.lang.reflect.Parameter[] params = m.getParameters();
@@ -570,16 +617,6 @@ public final class JdqlExecutor {
         if (c == double.class) return 0.0;
         if (c == float.class)  return 0.0f;
         return 0;
-    }
-
-    /**
-     * M8-2 — dispatch the result of a multi-column projection (one {@code Object[]} per row)
-     * to the method's declared return type. See {@link #dispatchMultiProjection(Class, Class, List, java.util.List)}
-     * for shape semantics.
-     */
-    private static Object dispatchMultiProjection(Class<?> rt, Method method, List<Object[]> rows,
-                                                  java.util.List<Attribute<?, ?>> attrs, Object[] args) {
-        return dispatchMultiProjection(rt, projectionElement(method), rows, attrs);
     }
 
     /**
