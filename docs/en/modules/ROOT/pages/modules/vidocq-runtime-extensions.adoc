@@ -608,6 +608,35 @@ A boxed type takes `null`, a primitive does not. A value that does not convert f
 
 *Limits.* The console keeps 128 actions per panel: past them, *Monitoring* says `and N more methods`. A call longer than the console's 60 seconds keeps running, and its outcome shows on a later poll. The repository's package must be open to Vidocq — a Vidocq application is an `open module` by convention, or `opens` the package; otherwise its methods are listed as `package <p> not open to Vidocq`.
 
+[#mansart-data-jdql]
+== A JDQL console for Mansart Data [.tag-new]#NEW#
+
+Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] ends with a *JDQL* tab, which runs a JDQL statement you type against the application's database: a query to look at data, an `UPDATE` or a `DELETE` to try a change, then roll it back or keep it. Its list offers two actions.
+
+* *Query* runs a `FROM …`, a projection `SELECT a, b FROM …`, a `SELECT COUNT(this) FROM …` or an aggregate such as `SELECT MAX(price) FROM …`, without asking first. An `UPDATE` or a `DELETE` is refused there: `an UPDATE or DELETE: use Update / Delete`.
+* *Update / Delete* runs an `UPDATE … SET …` or a `DELETE FROM …`, and nothing else (`not an UPDATE or DELETE: use Query`). The page asks first (`Runs this JDQL statement against the database.`), and its *Transaction* list offers `rollback`, the default, then `commit`, as a repository method's write does (<<mansart-data-run-method>>): the statement runs in a transaction of the application's `TransactionManager`, rolled back unless `commit` is asked, and always rolled back when it fails. Without a `TransactionManager`, `commit` only.
+
+The form has two fields of several lines: `query`, the statement, and `params`, its named parameters as a JSON object.
+
+[source,text]
+----
+FROM Task WHERE status = :status ORDER BY dueDate           params: {"status": "OPEN"}
+SELECT title, priority FROM Task WHERE project = :project   params: {"project": "vidocq"}
+SELECT COUNT(this) FROM Task WHERE dueDate < :day           params: {"day": "2026-10-01"}
+UPDATE Task SET priority = :priority WHERE project = :p     params: {"priority": "HIGH", "p": "vidocq"}
+DELETE FROM TaskEvent WHERE type = 'REOPENED'
+----
+
+*The entity.* A statement names its entity after `FROM`, `UPDATE` or `DELETE FROM`, by its simple name, or by its full class name when two entities share a simple name, as the catalogue then shows them. A name the catalogue does not know is refused, with the names it knows: `unknown entity Nope; entities: Task, TaskEvent`.
+
+*Parameters.* A named parameter `:name` takes the member `name` of `params`; a parameter with no value, or a member no parameter uses, is refused (`:status: no value given`), and so is a positional `?1`. A value compared to an attribute — a parameter, a literal such as `'OPEN'` or `'2026-09-29'`, a value of `SET` — is converted to the attribute's Java type: an enum by the name of a constant, a date or a time as ISO text, a number exactly (`2.5` for an `int` is refused), a `Boolean` from `true` or `false`, a `UUID` from its text. A JSON array feeds an `IN :names`. A value that does not convert fails the statement before it runs: `:status: not a TaskStatus`.
+
+*Results.* Through the page's JSON viewer: the entities as objects, as a repository method returns them (<<mansart-data-run-method>>); a projection as one object per row, `{"title": "Release notes", "priority": "HIGH"}`; at most 100 rows, the line saying `3 rows in 12 ms` or `first 100 rows in 40 ms`. A count is its number, `42`; an aggregate its value, `null` when there is no row; a write the rows it changed, `4 rows · rolled back`. *Exchange* holds the entity, the statement, its parameters and the transaction asked. A statement that does not parse, or fails, shows the class of the exception and its message, cut after 500 characters and with a `user:password@` masked.
+
+*History.* The *JDQL* tab lists its last 20 statements, *Query* or *Update / Delete*, newest first, each with *Replay*, which fills the form again without sending it.
+
+*Limits.* JDQL has no `INSERT`: insert with a repository's `save`, or an `@Insert` method (<<mansart-data-run-method>>). A statement runs on the default data store, the `RepositoryRuntime` bean of the `@Default` datasource: a repository routed elsewhere with `@Repository(dataStore = …)` is not reached. Paths such as `author.name` go as far as Mansart's JDQL does. The whole result is read before the first 100 rows are shown: narrow a large table with a `WHERE`. The console runs Mansart's own `JdqlExecutor.run(jdql, parameters, model, runtime)`, which a tool of yours may call too.
+
 [#mansart-transactions-jdbc-bridge]
 == Mansart Data writes join the transaction [.tag-new]#NEW#
 
