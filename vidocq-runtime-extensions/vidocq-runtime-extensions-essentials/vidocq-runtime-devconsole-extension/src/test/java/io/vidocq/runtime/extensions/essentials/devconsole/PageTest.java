@@ -41,7 +41,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PageTest {
 
     /** Every file of the page. */
-    private static final List<String> FILES = List.of("index.html", "console.css", "console.js", "favicon.svg");
+    private static final List<String> FILES = List.of("index.html", "console.css", "console.js", "favicon.svg",
+            "editor-core.js");
+    /** The page's scripts: console.js, which the index loads, and the modules it imports. */
+    private static final List<String> SCRIPTS = FILES.stream().filter(name -> name.endsWith(".js")).toList();
+    /** An import statement of a module, and the module it names. */
+    private static final Pattern IMPORT = Pattern.compile("(?m)^import .* from \"([^\"]+)\";$");
     /** The absolute URLs the page may hold, never fetched: the SVG namespace, and the licenses in its headers. */
     private static final List<String> NAMES = List.of("http://www.w3.org/2000/svg",
             "https://www.eclipse.org/legal/epl-2.0/", "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
@@ -100,12 +105,14 @@ class PageTest {
 
     @Test
     void theScriptNeverParsesTextAsMarkup() {
-        String script = file("console.js");
-
-        for (String sink : List.of("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(",
-                "new Function", "setAttribute(\"style\"", "srcdoc")) {
-            assertFalse(script.contains(sink), "console.js uses " + sink + ": every text goes through textContent");
+        for (String name : SCRIPTS) {
+            String script = file(name);
+            for (String sink : List.of("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(",
+                    "new Function", "setAttribute(\"style\"", "srcdoc", "import(")) {
+                assertFalse(script.contains(sink), name + " uses " + sink + ": every text goes through textContent");
+            }
         }
+        String script = file("console.js");
         assertTrue(script.contains("textContent"), script.length() + " characters and no textContent");
     }
 
@@ -124,15 +131,30 @@ class PageTest {
 
     @Test
     void theScriptTouchesLocalStorageInsideATryOnly() {
-        List<String> uses = file("console.js").lines()
-                .filter(line -> !line.strip().startsWith("//") && !line.strip().startsWith("*"))
-                .filter(line -> line.contains("localStorage"))
-                .toList();
+        for (String name : SCRIPTS) {
+            List<String> uses = file(name).lines()
+                    .filter(line -> !line.strip().startsWith("//") && !line.strip().startsWith("*"))
+                    .filter(line -> line.contains("localStorage"))
+                    .toList();
 
-        assertEquals(2, uses.size(), "one read, one write: " + uses);
-        for (String use : uses) {
-            assertTrue(use.contains("try {") && use.contains("catch"), "a private window may refuse it: " + use);
+            assertEquals(name.equals("console.js") ? 2 : 0, uses.size(),
+                    "one read, one write, in console.js only: " + name + " " + uses);
+            for (String use : uses) {
+                assertTrue(use.contains("try {") && use.contains("catch"), "a private window may refuse it: " + use);
+            }
         }
+    }
+
+    @Test
+    void theEditorCoreTouchesNothingOfThePageSoThatGraalJsRunsIt() {
+        String code = file("editor-core.js").replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)^\\s*//.*$", "");
+
+        for (String global : List.of("document", "window", "navigator", "requestAnimationFrame", "localStorage",
+                "globalThis")) {
+            assertFalse(Pattern.compile("\\b" + global + "\\b").matcher(code).find(), "editor-core.js uses " + global);
+        }
+        assertEquals(List.of(), IMPORT.matcher(code).results().map(m -> m.group(1)).toList(), "it imports nothing");
+        assertTrue(code.contains("export const jsonLanguage = Object.freeze({"), "the JSON language");
     }
 
     @Test

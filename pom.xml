@@ -116,6 +116,9 @@
         <!-- Schema migration backends (opt-in extension modules) -->
         <flyway.version>11.1.0</flyway.version>
         <liquibase.version>4.31.1</liquibase.version>
+        <!-- GraalJS, test scope only: the dev console's EditorCoreTest runs the page's editor-core.js as the ES module
+             it is. The community coordinates: org.graalvm.polyglot:js (js-community is its deprecated alias). -->
+        <graaljs.version>25.4.4.1.1</graaljs.version>
     </properties>
 
     <dependencyManagement>
@@ -560,6 +563,19 @@
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                 <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+
+            <!-- GraalJS for tests that run the dev console's JavaScript: never on a runtime module path. -->
+            <dependency>
+                <groupId>org.graalvm.polyglot</groupId>
+                <artifactId>polyglot</artifactId>
+                <version>${graaljs.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.graalvm.polyglot</groupId>
+                <artifactId>js</artifactId>
+                <version>${graaljs.version}</version>
                 <type>pom</type>
             </dependency>
 
