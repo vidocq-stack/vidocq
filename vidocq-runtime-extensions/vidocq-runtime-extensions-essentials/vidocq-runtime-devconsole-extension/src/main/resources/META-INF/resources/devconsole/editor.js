@@ -30,7 +30,7 @@
 // - Every edit it makes goes through document.execCommand("insertText"), which keeps Ctrl+Z; where the browser
 //   refuses it, setRangeText and an input event.
 
-import { jsonLanguage, keystroke, FORMAT_EXAMPLES } from "./editor-core.js";
+import { jsonLanguage, keystroke, isShortcut, FORMAT_EXAMPLES } from "./editor-core.js";
 
 export { jsonLanguage, FORMAT_EXAMPLES };
 
@@ -514,7 +514,7 @@ export function createEditor({ language, data, value, rows, label }) {
     }
     const leaving = escaped;
     escaped = event.key === "Escape";
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (isShortcut(event.key, event.ctrlKey, event.altKey, event.metaKey)) return;
     const key = event.key === "Tab" && event.shiftKey ? "Shift+Tab" : event.key;
     const tab = key === "Tab" || key === "Shift+Tab";
     if (tab && leaving) return;
@@ -544,6 +544,9 @@ export function createEditor({ language, data, value, rows, label }) {
   });
   for (const type of ["keyup", "mouseup", "focus"]) {
     textarea.addEventListener(type, () => {
+      // The caret moved off what the list would replace (an arrow key, a click): Enter types again.
+      const { selectionStart: start, selectionEnd: end } = textarea;
+      if (completion && (start < completion.from || end > completion.to)) closeList();
       outline();
       tipAtCaret();
     });

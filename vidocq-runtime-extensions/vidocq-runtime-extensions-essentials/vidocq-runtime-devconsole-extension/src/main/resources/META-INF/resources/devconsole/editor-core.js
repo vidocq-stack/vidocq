@@ -430,7 +430,7 @@ function contextAt(text, tokens, caret, data) {
   }
   if (found === null) found = here();
   return { position: found.position, schema: found.schema,
-    keys: found.frame !== null ? found.frame.keys : new Set(), current };
+    keys: found.frame !== null ? found.frame.keys : new Set(), current, inContainer: found.frame !== null };
 }
 
 /** Whether the caret is in token {@code t}, typing it: inside a closed string, at the end of an open one or a word. */
@@ -545,24 +545,43 @@ function valueItems(p, root) {
 
 /**
  * The completion at {@code caret} (spec §3.3): { from, to, items }, from-to what is already typed, a key with its
- * quotes (a string with no closing quote up to the caret only, since it runs to the end of its line), items filtered
- * by it ignoring case; null anywhere else, with no schema for the place, or with no item left.
+ * quotes (a string with no closing quote up to the caret only, since it runs to the end of its line; so too a string
+ * whose closing quote is another member's opening one, a punctuation character between the caret and it), items
+ * filtered by it ignoring case; null anywhere else, with no schema for the place, or with no item left. Inside an
+ * object or an array, an item followed by another member ends with "," (the caret staying before it), so that
+ * accepting it keeps the text JSON.
  */
 function complete(text, caret, data) {
   const at = contextAt(text, lex(text), caret, data);
   if (at.position === null || at.schema === null) return null;
   const t = at.current;
   const from = t ? t.from : caret;
-  const to = t && (!isStringToken(t) || isClosed(text, t)) ? t.to : caret;
+  const swallowed = t !== null && t.kind === "string" && isClosed(text, t)
+    && /[,:{}[\]]/.test(text.slice(caret, t.to - 1));
+  const to = t && !swallowed && (!isStringToken(t) || isClosed(text, t)) ? t.to : caret;
+  let items;
   if (at.position === "key") {
     const prefix = t ? text.slice(t.from + (isStringToken(t) ? 1 : 0), caret).toLowerCase() : "";
-    const items = keyItems(at.schema, at.keys, t !== null && t.kind === "key", data)
+    items = keyItems(at.schema, at.keys, t !== null && t.kind === "key", data)
       .filter((item) => item.label.toLowerCase().startsWith(prefix));
-    return items.length ? { from, to, items } : null;
+  } else {
+    const prefix = t ? text.slice(t.from, caret).toLowerCase() : "";
+    items = valueItems(at.schema, data).filter((item) => item.insert.toLowerCase().startsWith(prefix));
   }
-  const prefix = t ? text.slice(t.from, caret).toLowerCase() : "";
-  const items = valueItems(at.schema, data).filter((item) => item.insert.toLowerCase().startsWith(prefix));
-  return items.length ? { from, to, items } : null;
+  if (!items.length) return null;
+  if (at.inContainer && memberFollows(text, to)) {
+    for (const item of items) {
+      if (item.caret === undefined) item.caret = item.insert.length;
+      item.insert += ",";
+    }
+  }
+  return { from, to, items };
+}
+
+/** Whether a member follows offset {@code i}: the next character that is not blank is none of , : } ] (nor the end). */
+function memberFollows(text, i) {
+  while (i < text.length && isBlank(text[i])) i++;
+  return i < text.length && !",:}]".includes(text[i]);
 }
 // ------------------------------------------------------------------------------------------------ formatting
 
@@ -641,6 +660,17 @@ function stringAround(language, text, offset) {
     if (isStringToken(t) && (offset < t.to || (offset === t.to && !isClosed(text, t)))) return t;
   }
   return null;
+}
+
+/**
+ * Whether a key pressed with these modifiers is a command for the browser rather than something typed: Command held,
+ * or Control without Alt. A character typed with Option (a French Mac keyboard types { and [ so) or with AltGr (which
+ * Windows reports as Control and Alt) is typed, and gets the smart keystrokes; a key that types no character, such as
+ * Option+Backspace, stays the browser's.
+ */
+export function isShortcut(key, ctrlKey, altKey, metaKey) {
+  if (metaKey || (ctrlKey && !altKey)) return true;
+  return (ctrlKey || altKey) && String(key).length !== 1;
 }
 
 /**

@@ -76,6 +76,7 @@ class EditorCoreTest {
     private static Value json;
     private static Value language;
     private static Value keystroke;
+    private static Value isShortcut;
 
     @BeforeAll
     static void loadTheModule() {
@@ -88,6 +89,7 @@ class EditorCoreTest {
         json = context.eval("js", "JSON");
         language = exports.getMember("jsonLanguage");
         keystroke = exports.getMember("keystroke");
+        isShortcut = exports.getMember("isShortcut");
     }
 
     @AfterAll
@@ -395,9 +397,60 @@ class EditorCoreTest {
 
     @Test
     void theKeysAfterTheCaretAreWrittenToo() {
-        assertEquals("1-1\n\"status\": \"OPEN\"", complete("{|\n  \"title\": \"a\", \"due\": \"\", \"at\": \"\", "
+        assertEquals("1-1\n\"status\": \"OPEN\"|,", complete("{|\n  \"title\": \"a\", \"due\": \"\", \"at\": \"\", "
                 + "\"when\": \"\", \"ref\": \"\", \"points\": 1, \"done\": true, \"tags\": [], \"pair\": [], "
                 + "\"owner\": {}, \"extra\": 1, \"any\": 1, \"id\": 1\n}", TASK));
+    }
+
+    // ------------------------------------------------------------------------------------------------ shortcuts
+
+    private static boolean shortcut(String key, boolean ctrl, boolean alt, boolean meta) {
+        return isShortcut.execute(key, ctrl, alt, meta).asBoolean();
+    }
+
+    @Test
+    void aCharacterTypedWithOptionOrAltGrIsTypedNotAShortcut() {
+        assertEquals(false, shortcut("{", false, true, false), "{ with Option on a French Mac keyboard");
+        assertEquals(false, shortcut("[", false, true, false), "[ with Option on a French Mac keyboard");
+        assertEquals(false, shortcut("{", true, true, false), "{ with AltGr, which Windows reports as Ctrl+Alt");
+        assertEquals(false, shortcut("\"", false, false, false), "a plain character");
+        assertEquals(false, shortcut("Enter", false, false, false), "a plain key");
+    }
+
+    @Test
+    void aKeyHeldWithCommandOrControlAloneOrAnOptionKeyThatTypesNothingIsAShortcut() {
+        assertEquals(true, shortcut("z", false, false, true), "Cmd+Z");
+        assertEquals(true, shortcut("[", false, false, true), "Cmd+[");
+        assertEquals(true, shortcut("z", true, false, false), "Ctrl+Z");
+        assertEquals(true, shortcut("Backspace", false, true, false), "Option+Backspace deletes a word");
+        assertEquals(true, shortcut("Enter", true, true, false), "Ctrl+Alt+Enter");
+    }
+
+    /** Two optional properties, a string and a boolean, for the separator tests. */
+    private static final String PAIR = """
+            {"type": "object", "properties": {"a": {"type": "string"}, "b": {"type": "boolean"}}}""";
+
+    @Test
+    void anItemAcceptedBeforeAnotherMemberBringsItsCommaTheCaretBeforeIt() {
+        assertEquals("1-1\n\"a\": \"|\",", complete("{|\"b\": true}", PAIR), "right after {");
+        assertEquals("1-1\n\"a\": \"|\",", complete("{|\n  \"b\": true\n}", PAIR), "the next member on the next line");
+        assertEquals("12-12\n\"a\": \"|\",", complete("{\"b\": true, |\"c\": 1}", PAIR), "after a comma");
+        assertEquals("6-6\ntrue|,\nfalse|,", complete("{\"b\": |\n  \"a\": \"x\"}", PAIR), "a value before a key");
+        assertEquals("1-1\ntrue|,\nfalse|,",
+                complete("[| false]", "{\"type\": \"array\", \"items\": {\"type\": \"boolean\"}}"), "an item");
+    }
+
+    @Test
+    void noCommaIsAddedBeforeAClosingBracketACommaOrTheEnd() {
+        assertEquals("1-1\n\"a\": \"|\"\n\"b\": false", complete("{|}", PAIR));
+        assertEquals("1-1\n\"a\": \"|\"\n\"b\": false", complete("{|, \"c\": 1}", PAIR));
+        assertEquals("6-6\ntrue\nfalse", complete("{\"b\": |", PAIR));
+    }
+
+    @Test
+    void aClosedStringThatSwallowedTheNextMembersQuoteIsReplacedUpToTheCaretOnly() {
+        assertEquals("1-4\n\"title\": \"|\"", complete("{\"ti|, \"points\": null}", TASK));
+        assertEquals("1-7\n\"title\": \"|\"", complete("{\"ti|tl\"}", TASK), "inside a closed key: the whole of it");
     }
 
     @Test
@@ -410,7 +463,7 @@ class EditorCoreTest {
 
     @Test
     void aKeyWithNoClosingQuoteIsReplacedUpToTheCaretOnly() {
-        assertEquals("10-13\n\"due\": \"|\"", complete("{\"id\": 1, \"du|\n\"title\": \"a\"}", TASK));
+        assertEquals("10-13\n\"due\": \"|\",", complete("{\"id\": 1, \"du|\n\"title\": \"a\"}", TASK));
     }
 
     @Test

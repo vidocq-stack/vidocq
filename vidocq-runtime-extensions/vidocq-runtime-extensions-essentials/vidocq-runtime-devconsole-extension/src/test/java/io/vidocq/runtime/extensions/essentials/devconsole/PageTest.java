@@ -176,9 +176,16 @@ class PageTest {
         assertTrue(editor.contains("if (event.isComposing || MODIFIERS.has(event.key)) return;"),
                 "Shift pressed before Tab does not cancel the Escape of Escape then Shift+Tab");
         assertTrue(editor.contains("if (tab && leaving) return;"), "Escape then Tab leaves the editor");
+        assertTrue(editor.contains("if (isShortcut(event.key, event.ctrlKey, event.altKey, event.metaKey)) return;"),
+                "a bracket typed with Option (a French Mac keyboard) or AltGr is paired too");
+        assertFalse(editor.contains("if (event.ctrlKey || event.metaKey || event.altKey) return;"),
+                "Option alone no longer stops the smart keystrokes");
+        assertTrue(editor.contains("if (completion && (start < completion.from || end > completion.to)) closeList();"),
+                "the list closes when the caret leaves what it would replace, so Enter never accepts at a stale place");
         assertTrue(editor.contains("popup.style.left = Math.max(0, Math.min(point.left, box.clientWidth - width))"),
                 "the completion list never past the editor's right edge");
-        assertTrue(editor.contains("const up = frameTop + below + height > window.innerHeight && frameTop + above >= 0;"),
+        assertTrue(editor.contains("const up = frameTop + below + height > window.innerHeight"
+                + " && frameTop + above >= 0;"),
                 "over the caret when the window has no room below");
         assertTrue(editor.contains("document.elementsFromPoint(x, y)"), "the tooltip of what the pointer is on");
         assertTrue(editor.contains("el(\"button\", \"ed-format\", \"Format\")"), "the Format button");
