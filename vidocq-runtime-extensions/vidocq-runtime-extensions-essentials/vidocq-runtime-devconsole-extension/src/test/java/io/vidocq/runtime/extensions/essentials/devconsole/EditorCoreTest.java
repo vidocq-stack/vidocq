@@ -46,6 +46,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class EditorCoreTest {
 
+    /** The schema most tests check against, as a panel sends one: a Task, with every keyword the editor reads. */
+    private static final String TASK = """
+            {"type": "object", "required": ["title", "status"],
+             "properties": {
+               "id": {"type": "integer", "readOnly": true, "description": "column id"},
+               "title": {"type": "string", "maxLength": 5, "description": "column title"},
+               "status": {"type": "string", "enum": ["OPEN", "DONE"]},
+               "due": {"type": "string", "format": "date"},
+               "at": {"type": "string", "format": "time"},
+               "when": {"type": "string", "format": "date-time"},
+               "ref": {"type": "string", "format": "uuid"},
+               "points": {"type": ["integer", "null"]},
+               "done": {"type": "boolean"},
+               "tags": {"type": "array", "items": {"type": "string"}},
+               "pair": {"type": "array", "items": [{"type": "integer"}, {"type": "string"}]},
+               "owner": {"$ref": "#/$defs/owner"},
+               "extra": {"$ref": "other.json#/x"},
+               "any": {"anyOf": [{"type": "string"}]}},
+             "$defs": {"owner": {"type": "object", "required": ["name"],
+               "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+               "additionalProperties": false}}}
+            """;
+
     /** One emoji, two UTF-16 units: offsets must count both. */
     private static final String EMOJI = "\uD83D\uDE00";
 
@@ -195,5 +218,98 @@ class EditorCoreTest {
     void aDeeplyNestedTextNeverExhaustsTheStack() {
         assertEquals("", diagnose("[".repeat(10_000) + "]".repeat(10_000), null));
         assertEquals("error 10000-10000 expected a value", diagnose("[".repeat(10_000), null));
+    }
+
+    @Test
+    void aMissingRequiredKeyIsAnErrorOnItsObjectsOpeningBrace() {
+        assertEquals("error 0-1 missing required key \"status\"", diagnose("{\"title\": \"a\"}", TASK));
+    }
+
+    @Test
+    void aValueOfTheWrongTypeIsAnErrorOnTheValue() {
+        assertEquals("error 10-11 expected string\nerror 41-44 expected integer or null",
+                diagnose("{\"title\": 1, \"status\": \"OPEN\", \"points\": 1.5}", TASK));
+        assertEquals("error 56-60 expected boolean",
+                diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"points\": 2.0, \"done\": null}", TASK),
+                "2.0 is an integer, null is one of the types listed");
+    }
+
+    @Test
+    void aValueOutsideItsEnumIsAnError() {
+        assertEquals("error 25-31 not one of \"OPEN\", \"DONE\"",
+                diagnose("{\"title\": \"a\", \"status\": \"LATE\"}", TASK));
+    }
+
+    @Test
+    void aStringLongerThanMaxLengthIsAnErrorCountingCharactersNotUnits() {
+        assertEquals("error 10-18 longer than 5 characters",
+                diagnose("{\"title\": \"abcdef\", \"status\": \"OPEN\"}", TASK));
+        assertEquals("", diagnose("{\"title\": \"" + EMOJI.repeat(5) + "\", \"status\": \"OPEN\"}", TASK));
+    }
+
+    @Test
+    void aKeyTheSchemaDoesNotListIsAWarningOnTheKey() {
+        assertEquals("warning 33-41 unknown key \"colour\"",
+                diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"colour\": 1}", TASK));
+        assertEquals("", diagnose("{\"b\": 1}",
+                "{\"type\": \"object\", \"properties\": {\"a\": {}}, \"additionalProperties\": true}"));
+        assertEquals("error 6-9 expected integer", diagnose("{\"b\": \"x\"}", "{\"type\": \"object\", "
+                + "\"properties\": {\"a\": {}}, \"additionalProperties\": {\"type\": \"integer\"}}"));
+        assertEquals("", diagnose("{\"b\": 1}",
+                "{\"type\": \"object\", \"properties\": {\"a\": {}}, \"patternProperties\": {\"^b\": {}}}"));
+    }
+
+    @Test
+    void aStringThatDoesNotLookLikeItsFormatIsAWarning() {
+        assertEquals("warning 40-52 not a date, such as 2026-09-30\n"
+                + "warning 77-95 not a date-time, such as 2026-09-30T14:30:00\n"
+                + "warning 104-109 not a uuid, such as 123e4567-e89b-12d3-a456-426614174000",
+                diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"due\": \"30/09/2026\", \"at\": \"14:30\", "
+                        + "\"when\": \"2026-09-30 14:30\", \"ref\": \"123\"}", TASK));
+    }
+
+    @Test
+    void theChecksFollowItemsTheirArrayFormAndALocalRefAtDepth() {
+        assertEquals("error 47-48 expected string\nerror 63-64 expected string\n"
+                + "error 82-83 missing required key \"name\"\nwarning 83-89 unknown key \"nick\"",
+                diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"tags\": [\"x\", 2], \"pair\": [1, 2, true], "
+                        + "\"owner\": {\"nick\": \"y\"}}", TASK));
+    }
+
+    @Test
+    void aSelfReferencingSchemaIsCheckedAtEveryDepth() {
+        assertEquals("error 34-37 expected integer", diagnose("{\"children\": [{\"children\": [{\"n\": \"x\"}]}]}",
+                "{\"$ref\": \"#/$defs/node\", \"$defs\": {\"node\": {\"type\": \"object\", \"properties\": {"
+                        + "\"children\": {\"type\": \"array\", \"items\": {\"$ref\": \"#/$defs/node\"}}, "
+                        + "\"n\": {\"type\": \"integer\"}}}}}"));
+    }
+
+    @Test
+    void anotherRefIsNotFollowedAndNothingUnderAnyOfIsChecked() {
+        assertEquals("", diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"extra\": 5, \"any\": 5}", TASK));
+    }
+
+    @Test
+    void anOddSchemaNeverThrowsItChecksLess() {
+        assertEquals("", diagnose("{\"x\": 1}", "{\"$ref\": \"#/$defs/a\", \"$defs\": {"
+                + "\"a\": {\"$ref\": \"#/$defs/b\"}, \"b\": {\"$ref\": \"#/$defs/a\"}}}"), "a $ref cycle");
+        assertEquals("", diagnose("{\"x\": 1}", "{\"type\": \"object\", \"properties\": 5, \"required\": \"x\"}"));
+        assertEquals("", diagnose("\"abcdef\"", "{\"type\": 7, \"enum\": \"x\", \"maxLength\": \"3\", \"format\": 5}"));
+        assertEquals("", diagnose("{\"x\": 1}", "\"not a schema\""));
+        assertEquals("", diagnose("{\"a\": 1}", "{\"properties\": {\"a\": {\"type\": \"strng\"}}}"),
+                "a type the editor does not know");
+        assertEquals("error 0-1 missing required key \"b\"",
+                diagnose("{\"a\": 1}", "{\"properties\": {\"a\": {}}, \"required\": [\"b\"]}"),
+                "a required key that properties does not list is still required");
+    }
+
+    @Test
+    void aKeyNamedProtoIsAKeyLikeAnyOther() {
+        String schema = "{\"type\": \"object\", \"required\": [\"__proto__\"], "
+                + "\"properties\": {\"__proto__\": {\"type\": \"integer\"}}}";
+
+        assertEquals("error 14-17 expected integer", diagnose("{\"__proto__\": \"x\"}", schema));
+        assertEquals("error 0-1 missing required key \"__proto__\"", diagnose("{}", schema));
+        assertEquals("", diagnose("{\"__proto__\": 1}", schema));
     }
 }

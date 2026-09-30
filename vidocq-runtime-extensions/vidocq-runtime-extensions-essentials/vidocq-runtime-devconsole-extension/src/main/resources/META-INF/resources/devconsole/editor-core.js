@@ -204,6 +204,157 @@ function parse(text, tokens) {
     k++;
   }
 }
+// ------------------------------------------------------------------------------------------------ schema
+
+/** The JSON Schema types a value can have: a type the editor does not know is not checked. */
+const TYPES = new Set(["object", "array", "string", "number", "integer", "boolean", "null"]);
+/** The keywords whose subschemas are never checked: a value under them is accepted as it is. */
+const UNCHECKED = ["anyOf", "oneOf", "allOf", "not", "patternProperties"];
+/** How many $ref one resolution follows before it gives up: a cycle of references ends there. */
+const MAX_REFS = 32;
+/** An ISO date, and a time of day with or without seconds and offset, as the formats below read them. */
+const DATE = "\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])";
+const TIME = "([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([Zz]|[+-]([01]\\d|2[0-3]):[0-5]\\d)?";
+/** What a string of each format looks like: a warning, never a refusal, since the server stays the judge. */
+const FORMAT_PATTERNS = new Map([
+  ["date", new RegExp("^" + DATE + "$")],
+  ["time", new RegExp("^" + TIME + "$")],
+  ["date-time", new RegExp("^" + DATE + "[Tt]" + TIME + "$")],
+  ["uuid", /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/],
+]);
+
+/**
+ * {@code schema} with its local $ref followed, or null when it is no object, its $ref is not a local one (it is then
+ * not checked), or a chain of references runs past MAX_REFS, as a cycle does. {@code root} is what "#" names.
+ */
+function resolve(schema, root) {
+  let s = schema;
+  for (let refs = 0; isObject(s) && Object.hasOwn(s, "$ref"); refs++) {
+    if (refs === MAX_REFS || typeof s.$ref !== "string") return null;
+    s = pointer(root, s.$ref);
+  }
+  return isObject(s) ? s : null;
+}
+
+/** The schema a local $ref names under #/$defs/ or #/definitions/, or undefined for any other reference. */
+function pointer(root, ref) {
+  if (!ref.startsWith("#/$defs/") && !ref.startsWith("#/definitions/")) return undefined;
+  let s = root;
+  for (const part of ref.slice(2).split("/")) {
+    const name = part.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (!isObject(s) || !Object.hasOwn(s, name)) return undefined;
+    s = s[name];
+  }
+  return s;
+}
+
+/** The schema of member {@code key} of an object of schema {@code s}, unresolved; null when it has none. */
+function memberSchema(s, key) {
+  if (isObject(s.properties) && Object.hasOwn(s.properties, key)) return s.properties[key];
+  return isObject(s.additionalProperties) ? s.additionalProperties : null;
+}
+
+/** The schema of item {@code i} of an array of schema {@code s}, unresolved; null when it has none. */
+function itemSchema(s, i) {
+  if (Array.isArray(s.items)) return i < s.items.length ? s.items[i] : null;
+  return isObject(s.items) ? s.items : null;
+}
+
+/** The types {@code s} allows that the editor knows, or null when it says none it knows. */
+function typesOf(s) {
+  const named = typeof s.type === "string" ? [s.type] : Array.isArray(s.type) ? s.type : [];
+  const known = named.filter((type) => typeof type === "string" && TYPES.has(type));
+  return known.length ? known : null;
+}
+
+/** Whether the parsed {@code node} is of JSON Schema type {@code type}; integer refuses 1.5, not 1.0. */
+function hasType(node, type) {
+  switch (type) {
+    case "object":
+    case "array":
+    case "string":
+    case "number":
+      return node.kind === type;
+    case "integer":
+      return node.kind === "number" && Number.isInteger(node.value);
+    case "boolean":
+      return node.kind === "literal" && typeof node.value === "boolean";
+    default:
+      return node.kind === "literal" && node.value === null;
+  }
+}
+
+/** Whether the parsed {@code node} equals the JSON value {@code v}. */
+function same(node, v) {
+  switch (node.kind) {
+    case "object":
+      return isObject(v) && Object.keys(v).length === new Set(node.members.map((m) => m.key)).size
+        && node.members.every((m) => Object.hasOwn(v, m.key) && same(m.value, v[m.key]));
+    case "array":
+      return Array.isArray(v) && v.length === node.items.length && node.items.every((item, i) => same(item, v[i]));
+    default:
+      return node.value === v;
+  }
+}
+
+/** The values of an enum as a message lists them: the first five, as JSON. */
+const listed = (values) => values.slice(0, 5).map((v) => JSON.stringify(v)).join(", ")
+  + (values.length > 5 ? ", …" : "");
+
+/**
+ * The schema checks of the parsed {@code value} against {@code schema}, at every depth, in the order of the text. A
+ * value of the wrong type is checked no further. An object or an array is marked on its opening bracket, so that a
+ * tooltip does not cover all it holds. Its own stack, as the parser.
+ */
+function check(value, schema) {
+  const out = [];
+  const diagnostic = (from, to, severity, message) => out.push({ from, to, severity, message });
+  const work = [[value, resolve(schema, schema)]];
+  while (work.length) {
+    const [node, s] = work.pop();
+    if (s === null) continue;
+    const container = node.kind === "object" || node.kind === "array";
+    const from = node.from;
+    const to = container ? node.from + 1 : node.to;
+    const types = typesOf(s);
+    if (types && !types.some((type) => hasType(node, type))) {
+      diagnostic(from, to, "error", "expected " + types.join(" or "));
+      continue;
+    }
+    if (Array.isArray(s.enum) && s.enum.length && !s.enum.some((v) => same(node, v))) {
+      diagnostic(from, to, "error", "not one of " + listed(s.enum));
+      continue;
+    }
+    if (node.kind === "string") {
+      if (typeof s.maxLength === "number" && [...node.value].length > s.maxLength) {
+        diagnostic(from, to, "error", "longer than " + s.maxLength + " characters");
+      }
+      const format = typeof s.format === "string" ? FORMAT_PATTERNS.get(s.format) : undefined;
+      if (format && !format.test(node.value)) {
+        diagnostic(from, to, "warning", "not a " + s.format + ", such as " + FORMAT_EXAMPLES.get(s.format));
+      }
+    } else if (node.kind === "object") {
+      const keys = new Set(node.members.map((m) => m.key));
+      for (const name of Array.isArray(s.required) ? s.required : []) {
+        if (typeof name === "string" && !keys.has(name)) {
+          diagnostic(from, to, "error", "missing required key " + JSON.stringify(name));
+        }
+      }
+      const properties = isObject(s.properties) ? s.properties : null;
+      const closed = properties !== null && Object.keys(properties).length > 0 && s.additionalProperties !== true
+        && !isObject(s.additionalProperties) && !UNCHECKED.some((keyword) => Object.hasOwn(s, keyword));
+      for (const m of node.members) {
+        if (closed && !Object.hasOwn(properties, m.key)) {
+          diagnostic(m.keyFrom, m.keyTo, "warning", "unknown key " + JSON.stringify(m.key));
+        }
+        work.push([m.value, resolve(memberSchema(s, m.key), schema)]);
+      }
+    } else if (node.kind === "array") {
+      node.items.forEach((item, i) => work.push([item, resolve(itemSchema(s, i), schema)]));
+    }
+  }
+  return out.sort((a, b) => a.from - b.from || a.to - b.to);
+}
 // ------------------------------------------------------------------------------------------------ the language
 
 /** JSON, its data the JSON Schema of the value (spec §3). */
@@ -211,8 +362,8 @@ export const jsonLanguage = Object.freeze({
   id: "json",
   tokenize: (text) => lex(text),
   diagnose(text, data) {
-    const { error } = parse(text, lex(text));
-    return error ? [error] : [];
+    const { value, error } = parse(text, lex(text));
+    return error ? [error] : check(value, data);
   },
   pairs: Object.freeze(["{}", "[]", "()", "\"\""]),
 });
