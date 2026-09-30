@@ -191,8 +191,11 @@ final class CsvActions {
         String details = exportDetails(entity, export);
         // As a query: in a transaction always rolled back when there is a manager, read-only whatever runs.
         String runs = transactions.available() ? TransactionRunner.ROLLBACK : null;
+        // At most as many rows as could fit in MAX_BYTES, a row taking 2 bytes at least (a field and \n): a file
+        // that fits is never cut, and a table never read whole to be refused (#157).
         TransactionRunner.Outcome<Written> outcome = transactions.run(runs,
-                () -> write(runner.run(export.query(), export.params(), model, runtime), entity, export.separator()));
+                () -> write(runner.run(export.query(), export.params(), model, runtime,
+                        MAX_BYTES / 2 + 1), entity, export.separator()));
         if (outcome.failure() != null) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + EXPORT + " failed: "
                     + outcome.failure().getClass().getName());

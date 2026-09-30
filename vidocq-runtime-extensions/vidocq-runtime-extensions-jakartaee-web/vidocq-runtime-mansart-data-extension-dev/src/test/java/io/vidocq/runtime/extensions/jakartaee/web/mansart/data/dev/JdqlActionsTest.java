@@ -63,6 +63,7 @@ class JdqlActionsTest {
     final class RecordingRunner implements JdqlRunner {
 
         final List<String> queries = new ArrayList<>();
+        final List<Integer> limits = new ArrayList<>();
         final List<Map<String, Object>> parameters = new ArrayList<>();
         final List<Class<?>> entities = new ArrayList<>();
         final List<Object> runtimes = new ArrayList<>();
@@ -71,8 +72,10 @@ class JdqlActionsTest {
         RuntimeException failure;
 
         @Override
-        public JdqlResult run(String jdql, Map<String, Object> params, EntityModel<?> model, Object runtime) {
+        public JdqlResult run(String jdql, Map<String, Object> params, EntityModel<?> model, Object runtime,
+                              int maxRows) {
             queries.add(jdql);
+            limits.add(maxRows);
             parameters.add(params);
             entities.add(model.entityClass());
             runtimes.add(runtime);
@@ -226,6 +229,16 @@ class JdqlActionsTest {
         runner.answer = new JdqlResult.Entities(List.of());
         String none = query(actions, "{\"query\":\"FROM Gizmo\"}").summary();
         assertTrue(none.matches("no row in \\d+ ms"), none);
+    }
+
+    /** #157: a query reads one row more than it shows, never a whole table. */
+    @Test
+    void aQueryReadsAtMostOneRowMoreThanItShows() {
+        RepositoryActions actions = build();
+
+        query(actions, "{\"query\":\"FROM Gizmo\"}");
+
+        assertEquals(List.of(ResultJson.MAX_ROWS + 1), runner.limits);
     }
 
     @Test

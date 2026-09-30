@@ -169,7 +169,8 @@ final class JdqlActions {
         // read-only whatever it holds, should a statement that writes ever pass for a query.
         String runs = write ? mode : transactions.available() ? TransactionRunner.ROLLBACK : null;
         TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(runs,
-                () -> answer(runner.run(statement.query(), statement.params(), model, runtime), write, json));
+                () -> answer(runner.run(statement.query(), statement.params(), model, runtime,
+                        ResultJson.MAX_ROWS + 1), write, json));
         if (outcome.failure() != null) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + (write ? WRITE : QUERY) + " failed: "
                     + outcome.failure().getClass().getName());

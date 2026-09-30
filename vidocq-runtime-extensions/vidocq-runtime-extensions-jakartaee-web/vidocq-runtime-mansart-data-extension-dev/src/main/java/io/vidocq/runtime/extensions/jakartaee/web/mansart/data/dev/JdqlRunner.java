@@ -33,9 +33,9 @@ import java.util.Map;
 @FunctionalInterface
 interface JdqlRunner {
 
-    /** {@link JdqlExecutor#run} on the {@link RepositoryRuntime} bean the call resolved. */
-    JdqlRunner MANSART = (jdql, parameters, model, runtime) ->
-            JdqlExecutor.run(jdql, parameters, model, (RepositoryRuntime) runtime);
+    /** {@link JdqlExecutor#run} on the {@link RepositoryRuntime} bean the call resolved, read up to a SQL LIMIT. */
+    JdqlRunner MANSART = (jdql, parameters, model, runtime, maxRows) ->
+            JdqlExecutor.run(jdql, parameters, model, (RepositoryRuntime) runtime, maxRows);
 
     /**
      * Runs {@code jdql}, in whatever transaction the caller has begun.
@@ -44,7 +44,9 @@ interface JdqlRunner {
      * @param parameters its named parameters, by name; {@code null} values included
      * @param model      the model of the entity it names
      * @param runtime    the {@code RepositoryRuntime} bean
+     * @param maxRows    the most entities or rows read from the database (a SQL LIMIT, #157); a count, an
+     *                   aggregate or a write is not affected
      * @return its result
      */
-    JdqlResult run(String jdql, Map<String, Object> parameters, EntityModel<?> model, Object runtime);
+    JdqlResult run(String jdql, Map<String, Object> parameters, EntityModel<?> model, Object runtime, int maxRows);
 }
