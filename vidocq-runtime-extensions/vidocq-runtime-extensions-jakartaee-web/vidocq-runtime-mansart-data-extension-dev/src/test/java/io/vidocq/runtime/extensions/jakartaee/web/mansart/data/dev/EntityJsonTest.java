@@ -22,12 +22,14 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.Gizmo;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.Level;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.Part;
+import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.Task;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,24 +40,60 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Entities read and built through Mansart's model and its handles (spec §5). */
 class EntityJsonTest {
 
-    /** The schema of a Gizmo, in model order, none required. */
-    static final String GIZMO_SCHEMA = "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},"
-            + "\"name\":{\"type\":\"string\"},\"stock\":{\"type\":\"integer\"},"
-            + "\"level\":{\"type\":\"string\",\"enum\":[\"LOW\",\"HIGH\"]},"
-            + "\"due\":{\"type\":\"string\",\"format\":\"date\"},\"price\":{\"type\":\"number\"}}}";
+    /**
+     * The schema of a Gizmo, in model order: its id is neither generated nor nullable, so it is required; every other
+     * column may be null, or is a primitive.
+     */
+    static final String GIZMO_SCHEMA = "{\"type\":\"object\",\"properties\":{"
+            + "\"id\":{\"type\":\"integer\",\"description\":\"column id\"},"
+            + "\"name\":{\"type\":\"string\",\"description\":\"column name\"},"
+            + "\"stock\":{\"type\":\"integer\",\"description\":\"column stock\"},"
+            + "\"level\":{\"type\":\"string\",\"enum\":[\"LOW\",\"HIGH\"],\"description\":\"column level\"},"
+            + "\"due\":{\"type\":\"string\",\"format\":\"date\",\"description\":\"column due\"},"
+            + "\"price\":{\"type\":\"number\",\"description\":\"column price\"}},\"required\":[\"id\"]}";
+    /** The schema of a Task: the generated id and the version read-only, the columns that cannot be null required. */
+    static final String TASK_SCHEMA = "{\"type\":\"object\",\"properties\":{"
+            + "\"id\":{\"type\":\"integer\",\"readOnly\":true,\"description\":\"column id\"},"
+            + "\"version\":{\"type\":\"integer\",\"readOnly\":true,\"description\":\"column version\"},"
+            + "\"title\":{\"type\":\"string\",\"description\":\"column title\"},"
+            + "\"notes\":{\"type\":\"string\",\"description\":\"column notes\"},"
+            + "\"points\":{\"type\":\"integer\",\"description\":\"column points\"},"
+            + "\"level\":{\"type\":\"string\",\"enum\":[\"LOW\",\"HIGH\"],\"description\":\"column level\"},"
+            + "\"owner\":{\"type\":\"integer\",\"description\":\"id of Gizmo, column owner_id\"}},"
+            + "\"required\":[\"title\",\"level\",\"owner\"]}";
 
     private final EntityJson entities = RunFixtures.entities();
 
     @Test
-    void anEntityIsAnObjectOfItsColumnsNoneRequired() {
+    void anEntityIsAnObjectOfItsColumnsTheOnesThatCannotBeNullRequired() {
         assertEquals(GIZMO_SCHEMA, Json.write(entities.schema(Gizmo.class)));
     }
 
     @Test
     void aReferenceTakesTheReferencedIdAndAJoinedAttributeIsLeftOut() {
-        assertEquals("{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},"
-                + "\"gizmo\":{\"type\":\"integer\"},\"label\":{\"type\":\"string\"}}}",
+        assertEquals("{\"type\":\"object\",\"properties\":{"
+                + "\"id\":{\"type\":\"integer\",\"readOnly\":true,\"description\":\"column id\"},"
+                + "\"gizmo\":{\"type\":\"integer\",\"description\":\"id of Gizmo, column gizmo_id\"},"
+                + "\"label\":{\"type\":\"string\",\"description\":\"column label\"}},\"required\":[]}",
                 Json.write(entities.schema(Part.class)));
+    }
+
+    @Test
+    void aTaskSaysWhatIsRequiredWhatTheDatabaseWritesAndWhichColumnEachIs() {
+        assertEquals(TASK_SCHEMA, Json.write(entities.schema(Task.class)));
+    }
+
+    @Test
+    void neitherANullableColumnNorAPrimitiveNorAGeneratedIdNorTheVersionIsRequired() {
+        Map<String, Object> schema = entities.schema(Task.class);
+
+        assertEquals(List.of("title", "level", "owner"), schema.get("required"),
+                "notes may be null, points is an int, id is generated, version is the version");
+        Map<?, ?> properties = (Map<?, ?>) schema.get("properties");
+        assertEquals(true, ((Map<?, ?>) properties.get("id")).get("readOnly"), "a generated id");
+        assertEquals(true, ((Map<?, ?>) properties.get("version")).get("readOnly"), "the version");
+        assertNull(((Map<?, ?>) properties.get("title")).get("readOnly"), "a column the application writes");
+        assertFalse(((List<?>) entities.schema(Gizmo.class).get("required")).contains("stock"), "an int");
     }
 
     @Test

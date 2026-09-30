@@ -21,8 +21,10 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
 import io.vidocq.mansart.data.dialect.Attribute;
 import io.vidocq.mansart.data.dialect.EntityModel;
+import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.JoinedAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
+import io.vidocq.mansart.data.dialect.attribute.VersionAttribute;
 
 import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
@@ -59,16 +61,32 @@ final class EntityJson {
     }
 
     /**
-     * The JSON Schema of {@code entity}: an object, one property per settable attribute, none required.
+     * The JSON Schema of {@code entity} (editor spec §6): an object, one property per settable attribute, each with
+     * its column as {@code description}, {@code id of <Entity>, column <name>} for a reference. A generated id and the
+     * version are {@code readOnly}: the database writes them. Any other attribute is {@code required} when its column
+     * is not nullable and its field is not primitive, which always holds a value.
      *
      * @throws RuntimeException when its model cannot be read, as {@code EntityModels.of} throws it
      */
     Map<String, Object> schema(Class<?> entity) {
         Map<String, Object> properties = new LinkedHashMap<>();
-        for (Map.Entry<String, Settable> property : settable(model(entity)).entrySet()) {
-            properties.put(property.getKey(), Scalars.schema(property.getValue().type()));
+        List<String> required = new ArrayList<>();
+        for (Map.Entry<String, Settable> entry : settable(model(entity)).entrySet()) {
+            Settable property = entry.getValue();
+            Attribute<?, ?> attribute = property.attribute();
+            Map<String, Object> schema = Scalars.schema(property.type());
+            if (attribute instanceof IdAttribute<?, ?> id && id.generated()
+                    || attribute instanceof VersionAttribute<?, ?>) {
+                schema.put("readOnly", true);
+            } else if (!attribute.nullable() && !fieldType(attribute).isPrimitive()) {
+                required.add(entry.getKey());
+            }
+            schema.put("description", (property.referenced() == null ? ""
+                    : "id of " + property.referenced().entityClass().getSimpleName() + ", ")
+                    + "column " + attribute.columnName());
+            properties.put(entry.getKey(), schema);
         }
-        return Scalars.object("type", "object", "properties", properties);
+        return Scalars.object("type", "object", "properties", properties, "required", required);
     }
 
     /**

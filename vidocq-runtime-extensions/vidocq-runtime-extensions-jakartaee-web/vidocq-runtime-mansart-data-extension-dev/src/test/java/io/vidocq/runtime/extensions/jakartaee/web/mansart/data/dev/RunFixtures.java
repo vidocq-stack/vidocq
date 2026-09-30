@@ -21,12 +21,16 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
 import io.vidocq.mansart.data.core.EntityModels;
 import io.vidocq.mansart.data.dialect.EntityModel;
+import io.vidocq.mansart.data.dialect.attribute.EnumAttribute;
+import io.vidocq.mansart.data.dialect.attribute.EnumStorage;
 import io.vidocq.mansart.data.dialect.attribute.IdAttribute;
 import io.vidocq.mansart.data.dialect.attribute.JoinPath;
 import io.vidocq.mansart.data.dialect.attribute.JoinedAttribute;
+import io.vidocq.mansart.data.dialect.attribute.NumericAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
 import io.vidocq.mansart.data.dialect.attribute.TemporalAttribute;
 import io.vidocq.mansart.data.dialect.attribute.TextAttribute;
+import io.vidocq.mansart.data.dialect.attribute.VersionAttribute;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
 import jakarta.data.page.Page;
 import jakarta.data.page.PageRequest;
@@ -136,6 +140,22 @@ final class RunFixtures {
         public Tally() {}
     }
 
+    /**
+     * Its model is {@link #taskModel()}, as an application's task is mapped: a generated id, a version, a title and a
+     * level that cannot be null, notes that can, a primitive and a reference to a gizmo that cannot.
+     */
+    public static class Task {
+        private Long id;
+        private Long version;
+        private String title;
+        private String notes;
+        private int points;
+        private Level level;
+        private Gizmo owner;
+
+        public Task() {}
+    }
+
     static Slot slot(Long id, Year year, String label) {
         Slot slot = new Slot();
         slot.id = id;
@@ -210,6 +230,10 @@ final class RunFixtures {
     @Repository
     public interface BrokenRepository extends BasicRepository<Broken, Long> {}
 
+    /** Only what it inherits: the save(Task) whose schema describes a whole entity. */
+    @Repository
+    public interface TaskRepository extends BasicRepository<Task, Long> {}
+
     /** No Jakarta Data super-interface: no primary entity, no inherited method. */
     @Repository
     public interface ReportQueries {
@@ -219,19 +243,22 @@ final class RunFixtures {
 
     /** The entities of the catalogue, by class name. */
     static final Set<String> ENTITIES = Set.of(Gizmo.class.getName(), Part.class.getName(), Broken.class.getName(),
-            Slot.class.getName(), Tally.class.getName());
+            Slot.class.getName(), Tally.class.getName(), Task.class.getName());
 
     /** The repositories the panel runs, as MansartDataLive publishes them. */
     static final List<Class<?>> REPOSITORIES = List.of(GizmoRepository.class, PartRepository.class,
             ReportQueries.class);
 
-    /** The models: Part's, Slot's and Tally's by hand, the others from Mansart itself. */
+    /** The models: Part's, Slot's, Tally's and Task's by hand, the others from Mansart itself. */
     static EntityModel<?> model(Class<?> type) {
         if (type == Part.class) {
             return partModel();
         }
         if (type == Tally.class) {
             return tallyModel();
+        }
+        if (type == Task.class) {
+            return taskModel();
         }
         return type == Slot.class ? slotModel() : EntityModels.of(type);
     }
@@ -285,6 +312,38 @@ final class RunFixtures {
                     lookup.findSetter(Slot.class, "label", String.class));
             return new EntityModel<>(Slot.class, "slots", "", id, Optional.empty(), List.of(id, year, label),
                     lookup.findConstructor(Slot.class, MethodType.methodType(void.class)));
+        } catch (ReflectiveOperationException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    /** The model of {@link Task}, with real handles, in the order of its fields. */
+    static EntityModel<Task> taskModel() {
+        MethodHandles.Lookup lookup = MethodHandles.lookup();
+        try {
+            IdAttribute<Task, Long> id = new IdAttribute<>("id", "id", Long.class, Task.class, true,
+                    lookup.findGetter(Task.class, "id", Long.class), lookup.findSetter(Task.class, "id", Long.class));
+            VersionAttribute<Task, Long> version = new VersionAttribute<>("version", "version", Long.class, Task.class,
+                    lookup.findGetter(Task.class, "version", Long.class),
+                    lookup.findSetter(Task.class, "version", Long.class));
+            TextAttribute<Task> title = new TextAttribute<>("title", "title", Task.class, false, false, 200,
+                    lookup.findGetter(Task.class, "title", String.class),
+                    lookup.findSetter(Task.class, "title", String.class));
+            TextAttribute<Task> notes = new TextAttribute<>("notes", "notes", Task.class, true, false, 2000,
+                    lookup.findGetter(Task.class, "notes", String.class),
+                    lookup.findSetter(Task.class, "notes", String.class));
+            NumericAttribute<Task, Integer> points = new NumericAttribute<>("points", "points", Integer.class,
+                    Task.class, false, false, 0, 0, lookup.findGetter(Task.class, "points", int.class),
+                    lookup.findSetter(Task.class, "points", int.class));
+            EnumAttribute<Task, Level> level = new EnumAttribute<>("level", "level", Level.class, Task.class, false,
+                    false, EnumStorage.STRING, lookup.findGetter(Task.class, "level", Level.class),
+                    lookup.findSetter(Task.class, "level", Level.class));
+            ReferenceAttribute<Task, Gizmo> owner = new ReferenceAttribute<>("owner", "owner_id", Gizmo.class,
+                    Task.class, false, false, false, lookup.findGetter(Task.class, "owner", Gizmo.class),
+                    lookup.findSetter(Task.class, "owner", Gizmo.class));
+            return new EntityModel<>(Task.class, "tasks", "", id, Optional.of(version),
+                    List.of(id, version, title, notes, points, level, owner),
+                    lookup.findConstructor(Task.class, MethodType.methodType(void.class)));
         } catch (ReflectiveOperationException impossible) {
             throw new IllegalStateException(impossible);
         }

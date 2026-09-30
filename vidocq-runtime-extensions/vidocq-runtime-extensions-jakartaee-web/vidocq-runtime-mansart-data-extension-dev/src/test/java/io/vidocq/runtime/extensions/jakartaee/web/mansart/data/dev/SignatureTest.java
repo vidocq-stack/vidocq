@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.BrokenRepository;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.Gizmo;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.GizmoRepository;
+import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev.RunFixtures.TaskRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -81,6 +82,12 @@ class SignatureTest {
         assertEquals("{\"type\":\"object\",\"properties\":{\"gizmo\":" + EntityJsonTest.GIZMO_SCHEMA
                 + "},\"required\":[\"gizmo\"]}", signature(GizmoRepository.class, "keep(Gizmo)").schema());
         assertNull(signature(GizmoRepository.class, "search(String)").reason());
+    }
+
+    @Test
+    void theSaveOfATaskDescribesItsEntityForTheForm() {
+        assertEquals("{\"type\":\"object\",\"properties\":{\"entity\":" + EntityJsonTest.TASK_SCHEMA
+                + "},\"required\":[\"entity\"]}", signature(TaskRepository.class, "save(Task)").schema());
     }
 
     @Test
