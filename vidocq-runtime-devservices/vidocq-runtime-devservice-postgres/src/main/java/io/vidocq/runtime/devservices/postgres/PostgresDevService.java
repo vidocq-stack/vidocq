@@ -102,6 +102,9 @@ public final class PostgresDevService implements DevService {
     @Override
     public Map<String, String> start(DevServiceContext ctx) {
         boolean reuse = reuse(ctx);
+        for (String line : leftOut(ctx)) {
+            ctx.log().log(System.Logger.Level.INFO, line);
+        }
         Map<String, String> props = new LinkedHashMap<>();
         for (DatasourcePlan ds : plan(ctx)) {
             PostgreSQLContainer<?> c = new PostgreSQLContainer<>(
@@ -198,7 +201,8 @@ public final class PostgresDevService implements DevService {
      *   <li>the file gives a {@code jdbc:postgresql:} URL, the production one, or a wrapper driver's
      *       {@code jdbc:<name>:postgresql:} ({@link #isPostgres}): a container, whose URL replaces it under the dev
      *       host;</li>
-     *   <li>no URL, or a value that is not a {@code jdbc:} URL (such as {@code ${db.url}}): a container only when
+     *   <li>no URL, or a value that is not a readable {@code jdbc:} URL (one holding {@code ${…}}, or with no name
+     *       after {@code jdbc:}): a container only when
      *       {@value #DRIVER} is on the application's class path.</li>
      * </ol>
      */
@@ -217,7 +221,10 @@ public final class PostgresDevService implements DevService {
             return new Decision(name, null, null); // rule 1: the developer's own database
         }
         String fileUrl = ctx.applicationProperty(urlKey).map(String::strip).orElse("");
-        if (startsWithIgnoringCase(fileUrl, "jdbc:")) {
+        // A placeholder (${...}) or a scheme with no name is no URL the dev host can read: rule 4 (#166).
+        boolean readable = startsWithIgnoringCase(fileUrl, "jdbc:") && !fileUrl.contains("${")
+                && scheme(fileUrl).length() > "jdbc:".length();
+        if (readable) {
             if (!isPostgres(fileUrl)) {
                 return new Decision(name, null, urlKey + " is " + scheme(fileUrl) + ", not PostgreSQL");
             }
@@ -228,6 +235,25 @@ public final class PostgresDevService implements DevService {
                     "no " + urlKey + " and no PostgreSQL driver (" + DRIVER + ") on the class path");
         }
         return new Decision(name, specFor(ctx, name, poolPrefix, devPrefix), null);
+    }
+
+    /**
+     * When at least one datasource gets a container, one line for each that does not and says why — which
+     * {@link #skipReason} does not cover, being asked only when nothing starts. Logged once, at {@link #start}.
+     */
+    static List<String> leftOut(DevServiceContext ctx) {
+        List<Decision> decisions = decide(ctx);
+        if (decisions.stream().noneMatch(decision -> decision.plan() != null)) {
+            return List.of();
+        }
+        List<String> lines = new ArrayList<>();
+        for (Decision decision : decisions) {
+            if (decision.plan() == null && decision.reason() != null) {
+                lines.add("Postgres dev service: datasource '" + decision.name() + "' not started: "
+                        + decision.reason());
+            }
+        }
+        return lines;
     }
 
     /**

@@ -190,6 +190,29 @@ class PostgresDevServiceTest {
                 .skipReason(ctx(Map.of(), Map.of("vidocq.pool.url", "jdbc:tc:postgresql:16:///db"), true)));
     }
 
+    /** #166: a placeholder right after jdbc:, or a scheme with no name, is no URL at all (rule 4), never rule 2. */
+    @Test
+    void aJdbcUrlWithAPlaceholderOrNoSchemeNameIsNoUrlAtAll() {
+        for (String url : List.of("jdbc:${db.kind}://h/db", "jdbc:postgresql://${db.host}/app", "jdbc:", "jdbc::h2")) {
+            Map<String, String> file = Map.of("vidocq.pool.url", url);
+            assertEquals(List.of("default"), names(PostgresDevService.plan(ctx(Map.of(), file, true))), url);
+            assertEquals("no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path",
+                    new PostgresDevService().skipReason(ctx(Map.of(), file, false)), url);
+        }
+    }
+
+    /** #166: when some datasource starts, each one that does not is still said once, at start. */
+    @Test
+    void theDatasourcesLeftOutBesideAStartedOneAreSaid() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.dev.postgres.datasources", "audit,reports"),
+                Map.of("vidocq.pool.url", "jdbc:postgresql://prod/app", "vidocq.pool.audit.url", "jdbc:h2:mem:audit",
+                        "vidocq.pool.reports.url", "jdbc:postgresql://prod/reports"), true);
+
+        assertEquals(List.of("Postgres dev service: datasource 'audit' not started: "
+                + "vidocq.pool.audit.url is jdbc:h2, not PostgreSQL"), PostgresDevService.leftOut(ctx));
+        assertEquals(List.of(), PostgresDevService.leftOut(ctx(Map.of(), Map.of(), true)), "all started: nothing");
+    }
+
     @Test
     void noUrlStartsAContainerOnlyWithTheDriverOnTheClassPath() {
         assertEquals(List.of("default"), names(PostgresDevService.plan(ctx(Map.of(), Map.of(), true))));
