@@ -22,12 +22,18 @@ package io.vidocq.runtime.devservices.keycloak;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import com.github.dockerjava.api.command.CreateContainerCmd;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.core.CreateContainerCmdModifier;
 
+import java.lang.reflect.Proxy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
@@ -35,6 +41,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -86,6 +93,45 @@ class KeycloakDevServiceTest {
         } finally {
             svc.stop();
         }
+    }
+
+    @Test
+    void theContainerIsNamedAfterVidocqTheApplicationAndKeycloak() {
+        GenericContainer<?> c = KeycloakDevService.container(ctx(Map.of()), "quay.io/keycloak/keycloak:26.0",
+                Optional.empty(), "master", false);
+
+        assertTrue(createdName(c).matches("vidocq-dev-[a-z0-9_.-]+-keycloak-[0-9a-f]{8}"), createdName(c));
+        assertEquals("true", c.getLabels().get("io.vidocq.dev"));
+        assertEquals("keycloak", c.getLabels().get("io.vidocq.dev.service"));
+    }
+
+    @Test
+    void aReusedContainerChangesNameWhenTheImportedRealmChanges(@TempDir Path dir) throws Exception {
+        Path realm = Files.writeString(dir.resolve("realm.json"), "{\"realm\":\"vidocq\"}");
+        Optional<String> realmImport = Optional.of(realm.toString());
+        String name = createdName(KeycloakDevService.container(ctx(Map.of()), "kc:26", realmImport, "vidocq", true));
+
+        assertEquals(name,
+                createdName(KeycloakDevService.container(ctx(Map.of()), "kc:26", realmImport, "vidocq", true)));
+        Files.writeString(realm, "{\"realm\":\"vidocq\",\"enabled\":true}");
+        assertNotEquals(name,
+                createdName(KeycloakDevService.container(ctx(Map.of()), "kc:26", realmImport, "vidocq", true)));
+    }
+
+    /** The name the container's create-command modifiers give, read through a stand-in for Docker's command. */
+    private static String createdName(GenericContainer<?> container) {
+        String[] name = new String[1];
+        CreateContainerCmd cmd = (CreateContainerCmd) Proxy.newProxyInstance(CreateContainerCmd.class.getClassLoader(),
+                new Class<?>[] {CreateContainerCmd.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("withName")) {
+                        name[0] = (String) args[0];
+                    }
+                    return method.getReturnType().isInstance(proxy) ? proxy : null;
+                });
+        for (CreateContainerCmdModifier modifier : container.getCreateContainerCmdModifiers()) {
+            cmd = modifier.modify(cmd);
+        }
+        return name[0];
     }
 
     private static DevServiceContext ctx(Map<String, String> props) {

@@ -297,6 +297,23 @@ Container reuse also requires `testcontainers.reuse.enable=true` in your
 `~/.testcontainers.properties`. A fixed port that is already taken fails the start with a clear
 Docker bind error.
 
+## Container names
+
+Each container is named `<prefix><application>-<service>[-<datasource>]-<suffix>`, e.g.
+`vidocq-dev-mcp-tasks-server-postgres-3f9a2c01`, and labelled `io.vidocq.dev=true`,
+`io.vidocq.dev.app=<application>`, `io.vidocq.dev.service=<service>`:
+
+```properties
+vidocq.dev.container-prefix=acme-dev-          # default vidocq-dev-
+```
+
+The application is the project directory's name. The suffix is random, except for a reused
+container (`vidocq.dev.reuse=true`), where it is a digest of the application's path and the
+container's configuration, so that Testcontainers, whose reuse hash covers the name, still finds it.
+`docker ps --filter label=io.vidocq.dev` lists every dev service container. A custom provider uses
+`DevContainers.name(ctx, service, qualifier, reuseKey)` and `DevContainers.labels(ctx, service)`
+from the SPI.
+
 ## Docker daemon resolution
 
 Testcontainers must find your Docker daemon. With Docker Desktop the default socket usually

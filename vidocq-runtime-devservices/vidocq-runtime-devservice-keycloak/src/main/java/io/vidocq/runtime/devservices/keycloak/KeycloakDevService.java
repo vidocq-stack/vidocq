@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.devservices.keycloak;
 
+import io.vidocq.runtime.devservices.spi.DevContainers;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.devservices.spi.DevServiceState;
@@ -27,8 +28,11 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +47,8 @@ import java.util.Optional;
  * channel split to reconcile (unlike a Docker-network compose).</p>
  *
  * <p>Opts out when {@code mp.jwt.verify.issuer} is already configured. Tunables (all optional):
- * {@code vidocq.dev.keycloak.image|realm|realm-import}; plus two app-mapping helpers so a generic
+ * {@code vidocq.dev.keycloak.image|realm|realm-import} and the shared {@code vidocq.dev.reuse} and
+ * {@code vidocq.dev.container-prefix} ({@link DevContainers}); plus two app-mapping helpers so a generic
  * provider can feed app-specific keys without any app-side code:</p>
  * <ul>
  *   <li>{@code vidocq.dev.keycloak.issuer-keys} — comma-separated extra keys to also receive the
@@ -86,24 +91,7 @@ public final class KeycloakDevService implements DevService {
                 ? ctx.property("vidocq.dev.keycloak.realm").orElse("vidocq")
                 : "master";
 
-        container = new GenericContainer<>(DockerImageName.parse(image))
-                .withExposedPorts(KC_PORT)
-                .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
-                .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin");
-
-        if (realmImport.isPresent()) {
-            Path realmFile = ctx.resolve(realmImport.get());
-            container.withCopyFileToContainer(MountableFile.forHostPath(realmFile),
-                            "/opt/keycloak/data/import/" + realmFile.getFileName())
-                    .withCommand("start-dev", "--import-realm");
-        } else {
-            container.withCommand("start-dev");
-        }
-        container.waitingFor(Wait.forHttp("/realms/" + realm).forPort(KC_PORT).forStatusCode(200)
-                .withStartupTimeout(Duration.ofMinutes(3)));
-        if (reuse(ctx)) {
-            container.withReuse(true);
-        }
+        container = container(ctx, image, realmImport, realm, reuse(ctx));
         container.start();
 
         issuer = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT)
@@ -128,6 +116,49 @@ public final class KeycloakDevService implements DevService {
             props.put(key.trim(), publicUrl);
         });
         return props;
+    }
+
+    /**
+     * The Keycloak container, not started: named and labelled by {@link DevContainers}. A reused one is named after
+     * its image, realm and the content of the realm it imports, which Testcontainers' reuse hash also covers.
+     */
+    static GenericContainer<?> container(DevServiceContext ctx, String image, Optional<String> realmImport,
+            String realm, boolean reuse) {
+        Path realmFile = realmImport.map(ctx::resolve).orElse(null);
+        String reuseKey = reuse ? image + "\n" + realm + "\n" + realmDigest(realmFile) : null;
+        String name = DevContainers.name(ctx, "keycloak", null, reuseKey);
+        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image))
+                .withExposedPorts(KC_PORT)
+                .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
+                .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
+                .withLabels(DevContainers.labels(ctx, "keycloak"))
+                .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
+
+        if (realmFile != null) {
+            container.withCopyFileToContainer(MountableFile.forHostPath(realmFile),
+                            "/opt/keycloak/data/import/" + realmFile.getFileName())
+                    .withCommand("start-dev", "--import-realm");
+        } else {
+            container.withCommand("start-dev");
+        }
+        container.waitingFor(Wait.forHttp("/realms/" + realm).forPort(KC_PORT).forStatusCode(200)
+                .withStartupTimeout(Duration.ofMinutes(3)));
+        if (reuse) {
+            container.withReuse(true);
+        }
+        return container;
+    }
+
+    /** The realm file's path and content hash, so an edited realm gets a new container; empty without one. */
+    private static String realmDigest(Path realmFile) {
+        if (realmFile == null) {
+            return "";
+        }
+        try {
+            return realmFile.toAbsolutePath() + "#" + Arrays.hashCode(Files.readAllBytes(realmFile));
+        } catch (IOException e) {
+            return realmFile.toAbsolutePath().toString(); // unreadable: the copy will say so when it starts
+        }
     }
 
     @Override

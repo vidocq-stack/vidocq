@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.devservices.postgres;
 
+import io.vidocq.runtime.devservices.spi.DevContainers;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.devservices.spi.DevServiceState;
@@ -49,7 +50,8 @@ import java.util.Set;
  * <p><b>Tunables</b> (all optional), per datasource via {@code vidocq.dev.postgres.<name>.} and globally via
  * {@code vidocq.dev.postgres.}: {@code image} (global default applies to every datasource), {@code db},
  * {@code username}, {@code password}, {@code port} (fixed host port — random when unset, for a stable
- * external connection across restarts), plus the shared {@code vidocq.dev.reuse}.</p>
+ * external connection across restarts), plus the shared {@code vidocq.dev.reuse} and
+ * {@code vidocq.dev.container-prefix} ({@link DevContainers}).</p>
  */
 public final class PostgresDevService implements DevService {
 
@@ -107,18 +109,7 @@ public final class PostgresDevService implements DevService {
         }
         Map<String, String> props = new LinkedHashMap<>();
         for (DatasourcePlan ds : plan(ctx)) {
-            PostgreSQLContainer<?> c = new PostgreSQLContainer<>(
-                    DockerImageName.parse(ds.image()).asCompatibleSubstituteFor("postgres"))
-                    .withDatabaseName(ds.db())
-                    .withUsername(ds.username())
-                    .withPassword(ds.password());
-            if (ds.fixedPort() != null) {
-                // Pin the host port so an external tool keeps the same coordinates across restarts.
-                c.setPortBindings(List.of(ds.fixedPort() + ":5432"));
-            }
-            if (reuse) {
-                c.withReuse(true);
-            }
+            PostgreSQLContainer<?> c = container(ctx, ds, reuse);
             c.start();
             containers.add(c);
             images.add(ds.image());
@@ -129,6 +120,33 @@ public final class PostgresDevService implements DevService {
                     "Postgres dev service '" + ds.name() + "' ready at " + c.getJdbcUrl());
         }
         return props;
+    }
+
+    /**
+     * The container of one datasource, not started: named and labelled by {@link DevContainers}, the datasource's
+     * name as qualifier unless it is the {@code @Default} one.
+     */
+    static PostgreSQLContainer<?> container(DevServiceContext ctx, DatasourcePlan ds, boolean reuse) {
+        String qualifier = DEFAULT_NAME.equals(ds.name()) ? null : ds.name();
+        String reuseKey = reuse
+                ? String.join("\n", ds.image(), ds.db(), ds.username(), ds.password(), String.valueOf(ds.fixedPort()))
+                : null;
+        String name = DevContainers.name(ctx, "postgres", qualifier, reuseKey);
+        PostgreSQLContainer<?> c = new PostgreSQLContainer<>(
+                DockerImageName.parse(ds.image()).asCompatibleSubstituteFor("postgres"))
+                .withDatabaseName(ds.db())
+                .withUsername(ds.username())
+                .withPassword(ds.password())
+                .withLabels(DevContainers.labels(ctx, "postgres"))
+                .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
+        if (ds.fixedPort() != null) {
+            // Pin the host port so an external tool keeps the same coordinates across restarts.
+            c.setPortBindings(List.of(ds.fixedPort() + ":5432"));
+        }
+        if (reuse) {
+            c.withReuse(true);
+        }
+        return c;
     }
 
     @Override

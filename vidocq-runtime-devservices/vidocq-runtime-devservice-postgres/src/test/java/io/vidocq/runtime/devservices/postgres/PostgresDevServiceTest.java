@@ -23,8 +23,13 @@ import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import com.github.dockerjava.api.command.CreateContainerCmd;
 import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.core.CreateContainerCmdModifier;
 
+import java.lang.reflect.Proxy;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
@@ -366,6 +371,57 @@ class PostgresDevServiceTest {
             @Override public Path resolve(String relative) { return Path.of(".").resolve(relative); }
             @Override public System.Logger log() { return System.getLogger("test"); }
         };
+    }
+
+    // ---- container name and labels (pure, no Docker) ----
+
+    @Test
+    void theDefaultDatasourceContainerIsNamedAfterVidocqTheApplicationAndPostgres() {
+        PostgresDevService.DatasourcePlan ds = PostgresDevService.plan(ctx(Map.of())).getFirst();
+
+        PostgreSQLContainer<?> c = PostgresDevService.container(ctx(Map.of()), ds, false);
+
+        assertTrue(createdName(c).matches("vidocq-dev-[a-z0-9_.-]+-postgres-[0-9a-f]{8}"), createdName(c));
+        assertEquals("true", c.getLabels().get("io.vidocq.dev"));
+        assertEquals("postgres", c.getLabels().get("io.vidocq.dev.service"));
+    }
+
+    @Test
+    void aNamedDatasourceContainerCarriesTheDatasourceName() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.dev.postgres.datasources", "analytics"));
+        PostgresDevService.DatasourcePlan analytics = PostgresDevService.plan(ctx).get(1);
+
+        assertTrue(createdName(PostgresDevService.container(ctx, analytics, false))
+                .matches("vidocq-dev-[a-z0-9_.-]+-postgres-analytics-[0-9a-f]{8}"));
+    }
+
+    @Test
+    void aReusedContainerKeepsItsNameUntilItsConfigurationChanges() {
+        DevServiceContext ctx = ctx(Map.of());
+        PostgresDevService.DatasourcePlan ds = PostgresDevService.plan(ctx).getFirst();
+        DevServiceContext otherPassword = ctx(Map.of("vidocq.dev.postgres.password", "secret"));
+        PostgresDevService.DatasourcePlan changed = PostgresDevService.plan(otherPassword).getFirst();
+
+        String name = createdName(PostgresDevService.container(ctx, ds, true));
+
+        assertEquals(name, createdName(PostgresDevService.container(ctx, ds, true)));
+        assertNotEquals(name, createdName(PostgresDevService.container(otherPassword, changed, true)));
+    }
+
+    /** The name the container's create-command modifiers give, read through a stand-in for Docker's command. */
+    static String createdName(GenericContainer<?> container) {
+        String[] name = new String[1];
+        CreateContainerCmd cmd = (CreateContainerCmd) Proxy.newProxyInstance(CreateContainerCmd.class.getClassLoader(),
+                new Class<?>[] {CreateContainerCmd.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("withName")) {
+                        name[0] = (String) args[0];
+                    }
+                    return method.getReturnType().isInstance(proxy) ? proxy : null;
+                });
+        for (CreateContainerCmdModifier modifier : container.getCreateContainerCmdModifiers()) {
+            cmd = modifier.modify(cmd);
+        }
+        return name[0];
     }
 
     private static List<String> names(List<PostgresDevService.DatasourcePlan> plan) {

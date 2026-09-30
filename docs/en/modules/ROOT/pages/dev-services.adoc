@@ -111,6 +111,35 @@ which may carry a host, a user or a password. When no datasource gets a containe
 all of them are joined with `; `. The log says `DevService 'postgres' not started: <reason>`, the
 state file keeps it, and the report shows it (<<the-report-section>>).
 
+[#container-names]
+=== Container names and labels [.tag-new]#NEW#
+
+A container a dev service starts is named after Vidocq, the application and the service, so
+`docker ps` tells it apart from the rest:
+
+----
+vidocq-dev-mcp-tasks-server-postgres-3f9a2c01
+vidocq-dev-mcp-tasks-server-postgres-analytics-7b04e1d9
+vidocq-dev-shop-keycloak-c2a18f5e
+----
+
+The application is the name of the project's directory, and a named datasource follows the
+service. A Docker name is unique on the machine, so the last part keeps two applications, two
+datasources, or `vidocq:dev` and the tests of the same project apart. It is random for a
+container that is not reused. For a reused one (`vidocq.dev.reuse=true`), it is a digest of the
+application's path and the container's configuration: the name stays the same from one session to
+the next while the configuration does, and changes with it. Testcontainers finds a reused container
+by a hash that covers its name.
+
+`vidocq.dev.container-prefix` replaces `vidocq-dev-`, as any tuning key, from a `-D` or from
+`vidocq.properties`. It must start a valid Docker name, letters, digits, `_`, `.` and `-`, and
+start with a letter or a digit; otherwise the start fails with a message that names the key.
+
+Each container also carries three labels: `io.vidocq.dev=true`, `io.vidocq.dev.app=<application>`
+and `io.vidocq.dev.service=<service>`. `docker ps --filter label=io.vidocq.dev` lists them all,
+whatever their prefix. The `testcontainers-ryuk-…` container that removes them at the end keeps its
+own name.
+
 [#vidocq-run]
 == vidocq:run (opt-in) [.tag-new]#NEW#
 
