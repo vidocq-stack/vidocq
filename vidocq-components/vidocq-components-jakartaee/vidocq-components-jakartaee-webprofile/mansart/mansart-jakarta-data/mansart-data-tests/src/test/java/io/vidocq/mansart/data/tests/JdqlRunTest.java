@@ -323,4 +323,45 @@ class JdqlRunTest {
         assertThat(count("SELECT COUNT(this) FROM Shipment", Map.of())).isEqualTo(before);
         assertThat(JdqlExecutor.isWrite("SELECT this DELETE FROM Shipment")).isFalse();
     }
+
+    // ---- at most maxRows (a SQL LIMIT), for a caller that shows or writes a bounded result ----
+
+    @Test
+    void maxRowsBoundsTheEntitiesInTheStatementsOrder() {
+        JdqlResult result = JdqlExecutor.run("FROM Shipment ORDER BY id", Map.of(), model, runtime, 2);
+
+        assertThat(references(result)).containsExactly("A-1", "B-2");
+    }
+
+    @Test
+    void maxRowsBoundsTheRowsOfAProjectionOfOneOrSeveralColumns() {
+        JdqlResult.Rows one = (JdqlResult.Rows) JdqlExecutor.run("SELECT reference FROM Shipment ORDER BY id DESC",
+                Map.of(), model, runtime, 3);
+        JdqlResult.Rows two = (JdqlResult.Rows) JdqlExecutor.run(
+                "SELECT reference, parcels FROM Shipment WHERE status = :status ORDER BY id",
+                Map.of("status", "SHIPPED"), model, runtime, 1);
+
+        assertThat(one.rows()).hasSize(3);
+        assertThat(one.rows().getFirst()[0]).isEqualTo("D-4");
+        assertThat(two.rows()).hasSize(1);
+        assertThat(two.rows().getFirst()[0]).isEqualTo("B-2");
+    }
+
+    @Test
+    void maxRowsLeavesACountAnAggregateAndAWriteAlone() {
+        assertThat(((JdqlResult.Count) JdqlExecutor.run("SELECT COUNT(this) FROM Shipment", Map.of(), model, runtime,
+                1)).count()).isEqualTo(4);
+        assertThat(((JdqlResult.Value) JdqlExecutor.run("SELECT MAX(parcels) FROM Shipment", Map.of(), model, runtime,
+                1)).value()).isEqualTo(3);
+        assertThat(((JdqlResult.Count) JdqlExecutor.run("UPDATE Shipment SET parcels = 9", Map.of(), model, runtime,
+                1)).count()).isEqualTo(4);
+    }
+
+    @Test
+    void maxRowsBeyondTheRowsGivesThemAllAndBelowOneIsRefused() {
+        assertThat(references(JdqlExecutor.run("FROM Shipment ORDER BY id", Map.of(), model, runtime, 100)))
+                .containsExactly("A-1", "B-2", "C-3", "D-4");
+        assertThatThrownBy(() -> JdqlExecutor.run("FROM Shipment", Map.of(), model, runtime, 0))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("maxRows: at least 1, not 0");
+    }
 }

@@ -225,7 +225,12 @@ public final class RepositoryRuntime {
     /* -------- derived queries (M3b) ---------- */
 
     public <E> List<E> queryList(EntityModel<E> model, Where where, OrderBy orderBy, Object... args) {
-        SqlFragment frag = dialect.select(model, where, orderBy, Pagination.NONE);
+        return queryList(model, where, orderBy, Pagination.NONE, args);
+    }
+
+    /** {@link #queryList(EntityModel, Where, OrderBy, Object...)} with a SQL page, such as a LIMIT. */
+    <E> List<E> queryList(EntityModel<E> model, Where where, OrderBy orderBy, Pagination pagination, Object... args) {
+        SqlFragment frag = dialect.select(model, where, orderBy, pagination);
         return ConnectionScope.withConnection(bridge, dataSource, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
@@ -293,9 +298,15 @@ public final class RepositoryRuntime {
     public <E, T> java.util.List<T> projectColumn(EntityModel<E> model, Attribute<?, ?> attr,
                                                   Class<T> resultType, Where where, OrderBy orderBy,
                                                   Object... args) {
+        return projectColumn(model, attr, resultType, where, orderBy, Pagination.NONE, args);
+    }
+
+    /** {@link #projectColumn(EntityModel, Attribute, Class, Where, OrderBy, Object...)} with a SQL page. */
+    <E, T> java.util.List<T> projectColumn(EntityModel<E> model, Attribute<?, ?> attr, Class<T> resultType,
+                                           Where where, OrderBy orderBy, Pagination pagination, Object... args) {
         SqlFragment frag = dialect.selectColumns(model,
                 java.util.List.of(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(attr)),
-                where, orderBy, Pagination.NONE);
+                where, orderBy, pagination);
         return ConnectionScope.withConnection(bridge, dataSource, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
@@ -317,12 +328,19 @@ public final class RepositoryRuntime {
     public <E> java.util.List<Object[]> projectColumns(EntityModel<E> model,
                                                        java.util.List<Attribute<?, ?>> attrs,
                                                        Where where, OrderBy orderBy, Object... args) {
+        return projectColumns(model, attrs, where, orderBy, Pagination.NONE, args);
+    }
+
+    /** {@link #projectColumns(EntityModel, java.util.List, Where, OrderBy, Object...)} with a SQL page. */
+    <E> java.util.List<Object[]> projectColumns(EntityModel<E> model, java.util.List<Attribute<?, ?>> attrs,
+                                                Where where, OrderBy orderBy, Pagination pagination,
+                                                Object... args) {
         java.util.List<io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn> cols =
                 new ArrayList<>(attrs.size());
         for (Attribute<?, ?> a : attrs) {
             cols.add(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(a));
         }
-        SqlFragment frag = dialect.selectColumns(model, cols, where, orderBy, Pagination.NONE);
+        SqlFragment frag = dialect.selectColumns(model, cols, where, orderBy, pagination);
         return ConnectionScope.withConnection(bridge, dataSource, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});

@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.core;
 
 import io.vidocq.mansart.data.dialect.Attribute;
+import io.vidocq.mansart.data.dialect.Pagination;
 import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.mansart.data.dialect.OrderBy;
 import io.vidocq.mansart.data.dialect.Where;
@@ -102,7 +103,8 @@ public final class JdqlExecutor {
      * exactly to a numeric attribute's type, a collection (for {@code IN :names}) element by element; a value of the
      * right type is kept. Every value is checked before anything runs.
      *
-     * <p>The result is read whole: {@code run} returns all that the statement selects, and the caller cuts.
+     * <p>The result is read whole: {@code run} returns all that the statement selects, and the caller cuts;
+     * {@link #run(String, Map, EntityModel, RepositoryRuntime, int)} reads at most a number of rows instead.
      *
      * @param jdql       one statement: {@code FROM …}, {@code SELECT … FROM …}, {@code UPDATE … SET …} or
      *                   {@code DELETE FROM …}, naming {@code model}'s entity by its simple or its full class name
@@ -117,6 +119,28 @@ public final class JdqlExecutor {
      */
     public static JdqlResult run(String jdql, Map<String, ?> parameters, EntityModel<?> model,
                                  RepositoryRuntime runtime) {
+        return run(jdql, parameters, model, runtime, Pagination.NONE);
+    }
+
+    /**
+     * {@link #run(String, Map, EntityModel, RepositoryRuntime)}, reading at most {@code maxRows} entities or rows of a
+     * projection, in the statement's order: a SQL {@code LIMIT}, so that no more is ever read from the database. A
+     * count, an aggregate, an {@code UPDATE} and a {@code DELETE} are not affected. For a caller that shows or writes a
+     * bounded result, such as a dev console.
+     *
+     * @param maxRows the most entities or rows read, at least 1
+     * @throws IllegalArgumentException when {@code maxRows} is less than 1
+     */
+    public static JdqlResult run(String jdql, Map<String, ?> parameters, EntityModel<?> model,
+                                 RepositoryRuntime runtime, int maxRows) {
+        if (maxRows < 1) {
+            throw new IllegalArgumentException("maxRows: at least 1, not " + maxRows);
+        }
+        return run(jdql, parameters, model, runtime, new Pagination.Offset(0, maxRows));
+    }
+
+    private static JdqlResult run(String jdql, Map<String, ?> parameters, EntityModel<?> model,
+                                  RepositoryRuntime runtime, Pagination pagination) {
         java.util.Objects.requireNonNull(jdql, "jdql");
         java.util.Objects.requireNonNull(model, "model");
         java.util.Objects.requireNonNull(runtime, "runtime");
@@ -145,7 +169,8 @@ public final class JdqlExecutor {
             names.put(used.get(i), i);
             args[i] = given.get(used.get(i));
         }
-        Object result = execute(stmt, shapeOf(stmt, model, attrIndex, names), model, attrIndex, runtime, args);
+        Object result = execute(stmt, shapeOf(stmt, model, attrIndex, names), model, attrIndex, runtime, args,
+                pagination);
         return switch (stmt.kind) {
             case SELECT -> new JdqlResult.Entities((List<?>) result);
             case COUNT, UPDATE, DELETE -> new JdqlResult.Count(((Number) result).longValue());
@@ -339,6 +364,15 @@ public final class JdqlExecutor {
     static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,
                           RepositoryRuntime runtime, Object[] args) {
+        return execute(stmt, shape, model, attrIndex, runtime, args, Pagination.NONE);
+    }
+
+    /** {@link #execute(JdqlAst.Stmt, CallShape, EntityModel, Map, RepositoryRuntime, Object[])}, entities and rows read
+     *  in {@code pagination}'s page (a SQL LIMIT for {@link #run(String, Map, EntityModel, RepositoryRuntime, int)}). */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
+                          Map<String, Attribute<?, ?>> attrIndex,
+                          RepositoryRuntime runtime, Object[] args, Pagination pagination) {
         OrderBy orderBy = buildOrderBy(stmt.orderBy, model, attrIndex);
         // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
         // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
@@ -381,7 +415,7 @@ public final class JdqlExecutor {
                     yield runtime.queryPage((EntityModel) model, bw.where, orderBy, pr, bw.args);
                 }
                 if (optional) yield runtime.queryOne((EntityModel) model, bw.where, bw.args);
-                List<Object> data = runtime.queryList((EntityModel) model, bw.where, orderBy, bw.args);
+                List<Object> data = runtime.queryList((EntityModel) model, bw.where, orderBy, pagination, bw.args);
                 jakarta.data.Limit lim2 = findLimit(args);
                 if (lim2 != null) {
                     int from = Math.max(0, (int) (lim2.startAt() - 1));
@@ -420,7 +454,7 @@ public final class JdqlExecutor {
                 }
                 Class<?> rt = shape.returnType();
                 List<Object[]> rows = runtime.projectColumns((EntityModel) model, attrs,
-                        bw.where, orderBy, bw.args);
+                        bw.where, orderBy, pagination, bw.args);
                 jakarta.data.Limit lim = findLimit(args);
                 if (lim != null) {
                     int from = Math.max(0, (int) (lim.startAt() - 1));
@@ -436,7 +470,7 @@ public final class JdqlExecutor {
                 Class<?> rt = shape.returnType();
                 Class<?> elem = shape.element();
                 List<Object> col = runtime.projectColumn((EntityModel) model, attr,
-                        (Class) elem, bw.where, orderBy, bw.args);
+                        (Class) elem, bw.where, orderBy, pagination, bw.args);
                 // Apply a Limit argument (Jakarta Data control parameter) by slicing.
                 jakarta.data.Limit lim = findLimit(args);
                 if (lim != null) {
