@@ -355,6 +355,215 @@ function check(value, schema) {
   }
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
+// ------------------------------------------------------------------------------------------------ completion
+
+/**
+ * Where {@code caret} is (spec §3.3), from the tokens before it: { position: "key" | "value" | null, schema, keys,
+ * current }. schema is the resolved schema of the object whose key is typed, or of the value typed; keys, the keys
+ * that object already has, before and after the caret, the one being typed excepted; current, the token the caret
+ * is in, being typed, or null. Unlike the parser, it goes on past an error: a text being typed rarely parses.
+ */
+function contextAt(text, tokens, caret, data) {
+  const stack = [];
+  let rootDone = false;
+  let found = null;
+  const valueSchema = (top) => top === undefined ? resolve(data, data)
+    : top.schema === null ? null
+    : resolve(top.kind === "object" ? memberSchema(top.schema, top.key) : itemSchema(top.schema, top.count), data);
+  const here = () => {
+    const top = stack[stack.length - 1];
+    if (!top) return { frame: null, position: rootDone ? null : "value", schema: resolve(data, data) };
+    if (top.kind === "object" && (top.expect === "first" || top.expect === "key")) {
+      return { frame: top, position: "key", schema: top.schema };
+    }
+    if ((top.kind === "object" && top.expect === "value") || (top.kind === "array" && top.expect !== "comma")) {
+      return { frame: top, position: "value", schema: valueSchema(top) };
+    }
+    return { frame: top, position: null, schema: null };
+  };
+  const step = (t) => {
+    const top = stack[stack.length - 1];
+    const c = punctAt(text, t);
+    if (c === "{" || c === "[") {
+      const schema = valueSchema(top);
+      if (top) {
+        top.count++;
+        top.expect = "comma";
+      }
+      stack.push({ kind: c === "{" ? "object" : "array", schema, keys: new Set(), expect: "first", key: null,
+        count: 0 });
+    } else if (c === "}" || c === "]") {
+      const kind = c === "}" ? "object" : "array";
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].kind === kind) {
+          stack.length = i;
+          if (i === 0) rootDone = true;
+          break;
+        }
+      }
+    } else if (!top) {
+      rootDone = true;
+    } else if (c === ",") {
+      top.expect = top.kind === "object" ? "key" : "value";
+    } else if (c === ":") {
+      if (top.kind === "object") top.expect = "value";
+    } else if (top.kind === "object" && top.expect !== "colon" && top.expect !== "value" && isStringToken(t)) {
+      const key = stringValue(text, t);
+      top.key = key !== undefined ? key : text.slice(t.from + 1, t.to);
+      top.keys.add(top.key);
+      top.expect = "colon";
+    } else if (top.kind === "array" || top.expect === "value" || top.expect === "colon") {
+      top.count++;
+      top.expect = "comma";
+    }
+  };
+  let current = null;
+  for (const t of tokens) {
+    if (found === null && (t.from >= caret || touches(text, t, caret))) {
+      found = here();
+      if (t.from < caret) current = t;
+    }
+    if (found !== null && found.frame !== null && !stack.includes(found.frame)) break;
+    if (found !== null && found.frame === null) break;
+    if (t === current && found.position === "key") continue;
+    step(t);
+  }
+  if (found === null) found = here();
+  return { position: found.position, schema: found.schema,
+    keys: found.frame !== null ? found.frame.keys : new Set(), current };
+}
+
+/** Whether the caret is in token {@code t}, typing it: inside a closed string, at the end of an open one or a word. */
+const touches = (text, t, caret) => t.kind !== "punct" && t.from < caret
+  && (caret < t.to || (caret === t.to && (!isStringToken(t) || !isClosed(text, t))));
+
+/** What a completion says of a schema's type: string, integer, enum, object, string | null …, or any. */
+function kindOf(p) {
+  if (p === null) return "any";
+  if (Array.isArray(p.enum) && p.enum.length) return "enum";
+  const types = typesOf(p);
+  return types ? types.join(" | ") : isObject(p.properties) ? "object" : "any";
+}
+
+/** The types a value of schema {@code p} may take, an object assumed when it lists properties and no type. */
+const typesFor = (p) => typesOf(p) || (isObject(p.properties) ? ["object"] : []);
+
+/**
+ * The start of a value of schema {@code p}: { text, caret }, caret an offset into text, or undefined for after it.
+ * "" with the caret inside, 0, false, null, the first enum value, [] or {} with the caret inside; at the first
+ * level, an object whose schema has required keys starts with them.
+ */
+function valueStart(p, root, depth) {
+  if (p === null) return { text: "null" };
+  if (Array.isArray(p.enum) && p.enum.length) return { text: JSON.stringify(p.enum[0]) };
+  const types = typesFor(p);
+  switch (types.find((type) => type !== "null") || types[0]) {
+    case "string":
+      return { text: "\"\"", caret: 1 };
+    case "number":
+    case "integer":
+      return { text: "0" };
+    case "boolean":
+      return { text: "false" };
+    case "array":
+      return { text: "[]", caret: 1 };
+    case "object":
+      return depth === 0 ? objectStart(p, root) : { text: "{}", caret: 1 };
+    default:
+      return { text: "null" };
+  }
+}
+
+/** An object of schema {@code s} with its required keys, the caret in or after the first one's value; else {}. */
+function objectStart(s, root) {
+  const required = Array.isArray(s.required) ? s.required.filter((name) => typeof name === "string") : [];
+  if (!required.length) return { text: "{}", caret: 1 };
+  const properties = isObject(s.properties) ? s.properties : {};
+  let text = "{";
+  let caret;
+  for (const name of required) {
+    if (text.length > 1) text += ", ";
+    text += JSON.stringify(name) + ": ";
+    const start = valueStart(resolve(Object.hasOwn(properties, name) ? properties[name] : null, root), root, 1);
+    if (caret === undefined) caret = text.length + (start.caret !== undefined ? start.caret : start.text.length);
+    text += start.text;
+  }
+  return { text: text + "}", caret };
+}
+
+/**
+ * The keys of object schema {@code s} not in {@code present}: required first, then the others, then the read-only
+ * ones, each group in schema order. {@code keyOnly}: the key is already followed by ":", only it is replaced.
+ */
+function keyItems(s, present, keyOnly, root) {
+  const properties = isObject(s.properties) ? s.properties : {};
+  const required = new Set(Array.isArray(s.required) ? s.required.filter((name) => typeof name === "string") : []);
+  const names = [...Object.keys(properties), ...[...required].filter((name) => !Object.hasOwn(properties, name))];
+  const ranked = [];
+  for (const name of names) {
+    if (present.has(name)) continue;
+    const p = resolve(Object.hasOwn(properties, name) ? properties[name] : null, root);
+    const readOnly = p !== null && p.readOnly === true;
+    const mandatory = required.has(name) && !readOnly;
+    const description = p !== null && typeof p.description === "string" && p.description ? " — " + p.description : "";
+    const key = JSON.stringify(name);
+    const item = { insert: key, label: name, kind: "key",
+      detail: [kindOf(p), ...(mandatory ? ["required"] : []), ...(readOnly ? ["generated"] : [])].join(", ")
+        + description };
+    if (!keyOnly) {
+      const start = valueStart(p, root, 0);
+      item.insert = key + ": " + start.text;
+      if (start.caret !== undefined) item.caret = key.length + 2 + start.caret;
+    }
+    ranked.push({ rank: readOnly ? 2 : mandatory ? 0 : 1, item });
+  }
+  return ranked.sort((a, b) => a.rank - b.rank).map((r) => r.item);
+}
+
+/** The values a value of schema {@code p} may start with: its enum, true and false, null, then {} or []. */
+function valueItems(p, root) {
+  const items = [];
+  const add = (insert, detail, caret) => {
+    if (items.some((item) => item.insert === insert)) return;
+    items.push(caret === undefined ? { insert, label: insert, detail, kind: "value" }
+      : { insert, label: insert, detail, kind: "value", caret });
+  };
+  if (Array.isArray(p.enum)) for (const v of p.enum) add(JSON.stringify(v), "enum");
+  const types = typesFor(p);
+  if (types.includes("boolean")) {
+    add("true", "boolean");
+    add("false", "boolean");
+  }
+  if (types.includes("null")) add("null", "null");
+  if (types.includes("object")) {
+    const start = objectStart(p, root);
+    add(start.text, "object", start.caret);
+  }
+  if (types.includes("array")) add("[]", "array", 1);
+  return items;
+}
+
+/**
+ * The completion at {@code caret} (spec §3.3): { from, to, items }, from-to what is already typed, a key with its
+ * quotes (a string with no closing quote up to the caret only, since it runs to the end of its line), items filtered
+ * by it ignoring case; null anywhere else, with no schema for the place, or with no item left.
+ */
+function complete(text, caret, data) {
+  const at = contextAt(text, lex(text), caret, data);
+  if (at.position === null || at.schema === null) return null;
+  const t = at.current;
+  const from = t ? t.from : caret;
+  const to = t && (!isStringToken(t) || isClosed(text, t)) ? t.to : caret;
+  if (at.position === "key") {
+    const prefix = t ? text.slice(t.from + (isStringToken(t) ? 1 : 0), caret).toLowerCase() : "";
+    const items = keyItems(at.schema, at.keys, t !== null && t.kind === "key", data)
+      .filter((item) => item.label.toLowerCase().startsWith(prefix));
+    return items.length ? { from, to, items } : null;
+  }
+  const prefix = t ? text.slice(t.from, caret).toLowerCase() : "";
+  const items = valueItems(at.schema, data).filter((item) => item.insert.toLowerCase().startsWith(prefix));
+  return items.length ? { from, to, items } : null;
+}
 // ------------------------------------------------------------------------------------------------ the language
 
 /** JSON, its data the JSON Schema of the value (spec §3). */
@@ -365,5 +574,6 @@ export const jsonLanguage = Object.freeze({
     const { value, error } = parse(text, lex(text));
     return error ? [error] : check(value, data);
   },
+  complete,
   pairs: Object.freeze(["{}", "[]", "()", "\"\""]),
 });

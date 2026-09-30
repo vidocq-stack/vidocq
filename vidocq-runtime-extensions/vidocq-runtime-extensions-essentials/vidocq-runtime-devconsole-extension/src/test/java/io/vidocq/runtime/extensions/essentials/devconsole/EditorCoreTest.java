@@ -312,4 +312,145 @@ class EditorCoreTest {
         assertEquals("error 0-1 missing required key \"__proto__\"", diagnose("{}", schema));
         assertEquals("", diagnose("{\"__proto__\": 1}", schema));
     }
+
+    // ------------------------------------------------------------------------------------------------ completion
+
+    /**
+     * The completion where {@code marked} has its |: "from-to", then each item's insert on a line of its own, a |
+     * where the caret lands inside it; "null" when there is none.
+     */
+    private static String complete(String marked, String schema) {
+        Value found = completion(marked, schema);
+        if (found.isNull()) {
+            return "null";
+        }
+        List<String> out = new ArrayList<>(List.of(number(found, "from") + "-" + number(found, "to")));
+        Value items = found.getMember("items");
+        for (long i = 0; i < items.getArraySize(); i++) {
+            Value item = items.getArrayElement(i);
+            String insert = item.getMember("insert").asString();
+            Value caret = item.getMember("caret");
+            out.add(caret == null || caret.isNull() ? insert
+                    : insert.substring(0, caret.asInt()) + "|" + insert.substring(caret.asInt()));
+        }
+        return String.join("\n", out);
+    }
+
+    /** The items of that completion as label: detail, one per line. */
+    private static String details(String marked, String schema) {
+        Value items = completion(marked, schema).getMember("items");
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < items.getArraySize(); i++) {
+            Value item = items.getArrayElement(i);
+            out.add(item.getMember("label").asString() + ": " + item.getMember("detail").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    private static Value completion(String marked, String schema) {
+        int caret = marked.indexOf('|');
+        return language.invokeMember("complete", marked.substring(0, caret) + marked.substring(caret + 1), caret,
+                parsed(schema));
+    }
+
+    @Test
+    void aKeyPositionOffersTheMissingKeysRequiredFirstReadOnlyLast() {
+        assertEquals("""
+                15-15
+                "title": "|"
+                "status": "OPEN"
+                "due": "|"
+                "at": "|"
+                "when": "|"
+                "ref": "|"
+                "points": 0
+                "tags": [|]
+                "pair": [|]
+                "owner": {"name": "|"}
+                "extra": null
+                "any": null
+                "id": 0""", complete("{\"done\": true, |}", TASK));
+    }
+
+    @Test
+    void eachKeyItemSaysItsTypeWhetherItIsRequiredOrGeneratedAndItsDescription() {
+        assertEquals("""
+                title: string, required — column title
+                status: enum, required
+                due: string
+                at: string
+                when: string
+                ref: string
+                points: integer | null
+                done: boolean
+                tags: array
+                pair: array
+                owner: object
+                extra: any
+                any: any
+                id: integer, generated — column id""", details("{|}", TASK));
+    }
+
+    @Test
+    void theKeysAfterTheCaretAreWrittenToo() {
+        assertEquals("1-1\n\"status\": \"OPEN\"", complete("{|\n  \"title\": \"a\", \"due\": \"\", \"at\": \"\", "
+                + "\"when\": \"\", \"ref\": \"\", \"points\": 1, \"done\": true, \"tags\": [], \"pair\": [], "
+                + "\"owner\": {}, \"extra\": 1, \"any\": 1, \"id\": 1\n}", TASK));
+    }
+
+    @Test
+    void aPartlyTypedKeyIsReplacedWithItsQuotesIgnoringCase() {
+        assertEquals("1-5\n\"title\": \"|\"", complete("{\"ti|\"}", TASK));
+        assertEquals("1-5\n\"title\": \"|\"", complete("{\"TI|\"}", TASK));
+        assertEquals("1-3\n\"title\": \"|\"", complete("{ti|}", TASK), "typed without its quotes");
+        assertEquals("1-5\n\"title\"", complete("{\"ti|\": \"x\"}", TASK), "a key already followed by ':' alone");
+    }
+
+    @Test
+    void aKeyWithNoClosingQuoteIsReplacedUpToTheCaretOnly() {
+        assertEquals("10-13\n\"due\": \"|\"", complete("{\"id\": 1, \"du|\n\"title\": \"a\"}", TASK));
+    }
+
+    @Test
+    void theKeysOfANestedObjectComeFromItsSchema() {
+        assertEquals("11-11\n\"name\": \"|\"\n\"age\": 0", complete("{\"owner\": {|}}", TASK));
+    }
+
+    @Test
+    void aValuePositionOffersTheEnumBooleansNullAndContainers() {
+        assertEquals("11-11\n\"OPEN\"\n\"DONE\"", complete("{\"status\": |}", TASK));
+        assertEquals("9-9\ntrue\nfalse", complete("{\"done\": |}", TASK));
+        assertEquals("11-11\nnull", complete("{\"points\": |}", TASK));
+        assertEquals("10-10\n{\"name\": \"|\"}", complete("{\"owner\": |}", TASK));
+        assertEquals("9-9\n[|]", complete("{\"tags\": |}", TASK));
+        assertEquals("11-14\n\"DONE\"", complete("{\"status\": \"d|\"}", TASK), "filtered by what is typed");
+        assertEquals("9-10\ntrue", complete("{\"done\": t|}", TASK));
+    }
+
+    @Test
+    void theRootValueStartsWithTheRequiredKeys() {
+        assertEquals("0-0\n{\"title\": \"|\", \"status\": \"OPEN\"}", complete("|", TASK));
+    }
+
+    @Test
+    void nothingElsewhereNorWithoutASchemaForThePlace() {
+        assertEquals("null", complete("{\"title\": \"a\"|}", TASK), "after a value");
+        assertEquals("null", complete("{\"title\": \"a|\"}", TASK), "a string that is no enum");
+        assertEquals("null", complete("{\"tags\": [|]}", TASK), "an item that is a string");
+        assertEquals("null", complete("{\"colour\": |}", TASK), "a key the schema does not list");
+        assertEquals("null", complete("{|}", null), "no schema");
+        assertEquals("null", complete("{\"a\": 1}|", TASK), "after the root value");
+    }
+
+    @Test
+    void completionOffsetsSurviveEmojiAndCrlf() {
+        assertEquals("10-14\n\"title\": \"|\"", complete("{\"" + EMOJI + "\": 1, \"ti|\"}", TASK));
+        assertEquals("5-9\n\"title\": \"|\"", complete("{\r\n  \"ti|\"\r\n}", TASK));
+    }
+
+    @Test
+    void aKeyNamedProtoIsOfferedLikeAnyOther() {
+        assertEquals("1-1\n\"__proto__\": 0",
+                complete("{|}", "{\"type\": \"object\", \"properties\": {\"__proto__\": {\"type\": \"integer\"}}}"));
+    }
 }
