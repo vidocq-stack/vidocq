@@ -453,4 +453,50 @@ class EditorCoreTest {
         assertEquals("1-1\n\"__proto__\": 0",
                 complete("{|}", "{\"type\": \"object\", \"properties\": {\"__proto__\": {\"type\": \"integer\"}}}"));
     }
+
+    // ------------------------------------------------------------------------------------------------ formatting
+
+    private static String format(String text) {
+        return language.invokeMember("format", text).asString();
+    }
+
+    @Test
+    void formatIndentsTwoSpacesOneMemberPerLine() {
+        assertEquals("""
+                {
+                  "a": [
+                    1,
+                    {
+                      "b": null
+                    }
+                  ],
+                  "c": true
+                }""", format("{\"a\":[1,{\"b\":null}],\"c\":true}"));
+    }
+
+    @Test
+    void anEmptyObjectOrArrayStaysOnOneLine() {
+        assertEquals("{\n  \"a\": [],\n  \"b\": {}\n}", format("{ \"a\" : [ ] , \"b\" : {\r\n} }"));
+    }
+
+    @Test
+    void numbersAndStringsAreCopiedAsWritten() {
+        assertEquals("{\n  \"id\": 12345678901234567890,\n  \"name\": \"\\u00e9\",\n  \"x\": 1.50e+3\n}",
+                format("{\"id\":12345678901234567890,\"name\":\"\\u00e9\",\"x\":1.50e+3}"));
+    }
+
+    @Test
+    void formattingAFormattedTextChangesNothing() {
+        String once = format("[{\"a\":{\"b\":[1,2]}},\"" + EMOJI + "\"]");
+
+        assertEquals(once, format(once));
+    }
+
+    @Test
+    void aTextWithASyntaxErrorIsNotFormattedAndSaysWhy() {
+        PolyglotException thrown = assertThrows(PolyglotException.class, () -> format("{\n\"a\": 1,\n}"));
+
+        assertTrue(thrown.isGuestException(), "an Error thrown by the module");
+        assertEquals("Error: line 2: trailing comma", thrown.getMessage());
+    }
 }

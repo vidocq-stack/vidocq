@@ -564,6 +564,49 @@ function complete(text, caret, data) {
   const items = valueItems(at.schema, data).filter((item) => item.insert.toLowerCase().startsWith(prefix));
   return items.length ? { from, to, items } : null;
 }
+// ------------------------------------------------------------------------------------------------ formatting
+
+/** The line of {@code offset}, counted from 1. */
+function lineOf(text, offset) {
+  let line = 1;
+  for (let i = text.indexOf("\n"); i >= 0 && i < offset; i = text.indexOf("\n", i + 1)) line++;
+  return line;
+}
+
+/**
+ * {@code text} re-indented from its tokens: two spaces, one member per line, an empty {} or [] kept on one line, the
+ * text of every string and number copied as written. Throws, saying why, when the text does not parse.
+ */
+function format(text) {
+  const tokens = lex(text);
+  const { error } = parse(text, tokens);
+  if (error) throw new Error("line " + lineOf(text, error.from) + ": " + error.message);
+  let out = "";
+  let depth = 0;
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k];
+    const c = punctAt(text, t);
+    if (c === "{" || c === "[") {
+      if (punctAt(text, tokens[k + 1]) === (c === "{" ? "}" : "]")) {
+        out += c === "{" ? "{}" : "[]";
+        k++;
+      } else {
+        depth++;
+        out += c + "\n" + INDENT.repeat(depth);
+      }
+    } else if (c === "}" || c === "]") {
+      depth--;
+      out += "\n" + INDENT.repeat(depth) + c;
+    } else if (c === ",") {
+      out += ",\n" + INDENT.repeat(depth);
+    } else if (c === ":") {
+      out += ": ";
+    } else {
+      out += text.slice(t.from, t.to);
+    }
+  }
+  return out;
+}
 // ------------------------------------------------------------------------------------------------ the language
 
 /** JSON, its data the JSON Schema of the value (spec §3). */
@@ -575,5 +618,6 @@ export const jsonLanguage = Object.freeze({
     return error ? [error] : check(value, data);
   },
   complete,
+  format,
   pairs: Object.freeze(["{}", "[]", "()", "\"\""]),
 });
