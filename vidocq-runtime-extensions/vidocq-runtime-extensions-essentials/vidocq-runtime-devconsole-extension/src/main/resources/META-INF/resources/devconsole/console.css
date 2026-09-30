@@ -300,6 +300,62 @@ button:disabled { opacity: 0.55; cursor: progress; }
 .action .json-form { display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .action .json-editor { font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--surface);
   border: 1px solid var(--rule); border-radius: 5px; padding: 6px 8px; width: 100%; max-width: 80ch; }
+/* The code editor (editor.js): a textarea over a <pre> that draws the same text coloured, with the line numbers in
+   the padding both share. Both lay the text out identically — font, size, line height, padding, border, wrapping,
+   tab size — and nothing in the <pre> changes a width: colours, underlines and outlines only. */
+.ed { width: 100%; max-width: 88ch; --ed-gutter: calc(var(--ed-digits, 2) * 1ch + 16px); }
+.ed-box { position: relative; }
+.ed-pre, .ed-text, .ed-mirror { box-sizing: border-box; margin: 0; border: 1px solid transparent; border-radius: 5px;
+  padding: 6px 8px 6px calc(var(--ed-gutter) + 8px); font-family: var(--mono); font-size: 12px; line-height: 18px;
+  letter-spacing: normal; tab-size: 2; font-variant-ligatures: none; font-kerning: none; white-space: pre-wrap;
+  overflow-wrap: break-word; word-break: normal; scrollbar-gutter: stable; }
+.ed-pre { position: absolute; inset: 0; overflow: hidden; color: var(--ink); counter-reset: ed-line;
+  background: linear-gradient(to right, var(--sunk) var(--ed-gutter), var(--surface) var(--ed-gutter)); }
+.ed-text { position: relative; z-index: 1; display: block; width: 100%; min-height: 64px; overflow: auto;
+  resize: vertical; border-color: var(--rule); background: transparent; color: transparent; caret-color: var(--ink);
+  outline: none; }
+.ed-text:focus-visible { border-color: var(--accent); }
+.ed-text::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); color: transparent; }
+.ed-mirror { position: absolute; top: 0; left: 0; visibility: hidden; overflow: hidden; pointer-events: none; }
+.ed-line { position: relative; min-height: 18px; counter-increment: ed-line; }
+.ed-line::before { content: counter(ed-line); position: absolute; right: 100%; margin-right: 12px;
+  width: calc(var(--ed-gutter) - 4px); text-align: right; color: var(--faint); }
+.ed-line.ed-dot-error::after, .ed-line.ed-dot-warning::after { content: ""; position: absolute; right: 100%; top: 6px;
+  margin-right: 3px; width: 6px; height: 6px; border-radius: 50%; }
+.ed-line.ed-dot-error::after { background: var(--crit); }
+.ed-line.ed-dot-warning::after { background: var(--warn); }
+.ed-key { color: var(--json-key); }
+.ed-string { color: var(--json-string); }
+.ed-number { color: var(--json-number); }
+.ed-literal { color: var(--json-literal); }
+.ed-punct { color: var(--json-punct); }
+.ed-invalid { color: var(--crit); }
+.ed-error { text-decoration: underline wavy var(--crit); text-decoration-skip-ink: none; text-underline-offset: 3px; }
+.ed-warning { text-decoration: underline wavy var(--warn); text-decoration-skip-ink: none; text-underline-offset: 3px; }
+.ed-mark::after { content: "\00a0"; }
+.ed-match { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: 2px; }
+.ed-plain .ed-pre { display: none; }
+.ed-plain .ed-text { padding-left: 8px; color: var(--ink); background: var(--surface); }
+.ed-disabled .ed-pre { opacity: 0.55; }
+.ed-list { position: absolute; z-index: 3; min-width: 18ch; max-width: 100%; max-height: 15em; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 5px; box-shadow: 0 4px 14px var(--shade);
+  font-family: var(--mono); font-size: 12px; }
+.ed-item { display: flex; justify-content: space-between; gap: 14px; padding: 3px 8px; cursor: pointer;
+  white-space: nowrap; }
+.ed-item[aria-selected="true"] { background: var(--accent-soft); }
+.ed-item-label { color: var(--ink); }
+.ed-item-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--faint); }
+.ed-tip { position: absolute; z-index: 4; max-width: min(60ch, 100%); padding: 4px 8px; border-radius: 4px;
+  background: var(--ink); color: var(--surface); font-size: 12px; line-height: 1.4; pointer-events: none; }
+.ed-tip-error::before, .ed-tip-warning::before { content: ""; display: inline-block; width: 6px; height: 6px;
+  margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
+.ed-tip-error::before { background: var(--crit); }
+.ed-tip-warning::before { background: var(--warn); }
+.ed-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; font-size: 12px;
+  color: var(--muted); }
+.ed-note { flex: 1 1 20ch; overflow-wrap: anywhere; }
+.ed-note.ed-bad { color: var(--crit); }
+.ed-format { font-size: 11.5px; padding: 1px 8px; }
 .action .result { flex-basis: 100%; }
 pre.result-body { background: var(--sunk); border-radius: 6px; padding: 10px 12px; margin: 6px 0 0;
   font-family: var(--mono); font-size: 12px; max-height: 24em; overflow: auto; white-space: pre-wrap;

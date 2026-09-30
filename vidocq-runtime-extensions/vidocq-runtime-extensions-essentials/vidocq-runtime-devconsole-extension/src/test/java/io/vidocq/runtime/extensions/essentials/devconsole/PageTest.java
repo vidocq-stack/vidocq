@@ -42,7 +42,7 @@ class PageTest {
 
     /** Every file of the page. */
     private static final List<String> FILES = List.of("index.html", "console.css", "console.js", "favicon.svg",
-            "editor-core.js");
+            "editor-core.js", "editor.js");
     /** The page's scripts: console.js, which the index loads, and the modules it imports. */
     private static final List<String> SCRIPTS = FILES.stream().filter(name -> name.endsWith(".js")).toList();
     /** An import statement of a module, and the module it names. */
@@ -155,6 +155,53 @@ class PageTest {
         }
         assertEquals(List.of(), IMPORT.matcher(code).results().map(m -> m.group(1)).toList(), "it imports nothing");
         assertTrue(code.contains("export const jsonLanguage = Object.freeze({"), "the JSON language");
+    }
+
+    @Test
+    void theEditorImportsTheCoreAndDrawsItsTextWithTextContent() {
+        String editor = file("editor.js");
+
+        assertEquals(List.of("./editor-core.js"), IMPORT.matcher(editor).results().map(m -> m.group(1)).toList());
+        assertTrue(editor.contains("export function createEditor({ language, data, value, rows, label })"), "spec §4");
+        assertTrue(editor.contains("span.textContent = text.slice(part.from, part.to);"), "the <pre>'s text, as text");
+        assertTrue(editor.contains("if (frame === 0) frame = requestAnimationFrame("), "one draw per frame at most");
+        assertTrue(editor.contains("const LIMIT = 100_000;"), "past 100 000 characters, a plain textarea");
+        assertTrue(editor.contains("diagnostics = safely(() => language.diagnose(text, data), []);"),
+                "a schema the language chokes on never breaks the page");
+        assertTrue(editor.contains("document.execCommand(\"insertText\", false, insert)"), "Ctrl+Z undoes an edit");
+        assertTrue(editor.contains("textarea.setRangeText(insert, from, to, \"end\");"),
+                "where the browser refuses execCommand");
+        assertTrue(editor.contains("event.key === \" \" && event.ctrlKey"), "Ctrl+Space opens the completion list");
+        assertTrue(editor.contains("event.code === \"KeyF\" && event.shiftKey && event.altKey"), "Shift+Alt+F formats");
+        assertTrue(editor.contains("if (event.isComposing || MODIFIERS.has(event.key)) return;"),
+                "Shift pressed before Tab does not cancel the Escape of Escape then Shift+Tab");
+        assertTrue(editor.contains("if (tab && leaving) return;"), "Escape then Tab leaves the editor");
+        assertTrue(editor.contains("popup.style.left = Math.max(0, Math.min(point.left, box.clientWidth - width))"),
+                "the completion list never past the editor's right edge");
+        assertTrue(editor.contains("const up = frameTop + below + height > window.innerHeight && frameTop + above >= 0;"),
+                "over the caret when the window has no room below");
+        assertTrue(editor.contains("document.elementsFromPoint(x, y)"), "the tooltip of what the pointer is on");
+        assertTrue(editor.contains("el(\"button\", \"ed-format\", \"Format\")"), "the Format button");
+    }
+
+    @Test
+    void theEditorColoursItsTokensWithTheViewersColoursInEveryTheme() {
+        String style = file("console.css");
+
+        for (String kind : List.of("key", "string", "number", "literal", "punct")) {
+            assertTrue(rule(style, ".ed-" + kind + " {").contains("var(--json-" + kind + ")"), "the viewer's " + kind);
+        }
+        assertTrue(rule(style, ".ed-invalid {").contains("var(--crit)"), "an invalid run");
+        assertTrue(rule(style, ".ed-error {").contains("var(--crit)"), "an error, a red wavy underline");
+        assertTrue(rule(style, ".ed-warning {").contains("var(--warn)"), "a warning, an orange one");
+        for (String opening : List.of(":root {", ":root:not([data-theme=\"light\"]) {",
+                ":root[data-theme=\"dark\"] {")) {
+            String theme = rule(style, opening);
+            assertTrue(theme.contains("--crit:") && theme.contains("--warn:"), "both colours in " + opening);
+        }
+        assertTrue(rule(style, ".ed-text {").contains("color: transparent"), "the textarea shows the <pre>'s text");
+        assertTrue(rule(style, ".ed-pre, .ed-text, .ed-mirror {").contains("white-space: pre-wrap"),
+                "the <pre>, the textarea and the caret's mirror wrap alike");
     }
 
     @Test

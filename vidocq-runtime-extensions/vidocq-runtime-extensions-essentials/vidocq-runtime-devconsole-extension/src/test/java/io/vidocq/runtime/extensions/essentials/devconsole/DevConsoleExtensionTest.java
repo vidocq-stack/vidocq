@@ -346,6 +346,12 @@ class DevConsoleExtensionTest {
         assertTrue(style.headers().firstValue("Content-Type").orElse("").startsWith("text/css"),
                 style.headers().toString());
         assertEquals("no-cache", script.headers().firstValue("Cache-Control").orElse(null));
+        for (String module : List.of("editor.js", "editor-core.js")) {
+            HttpResponse<String> imported = get(root + module);
+            assertEquals(200, imported.statusCode(), module);
+            assertTrue(imported.headers().firstValue("Content-Type").orElse("").startsWith("text/javascript"),
+                    "a module console.js imports needs a JavaScript type too: " + module + " " + imported.headers());
+        }
     }
 
     @Test
