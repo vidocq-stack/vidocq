@@ -49,6 +49,20 @@ class ApplicationFilesTest {
         assertEquals(Optional.of("55432"), dev.apply("vidocq.dev.postgres.port"));
     }
 
+    /** #166: on a tree not built yet, the source resources stand in for the classes directory. */
+    @Test
+    void withoutFilesInTheClassesTheSourceResourcesAnswer(@TempDir Path dir) throws Exception {
+        Path classes = Files.createDirectories(dir.resolve("target/classes"));
+        Path resources = Files.createDirectories(dir.resolve("src/main/resources"));
+        Files.writeString(resources.resolve("vidocq.properties"), "vidocq.pool.url=jdbc:h2:mem:src\n");
+
+        assertEquals(Optional.of("jdbc:h2:mem:src"), ApplicationFiles.allOf(classes, resources).apply("vidocq.pool.url"));
+
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.pool.url=jdbc:h2:mem:built\n");
+        assertEquals(Optional.of("jdbc:h2:mem:built"),
+                ApplicationFiles.allOf(classes, resources).apply("vidocq.pool.url"), "built: the classes win");
+    }
+
     @Test
     void aClassesDirectoryWithoutFilesAnswersNothing(@TempDir Path classes) {
         assertEquals(Optional.empty(), ApplicationFiles.allOf(classes).apply("vidocq.pool.url"));

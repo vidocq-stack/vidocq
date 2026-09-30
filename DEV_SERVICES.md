@@ -98,7 +98,8 @@ configuration directory) gives, for the `@Default` datasource and then for each 
    `jdbc:otel:postgresql:…` or `jdbc:p6spy:postgresql:…` (not Testcontainers' `jdbc:tc:`): a
    container, whose URL replaces the file's under the dev host — the file's URL is the production
    one, and never switches the dev container off;
-4. no URL anywhere, or a value that is not a `jdbc:` URL (such as `${db.url}`): a container only
+4. no URL anywhere, or a value that is not a readable `jdbc:` URL (such as `${db.url}`,
+   `jdbc:${db.kind}://…` or `jdbc:` alone): a container only
    when `org.postgresql.Driver` is on the application's class path (runtime dependencies for
    `vidocq:dev`/`vidocq:run`, test dependencies for `vidocq:test` and a JUnit run); otherwise
    `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`.
@@ -107,6 +108,11 @@ A reason names the key and the URL's scheme only, never its host, user or passwo
 datasources and none started, the reasons are joined with `; `. It is kept in the state file
 (`"skipped"`) and shown as a `postgres` row, `not started: …`, in the startup report and the dev
 console's *Dev services* panel; with nothing started, the summary reads `no dev service started`.
+
+The file is read from `target/classes`, or from `src/main/resources` under `vidocq:dev` on a tree
+not built yet; an edit since the last build is read as built. When some datasource starts and
+another does not, the log says why for the other (`Postgres dev service: datasource 'audit' not
+started: …`). `vidocq:test` resolves the test dependencies at start, dev services on or off.
 
 **Upgrading:** an application that relied on the container with no URL at all and the PostgreSQL
 driver in *test* scope only no longer gets one under `vidocq:dev` and `vidocq:run` (they look at

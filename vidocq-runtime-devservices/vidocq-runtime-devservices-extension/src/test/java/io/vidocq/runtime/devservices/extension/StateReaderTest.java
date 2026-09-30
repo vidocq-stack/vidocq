@@ -72,6 +72,17 @@ class StateReaderTest {
         assertEquals(List.of(), DevServicesSnapshot.NONE.skipped());
     }
 
+    /** #166: an entry of "skipped" that is no object is dropped, and the services are still read. */
+    @Test
+    void aSkippedEntryThatIsNoObjectIsDroppedAndTheServicesStillRead() {
+        DevServicesSnapshot s = StateReader.parse("""
+            {"host":"vidocq:dev","state":"running","startedAt":"x","services":[{"id":"postgres","image":"pg",\
+            "endpoints":{},"injected":[]}],"skipped":[null,"x",3,{"id":"keycloak","reason":"r"}]}""");
+
+        assertEquals(1, s.services().size());
+        assertEquals(List.of(new DevServicesSnapshot.Skipped("keycloak", "r")), s.skipped());
+    }
+
     @Test
     void rejectsWhatItCannotRead() {
         assertThrows(IllegalArgumentException.class, () -> StateReader.parse("{\"host\":"));

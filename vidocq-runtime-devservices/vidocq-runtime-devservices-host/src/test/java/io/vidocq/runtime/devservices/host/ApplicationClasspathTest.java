@@ -67,6 +67,25 @@ class ApplicationClasspathTest {
         assertTrue(classpath.contains("org.postgresql.Driver"), "the names read the first time are kept");
     }
 
+    /** #166: only the answer to the class asked is kept, never a jar's whole listing. */
+    @Test
+    void onlyTheAnswerToTheClassAskedIsKept(@TempDir Path dir) throws Exception {
+        Path jar = dir.resolve("postgresql.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar))) {
+            for (String name : List.of("org/postgresql/Driver.class", "org/postgresql/Other.class")) {
+                out.putNextEntry(new JarEntry(name));
+                out.closeEntry();
+            }
+        }
+        ApplicationClasspath classpath = new ApplicationClasspath(List.of(jar));
+        assertTrue(classpath.contains("org.postgresql.Driver"));
+
+        Files.delete(jar);
+
+        assertTrue(classpath.contains("org.postgresql.Driver"), "the answer given is kept");
+        assertFalse(classpath.contains("org.postgresql.Other"), "the listing was never kept");
+    }
+
     @Test
     void aMissingPathOrAFileThatIsNoJarHoldsNothing(@TempDir Path dir) throws Exception {
         Path notAJar = dir.resolve("broken.jar");

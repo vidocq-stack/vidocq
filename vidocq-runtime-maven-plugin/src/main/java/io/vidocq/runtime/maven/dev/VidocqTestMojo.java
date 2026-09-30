@@ -53,6 +53,10 @@ import java.util.function.Function;
  *
  * <p>Each run prints a summary; with a console, {@code r} runs every test, {@code f} the failed ones and {@code q}
  * quits. Ctrl+C always stops the goal, its run and its dev services.
+ *
+ * <p>The goal resolves the test dependencies at start, dev services on or off: the PostgreSQL dev service looks for
+ * its driver on that class path, and the tests it forks need the same resolution anyway, so an unresolvable
+ * dependency (an unbuilt reactor module, offline) fails here rather than at the first run (#166).
  */
 @Mojo(name = "test", defaultPhase = LifecyclePhase.NONE, requiresDependencyResolution = ResolutionScope.TEST,
         threadSafe = false)

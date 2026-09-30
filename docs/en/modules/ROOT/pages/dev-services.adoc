@@ -83,7 +83,7 @@ service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for 
 | Yes, and its URL replaces the file's under the dev host
 | The service, as before
 
-| No URL at all, or a value that is not a `jdbc:` URL, such as a `${db.url}` expression
+| No URL at all, or a value that is not a readable `jdbc:` URL, such as a `${db.url}` expression, `jdbc:${db.kind}://…` or `jdbc:` alone
 | Only when `org.postgresql.Driver` is on the application's class path
 | Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`
 |===
@@ -92,6 +92,14 @@ The class path is the one the application will run with: its runtime dependencie
 `vidocq:dev` and `vidocq:run`, its test dependencies under `vidocq:test` and a JUnit run. An
 application on PostgreSQL at runtime and on H2 in its tests, whose file names PostgreSQL, still gets
 its container in a test run. The driver is looked up as a `.class` entry, never loaded.
+
+The file is read where the build put it, `target/classes`; on a tree not built yet, `vidocq:dev`
+reads `src/main/resources` instead. A `vidocq.properties` edited since the last build is read as
+built: run `process-resources` (or any build) after changing the URL. `vidocq:test` resolves the
+test dependencies at start, dev services on or off, as the tests it forks need them anyway.
+
+When one datasource gets a container and another does not, the log still says why for the other:
+`Postgres dev service: datasource 'audit' not started: vidocq.pool.audit.url is jdbc:h2, not PostgreSQL`.
 
 IMPORTANT: An application that relied on the container with no URL anywhere and the PostgreSQL
 driver in *test* scope only no longer gets one under `vidocq:dev` and `vidocq:run`, which look at

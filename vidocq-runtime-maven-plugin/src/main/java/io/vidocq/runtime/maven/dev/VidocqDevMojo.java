@@ -346,7 +346,8 @@ public class VidocqDevMojo extends AbstractMojo {
                     new ApplicationClasspath(ApplicationLaunch.classpathOf(modulePath, classesDir.toPath()));
             try {
                 devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
-                        ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
+                        ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
+                        classpath::contains,
                         System.getLogger("vidocq.dev.devservices"));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);

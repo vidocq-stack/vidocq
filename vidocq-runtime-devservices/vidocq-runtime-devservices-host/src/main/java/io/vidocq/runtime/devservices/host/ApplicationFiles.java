@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -60,6 +61,20 @@ public final class ApplicationFiles {
      */
     public static Function<String, Optional<String>> allOf(Path classesDir) {
         return read(classesDir, key -> true);
+    }
+
+    /**
+     * {@link #allOf(Path)}, reading {@code resourcesDir} instead when {@code classesDir} holds neither
+     * {@code vidocq.properties} nor {@code application.properties} yet — a tree not built, where the dev host would
+     * otherwise see no URL at all (#166). A file edited since the last build is still read as built.
+     *
+     * @param classesDir   the build's classes directory, such as {@code target/classes}
+     * @param resourcesDir the source resources, such as {@code src/main/resources}
+     */
+    public static Function<String, Optional<String>> allOf(Path classesDir, Path resourcesDir) {
+        boolean built = Files.isRegularFile(classesDir.resolve("vidocq.properties"))
+                || Files.isRegularFile(classesDir.resolve("application.properties"));
+        return allOf(built || resourcesDir == null ? classesDir : resourcesDir);
     }
 
     private static Function<String, Optional<String>> read(Path classesDir, Predicate<String> keys) {
