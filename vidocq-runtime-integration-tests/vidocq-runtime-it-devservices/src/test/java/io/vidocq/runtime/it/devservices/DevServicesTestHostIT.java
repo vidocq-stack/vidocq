@@ -48,6 +48,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -78,8 +79,13 @@ class DevServicesTestHostIT {
     private static final String CONSOLE_LOGGER = "io.vidocq.devconsole";
     private static final Pattern URL_RECORD = Pattern.compile("Vidocq dev console: (http://127\\.0\\.0\\.1:(\\d+)/)");
 
+    private static final String CHAPPE_LOGGER = "io.vidocq.runtime.extensions.essentials.chappe";
+    private static final Pattern LISTENER_RECORD =
+            Pattern.compile("Chappe listener 'default' started on http://[^:/]+:(\\d+)/?.*");
+
     /** Kept strongly: JUL holds its loggers weakly, and the handler would go with a collected one. */
     private static Logger consoleLogger;
+    private static Logger chappeLogger;
     private static final List<LogRecord> RECORDS = new ArrayList<>();
     private static final Handler CAPTURE = new Handler() {
         @Override
@@ -100,7 +106,11 @@ class DevServicesTestHostIT {
         }
     };
 
+    /** Chappe's port key: 0, so that the in-process boot takes a port the OS picks, never 8080 (#146). */
+    private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
+
     private static VidocqBootstrap bootstrap;
+    private static String previousPort;
     /** The startup report's text, as the snapshot's {@code startup.text} field carries it. */
     private static String startupReportText;
 
@@ -109,6 +119,12 @@ class DevServicesTestHostIT {
         consoleLogger = Logger.getLogger(CONSOLE_LOGGER);
         CAPTURE.setLevel(Level.ALL);
         consoleLogger.addHandler(CAPTURE);
+        chappeLogger = Logger.getLogger(CHAPPE_LOGGER);
+        chappeLogger.addHandler(CAPTURE);
+        previousPort = System.getProperty(PORT_KEY);
+        if (previousPort == null) {
+            System.setProperty(PORT_KEY, "0");
+        }
         bootstrap = VidocqBootstrap.create().configure().start();
         String body = get(consoleUrl() + "api/snapshot");
         try (Jsonb jsonb = JsonbBuilder.create()) {
@@ -127,7 +143,28 @@ class DevServicesTestHostIT {
             if (consoleLogger != null) {
                 consoleLogger.removeHandler(CAPTURE);
             }
+            if (chappeLogger != null) {
+                chappeLogger.removeHandler(CAPTURE);
+            }
+            if (previousPort == null) {
+                System.clearProperty(PORT_KEY);
+            }
         }
+    }
+
+    /** #146: the in-process boot listens on a port the OS picked, never on Chappe's default 8080 (nor 8888). */
+    @Test
+    void theApplicationListensOnAPortTheOsPicked() {
+        SimpleFormatter formatter = new SimpleFormatter();
+        List<String> messages;
+        synchronized (RECORDS) {
+            messages = RECORDS.stream().map(formatter::formatMessage).toList();
+        }
+        int port = messages.stream().map(LISTENER_RECORD::matcher).filter(Matcher::matches)
+                .mapToInt(m -> Integer.parseInt(m.group(1))).findFirst()
+                .orElseThrow(() -> new AssertionError("no Chappe listener line on " + CHAPPE_LOGGER + ": " + messages));
+        assertNotEquals(8080, port);
+        assertNotEquals(8888, port);
     }
 
     @Test
