@@ -401,11 +401,11 @@ description and its form under it, then its result in a block of its own, then t
 past ten items a text filter above the list narrows it. The page remembers the open sub-tab in this browser, and,
 until the page is reloaded, the item picked in each.
 
-A tool's arguments are a form generated from its input schema when the schema is flat — its root is
-`"type": "object"` and every property is a `string`, `number`, `integer` or `boolean`, or an `enum` of strings, with
-no `$ref` and no nesting — and a raw JSON editor otherwise, started from its required properties. A
-"JSON" switch shows the same values as JSON on a flat form too, and switching back keeps them. A prompt's arguments
-and a resource template's variables are always a flat form, one `string` per argument or variable.
+A tool's arguments are a <<json-form,generated form>> when its input schema allows one — scalars, enums of strings,
+and objects of those one level down — and the <<json-editor,JSON editor>> otherwise, started from its required
+properties, which checks and completes them against the schema. A "JSON" switch shows the same values in that editor
+on a form too, and switching back keeps them. A prompt's arguments and a resource template's variables are always a
+flat form, one `string` per argument or variable.
 
 The call goes through the application's own `/mcp`, from the console's own JVM, in protocol `2026-07-28`, with no
 session opened: the URL is the one the startup report prints for `/mcp`, a loopback one preferred when more than
@@ -508,6 +508,63 @@ The viewer keeps what is folded while the page polls, and forgets it when a new 
 A body that does not parse as JSON is shown as text. The tree is built with DOM calls only, never as markup, so a
 key or a string is never read as HTML.
 
+[#json-editor]
+== JSON editor [.tag-new]#NEW#
+
+A `json` argument of an action — an MCP tool's arguments in the <<mcp-inspector,MCP inspector>>, the arguments of a
+repository method in the *Mansart Data* tab — is typed in a small code editor written for the page, which loads
+nothing from elsewhere. It reads the argument's JSON Schema as you type:
+
+* **Colours.** Keys, strings, numbers, `true`, `false` and `null` take the <<json-viewer,JSON viewer>>'s colours, in
+the light and the dark themes; what is no JSON at all is red. The lines are numbered.
+* **Diagnostics.** The first syntax error — `unterminated string`, `expected ',' or '}'`, `trailing comma`,
+`nothing after the value`… — then what the schema says, at every depth: a missing `required` key (marked on its
+object's `{`), a value of the wrong `type` (`integer` refuses `1.5`), a value outside its `enum`, a string longer
+than `maxLength` are errors; a key its object's `properties` does not list, and a string that does not look like its
+`format` (`date`, `time`, `date-time`, `uuid`), are warnings. Each is underlined, red or orange, with a dot on its
+line; its message shows when the caret or the pointer is on it, and the line under the editor counts them:
+`1 error, 2 warnings`. They never stop a call: the server stays the judge.
+* **Completion.** `Ctrl+Space` lists what fits where the caret is, and a `"` typed where a key goes opens the list by
+itself. In an object, the keys of its schema it does not have yet, required first and read-only last, each with its
+type, `required` or `generated`, and its description; the value comes with the key, an object with its required
+keys. After a `:` or in an array: the `enum` values, `true` and `false`, `null`, `{}` or `[]`. `Up` and `Down` move,
+`Enter` or `Tab` or a click accepts, `Escape` closes, and typing filters the list.
+* **Keys.** An opening bracket or quote brings its closing one, a closing character typed before the same steps over
+it, `Backspace` between an empty pair deletes both, `Enter` keeps the line's indentation and opens an indented line
+between `{}` or `[]`, `Tab` and `Shift+Tab` indent and outdent the selected lines by two spaces. `Escape` then `Tab`
+leaves the editor. The bracket next to the caret and its match are outlined.
+* **Format.** The *Format* button, or `Shift+Alt+F`, indents the JSON by two spaces, one member per line, and keeps
+every string and number as written: an id past 2^53 or a `\u00e9` escape does not change. A text that does not
+parse is not formatted, and the line under the editor says why: `not formatted: line 3: trailing comma`.
+* **Undo.** Every edit the editor makes — an accepted completion, a formatting, a closed pair — is undone by one
+`Ctrl+Z` (`⌘Z`).
+
+The editor reads these keywords of the schema: `type` (one name or a list), `properties`, `required`,
+`additionalProperties`, `items` (a schema, or a list for the positions of an array), `enum`, `maxLength`, `format`,
+`readOnly`, `description`, and a `$ref` to `#/$defs/…` or `#/definitions/…`. Any other `$ref` is not followed; what
+is under `anyOf`, `oneOf`, `allOf`, `not` or `patternProperties` is accepted as it is. A schema the editor does not
+understand makes it check less, never fail. What you typed is sent as you typed it. Past 100 000 characters the
+editor stops colouring and checking, and says `past 100 000 characters: no colours, no checks`; completion and
+*Format* still work.
+
+[#json-form]
+=== The generated form [.tag-new]#NEW#
+
+When the schema allows it, a `json` argument is a form rather than JSON, with a *JSON* switch to the editor that
+keeps the values both ways. The schema's root is `"type": "object"`, with no `$ref`, `anyOf`, `oneOf`, `allOf` or
+`not`, and each property is a `string`, `number`, `integer` or `boolean`, an `enum` of strings, or an object whose own
+`properties` all are such: one level of nesting, drawn as a group of fields under the object's name. A string of
+`"format": "textarea"` is a field of several lines (xref:dev-console-panels.adoc#json-argument[A JSON argument]). Any
+other schema gets the editor alone.
+
+* A required property is starred, `title *`, and a call without it is refused with its path, before anything is
+sent: `entity.title is required`. A nested object that is not required and left empty is not sent at all.
+* A `readOnly` property, such as an id the database generates, reads `id (generated)`, its field showing
+`generated`. It is never required: left empty it is not sent; filled, it is.
+* A field of `"format"` `date`, `time`, `date-time` or `uuid` shows the shape it expects: `2026-09-30`, `14:30:00`,
+`2026-09-30T14:30:00`, `123e4567-e89b-12d3-a456-426614174000`.
+* The editor starts from the required properties, at each level. *Replay* fills the form, a nested object included;
+a value the panel masked is left for you to type again.
 [#security]
 == Security [.tag-new]#NEW#
 

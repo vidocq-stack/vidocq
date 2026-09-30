@@ -515,9 +515,11 @@ the constructor throws. One action has at most one `json` argument, beside any `
 value reaches `call` as its JSON text, in the same `Map<String, String>`. `accepts(String)` stays the only check:
 for a `json` argument it means "parses as a JSON object", whatever its length.
 
-The page renders it as a form generated from the schema when the schema is flat (xref:dev-console.adoc#mcp-inspector[the
-rule the MCP inspector uses]) and as a raw JSON editor otherwise; the console never validates the value against the
-schema itself — the action's target does. The MCP inspector's own tool action is a short example
+The page renders it as a form generated from the schema when the schema allows one, an object of scalars one level
+down included (xref:dev-console.adoc#json-form[the generated form] [.tag-new]#NEW#), and as the
+xref:dev-console.adoc#json-editor[JSON editor] [.tag-new]#NEW# otherwise, which colours, checks and completes the
+value against the schema, whose keywords that page lists; the console never validates the value against the schema
+itself — the action's target does. The MCP inspector's own tool action is a short example
 (`TestPanels.InspectorPanel`'s `tool.weather`):
 
 [source,java]

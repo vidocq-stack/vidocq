@@ -161,8 +161,8 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
     /**
      * One value an action takes, and what the console accepts for it: a value of {@code allowedValues}, which the
      * page offers as a list; a whole match of {@code pattern}, which it offers as a text field; or a JSON object
-     * described by the JSON Schema {@code schema}, which it offers as a form when the schema is flat and as a JSON
-     * editor otherwise. Exactly one of the three is set.
+     * described by the JSON Schema {@code schema}, which it offers as a form when the schema allows one and as a JSON
+     * editor otherwise (see {@link #json}). Exactly one of the three is set.
      *
      * @param name          the key of the value in the request and in the map the action receives; it follows the
      *                      rule of {@link PanelSample#requireKey}, such as {@code level}
@@ -255,6 +255,15 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         /**
          * An argument whose value is a JSON object, such as the arguments of an MCP tool. The action receives it as
          * its JSON text. One action has one such argument at most.
+         *
+         * <p>The page reads these keywords of {@code schema}: {@code type}, {@code properties}, {@code required},
+         * {@code additionalProperties}, {@code items}, {@code enum}, {@code maxLength}, {@code format} ({@code date},
+         * {@code time}, {@code date-time}, {@code uuid}; {@code textarea} for a field of several lines),
+         * {@code contentMediaType} ({@code text/csv}), {@code readOnly}, {@code description}, {@code default}, and a
+         * local {@code $ref} ({@code #/$defs/...}, {@code #/definitions/...}). It generates a form when the root is an
+         * object whose properties are scalars, enums of strings, or objects of those one level down, and offers its
+         * JSON editor otherwise, which checks and completes the value against the schema; neither refuses to send
+         * it: the action's target stays the judge.
          *
          * @param name   its name, by the key rule
          * @param label  what the page writes next to it

@@ -567,7 +567,7 @@ Check the entity's `jakarta.persistence` annotations, its id and its constructor
 
 Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] also runs the application's repository methods against its database: a query to see what it returns, a write to try it, then roll it back or keep it. The tab keeps the catalogue (<<mansart-data-catalogue>>) under *Monitoring*, then shows one tab per repository, titled with its name, whose list offers its methods by name: every method it declares, plus the `findById`, `findAll`, `save`, `deleteById` and `delete` it inherits from Jakarta Data.
 
-*Arguments.* A method's arguments are one JSON object, one property per parameter, named as the catalogue names it (`@Param`, else the real name when the application is compiled with `-parameters`, else `arg0`, `arg1`…), all required. The page shows a form, or a JSON editor when a parameter is an entity.
+*Arguments.* A method's arguments are one JSON object, one property per parameter, named as the catalogue names it (`@Param`, else the real name when the application is compiled with `-parameters`, else `arg0`, `arg1`…), all required. The page shows a form, an entity as a group of fields in it [.tag-new]#NEW#: one per column, a column that cannot be null starred as required, the generated id and the version marked `(generated)`, each field's tooltip naming its column (xref:dev-console.adoc#json-form[The generated form]). Its *JSON* switch shows the same arguments in the xref:dev-console.adoc#json-editor[JSON editor], which completes an entity's attributes and checks their types.
 
 [cols="2,3"]
 |===
@@ -595,7 +595,7 @@ Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev 
 | Its text.
 
 | An entity of a repository
-| An object, one property per column, each optional: an absent one keeps what the entity's no-arg constructor sets, so that an absent generated `id` is generated. A reference to another entity takes that entity's id. The entity is built through Mansart's own model, as Mansart builds it from a row.
+| An object, one property per column. Its schema [.tag-new]#NEW# says `required` for a column that cannot be null and whose field is not a primitive, `readOnly` for the generated id and the version, and names each column in `description` (`id of Gizmo, column gizmo_id` for a reference); the console does not enforce it: an absent property keeps what the entity's no-arg constructor sets, so that an absent generated `id` is generated. A reference to another entity takes that entity's id. The entity is built through Mansart's own model, as Mansart builds it from a row.
 |===
 
 A boxed type takes `null`, a primitive does not. A value that does not convert fails the call before anything runs, with the parameter and why: `dueDate: not an ISO date`. A method with any other parameter type, such as `PageRequest`, `Sort`, `Limit` or a `List`, is listed under *Monitoring* in `not-runnable`, with the reason, and is not offered.
