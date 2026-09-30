@@ -141,4 +141,59 @@ class EditorCoreTest {
         assertEquals("[\"{}\",\"[]\",\"()\",\"\\\"\\\"\"]",
                 json.invokeMember("stringify", language.getMember("pairs")).asString());
     }
+
+    // ------------------------------------------------------------------------------------------------ diagnostics
+
+    /** The diagnostics of {@code text} under {@code schema}, one per line: severity from-to message. */
+    private static String diagnose(String text, String schema) {
+        Value found = language.invokeMember("diagnose", text, parsed(schema));
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < found.getArraySize(); i++) {
+            Value d = found.getArrayElement(i);
+            out.add(d.getMember("severity").asString() + " " + number(d, "from") + "-" + number(d, "to") + " "
+                    + d.getMember("message").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    @Test
+    void theFirstSyntaxErrorOnlyAtItsOffsets() {
+        assertEquals("error 6-11 unterminated string", diagnose("{\"a\": \"open", null));
+        assertEquals("error 6-10 invalid string", diagnose("{\"a\": \"\\x\"}", null));
+        assertEquals("error 8-11 expected ',' or '}'", diagnose("{\"a\": 1 \"b\": 2}", null));
+        assertEquals("error 3-4 expected ',' or ']'", diagnose("[1 2]", null));
+        assertEquals("error 7-8 trailing comma", diagnose("{\"a\": 1,}", null));
+        assertEquals("error 2-3 trailing comma", diagnose("[1,]", null));
+        assertEquals("error 9-10 nothing after the value", diagnose("{\"a\": 1} x", null));
+        assertEquals("error 5-6 expected ':'", diagnose("{\"a\" 1}", null));
+        assertEquals("error 1-2 expected a key or '}'", diagnose("{1: 2}", null));
+        assertEquals("error 9-10 expected a key", diagnose("{\"a\": 1, 2}", null));
+        assertEquals("error 6-7 expected a value", diagnose("{\"a\": }", null));
+        assertEquals("error 6-9 unexpected token", diagnose("{\"a\": tru}", null));
+        assertEquals("error 8-10 expected ',' or '}'", diagnose("{\"a\": 1 // note\n}", null));
+    }
+
+    @Test
+    void anErrorAtTheEndOfTheTextIsEmptyAtItsLength() {
+        assertEquals("error 7-7 expected ',' or '}'", diagnose("{\"a\": 1", null));
+        assertEquals("error 0-0 expected a value", diagnose("", null));
+        assertEquals("error 3-3 expected a value", diagnose(" \r\n", null));
+    }
+
+    @Test
+    void aTextThatParsesHasNoDiagnosticWithoutASchema() {
+        assertEquals("", diagnose("{\"a\": [1, {\"b\": null}], \"c\": \"\\u00e9\", \"d\": -0.5e-3}", null));
+    }
+
+    @Test
+    void syntaxOffsetsCountCrlfTabsAndEmojiAsTheTextareaDoes() {
+        assertEquals("error 15-16 trailing comma",
+                diagnose("{\r\n\t\"" + EMOJI + "\": \"\u00e9" + EMOJI + "\",\r\n}", null));
+    }
+
+    @Test
+    void aDeeplyNestedTextNeverExhaustsTheStack() {
+        assertEquals("", diagnose("[".repeat(10_000) + "]".repeat(10_000), null));
+        assertEquals("error 10000-10000 expected a value", diagnose("[".repeat(10_000), null));
+    }
 }

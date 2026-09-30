@@ -100,11 +100,119 @@ function isClosed(text, t) {
   return backslashes % 2 === 0;
 }
 
+// ------------------------------------------------------------------------------------------------ syntax
+
+/** The value of the string token {@code t}, or undefined when it is unterminated or holds an invalid escape. */
+function stringValue(text, t) {
+  if (!isClosed(text, t)) return undefined;
+  try {
+    return JSON.parse(text.slice(t.from, t.to));
+  } catch (invalid) {
+    return undefined;
+  }
+}
+
+/**
+ * {@code text} parsed from its {@code tokens}: { value, error }, value a tree of nodes that keep their offsets
+ * ({ kind: "object", from, to, members: [{ key, keyFrom, keyTo, value }] }, { kind: "array", from, to, items },
+ * { kind: "string" | "number" | "literal", from, to, value }), error the first syntax error, or null. The parser
+ * keeps its own stack, so that a deeply nested text never exhausts the engine's. An error at the end of the text is
+ * empty: from and to are both its length.
+ */
+function parse(text, tokens) {
+  const end = text.length;
+  const stack = [];
+  let root;
+  let k = 0;
+  const fail = (t, message) => ({ value: null, error: { from: t ? t.from : end, to: t ? t.to : end,
+    severity: "error", message } });
+  const attach = (node) => {
+    const top = stack[stack.length - 1];
+    if (!top) {
+      root = node;
+    } else if (top.kind === "object") {
+      top.members.push({ key: top.key, keyFrom: top.keyFrom, keyTo: top.keyTo, value: node });
+      top.expect = "comma";
+    } else {
+      top.items.push(node);
+      top.expect = "comma";
+    }
+  };
+  const close = (container, t) => {
+    container.to = t.to;
+    stack.pop();
+    attach(container);
+  };
+  for (;;) {
+    const t = tokens[k];
+    const top = stack[stack.length - 1];
+    const c = punctAt(text, t);
+    if (!top) {
+      if (root !== undefined) return t ? fail(t, "nothing after the value") : { value: root, error: null };
+    } else if (top.kind === "object" && top.expect !== "value") {
+      if (top.expect === "comma") {
+        if (c === ",") { top.expect = "key"; top.comma = t; k++; continue; }
+        if (c === "}") { k++; close(top, t); continue; }
+        return fail(t, "expected ',' or '}'");
+      }
+      if (top.expect === "colon") {
+        if (c === ":") { top.expect = "value"; k++; continue; }
+        return fail(t, "expected ':'");
+      }
+      if (c === "}") {
+        if (top.expect === "key") return fail(top.comma, "trailing comma");
+        k++;
+        close(top, t);
+        continue;
+      }
+      if (!t || !isStringToken(t)) return fail(t, top.expect === "first" ? "expected a key or '}'" : "expected a key");
+      const key = stringValue(text, t);
+      if (key === undefined) return fail(t, isClosed(text, t) ? "invalid string" : "unterminated string");
+      top.key = key;
+      top.keyFrom = t.from;
+      top.keyTo = t.to;
+      top.expect = "colon";
+      k++;
+      continue;
+    } else if (top.kind === "array" && top.expect === "comma") {
+      if (c === ",") { top.expect = "value"; top.comma = t; k++; continue; }
+      if (c === "]") { k++; close(top, t); continue; }
+      return fail(t, "expected ',' or ']'");
+    } else if (top.kind === "array" && c === "]") {
+      if (top.expect === "value") return fail(top.comma, "trailing comma");
+      k++;
+      close(top, t);
+      continue;
+    }
+    // a value is expected here
+    if (!t) return fail(t, "expected a value");
+    if (c === "{") {
+      stack.push({ kind: "object", from: t.from, to: end, members: [], expect: "first" });
+    } else if (c === "[") {
+      stack.push({ kind: "array", from: t.from, to: end, items: [], expect: "first" });
+    } else if (isStringToken(t)) {
+      const value = stringValue(text, t);
+      if (value === undefined) return fail(t, isClosed(text, t) ? "invalid string" : "unterminated string");
+      attach({ kind: "string", from: t.from, to: t.to, value });
+    } else if (t.kind === "number") {
+      attach({ kind: "number", from: t.from, to: t.to, value: Number(text.slice(t.from, t.to)) });
+    } else if (t.kind === "literal") {
+      attach({ kind: "literal", from: t.from, to: t.to, value: LITERALS.get(text.slice(t.from, t.to)) });
+    } else {
+      return fail(t, t.kind === "invalid" ? "unexpected token" : "expected a value");
+    }
+    k++;
+  }
+}
 // ------------------------------------------------------------------------------------------------ the language
 
 /** JSON, its data the JSON Schema of the value (spec §3). */
 export const jsonLanguage = Object.freeze({
   id: "json",
   tokenize: (text) => lex(text),
+  diagnose(text, data) {
+    const { error } = parse(text, lex(text));
+    return error ? [error] : [];
+  },
   pairs: Object.freeze(["{}", "[]", "()", "\"\""]),
 });
