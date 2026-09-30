@@ -50,6 +50,7 @@
                 <parameter><name>pluginArtifactMap</name><type>java.util.Map</type><required>false</required><editable>false</editable><description>This plugin's own resolved dependencies, keyed groupId:artifactId — used to locate the dev services extension jar added to the child's module path.</description></parameter>
                 <parameter><name>repoSession</name><type>org.eclipse.aether.RepositorySystemSession</type><required>true</required><editable>false</editable><description>Aether repository session, for resolving each extension's -dev companion and the dev console</description></parameter>
                 <parameter><name>remoteRepos</name><type>java.util.List</type><required>false</required><editable>false</editable><description>Remote project repositories</description></parameter>
+                <parameter><name>pluginRepos</name><type>java.util.List</type><required>false</required><editable>false</editable><description>Remote plugin repositories, where the dev console is looked for too</description></parameter>
                 <parameter><name>pluginVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>This plugin's own version, for resolving the dev console and its SPI through Aether</description></parameter>
             </parameters>
             <configuration>
@@ -78,6 +79,7 @@
                 <pluginArtifactMap implementation="java.util.Map" default-value="${plugin.artifactMap}"/>
                 <repoSession implementation="org.eclipse.aether.RepositorySystemSession" default-value="${repositorySystemSession}"/>
                 <remoteRepos implementation="java.util.List" default-value="${project.remoteProjectRepositories}"/>
+                <pluginRepos implementation="java.util.List" default-value="${project.remotePluginRepositories}"/>
                 <pluginVersion implementation="java.lang.String" default-value="${plugin.version}"/>
             </configuration>
             <requirements>

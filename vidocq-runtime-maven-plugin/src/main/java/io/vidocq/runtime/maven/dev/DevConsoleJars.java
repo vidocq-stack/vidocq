@@ -20,11 +20,13 @@
 package io.vidocq.runtime.maven.dev;
 
 import org.apache.maven.artifact.Artifact;
+import org.eclipse.aether.repository.RemoteRepository;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +46,46 @@ final class DevConsoleJars {
     static final String SPI_KEY = "io.vidocq.runtime:vidocq-runtime-devconsole-spi";
 
     private DevConsoleJars() {}
+
+    /**
+     * The version the dev console and its SPI are resolved at: the application's Vidocq runtime, read from its
+     * Chappe extension (the console needs it, so it is there), as a base version ({@code 0.3.0-SNAPSHOT} for a
+     * timestamped snapshot); {@code fallback}, the plugin's own version, without it (#148).
+     */
+    static String runtimeVersion(Collection<Artifact> projectArtifacts, String fallback) {
+        for (Artifact artifact : projectArtifacts) {
+            if (CHAPPE_KEY.equals(artifact.getGroupId() + ":" + artifact.getArtifactId())) {
+                return artifact.getBaseVersion();
+            }
+        }
+        return fallback;
+    }
+
+    /** The warning when the application's runtime is not this plugin's version, or {@code null} when it is. */
+    static String versionWarning(String runtimeVersion, String pluginVersion) {
+        if (runtimeVersion.equals(pluginVersion)) {
+            return null;
+        }
+        return "Dev tools: the application runs Vidocq " + runtimeVersion + " and vidocq-runtime-maven-plugin is "
+                + pluginVersion + "; the dev console follows the application (" + runtimeVersion
+                + "). Align both versions if the console misbehaves.";
+    }
+
+    /**
+     * Where the console is looked for: the project's repositories, then the plugin repositories — a snapshot
+     * repository may be declared only as a plugin repository — each repository (by id) once (#148).
+     */
+    static List<RemoteRepository> repositories(List<RemoteRepository> project, List<RemoteRepository> plugin) {
+        Map<String, RemoteRepository> byId = new LinkedHashMap<>();
+        for (List<RemoteRepository> list : java.util.Arrays.asList(project, plugin)) {
+            if (list != null) {
+                for (RemoteRepository repository : list) {
+                    byId.putIfAbsent(repository.getId(), repository);
+                }
+            }
+        }
+        return List.copyOf(byId.values());
+    }
 
     /** Whether {@code projectArtifacts} already has the Chappe HTTP server extension (Vidocq/vidocq#143). */
     static boolean needsConsole(Collection<Artifact> projectArtifacts) {

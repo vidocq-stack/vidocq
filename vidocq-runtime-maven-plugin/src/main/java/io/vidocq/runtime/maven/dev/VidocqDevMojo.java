@@ -264,12 +264,17 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
     private List<RemoteRepository> remoteRepos;
 
+    /** The project's plugin repositories: the dev console is looked for there too (#148). */
+    @Parameter(defaultValue = "${project.remotePluginRepositories}", readonly = true)
+    private List<RemoteRepository> pluginRepos;
+
     @Component
     private RepositorySystem repoSystem;
 
     /**
-     * This plugin's own version, for resolving the dev console and its SPI through Aether ({@link
-     * #resolveConsoleArtifact}): those artifacts are released in lockstep with this plugin, and are never a
+     * This plugin's own version: the dev console and its SPI are resolved at the application's Vidocq runtime version
+     * ({@link DevConsoleJars#runtimeVersion}, #148), this one only when the application has no Chappe extension to
+     * read it from, and a warning names both when they differ. Those artifacts are never a
      * {@code vidocq-runtime-maven-plugin} dependency (see the note in this module's {@code pom.xml}).
      */
     @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
@@ -656,9 +661,15 @@ public class VidocqDevMojo extends AbstractMojo {
 
     private List<Path> resolveDevConsole(Set<String> addedKeys) {
         Map<String, Artifact> consoleArtifacts = new LinkedHashMap<>();
+        // The console follows the application's Vidocq runtime, not this plugin (#148).
+        String version = DevConsoleJars.runtimeVersion(project.getArtifacts(), pluginVersion);
+        String mismatch = DevConsoleJars.versionWarning(version, pluginVersion);
+        if (mismatch != null && !DevConsoleJars.missingKeys(project.getArtifacts(), addedKeys).isEmpty()) {
+            getLog().warn(mismatch);
+        }
         // Only what the project does not declare and no earlier step added: a declared console needs no repository.
         for (String key : DevConsoleJars.missingKeys(project.getArtifacts(), addedKeys)) {
-            Artifact artifact = resolveConsoleArtifact(key);
+            Artifact artifact = resolveConsoleArtifact(key, version);
             if (artifact == null) {
                 // A partial console (e.g. missing its SPI) would fail the child's boot — skip it entirely.
                 return List.of();
@@ -669,26 +680,29 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
-     * {@code key} ({@code groupId:artifactId}) at {@link #pluginVersion}, resolved through Aether as a jar, or
+     * {@code key} ({@code groupId:artifactId}) at {@code version}, the application's Vidocq runtime version
+     * ({@link DevConsoleJars#runtimeVersion}), resolved through Aether as a jar from the project's and the plugin
+     * repositories, or
      * {@code null} — with a warning, never a build failure — when it cannot be resolved (e.g. offline on a first
      * run before {@code vidocq-runtime-devconsole-extension} was ever installed locally).
      */
-    private Artifact resolveConsoleArtifact(String key) {
+    private Artifact resolveConsoleArtifact(String key, String version) {
         int colon = key.indexOf(':');
         String groupId = key.substring(0, colon);
         String artifactId = key.substring(colon + 1);
         ArtifactRequest request = new ArtifactRequest();
-        request.setArtifact(new DefaultArtifact(groupId, artifactId, "jar", pluginVersion));
-        request.setRepositories(remoteRepos);
+        request.setArtifact(new DefaultArtifact(groupId, artifactId, "jar", version));
+        request.setRepositories(DevConsoleJars.repositories(remoteRepos, pluginRepos));
         try {
             ArtifactResult result = repoSystem.resolveArtifact(repoSession, request);
-            Artifact resolved = new org.apache.maven.artifact.DefaultArtifact(groupId, artifactId, pluginVersion,
+            Artifact resolved = new org.apache.maven.artifact.DefaultArtifact(groupId, artifactId, version,
                     "runtime", "jar", "", new DefaultArtifactHandler("jar"));
             resolved.setFile(result.getArtifact().getFile());
             return resolved;
         } catch (ArtifactResolutionException e) {
-            getLog().warn("Dev tools: cannot resolve " + key + ":" + pluginVersion + " (the dev console); vidocq:dev"
-                    + " continues without it. Run the build once online, or mvn -U.");
+            getLog().warn("Dev tools: cannot resolve " + key + ":" + version + " (the dev console, at the version of"
+                    + " the application's Vidocq runtime" + (version.equals(pluginVersion) ? "" : "; this plugin is "
+                    + pluginVersion) + "); vidocq:dev continues without it. Run the build once online, or mvn -U.");
             return null;
         }
     }

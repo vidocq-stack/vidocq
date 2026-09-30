@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven.dev;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,6 +41,7 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -149,6 +151,37 @@ class DevConsoleJarsTest {
             jarOut.closeEntry();
         }
         return jar;
+    }
+
+    /** #148: the console follows the application's Vidocq runtime (its Chappe extension), else this plugin. */
+    @Test
+    void theConsoleVersionIsTheRuntimesElseThePlugins() {
+        Artifact chappe = new DefaultArtifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-chappe-webserver-extension", "0.3.0-20260930.101010-4", "compile", "jar", null,
+                new DefaultArtifactHandler("jar"));
+
+        assertEquals("0.3.0-SNAPSHOT", DevConsoleJars.runtimeVersion(List.of(chappe), "0.4.0-SNAPSHOT"));
+        assertEquals("0.4.0-SNAPSHOT", DevConsoleJars.runtimeVersion(List.of(), "0.4.0-SNAPSHOT"));
+    }
+
+    @Test
+    void aRuntimeOtherThanThePluginIsSaid() {
+        String warning = DevConsoleJars.versionWarning("0.3.0-SNAPSHOT", "0.4.0-SNAPSHOT");
+
+        assertTrue(warning.contains("0.3.0-SNAPSHOT") && warning.contains("0.4.0-SNAPSHOT"), warning);
+        assertNull(DevConsoleJars.versionWarning("0.4.0-SNAPSHOT", "0.4.0-SNAPSHOT"));
+    }
+
+    /** #148: a snapshot repository declared only as a plugin repository is searched too, each repository once. */
+    @Test
+    void theProjectsRepositoriesThenThePluginsAreSearchedEachOnce() {
+        RemoteRepository central = new RemoteRepository.Builder("central", "default", "https://repo/central").build();
+        RemoteRepository snapshots = new RemoteRepository.Builder("vidocq-snapshots", "default", "https://repo/s")
+                .build();
+
+        assertEquals(List.of(central, snapshots),
+                DevConsoleJars.repositories(List.of(central), List.of(central, snapshots)));
+        assertEquals(List.of(central), DevConsoleJars.repositories(List.of(central), null));
     }
 
     static Artifact artifact(String groupId, String artifactId, Path jar) {
