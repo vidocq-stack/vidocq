@@ -96,14 +96,6 @@ class PluginDescriptorDevDebugTest {
         assertEquals("", entry.getAttribute("default-value"), "no default: the application's files must be read");
     }
 
-    /** #148: vidocq:dev also searches the plugin repositories for the dev console. */
-    @Test
-    void theDevGoalGetsThePluginRepositories() throws Exception {
-        PluginDescriptorContinuousTestingTest.assertConfigured("dev", "pluginRepos", "java.util.List", "",
-                "${project.remotePluginRepositories}");
-        PluginDescriptorContinuousTestingTest.assertParametersAreFields("dev", VidocqDevMojo.class);
-    }
-
     private static Element parameter(String name) {
         for (Element element : children(child(dev, "parameters"))) {
             if (name.equals(text(element, "name"))) {

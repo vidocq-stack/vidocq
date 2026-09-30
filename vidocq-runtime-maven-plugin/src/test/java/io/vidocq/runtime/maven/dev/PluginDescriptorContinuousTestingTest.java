@@ -121,6 +121,14 @@ class PluginDescriptorContinuousTestingTest {
                 VidocqTestMojo.class.getDeclaredField("project").getType().getName());
     }
 
+    /** #148: vidocq:dev also searches the plugin repositories for the dev console. */
+    @Test
+    void theDevGoalGetsThePluginRepositories() throws Exception {
+        assertConfigured("dev", "pluginRepos", "java.util.List", "",
+                "${project.remotePluginRepositories}");
+        assertParametersAreFields("dev", VidocqDevMojo.class);
+    }
+
     static void assertConfigured(String goal, String name, String type, String expression, String defaultValue) {
         Element mojo = MOJOS.get(goal);
         assertNotNull(mojo, "no <mojo> with <goal>" + goal + "</goal>");
