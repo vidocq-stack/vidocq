@@ -33,11 +33,13 @@
 // - In a dev launch, a panel's actions are buttons. Each sends one same-origin POST, application/json, with the
 //   token of the boot the snapshot carries (console.actionToken); a confirmation is asked inline, never with a
 //   blocking dialog. The page shows the line the action returned, or the class of what it threw.
-// - An action's json argument is a form generated from its JSON Schema when the schema is flat (isFlatSchema), a raw
-//   JSON editor otherwise, with a "JSON" switch that keeps the values. A structured answer shows its body, through
-//   the JSON viewer (jsonViewer) when it is JSON, and its details folded under "Exchange", through it too. A cell of
-//   a sample table column named "replay" that reads as "<action id> <JSON object>" of an action of that panel is a
-//   button that fills its form: nothing is sent until the user submits. Any other cell of such a column stays text.
+// - An action's json argument is a form generated from its JSON Schema when formShape accepts the schema (scalars,
+//   and objects of scalars one level down), the code editor of editor.js otherwise, with a "JSON" switch to that
+//   editor that keeps the values. The editor colours, checks and completes the JSON against the same schema. A
+//   structured answer shows its body, through the JSON viewer (jsonViewer) when it is JSON, and its details folded
+//   under "Exchange", through it too. A cell of a sample table column named "replay" that reads as "<action id>
+//   <JSON object>" of an action of that panel is a button that fills its form: nothing is sent until the user
+//   submits. Any other cell of such a column stays text.
 // - A panel whose actions have groups gets sub-tabs: Monitoring, with everything else the panel shows, then one per
 //   group, in order of first appearance, which picks one action in a combo and shows its form, its last result apart
 //   and the rows of the panel's replay tables that name one of the group's actions. The page keeps, per panel, the
@@ -45,6 +47,8 @@
 // - A text/csv answer is shown as text with a Download button, which saves it in the browser, no request sent. A
 //   textarea of a form whose schema says "contentMediaType": "text/csv" gets Choose file, which reads a local file of
 //   60 KiB at most into it; nothing is sent until the form is.
+
+import { createEditor, jsonLanguage, FORMAT_EXAMPLES } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -683,28 +687,64 @@ function stringField(argument) {
 const SKELETON = new Map([["string", ""], ["number", 0], ["integer", 0], ["boolean", false], ["array", []],
   ["object", {}]]);
 const SCALAR_TYPES = new Set(["string", "number", "integer", "boolean"]);
-const NOT_FLAT = ["$ref", "properties", "items", "anyOf", "oneOf", "allOf", "not", "patternProperties"];
+/** What a schema of a form's root may not use: the form would not say what it means. */
+const NOT_FORM = ["$ref", "anyOf", "oneOf", "allOf", "not"];
+/** What a scalar field's schema may not use. */
+const NOT_SCALAR = ["$ref", "properties", "items", "anyOf", "oneOf", "allOf", "not", "patternProperties"];
+/** What a nested object's schema may not use: it lists its properties, and nothing else says what it holds. */
+const NOT_NESTED = ["$ref", "items", "anyOf", "oneOf", "allOf", "not", "patternProperties"];
 
-/**
- * Whether a json argument's schema gets a generated form (spec §2.4): its root is "type": "object", and every
- * property is a string, a number, an integer or a boolean, or an enum of strings, with no $ref and no nesting. The
- * one place this rule is written.
- */
-function isFlatSchema(schema) {
-  if (!isObject(schema) || schema.type !== "object") return false;
-  if (["$ref", "anyOf", "oneOf", "allOf", "not"].some((k) => k in schema)) return false;
-  if (schema.properties === undefined) return true;
-  if (!isObject(schema.properties)) return false;
-  return Object.values(schema.properties).every((p) => isObject(p) && !NOT_FLAT.some((k) => k in p)
-    && (Array.isArray(p.enum)
-      ? (p.type === undefined || p.type === "string") && p.enum.length > 0 && p.enum.every((v) => typeof v === "string")
-      : SCALAR_TYPES.has(p.type)));
+/** The kind of a form field of property schema {@code p}: its scalar type, "enum" (of strings), or null. */
+function scalarKind(p) {
+  if (!isObject(p) || NOT_SCALAR.some((k) => k in p)) return null;
+  if (Array.isArray(p.enum)) {
+    return (p.type === undefined || p.type === "string") && p.enum.length > 0
+      && p.enum.every((v) => typeof v === "string") ? "enum" : null;
+  }
+  return SCALAR_TYPES.has(p.type) ? p.type : null;
 }
 
 /**
- * The raw editor's first value: the required properties, each with its default, or an empty value of its type. A
- * property named "__proto__" is a schema-declared name like any other: a bare {} would silently drop a write to
- * that key (or repoint the object's own prototype) instead of storing it, so the object is prototype-less.
+ * The generated form of a json argument's schema (editor spec §5), the one place its rule is written: its fields, or
+ * null for the JSON editor. The root is "type": "object", with no $ref, anyOf, oneOf, allOf or not; each property is
+ * a string, a number, an integer or a boolean, or an enum of strings, or an object ("type": "object") whose own
+ * properties all are such scalars, with no $ref and no deeper nesting. A field is { name, kind, definition, required,
+ * readOnly, fields }: kind a scalar type, "enum" or "object"; fields, a nested object's own. A readOnly property is
+ * never required.
+ */
+function formShape(schema) {
+  if (!isObject(schema) || schema.type !== "object" || NOT_FORM.some((k) => k in schema)) return null;
+  return formFields(schema, true);
+}
+
+/** The fields of object schema {@code schema}, or null when a property cannot be one; nested: one more level. */
+function formFields(schema, nested) {
+  if (schema.properties === undefined) return [];
+  if (!isObject(schema.properties)) return null;
+  const required = new Set(Array.isArray(schema.required) ? schema.required.filter((n) => typeof n === "string")
+    : []);
+  const fields = [];
+  for (const [name, p] of Object.entries(schema.properties)) {
+    const readOnly = isObject(p) && p.readOnly === true;
+    const field = { name, kind: scalarKind(p), definition: p, required: !readOnly && required.has(name), readOnly,
+      fields: null };
+    if (field.kind === null) {
+      if (!nested || !isObject(p) || p.type !== "object" || !isObject(p.properties)
+        || NOT_NESTED.some((k) => k in p)) return null;
+      field.kind = "object";
+      field.fields = formFields(p, false);
+      if (field.fields === null) return null;
+    }
+    fields.push(field);
+  }
+  return fields;
+}
+
+/**
+ * The JSON editor's first value: the required properties, each with its default, or an empty value of its type, a
+ * nested object with its own required properties. A property named "__proto__" is a schema-declared name like any
+ * other: a bare {} would silently drop a write to that key (or repoint the object's own prototype) instead of
+ * storing it, so the object is prototype-less.
  */
 function skeleton(schema) {
   const object = Object.create(null);
@@ -715,13 +755,18 @@ function skeleton(schema) {
     const p = Object.hasOwn(properties, name) && isObject(properties[name]) ? properties[name] : {};
     object[name] = p.default !== undefined ? p.default
       : Array.isArray(p.enum) && p.enum.length ? p.enum[0]
+      : p.type === "object" ? skeleton(p)
       : SKELETON.has(p.type) ? structuredClone(SKELETON.get(p.type)) : null;
   }
   return object;
 }
 
-/** {@code values} without the members a panel masked: the user types those again. */
-const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED));
+/** Whether {@code values} holds a member a panel masked, in it or in an object it holds. */
+const hasMasked = (values) => Object.values(values).some((v) => v === MASKED || (isObject(v) && hasMasked(v)));
+
+/** {@code values} without the members a panel masked, at every depth of its objects: the user types those again. */
+const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED)
+  .map(([k, v]) => [k, isObject(v) ? unmasked(v) : v]));
 
 /** Past this size a chosen file is not read: the console takes a request of 64 KiB at most. */
 const MAX_FILE_BYTES = 60 * 1024;
@@ -786,70 +831,84 @@ function fileChooser(target) {
 }
 
 /**
- * A json argument: a form generated from its schema when the schema is flat, using required, default, description,
- * enum and a string's "format": "textarea" (a field of several lines, with Choose file when its "contentMediaType"
- * is "text/csv"), and a raw JSON editor otherwise, starting from
- * the required properties. A "JSON" switch shows the form's
- * value as JSON; switching back keeps the values. value() returns the JSON text sent, or throws what is wrong.
+ * A json argument: a form generated from its schema when formShape accepts it, using required, readOnly, default,
+ * description, enum, a string's "format" (a placeholder of its shape; "textarea", a field of several lines, with
+ * Choose file when its "contentMediaType" is "text/csv"), a nested object as a fieldset; the code editor of editor.js
+ * otherwise, checking and completing against the schema, starting from the required properties. A "JSON" switch shows
+ * the form's value in that editor; switching back keeps the values. value() returns the JSON text sent, or throws
+ * what is wrong: the editor's own text once it parses as an object, so that an id past 2^53 reaches the server as
+ * typed.
  */
 function jsonField(argument) {
   const root = el("div", "json-arg");
   const schema = argument.schema;
   const name = argument.label || argument.name;
-  const flat = isFlatSchema(schema);
-  const required = new Set(Array.isArray(schema.required) ? schema.required.filter((n) => typeof n === "string")
-    : []);
+  const shape = formShape(schema);
   const head = el("div", "json-head");
   head.append(el("span", "json-label", name));
   const note = el("span", "json-note");
-  const editor = el("textarea", "json-editor");
-  editor.spellcheck = false;
-  editor.rows = 6;
-  editor.name = argument.name;
-  editor.value = JSON.stringify(skeleton(schema), null, 2);
+  const editor = createEditor({ language: jsonLanguage, data: schema, value: JSON.stringify(skeleton(schema), null, 2),
+    rows: 8, label: name });
+  editor.textarea.name = argument.name;
   const form = el("div", "json-form");
-  const inputs = new Map();
+  const inputs = new Map();             // by field of the shape: { input, kind, text }
   const choosers = [];                  // the file inputs of the CSV fields, disabled with the form
   const raw = el("input");
   raw.type = "checkbox";
-  if (flat) {
-    for (const [property, definition] of Object.entries(schema.properties || {})) {
-      const kind = Array.isArray(definition.enum) ? "enum" : definition.type;
-      const wrap = el("label", "arg");
-      wrap.append(el("span", null, property + (required.has(property) ? " *" : "")));
-      let input;
-      let chooser = null;
-      if (kind === "enum" || kind === "boolean") {
-        input = el("select");
-        for (const v of ["", ...(kind === "enum" ? definition.enum : ["true", "false"])]) {
-          const option = el("option", null, v === "" ? "–" : v);
-          option.value = v;
-          input.append(option);
-        }
-      } else if (kind === "string" && definition.format === "textarea") {
-        // A text of several lines, such as a query: a textarea, read, filled and sent as an input is.
-        input = el("textarea", "json-text");
-        input.rows = 4;
-        input.spellcheck = false;
-        wrap.classList.add("wide");
-        if (definition.contentMediaType === "text/csv") chooser = fileChooser(input);
-      } else {
-        input = el("input");
-        input.type = "text";
-        input.autocomplete = "off";
-        input.spellcheck = false;
-        if (kind !== "string") input.inputMode = "decimal";
+
+  /** The label and input of field {@code f}, {@code path} its name from the root, "entity.title". */
+  function field(f, path) {
+    const definition = f.definition;
+    const kind = f.kind;
+    const wrap = el("label", "arg");
+    wrap.append(el("span", null, f.name + (f.required ? " *" : "") + (f.readOnly ? " (generated)" : "")));
+    let input;
+    let chooser = null;
+    if (kind === "enum" || kind === "boolean") {
+      input = el("select");
+      for (const v of ["", ...(kind === "enum" ? definition.enum : ["true", "false"])]) {
+        const option = el("option", null, v === "" ? "–" : v);
+        option.value = v;
+        input.append(option);
       }
-      if (definition.default !== undefined && definition.default !== null) input.value = String(definition.default);
-      if (typeof definition.description === "string") input.title = definition.description;
-      input.name = argument.name + "." + property;
-      wrap.append(input);
-      if (chooser) {
-        wrap.append(chooser.root);
-        choosers.push(chooser.file);
+    } else if (kind === "string" && definition.format === "textarea") {
+      // A text of several lines, such as a query: a textarea, read, filled and sent as an input is.
+      input = el("textarea", "json-text");
+      input.rows = 4;
+      input.spellcheck = false;
+      wrap.classList.add("wide");
+      if (definition.contentMediaType === "text/csv") chooser = fileChooser(input);
+    } else {
+      input = el("input");
+      input.type = "text";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      if (kind !== "string") input.inputMode = "decimal";
+      input.placeholder = f.readOnly ? "generated" : FORMAT_EXAMPLES.get(definition.format) || "";
+    }
+    if (definition.default !== undefined && definition.default !== null) input.value = String(definition.default);
+    if (typeof definition.description === "string") input.title = definition.description;
+    input.name = argument.name + "." + path;
+    wrap.append(input);
+    if (chooser) {
+      wrap.append(chooser.root);
+      choosers.push(chooser.file);
+    }
+    inputs.set(f, { input, kind, text: chooser ? chooser.text : null });
+    return wrap;
+  }
+
+  if (shape) {
+    for (const f of shape) {
+      if (f.kind !== "object") {
+        form.append(field(f, f.name));
+        continue;
       }
-      form.append(wrap);
-      inputs.set(property, { input, kind, text: chooser ? chooser.text : null });
+      // A nested object: a fieldset of its own fields, its name the legend.
+      const group = el("fieldset", "json-group");
+      group.append(el("legend", null, f.name + (f.required ? " *" : "") + (f.readOnly ? " (generated)" : "")));
+      for (const inner of f.fields) group.append(field(inner, f.name + "." + inner.name));
+      form.append(group);
     }
     const toggle = el("label", "json-switch");
     toggle.append(raw, el("span", null, "JSON"));
@@ -857,26 +916,38 @@ function jsonField(argument) {
   }
   head.append(note);
   root.append(head);
-  if (flat) root.append(form);
-  root.append(editor);
-  const rawMode = () => !flat || raw.checked;
-  const show = () => { form.hidden = rawMode(); editor.hidden = !rawMode(); };
+  if (shape) root.append(form);
+  root.append(editor.root);
+  const rawMode = () => !shape || raw.checked;
+  const show = () => { form.hidden = rawMode(); editor.root.hidden = !rawMode(); };
   show();
 
   /**
-   * The form's values as an object; strict, it refuses a number that is none and a missing required property. A
-   * property literally named "__proto__" is a name like any other: a bare {} would silently drop the write, which
-   * would then make it forever "required" instead of present.
+   * The values of {@code fields} as an object, {@code prefix} the path of that object for a refusal; strict, a number
+   * that is none is refused. A nested object neither required nor filled in is left out; one that is, its missing
+   * required fields refused by their path. A property literally named "__proto__" is a name like any other: a bare
+   * {} would silently drop the write, which would then make it forever "required" instead of present.
    */
-  function formObject(strict) {
+  function valuesOf(fields, prefix, strict) {
     const object = Object.create(null);
-    for (const [property, { input, kind, text: fileText }] of inputs) {
+    for (const f of fields) {
+      const property = f.name;
+      if (f.kind === "object") {
+        const inner = valuesOf(f.fields, prefix + property + ".", strict);
+        if (!f.required && Object.keys(inner).length === 0) continue;
+        if (strict) requireAll(f.fields, inner, prefix + property + ".");
+        object[property] = inner;
+        continue;
+      }
+      const { input, kind, text: fileText } = inputs.get(f);
       const text = input.value.trim();
       if (text === "") continue;
       if (kind === "integer" || kind === "number") {
         const n = Number(text);
         const valid = kind === "integer" ? /^-?\d+$/.test(text) : Number.isFinite(n);
-        if (!valid && strict) throw new Error(property + ": not " + (kind === "integer" ? "an integer" : "a number"));
+        if (!valid && strict) {
+          throw new Error(prefix + property + ": not " + (kind === "integer" ? "an integer" : "a number"));
+        }
         object[property] = valid ? n : text;
       } else if (kind === "boolean") {
         object[property] = text === "true";
@@ -884,48 +955,67 @@ function jsonField(argument) {
         object[property] = fileText ? fileText() : input.value;
       }
     }
-    if (strict) {
-      for (const property of required) {
-        if (!Object.hasOwn(object, property)) throw new Error(property + " is required");
-      }
+    return object;
+  }
+  /** Refuses the first required field of {@code fields} that {@code object} lacks: "entity.title is required". */
+  function requireAll(fields, object, prefix) {
+    for (const f of fields) {
+      if (f.required && !Object.hasOwn(object, f.name)) throw new Error(prefix + f.name + " is required");
     }
+  }
+  function formObject(strict) {
+    const object = valuesOf(shape, "", strict);
+    if (strict) requireAll(shape, object, "");
     return object;
   }
   function editorObject() {
     let value;
-    try { value = JSON.parse(editor.value); } catch (unparsable) { throw new Error(name + ": not valid JSON"); }
+    try { value = JSON.parse(editor.value()); } catch (unparsable) { throw new Error(name + ": not valid JSON"); }
     if (!isObject(value)) throw new Error(name + ": not a JSON object");
     return value;
   }
-  function toForm(object) {
-    for (const [property, { input }] of inputs) {
+  function toForm(object, fields) {
+    for (const f of fields) {
+      const property = f.name;
       // Object.hasOwn: a property object lacks, such as "constructor" or "toString", must read as absent, never
       // as the inherited member of that name.
-      const v = Object.hasOwn(object, property) ? object[property] : undefined;
-      input.value = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      const v = isObject(object) && Object.hasOwn(object, property) ? object[property] : undefined;
+      if (f.kind === "object") {
+        toForm(v, f.fields);
+        continue;
+      }
+      inputs.get(f).input.value = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v)
+        : String(v);
     }
   }
   raw.addEventListener("change", () => {
     note.textContent = "";
     if (raw.checked) {
-      editor.value = JSON.stringify(formObject(false), null, 2);
+      editor.setValue(JSON.stringify(formObject(false), null, 2));
     } else {
-      try { toForm(editorObject()); } catch (invalid) { raw.checked = true; note.textContent = invalid.message; }
+      try { toForm(editorObject(), shape); } catch (invalid) { raw.checked = true; note.textContent = invalid.message; }
     }
     show();
   });
   return {
     name: argument.name,
     root,
-    value: () => JSON.stringify(rawMode() ? editorObject() : formObject(true)),
+    value() {
+      if (!rawMode()) return JSON.stringify(formObject(true));
+      editorObject();                   // refuses a text that is no JSON object, as before
+      return editor.value();
+    },
     fill(values) {
       if (!isObject(values)) return;
       const kept = unmasked(values);
-      editor.value = JSON.stringify(kept, null, 2);
-      if (flat) toForm(kept);
-      note.textContent = Object.keys(kept).length < Object.keys(values).length ? "masked values: type them again" : "";
+      editor.setValue(JSON.stringify(kept, null, 2));
+      if (shape) toForm(kept, shape);
+      note.textContent = hasMasked(values) ? "masked values: type them again" : "";
     },
-    disable(on) { for (const c of [editor, raw, ...[...inputs.values()].map((i) => i.input), ...choosers]) c.disabled = on; },
+    disable(on) {
+      editor.disable(on);
+      for (const c of [raw, ...[...inputs.values()].map((i) => i.input), ...choosers]) c.disabled = on;
+    },
   };
 }
 

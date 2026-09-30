@@ -18,8 +18,9 @@
 
     SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
 
-    The Vidocq dev console. Plain HTML, one stylesheet and one ES module, all served by the console itself:
-    no build step, nothing loaded from another site. console.js polls api/snapshot and draws it.
+    The Vidocq dev console. Plain HTML, one stylesheet and one ES module, console.js, which imports the code
+    editor's editor.js and editor-core.js, all served by the console itself: no build step, nothing loaded from
+    another site. console.js polls api/snapshot and draws it.
 
 -->
 <!doctype html>

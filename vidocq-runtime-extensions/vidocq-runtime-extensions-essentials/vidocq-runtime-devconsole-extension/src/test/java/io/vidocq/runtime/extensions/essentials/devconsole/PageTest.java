@@ -334,16 +334,56 @@ class PageTest {
     }
 
     @Test
-    void jsonArgumentsGetAFormForAFlatSchemaAndARawEditorOtherwise() {
+    void jsonArgumentsGetAFormWhenFormShapeAcceptsTheirSchemaAndTheEditorOtherwise() {
         String script = file("console.js");
 
-        assertTrue(script.contains("function isFlatSchema(schema)"), "the flat-schema rule, written once");
-        assertTrue(script.contains("\"$ref\""), "a $ref is never flat");
+        assertTrue(script.contains("function formShape(schema)"), "the form's rule, written once");
+        assertFalse(script.contains("isFlatSchema"), "formShape replaced it");
+        assertTrue(script.contains("\"$ref\""), "a $ref is never a form");
         assertTrue(script.contains("function jsonField(argument)"), "a json argument's field");
+        assertTrue(script.contains("const editor = createEditor({ language: jsonLanguage, data: schema,"),
+                "the JSON mode is the editor, checking against the argument's schema");
+        assertFalse(script.contains("\"json-editor\""), "no raw textarea left");
+        assertTrue(script.contains("return editor.value();"), "the editor's own text is sent: no id past 2^53 rounded");
         assertTrue(script.contains("const REPLAY_COLUMN = \"replay\""), "PanelSample.REPLAY_COLUMN");
         assertTrue(script.contains("const MASKED = \"***\""), "a masked value is not replayed");
         assertTrue(script.contains("const FILTER_FROM = 10"), "a filter past ten actions");
         assertTrue(script.contains("\"Exchange\""), "the details folded under Exchange");
+    }
+
+    @Test
+    void theConsoleImportsTheEditorAndNoOtherScript() {
+        String script = file("console.js");
+
+        assertEquals(List.of("./editor.js"), IMPORT.matcher(script).results().map(m -> m.group(1)).toList());
+        assertTrue(script.contains("import { createEditor, jsonLanguage, FORMAT_EXAMPLES } from \"./editor.js\";"));
+        assertEquals(1, Pattern.compile("<script").matcher(file("index.html")).results().count(),
+                "the index still loads console.js only");
+    }
+
+    @Test
+    void aNestedObjectIsAFieldsetWhoseMissingFieldsAreRefusedByTheirPath() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("const group = el(\"fieldset\", \"json-group\");"), "a fieldset per nested object");
+        assertTrue(script.contains("group.append(el(\"legend\", null, f.name + (f.required ? \" *\" : \"\")"),
+                "its name the legend, starred when required");
+        assertTrue(script.contains("if (!nested || !isObject(p) || p.type !== \"object\" || !isObject(p.properties)"),
+                "one level of nesting, and an object that lists its properties");
+        assertTrue(script.contains("throw new Error(prefix + f.name + \" is required\")"), "entity.title is required");
+        assertTrue(script.contains("if (!f.required && Object.keys(inner).length === 0) continue;"),
+                "an optional nested object left empty is not sent");
+        assertTrue(script.contains("required: !readOnly && required.has(name)"),
+                "a readOnly property is never required");
+        assertTrue(script.contains("(f.readOnly ? \" (generated)\" : \"\")"), "a readOnly property says so");
+        assertTrue(script.contains(
+                "input.placeholder = f.readOnly ? \"generated\" : FORMAT_EXAMPLES.get(definition.format) || \"\";"),
+                "the placeholder: generated, or the shape of a date, a time, a date-time, a uuid");
+        assertTrue(script.contains(": p.type === \"object\" ? skeleton(p)"),
+                "the skeleton, required keys at each level");
+        assertTrue(script.contains(".map(([k, v]) => [k, isObject(v) ? unmasked(v) : v])"), "masked values, at depth");
+        assertTrue(rule(file("console.css"), ".action .json-group {").contains("flex-basis: 100%"),
+                "a line of its own");
     }
 
     @Test
@@ -433,7 +473,7 @@ class PageTest {
 
         assertTrue(chooser.contains("text: () => raw !== null && target.value === raw.replace(/\\r\\n?/g, \"\\n\") ? raw"
                 + " : target.value,"), "the file's own text while the textarea still shows it, else the textarea");
-        assertTrue(script.contains("inputs.set(property, { input, kind, text: chooser ? chooser.text : null });"),
+        assertTrue(script.contains("inputs.set(f, { input, kind, text: chooser ? chooser.text : null });"),
                 "the form keeps it");
         assertTrue(script.contains("object[property] = fileText ? fileText() : input.value;"), "and sends it");
     }
@@ -459,7 +499,7 @@ class PageTest {
 
         long nullPrototypeObjects = script.lines().filter(line -> line.contains("= Object.create(null);")).count();
         assertEquals(3, nullPrototypeObjects,
-                "skeleton(), formObject() and the request body: a bare {} would silently drop a \"__proto__\" key");
+                "skeleton(), valuesOf() and the request body: a bare {} would silently drop a \"__proto__\" key");
         assertTrue(script.contains("Object.hasOwn(properties, name)"), "a schema property read by its own name");
         assertTrue(script.contains("Object.hasOwn(object, property) ? object[property] : undefined"),
                 "a form value read by its own name, never an inherited member such as constructor or toString");

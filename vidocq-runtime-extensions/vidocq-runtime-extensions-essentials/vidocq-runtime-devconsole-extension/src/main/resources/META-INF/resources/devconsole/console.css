@@ -298,8 +298,10 @@ button:disabled { opacity: 0.55; cursor: progress; }
 .action .json-switch { display: inline-flex; align-items: center; gap: 4px; }
 .action .json-note { color: var(--crit); }
 .action .json-form { display: flex; flex-wrap: wrap; gap: 6px 12px; }
-.action .json-editor { font-family: var(--mono); font-size: 12px; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--rule); border-radius: 5px; padding: 6px 8px; width: 100%; max-width: 80ch; }
+/* A nested object of the form: a fieldset of its own fields, its name the legend. */
+.action .json-group { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+  margin: 0; padding: 6px 10px 8px; border: 1px solid var(--rule); border-radius: 5px; min-width: 0; }
+.action .json-group > legend { padding: 0 4px; font-size: 12px; color: var(--muted); }
 /* The code editor (editor.js): a textarea over a <pre> that draws the same text coloured, with the line numbers in
    the padding both share. Both lay the text out identically — font, size, line height, padding, border, wrapping,
    tab size — and nothing in the <pre> changes a width: colours, underlines and outlines only. */
