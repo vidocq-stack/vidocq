@@ -75,6 +75,7 @@ class EditorCoreTest {
     private static Context context;
     private static Value json;
     private static Value language;
+    private static Value keystroke;
 
     @BeforeAll
     static void loadTheModule() {
@@ -86,6 +87,7 @@ class EditorCoreTest {
                 .mimeType("application/javascript+module").buildLiteral());
         json = context.eval("js", "JSON");
         language = exports.getMember("jsonLanguage");
+        keystroke = exports.getMember("keystroke");
     }
 
     @AfterAll
@@ -498,5 +500,98 @@ class EditorCoreTest {
 
         assertTrue(thrown.isGuestException(), "an Error thrown by the module");
         assertEquals("Error: line 2: trailing comma", thrown.getMessage());
+    }
+
+    // ------------------------------------------------------------------------------------------------ keystrokes
+
+    /**
+     * {@code marked} after {@code key}: one | is the caret, two | the ends of the selection, before and after;
+     * "null" when the module lets the browser type the key.
+     */
+    private static String press(String marked, String key) {
+        int start = marked.indexOf('|');
+        int second = marked.indexOf('|', start + 1);
+        String text = marked.replace("|", "");
+        int end = second < 0 ? start : second - 1;
+        Value edit = keystroke.execute(language, text, start, end, key);
+        if (edit.isNull()) {
+            return "null";
+        }
+        int from = number(edit, "from");
+        String next = text.substring(0, from) + edit.getMember("insert").asString()
+                + text.substring(number(edit, "to"));
+        int caret = from + number(edit, "caret");
+        Value anchor = edit.getMember("anchor");
+        if (anchor == null || anchor.isNull()) {
+            return next.substring(0, caret) + "|" + next.substring(caret);
+        }
+        int other = from + anchor.asInt();
+        int low = Math.min(other, caret);
+        int high = Math.max(other, caret);
+        return next.substring(0, low) + "|" + next.substring(low, high) + "|" + next.substring(high);
+    }
+
+    @Test
+    void anOpeningCharacterInsertsItsPairTheCaretBetween() {
+        assertEquals("{|}", press("|", "{"));
+        assertEquals("[1, [|]]", press("[1, |]", "["));
+        assertEquals("(|)", press("|", "("));
+        assertEquals("{\"a\": \"|\"}", press("{\"a\": |}", "\""));
+    }
+
+    @Test
+    void anOpeningCharacterWrapsTheSelection() {
+        assertEquals("[|abc|]", press("|abc|", "["));
+        assertEquals("\"|abc|\"", press("|abc|", "\""));
+    }
+
+    @Test
+    void aQuoteOpensAPairOnlyWhereAStringMayStart() {
+        assertEquals("null", press("abc|", "\""), "after a letter");
+        assertEquals("null", press("[1|]", "\""), "after a digit");
+        assertEquals("null", press("{\"a|b\": 1}", "\""), "inside a string");
+        assertEquals("null", press("{\"a|b\": 1}", "{"), "a bracket inside a string is text");
+    }
+
+    @Test
+    void aClosingCharacterRightBeforeTheSameStepsOverIt() {
+        assertEquals("{}|", press("{|}", "}"));
+        assertEquals("[1]|", press("[1|]", "]"));
+        assertEquals("{\"a\"|: 1}", press("{\"a|\": 1}", "\""));
+        assertEquals("null", press("{|", "}"), "nothing to step over: the browser types it");
+    }
+
+    @Test
+    void enterKeepsTheIndentationAndOpensALineBetweenBrackets() {
+        assertEquals("{\n  \"a\": 1,\n  |\n}", press("{\n  \"a\": 1,|\n}", "Enter"));
+        assertEquals("{\n  |\n}", press("{|}", "Enter"));
+        assertEquals("  [\n    |\n  ]", press("  [|]", "Enter"));
+        assertEquals("{\r\n  \"a\": 1,\n  |\r\n}", press("{\r\n  \"a\": 1,|\r\n}", "Enter"));
+    }
+
+    @Test
+    void backspaceBetweenAnEmptyPairDeletesBoth() {
+        assertEquals("|", press("{|}", "Backspace"));
+        assertEquals("|", press("[|]", "Backspace"));
+        assertEquals("|", press("(|)", "Backspace"));
+        assertEquals("{\"a\": |}", press("{\"a\": \"|\"}", "Backspace"));
+        assertEquals("null", press("\"a\\\"|\"", "Backspace"), "an escaped quote then the closing one");
+        assertEquals("null", press("{|a}", "Backspace"));
+    }
+
+    @Test
+    void tabInsertsTwoSpacesOrIndentsTheSelectedLines() {
+        assertEquals("a  |", press("a|", "Tab"));
+        assertEquals("|  a\n  b|\nc", press("|a\nb|\nc", "Tab"));
+        assertEquals("|  a|\nb", press("|a\n|b", "Tab"), "a selection ending at a line start leaves that line");
+    }
+
+    @Test
+    void shiftTabOutdentsTheLinesOrLetsTheBrowserMoveOn() {
+        assertEquals("  a|", press("    a|", "Shift+Tab"));
+        assertEquals("|a\nb|", press("|  a\n  b|", "Shift+Tab"));
+        assertEquals("|a", press("  |a", "Shift+Tab"));
+        assertEquals("| a", press(" |  a", "Shift+Tab"));
+        assertEquals("null", press("a|", "Shift+Tab"));
     }
 }

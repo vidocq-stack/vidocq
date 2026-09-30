@@ -621,3 +621,98 @@ export const jsonLanguage = Object.freeze({
   format,
   pairs: Object.freeze(["{}", "[]", "()", "\"\""]),
 });
+
+// ------------------------------------------------------------------------------------------------ keystrokes
+
+/** The offset where the line holding {@code offset} starts. */
+const lineStart = (text, offset) => offset === 0 ? 0 : text.lastIndexOf("\n", offset - 1) + 1;
+
+/** The lines {@code start}-{@code end} touch, from the start of the first to the end of the last. */
+function lineSpan(text, start, end) {
+  const last = end > start && text[end - 1] === "\n" ? end - 1 : end;
+  const to = text.indexOf("\n", last);
+  return { from: lineStart(text, start), to: to < 0 ? text.length : to };
+}
+
+/** The string token {@code offset} is inside of, its closing quote excluded, or null. */
+function stringAround(language, text, offset) {
+  for (const t of language.tokenize(text)) {
+    if (t.from >= offset) return null;
+    if (isStringToken(t) && (offset < t.to || (offset === t.to && !isClosed(text, t)))) return t;
+  }
+  return null;
+}
+
+/**
+ * The edit {@code key} makes in {@code text}, whose selection is {@code selectionStart}-{@code selectionEnd} (spec
+ * §3.5): { from, to, insert, caret }, caret an offset into insert as on a completion item, and anchor, when present,
+ * the other end of the selection it leaves, an offset into insert too; an empty insert over an empty range only moves
+ * the caret. null: the browser types the key itself. The keys: an opening or closing character of language.pairs,
+ * "Enter", "Backspace", "Tab", "Shift+Tab".
+ */
+export function keystroke(language, text, selectionStart, selectionEnd, key) {
+  const start = Math.min(selectionStart, selectionEnd);
+  const end = Math.max(selectionStart, selectionEnd);
+  if (key === "Enter") return enter(text, start, end);
+  if (key === "Tab") {
+    return start === end ? { from: start, to: start, insert: INDENT, caret: INDENT.length } : indent(text, start, end);
+  }
+  if (key === "Shift+Tab") return outdent(text, start, end);
+  const pairs = Array.isArray(language.pairs) ? language.pairs : [];
+  if (key === "Backspace") return start === end ? backspace(language, pairs, text, start) : null;
+  const opening = pairs.find((pair) => pair[0] === key);
+  const closing = pairs.find((pair) => pair[1] === key);
+  if (!opening && !closing) return null;
+  if (start !== end) {
+    return opening ? { from: start, to: end, insert: key + text.slice(start, end) + opening[1], anchor: 1,
+      caret: 1 + end - start } : null;
+  }
+  const string = stringAround(language, text, start);
+  if (closing && text[start] === key
+      && (key === "\"" ? string !== null && string.to === start + 1 && isClosed(text, string) : string === null)) {
+    return { from: start + 1, to: start + 1, insert: "", caret: 0 };
+  }
+  if (!opening || string !== null) return null;
+  if (key === "\"" && /[\p{L}\p{N}]$/u.test(text.slice(Math.max(0, start - 2), start))) return null;
+  return { from: start, to: start, insert: opening, caret: 1 };
+}
+
+/** Enter: the line's indentation kept; between {} or [], an indented line and the closing character on the next. */
+function enter(text, start, end) {
+  const indentation = /^[ \t]*/.exec(text.slice(lineStart(text, start), start))[0];
+  const before = text[start - 1];
+  const after = text[end];
+  if ((before === "{" && after === "}") || (before === "[" && after === "]")) {
+    const opened = "\n" + indentation + INDENT;
+    return { from: start, to: end, insert: opened + "\n" + indentation, caret: opened.length };
+  }
+  return { from: start, to: end, insert: "\n" + indentation, caret: 1 + indentation.length };
+}
+
+/** Backspace right between an empty pair of the language, an empty string's quotes included, deletes both. */
+function backspace(language, pairs, text, offset) {
+  if (offset === 0 || !pairs.includes(text.slice(offset - 1, offset + 1))) return null;
+  if (text[offset] === "\"") {
+    const empty = language.tokenize(text).find((t) => t.from === offset - 1);
+    if (!empty || !isStringToken(empty) || empty.to !== offset + 1) return null;
+  }
+  return { from: offset - 1, to: offset + 1, insert: "", caret: 0 };
+}
+
+/** Tab over a selection: every line it touches indented, and selected. */
+function indent(text, start, end) {
+  const { from, to } = lineSpan(text, start, end);
+  const insert = text.slice(from, to).split("\n").map((line) => INDENT + line).join("\n");
+  return { from, to, insert, anchor: 0, caret: insert.length };
+}
+
+/** Shift+Tab: every line the selection or the caret touches outdented by one level; null when none can be. */
+function outdent(text, start, end) {
+  const { from, to } = lineSpan(text, start, end);
+  const lines = text.slice(from, to).split("\n");
+  const cuts = lines.map((line) => line.startsWith(INDENT) ? INDENT.length : /^[ \t]/.test(line) ? 1 : 0);
+  if (cuts.every((cut) => cut === 0)) return null;
+  const insert = lines.map((line, i) => line.slice(cuts[i])).join("\n");
+  if (start === end) return { from, to, insert, caret: Math.max(0, start - from - cuts[0]) };
+  return { from, to, insert, anchor: 0, caret: insert.length };
+}
