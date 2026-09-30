@@ -191,7 +191,8 @@ public class VidocqCheckPomMojo extends AbstractMojo {
 
         // Warned about first, whatever the checks below find: a warning, never a failure. A dev-only module
         // depends on dev tools by design.
-        if (!isDevOnlyProject(project)) {
+        boolean devOnly = isDevOnlyProject(project);
+        if (!devOnly) {
             for (String issue : findDevOnlyDeclarations(project.getDependencies(), this::resolvedJar)) {
                 getLog().warn(issue);
             }
@@ -211,7 +212,11 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         }
 
         List<String> issues = new ArrayList<>();
-        issues.addAll(findMissingCodegens(extensions, extensionGroups, codegenPaths));
+        // A dev-only module (a -dev companion) reads its runtime extension's live API and generates nothing: its
+        // extension needs no codegen bundle there (#147). Orphans and drifts are still checked.
+        if (!devOnly) {
+            issues.addAll(findMissingCodegens(extensions, extensionGroups, codegenPaths));
+        }
         issues.addAll(findOrphanCodegens(extensions, codegenPaths));
         issues.addAll(findVersionDrifts(extensions, codegenPaths));
 
@@ -360,7 +365,8 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         return c != null ? c.getValue() : null;
     }
 
-    private boolean codegenArtifactExists(String artifactId, String groupId, String version) {
+    // package-private: a test overrides it rather than resolve artifacts.
+    boolean codegenArtifactExists(String artifactId, String groupId, String version) {
         if (version == null) version = project.getVersion();
         if (groupId == null) groupId = VIDOCQ_RUNTIME_GROUP;
         try {

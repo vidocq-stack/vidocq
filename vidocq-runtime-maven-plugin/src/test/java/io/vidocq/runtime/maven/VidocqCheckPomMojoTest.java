@@ -23,6 +23,7 @@ import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
@@ -38,8 +39,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -157,6 +160,63 @@ class VidocqCheckPomMojoTest {
         checkpom(project, marked, warnings).execute();
 
         assertEquals(List.of(), warnings);
+    }
+
+    /**
+     * #147: a dev-only module depends on its runtime extension for its live API only and generates nothing: its
+     * missing codegen bundle is not an issue. Any other module still fails on it.
+     */
+    @Test
+    void aDevOnlyModuleNeedsNoCodegenBundleForTheExtensionItReads(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "knock.jar", null);
+        Model devModel = new Model();
+        devModel.setPackaging("jar");
+        devModel.addDependency(dependency("vidocq-runtime-knock-health-extension", "compile"));
+        Plugin jar = new Plugin();
+        jar.setGroupId("org.apache.maven.plugins");
+        jar.setArtifactId("maven-jar-plugin");
+        jar.setConfiguration(Xpp3DomBuilder.build(new StringReader("<configuration><archive><manifestEntries>"
+                + "<Vidocq-Dev-Only>true</Vidocq-Dev-Only></manifestEntries></archive></configuration>")));
+        Build build = new Build();
+        build.addPlugin(jar);
+        devModel.setBuild(build);
+        Model plainModel = new Model();
+        plainModel.setPackaging("jar");
+        plainModel.addDependency(dependency("vidocq-runtime-knock-health-extension", "compile"));
+
+        assertDoesNotThrow(() -> strictCheckpom(new MavenProject(devModel), plain).execute());
+        MojoFailureException failure = assertThrows(MojoFailureException.class,
+                () -> strictCheckpom(new MavenProject(plainModel), plain).execute());
+        assertTrue(failure.getMessage().contains("1 issue(s)"), failure.getMessage());
+    }
+
+    /** A checkpom mojo failing on its issues, every codegen bundle published, every dependency resolving to jar. */
+    private static VidocqCheckPomMojo strictCheckpom(MavenProject project, Path jarFile) throws Exception {
+        VidocqCheckPomMojo mojo = new VidocqCheckPomMojo() {
+            @Override
+            Optional<Path> resolvedJar(Dependency d) {
+                return Optional.of(jarFile);
+            }
+
+            @Override
+            boolean codegenArtifactExists(String artifactId, String groupId, String version) {
+                return true;
+            }
+        };
+        setProject(mojo, project);
+        Field failOnMissing = VidocqCheckPomMojo.class.getDeclaredField("failOnMissing");
+        failOnMissing.setAccessible(true);
+        failOnMissing.set(mojo, true);
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void info(CharSequence content) {
+            }
+
+            @Override
+            public void error(CharSequence content) {
+            }
+        });
+        return mojo;
     }
 
     /** A checkpom mojo on {@code project} whose every dependency resolves to {@code jar}, warnings captured. */

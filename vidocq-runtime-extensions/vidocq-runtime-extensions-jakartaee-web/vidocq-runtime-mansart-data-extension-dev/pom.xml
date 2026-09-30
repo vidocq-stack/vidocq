@@ -15,15 +15,6 @@
     <description>The Mansart Data catalogue panel of the dev console. Only vidocq:dev adds it; no binary contains it
         (Vidocq/vidocq#143).</description>
 
-    <properties>
-        <!--
-            checkpom asks every module that depends on vidocq-runtime-mansart-data-extension to run its codegen
-            bundle; this dev-only panel holds no entity and no repository, so there is nothing to generate. The
-            missing bundle is a warning here until checkpom exempts dev-only modules (Vidocq/vidocq#147).
-        -->
-        <vidocq.checkpom.failOnMissing>false</vidocq.checkpom.failOnMissing>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>

@@ -33,27 +33,6 @@
 
     <build>
         <plugins>
-            <!--
-                checkpom flags any module that declares vidocq-runtime-cassini-rest-extension as a dependency
-                without pointing its codegen bundle in annotationProcessorPaths (Maven falls back to reflection
-                otherwise). This module has no @Path resource of its own, so the processor generates nothing,
-                but the declaration keeps checkpom quiet and matches vidocq-runtime-knock-health-extension's own
-                pattern for the same dependency.
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths combine.children="append">
-                        <path>
-                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                            <version>${project.version}</version>
-                            <type>pom</type>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
