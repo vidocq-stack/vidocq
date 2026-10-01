@@ -181,9 +181,11 @@ final class JdqlActions {
         // A query runs in a transaction that is always rolled back, when there is a transaction manager: it is
         // read-only whatever it holds, should a statement that writes ever pass for a query.
         String runs = write ? mode : transactions.available() ? TransactionRunner.ROLLBACK : null;
-        TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(runs,
-                () -> answer(runner.run(statement.query(), statement.params(), model, runtime,
-                        ResultJson.MAX_ROWS + 1), write, json));
+        TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(runs, () -> {
+            JdqlResult result = runner.run(statement.query(), statement.params(), model, runtime,
+                    ResultJson.MAX_ROWS + 1);
+            return write ? answer(result, true, json) : shown(result, model, json);
+        });
         if (outcome.failure() != null) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: " + (write ? WRITE : QUERY) + " failed: "
                     + outcome.failure().getClass().getName());
@@ -194,7 +196,23 @@ final class JdqlActions {
         ResultJson.Result value = outcome.value();
         String summary = value.what() + (value.rows() ? " in " + millis(start) + " ms" : "")
                 + (!write || outcome.state() == null ? "" : " · " + outcome.state());
-        return new PanelAction.ActionResult(summary, PanelAction.ActionResult.JSON, value.body(), false, details);
+        // a query's entities and rows are a table of rows (SQL spec §4.4); a count, a value and a write are JSON
+        return new PanelAction.ActionResult(summary, !write && value.rows() ? PanelAction.ActionResult.ROWS
+                : PanelAction.ActionResult.JSON, value.body(), false, details);
+    }
+
+    /**
+     * What a query shows (SQL spec §4.4): its entities and the rows of a projection as a table of rows, at most
+     * {@value ResultJson#MAX_ROWS} of them; a count or an aggregate as {@link #answer} writes it.
+     *
+     * @param model the model of the entity the query names, whose attributes type the columns
+     */
+    static ResultJson.Result shown(JdqlResult result, EntityModel<?> model, EntityJson entities) {
+        return switch (result) {
+            case JdqlResult.Entities found -> ResultJson.rows(found.entities(), model, entities);
+            case JdqlResult.Rows rows -> ResultJson.rows(rows.columns(), rows.rows(), model, entities);
+            default -> answer(result, false, entities);
+        };
     }
 
     /**

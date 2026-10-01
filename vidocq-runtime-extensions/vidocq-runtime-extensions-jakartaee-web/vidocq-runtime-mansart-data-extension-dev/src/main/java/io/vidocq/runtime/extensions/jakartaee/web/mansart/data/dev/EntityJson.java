@@ -210,6 +210,34 @@ final class EntityJson {
         return names;
     }
 
+    /**
+     * The type a table of rows shows for each name {@link #names} gives {@code entity}'s instances, in that order (SQL
+     * spec §4.4): the JSON Schema type of the attribute's Java type, or its format for a date, a time or a uuid; for a
+     * reference, its id's; empty when it has none.
+     *
+     * @throws RuntimeException when its model cannot be read, as {@code EntityModels.of} throws it
+     */
+    Map<String, String> types(Class<?> entity) {
+        Map<String, String> types = new LinkedHashMap<>();
+        for (Attribute<?, ?> attribute : model(entity).attributes()) {
+            if (attribute == null || attribute instanceof JoinedAttribute<?, ?> || attribute.getter() == null) {
+                continue;
+            }
+            Class<?> type = attribute.javaType();
+            if (attribute instanceof ReferenceAttribute<?, ?> reference) {
+                try {
+                    type = model(reference.javaType()).id().javaType();
+                } catch (RuntimeException | LinkageError unreadable) {
+                    type = null;
+                }
+            }
+            Map<String, Object> schema = type == null ? null : Scalars.schema(type);
+            types.put(attribute.name(), schema == null ? "" : String.valueOf(schema.getOrDefault("format",
+                    schema.get("type"))));
+        }
+        return types;
+    }
+
     /** The id of {@code entity}, an instance of an entity: what a reference to it is written as. */
     Object idOf(Object entity) {
         return get(model(entity.getClass()).id().getter(), entity);

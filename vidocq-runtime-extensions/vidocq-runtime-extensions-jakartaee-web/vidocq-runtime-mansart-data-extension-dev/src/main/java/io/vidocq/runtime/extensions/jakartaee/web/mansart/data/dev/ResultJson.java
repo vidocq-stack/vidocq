@@ -19,6 +19,10 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
+import io.vidocq.mansart.data.dialect.EntityModel;
+import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
+import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult.Column;
+
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -135,6 +139,56 @@ final class ResultJson {
             json.add(object);
         }
         return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(json.size()), true);
+    }
+
+    /**
+     * Entities a JDQL query found as a table of rows (SQL spec §4.4): one column per name its objects have, in model
+     * order, typed from the attributes ({@link EntityJson#types}); at most {@value #MAX_ROWS} rows, the next one
+     * setting {@code more}.
+     *
+     * @param model the model of the entity the query names
+     */
+    static Result rows(List<?> found, EntityModel<?> model, EntityJson entities) {
+        boolean more = found.size() > MAX_ROWS;
+        Map<String, String> types = entities.types(model.entityClass());
+        List<List<Object>> rows = new ArrayList<>();
+        for (Object entity : more ? found.subList(0, MAX_ROWS) : found) {
+            Map<String, Object> json = entities.toJson(entity);
+            rows.add(types.keySet().stream().map(json::get).toList());
+        }
+        List<Column> columns = types.entrySet().stream().map(type -> new Column(type.getKey(), type.getValue()))
+                .toList();
+        return new Result(ActionResult.rows(null, columns, rows, more).body(),
+                more ? "first " + MAX_ROWS + " rows" : count(rows.size()), true);
+    }
+
+    /**
+     * The rows of a JDQL projection as a table of rows (SQL spec §4.4): its columns in order, each typed as the
+     * attribute of that name of {@code model}, or {@code object} when it holds entities; an entity, a list, written as
+     * its JSON text; at most {@value #MAX_ROWS} rows, the next one setting {@code more}.
+     */
+    static Result rows(List<String> columns, List<Object[]> rows, EntityModel<?> model, EntityJson entities) {
+        boolean more = rows.size() > MAX_ROWS;
+        List<Object[]> kept = more ? rows.subList(0, MAX_ROWS) : rows;
+        Map<String, String> types = entities.types(model.entityClass());
+        List<Column> shown = new ArrayList<>();
+        for (int i = 0; i < columns.size(); i++) {
+            int at = i;
+            boolean holdsEntities = kept.stream().map(row -> at < row.length ? row[at] : null)
+                    .anyMatch(value -> value != null && entities.isEntity(value.getClass()));
+            shown.add(new Column(columns.get(i), holdsEntities ? "object" : types.getOrDefault(columns.get(i), "")));
+        }
+        List<List<Object>> out = new ArrayList<>();
+        for (Object[] row : kept) {
+            List<Object> values = new ArrayList<>(columns.size());
+            for (int i = 0; i < columns.size(); i++) {
+                Object node = node(i < row.length ? row[i] : null, entities, 1);
+                values.add(node instanceof Map<?, ?> || node instanceof List<?> ? Json.write(node) : node);
+            }
+            out.add(values);
+        }
+        return new Result(ActionResult.rows(null, shown, out, more).body(),
+                more ? "first " + MAX_ROWS + " rows" : count(out.size()), true);
     }
 
     /** {@code value} as JSON, as an element of a list is written: an entity as an object, a scalar as itself. */

@@ -276,6 +276,7 @@ class DevConsoleSnapshotTest {
         Map<?, ?> dear = runJdql(token, "query",
                 "{\"query\":\"FROM Product WHERE price > :min ORDER BY name\",\"params\":{\"min\":3}}", null);
         assertTrue(((String) dear.get("result")).matches("2 rows in \\d+ ms"), "result: " + dear);
+        assertEquals("application/x-rows+json", dear.get("contentType"), "a table of rows");
         assertEquals(List.of("Cappuccino", "Latte"),
                 rows((String) dear.get("body")).stream().map(r -> ((Map<?, ?>) r).get("name")).toList());
 
@@ -353,9 +354,20 @@ class DevConsoleSnapshotTest {
         return answer;
     }
 
-    private static List<?> rows(String text) throws Exception {
+    /** The rows of a body of rows, each a map of its columns' names to its values. */
+    private static List<Map<String, Object>> rows(String text) throws Exception {
         try (Jsonb jsonb = JsonbBuilder.create()) {
-            return (List<?>) jsonb.fromJson(text, Object.class);
+            Map<?, ?> body = (Map<?, ?>) jsonb.fromJson(text, Object.class);
+            List<?> columns = (List<?>) body.get("columns");
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (Object row : (List<?>) body.get("rows")) {
+                Map<String, Object> named = new LinkedHashMap<>();
+                for (int i = 0; i < columns.size(); i++) {
+                    named.put((String) ((Map<?, ?>) columns.get(i)).get("name"), ((List<?>) row).get(i));
+                }
+                rows.add(named);
+            }
+            return rows;
         }
     }
 

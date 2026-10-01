@@ -174,9 +174,12 @@ class JdqlActionsTest {
 
         assertFalse(result.error(), result.summary());
         assertTrue(result.summary().matches("2 rows in \\d+ ms"), result.summary());
-        assertEquals(ActionResult.JSON, result.contentType());
-        assertTrue(result.body().startsWith("[{\"id\":1,\"name\":\"bolt\",\"stock\":3,\"level\":\"LOW\""),
-                result.body());
+        assertEquals(ActionResult.ROWS, result.contentType(), "a table of rows (SQL spec §4.4)");
+        assertEquals("{\"columns\":[{\"name\":\"id\",\"type\":\"integer\"},{\"name\":\"name\",\"type\":"
+                + "\"string\"},{\"name\":\"stock\",\"type\":\"integer\"},{\"name\":\"level\",\"type\":\"string\"},"
+                + "{\"name\":\"due\",\"type\":\"date\"},{\"name\":\"price\",\"type\":\"number\"}],\"rows\":"
+                + "[[1,\"bolt\",3,\"LOW\",\"2026-10-01\",2.50],[2,\"bolt\",3,\"LOW\",\"2026-10-01\",2.50]],"
+                + "\"more\":false}", result.body(), "the columns its JSON had, typed from the attributes");
         assertEquals(List.of("FROM Gizmo WHERE stock > :min"), runner.queries, "the statement, stripped");
         assertEquals(List.of(Map.of("min", new BigDecimal("2"))), runner.parameters);
         assertEquals(List.of(Gizmo.class), runner.entities);
@@ -214,12 +217,15 @@ class JdqlActionsTest {
         runner.answer = new JdqlResult.Rows(List.of("name", "stock"), List.<Object[]>of(new Object[] {"bolt", 3}));
         ActionResult rows = query(actions, "{\"query\":\"SELECT name, stock FROM Gizmo\"}");
         assertTrue(rows.summary().matches("1 row in \\d+ ms"), rows.summary());
-        assertEquals("[{\"name\":\"bolt\",\"stock\":3}]", rows.body());
+        assertEquals(ActionResult.ROWS, rows.contentType());
+        assertEquals("{\"columns\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"stock\",\"type\":"
+                + "\"integer\"}],\"rows\":[[\"bolt\",3]],\"more\":false}", rows.body());
 
         runner.answer = new JdqlResult.Count(42);
         ActionResult count = query(actions, "{\"query\":\"SELECT COUNT(this) FROM Gizmo\"}");
         assertEquals("42", count.summary());
         assertEquals("42", count.body());
+        assertEquals(ActionResult.JSON, count.contentType(), "a count has no column: JSON, as before");
 
         runner.answer = new JdqlResult.Value(new BigDecimal("4.00"));
         ActionResult max = query(actions, "{\"query\":\"SELECT MAX(price) FROM Gizmo\"}");
@@ -232,6 +238,23 @@ class JdqlActionsTest {
         runner.answer = new JdqlResult.Entities(List.of());
         String none = query(actions, "{\"query\":\"FROM Gizmo\"}").summary();
         assertTrue(none.matches("no row in \\d+ ms"), none);
+    }
+
+    @Test
+    void aProjectionOfAnEntityIsAnObjectColumnOfItsJsonAndAWriteStaysJson() {
+        RepositoryActions actions = build();
+        runner.answer = new JdqlResult.Rows(List.of("gizmo", "label", "other"),
+                List.<Object[]>of(new Object[] {bolt(7), "a", null}));
+
+        ActionResult rows = query(actions, "{\"query\":\"SELECT gizmo, label FROM Part\"}");
+
+        assertEquals("{\"columns\":[{\"name\":\"gizmo\",\"type\":\"object\"},{\"name\":\"label\",\"type\":"
+                + "\"string\"},{\"name\":\"other\",\"type\":\"\"}],\"rows\":[[\"{\\\"id\\\":7,\\\"name\\\":"
+                + "\\\"bolt\\\",\\\"stock\\\":3,\\\"level\\\":\\\"LOW\\\",\\\"due\\\":\\\"2026-10-01\\\","
+                + "\\\"price\\\":2.50}\",\"a\",null]],\"more\":false}", rows.body(), "an entity as its JSON text");
+        runner.answer = new JdqlResult.Count(4);
+        assertEquals(ActionResult.JSON, run(actions, JdqlActions.WRITE, "{\"query\":\"UPDATE Gizmo SET stock = 0\"}",
+                null).contentType(), "Update / Delete is unchanged");
     }
 
     /** #157: a query reads one row more than it shows, never a whole table. */
@@ -253,7 +276,9 @@ class JdqlActionsTest {
         ActionResult result = query(actions, "{\"query\":\"FROM Gizmo\"}");
 
         assertTrue(result.summary().matches("first 100 rows in \\d+ ms"), result.summary());
-        assertEquals(100, ((List<?>) Json.parse(result.body())).size());
+        Map<?, ?> body = (Map<?, ?>) Json.parse(result.body());
+        assertEquals(100, ((List<?>) body.get("rows")).size());
+        assertEquals(Boolean.TRUE, body.get("more"), "the 101st says there are more");
     }
 
     @Test
