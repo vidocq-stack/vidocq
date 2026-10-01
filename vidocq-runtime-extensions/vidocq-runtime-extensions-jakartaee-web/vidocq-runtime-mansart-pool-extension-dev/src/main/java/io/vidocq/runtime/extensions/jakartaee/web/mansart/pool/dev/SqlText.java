@@ -27,9 +27,10 @@ import java.util.Set;
 /**
  * What the pools panel reads of a SQL text before it runs it (SQL spec §4.2), without parsing it: its first word,
  * whether it holds more than one statement, and its named parameters. Each is read in the text's code only, outside
- * strings ({@code '…'}, a doubled quote inside), quoted identifiers (between the database's identifier quotes, doubled
- * inside) and comments ({@code --} to the end of the line, and between {@code /*} and its end), which may run over
- * several lines; an unterminated one runs to the end of the text.
+ * strings ({@code '…'}, a doubled quote inside; {@code $$…$$} and {@code $tag$…$tag$}, as H2 and PostgreSQL write
+ * them; {@code E'…'}, a backslash escaping inside, as PostgreSQL writes it), quoted identifiers (between the database's
+ * identifier quotes, doubled inside) and comments ({@code --} to the end of the line, and between {@code /*} and its
+ * end), which may run over several lines; an unterminated one runs to the end of the text.
  */
 final class SqlText {
 
@@ -116,7 +117,19 @@ final class SqlText {
         while (i < n) {
             char c = sql.charAt(i);
             char next = i + 1 < n ? sql.charAt(i + 1) : 0;
-            if (c == '\'' || c == identifierQuote) {
+            // a $ or an E inside a name, such as price$ or typE, opens nothing
+            boolean inName = i > 0 && isNamePart(sql.charAt(i - 1));
+            String dollar = c == '$' && !inName ? dollarTag(sql, i) : null;
+            if (dollar != null) {
+                int end = sql.indexOf(dollar, i + dollar.length());
+                i = end < 0 ? n : end + dollar.length();
+            } else if ((c == 'E' || c == 'e') && next == '\'' && !inName) {
+                i += 2;
+                while (i < n && (sql.charAt(i) != '\'' || (i + 1 < n && sql.charAt(i + 1) == '\''))) {
+                    i += sql.charAt(i) == '\\' || sql.charAt(i) == '\'' ? 2 : 1;
+                }
+                i++;
+            } else if (c == '\'' || c == identifierQuote) {
                 i++;
                 while (i < n && (sql.charAt(i) != c || (i + 1 < n && sql.charAt(i + 1) == c))) {
                     i += sql.charAt(i) == c ? 2 : 1;
@@ -134,5 +147,24 @@ final class SqlText {
             }
         }
         return code;
+    }
+
+    /** Whether {@code c} may be part of an unquoted name. */
+    private static boolean isNamePart(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
+    }
+
+    /**
+     * The tag that opens a dollar-quoted string at {@code i}, {@code $$} or {@code $tag$} (a letter or {@code _}, then
+     * letters, digits and {@code _}), which closes it too; {@code null} when none opens there, such as {@code $1}.
+     */
+    private static String dollarTag(String sql, int i) {
+        int j = i + 1;
+        if (j < sql.length() && (Character.isLetter(sql.charAt(j)) || sql.charAt(j) == '_')) {
+            while (j < sql.length() && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                j++;
+            }
+        }
+        return j < sql.length() && sql.charAt(j) == '$' ? sql.substring(i, j + 1) : null;
     }
 }

@@ -60,4 +60,23 @@ class SqlTextTest {
         assertEquals(List.of("a", "_e1", "a"), named.names(), "one name per question mark, in order");
         assertEquals(List.of(), SqlText.named("SELECT 1 :: int, :1", '"').names(), "no cast, no number is a name");
     }
+
+    @Test
+    void aDollarQuotedStringOrAnEscapeStringHidesWhatItHolds() {
+        assertTrue(SqlText.severalStatements("SELECT $$'$$; CREATE TABLE t (id INT); SELECT $$'$$", '"'),
+                "a quote in a dollar-quoted string opens no string");
+        assertFalse(SqlText.severalStatements("SELECT $$a; b$$, $tag$it's; $$ fine$tag$", '"'));
+        assertFalse(SqlText.severalStatements(
+                "CREATE FUNCTION one() RETURNS int AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql", '"'),
+                "a function's body is one statement");
+        assertFalse(SqlText.severalStatements("SELECT E'it\\'s; fine', e'\\\\'", '"'),
+                "an escaped quote stays in the string");
+        assertTrue(SqlText.severalStatements("SELECT price$ FROM t WHERE id = $1; DELETE FROM t", '"'),
+                "a $ in a name and a $1 open no string");
+        assertEquals("DELETE", SqlText.firstWord("$$ SELECT $$ DELETE FROM t", '"'), "a write after a string");
+
+        SqlText.Named named = SqlText.named("SELECT $$it's$$ AS x, :id, $q$ :no $q$, E'\\' :no', :id", '"');
+        assertEquals("SELECT $$it's$$ AS x, ?, $q$ :no $q$, E'\\' :no', ?", named.sql());
+        assertEquals(List.of("id", "id"), named.names(), "bound where they are, none in a string");
+    }
 }

@@ -117,6 +117,18 @@ class SqlRunnerTest {
     }
 
     @Test
+    void aDollarQuotedStringHidesNoSecondStatementFromQuery() {
+        ActionResult refused = runner.query(
+                "SELECT $$'$$ AS x; DELETE FROM tasks WHERE id = 1; COMMIT; SELECT $$'$$", Map.of());
+
+        assertTrue(refused.error(), refused.summary());
+        assertEquals("one statement at a time", refused.summary());
+        assertEquals("[[3]]", rows(runner.query("SELECT COUNT(*) FROM tasks", Map.of())), "nothing ran");
+        assertEquals("[[\"it's\",\"second\"]]", rows(runner.query("SELECT $$it's$$, title FROM tasks WHERE id = :id",
+                params("id", new BigDecimal("2")))), "a parameter after a dollar-quoted string is bound");
+    }
+
+    @Test
     void aNamedParameterIsBoundWhereItIsAndAMissingOneIsRefused() {
         assertEquals("[[\"second\"]]", rows(runner.query("SELECT title FROM tasks WHERE id = :id "
                 + "AND title <> ':id' AND \"title\" IS NOT NULL -- :nope", params("id", new BigDecimal("2")))));
