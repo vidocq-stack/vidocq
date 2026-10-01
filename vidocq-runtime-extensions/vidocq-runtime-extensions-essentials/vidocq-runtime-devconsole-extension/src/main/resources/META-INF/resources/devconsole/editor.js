@@ -35,6 +35,8 @@
 import { jsonLanguage, queryLanguage, keystroke, isShortcut, FORMAT_EXAMPLES } from "./editor-core.js";
 
 export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };
+/** A result's rows, read from its body and written as CSV: console.js draws them, editor-core.js reads them. */
+export { readRows, rowsCsv } from "./editor-core.js";
 
 /** Past this many characters, no colours and no diagnostics: the textarea alone. */
 const LIMIT = 100_000;

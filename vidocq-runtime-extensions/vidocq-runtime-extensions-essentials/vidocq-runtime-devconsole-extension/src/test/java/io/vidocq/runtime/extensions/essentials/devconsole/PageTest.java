@@ -304,7 +304,7 @@ class PageTest {
         String script = file("console.js");
 
         assertTrue(script.contains("function actionRow(panelId, action, outlet)"), "where results show is the outlet's");
-        assertTrue(script.contains("function inlineOutlet(actionId)"), "the panel's own bar keeps its look");
+        assertTrue(script.contains("function inlineOutlet(actionId, panelId)"), "the panel's own bar keeps its look");
         assertTrue(script.contains("const started = performance.now();"), "the round trip the page measures");
         for (String wording : List.of("\"No token: reload the page.\"", "\"the console did not answer\"",
                 "\"another action of this panel is running\"", "\"still running after 60 s: the outcome will show here\"",
@@ -324,7 +324,8 @@ class PageTest {
                 "the selected action's own form, kept while it is typed in");
         assertTrue(script.contains("byId.has(state.chosen.get(name))"),
                 "a selected action a dev reload removed falls back to the group's first");
-        assertTrue(script.contains("function resultBlock(result, actionId)"), "the result, apart from the form");
+        assertTrue(script.contains("function resultBlock(result, actionId, panelId)"),
+                "the result, apart from the form");
         assertTrue(script.contains("\"No call yet\""), "before the first call");
         assertTrue(script.contains("function sampleTable(value, panelId, keep)"), "a table filtered to a group");
         assertTrue(script.contains("(id) => groupOf.get(id) === name"), "the rows of this group's actions only");
@@ -408,7 +409,8 @@ class PageTest {
 
         assertEquals(List.of("./editor.js"), IMPORT.matcher(script).results().map(m -> m.group(1)).toList());
         assertTrue(script.contains(
-                "import { createEditor, jsonLanguage, queryLanguage, FORMAT_EXAMPLES } from \"./editor.js\";"));
+                "import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } "
+                        + "from \"./editor.js\";"));
         assertEquals(1, Pattern.compile("<script").matcher(file("index.html")).results().count(),
                 "the index still loads console.js only");
     }
@@ -472,8 +474,42 @@ class PageTest {
         String download = script.substring(script.indexOf("function downloadTools("),
                 script.indexOf("function answerBody("));
         assertFalse(download.contains("fetch("), "a download sends no request");
-        assertEquals(2, Pattern.compile(Pattern.quote("answerBody(answer, result.nodes.body, actionId)"))
+        assertEquals(2, Pattern.compile(Pattern.quote("answerBody(answer, result.nodes.body, actionId, panelId)"))
                 .matcher(script).results().count(), "a group tab's result block and the panel's own bar");
+    }
+
+    @Test
+    void aRowsResultIsATableWithATableJsonSwitchAndCopyAsCsv() {
+        String script = file("console.js");
+        String style = file("console.css");
+        int start = script.indexOf("function rowsBody(");
+        String rows = script.substring(start, script.indexOf("// ---", start));
+
+        assertTrue(script.contains("const isRowsType = (type) => typeof type === \"string\""
+                + " && type.startsWith(\"application/x-rows+json\");"), "PanelAction.ActionResult.ROWS");
+        assertTrue(script.contains("const rows = readRows(answer.body);"), "its shape checked by editor-core.js");
+        assertTrue(script.contains("return rows ? rowsBody(rows, answer.body, nodes, panelId) "
+                + ": textOrJson(answer.body, true, nodes);"), "a body of another shape is shown as any other JSON");
+        for (String tool : List.of("\"Table\"", "\"JSON\"", "\"Copy as CSV\"", "\"Clipboard refused\"")) {
+            assertTrue(rows.contains(tool), "the result's bar: " + tool);
+        }
+        assertTrue(rows.contains("navigator.clipboard.writeText(rowsCsv(rows))"), "the rows as CSV, by editor-core.js");
+        assertTrue(rows.contains("const viewer = mode === \"json\" ? jsonViewer(text, nodes) : null;"),
+                "JSON is the viewer of today on the same body");
+        assertTrue(rows.contains("rowsViews.set(nodes, mode);"), "a redraw of the same result keeps the view chosen");
+        assertTrue(rows.contains("td.textContent = \"NULL\";") && rows.contains("td.className = \"rows-null\";"),
+                "NULL, dimmed, never an empty string");
+        assertTrue(script.contains("const MAX_CELL = 200;") && rows.contains("td.title = whole;"),
+                "a long value cut, the whole of it in the cell's title");
+        assertTrue(rows.contains("\"more rows not shown\""), "said under the rows");
+        assertTrue(rows.contains("rows.columns[i].name === REPLAY_COLUMN ? replayButton(panelId, cell) : null"),
+                "a replay column fills another action's form, as a sample table's does");
+        assertFalse(rows.contains("fetch("), "a table, a switch and a copy send no request");
+        assertTrue(rule(style, "table.rows th {").contains("position: sticky"), "the header stays in view");
+        assertTrue(rule(style, ".rows-scroll {").contains("overflow: auto"), "the table scrolls inside the result");
+        assertTrue(rule(style, "table.rows td.rows-null {").contains("var(--faint)"), "NULL dimmed");
+        assertTrue(file("editor.js").contains("export { readRows, rowsCsv } from \"./editor-core.js\";"),
+                "editor.js passes the pure half on to console.js, its only import");
     }
 
     @Test

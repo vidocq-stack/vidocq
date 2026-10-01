@@ -51,8 +51,12 @@
 //   language its "x-language" names, fetched once per boot from api/language (a GET, no token) and shared by every
 //   editor waiting for it. A property of "x-parameters-of": "<query property>" is a JSON editor whose schema is that
 //   query's parameters, computed again as the query is typed; both send their text as typed.
+// - An application/x-rows+json answer is a table of rows (rowsBody): a header per column, its type dimmed under its
+//   name, NULL dimmed, a long value cut; Table / JSON switches to the JSON viewer of the same body, Copy as CSV copies
+//   the rows. A cell of a column named "replay" is a button named after the action it fills. A body of another shape
+//   is shown as any other JSON.
 
-import { createEditor, jsonLanguage, queryLanguage, FORMAT_EXAMPLES } from "./editor.js";
+import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -1348,12 +1352,127 @@ function downloadTools(text, actionId) {
   return tools;
 }
 
-/** The body of an answer: CSV as text with Download, JSON through the viewer, anything else as text. */
-function answerBody(answer, nodes, actionId) {
+/** Whether a content type is a table of rows: PanelAction.ActionResult.ROWS. */
+const isRowsType = (type) => typeof type === "string" && type.startsWith("application/x-rows+json");
+
+/**
+ * The body of an answer: CSV as text with Download, rows as a table, JSON through the viewer, anything else as text.
+ * {@code panelId} is the panel whose actions a replay cell of rows fills.
+ */
+function answerBody(answer, nodes, actionId, panelId) {
   if (isCsvType(answer.contentType)) {
     return { view: el("pre", "result-body", answer.body), tools: downloadTools(answer.body, actionId) };
   }
+  if (isRowsType(answer.contentType)) {
+    const rows = readRows(answer.body);
+    // a body of another shape is shown as any other JSON (SQL spec §2.2)
+    return rows ? rowsBody(rows, answer.body, nodes, panelId) : textOrJson(answer.body, true, nodes);
+  }
   return textOrJson(answer.body, isJsonType(answer.contentType), nodes);
+}
+
+/** Past this many characters a cell is cut with "…", its whole value in its title (SQL spec §2.2). */
+const MAX_CELL = 200;
+/** The view of each answer of rows, "table" or "json", by the fold state of its body: a redraw keeps the choice. */
+const rowsViews = new WeakMap();
+
+/**
+ * A body of rows (SQL spec §2.2): the table, or the JSON viewer of the same body, with Table / JSON to switch and
+ * Copy as CSV, which copies the rows as RFC 4180 CSV; a refused clipboard is said on the button, nothing more.
+ */
+function rowsBody(rows, text, nodes, panelId) {
+  const view = el("div", "rows-view");
+  const tools = el("span", "jv-tools");
+  const switcher = el("span", "rows-switch");
+  switcher.setAttribute("role", "group");
+  switcher.setAttribute("aria-label", "Show the rows as");
+  const asTable = el("button", null, "Table");
+  const asJson = el("button", null, "JSON");
+  const copy = el("button", null, "Copy as CSV");
+  for (const b of [asTable, asJson, copy]) b.type = "button";
+  const viewerSlot = el("span", "jv-tools");      // the JSON viewer's own tools, while it shows
+  switcher.append(asTable, asJson);
+  tools.append(switcher, copy, viewerSlot);
+  const show = (mode) => {
+    rowsViews.set(nodes, mode);
+    asTable.setAttribute("aria-pressed", String(mode === "table"));
+    asJson.setAttribute("aria-pressed", String(mode === "json"));
+    const viewer = mode === "json" ? jsonViewer(text, nodes) : null;
+    view.replaceChildren(viewer ? viewer.root : rowsTable(rows, panelId));
+    viewerSlot.replaceChildren(...(viewer ? [viewerTools(viewer)] : []));
+  };
+  asTable.addEventListener("click", () => show("table"));
+  asJson.addEventListener("click", () => show("json"));
+  copy.addEventListener("click", async () => {
+    let said;
+    try {
+      await navigator.clipboard.writeText(rowsCsv(rows));
+      said = "Copied";
+    } catch (refused) {
+      said = "Clipboard refused";
+    }
+    copy.textContent = said;
+    setTimeout(() => { copy.textContent = "Copy as CSV"; }, 2000);
+  });
+  show(rowsViews.get(nodes) === "json" ? "json" : "table");
+  return { view, tools };
+}
+
+/**
+ * The table of {@code rows}: a header per column, its type dimmed under its name, kept in view while the rows scroll;
+ * NULL dimmed, an empty string an empty cell; a value past MAX_CELL characters cut with "…", the whole of it in the
+ * cell's title; "more rows not shown" under them when there are more. A cell of a REPLAY_COLUMN column that replays an
+ * action of the panel is a button named after that action; its header is left blank.
+ */
+function rowsTable(rows, panelId) {
+  const box = el("div", "rows-box");
+  const scroll = el("div", "rows-scroll");
+  const table = el("table", "rows");
+  const body = el("tbody");
+  const buttons = new Set();               // the columns where a cell is a replay button
+  for (const row of rows.rows) {
+    const tr = el("tr");
+    row.forEach((cell, i) => {
+      const td = el("td");
+      const button = rows.columns[i].name === REPLAY_COLUMN ? replayButton(panelId, cell) : null;
+      if (button) {
+        buttons.add(i);
+        button.textContent = actionRows.get(actionKey(panelId, replayTarget(cell))).label;
+        td.append(button);
+      } else if (cell === null) {
+        td.className = "rows-null";
+        td.textContent = "NULL";
+      } else {
+        const whole = String(cell);
+        if (whole.length > MAX_CELL) {
+          const high = /[\uD800-\uDBFF]/.test(whole[MAX_CELL - 1]);      // never half a character
+          td.textContent = whole.slice(0, high ? MAX_CELL - 1 : MAX_CELL) + "…";
+          td.title = whole;
+        } else {
+          td.textContent = whole;
+        }
+        if (typeof cell === "number") td.className = "n";
+      }
+      tr.append(td);
+    });
+    body.append(tr);
+  }
+  const head = el("tr");
+  rows.columns.forEach((column, i) => {
+    const th = el("th");
+    if (!buttons.has(i)) {
+      th.append(el("span", "rows-name", column.name));
+      if (column.type) th.append(el("span", "rows-type", column.type));
+    }
+    head.append(th);
+  });
+  const thead = el("thead");
+  thead.append(head);
+  table.append(thead, body);
+  scroll.append(table);
+  box.append(scroll);
+  if (rows.more) box.append(el("p", "rows-more", "more rows not shown"));
+  return box;
 }
 
 /**
@@ -1399,11 +1518,11 @@ function exchangeFold(details, result) {
 }
 
 /** What a result shows under its line in the panel's own bar: its body, with the viewer's tools, then its details. */
-function resultOutput(result, actionId) {
+function resultOutput(result, actionId, panelId) {
   const answer = result.answer;
   const out = [];
   if (typeof answer.body === "string") {
-    const body = answerBody(answer, result.nodes.body, actionId);
+    const body = answerBody(answer, result.nodes.body, actionId, panelId);
     if (body.tools) out.push(body.tools);
     out.push(body.view);
   }
@@ -1416,7 +1535,7 @@ function resultOutput(result, actionId) {
  * and the exchange under it. It keeps the last result for the life of the form; a new line over the same answer
  * leaves the body as it is.
  */
-function inlineOutlet(actionId) {
+function inlineOutlet(actionId, panelId) {
   const message = el("span", "msg");
   const output = el("div", "result");
   let last = null;
@@ -1428,7 +1547,7 @@ function inlineOutlet(actionId) {
       last = next;
       message.textContent = next.summary;
       message.className = "msg " + STATE_CLASS.get(next.state);
-      if (!sameAnswer) output.replaceChildren(...(next.answer ? resultOutput(next, actionId) : []));
+      if (!sameAnswer) output.replaceChildren(...(next.answer ? resultOutput(next, actionId, panelId) : []));
     },
   };
 }
@@ -1615,7 +1734,7 @@ function groupOutlet(state, actionId, changed) {
  * The result of the selected action, apart from its form (spec §2.1): a header with the state in colour, the line,
  * the round trip the page measured and the viewer's tools, then the body, then the exchange folded under "Exchange".
  */
-function resultBlock(result, actionId) {
+function resultBlock(result, actionId, panelId) {
   const block = el("section", "result-block");
   if (!result) {
     block.dataset.state = "none";
@@ -1631,7 +1750,7 @@ function resultBlock(result, actionId) {
   block.append(head);
   const answer = result.answer;
   if (answer && typeof answer.body === "string") {
-    const body = answerBody(answer, result.nodes.body, actionId);
+    const body = answerBody(answer, result.nodes.body, actionId, panelId);
     if (body.tools) head.append(body.tools);
     block.append(body.view);
   }
@@ -1689,7 +1808,8 @@ function groupTab(panelId, name, rows, state, open) {
     }
     return shown;
   }
-  const showResult = () => resultSlot.replaceChildren(resultBlock(state.results.get(selected) || null, selected));
+  const showResult = () => resultSlot.replaceChildren(resultBlock(state.results.get(selected) || null, selected,
+    panelId));
   function choose(id) {
     selected = id;
     state.chosen.set(name, id);
@@ -1967,7 +2087,7 @@ function panelView(panel, snapshot) {
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   const rows = actions.map((action) => {
     const group = groupName(action);
-    const outlet = group === null ? inlineOutlet(action.id) : groupOutlet(state, action.id, (id) => {
+    const outlet = group === null ? inlineOutlet(action.id, panel.id) : groupOutlet(state, action.id, (id) => {
       const tab = groupTabs.get(group);
       if (tab) tab.changed(id);
     });
