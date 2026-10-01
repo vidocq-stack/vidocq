@@ -1526,40 +1526,73 @@ function useOf(text, v, tokens, k) {
 
 // ------------------------------------------------------------------------------------------------ query: formatting
 
+/** The words that may come before SQL's JOIN, the first of which starts the join's line. */
+const JOIN_WORDS = new Set(["LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "NATURAL"]);
+
 /**
  * {@code text} with its keywords and functions in capitals (self as the dialect writes it), each clause on a line of
  * its own, AND and OR on an indented line of their own (the AND of a BETWEEN stays on its line), one space between
  * tokens but around a dot, inside parentheses, before a comma and after a sign; strings, numbers, parameters and
- * names copied as written. Throws, saying where, on an unterminated string.
+ * names copied as written. In SQL (SQL spec §3) only the outer level's clauses start a line, a join's line starts
+ * with its LEFT, INNER… and holds its ON, a cast's :: takes no space, quoted names and comments are copied as
+ * written, and what follows a -- comment starts a line. Throws, saying where, on an unterminated string, quoted name
+ * or comment.
  */
 function formatQuery(text, data) {
-  const { v, tokens } = read(text, data);
+  const { v, tokens, comments } = read(text, data);
   const open = tokens.find((t) => t.kind === "string" && !isClosed(text, t));
   if (open !== undefined) throw new Error("line " + lineOf(text, open.from) + ": unterminated string");
+  const name = tokens.find((t) => t.quoted && !isClosed(text, t));
+  if (name !== undefined) throw new Error("line " + lineOf(text, name.from) + ": unterminated identifier");
+  const comment = comments.find((c) => c.open);
+  if (comment !== undefined) throw new Error("line " + lineOf(text, comment.from) + ": unterminated comment");
+  const stream = comments.length ? [...tokens, ...comments].sort((a, b) => a.from - b.from) : tokens;
+  const joinAt = (k) => {
+    for (let i = k; stream[i] !== undefined && stream[i].kind === "keyword"; i++) {
+      if (stream[i].word === "JOIN") return true;
+      if (!JOIN_WORDS.has(stream[i].word)) return false;
+    }
+    return false;
+  };
   let out = "";
   let between = false;        // a BETWEEN waits for its AND
   let glue = true;            // the previous token takes no space after it: "(", "." or a sign
   let call = false;           // the previous token is a function: its "(" follows it
-  for (let k = 0; k < tokens.length; k++) {
-    const t = tokens[k];
+  let joining = false;        // a LEFT, INNER… started a line that waits for its JOIN
+  let afterLine = false;      // the previous piece is a -- comment: the next one starts a line
+  for (let k = 0; k < stream.length; k++) {
+    const t = stream[k];
+    if (t.kind === "comment") {
+      out += (out === "" ? "" : afterLine ? "\n" : " ") + text.slice(t.from, t.to);
+      afterLine = text[t.from] === "-";
+      glue = false;
+      call = false;
+      continue;
+    }
     const c = t.kind === "punct" || t.kind === "operator" ? text.slice(t.from, t.to) : null;
     const keyword = t.kind === "keyword" ? t.word : null;
-    const clause = keyword !== null ? clauseAt(v, tokens, k) : null;
+    const clause = keyword !== null && (!v.aliases || t.depth === 0) ? clauseAt(v, stream, k) : null;
     let piece = t.self ? v.self : keyword !== null || t.kind === "function" ? t.word : text.slice(t.from, t.to);
-    let separator = glue || c === "," || c === ")" || c === "." || (c === "(" && call) ? "" : " ";
+    let separator = glue || c === "," || c === ")" || c === "." || c === "::" || (c === "(" && call) ? "" : " ";
     if (clause !== null) {
       piece = clause.join(" ");
       k += clause.length - 1;
-      separator = "\n";
+      separator = joining || (v.aliases && piece === "ON") ? " " : "\n";
       between = false;
+      joining = false;
+    } else if (v.aliases && keyword !== null && JOIN_WORDS.has(keyword) && !joining && t.depth === 0 && joinAt(k)) {
+      separator = "\n";
+      joining = true;
     } else if (keyword === "OR" || (keyword === "AND" && !between)) {
       separator = "\n" + INDENT;
     } else if (keyword === "AND" || keyword === "BETWEEN") {
       between = keyword === "BETWEEN";
     }
-    const sign = (c === "-" || c === "+") && (out === "" || ["operator", "keyword"].includes(tokens[k - 1].kind)
-      || (tokens[k - 1].kind === "punct" && "(,".includes(text[tokens[k - 1].from])));
-    glue = c === "(" || c === "." || sign;
+    if (afterLine && !separator.startsWith("\n")) separator = "\n";
+    afterLine = false;
+    const sign = (c === "-" || c === "+") && (out === "" || ["operator", "keyword"].includes(stream[k - 1].kind)
+      || (stream[k - 1].kind === "punct" && "(,".includes(text[stream[k - 1].from])));
+    glue = c === "(" || c === "." || c === "::" || sign;
     call = t.kind === "function";
     out += (out === "" ? "" : separator) + piece;
   }

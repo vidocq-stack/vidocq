@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.junit.jupiter.api.AfterAll;
@@ -35,6 +36,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * The query mode's SQL options in the editor's pure half, {@code editor-core.js}, run by GraalJS as the ES module the
@@ -394,6 +396,61 @@ class SqlLanguageTest {
                 + "\"additionalProperties\":false}",
                 json.invokeMember("stringify", language.invokeMember("parameters",
                         "SELECT * FROM tasks t WHERE t.price > :min AND :d = t.due_date", sql)).asString());
+    }
+
+    // ------------------------------------------------------------------------------------------------ formatting
+
+    private static String format(String text) {
+        return language.invokeMember("format", text, sql).asString();
+    }
+
+    @Test
+    void formatPutsEachClauseOnALineOfItsOwnAJoinWithItsOn() {
+        assertEquals("""
+                SELECT t.title, p.lead
+                FROM tasks t
+                LEFT JOIN projects p ON p.id = t.project_id
+                  AND p.lead LIKE 'a%'
+                JOIN "Order" o ON o.id = t.id
+                WHERE t.price > :min
+                GROUP BY t.title, p.lead
+                HAVING COUNT(*) > 1
+                ORDER BY t.title
+                LIMIT 10
+                OFFSET 20""", format("select t.title, p.lead from tasks t left join projects p on p.id = t.project_id "
+                + "and p.lead like 'a%' join \"Order\" o on o.id = t.id where t.price > :min group by t.title, p.lead "
+                + "having count(*) > 1 order by t.title limit 10 offset 20"));
+        assertEquals("INSERT INTO tasks (title, price)\nVALUES ('a', 1.50)",
+                format("insert into tasks(title,price) values('a',1.50)"));
+    }
+
+    @Test
+    void formatCopiesQuotedNamesCastsAndCommentsAndLeavesASubQueryOnItsLine() {
+        assertEquals("""
+                SELECT "due date"::text -- the date
+                FROM "Order" o /* every one */
+                WHERE o.id IN (SELECT id FROM tasks WHERE price > 1)""",
+                format("select \"due date\" :: text -- the date\nfrom \"Order\" o /* every one */ where o.id in "
+                        + "(select id from tasks where price>1)"));
+        assertEquals("SELECT 1 -- one\n, 2", format("select 1 -- one\n, 2"), "after a -- comment, a new line");
+    }
+
+    @Test
+    void formattingAFormattedSqlQueryChangesNothing() {
+        String once = format("select t.title from tasks t inner join projects p on p.id = t.project_id where "
+                + "t.title = 'a' or t.price between 1 and 2");
+
+        assertEquals("SELECT t.title\nFROM tasks t\nINNER JOIN projects p ON p.id = t.project_id\n"
+                + "WHERE t.title = 'a'\n  OR t.price BETWEEN 1 AND 2", once);
+        assertEquals(once, format(once));
+    }
+
+    @Test
+    void anUnterminatedQuotedNameOrCommentIsNotFormattedAndSaysWhere() {
+        PolyglotException name = assertThrows(PolyglotException.class, () -> format("SELECT 1\nFROM \"tasks"));
+        assertEquals("Error: line 2: unterminated identifier", name.getMessage());
+        PolyglotException comment = assertThrows(PolyglotException.class, () -> format("SELECT 1 /* x"));
+        assertEquals("Error: line 1: unterminated comment", comment.getMessage());
     }
 
     // ------------------------------------------------------------------------------------------------ keystrokes
