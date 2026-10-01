@@ -25,10 +25,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -211,6 +218,88 @@ class SqlRunnerTest {
         assertEquals("cannot open ***: password authentication failed for user \"***\" with ***", refused.summary());
         assertFalse(refused.body().contains("hunter22") || refused.body().contains("db.example"), refused.body());
         assertFalse(refused.details().contains("hunter22"), refused.details());
+    }
+
+    @Test
+    void onPostgreSqlAStringIsBoundUntypedSoThatTheDatabaseTypesItFromWhereItIs() {
+        List<String> bindings = new ArrayList<>();
+        SqlRunner postgres = new SqlRunner(postgres(bindings, false), '"', 30, "url", "user", "secret");
+
+        ActionResult result = postgres.query("SELECT id FROM tasks WHERE due < :day AND id <> :id ORDER BY id",
+                params("day", "2026-10-02", "id", new BigDecimal("9")));
+
+        assertEquals("[[1]]", rows(result), result.summary());
+        assertEquals(List.of("setObject[1, 2026-10-02, 1111]", "setObject[2, 9]"), bindings,
+                "a string of type OTHER, unspecified, as PostgreSQL's due_date < :day needs; a number as it is");
+    }
+
+    @Test
+    void onPostgreSqlAParameterItCannotTypeIsBoundAgainAsTextInANewTransaction() {
+        List<String> bindings = new ArrayList<>();
+        SqlRunner postgres = new SqlRunner(postgres(bindings, true), '"', 30, "url", "user", "secret");
+
+        ActionResult result = postgres.query("SELECT COUNT(*) FROM tasks WHERE title = :q OR price IS NOT DISTINCT "
+                + "FROM :p", params("q", "first", "p", null));
+
+        assertEquals("[[2]]", rows(result), result.summary());
+        assertEquals(List.of("setObject[1, first, 1111]", "setObject[2, null]", "setObject[1, first]",
+                "setNull[2, 12]"), bindings, "untyped first; then a string and a null as VARCHAR");
+        assertEquals(0, pool.snapshot().active(), "the connection given back");
+    }
+
+    /**
+     * The pool, as a PostgreSQL pool: its connections say PostgreSQL and record how each parameter is bound, H2 running
+     * the statement (a value of type OTHER is passed on without it). When {@code untypable}, a statement with a value
+     * of type OTHER fails as PostgreSQL fails to type a parameter, SQLState 42P18, before it runs.
+     */
+    private DataSource postgres(List<String> bindings, boolean untypable) {
+        return proxy(DataSource.class, (self, method, arguments) -> {
+            Object result = call(method, pool, arguments);
+            return result instanceof Connection connection ? postgres(connection, bindings, untypable) : result;
+        });
+    }
+
+    private static Connection postgres(Connection connection, List<String> bindings, boolean untypable) {
+        return proxy(Connection.class, (self, method, arguments) -> switch (method.getName()) {
+            case "getMetaData" -> {
+                DatabaseMetaData metaData = connection.getMetaData();
+                yield proxy(DatabaseMetaData.class, (meta, asked, values) -> asked.getName()
+                        .equals("getDatabaseProductName") ? "PostgreSQL" : call(asked, metaData, values));
+            }
+            case "prepareStatement" -> {
+                PreparedStatement statement = (PreparedStatement) call(method, connection, arguments);
+                boolean[] other = {false};
+                yield proxy(PreparedStatement.class, (prepared, asked, values) -> {
+                    String name = asked.getName();
+                    if ((name.equals("setObject") || name.equals("setNull")) && values.length >= 2) {
+                        bindings.add(name + Arrays.toString(values));
+                    }
+                    if (name.equals("setObject") && values.length == 3 && values[2].equals(Types.OTHER)) {
+                        other[0] = true;
+                        statement.setObject((Integer) values[0], values[1]);
+                        return null;
+                    }
+                    if (name.equals("execute") && untypable && other[0]) {
+                        throw new SQLException("ERROR: could not determine data type of parameter $1", "42P18");
+                    }
+                    return call(asked, statement, values);
+                });
+            }
+            default -> call(method, connection, arguments);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T proxy(Class<T> type, InvocationHandler handler) {
+        return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, handler);
+    }
+
+    private static Object call(Method method, Object target, Object[] arguments) throws Throwable {
+        try {
+            return method.invoke(target, arguments);
+        } catch (InvocationTargetException failed) {
+            throw failed.getCause();
+        }
     }
 
     @Test

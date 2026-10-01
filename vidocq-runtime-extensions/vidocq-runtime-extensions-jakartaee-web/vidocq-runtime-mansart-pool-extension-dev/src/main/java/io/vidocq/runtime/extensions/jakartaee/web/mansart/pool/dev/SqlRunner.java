@@ -31,6 +31,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLTimeoutException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -45,9 +46,11 @@ import java.util.regex.Pattern;
  * then gives the connection back with its autoCommit and its read-only flag as they were. What only reads runs on a
  * read-only connection too. A statement is cancelled past its timeout. A named parameter {@code :name} is bound from
  * {@code params}: a string, a number, a boolean or {@code null} with {@code setObject}, a list as an array where the
- * driver makes one. A refusal comes before anything runs. An {@link SQLException} is an error result whose line is
- * the database's message, the pool's URL, password and user masked, and whose details give its SQLState and vendor
- * code.
+ * driver makes one. On PostgreSQL a string is bound untyped, so that the database types it from where it is, such as a
+ * date in {@code due_date < :day}; a statement whose parameter it cannot type runs again, in a new transaction, its
+ * strings and nulls bound as text. A refusal comes before anything runs. An {@link SQLException} is an error result
+ * whose line is the database's message, the pool's URL, password and user masked, and whose details give its SQLState
+ * and vendor code.
  */
 final class SqlRunner {
 
@@ -63,6 +66,18 @@ final class SqlRunner {
     private static final int MAX_NAME = ActionResult.Column.MAX_NAME;
     /** The SQLState of a statement cancelled, as PostgreSQL and H2 say it. */
     private static final String CANCELLED = "57014";
+    /** The SQLState of a parameter whose type PostgreSQL cannot determine, such as {@code :p} in {@code :p IS NULL}. */
+    private static final String UNTYPABLE = "42P18";
+
+    /** How a statement's strings and nulls are bound. */
+    private enum Binding {
+        /** With {@code setObject}. */
+        PLAIN,
+        /** A string as {@link Types#OTHER}: PostgreSQL's unspecified type, which it infers from where it is. */
+        UNTYPED,
+        /** A string with {@code setObject}, a null as {@link Types#VARCHAR}: text, when PostgreSQL could not infer. */
+        TEXT
+    }
 
     private final DataSource pool;
     private final char identifierQuote;
@@ -164,7 +179,18 @@ final class SqlRunner {
                     readOnly(connection, true);
                 }
                 connection.setAutoCommit(false);
-                Answer answer = statement(connection, named, params, limit);
+                boolean postgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+                Answer answer;
+                try {
+                    answer = statement(connection, named, params, limit, postgres ? Binding.UNTYPED : Binding.PLAIN);
+                } catch (SQLException untypable) {
+                    if (!postgres || !UNTYPABLE.equals(untypable.getSQLState())) {
+                        throw untypable;
+                    }
+                    // nothing ran: the transaction PostgreSQL aborted is rolled back, the parameters bound as text
+                    connection.rollback();
+                    answer = statement(connection, named, params, limit, Binding.TEXT);
+                }
                 if (commit) {
                     connection.commit();
                 } else {
@@ -185,12 +211,12 @@ final class SqlRunner {
         }
     }
 
-    private Answer statement(Connection connection, SqlText.Named named, Map<String, Object> params, int limit)
-            throws SQLException {
+    private Answer statement(Connection connection, SqlText.Named named, Map<String, Object> params, int limit,
+                             Binding binding) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(named.sql())) {
             statement.setQueryTimeout(timeoutSeconds);
             statement.setMaxRows(limit + 1);
-            bind(connection, statement, named.names(), params);
+            bind(connection, statement, named.names(), params, binding);
             if (!statement.execute()) {
                 return new Answer(null, List.of(), false, statement.getUpdateCount());
             }
@@ -238,9 +264,9 @@ final class SqlRunner {
         return more ? "first " + n + " rows" : n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
     }
 
-    /** Binds each {@code ?} of the statement to the parameter of that name. */
+    /** Binds each {@code ?} of the statement to the parameter of that name, strings and nulls as {@code binding}. */
     private static void bind(Connection connection, PreparedStatement statement, List<String> names,
-                             Map<String, Object> params) throws SQLException {
+                             Map<String, Object> params, Binding binding) throws SQLException {
         for (int i = 0; i < names.size(); i++) {
             Object value = params.get(names.get(i));
             if (value instanceof List<?> list) {
@@ -250,6 +276,10 @@ final class SqlRunner {
                 } catch (SQLFeatureNotSupportedException noArray) {
                     statement.setObject(i + 1, elements);
                 }
+            } else if (value instanceof String text && binding == Binding.UNTYPED) {
+                statement.setObject(i + 1, text, Types.OTHER);
+            } else if (value == null && binding == Binding.TEXT) {
+                statement.setNull(i + 1, Types.VARCHAR);
             } else {
                 statement.setObject(i + 1, scalar(value));
             }
