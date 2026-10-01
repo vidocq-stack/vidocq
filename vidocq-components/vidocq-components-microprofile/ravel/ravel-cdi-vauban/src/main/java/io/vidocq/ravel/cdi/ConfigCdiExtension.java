@@ -223,8 +223,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         // archives bundle no producer. Skipped when a Config-typed bean is
         // already registered (RavelConfigProducer via the jar's bean index on
         // the assembled runtime) — two @Default Config beans would make every
-        // {@code @Inject Config} ambiguous.
-        if (!configBeanAlreadyRegistered) {
+        // {@code @Inject Config} ambiguous. Never at build time: the compilation
+        // does not see RavelConfigProducer, which ships next to this extension, and
+        // the container start runs this extension again knowing the deployment (ravel#21).
+        if (!configBeanAlreadyRegistered && !runsAtBuildTime()) {
             components.addBean(org.eclipse.microprofile.config.Config.class)
                     .type(org.eclipse.microprofile.config.Config.class)
                     .scope(Dependent.class)
@@ -388,6 +390,9 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
      */
     private static void validateConfigPropertiesFields(
             Class<?> beanClass, String resolvedPrefix, DeclarationInfo declaration, Messages messages) {
+        if (runsAtBuildTime()) {
+            return;
+        }
         Object probe = tryInstantiate(beanClass);
         Config config = ConfigProvider.getConfig();
         for (java.lang.reflect.Field field : beanClass.getDeclaredFields()) {
@@ -566,7 +571,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             Type ipType,
             Messages messages
     ) {
-        if (isDeferredOrOptionalWrapper(ipType)) {
+        if (runsAtBuildTime() || isDeferredOrOptionalWrapper(ipType)) {
             return;
         }
         if (ipType instanceof ParameterizedType || ipType instanceof jakarta.enterprise.lang.model.types.ArrayType) {
@@ -623,6 +628,23 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             }
         } catch (RuntimeException e) {
             messages.error("Invalid @ConfigProperty for key '" + key + "': " + e.getMessage(), declaration);
+        }
+    }
+
+    /**
+     * Whether Vauban runs this extension while the application compiles (ravel#21). The values a
+     * deployment injects come from where it runs — {@code vidocq.properties}, the environment, the
+     * system properties of its JVM — so checking them is left to the container start, which runs
+     * this extension again; checking them here would read the build machine's.
+     *
+     * <p>{@code io.vidocq.vauban.api} is an optional module ({@code requires static}): without it,
+     * another container runs this extension, at deployment.
+     */
+    private static boolean runsAtBuildTime() {
+        try {
+            return io.vidocq.vauban.api.ExtensionPhase.isBuildTime();
+        } catch (NoClassDefFoundError absent) {
+            return false;
         }
     }
 

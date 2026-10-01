@@ -19,6 +19,7 @@
  */
 package io.vidocq.ravel.cdi;
 
+import io.vidocq.vauban.api.ExtensionPhase;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
@@ -30,6 +31,7 @@ import jakarta.enterprise.lang.model.declarations.FieldInfo;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.Type;
+import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -112,6 +114,100 @@ class ConfigCdiExtensionTest {
         new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
 
         assertFalse(messages.errors.isEmpty());
+    }
+
+    @Test
+    void register_leaves_a_missing_required_property_to_the_container_start_at_build_time() {
+        // ravel#21: the value comes from the deployment (vidocq.properties, the environment), which the
+        // compiler does not see — the same point fails the container start instead.
+        String key = "cdi.test.missing.at.build." + System.nanoTime();
+        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
+
+        InjectionPointInfo ip = injectionPoint(classType("java.lang.String"), List.of(cfg), fieldDeclaration("requiredValue"));
+        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        CapturingMessages messages = new CapturingMessages();
+
+        ExtensionPhase.atBuildTime(() -> {
+            new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+            return null;
+        });
+
+        assertEquals(List.of(), messages.errors);
+    }
+
+    @Test
+    void register_validates_missing_ConfigProperties_members_at_deployment() {
+        InjectionPointInfo ip = injectionPoint(classType(MissingServer.class.getName()),
+                List.of(configPropertiesAnnotation(ConfigProperties.UNCONFIGURED_PREFIX)), fieldDeclaration("server"));
+        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        CapturingMessages messages = new CapturingMessages();
+
+        new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+
+        assertFalse(messages.errors.isEmpty());
+    }
+
+    @Test
+    void register_leaves_missing_ConfigProperties_members_to_the_container_start_at_build_time() {
+        InjectionPointInfo ip = injectionPoint(classType(MissingServer.class.getName()),
+                List.of(configPropertiesAnnotation(ConfigProperties.UNCONFIGURED_PREFIX)), fieldDeclaration("server"));
+        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        CapturingMessages messages = new CapturingMessages();
+
+        ExtensionPhase.atBuildTime(() -> {
+            new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+            return null;
+        });
+
+        assertEquals(List.of(), messages.errors);
+    }
+
+    @Test
+    void synthesis_adds_the_fallback_Config_bean_when_the_deployment_has_none() {
+        List<Object> added = new ArrayList<>();
+
+        new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(added), null);
+
+        assertEquals(List.of(org.eclipse.microprofile.config.Config.class), added);
+    }
+
+    @Test
+    void synthesis_leaves_the_fallback_Config_bean_to_the_container_start_at_build_time() {
+        // ravel#21: the compilation does not see RavelConfigProducer, which ships next to this
+        // extension — a fallback frozen at build time made every @Inject Config ambiguous at start.
+        List<Object> added = new ArrayList<>();
+
+        ExtensionPhase.atBuildTime(() -> {
+            new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(added), null);
+            return null;
+        });
+
+        assertEquals(List.of(), added);
+    }
+
+    /** Records the class of every synthetic bean added; each builder call returns the builder. */
+    private static jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents recordingComponents(
+            List<Object> added) {
+        Object builder = Proxy.newProxyInstance(
+                ConfigCdiExtensionTest.class.getClassLoader(),
+                new Class[]{jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder.class},
+                (proxy, method, args) -> proxy);
+        return (jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents) Proxy.newProxyInstance(
+                ConfigCdiExtensionTest.class.getClassLoader(),
+                new Class[]{jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "addBean" -> {
+                        added.add(args[0]);
+                        yield builder;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    /** A {@code @ConfigProperties} class whose one member no configuration source provides. */
+    @ConfigProperties(prefix = "cdi.test.missing.server")
+    static class MissingServer {
+        String host;
     }
 
     @Test
@@ -200,6 +296,21 @@ class ConfigCdiExtensionTest {
                 new Class[]{AnnotationInfo.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "name" -> ConfigProperty.class.getName();
+                    case "hasMember" -> members.containsKey((String) args[0]);
+                    case "member" -> members.get((String) args[0]);
+                    case "members" -> members;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private static AnnotationInfo configPropertiesAnnotation(String prefix) {
+        Map<String, AnnotationMember> members = Map.of("prefix", stringMember(prefix));
+
+        return (AnnotationInfo) Proxy.newProxyInstance(
+                AnnotationInfo.class.getClassLoader(),
+                new Class[]{AnnotationInfo.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "name" -> ConfigProperties.class.getName();
                     case "hasMember" -> members.containsKey((String) args[0]);
                     case "member" -> members.get((String) args[0]);
                     case "members" -> members;

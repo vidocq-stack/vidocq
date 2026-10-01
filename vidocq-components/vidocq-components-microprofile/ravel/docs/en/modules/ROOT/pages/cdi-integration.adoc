@@ -169,6 +169,18 @@ Exception in thread "main" jakarta.enterprise.inject.spi.DeploymentException:
 
 Use `defaultValue` or `Optional<T>` to make injection optional.
 
+=== When the extension runs in the compiler
+
+Vauban can also run the extension while the application compiles: put `ravel-cdi-vauban` on the
+annotation processor path (on Vidocq, the `vidocq-runtime-ravel-config-extension-codegen` bundle does it).
+The extension then registers the beans that satisfy each `@ConfigProperty` and `@ConfigProperties` point,
+so Vauban's build-time validation accepts them, and an unsupported injection type fails the build.
+
+It does not check the values there. They come from where the application runs — its configuration files,
+the environment, the system properties of its JVM — which the compiler does not see. A missing key still
+fails the container start, as above. The extension asks Vauban which of the two it is running in
+(`io.vidocq.vauban.api.ExtensionPhase`).
+
 == Grouped configuration
 
 A common pattern is grouping related config in a `@Dependent` bean:

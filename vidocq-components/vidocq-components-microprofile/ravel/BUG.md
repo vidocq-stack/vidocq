@@ -112,3 +112,29 @@
     Fix both include lists (add `**/EmptyValuesTestProgrammaticLookup.class` and
     `**/TestCustomConfigProfile.class`, or switch to `**/*.class` with TestNG's own
     `@Test` filtering) together with the code fix so the regression stays visible.
+
+## BUG-20261001-01 — `@Inject @ConfigProperty` does not compile, then does not start, under the Vauban processor (ravel#21)
+
+- **Date** : 2026-10-01
+- **Statut** : FIXED (branch `fix/config-values-checked-at-container-start`, with vauban `fix/extension-build-time-signal` and vidocq `fix/ravel-config-codegen-bundle`)
+- **Module touché** : ravel-cdi-vauban (`ConfigCdiExtension`)
+- **Symptôme** : reported by Sébastien Blanc on 0.3.0 (Vidocq/ravel#21). A plain
+  `@Inject @ConfigProperty(name = "shop.name") String` fails the compilation with
+  "Unsatisfied dependency"; the only way out was `-Avauban.validation=false`. Peeled layer by layer:
+  1. 0.3.0 only: Vauban did not see `@ConfigProperty` as a qualifier at compile time — fixed on main
+     by vauban#70 (BUG-20260914-13 there).
+  2. Ravel's extension never ran in the compiler: no artifact put it on the processor path
+     (fixed in vidocq: `vidocq-runtime-ravel-config-extension-codegen`).
+  3. Once it ran there, it checked the *values* against the build machine:
+     `Missing required config property 'shop.name'`, although the value lives in the deployment
+     (`vidocq.properties`, the environment).
+  4. It also synthesised the fallback `@Default Config` bean, because the compilation does not see
+     `RavelConfigProducer`; frozen into the application, that bean made every `@Inject Config`
+     ambiguous at start.
+- **Reproduction minimale** : an `@ApplicationScoped` bean with the field above, compiled with
+  `ravel-cdi-vauban` on the processor path (vidocq `vidocq-runtime-it-ravel-config`).
+- **Correction** : the extension asks Vauban whether it runs at build time
+  (`ExtensionPhase.isBuildTime()`); there it registers the injection points and their beans but
+  leaves the value checks (`@ConfigProperty` and `@ConfigProperties`) and the fallback `Config`
+  bean to the container start, which runs it again. Pinned by `ConfigCdiExtensionTest`
+  (`*_at_build_time`); `VaubanContainerIntegrationTest` still proves a missing key fails the start.
