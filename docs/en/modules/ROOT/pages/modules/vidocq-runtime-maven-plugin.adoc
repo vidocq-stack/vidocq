@@ -19,7 +19,7 @@
 | Goal | Role
 
 | `vidocq:generate`
-| Generates the CDI bean index (`META-INF/vauban-beans.list`) and pre-generates proxies/interceptors at compile time. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
+| Generates the CDI bean index (`META-INF/vauban-beans.list`) and the code of the dependency jars it scans — their `_VaubanComponents`, client proxies and intercepted subclasses — into an enriched copy of each jar that every launch uses. See <<generate,the `vidocq:generate` goal>> [.tag-new]#NEW#. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
 
 | `vidocq:package`
 | Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
@@ -35,6 +35,9 @@
 
 | `vidocq:checkpom`
 | Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
+
+| `vidocq:analyze-deps` [.tag-new]#NEW#
+| Explains which dependencies `vidocq:generate` scans, why, and what it does with each; prints the `<scanDependencies>` block that makes the detection explicit. See <<analyze-deps>>.
 
 | `vauban:modularize` (Vauban plugin)
 | Gives the non-modular dependency jars a `module-info` in `target/vauban-modularized/`, picked up automatically by `dev`, `jlink` and `package`. No longer a goal of this plugin — see <<modularize>>.
@@ -71,6 +74,51 @@ xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-m
 ====
 
 [#modularize]
+[#generate]
+== `vidocq:generate` goal [.tag-new]#NEW#
+
+Bound to `process-classes`. Besides the application's own bean index, it generates code for the dependency jars it scans, so that their beans run generated code instead of reflection: per package a `_VaubanComponents` that creates the beans, injects their fields and calls their methods, a client proxy per normal-scoped bean, an intercepted subclass per intercepted one — the same code the Vauban annotation processor writes for a project, made with the Class-File API.
+
+=== Which jars it scans
+
+[cols="1,3"]
+|===
+| Source | How
+
+| An extension
+| A jar of the project declares `Vidocq-Scan-Dependencies: <groupId:artifactId patterns>` in its manifest. The langchain4j-cdi MCP extension declares `dev.langchain4j.cdi.mcp:*`, so the server's beans are generated in every application that uses it.
+
+| The application
+| `<scanDependencies>`, `groupId:artifactId` patterns, `*` accepted at the end of either side.
+
+| A CDI bean archive
+| Any jar with a `META-INF/beans.xml` whose `bean-discovery-mode` is not `none`. On by default; `-Dvidocq.generate.autoScan=false` or `<autoScan>false</autoScan>` turns it off.
+|===
+
+A selected jar is left out when it already carries generated code (a Vidocq brick compiled with the Vauban processor), when `<scanExcludes>` names it, or when it is signed and `<scanDependencies>` does not name it: the build log says which, and why.
+
+=== The enriched copy
+
+Each scanned jar gets a copy in `target/vidocq-enriched/`, under its original file name: the jar with its generated classes, and a module descriptor that `provides io.vidocq.vauban.api.VaubanComponentProvider` with them and `requires` the Vauban modules they call. A jar without a descriptor is first given one, an `open module` synthesized as `vauban:modularize` does. `vidocq:dev`, `vidocq:run`, `vidocq:package` and `vidocq:jlink` put the copy on the module path in place of the original.
+
+The copy is a modified third-party jar: its signature files are dropped, and its manifest records `Vidocq-Enriched-From` (the coordinates) and `Vidocq-Enriched-Digest` (`sha256:` of the original). A packaged application ships it; declare it to your SBOM tooling, or turn the detection off. A jar for which no descriptor can be synthesized — a `ServiceLoader` lookup no explicit module may declare — keeps its original and gets its generated classes through `--patch-module`, and the build says so. An IDE launch without a Maven step uses the original jars, and the beans fall back to reflection.
+
+[cols="1,1,3"]
+|===
+| Parameter | Default | Role
+
+| `scanDependencies` | none | Jars to scan, whatever else selects them; also enriches a signed jar.
+| `scanExcludes` | none | Jars never scanned.
+| `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
+|===
+
+The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]).
+
+[#analyze-deps]
+== `vidocq:analyze-deps` goal [.tag-new]#NEW#
+
+`mvn vidocq:analyze-deps` prints, for each bean archive and each named dependency, what it is — its discovery mode, an explicit or automatic module, signed or not — what selects or excludes it, and what `vidocq:generate` does with it: an enriched copy, an open module synthesized first, or nothing and why. It ends with the `<scanDependencies>` block that makes the detected bean archives explicit, to paste in the pom. It reads the same `scanDependencies`, `scanExcludes` and `autoScan` as `vidocq:generate`: configure them at plugin level so both goals see them. It changes nothing.
+
 == `modularize` moved to the Vauban plugin
 
 The `vidocq:modularize` goal no longer exists. It is now **`vauban:modularize`**, in

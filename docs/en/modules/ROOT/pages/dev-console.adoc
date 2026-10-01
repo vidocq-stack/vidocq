@@ -336,6 +336,8 @@ Every table ends with two columns that say whether a row runs code generated at 
 * `codegen`: `APT` when the annotation processor generated everything the row needs, `Class-File` when `vauban:generate` or `vidocq:generate` did, `APT + Class-File` for both, `partial` when some of it falls back, `reflection` when all of it does, `unknown` when a provider built before Vauban declared its coverage serves it — rebuild that jar — and `n/a` for synthetic and built-in beans;
 * `by reflection`: what falls back, such as `field logger`, `@PostConstruct init()` or `client proxy`. An interceptor's `@AroundInvoke` always does today (https://codefloe.com/Vidocq/vauban/issues/109[vauban#109]), and so does a producer field.
 
+A third-party jar's beans read `reflection` until `vidocq:generate` scans the jar; a CDI bean archive is scanned by default, and `mvn vidocq:analyze-deps` tells which jars are and why (xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal]).
+
 A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
 
 [#logs-panel]

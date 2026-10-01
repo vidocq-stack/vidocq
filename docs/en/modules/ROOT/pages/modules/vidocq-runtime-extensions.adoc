@@ -760,6 +760,8 @@ Compile the application with `-parameters`, or name every argument with `@ToolAr
 
 The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`, is kept in the boot layer like every `io.vidocq.runtime.extensions` module, and it reads `dev.langchain4j.cdi.mcp.server` and the invoker. A module kept in the boot layer keeps what it reads, so the MCP server lives in the boot layer in every launch shape: `vidocq:dev`, `vidocq:run`, the generated launcher and a `@VidocqMain` trampoline started from the IDE. The application layer holds the application's modules only, and the report's `layer` section shows it.
 
+The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`) [.tag-new]#NEW#: the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
+
 Two hand-made layouts break this:
 
 * The langchain4j-cdi jars in the `-Dvidocq.app.path` directory, next to the application. The JVM stops before `main` with `FindException: Module dev.langchain4j.cdi.mcp.server not found, required by io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`. `vidocq:package` never builds this layout: dependencies go to `lib/`.
