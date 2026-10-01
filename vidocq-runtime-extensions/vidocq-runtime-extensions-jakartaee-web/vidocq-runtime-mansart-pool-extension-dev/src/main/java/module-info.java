@@ -23,6 +23,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev {
     requires io.vidocq.runtime.spi.devconsole;
     requires io.vidocq.mansart.pool.api;
     requires io.vidocq.mansart.pool.core;
+    requires java.sql;        // the SQL the panel runs on a pool, and the metadata of its tables
 
     provides io.vidocq.runtime.spi.devconsole.LivePanel
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel;
