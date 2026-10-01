@@ -1244,8 +1244,8 @@ function readSql(text, v, tokens) {
 
 // ------------------------------------------------------------------------------------------------ query: completion
 
-/** The clauses whose expressions name the target's attributes (spec §3.3). */
-const EXPRESSION_CLAUSES = new Set(["SELECT", "WHERE", "ORDER BY", "SET"]);
+/** The clauses whose expressions name the target's attributes (spec §3.3), SQL's ON, GROUP BY and HAVING too. */
+const EXPRESSION_CLAUSES = new Set(["SELECT", "WHERE", "ORDER BY", "SET", "ON", "GROUP BY", "HAVING"]);
 /** The kinds of a token that is a word being typed. */
 const WORDS = new Set(["keyword", "function", "target", "attribute", "identifier"]);
 
@@ -1278,17 +1278,27 @@ const attributeItems = (entry) => [...entry.attributes.values()].map((a) => ({ i
  * keywords. null in a string, a number or a parameter, or with nothing to offer.
  */
 function completeQuery(text, caret, data) {
-  const { v, tokens, target } = read(text, data);
+  const { v, tokens, comments, target, scope } = read(text, data);
+  if (comments.some((c) => c.from < caret && (caret < c.to || (caret === c.to && (c.open || text[c.from] === "-"))))) {
+    return null;
+  }
   const current = tokens.find((t) => t.from < caret && caret <= t.to) || null;
   const word = current !== null && WORDS.has(current.kind) ? current : null;
   if (current !== null && word === null && current.kind !== "punct" && current.kind !== "operator") return null;
+  // a quoted name being typed is replaced whole once it is closed, up to the caret while it is not
+  const quoted = word !== null && word.quoted === true;
   const from = word !== null ? word.from : caret;
-  const to = word !== null ? word.to : caret;
+  const to = word !== null && (!quoted || isClosed(text, word)) ? word.to : caret;
   let p = -1;
   while (p + 1 < tokens.length && tokens[p + 1].to <= from) p++;
   const previous = tokens[p];
   let items;
-  if (previous !== undefined && previous.kind === "punct" && text[previous.from] === "." && previous.to === from) {
+  if (v.aliases) {
+    // in quotes, a name is typed: no keyword, no function
+    items = sqlItems(text, v, tokens, scope, target, p, from, to)
+      .filter((item) => !quoted || item.kind === "target" || item.kind === "attribute");
+  } else if (previous !== undefined && previous.kind === "punct" && text[previous.from] === "."
+    && previous.to === from) {
     const owner = tokens[p - 1];
     const entry = owner === undefined || owner.to !== previous.from ? null : owner.self ? target
       : owner.attribute !== undefined && owner.attribute.target !== null
@@ -1310,9 +1320,82 @@ function completeQuery(text, caret, data) {
       items = keywords;
     }
   }
-  const prefix = text.slice(from, caret).toLowerCase();
+  const prefix = text.slice(quoted ? from + 1 : from, caret).toLowerCase();
   items = items.filter((item) => item.label.toLowerCase().startsWith(prefix));
   return items.length ? { from, to, items } : null;
+}
+
+/**
+ * {@code name} as a SQL query writes it (SQL spec §3): between the dialect's identifier quotes, a quote inside it
+ * doubled, when it is no plain name (letters, digits and _, not first a digit), when it is a keyword, or when the
+ * database would store it otherwise; as it is when none of these holds, or when the dialect quotes no name.
+ */
+function written(v, name) {
+  const q = v.identifierQuote;
+  if (q === null || (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name) && !v.keywords.has(name.toUpperCase())
+    && folded(v, name) === name)) return name;
+  return q + name.replaceAll(q, q + q) + q;
+}
+
+/** A target as a SQL query writes it: a table of another schema as schema.name, each part as written() says. */
+const writtenTarget = (v, t) => t.schema !== null && t.name.startsWith(t.schema + ".")
+  ? written(v, t.schema) + "." + written(v, t.name.slice(t.schema.length + 1)) : written(v, t.name);
+
+/** The completion items of the columns of {@code entry}, each as SQL writes it, its table after its detail if any. */
+const columnItems = (v, entry, table) => [...entry.attributes.values()].map((a) => ({ insert: written(v, a.name),
+  label: a.name, detail: table === null ? a.detail : (a.detail ? a.detail + " · " : "") + table, kind: "attribute" }));
+
+/**
+ * The completion items of a SQL query (SQL spec §3), the word being typed at {@code from}-{@code to}, after token
+ * {@code p}: after "alias." or "table." that table's columns, after "schema." where a target goes that schema's
+ * tables; where a target goes the targets; in a SELECT, ON, WHERE, GROUP BY, HAVING, ORDER BY or SET clause with a
+ * known target in scope, the aliases and the targets in scope, the columns of each with its table in their detail,
+ * self when the dialect has one, the functions and the other keywords; anywhere else the keywords. Each name is
+ * inserted as the database needs it.
+ */
+function sqlItems(text, v, tokens, scope, target, p, from, to) {
+  const previous = tokens[p];
+  const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
+  const keywords = v.keywordList.map((k) => ({ insert: k, label: k, detail: "keyword", kind: "keyword" }));
+  if (punctIs(previous, ".") && previous.to === from) {
+    const owner = tokens[p - 1];
+    if (owner === undefined || owner.to !== previous.from) return [];
+    if (owner.position === "target") {
+      const schema = keyOf(text, owner, v) + ".";
+      return [...v.targets.values()].filter((t) => t.name.startsWith(schema)).map((t) => ({
+        insert: written(v, t.name.slice(schema.length)), label: t.name.slice(schema.length), detail: t.detail,
+        kind: "target" }));
+    }
+    const s = owner.attribute === undefined ? scoped(v, scope, keyOf(text, owner, v)) : null;
+    const entry = s !== null ? s.entry : owner.attribute !== undefined && owner.attribute.target !== null
+      ? v.targets.get(owner.attribute.target) || null : null;
+    return entry === null ? [] : columnItems(v, entry, null);
+  }
+  const outer = previous !== undefined && previous.depth === 0;
+  if (outer && ((previous.kind === "keyword" && v.targetAfter.has(previous.word))
+    || (punctIs(previous, ",") && clauseBefore(v, tokens, p + 1) === "FROM"))) {
+    return [...v.targets.values()].map((t) => ({ insert: writtenTarget(v, t), label: t.name, detail: t.detail,
+      kind: "target" }));
+  }
+  const known = scope.filter((s) => s.entry !== null);
+  if (!known.length || !EXPRESSION_CLAUSES.has(clauseBefore(v, tokens, p + 1))) return keywords;
+  const call = text[to] === "(";
+  const aliases = scope.filter((s) => s.written !== null).map((s) => ({ insert: written(v, s.written),
+    label: s.written, detail: "alias of " + s.label, kind: "target" }));
+  const targets = new Map();
+  for (const s of scope) {
+    if (!targets.has(s.label)) {
+      targets.set(s.label, { insert: s.entry !== null ? writtenTarget(v, s.entry) : s.label, label: s.label,
+        detail: s.entry !== null ? s.entry.detail : "", kind: "target" });
+    }
+  }
+  const entries = [...new Set(known.map((s) => s.entry))];
+  return [...aliases, ...targets.values(), ...entries.flatMap((entry) => columnItems(v, entry, entry.name)),
+    ...(v.self === null || target === null ? [] : [{ insert: v.self, label: v.self,
+      detail: "the " + target.name + " itself", kind: "keyword" }]),
+    ...v.functionList.map((f) => call ? { insert: f, label: f, detail: "function", kind: "function" }
+      : { insert: f + "()", label: f, detail: "function", kind: "function", caret: f.length + 1 }),
+    ...keywords.filter((k) => !v.functions.has(k.label) && (v.self === null || k.label !== v.self.toUpperCase()))];
 }
 
 // ------------------------------------------------------------------------------------------------ query: diagnostics

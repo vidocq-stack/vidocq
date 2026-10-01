@@ -221,6 +221,98 @@ class SqlLanguageTest {
                 "a minus sign, then another, is no comment");
     }
 
+    // ------------------------------------------------------------------------------------------------ completion
+
+    /** The functions of the fixture as they are inserted, a | where the caret lands. */
+    private static final String FUNCTIONS = "COUNT(|) MAX(|) UPPER(|) COALESCE(|)";
+    /** Every keyword of the fixture but its functions, in its order: what follows them in a clause. */
+    private static final String OTHER_KEYWORDS = "SELECT FROM WHERE JOIN LEFT INNER OUTER ON AS AND OR NOT NULL IS "
+            + "IN LIKE BETWEEN GROUP BY HAVING ORDER ASC DESC LIMIT OFFSET INSERT INTO VALUES UPDATE SET DELETE WITH "
+            + "DISTINCT CASE WHEN THEN ELSE END TRUE FALSE INTEGER";
+
+    private static Value completion(String marked) {
+        int caret = marked.indexOf('|');
+        return language.invokeMember("complete", marked.substring(0, caret) + marked.substring(caret + 1), caret,
+                sql);
+    }
+
+    /** "from-to", then each item's insert, a | where the caret lands inside it; "null" when there is none. */
+    private static String complete(String marked) {
+        Value found = completion(marked);
+        if (found.isNull()) {
+            return "null";
+        }
+        List<String> out = new ArrayList<>(List.of(number(found, "from") + "-" + number(found, "to")));
+        Value items = found.getMember("items");
+        for (long i = 0; i < items.getArraySize(); i++) {
+            Value item = items.getArrayElement(i);
+            String insert = item.getMember("insert").asString();
+            Value caret = item.getMember("caret");
+            out.add(caret == null || caret.isNull() ? insert
+                    : insert.substring(0, caret.asInt()) + "|" + insert.substring(caret.asInt()));
+        }
+        return String.join(" ", out);
+    }
+
+    /** The first {@code count} items of that completion as label: detail, one per line. */
+    private static String details(String marked, int count) {
+        Value items = completion(marked).getMember("items");
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < Math.min(count, items.getArraySize()); i++) {
+            Value item = items.getArrayElement(i);
+            out.add(item.getMember("label").asString() + ": " + item.getMember("detail").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    @Test
+    void whereATargetGoesTheTargetsWrittenAsTheDatabaseNeedsThem() {
+        assertEquals("14-14 tasks projects \"Order\" sales.orders", complete("SELECT * FROM |"));
+        assertEquals("tasks: table · public\nprojects: table · public\nOrder: table · public\n"
+                + "sales.orders: view · sales", details("SELECT * FROM |", 4));
+        assertEquals("27-29 projects", complete("SELECT * FROM tasks t JOIN pr|"));
+        assertEquals("23-23 tasks projects \"Order\" sales.orders", complete("SELECT * FROM tasks t, |"),
+                "after a comma of the FROM list");
+        assertEquals("14-18 \"Order\"", complete("SELECT * FROM \"Or|\""), "a quoted name being typed, whole");
+        assertEquals("20-20 orders", complete("SELECT * FROM sales.|"), "after a schema, its tables");
+    }
+
+    @Test
+    void afterAnAliasOrATableAndADotThatTablesColumns() {
+        assertEquals("9-9 id title price due_date project_id", complete("SELECT t.| FROM tasks t"),
+                "the table is written after the caret");
+        assertEquals("id: int8 · column\ntitle: varchar(200) · column", details("SELECT t.| FROM tasks t", 2));
+        assertEquals("9-9 id \"due date\"", complete("SELECT o.| FROM \"Order\" o"), "a name with a space, quoted");
+        assertEquals("13-15 title", complete("SELECT tasks.ti| FROM tasks"));
+        assertEquals("null", complete("SELECT x.| FROM tasks t"), "no x in scope");
+    }
+
+    @Test
+    void inAnOnTheAliasesTheTargetsThenEveryColumnWithItsTableThenFunctionsAndKeywords() {
+        assertEquals("41-41 t p tasks projects id title price due_date project_id id title lead " + FUNCTIONS + " "
+                + OTHER_KEYWORDS, complete("SELECT * FROM tasks t JOIN projects p ON |"));
+        assertEquals("t: alias of tasks\np: alias of projects\ntasks: table · public\nprojects: table · public\n"
+                + "id: int8 · column · tasks\ntitle: varchar(200) · column · tasks",
+                details("SELECT * FROM tasks t JOIN projects p ON |", 6));
+        assertEquals("7-7 tasks id title price due_date project_id " + FUNCTIONS + " " + OTHER_KEYWORDS,
+                complete("SELECT | FROM tasks"), "no self in a dialect that has none");
+        assertEquals("30-32 \"due date\"", complete("SELECT * FROM \"Order\" o WHERE du|"));
+        assertEquals("7-9 tasks id title price due_date project_id", complete("SELECT \"|\" FROM tasks"),
+                "in quotes, the names only");
+        assertEquals("null", complete("SELECT * FROM tasks -- ti|"), "nothing in a comment");
+    }
+
+    @Test
+    void aQueryBeingTypedCompletesAtEveryCaretAndNeverThrows() {
+        for (String typed : new String[] {"", "S", "SELECT * FROM ", "SELECT t. FROM tasks t", "SELECT \"",
+                "SELECT * FROM tasks t JOIN projects p ON p.", "FROM .", "FROM tasks t, ", "SELECT /* x",
+                "WITH r AS (SELECT", "SELECT a::", "SELECT * FROM (SELECT * FROM tasks) x WHERE x."}) {
+            for (int caret = 0; caret <= typed.length(); caret++) {
+                completion(typed.substring(0, caret) + "|" + typed.substring(caret));
+            }
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------ parameters
 
     @Test
