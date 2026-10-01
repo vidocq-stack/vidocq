@@ -651,7 +651,10 @@ their table in their detail (`varchar(200) · column · tasks`), the functions a
 (`unknown table or alias x`) are errors; a column named alone that two tables in scope have is a warning, `title is in
 tasks t and projects p`. A table written with its schema is looked up as written, then without it, and not checked
 when neither is known. What a sub-query, a `WITH`'s table, an alias of the select list, a cast's type (`::text`) or a
-function the editor does not know holds is never checked: the database judges it when the statement runs.
+function the editor does not know holds is never checked: the database judges it when the statement runs. A sub-query
+or a function's rows after `FROM` or `JOIN`, `LATERAL` or not — `(SELECT …) x`, `generate_series(1, 3) AS g(n)` —
+is a table whose columns are unknown, named by its alias, and so is a `WITH r(a) AS (…)`; the field of
+`EXTRACT(EPOCH FROM due_date)` is no column.
 * **Format.** Each clause on a line of its own, a `LEFT JOIN … ON` on one line, `AND` and `OR` indented, the keywords
 in capitals, quoted names, strings and comments as written, a sub-query on the line it is on.
 

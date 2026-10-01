@@ -37,6 +37,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The query mode's SQL options in the editor's pure half, {@code editor-core.js}, run by GraalJS as the ES module the
@@ -366,6 +367,29 @@ class SqlLanguageTest {
                 "a cast's type, an unknown function");
         assertEquals("", diagnose("SELECT * FROM tasks WHERE title = OPEN"), "a name where a value goes, a literal");
         assertEquals("", diagnose("SELECT COUNT(*) FROM tasks t, projects p WHERE t.project_id = p.id"));
+    }
+
+    @Test
+    void aDerivedTableAFunctionsRowsACteWithColumnsAndExtractAreNeverAnError() {
+        assertEquals("", diagnose("SELECT x.a FROM (SELECT 1 AS a) x"), "a derived table");
+        assertEquals("", diagnose("SELECT s.n, t.title FROM tasks t JOIN (SELECT COUNT(*) AS n FROM tasks) AS s ON "
+                + "TRUE WHERE t.id = s.n"), "a derived table joined");
+        assertEquals("", diagnose("SELECT g, l.x FROM generate_series(1, 3) g, LATERAL (SELECT g AS x) l"),
+                "a function's rows and a lateral sub-query");
+        assertEquals("", diagnose("SELECT r.a, b FROM unnest(ARRAY[1]) AS r(a), tasks AS b"), "with its columns");
+        assertEquals("", diagnose("WITH r(a) AS (SELECT 1) SELECT r.a FROM r"), "a common table expression's columns");
+        assertEquals("", diagnose("SELECT EXTRACT(EPOCH FROM due_date) FROM tasks"), "a field of EXTRACT");
+        assertEquals("error 7-11 unknown table or alias nope", diagnose("SELECT nope.a FROM (SELECT 1 AS a) x"),
+                "an alias still has to be one");
+        assertEquals("error 7-12 unknown column titel of tasks", diagnose("SELECT titel FROM tasks"),
+                "a bare column of known targets still checked");
+    }
+
+    @Test
+    void aDerivedTableIsCompletedByItsAliasNeverAsATable() {
+        String items = complete("SELECT * FROM (SELECT 1 AS a) x, tasks t WHERE |");
+
+        assertTrue(items.startsWith("47-47 x t tasks id title "), "its alias, the table's alias and name: " + items);
     }
 
     @Test

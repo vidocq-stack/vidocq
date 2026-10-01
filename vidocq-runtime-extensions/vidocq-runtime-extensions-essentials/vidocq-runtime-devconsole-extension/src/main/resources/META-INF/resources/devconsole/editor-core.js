@@ -1112,8 +1112,10 @@ const scoped = (v, scope, key) => scope.find((s) => s.alias !== null && sameName
  * or AS and a name, aliases it, a keyword never; schema.name is looked up as written, then without its schema. A
  * path's head is an alias, a target's name or a column of a target in scope; a bare name is a column of any target in
  * scope; a name where a value goes is a literal, unless it is a path from an alias or a table. A common table
- * expression's name, an alias of the select list, a cast's type (::type) and an unknown function are not checked.
- * target is the first target's entry.
+ * expression's name and columns, an alias of the select list, a cast's type (::type), an unknown function and a field
+ * before FROM in a call (EXTRACT(EPOCH FROM d)) are not checked. A sub-query or a function's rows after FROM or JOIN,
+ * LATERAL or not ((SELECT …) x, generate_series(1, 3) AS g(n)), is a target whose columns are unknown, named by its
+ * alias; it is derived: completion never offers it as a table. target is the first target's entry.
  */
 function readSql(text, v, tokens) {
   const isDot = (t) => t !== undefined && t.kind === "punct" && text[t.from] === ".";
@@ -1130,20 +1132,76 @@ function readSql(text, v, tokens) {
     t.sub = open.length > 0 && open[open.length - 1];
     if (punctIs(t, "(")) open.push(t.sub || ["SELECT", "WITH", "VALUES"].some((w) => word(tokens[k + 1], w)));
   });
-  // WITH name AS (…): a common table expression, a target whose columns are unknown.
+  // The index of the token that closes the parenthesis at k, the last token when none does.
+  const closing = (k) => {
+    for (let j = k + 1; j < tokens.length; j++) if (punctIs(tokens[j], ")") && tokens[j].depth === tokens[k].depth) {
+      return j;
+    }
+    return tokens.length - 1;
+  };
+  // Names declared in parentheses, such as a CTE's or a derived table's columns: names, never checked.
+  const declared = (from, to) => {
+    for (let j = from + 1; j < to; j++) if (isName(tokens[j])) {
+      tokens[j].kind = "identifier";
+      tokens[j].position = "alias";
+    }
+  };
+  // WITH name AS (…) or WITH name (columns) AS (…): a common table expression, a target whose columns are unknown.
   const ctes = [];
   tokens.forEach((t, k) => {
-    if (isName(t) && t.depth === 0 && word(tokens[k + 1], "AS") && punctIs(tokens[k + 2], "(")) {
+    if (!isName(t) || t.depth !== 0) return;
+    const columns = punctIs(tokens[k + 1], "(") ? closing(k + 1) : -1;
+    const as = columns < 0 ? k + 1 : columns + 1;
+    if (word(tokens[as], "AS") && punctIs(tokens[as + 1], "(")) {
       t.kind = "target";
       t.position = "target";
       ctes.push(key(t));
+      if (columns >= 0) declared(k + 1, columns);
     }
   });
   const scope = [];
   tokens.forEach((t, k) => {
     if (t.kind !== "keyword" || !v.targetAfter.has(t.word) || t.depth !== 0) return;
     for (let at = k + 1; ;) {
+      const lateral = tokens[at] !== undefined
+        && text.slice(tokens[at].from, tokens[at].to).toUpperCase() === "LATERAL";
+      if (lateral && (t.word === "FROM" || t.word === "JOIN")) {
+        tokens[at].kind = "keyword";
+        at++;
+      }
       const first = tokens[at];
+      // A sub-query or a function's rows after FROM or JOIN: a derived target, its alias its name, its columns unknown.
+      const call = isName(first) && punctIs(tokens[at + 1], "(") && joined(first, tokens[at + 1]);
+      if ((t.word === "FROM" || t.word === "JOIN") && (punctIs(first, "(") || call)) {
+        if (call) {
+          first.kind = "identifier";
+          first.position = "call";
+        }
+        let next = closing(call ? at + 1 : at) + 1;
+        let alias = null;
+        if (word(tokens[next], "AS") && isName(tokens[next + 1])) {
+          alias = tokens[next + 1];
+          next += 2;
+        } else if (isName(tokens[next])) {
+          alias = tokens[next];
+          next += 1;
+        }
+        if (alias !== null) {
+          alias.kind = "target";
+          alias.position = "alias";
+          if (punctIs(tokens[next], "(")) {
+            const columns = closing(next);
+            declared(next, columns);
+            next = columns + 1;
+          }
+        }
+        scope.push({ entry: null, label: call ? text.slice(first.from, first.to) : "sub-query",
+          name: alias !== null ? key(alias) : call ? key(first) : "", alias: alias === null ? null : key(alias),
+          written: alias === null ? null : nameOf(text, alias, v), derived: true });
+        if (t.word !== "FROM" || !punctIs(tokens[next], ",")) return;
+        at = next + 1;
+        continue;
+      }
       if (!isName(first) && !(first !== undefined && first.kind === "keyword"
         && lookup(v, v.targets, key(first), false) !== null)) return;
       let end = at;
@@ -1210,7 +1268,8 @@ function readSql(text, v, tokens) {
     if (!isName(head) || head.position !== undefined || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
     const dotted = isDot(tokens[k + 1]) && joined(head, tokens[k + 1]);
     const owner = dotted ? scoped(v, scope, key(head)) : null;
-    if (head.sub || (head.quoted && !isClosed(text, head)) || (owner === null && isValue(k))) {
+    const field = head.depth > 0 && word(tokens[k + 1], "FROM");      // EPOCH in EXTRACT(EPOCH FROM d)
+    if (head.sub || field || (head.quoted && !isClosed(text, head)) || (owner === null && isValue(k))) {
       for (let at = k; tokens[at] !== undefined && (at === k || isName(tokens[at])); at += 2) {
         tokens[at].kind = "identifier";
         if (!isDot(tokens[at + 1]) || !joined(tokens[at], tokens[at + 1])) break;
@@ -1412,7 +1471,7 @@ function sqlItems(text, v, tokens, scope, target, p, from, to) {
     label: s.written, detail: "alias of " + s.label, kind: "target" }));
   const targets = new Map();
   for (const s of scope) {
-    if (!targets.has(s.label)) {
+    if (!s.derived && !targets.has(s.label)) {
       targets.set(s.label, { insert: s.entry !== null ? writtenTarget(v, s.entry) : s.label, label: s.label,
         detail: s.entry !== null ? s.entry.detail : "", kind: "target" });
     }
