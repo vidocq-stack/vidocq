@@ -154,8 +154,8 @@
             <!--
                 Writes META-INF/vauban-beans.list from the langchain4j-cdi jar: the applications need no
                 scanDependencies. The generated client proxies are parked in target/vidocq-patches and never enter
-                the jar; the server's proxies are generated at run time. At plugin level, so a bare
-                `mvn vidocq:generate` uses it too.
+                the jar; each application's vidocq:generate generates the server's code, through the manifest entry
+                below. At plugin level, so a bare `mvn vidocq:generate` uses it too.
             -->
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
@@ -173,6 +173,21 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <!--
+                Asks every application's vidocq:generate to scan the langchain4j-cdi jars this extension brings:
+                their beans get generated code instead of reflection (Vidocq/vidocq#186).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Vidocq-Scan-Dependencies>dev.langchain4j.cdi.mcp:*</Vidocq-Scan-Dependencies>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.sonatype.central</groupId>

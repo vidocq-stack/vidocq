@@ -40,7 +40,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.JarFile;
 
 /**
  * Generates the CDI bean index and pre-generates the proxies/interceptors
@@ -75,11 +74,25 @@ public class VidocqGenerateMojo extends AbstractMojo {
      * Format: {@code groupId:artifactId}. {@code artifactId} optional or
      * {@code *} to match any artifact of a groupId. Final Wildcard
      * accepted: {@code io.vidocq.*}, {@code com.acme.*:my-lib*}.
-     * <p>The JARs bearing {@code META-INF/vauban-bce-processed} are
-     * automatically excluded, whether they match or not.</p>
+     * <p>The jars that already carry generated code are always excluded. Extensions add their own jars through
+     * their manifest, and bean archives are detected; see {@link ScanSelection}.</p>
      */
     @Parameter
     private List<String> scanDependencies;
+
+    /**
+     * Dependencies never scanned, whatever selects them: an extension, {@code scanDependencies} or the bean-archive
+     * detection. Same syntax as {@code scanDependencies}.
+     */
+    @Parameter
+    private List<String> scanExcludes;
+
+    /**
+     * Scans every dependency that is a CDI bean archive — a {@code META-INF/beans.xml} whose discovery mode is not
+     * {@code none} — besides what an extension or {@code scanDependencies} names.
+     */
+    @Parameter(property = "vidocq.generate.autoScan", defaultValue = "true")
+    private boolean autoScan;
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -223,51 +236,24 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     /** Scanned dependency jar → artifactId, in dependency order. */
     private Map<Path, String> collectScannedDependencies() throws IOException {
-        if (scanDependencies == null || scanDependencies.isEmpty()) {
-            return Map.of();
-        }
-        List<Pattern> patterns = scanDependencies.stream().map(Pattern::parse).toList();
         Map<Path, String> deps = new LinkedHashMap<>();
-        for (var artifact : project.getArtifacts()) {
-            if (artifact.getFile() == null) continue;
-            String g = artifact.getGroupId();
-            String a = artifact.getArtifactId();
-            if (patterns.stream().noneMatch(p -> p.matches(g, a))) continue;
-            Path jar = artifact.getFile().toPath();
-            if (isAlreadyProcessed(jar)) {
-                getLog().debug("Skipping " + g + ":" + a + " (vauban-bce-processed)");
-                continue;
+        for (var d : ScanSelection.decide(ScanSelection.dependenciesOf(project.getArtifacts()),
+                orEmpty(scanDependencies), orEmpty(scanExcludes), autoScan)) {
+            if (d.selected()) {
+                deps.put(d.dependency().jar(), d.dependency().artifactId());
+                getLog().info("Scanning " + d.dependency().coordinates() + ": " + d.source().label());
+            } else if (d.excludedBecause() != null) {
+                if (d.facts().processed()) {
+                    getLog().debug("Skipping " + d.dependency().coordinates() + ": " + d.excludedBecause());
+                } else {
+                    getLog().warn("Not scanning " + d.dependency().coordinates() + ": " + d.excludedBecause());
+                }
             }
-            deps.put(jar, a);
         }
         return deps;
     }
 
-    private static boolean isAlreadyProcessed(Path jar) throws IOException {
-        if (Files.isDirectory(jar)) {
-            return Files.exists(jar.resolve("META-INF/vauban-bce-processed"));
-        }
-        try (JarFile jf = new JarFile(jar.toFile())) {
-            return jf.getEntry("META-INF/vauban-bce-processed") != null;
-        }
-    }
-
-    private record Pattern(String groupId, String artifactId) {
-        static Pattern parse(String s) {
-            int colon = s.indexOf(':');
-            String g = colon >= 0 ? s.substring(0, colon) : s;
-            String a = colon >= 0 ? s.substring(colon + 1) : "*";
-            return new Pattern(g, a.isEmpty() ? "*" : a);
-        }
-        boolean matches(String g, String a) {
-            return matchToken(groupId, g) && matchToken(artifactId, a);
-        }
-        private static boolean matchToken(String pattern, String value) {
-            if ("*".equals(pattern)) return true;
-            if (pattern.endsWith("*")) {
-                return value.startsWith(pattern.substring(0, pattern.length() - 1));
-            }
-            return pattern.equals(value);
-        }
+    private static List<String> orEmpty(List<String> list) {
+        return list == null ? List.of() : list;
     }
 }
