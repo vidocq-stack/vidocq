@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
  * @param observers        the observer methods, all of them
  * @param applicationObservers those of the application
  * @param observerRows     the rows of the observers table
- * @param applicationRule  how the application's classes were told apart from the runtime's
+ * @param applicationRule  how the application's classes were told apart from the libraries'
  */
 record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans, List<List<String>> beanRows,
                     int interceptors, int applicationInterceptors, List<List<String>> interceptorRows,
@@ -81,7 +81,7 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     static final List<String> OBSERVER_COLUMNS = List.of("event", "qualifiers", "observer", "mode", "from");
 
     private static final String APPLICATION = "application";
-    private static final String RUNTIME = "runtime";
+    private static final String LIBRARY = "library";
     /** The packages of the runtime when the application has no layer of its own. */
     private static final List<String> RUNTIME_PACKAGES = List.of("io.vidocq.", "jakarta.", "java.");
     private static final Comparator<List<String>> APPLICATION_FIRST = Comparator
@@ -96,7 +96,7 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     }
 
     /**
-     * How the classes of the application are told apart from those of the runtime.
+     * How the classes of the application are told apart from the libraries'.
      *
      * @param rule          what the boot facts say of it
      * @param isApplication whether a class, by its binary name, is the application's; holds strings only
@@ -271,7 +271,7 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     }
 
     private static String from(Predicate<String> ofApplication, String className) {
-        return ofApplication.test(className) ? APPLICATION : RUNTIME;
+        return ofApplication.test(className) ? APPLICATION : LIBRARY;
     }
 
     private static int ofApplication(List<List<String>> rows) {

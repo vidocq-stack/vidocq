@@ -319,16 +319,16 @@ The values are made safe in the application's JVM, before the snapshot is writte
 The console's own panel, `cdi`, just before the logs of a `dev` launch and the JVM: what Vauban, the runtime's CDI container, holds for this boot, as Quarkus's ArC card shows it. Everything is read once, when the console starts, from the container's metadata: the beans its bean manager lists for `Object` and `@Any`, its interceptors and its observer methods. No bean is created and no context is read, so a lazy bean stays lazy.
 
 * **Boot facts:** a summary such as `33 beans (29 application-scoped, 4 dependent), 0 interceptors, 0 decorators, 1 observer`, then:
-** `beans`, `interceptors` and `observers`: how many, and how many of them are the application's and the runtime's;
+** `beans`, `interceptors` and `observers`: how many, and how many of them are the application's, and how many come from a library — every class that is not the application's;
 ** `scopes`: the beans by scope, most first;
 ** `decorators`: always none — Vauban implements CDI Lite, which has no decorators;
-** `application`: how the application's classes were told apart. When Vidocq booted the application in a module layer of its own, as `vidocq:dev`, `vidocq:run`, the packaged launcher and a `@VidocqMain` trampoline do, they are the classes of that layer, and an extension's beans, such as the MCP server's, are the runtime's. Otherwise they are the classes outside the `io.vidocq`, `jakarta` and `java` packages, plus those of the main module;
+** `application`: how the application's classes were told apart. When Vidocq booted the application in a module layer of its own, as `vidocq:dev`, `vidocq:run`, the packaged launcher and a `@VidocqMain` trampoline do, they are the classes of that layer, and every other class — Vidocq's, an extension's such as the MCP server's, a third-party jar's — is a library's. Otherwise they are the classes outside the `io.vidocq`, `jakarta` and `java` packages, plus those of the main module;
 ** `beans left out`, `interceptors left out`, `observers left out`: how many rows a table could not show, only when it could not;
 ** `source`: Vauban's metadata, read once at boot.
 * **Tables**, the application's rows first, then by class name, 100 rows each at most:
-** `beans`: the class, the kind (`managed`, `producer method`, `producer field`, `synthetic`, `built-in`), the scope, the qualifiers without `@Any`, which every bean has, whether it is an alternative, and where it comes from. A disabled alternative is not listed: the container does not resolve it;
-** `interceptors`: the class, its interceptor bindings, its priority or `disabled: no @Priority`, and where it comes from;
-** `observers`: the event type, its qualifiers, the declaring class and method, `sync` or `async`, and where it comes from.
+** `beans`: the class, the kind (`managed`, `producer method`, `producer field`, `synthetic`, `built-in`), the scope, the qualifiers without `@Any`, which every bean has, whether it is an alternative, and where it comes from, `application` or `library`. A disabled alternative is not listed: the container does not resolve it;
+** `interceptors`: the class, its interceptor bindings, its priority or `disabled: no @Priority`, and where it comes from, `application` or `library`;
+** `observers`: the event type, its qualifiers, the declaring class and method, `sync` or `async`, and where it comes from, `application` or `library`.
 
 A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
 

@@ -148,7 +148,7 @@ final class CdiPanel implements DevConsolePanel {
     }
 
     private static String sides(int total, int application) {
-        return total + ": " + application + " of the application, " + (total - application) + " of the runtime";
+        return total + ": " + application + " of the application, " + (total - application) + " of the libraries";
     }
 
     private static String scopeCount(Map.Entry<String, Integer> scope) {

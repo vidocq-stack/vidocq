@@ -213,11 +213,11 @@ class CdiPanelTest {
         Map<String, List<String>> facts = facts(section);
         assertEquals(List.of("beans", "scopes", "interceptors", "decorators", "observers", "application",
                 "source"), List.copyOf(facts.keySet()));
-        assertEquals(List.of("4: 2 of the application, 2 of the runtime"), facts.get("beans"));
+        assertEquals(List.of("4: 2 of the application, 2 of the libraries"), facts.get("beans"));
         assertEquals(List.of("2 application-scoped", "1 dependent", "1 request-scoped"), facts.get("scopes"));
-        assertEquals(List.of("2: 1 of the application, 1 of the runtime"), facts.get("interceptors"));
+        assertEquals(List.of("2: 1 of the application, 1 of the libraries"), facts.get("interceptors"));
         assertEquals(List.of("none: Vauban implements CDI Lite, which has no decorators"), facts.get("decorators"));
-        assertEquals(List.of("2: 1 of the application, 1 of the runtime"), facts.get("observers"));
+        assertEquals(List.of("2: 1 of the application, 1 of the libraries"), facts.get("observers"));
         assertEquals(List.of("the com.acme packages"), facts.get("application"));
         assertEquals(List.of("Vauban's metadata, read once at boot: no bean created"), facts.get("source"));
         assertTrue(section.lines().stream().map(ReportLine::key).noneMatch(key -> key.endsWith("left out")),
@@ -233,8 +233,8 @@ class CdiPanelTest {
         assertEquals(List.of(
                 List.of("com.acme.Cart", "other", "request-scoped", "@Default", "no", "application"),
                 List.of("com.acme.Clock", "other", "application-scoped", "@Named(\"clock\")", "yes", "application"),
-                List.of("java.lang.Integer", "other", "application-scoped", "@Default", "no", "runtime"),
-                List.of("java.lang.String", "other", "dependent", "@Default", "no", "runtime")), rows(beans));
+                List.of("java.lang.Integer", "other", "application-scoped", "@Default", "no", "library"),
+                List.of("java.lang.String", "other", "dependent", "@Default", "no", "library")), rows(beans));
     }
 
     @Test
@@ -244,7 +244,7 @@ class CdiPanelTest {
         assertEquals(List.of("interceptor", "bindings", "priority", "from"), interceptors.get("columns"));
         assertEquals(List.of(
                 List.of("com.acme.Timed", "@Audit, @Timing", "10", "application"),
-                List.of("io.vidocq.runtime.Logged", "@Log", "disabled: no @Priority", "runtime")),
+                List.of("io.vidocq.runtime.Logged", "@Log", "disabled: no @Priority", "library")),
                 rows(interceptors));
     }
 
@@ -255,7 +255,7 @@ class CdiPanelTest {
         assertEquals(List.of("event", "qualifiers", "observer", "mode", "from"), observers.get("columns"));
         assertEquals(List.of(
                 List.of("List<Order>", "@Paid", "com.acme.Orders#placed", "async", "application"),
-                List.of("Startup", "", "io.vidocq.runtime.Boot#started", "sync", "runtime")), rows(observers));
+                List.of("Startup", "", "io.vidocq.runtime.Boot#started", "sync", "library")), rows(observers));
     }
 
     @Test
