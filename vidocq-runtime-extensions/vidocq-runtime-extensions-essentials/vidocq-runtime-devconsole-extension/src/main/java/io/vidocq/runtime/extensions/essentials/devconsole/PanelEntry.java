@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.devconsole;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.ReportSection;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
@@ -35,16 +36,18 @@ import java.util.Set;
  * One panel of the console for one boot, as it is read once and shown on every poll: the boot facts of a section of
  * the report, and, for a {@link DevConsolePanel}, the panel to sample and its charts.
  *
- * @param id      the id of its contributor, the section's id
- * @param title   what the page calls it
- * @param section its boot facts
- * @param panel   what writes its live values, or {@code null} for a contributor that is no panel
- * @param charts  what the page plots of them; empty when there is no panel or its {@code charts()} failed
- * @param actions what the page may ask it to do: read in a dev launch only, empty in any other, when there is no
- *                panel or its {@code actions()} failed; each id once, {@value #MAX_ACTIONS} at most
+ * @param id        the id of its contributor, the section's id
+ * @param title     what the page calls it
+ * @param section   its boot facts
+ * @param panel     what writes its live values, or {@code null} for a contributor that is no panel
+ * @param charts    what the page plots of them; empty when there is no panel or its {@code charts()} failed
+ * @param actions   what the page may ask it to do: read in a dev launch only, empty in any other, when there is no
+ *                  panel or its {@code actions()} failed; each id once, {@value #MAX_ACTIONS} at most
+ * @param languages what the page's code editor may fetch of it: read in a dev launch only, with the actions; empty
+ *                  in any other, when there is no panel, its {@code languages()} failed or named one id twice
  */
 record PanelEntry(String id, String title, ReportSection section, DevConsolePanel panel, List<Chart> charts,
-                  List<PanelAction> actions) {
+                  List<PanelAction> actions, List<PanelLanguage> languages) {
 
     /** The most actions of one panel the console shows. */
     static final int MAX_ACTIONS = 128;
@@ -54,6 +57,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
     PanelEntry {
         charts = List.copyOf(charts);
         actions = List.copyOf(actions);
+        languages = List.copyOf(languages);
     }
 
     /**
@@ -72,17 +76,33 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
     }
 
     /**
+     * The language {@code id} of this panel.
+     *
+     * @param id the id of the language, as the request names it
+     * @return the language, or {@code null} when the panel offers none of that id
+     */
+    PanelLanguage language(String id) {
+        for (PanelLanguage language : languages) {
+            if (language.id().equals(id)) {
+                return language;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The panel of a contributor of the report, from the section it wrote: a {@link DevConsolePanel} is live, any
      * other contributor shows its boot facts only.
      *
      * @param contributor the contributor, as the report called it
      * @param section     the section it wrote
-     * @param dev         whether the boot is a dev launch, the only one whose panels offer actions
+     * @param dev         whether the boot is a dev launch, the only one whose panels offer actions and languages
      */
     static PanelEntry contributed(StartupReportContributor contributor, ReportSection section, boolean dev) {
         DevConsolePanel panel = contributor instanceof DevConsolePanel live ? live : null;
         return new PanelEntry(section.id(), title(contributor, section.id()), section, panel,
-                charts(panel, section.id()), dev ? actions(panel, section.id()) : List.of());
+                charts(panel, section.id()), dev ? actions(panel, section.id()) : List.of(),
+                dev ? languages(panel, section.id()) : List.of());
     }
 
     /**
@@ -103,7 +123,8 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
                     failed);
         }
         return new PanelEntry(id, title, section.toSection(), panel, charts(panel, id),
-                mode == LaunchMode.DEV ? actions(panel, id) : List.of());
+                mode == LaunchMode.DEV ? actions(panel, id) : List.of(),
+                mode == LaunchMode.DEV ? languages(panel, id) : List.of());
     }
 
     private static String title(StartupReportContributor contributor, String id) {
@@ -154,6 +175,36 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' has no actions: its actions() failed",
                     failed);
+            return List.of();
+        }
+    }
+
+    /**
+     * The languages of {@code panel}, read once per boot and in a dev launch only: none when it has none or they fail,
+     * and none, with a WARNING that says why, when two of them have one id.
+     */
+    private static List<PanelLanguage> languages(DevConsolePanel panel, String id) {
+        if (panel == null) {
+            return List.of();
+        }
+        try {
+            List<PanelLanguage> declared = panel.languages();
+            if (declared == null) {
+                return List.of();
+            }
+            List<PanelLanguage> kept = declared.stream().filter(Objects::nonNull).toList();
+            Set<String> ids = new HashSet<>();
+            for (PanelLanguage language : kept) {
+                if (!ids.add(language.id())) {
+                    LOG.log(System.Logger.Level.WARNING, "Dev console panel '" + Texts.clean(id)
+                            + "' offers the language '" + language.id() + "' twice: it is shown without languages");
+                    return List.of();
+                }
+            }
+            return kept;
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' has no languages: its languages() "
+                    + "failed", failed);
             return List.of();
         }
     }

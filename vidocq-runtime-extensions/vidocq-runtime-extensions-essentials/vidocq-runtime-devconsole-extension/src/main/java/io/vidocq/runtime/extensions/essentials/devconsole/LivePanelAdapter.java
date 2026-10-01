@@ -23,6 +23,7 @@ import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
@@ -32,8 +33,8 @@ import java.util.List;
 
 /**
  * A static section and its live panel, seen as one {@link DevConsolePanel}: the contributor gives the id, the title
- * and the section; the live panel gives the samples, the charts and the actions. What {@link PanelEntry} and
- * {@link Snapshot} already know how to show.
+ * and the section; the live panel gives the samples, the charts, the actions and the languages. What
+ * {@link PanelEntry} and {@link Snapshot} already know how to show.
  */
 final class LivePanelAdapter implements DevConsolePanel {
 
@@ -72,6 +73,11 @@ final class LivePanelAdapter implements DevConsolePanel {
     @Override
     public List<PanelAction> actions() {
         return live.actions();
+    }
+
+    @Override
+    public List<PanelLanguage> languages() {
+        return live.languages();
     }
 
     @Override

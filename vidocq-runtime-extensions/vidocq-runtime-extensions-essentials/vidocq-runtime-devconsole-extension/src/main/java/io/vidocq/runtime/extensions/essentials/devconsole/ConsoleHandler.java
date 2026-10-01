@@ -25,6 +25,7 @@ import io.vidocq.chappe.api.HttpMethod;
 import io.vidocq.chappe.api.Request;
 import io.vidocq.chappe.api.Response;
 import io.vidocq.chappe.api.StatusCode;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 
 import java.util.List;
 import java.util.Objects;
@@ -43,6 +44,10 @@ import java.util.function.IntSupplier;
  *       ({@code 405}), {@code application/json} ({@code 415}), no {@code Origin} or the console's own
  *       ({@code 403}), an {@code Accept} that takes JSON ({@code 406}), and no token, since its tools only read;
  *       outside it, that path is nothing special;</li>
+ *   <li>{@code /api/language/<panel>/<id>} is a language a panel offers the page's code editor, its JSON as the
+ *       panel wrote it, {@code Cache-Control: no-cache}: {@code GET} or {@code HEAD} ({@code 405}), a {@code dev}
+ *       launch ({@code 404} in any other), no {@code Origin} or the console's own ({@code 403}), a panel and a
+ *       language of those ids ({@code 404}). No token, since it only reads, and never logged;</li>
  *   <li>{@code /api/snapshot} is the {@link Snapshot}; every other path is the page, its static files.</li>
  * </ul>
  *
@@ -63,6 +68,8 @@ final class ConsoleHandler implements Handler {
 
     /** The path of the snapshot. */
     static final String SNAPSHOT_PATH = "/api/snapshot";
+    /** Where a panel's language is, {@code /api/language/<panel>/<id>}. */
+    static final String LANGUAGE_PREFIX = "/api/language/";
 
     private static final String CONTENT_SECURITY_POLICY = "default-src 'self'; frame-ancestors 'none'";
 
@@ -113,6 +120,8 @@ final class ConsoleHandler implements Handler {
             response = action(request, host, actions);
         } else if (mcp != null && DevMcp.PATH.equals(request.pathInfo())) {
             response = mcp(request, host, actions);
+        } else if (request.pathInfo() != null && request.pathInfo().startsWith(LANGUAGE_PREFIX)) {
+            response = language(request, host, actions != null);
         } else if (request.method() != HttpMethod.GET && request.method() != HttpMethod.HEAD) {
             response = Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "GET, HEAD").build();
         } else if (SNAPSHOT_PATH.equals(request.pathInfo())) {
@@ -173,6 +182,39 @@ final class ConsoleHandler implements Handler {
             return ConsoleActions.text(StatusCode.NOT_ACCEPTABLE, "The dev MCP answers application/json only.");
         }
         return mcp.handle(request);
+    }
+
+    /**
+     * A request for a panel's language, its {@code Host} already let in: the method, {@code GET} or {@code HEAD}
+     * ({@code 405}); a dev boot ({@code 404}); the {@code Origin}, which a same-origin {@code GET} does not send, and
+     * which must otherwise be the console's own ({@code 403}); a panel and a language of the ids the path names
+     * ({@code 404}). Then its JSON, as the panel wrote it. Nothing is logged: it only reads.
+     */
+    private Response language(Request request, String host, boolean dev) {
+        if (request.method() != HttpMethod.GET && request.method() != HttpMethod.HEAD) {
+            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "GET, HEAD").build();
+        }
+        if (!dev) {
+            return ConsoleActions.text(StatusCode.NOT_FOUND, "No such language.");
+        }
+        String origin = request.header("Origin").orElse(null);
+        if (origin != null && !sameOrigin(origin, host)) {
+            return ConsoleActions.text(StatusCode.FORBIDDEN, "This origin is not the dev console's.");
+        }
+        String rest = request.pathInfo().substring(LANGUAGE_PREFIX.length());
+        int slash = rest.indexOf('/');
+        PanelEntry panel = slash <= 0 || rest.indexOf('/', slash + 1) >= 0 ? null
+                : snapshot.panel(rest.substring(0, slash));
+        PanelLanguage language = panel == null ? null : panel.language(rest.substring(slash + 1));
+        if (language == null) {
+            return ConsoleActions.text(StatusCode.NOT_FOUND, "No such language.");
+        }
+        return Response.builder()
+                .status(StatusCode.OK)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Cache-Control", "no-cache")
+                .body(language.json())
+                .build();
     }
 
     /** Whether an {@code Accept} header takes {@code application/json}: itself, {@code application/*}, or all. */

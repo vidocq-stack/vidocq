@@ -27,6 +27,7 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.ReportAnomaly;
 import io.vidocq.runtime.spi.report.ReportLine;
@@ -91,7 +92,9 @@ import java.util.function.Supplier;
  *       "last": {"text", "time", "ok", "error"}}]}, with {@code group}, {@code description}, {@code schema} and
  *       {@code error} written only when set, {@code schema} being the JSON object of a json argument;
  *       {@code allowed} {@code null} for an argument checked by a pattern, {@code last} {@code null} before the
- *       first run of the boot (see {@link ConsoleActions}). In any other launch, neither member is written.</li>
+ *       first run of the boot (see {@link ConsoleActions}). A panel that offers languages to the page's code editor
+ *       has {@code "languages": ["jdql"]}, their ids only: the page fetches one at {@code /api/language/<panel>/<id>}.
+ *       In any other launch, none of these members is written.</li>
  *   <li>Every string of the report and of the samples is {@linkplain Texts#clean cleaned and cut}; a section keeps
  *       {@value #MAX_LINES} lines of {@value #MAX_LINE_VALUES} values, flagged {@code "truncated": true} beyond.</li>
  * </ul>
@@ -540,9 +543,22 @@ final class Snapshot implements Handler {
             history.writeTo(out, panel.id(), since);
             if (actions != null) {
                 writeActions(out, panel);
+                writeLanguages(out, panel);
             }
         }
         out.endObject();
+    }
+
+    /** The member {@code languages} of a panel of a dev boot that offers some: their ids, never their content. */
+    private static void writeLanguages(JsonWriter out, PanelEntry panel) {
+        if (panel.languages().isEmpty()) {
+            return;
+        }
+        out.name("languages").beginArray();
+        for (PanelLanguage language : panel.languages()) {
+            out.value(language.id());
+        }
+        out.endArray();
     }
 
     /**

@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.devconsole;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.devconsole.Unit;
@@ -270,6 +271,52 @@ final class TestPanels {
                                 runs.add(arguments);
                                 return "noted";
                             }));
+        }
+    }
+
+    /**
+     * A panel with a query action and the languages {@link #languages} holds, {@code jdql} by default; counts the
+     * calls of {@code languages()}, and throws from it when {@link #failure} is set.
+     */
+    static final class LanguagePanel implements DevConsolePanel {
+
+        static final String JDQL = "{\"mode\":\"query\",\"targets\":{\"Task\":{\"detail\":\"table task\","
+                + "\"attributes\":{\"title\":{\"type\":\"string\",\"detail\":\"String · column title\"}}}}}";
+
+        final AtomicInteger languagesCalls = new AtomicInteger();
+        List<PanelLanguage> languages = List.of(new PanelLanguage("jdql", JDQL));
+        RuntimeException failure;
+
+        @Override
+        public String id() {
+            return "acme-data";
+        }
+
+        @Override
+        public void contribute(StartupReportContext context, StartupReportSection section) {
+            section.summary("things to query");
+        }
+
+        @Override
+        public void sample(PanelSample sample) {
+            // no value
+        }
+
+        @Override
+        public List<PanelAction> actions() {
+            return List.of(new PanelAction("query", "Query", null, List.of(PanelAction.Argument.json("statement",
+                    "Statement", "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"format\":"
+                            + "\"textarea\",\"contentMediaType\":\"text/x-query\",\"x-language\":\"jdql\"}}}")),
+                    arguments -> "0 rows"));
+        }
+
+        @Override
+        public List<PanelLanguage> languages() {
+            languagesCalls.incrementAndGet();
+            if (failure != null) {
+                throw failure;
+            }
+            return languages;
         }
     }
 
