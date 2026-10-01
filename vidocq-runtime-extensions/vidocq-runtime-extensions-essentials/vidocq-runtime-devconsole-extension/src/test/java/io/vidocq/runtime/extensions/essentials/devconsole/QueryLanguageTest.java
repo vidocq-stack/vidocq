@@ -408,6 +408,21 @@ class QueryLanguageTest {
     }
 
     @Test
+    void aNameWhereAValueGoesIsALiteralSuchAsAnEnumConstantNeverAnUnknownAttribute() {
+        assertEquals("", diagnose("FROM Task WHERE status = com.acme.Status.OPEN"), "Mansart reads an enum FQN");
+        assertEquals("", diagnose("FROM Task WHERE status = OPEN"), "a bare name, read as a string literal");
+        assertEquals("", diagnose("FROM Task WHERE status <> OPEN AND title LIKE pattern"));
+        assertEquals("", diagnose("FROM Task WHERE status IN (com.acme.Status.OPEN, com.acme.Status.DONE)"));
+        assertEquals("", diagnose("FROM Task WHERE price NOT BETWEEN low AND high"));
+        assertEquals("keyword:FROM target:Task keyword:WHERE attribute:title operator:= identifier:title",
+                tokens("FROM Task WHERE title = title"), "a value, coloured as a name, not as an attribute");
+        assertEquals("error 16-21 unknown attribute titel of Task", diagnose("FROM Task WHERE titel = OPEN"),
+                "the left side is still checked");
+        assertEquals("error 24-29 unknown attribute titel of Task", diagnose("UPDATE Task SET title = titel"),
+                "a SET's right side may name attributes: still checked");
+    }
+
+    @Test
     void aPathThroughAnAttributeThatIsNoReferenceIsAnError() {
         assertEquals("error 22-23 title is not a reference", diagnose("FROM Task WHERE title.x = 1"));
         assertEquals("error 21-22 title is not a reference", diagnose("FROM Task WHERE title."),

@@ -936,10 +936,48 @@ function read(text, data) {
     if (first) target = entry;
     first = false;
   });
+  // A name where a value goes is a literal, such as an enum constant (pkg.Status.OPEN) or a bare word read as a
+  // string: right of a comparison outside a SET, of LIKE, a bound of BETWEEN, an element of an IN (…) list.
+  const word = (t, w) => t !== undefined && t.kind === "keyword" && t.word === w;
+  const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
+  const inSet = (k) => {
+    for (let i = k - 1; i >= 0; i--) {
+      if (word(tokens[i], "SET") || word(tokens[i], "WHERE")) return word(tokens[i], "SET");
+    }
+    return false;
+  };
+  // The left operand of a comparison is a parameter or a literal (:min < price): the right one is the attribute.
+  const valueOnTheLeft = (t) => t !== undefined
+    && (t.kind === "parameter" || t.kind === "string" || t.kind === "number");
+  const inList = (k) => {
+    let depth = 0;
+    for (let i = k - 1; i >= 0; i--) {
+      if (punctIs(tokens[i], ")")) depth++;
+      else if (punctIs(tokens[i], "(") && depth-- === 0) return word(tokens[i - 1], "IN");
+    }
+    return false;
+  };
+  const isValue = (k) => {
+    const before = tokens[k - 1];
+    if (before === undefined) return false;
+    if (before.kind === "operator") {
+      return COMPARISONS.has(text.slice(before.from, before.to)) && !valueOnTheLeft(tokens[k - 2]) && !inSet(k);
+    }
+    if (word(before, "LIKE") || word(before, "BETWEEN")) return true;
+    if (word(before, "AND") && word(tokens[k - 3], "BETWEEN")) return true;
+    return (punctIs(before, "(") || punctIs(before, ",")) && inList(k);
+  };
   // Every other name heads a path, name.name…, resolved from the target one step at a time; with no known target,
   // or after a qualified or unknown one, nothing is checked.
   tokens.forEach((head, k) => {
     if (head.kind !== "name" || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
+    if (head.position !== "target" && head.word !== self && isValue(k)) {
+      for (let at = k; tokens[at] !== undefined && (at === k || tokens[at].kind === "name"); at += 2) {
+        tokens[at].kind = "identifier";
+        if (!isDot(tokens[at + 1]) || !joined(tokens[at], tokens[at + 1])) break;
+      }
+      return;
+    }
     let entry = head.position === "target" ? null : target;
     for (let at = k; ; at += 2) {
       const t = tokens[at];

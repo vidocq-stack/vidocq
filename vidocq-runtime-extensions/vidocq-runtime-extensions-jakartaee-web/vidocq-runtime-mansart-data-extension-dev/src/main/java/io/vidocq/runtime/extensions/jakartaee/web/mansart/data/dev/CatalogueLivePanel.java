@@ -158,6 +158,10 @@ public final class CatalogueLivePanel implements LivePanel {
         try {
             return List.of(new PanelLanguage(JdqlLanguage.ID, JdqlLanguage.json(catalogue.get().entities(),
                     className -> RepositoryActions.load(className, repositories), models)));
+        } catch (IllegalStateException tooBig) {
+            // Past the size a panel language may hold even at its leanest: the page says "no vocabulary: not offered".
+            LOG.log(System.Logger.Level.WARNING, "Mansart Data: no JDQL language: " + tooBig.getMessage());
+            return List.of();
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: no JDQL language: " + failed.getClass().getName());
             return List.of();

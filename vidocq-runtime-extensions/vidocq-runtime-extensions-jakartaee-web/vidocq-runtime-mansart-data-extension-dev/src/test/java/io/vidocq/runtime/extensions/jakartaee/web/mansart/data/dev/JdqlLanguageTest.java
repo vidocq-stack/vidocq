@@ -29,8 +29,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The {@code jdql} language of the Mansart Data panel (query mode spec §2.4): the dialect of JDQL, one target per
@@ -104,6 +108,27 @@ class JdqlLanguageTest {
                 + "\"label\":{\"type\":\"string\",\"detail\":\"String · column label\"}}",
                 Json.write(((Map<?, ?>) targets(entity("Part", Part.class, "parts")).get("Part")).get("attributes")),
                 "the gizmo's name, joined, is no attribute of the language");
+    }
+
+    @Test
+    void aLanguagePastItsLimitDropsTheDetailsThenTheEnumsAndPastThatSaysItsSize() {
+        List<MansartDataCatalogue.Entity> entities = List.of(entity("Task", Task.class, "tasks"),
+                entity("Gizmo", Gizmo.class, "gizmos"));
+        Function<String, Class<?>> classes = className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES);
+        String full = JdqlLanguage.json(entities, classes, RunFixtures::model);
+
+        String lean = JdqlLanguage.json(entities, classes, RunFixtures::model, full.length() - 1);
+        assertFalse(lean.contains("\"detail\""), lean);
+        assertTrue(lean.contains("\"enum\"") && lean.contains("\"target\":\"Gizmo\""), "the rest kept: " + lean);
+
+        String leaner = JdqlLanguage.json(entities, classes, RunFixtures::model, lean.length() - 1);
+        assertFalse(leaner.contains("\"enum\"") || leaner.contains("\"detail\""), leaner);
+        assertTrue(leaner.contains("\"title\":{\"type\":\"string\"}"), "every attribute still typed: " + leaner);
+
+        IllegalStateException tooBig = assertThrows(IllegalStateException.class,
+                () -> JdqlLanguage.json(entities, classes, RunFixtures::model, 100));
+        assertTrue(tooBig.getMessage().contains("2 entities") && tooBig.getMessage().contains("past the 100"),
+                tooBig.getMessage());
     }
 
     @Test

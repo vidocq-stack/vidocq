@@ -26,6 +26,7 @@ import io.vidocq.mansart.data.dialect.attribute.JoinedAttribute;
 import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
 import io.vidocq.mansart.data.dialect.attribute.VersionAttribute;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -60,6 +61,8 @@ final class JdqlLanguage {
     /** The words after which the entity is named. */
     static final List<String> TARGET_AFTER = List.of("FROM", "UPDATE");
 
+    private static final System.Logger LOG = System.getLogger(JdqlLanguage.class.getName());
+
     private JdqlLanguage() {}
 
     /**
@@ -74,6 +77,59 @@ final class JdqlLanguage {
      */
     static String json(List<MansartDataCatalogue.Entity> entities, Function<String, Class<?>> classes,
                        Function<Class<?>, EntityModel<?>> models) {
+        return json(entities, classes, models, PanelLanguage.MAX_JSON);
+    }
+
+    /**
+     * {@link #json(List, Function, Function)} within {@code limit} characters: past it, the language is written again
+     * without the {@code detail}s, then without the {@code enum}s too, which the editor can do without (every target
+     * and attribute stays, typed), saying so; past it still, it is refused.
+     *
+     * @throws IllegalStateException when even the leanest language is past {@code limit}, naming its size
+     */
+    static String json(List<MansartDataCatalogue.Entity> entities, Function<String, Class<?>> classes,
+                       Function<Class<?>, EntityModel<?>> models, int limit) {
+        Map<String, Object> targets = targets(entities, classes, models);
+        String json = write(targets);
+        if (json.length() <= limit) {
+            return json;
+        }
+        int full = json.length();
+        for (String dropped : List.of("detail", "enum")) {
+            drop(targets, dropped);
+            json = write(targets);
+            if (json.length() <= limit) {
+                LOG.log(System.Logger.Level.INFO, "Mansart Data: the JDQL language of " + targets.size()
+                        + " entities is " + full + " characters, past the " + limit + " a panel language may hold:"
+                        + " written without " + (dropped.equals("detail") ? "details" : "details or enums"));
+                return json;
+            }
+        }
+        throw new IllegalStateException("the JDQL language of " + targets.size() + " entities is " + json.length()
+                + " characters even without details or enums, past the " + limit + " a panel language may hold");
+    }
+
+    private static String write(Map<String, Object> targets) {
+        return Json.write(Scalars.object("mode", "query",
+                "dialect", Scalars.object("keywords", KEYWORDS, "functions", FUNCTIONS, "clauses", CLAUSES,
+                        "targetAfter", TARGET_AFTER, "self", "this", "quote", "'"),
+                "targets", targets));
+    }
+
+    /** Removes {@code key} from every target and every attribute of {@code targets}. */
+    private static void drop(Map<String, Object> targets, String key) {
+        for (Object target : targets.values()) {
+            Map<?, ?> entry = (Map<?, ?>) target;
+            entry.remove(key);
+            for (Object attribute : ((Map<?, ?>) entry.get("attributes")).values()) {
+                ((Map<?, ?>) attribute).remove(key);
+            }
+        }
+    }
+
+    private static Map<String, Object> targets(List<MansartDataCatalogue.Entity> entities,
+                                               Function<String, Class<?>> classes,
+                                               Function<Class<?>, EntityModel<?>> models) {
         Map<String, Integer> uses = new HashMap<>();
         for (MansartDataCatalogue.Entity entity : entities) {
             uses.merge(simpleName(entity.className()), 1, Integer::sum);
@@ -89,10 +145,7 @@ final class JdqlLanguage {
                         "attributes", attributes(model, models)));
             }
         }
-        return Json.write(Scalars.object("mode", "query",
-                "dialect", Scalars.object("keywords", KEYWORDS, "functions", FUNCTIONS, "clauses", CLAUSES,
-                        "targetAfter", TARGET_AFTER, "self", "this", "quote", "'"),
-                "targets", targets));
+        return targets;
     }
 
     /** The model of the entity {@code className}, or {@code null} when its class or its model cannot be had. */
