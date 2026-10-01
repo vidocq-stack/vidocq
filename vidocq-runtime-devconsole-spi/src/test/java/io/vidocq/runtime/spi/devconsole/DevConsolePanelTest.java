@@ -69,4 +69,12 @@ class DevConsolePanelTest {
         assertThrows(UnsupportedOperationException.class,
                 () -> charts.add(new Chart("entries", "Entries", List.of(Series.area("entries")))));
     }
+
+    @Test
+    void aPanelOffersNoLanguageUnlessItAsks() {
+        List<PanelLanguage> languages = new CachePanel().languages();
+
+        assertEquals(List.of(), languages);
+        assertThrows(UnsupportedOperationException.class, () -> languages.add(new PanelLanguage("jdql", "{}")));
+    }
 }

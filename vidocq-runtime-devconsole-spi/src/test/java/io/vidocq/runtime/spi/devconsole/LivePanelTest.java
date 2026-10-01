@@ -43,6 +43,7 @@ class LivePanelTest {
         assertEquals("acme", panel.id());
         assertEquals(List.of(), panel.charts());
         assertEquals(List.of(), panel.actions());
+        assertEquals(List.of(), panel.languages());
         assertDoesNotThrow(() -> panel.start(null));
         assertDoesNotThrow(panel::stop);
     }

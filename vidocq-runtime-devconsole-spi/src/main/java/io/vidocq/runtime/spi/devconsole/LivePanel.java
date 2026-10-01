@@ -58,4 +58,9 @@ public interface LivePanel {
     default List<PanelAction> actions() {
         return List.of();
     }
+
+    /** The languages of the page's code editor, read with the actions in a dev launch only; none by default. */
+    default List<PanelLanguage> languages() {
+        return List.of();
+    }
 }

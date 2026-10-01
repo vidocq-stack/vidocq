@@ -153,6 +153,20 @@ public interface DevConsolePanel extends StartupReportContributor {
     }
 
     /**
+     * The languages this panel offers the page's code editor, such as the JDQL its query actions take: a json
+     * argument's property names one with {@code "x-language": "<id>"}, and the page fetches it once,
+     * {@code GET /api/language/<panel>/<id>}. Read once per boot, with {@link #actions()}, and only in a
+     * {@link io.vidocq.runtime.spi.report.LaunchMode#DEV dev} launch. Two languages of one id leave the panel without
+     * languages, and the console logs why; a {@link RuntimeException} or a {@link LinkageError} thrown here leaves it
+     * without languages too. See {@link PanelLanguage}.
+     *
+     * @return the languages, each with its own id; none by default
+     */
+    default List<PanelLanguage> languages() {
+        return List.of();
+    }
+
+    /**
      * Writes the current values of this panel. Called by the dev console on every poll of its page, a
      * {@code GET /api/snapshot} about once a second per open tab: on the request thread, possibly on several at
      * once, and only once the report of this boot is written.
