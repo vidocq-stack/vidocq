@@ -22,11 +22,14 @@
 // that it runs in GraalJS for the tests (EditorCoreTest) exactly as it runs in the browser; editor.js draws what it
 // computes.
 //
-// - A language is { id, tokenize(text), diagnose(text, data), complete(text, caret, data), format(text), pairs }.
-//   Every offset is a UTF-16 offset into the text, as a textarea counts them.
+// - A language is { id, tokenize(text, data), diagnose(text, data), complete(text, caret, data), format(text, data),
+//   pairs }. Every offset is a UTF-16 offset into the text, as a textarea counts them.
 // - jsonLanguage reads JSON, its data being the JSON Schema of the value: the first syntax error, then what the
 //   schema says at every depth, following properties, items, additionalProperties and a local $ref, never anyOf,
 //   oneOf, allOf, not or patternProperties. A schema, however odd, never makes it throw: it checks less.
+// - queryLanguage() reads a query (JDQL), its data being the language a panel publishes: a dialect and a vocabulary
+//   of targets and their attributes. It colours, completes and checks names, never the grammar, which the server
+//   judges; parameters() is the JSON Schema of the query's named parameters. Odd data reads as none.
 // - keystroke() is the edit a key makes, or null to let the browser type it.
 
 /** One level of indentation, as the formatter and the Tab key write it. */
@@ -745,4 +748,228 @@ function outdent(text, start, end) {
   const insert = lines.map((line, i) => line.slice(cuts[i])).join("\n");
   if (start === end) return { from, to, insert, caret: Math.max(0, start - from - cuts[0]) };
   return { from, to, insert, anchor: 0, caret: insert.length };
+}
+
+// ------------------------------------------------------------------------------------------------ query: tokens
+
+/** The dialect of data that says none, or of each word it leaves out: JDQL's, as Mansart reads it (spec §2.2). */
+const DIALECT = Object.freeze({
+  keywords: ["SELECT", "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT", "IS", "NULL", "BETWEEN", "LIKE", "IN",
+    "ASC", "DESC", "UPDATE", "SET", "DELETE", "COUNT", "THIS", "SUM", "AVG", "MIN", "MAX", "TRUE", "FALSE"],
+  functions: ["UPPER", "LOWER", "LENGTH", "ABS", "CONCAT", "COUNT", "SUM", "AVG", "MIN", "MAX"],
+  clauses: ["SELECT", "FROM", "WHERE", "ORDER BY", "SET", "UPDATE", "DELETE FROM"],
+  targetAfter: ["FROM", "UPDATE"],
+  self: "this",
+  quote: "'",
+});
+/** The operators of a query, the longest first, so that <= is not read as < then =. */
+const OPERATORS = ["<=", ">=", "<>", "!=", "=", "<", ">", "+", "-", "*", "/"];
+/** What starts a name and what continues it, as JDQL reads them: a letter or _, then digits too. */
+const NAME_START = /[\p{L}_]/u;
+const NAME_PART = /[\p{L}\p{N}_]/u;
+const isDigit = (c) => c !== undefined && c >= "0" && c <= "9";
+/** The vocabularies read so far, by the data they were read from: a large one is read once, not on every key. */
+const VOCABULARIES = new WeakMap();
+
+/** The words of a dialect's list, in capitals, or {@code fallback}'s when it is no list. */
+const wordsOf = (list, fallback) => (Array.isArray(list) ? list : fallback)
+  .filter((w) => typeof w === "string" && w.trim() !== "").map((w) => w.trim().toUpperCase());
+
+/**
+ * The vocabulary of a query language's data (spec §2.2), read once per data object: keywords and functions (Sets of
+ * capitals, and keywordList and functionList in the dialect's order), clauses (each a list of words, the longest
+ * first), targetAfter (a Set), self, quote, and targets, a Map of each target's name to { name, detail, attributes },
+ * attributes a Map of each name to { name, type, format, enum, detail, target }. Anything odd is left out; data that
+ * is no object reads as the default dialect and no target.
+ */
+function vocabulary(data) {
+  if (!isObject(data)) return NO_VOCABULARY;
+  let known = VOCABULARIES.get(data);
+  if (known === undefined) {
+    known = readVocabulary(data);
+    VOCABULARIES.set(data, known);
+  }
+  return known;
+}
+
+function readVocabulary(data) {
+  const d = isObject(data.dialect) ? data.dialect : {};
+  const keywords = wordsOf(d.keywords, DIALECT.keywords);
+  const functions = wordsOf(d.functions, DIALECT.functions);
+  const quote = typeof d.quote === "string" && d.quote.length === 1 && !isBlank(d.quote) && !NAME_PART.test(d.quote)
+    && !"(),.:?!".includes(d.quote) && !OPERATORS.includes(d.quote) ? d.quote : DIALECT.quote;
+  const self = typeof d.self === "string" && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(d.self) ? d.self : DIALECT.self;
+  const targets = new Map();
+  for (const [name, t] of Object.entries(isObject(data.targets) ? data.targets : {})) {
+    if (!isObject(t)) continue;
+    const attributes = new Map();
+    for (const [attribute, a] of Object.entries(isObject(t.attributes) ? t.attributes : {})) {
+      if (!isObject(a)) continue;
+      attributes.set(attribute, { name: attribute, type: typeof a.type === "string" ? a.type : null,
+        format: typeof a.format === "string" ? a.format : null, enum: Array.isArray(a.enum) ? a.enum : null,
+        detail: typeof a.detail === "string" ? a.detail : "", target: typeof a.target === "string" ? a.target : null });
+    }
+    targets.set(name, { name, detail: typeof t.detail === "string" ? t.detail : "", attributes });
+  }
+  return { keywords: new Set(keywords), keywordList: keywords, functions: new Set(functions), functionList: functions,
+    clauses: wordsOf(d.clauses, DIALECT.clauses).map((c) => c.split(/\s+/)).sort((a, b) => b.length - a.length),
+    targetAfter: new Set(wordsOf(d.targetAfter, DIALECT.targetAfter)), self, quote, targets };
+}
+
+/** The vocabulary of no data: the default dialect, and no target. */
+const NO_VOCABULARY = readVocabulary({});
+
+/**
+ * The raw tokens of a query: { from, to, kind }, kind name, string, number, parameter (:name, ?1), operator, punct
+ * (( ) , .) or invalid (one character). A string runs from {@code quote} to the next one that is not doubled, or to
+ * the end of its line when there is none; a number written into a name, 12ab, is invalid as a whole.
+ */
+function lexQuery(text, quote) {
+  const tokens = [];
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text[i];
+    if (isBlank(c)) {
+      i++;
+      continue;
+    }
+    let j = i + 1;
+    let kind;
+    if (c === quote) {
+      kind = "string";
+      while (j < n && text[j] !== "\n" && text[j] !== "\r") {
+        if (text[j] === quote && text[j + 1] === quote) {
+          j += 2;
+        } else if (text[j++] === quote) {
+          break;
+        }
+      }
+    } else if (isDigit(c)) {
+      kind = "number";
+      while (isDigit(text[j])) j++;
+      if (text[j] === "." && isDigit(text[j + 1])) for (j += 1; isDigit(text[j]); j++);
+      if (j < n && "lLfFdD".includes(text[j])) j++;
+      if (j < n && NAME_PART.test(text[j])) {
+        while (j < n && NAME_PART.test(text[j])) j++;
+        kind = "invalid";
+      }
+    } else if (NAME_START.test(c)) {
+      kind = "name";
+      while (j < n && NAME_PART.test(text[j])) j++;
+    } else if ((c === ":" && j < n && NAME_PART.test(text[j])) || (c === "?" && isDigit(text[j]))) {
+      kind = "parameter";
+      while (j < n && (c === ":" ? NAME_PART.test(text[j]) : isDigit(text[j]))) j++;
+    } else if ("(),.".includes(c)) {
+      kind = "punct";
+    } else {
+      const operator = OPERATORS.find((o) => text.startsWith(o, i));
+      kind = operator ? "operator" : "invalid";
+      if (operator) j = i + operator.length;
+      else if (c >= "\uD800" && c <= "\uDBFF" && j < n) j++;          // a character outside the BMP stays whole
+    }
+    tokens.push({ from: i, to: j, kind });
+    i = j;
+  }
+  return tokens;
+}
+
+/** The last text read and what it gave: one draw asks for the tokens, the diagnostics and the parameters of it. */
+let lastRead = { text: null, data: null, read: null };
+
+/**
+ * {@code text} read with the vocabulary of {@code data} (spec §3.1-§3.2): { v, tokens, target }. A token is { from,
+ * to, kind }, kind keyword, function, target, attribute, identifier, string, number, parameter, operator, punct or
+ * invalid; a word also has word, its capitals; a name of a path pathFrom, where the path starts, and attribute when
+ * it resolves to one, or self when it is the dialect's self; a name that is wrong, problem, what is wrong. target is
+ * the target named right after the first targetAfter word, wherever the caret is, or null when that name is unknown,
+ * qualified (a.b.C, never checked) or missing. A path goes through the targets one step at a time: a cycle of
+ * references costs one lookup per step of the text.
+ */
+function read(text, data) {
+  if (lastRead.text === text && lastRead.data === data) return lastRead.read;
+  const v = vocabulary(data);
+  const tokens = lexQuery(text, v.quote);
+  const self = v.self.toUpperCase();
+  const isDot = (t) => t !== undefined && t.kind === "punct" && text[t.from] === ".";
+  const joined = (a, b) => a !== undefined && b !== undefined && a.to === b.from;
+  // A word next to a dot is a name of a path; else a function before "(", a keyword, or a name.
+  tokens.forEach((t, k) => {
+    if (t.kind !== "name") return;
+    t.word = text.slice(t.from, t.to).toUpperCase();
+    const next = tokens[k + 1];
+    if ((isDot(tokens[k - 1]) && joined(tokens[k - 1], t)) || (isDot(next) && joined(t, next))) return;
+    if (next !== undefined && next.kind === "punct" && text[next.from] === "(" && v.functions.has(t.word)) {
+      t.kind = "function";
+    } else if (v.keywords.has(t.word)) {
+      t.kind = "keyword";
+      if (t.word === self) t.self = true;
+    }
+  });
+  // The name right after a targetAfter word is a target, known or not (a known one may be spelt as a keyword, such
+  // as Order); the first one is the query's.
+  let target = null;
+  let first = true;
+  tokens.forEach((t, k) => {
+    const name = tokens[k + 1];
+    if (t.kind !== "keyword" || !v.targetAfter.has(t.word) || name === undefined) return;
+    const written = text.slice(name.from, name.to);
+    if (name.kind !== "name" && !(name.kind === "keyword" && v.targets.has(written))) return;
+    name.kind = "name";
+    name.self = false;
+    name.position = "target";
+    const qualified = isDot(tokens[k + 2]) && joined(name, tokens[k + 2]);
+    const entry = qualified ? null : v.targets.get(written) || null;
+    if (entry !== null) name.kind = "target";
+    else if (!qualified && v.targets.size) name.problem = "unknown target " + written;
+    if (first) target = entry;
+    first = false;
+  });
+  // Every other name heads a path, name.name…, resolved from the target one step at a time; with no known target,
+  // or after a qualified or unknown one, nothing is checked.
+  tokens.forEach((head, k) => {
+    if (head.kind !== "name" || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
+    let entry = head.position === "target" ? null : target;
+    for (let at = k; ; at += 2) {
+      const t = tokens[at];
+      const name = text.slice(t.from, t.to);
+      t.pathFrom = head.from;
+      if (at === k && head.position !== "target" && t.word === self) {
+        t.kind = "keyword";
+        t.self = true;
+      } else if (entry !== null && entry.attributes.has(name)) {
+        t.kind = "attribute";
+        t.attribute = entry.attributes.get(name);
+      } else {
+        t.kind = "identifier";
+        if (entry !== null && entry.attributes.size) t.problem = "unknown attribute " + name + " of " + entry.name;
+      }
+      const dot = tokens[at + 1];
+      if (!isDot(dot) || !joined(t, dot)) break;
+      const after = tokens[at + 2];
+      const more = after !== undefined && after.kind === "name" && joined(dot, after);
+      if (t.attribute !== undefined && t.attribute.target === null) {
+        (more ? after : dot).problem = name + " is not a reference";
+      }
+      entry = t.self ? entry : t.attribute !== undefined && t.attribute.target !== null
+        ? v.targets.get(t.attribute.target) || null : null;
+      if (!more) break;
+    }
+  });
+  lastRead = { text, data, read: { v, tokens, target } };
+  return lastRead.read;
+}
+
+// ------------------------------------------------------------------------------------------------ the query language
+
+/** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
+const QUERY = Object.freeze({
+  id: "query",
+  tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
+  pairs: Object.freeze(["()", "''"]),
+});
+
+/** The query language (spec §3), with the contract of jsonLanguage plus parameters(text, data). */
+export function queryLanguage() {
+  return QUERY;
 }

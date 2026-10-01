@@ -155,6 +155,7 @@ class PageTest {
         }
         assertEquals(List.of(), IMPORT.matcher(code).results().map(m -> m.group(1)).toList(), "it imports nothing");
         assertTrue(code.contains("export const jsonLanguage = Object.freeze({"), "the JSON language");
+        assertTrue(code.contains("export function queryLanguage() {"), "the query language");
     }
 
     @Test
