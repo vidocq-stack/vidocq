@@ -26,10 +26,12 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.devconsole.Unit;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -39,7 +41,8 @@ import java.util.List;
  *
  * <p>In a dev launch, each pool also gets a tab of actions (SQL spec §4, see {@link PoolActions}): its tables, the
  * columns and first rows of one, and SQL run in a transaction. What they need of the pool's tables is read once per
- * boot, by the first {@link #actions()}, and forgotten by {@link #start} and {@link #stop}.
+ * boot, by the first {@link #actions()}, and forgotten by {@link #start} and {@link #stop}. Each pool whose tables
+ * were read offers its SQL editors the {@code sql-<pool>} language of them (see {@link SqlLanguage}).
  */
 public final class PoolsLivePanel implements LivePanel {
 
@@ -47,6 +50,8 @@ public final class PoolsLivePanel implements LivePanel {
             new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
                     Series.line("waiting"), Series.ceiling("active"))),
             new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
+
+    private static final System.Logger LOG = System.getLogger(PoolsLivePanel.class.getName());
 
     /** The pools of this boot and what was read of their tables; {@code null} until the first call needs them. */
     private volatile List<PoolActions> pools;
@@ -74,6 +79,28 @@ public final class PoolsLivePanel implements LivePanel {
     @Override
     public List<PanelAction> actions() {
         return pools().stream().flatMap(pool -> pool.actions().stream()).toList();
+    }
+
+    /**
+     * The {@code sql-<pool>} language of each pool whose tables the boot read, from what it read; none for a pool
+     * whose language is past the size a panel language may hold even at its leanest, which a WARNING says.
+     */
+    @Override
+    public List<PanelLanguage> languages() {
+        List<PanelLanguage> languages = new ArrayList<>();
+        for (PoolActions pool : pools()) {
+            if (pool.metadata() == null) {
+                continue;
+            }
+            try {
+                languages.add(new PanelLanguage(pool.languageId(), SqlLanguage.json(pool.label(), pool.metadata())));
+            } catch (IllegalStateException tooBig) {
+                // the page says "no vocabulary: not offered", and its editor colours the words it knows alone
+                LOG.log(System.Logger.Level.WARNING, "Mansart pools: no SQL language for pool '" + pool.label()
+                        + "': " + tooBig.getMessage());
+            }
+        }
+        return languages;
     }
 
     /** The pools of this boot, their tables read now on the first call. */
