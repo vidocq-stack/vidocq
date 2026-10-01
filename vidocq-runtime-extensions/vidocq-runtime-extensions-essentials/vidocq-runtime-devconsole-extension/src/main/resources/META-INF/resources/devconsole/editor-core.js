@@ -1063,6 +1063,77 @@ function diagnoseQuery(text, data) {
   return out.sort((a, b) => a.from - b.from || a.to - b.to);
 }
 
+// ------------------------------------------------------------------------------------------------ query: parameters
+
+/** The comparisons through which a parameter takes the type of the attribute it meets. */
+const COMPARISONS = new Set(["=", "<>", "!=", "<", ">", "<=", ">="]);
+
+/**
+ * The JSON Schema of the params object of a query (spec §3.5): one property per distinct :name, in order of first
+ * use, all required, no other. A property's type is the one of the attribute it meets (attr op :p, :p op attr, SET
+ * attr = :p, BETWEEN), a string for LIKE, an array of it for IN; its description says where it is used; a parameter
+ * used twice keeps its first typed use; any other use takes any value. A positional parameter (?1) has no key.
+ */
+function parametersOf(text, data) {
+  const { v, tokens } = read(text, data);
+  const properties = new Map();
+  const typed = new Set();
+  tokens.forEach((t, k) => {
+    if (t.kind !== "parameter" || text[t.from] !== ":") return;
+    const name = text.slice(t.from + 1, t.to);
+    const use = useOf(text, v, tokens, k);
+    if (!properties.has(name) || (!typed.has(name) && use.type !== undefined)) properties.set(name, use);
+    if (use.type !== undefined) typed.add(name);
+  });
+  return { type: "object", properties: Object.fromEntries(properties), required: [...properties.keys()],
+    additionalProperties: false };
+}
+
+/**
+ * The schema of the parameter at token {@code k}, from the tokens around it: { type, format, enum, description } as
+ * its attribute has them, or {} when it meets none.
+ */
+function useOf(text, v, tokens, k) {
+  const keyword = (i, word) => tokens[i] !== undefined && tokens[i].kind === "keyword" && tokens[i].word === word;
+  const comparison = (i) => tokens[i] !== undefined && tokens[i].kind === "operator"
+    && COMPARISONS.has(text.slice(tokens[i].from, tokens[i].to));
+  // the path that ends at token i, or starts there when forward; null when it resolves to no attribute
+  const path = (i, forward) => {
+    let end = i;
+    while (forward && tokens[end + 2] !== undefined && tokens[end + 2].pathFrom === tokens[i].from) end += 2;
+    const t = tokens[end];
+    return t !== undefined && t.attribute !== undefined ? { attribute: t.attribute, text: text.slice(t.pathFrom, t.to) }
+      : null;
+  };
+  const not = (i) => keyword(i, "NOT") ? i - 1 : i;
+  const typeOf = (a) => Object.fromEntries([["type", a.type], ["format", a.format], ["enum", a.enum]]
+    .filter(([, value]) => value !== null));
+  const described = (schema, description) => ({ ...schema, description });
+  const kind = (a) => a.format !== null ? " (" + a.format + ")" : a.type !== null ? " (" + a.type + ")" : "";
+  let met;
+  if (comparison(k - 1) && (met = path(k - 2, false)) !== null) {
+    const set = text.slice(tokens[k - 1].from, tokens[k - 1].to) === "=" && clauseBefore(v, tokens, k) === "SET";
+    return described(typeOf(met.attribute), set ? "new value of " + met.text
+      : "compared with " + met.text + kind(met.attribute));
+  }
+  if (comparison(k + 1) && (met = path(k + 2, true)) !== null) {
+    return described(typeOf(met.attribute), "compared with " + met.text + kind(met.attribute));
+  }
+  if (keyword(k - 1, "LIKE") && (met = path(not(k - 2), false)) !== null) {
+    return described({ type: "string" }, "pattern for " + met.text);
+  }
+  if (keyword(k - 1, "BETWEEN") && (met = path(not(k - 2), false)) !== null) {
+    return described(typeOf(met.attribute), "lower bound of " + met.text + kind(met.attribute));
+  }
+  if (keyword(k - 1, "AND") && keyword(k - 3, "BETWEEN") && (met = path(not(k - 4), false)) !== null) {
+    return described(typeOf(met.attribute), "upper bound of " + met.text + kind(met.attribute));
+  }
+  if (keyword(k - 1, "IN") && (met = path(not(k - 2), false)) !== null) {
+    return described({ type: "array", items: typeOf(met.attribute) }, "list of " + met.text + " values");
+  }
+  return {};
+}
+
 // ------------------------------------------------------------------------------------------------ the query language
 
 /** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
@@ -1071,6 +1142,7 @@ const QUERY = Object.freeze({
   tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
   diagnose: diagnoseQuery,
   complete: completeQuery,
+  parameters: parametersOf,
   pairs: Object.freeze(["()", "''"]),
 });
 

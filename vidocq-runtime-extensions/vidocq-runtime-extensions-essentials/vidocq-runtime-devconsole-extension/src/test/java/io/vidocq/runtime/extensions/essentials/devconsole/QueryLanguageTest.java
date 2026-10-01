@@ -458,4 +458,81 @@ class QueryLanguageTest {
                 "a target that lists no attribute");
         assertEquals("error 5-9 unknown target Nope", diagnose("FROM Nope", nothing));
     }
+
+    // ------------------------------------------------------------------------------------------------ parameters
+
+    /** The JSON Schema of the params of {@code text} read with {@code data}, as JSON. */
+    private static String parameters(String text, Value data) {
+        return json.invokeMember("stringify", language.invokeMember("parameters", text, data)).asString();
+    }
+
+    private static String parameters(String text) {
+        return parameters(text, jdql);
+    }
+
+    /** The whole schema of {@code properties} (a JSON object's members), their names all required, in that order. */
+    private static String schema(String properties, String... required) {
+        return "{\"type\":\"object\",\"properties\":{" + properties + "},\"required\":["
+                + String.join(",", List.of(required).stream().map(name -> "\"" + name + "\"").toList())
+                + "],\"additionalProperties\":false}";
+    }
+
+    @Test
+    void aComparedParameterTakesTheTypeOfItsAttribute() {
+        assertEquals(schema("\"s\":{\"type\":\"string\",\"enum\":[\"OPEN\",\"DONE\"],"
+                + "\"description\":\"compared with status (string)\"}", "s"),
+                parameters("FROM Task WHERE status = :s"));
+        assertEquals(schema("\"min\":{\"type\":\"number\",\"description\":\"compared with price (number)\"}", "min"),
+                parameters("FROM Task WHERE :min <= price"), "the parameter first");
+        assertEquals(schema("\"d\":{\"type\":\"string\",\"format\":\"date\","
+                + "\"description\":\"compared with dueDate (date)\"}", "d"),
+                parameters("FROM Task WHERE dueDate <> :d"));
+        assertEquals(schema("\"n\":{\"type\":\"string\",\"description\":\"compared with project.name (string)\"}",
+                "n"), parameters("FROM Task WHERE project.name = :n"), "through a reference");
+        assertEquals(schema("\"s\":{\"type\":\"string\",\"enum\":[\"OPEN\",\"DONE\"],"
+                + "\"description\":\"compared with status (string)\"}", "s"),
+                parameters("SELECT title FROM Task WHERE status != :s"), "the target after the parameter's clause");
+    }
+
+    @Test
+    void likeBetweenAndInHaveSchemasOfTheirOwn() {
+        assertEquals(schema("\"p\":{\"type\":\"string\",\"description\":\"pattern for title\"}", "p"),
+                parameters("FROM Task WHERE title NOT LIKE :p"));
+        assertEquals(schema("\"lo\":{\"type\":\"number\",\"description\":\"lower bound of price (number)\"},"
+                + "\"hi\":{\"type\":\"number\",\"description\":\"upper bound of price (number)\"}", "lo", "hi"),
+                parameters("FROM Task WHERE price BETWEEN :lo AND :hi"));
+        assertEquals(schema("\"hi\":{\"type\":\"number\",\"description\":\"upper bound of price (number)\"}", "hi"),
+                parameters("FROM Task WHERE price NOT BETWEEN 3 AND :hi"));
+        assertEquals(schema("\"ss\":{\"type\":\"array\",\"items\":{\"type\":\"string\",\"enum\":[\"OPEN\",\"DONE\"]},"
+                + "\"description\":\"list of status values\"}", "ss"),
+                parameters("FROM Task WHERE status NOT IN :ss"));
+    }
+
+    @Test
+    void aSetParameterIsTheNewValueOfItsAttributeAndAnyOtherUseTakesAnyValue() {
+        assertEquals(schema("\"t\":{\"type\":\"string\",\"description\":\"new value of title\"},\"f\":{},"
+                + "\"id\":{\"type\":\"integer\",\"description\":\"compared with id (integer)\"}", "t", "f", "id"),
+                parameters("UPDATE Task SET title = :t, price = price * :f WHERE id = :id"));
+        assertEquals(schema("\"a\":{},\"b\":{}", "a", "b"), parameters("FROM Task WHERE UPPER(title) = :a OR :b"));
+    }
+
+    @Test
+    void aParameterUsedTwiceKeepsItsFirstTypedUseAndAPositionalOneHasNoKey() {
+        assertEquals(schema("\"x\":{\"type\":\"string\",\"description\":\"compared with title (string)\"}", "x"),
+                parameters("FROM Task WHERE :x IS NULL OR title = :x OR price = :x"));
+        assertEquals(schema("\"t\":{\"type\":\"string\",\"description\":\"compared with title (string)\"}", "t"),
+                parameters("FROM Task WHERE id = ?1 AND title = :t"));
+        assertEquals(schema(""), parameters("FROM Task WHERE id = ?1"));
+    }
+
+    @Test
+    void withNoVocabularyEveryParameterTakesAnyValueAndIsRequired() {
+        assertEquals(schema("\"t\":{},\"n\":{}", "t", "n"), parameters("FROM Task WHERE title = :t AND n = :n", null));
+    }
+
+    @Test
+    void aParameterNamedProtoIsAPropertyLikeAnyOther() {
+        assertEquals(schema("\"__proto__\":{\"type\":\"string\",\"description\":\"compared with title (string)\"}",
+                "__proto__"), parameters("FROM Task WHERE title = :__proto__"));
+    }
 }
