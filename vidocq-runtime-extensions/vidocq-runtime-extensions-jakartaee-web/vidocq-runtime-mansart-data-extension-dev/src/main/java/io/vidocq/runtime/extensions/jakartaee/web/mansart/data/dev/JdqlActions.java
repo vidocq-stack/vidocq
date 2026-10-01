@@ -120,14 +120,27 @@ final class JdqlActions {
         return List.of(query, write);
     }
 
-    /** The JSON Schema of {@value #STATEMENT}: {@code query} and {@code params}, each a field of several lines. */
+    /**
+     * The JSON Schema of {@value #STATEMENT}: {@code query}, which the page shows in its query editor with the
+     * {@value JdqlLanguage#ID} language, and {@code params}, in its JSON editor whose schema follows the query.
+     */
     static String schema() {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER, Scalars.object("type", "string", "format", "textarea",
-                                "description", "FROM Product WHERE price > :min ORDER BY name"),
-                        PARAMS_MEMBER, Scalars.object("type", "string", "format", "textarea",
-                                "description", "the named parameters, a JSON object: {\"min\": 3}")),
+                        QUERY_MEMBER, query("FROM Product WHERE price > :min ORDER BY name"),
+                        PARAMS_MEMBER, params()),
                 "required", List.of(QUERY_MEMBER)));
+    }
+
+    /** A query property of the tab's actions: a text of several lines, JDQL, its example as {@code description}. */
+    static Map<String, Object> query(String example) {
+        return Scalars.object("type", "string", "format", "textarea", "contentMediaType", JdqlLanguage.MEDIA_TYPE,
+                "x-language", JdqlLanguage.ID, "description", example);
+    }
+
+    /** The parameters property of the tab's actions: the text of a JSON object, of the named parameters of query. */
+    static Map<String, Object> params() {
+        return Scalars.object("type", "string", "format", "textarea", "x-parameters-of", QUERY_MEMBER,
+                "description", "the named parameters, a JSON object: {\"min\": 3}");
     }
 
     private static String description(String what, String names) {

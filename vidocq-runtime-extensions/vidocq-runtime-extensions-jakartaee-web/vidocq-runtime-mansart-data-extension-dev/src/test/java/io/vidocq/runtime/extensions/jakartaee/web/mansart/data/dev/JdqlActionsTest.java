@@ -155,8 +155,11 @@ class JdqlActionsTest {
         assertEquals(List.of("rollback", "commit"), write.arguments().get(1).allowedValues());
         String schema = query.arguments().getFirst().schema();
         assertEquals(schema, write.arguments().getFirst().schema());
-        assertTrue(schema.contains("\"query\":{\"type\":\"string\",\"format\":\"textarea\""), schema);
-        assertTrue(schema.contains("\"params\":{\"type\":\"string\",\"format\":\"textarea\""), schema);
+        assertTrue(schema.contains("\"query\":{\"type\":\"string\",\"format\":\"textarea\","
+                + "\"contentMediaType\":\"text/x-query\",\"x-language\":\"jdql\",\"description\":\"FROM Product "
+                + "WHERE price > :min ORDER BY name\"}"), "the query editor, with the panel's jdql: " + schema);
+        assertTrue(schema.contains("\"params\":{\"type\":\"string\",\"format\":\"textarea\","
+                + "\"x-parameters-of\":\"query\",\"description\":"), "the JSON editor of its parameters: " + schema);
         assertTrue(schema.endsWith("\"required\":[\"query\"]}"), schema);
         assertTrue(query.description().endsWith("Entities: Gizmo, Part"), query.description());
     }

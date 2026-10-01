@@ -161,7 +161,10 @@ class CsvActionsTest {
         assertNull(export.confirmation(), "an export writes nothing: no confirmation");
         assertEquals(List.of("statement"), export.arguments().stream().map(PanelAction.Argument::name).toList());
         String schema = export.arguments().getFirst().schema();
-        assertTrue(schema.contains("\"query\":{\"type\":\"string\",\"format\":\"textarea\""), schema);
+        assertTrue(schema.contains("\"query\":{\"type\":\"string\",\"format\":\"textarea\","
+                + "\"contentMediaType\":\"text/x-query\",\"x-language\":\"jdql\",\"description\":"), schema);
+        assertTrue(schema.contains("\"params\":{\"type\":\"string\",\"format\":\"textarea\","
+                + "\"x-parameters-of\":\"query\","), schema);
         assertTrue(schema.contains("\"separator\":{\"type\":\"string\",\"enum\":[\",\",\";\"],\"default\":\",\""),
                 schema);
         assertTrue(schema.endsWith("\"required\":[\"query\"]}"), schema);

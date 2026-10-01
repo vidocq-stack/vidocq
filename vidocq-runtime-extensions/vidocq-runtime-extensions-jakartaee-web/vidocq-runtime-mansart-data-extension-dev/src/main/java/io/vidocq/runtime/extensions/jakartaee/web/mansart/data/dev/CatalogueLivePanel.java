@@ -29,6 +29,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataL
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import jakarta.enterprise.inject.spi.BeanManager;
 
@@ -51,7 +52,8 @@ import java.util.function.Predicate;
  * statements in a <i>JDQL</i> tab (see {@link JdqlActions}, on Mansart's {@code JdqlExecutor.run}), which also
  * exports a query as CSV and imports a CSV file (see {@link CsvActions}, on {@code RepositoryRuntime.save}): built once
  * per boot by {@link #actions()}, which the console calls after {@link #start}, from the repository interfaces
- * {@link MansartDataLive} holds and the {@link BeanManager} {@code start} keeps; dropped by {@link #stop}.
+ * {@link MansartDataLive} holds and the {@link BeanManager} {@code start} keeps; dropped by {@link #stop}. Its
+ * {@link #languages()} gives that tab's query editors the {@code jdql} language (see {@link JdqlLanguage}).
  *
  * <p>A value key must match {@code [a-z][a-z0-9.-]{0,39}}: a repository's table is keyed by its name in kebab case,
  * {@code TaskRepository} as {@code task-repository}, its inherited methods by {@code <key>.inherits}, and the count
@@ -133,6 +135,31 @@ public final class CatalogueLivePanel implements LivePanel {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: the run actions could not be built: "
                     + failed.getClass().getName());
             run = RepositoryActions.NONE;
+            return List.of();
+        }
+    }
+
+    /**
+     * The {@value JdqlLanguage#ID} language the JDQL tab's query editors complete and check with, built now from the
+     * catalogue and the models; none before {@link #start}, as there is no action then either.
+     */
+    @Override
+    public List<PanelLanguage> languages() {
+        return beans == null ? List.of() : languages(type -> EntityModels.of(type));
+    }
+
+    /** The JDQL language of what {@link MansartDataLive} holds; none without an entity, or when it cannot be built. */
+    List<PanelLanguage> languages(Function<Class<?>, EntityModel<?>> models) {
+        Optional<MansartDataCatalogue> catalogue = MansartDataLive.catalogue();
+        List<Class<?>> repositories = MansartDataLive.repositories();
+        if (catalogue.isEmpty() || repositories.isEmpty() || catalogue.get().entities().isEmpty()) {
+            return List.of();
+        }
+        try {
+            return List.of(new PanelLanguage(JdqlLanguage.ID, JdqlLanguage.json(catalogue.get().entities(),
+                    className -> RepositoryActions.load(className, repositories), models)));
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, "Mansart Data: no JDQL language: " + failed.getClass().getName());
             return List.of();
         }
     }

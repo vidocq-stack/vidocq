@@ -32,6 +32,7 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -245,6 +246,23 @@ class CatalogueLivePanelTest {
 
         assertEquals(List.of("not-runnable", "calls"), sample.keys());
         assertEquals(List.of("Gizmo", "Part", "Other repositories"), sample.groupNames(), "the catalogue as before");
+    }
+
+    @Test
+    void theJdqlTabsLanguageIsBuiltFromTheCatalogueOnceStarted() {
+        assertEquals(List.of(), panel.languages(), "before start, as the actions");
+        assertEquals(List.of(), panel.languages(RunFixtures::model), "no catalogue yet");
+        publishRunFixtures();
+
+        List<PanelLanguage> languages = panel.languages(RunFixtures::model);
+
+        assertEquals(List.of("jdql"), languages.stream().map(PanelLanguage::id).toList());
+        Map<?, ?> targets = (Map<?, ?>) ((Map<?, ?>) Json.parse(languages.getFirst().json())).get("targets");
+        assertEquals(List.of("Gizmo", "Part"), List.copyOf(targets.keySet()), "the catalogue's entities");
+        String none = panel.languages(type -> {
+            throw new IllegalStateException("no model");
+        }).getFirst().json();
+        assertEquals(Map.of(), ((Map<?, ?>) Json.parse(none)).get("targets"), "no model read, no target");
     }
 
     @Test

@@ -140,13 +140,14 @@ final class CsvActions {
                         + jdql.entityNames(), PanelAction.MAX_DESCRIPTION - 1));
     }
 
-    /** The JSON Schema of an export's {@value #STATEMENT}: the query, its parameters, the separator. */
+    /**
+     * The JSON Schema of an export's {@value #STATEMENT}: the query, in the page's query editor as the tab's queries
+     * are, its parameters, in the JSON editor that follows it, and the separator.
+     */
     static String exportSchema() {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER, Scalars.object("type", "string", "format", "textarea",
-                                "description", "FROM Product ORDER BY id, or SELECT name, price FROM Product"),
-                        PARAMS_MEMBER, Scalars.object("type", "string", "format", "textarea",
-                                "description", "the named parameters, a JSON object: {\"min\": 3}"),
+                        QUERY_MEMBER, JdqlActions.query("FROM Product ORDER BY id, or SELECT name, price FROM Product"),
+                        PARAMS_MEMBER, JdqlActions.params(),
                         SEPARATOR_MEMBER, separatorSchema()),
                 "required", List.of(QUERY_MEMBER)));
     }
