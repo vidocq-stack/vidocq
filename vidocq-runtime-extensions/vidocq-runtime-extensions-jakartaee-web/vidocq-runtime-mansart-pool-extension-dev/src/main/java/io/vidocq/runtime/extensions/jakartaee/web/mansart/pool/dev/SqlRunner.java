@@ -110,6 +110,30 @@ final class SqlRunner {
         return run(sql, Map.of(), true, false, limit);
     }
 
+    /** What the panel reads of a connection, such as its tables' metadata. */
+    @FunctionalInterface
+    interface Reading {
+        ActionResult read(Connection connection) throws SQLException;
+    }
+
+    /**
+     * What {@code reading} reads on a connection of the pool, read-only, given back to the pool as it was; an error
+     * result, masked as a statement's is, when it throws an {@link SQLException}.
+     */
+    ActionResult read(Reading reading) {
+        try (Connection connection = pool.getConnection()) {
+            boolean readOnly = connection.isReadOnly();
+            readOnly(connection, true);
+            try {
+                return reading.read(connection);
+            } finally {
+                readOnly(connection, readOnly);
+            }
+        } catch (SQLException failed) {
+            return failure(failed, new LinkedHashMap<>());
+        }
+    }
+
     /** What a call answers: the rows, or the number of rows changed; {@code columns} is {@code null} for a count. */
     private record Answer(List<Column> columns, List<List<Object>> rows, boolean more, int count) {}
 

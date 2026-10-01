@@ -22,8 +22,10 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
 import io.vidocq.mansart.pool.PoolConfig;
 import io.vidocq.mansart.pool.PoolMetrics;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live.MansartPoolsLive;
+import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
+import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.devconsole.Unit;
@@ -34,6 +36,10 @@ import java.util.List;
  * The pool section, live: one group per open pool, from {@link MansartPoolsLive}, the holder the runtime extension
  * publishes once every pool is open and clears first thing in its {@code onStop}. No pool is opened or closed here;
  * this panel only reads what the extension already holds.
+ *
+ * <p>In a dev launch, each pool also gets a tab of actions (SQL spec §4, see {@link PoolActions}): its tables, the
+ * columns and first rows of one, and SQL run in a transaction. What they need of the pool's tables is read once per
+ * boot, by the first {@link #actions()}, and forgotten by {@link #start} and {@link #stop}.
  */
 public final class PoolsLivePanel implements LivePanel {
 
@@ -42,12 +48,42 @@ public final class PoolsLivePanel implements LivePanel {
                     Series.line("waiting"), Series.ceiling("active"))),
             new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
 
+    /** The pools of this boot and what was read of their tables; {@code null} until the first call needs them. */
+    private volatile List<PoolActions> pools;
+
     /** Created by the service loader. */
     public PoolsLivePanel() {}
 
     @Override
     public String id() {
         return "mansart-pool";
+    }
+
+    /** Forgets the previous boot's pools: a dev reload reads its own. */
+    @Override
+    public void start(ExtensionContext context) {
+        pools = null;
+    }
+
+    @Override
+    public void stop() {
+        pools = null;
+    }
+
+    /** Each pool's tab of actions, {@code @Default} first, then the named pools in name order. */
+    @Override
+    public List<PanelAction> actions() {
+        return pools().stream().flatMap(pool -> pool.actions().stream()).toList();
+    }
+
+    /** The pools of this boot, their tables read now on the first call. */
+    private synchronized List<PoolActions> pools() {
+        List<PoolActions> read = pools;
+        if (read == null) {
+            read = PoolActions.of(MansartPoolsLive.pools());
+            pools = read;
+        }
+        return read;
     }
 
     @Override
