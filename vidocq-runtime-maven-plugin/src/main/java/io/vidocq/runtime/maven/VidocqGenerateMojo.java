@@ -54,10 +54,15 @@ import java.util.Map;
  * for beans without scope coming from non-pre-processed JARs
  * (via {@code BceProcessor.processEnhancementOnly()}).
  * </p>
+ * <p>
+ * Resolves the runtime scope too: a build-compatible extension that reaches the application at runtime scope —
+ * Cassini's, through its REST extension — is on the module path at run time, so the generator must run it as well,
+ * or the classes it alone makes beans keep the reflection fallback (Vidocq/vidocq#188).
+ * </p>
  */
 @Mojo(name = "generate",
       defaultPhase = LifecyclePhase.PROCESS_CLASSES,
-      requiresDependencyResolution = ResolutionScope.COMPILE)
+      requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class VidocqGenerateMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)

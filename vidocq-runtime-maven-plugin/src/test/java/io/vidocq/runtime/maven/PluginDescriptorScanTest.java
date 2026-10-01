@@ -74,12 +74,21 @@ class PluginDescriptorScanTest {
         assertEquals("${vidocq.generate.autoScan}", autoScan.getTextContent().strip());
     }
 
+    /**
+     * Vidocq/vidocq#188: a build-compatible extension that reaches the application at runtime scope — Cassini's,
+     * through its REST extension — is on the module path at run time, so generate must see it too.
+     */
+    @Test
+    void generateAndAnalyzeDepsResolveTheRuntimeScopeToo() {
+        assertEquals("compile+runtime", text(mojos.get("generate"), "requiresDependencyResolution"));
+        assertEquals("compile+runtime", text(mojos.get("analyze-deps"), "requiresDependencyResolution"));
+    }
+
     @Test
     void analyzeDepsIsAGoalWithTheSameScanParameters() throws Exception {
         Element analyze = mojos.get("analyze-deps");
         assertNotNull(analyze, "no <mojo> with <goal>analyze-deps</goal>");
         assertEquals(VidocqAnalyzeDepsMojo.class, Class.forName(text(analyze, "implementation")));
-        assertEquals("compile", text(analyze, "requiresDependencyResolution"));
         assertTrue(parameterNames(analyze).keySet().containsAll(SCAN_PARAMETERS));
         assertEquals(parameterNames(analyze).keySet(), configuration(analyze).keySet(),
                 "every configuration entry names a declared parameter");

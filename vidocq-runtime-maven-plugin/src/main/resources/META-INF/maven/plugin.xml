@@ -189,7 +189,7 @@
         <mojo>
             <goal>generate</goal>
             <description>Generate CDI bean index for Vidocq application</description>
-            <requiresDependencyResolution>compile</requiresDependencyResolution>
+            <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
             <requiresOnline>false</requiresOnline>
@@ -260,7 +260,7 @@
         <mojo>
             <goal>analyze-deps</goal>
             <description>Print which dependencies vidocq:generate scans for CDI beans, why, and the scanDependencies block that makes the detected bean archives explicit. Changes nothing.</description>
-            <requiresDependencyResolution>compile</requiresDependencyResolution>
+            <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
             <requiresOnline>false</requiresOnline>

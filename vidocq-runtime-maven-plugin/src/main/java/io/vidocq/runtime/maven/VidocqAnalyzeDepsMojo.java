@@ -35,7 +35,7 @@ import java.util.List;
  * same {@code scanDependencies}, {@code scanExcludes} and {@code autoScan} as {@code generate}: configure them at
  * plugin level so both goals see them. Changes nothing.
  */
-@Mojo(name = "analyze-deps", requiresDependencyResolution = ResolutionScope.COMPILE, threadSafe = true)
+@Mojo(name = "analyze-deps", requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, threadSafe = true)
 public class VidocqAnalyzeDepsMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)

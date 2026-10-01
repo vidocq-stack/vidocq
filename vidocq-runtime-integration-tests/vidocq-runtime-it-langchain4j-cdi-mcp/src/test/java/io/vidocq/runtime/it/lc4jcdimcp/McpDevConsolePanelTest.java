@@ -72,9 +72,10 @@ class McpDevConsolePanelTest {
             assertTrue(mcpRows.stream().anyMatch(row -> row.startsWith(
                     "[\"dev.langchain4j.cdi.mcp.server.transport.McpEndpoint\",")
                     && row.matches(".*\"library\",\"(Class-File|partial)\".*")), "McpEndpoint: " + mcpRows);
-            // Except the three JAX-RS providers: they carry @Provider alone and become beans at boot through
-            // Cassini's build-compatible extension, which vidocq:generate does not run over a dependency jar.
-            assertEquals(List.of("McpExceptionMapper", "McpListenRoutingFilter", "McpSseStreamHeadersFilter"),
+            // Vidocq/vidocq#188: the three JAX-RS providers too, which carry @Provider alone: Cassini's
+            // build-compatible extension makes them beans, and vidocq:generate sees it although it is a
+            // runtime-scope dependency.
+            assertEquals(List.of(),
                     mcpRows.stream().filter(row -> row.contains("\"library\",\"reflection\""))
                             .map(row -> row.substring(row.lastIndexOf('.', row.indexOf("\",")) + 1,
                                     row.indexOf("\",")))
