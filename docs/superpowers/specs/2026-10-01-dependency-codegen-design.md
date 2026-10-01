@@ -71,8 +71,9 @@ What already exists and is reused:
 - After relocation, for each scanned jar with parked classes, a new `EnrichedJars` writes
   `target/vidocq-enriched/<original file name>`:
   1. start from `ModularizedJars.resolve(build, jar)`; if that jar still has no descriptor, synthesize one
-     (`open module`) through the single-jar modularizer, or, if synthesis is refused (licence, illegal `uses`),
-     leave the jar to `--patch-module` with a warning naming the reason;
+     (`open module`) through the single-jar modularizer, or, if synthesis is refused (a `ServiceLoader` lookup no
+     explicit module may declare), leave the jar to `--patch-module` with a warning naming the reason. The
+     modularizer's optional licence gate is not applied: it is off by default and `modularize` keeps it;
   2. add the parked classes (as `JpmsPatches.enrich` does: shipped entries win);
   3. rewrite the descriptor: `provides io.vidocq.vauban.api.VaubanComponentProvider with` the jar's providers,
      `requires io.vidocq.vauban.api`, and `requires io.vidocq.vauban.core` when a generated class references it;
