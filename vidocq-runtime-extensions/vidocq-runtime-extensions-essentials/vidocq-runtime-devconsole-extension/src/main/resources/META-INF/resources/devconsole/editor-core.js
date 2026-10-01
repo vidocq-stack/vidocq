@@ -95,9 +95,18 @@ function lex(text) {
 /** The punctuation character of token {@code t}, or null when it is none. */
 const punctAt = (text, t) => t !== undefined && t.kind === "punct" ? text[t.from] : null;
 
-/** Whether the string token {@code t} ends with its closing quote, an escaped quote not being one. */
+/**
+ * Whether the string token {@code t} ends with its closing quote, the quote it opens with: in JSON ("), an escaped
+ * quote is no closing one; in a query (the dialect's quote, ' in JDQL), a doubled one is none.
+ */
 function isClosed(text, t) {
-  if (t.to - t.from < 2 || text[t.to - 1] !== "\"") return false;
+  const quote = text[t.from];
+  if (t.to - t.from < 2 || text[t.to - 1] !== quote) return false;
+  if (quote !== "\"") {
+    let quotes = 0;
+    for (let i = t.to - 1; i > t.from && text[i] === quote; i--) quotes++;
+    return quotes % 2 === 1;
+  }
   let backslashes = 0;
   for (let i = t.to - 2; i > t.from && text[i] === "\\"; i--) backslashes++;
   return backslashes % 2 === 0;
@@ -1032,12 +1041,35 @@ function completeQuery(text, caret, data) {
   return items.length ? { from, to, items } : null;
 }
 
+// ------------------------------------------------------------------------------------------------ query: diagnostics
+
+/**
+ * The errors of a query (spec §3.4), in the order of the text: an unknown target, an unknown attribute of the target
+ * or of the target a reference leads to, a path through an attribute that is no reference, an unterminated string, a
+ * parenthesis never closed or closing none. Without a vocabulary, or a known target, no attribute is checked; the
+ * grammar never is: the server judges it when the query runs.
+ */
+function diagnoseQuery(text, data) {
+  const out = [];
+  const error = (t, message) => out.push({ from: t.from, to: t.to, severity: "error", message });
+  const open = [];
+  for (const t of read(text, data).tokens) {
+    if (t.problem !== undefined) error(t, t.problem);
+    if (t.kind === "string" && !isClosed(text, t)) error(t, "unterminated string");
+    if (t.kind === "punct" && text[t.from] === "(") open.push(t);
+    if (t.kind === "punct" && text[t.from] === ")" && open.pop() === undefined) error(t, "no '(' to close");
+  }
+  for (const t of open) error(t, "'(' never closed");
+  return out.sort((a, b) => a.from - b.from || a.to - b.to);
+}
+
 // ------------------------------------------------------------------------------------------------ the query language
 
 /** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
 const QUERY = Object.freeze({
   id: "query",
   tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
+  diagnose: diagnoseQuery,
   complete: completeQuery,
   pairs: Object.freeze(["()", "''"]),
 });

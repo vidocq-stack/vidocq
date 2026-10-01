@@ -371,4 +371,91 @@ class QueryLanguageTest {
         large.getMember("targets").putMember("T4999", parsed("{\"attributes\": {}}"));
         assertEquals("5-9 T499", complete("FROM T499|", large), "read once: a later change of the object is not seen");
     }
+
+    // ------------------------------------------------------------------------------------------------ diagnostics
+
+    /** The diagnostics of {@code text} read with {@code data}, one per line: severity from-to message. */
+    private static String diagnose(String text, Value data) {
+        Value found = language.invokeMember("diagnose", text, data);
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < found.getArraySize(); i++) {
+            Value d = found.getArrayElement(i);
+            out.add(d.getMember("severity").asString() + " " + number(d, "from") + "-" + number(d, "to") + " "
+                    + d.getMember("message").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    private static String diagnose(String text) {
+        return diagnose(text, jdql);
+    }
+
+    @Test
+    void anUnknownTargetIsAnError() {
+        assertEquals("error 5-8 unknown target Tsk", diagnose("FROM Tsk WHERE titel = 1"),
+                "and no attribute of it checked");
+        assertEquals("error 7-10 unknown target Tsk", diagnose("UPDATE Tsk SET title = 1"));
+    }
+
+    @Test
+    void anUnknownAttributeOfTheTargetOrOfTheTargetOfAReferenceIsAnError() {
+        assertEquals("error 16-21 unknown attribute titel of Task", diagnose("FROM Task WHERE titel = 1"));
+        assertEquals("error 7-12 unknown attribute titel of Task", diagnose("SELECT titel FROM Task"),
+                "the target written after it");
+        assertEquals("error 24-27 unknown attribute nme of Project", diagnose("FROM Task WHERE project.nme = 'a'"));
+        assertEquals("error 29-34 unknown attribute titel of Task",
+                diagnose("FROM Task WHERE project.lead.titel = 'a'"), "back through the cycle");
+    }
+
+    @Test
+    void aPathThroughAnAttributeThatIsNoReferenceIsAnError() {
+        assertEquals("error 22-23 title is not a reference", diagnose("FROM Task WHERE title.x = 1"));
+        assertEquals("error 21-22 title is not a reference", diagnose("FROM Task WHERE title."),
+                "the dot itself when nothing follows it");
+        assertEquals("", diagnose("FROM Task WHERE project."), "a reference being typed");
+    }
+
+    @Test
+    void anUnterminatedStringAndAnUnbalancedParenthesisAreErrors() {
+        assertEquals("error 24-29 unterminated string", diagnose("FROM Task WHERE title = 'open\nORDER BY id"));
+        assertEquals("", diagnose("FROM Task WHERE title = 'it''s'"), "a doubled quote is inside the string");
+        assertEquals("error 16-17 '(' never closed", diagnose("FROM Task WHERE (id = 1 OR (id = 2)"));
+        assertEquals("error 22-23 no '(' to close", diagnose("FROM Task WHERE id = 1)"));
+    }
+
+    @Test
+    void withNoVocabularyNoKnownTargetOrAQualifiedOneNoNameIsChecked() {
+        assertEquals("", diagnose("FROM Tsk WHERE titel.x = 1", null));
+        assertEquals("", diagnose("SELECT titel WHERE x = 1"), "no target");
+        assertEquals("", diagnose("FROM io.acme.Task WHERE titel = 1"), "a qualified name, never checked");
+        assertEquals("error 24-29 unterminated string", diagnose("FROM Task WHERE title = 'open", null),
+                "a string is checked without a vocabulary");
+    }
+
+    @Test
+    void aQueryBeingTypedIsCheckedForItsNamesOnlyAndNeverThrows() {
+        assertEquals("", diagnose("FROM "));
+        assertEquals("", diagnose("FROM Task WHERE "));
+        assertEquals("", diagnose("SELECT COUNT(this) FROM Task WHERE id BETWEEN 1 AND :max ORDER BY"),
+                "the grammar is the server's to judge");
+        assertEquals("error 16-17 '(' never closed\nerror 17-19 unknown attribute ti of Task",
+                diagnose("FROM Task WHERE (ti"));
+        for (String typed : new String[] {"", "F", "FROM T", "FROM Task WHERE project.", "FROM Task WHERE '",
+                "FROM Task WHERE ((", "FROM Task WHERE project..name", ".", "FROM .", "SELECT this. FROM Task"}) {
+            for (int caret = 0; caret <= typed.length(); caret++) {
+                completion(typed.substring(0, caret) + "|" + typed.substring(caret), jdql);
+            }
+            diagnose(typed);
+        }
+    }
+
+    @Test
+    void oddDataChecksLessAndNeverThrows() {
+        Value nothing = parsed("{\"targets\": {\"Task\": {\"attributes\": {\"p\": {\"target\": \"Nothing\"}}}}}");
+
+        assertEquals("", diagnose("FROM Task WHERE p.q.r = 1", nothing), "a reference to a target that is none");
+        assertEquals("", diagnose("FROM Task WHERE zz = 1", parsed("{\"targets\": {\"Task\": {}}}")),
+                "a target that lists no attribute");
+        assertEquals("error 5-9 unknown target Nope", diagnose("FROM Nope", nothing));
+    }
 }
