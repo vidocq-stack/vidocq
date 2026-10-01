@@ -537,14 +537,21 @@ new PanelAction("tool.weather", "Weather", null,
 
 A string property whose schema also says `"format": "textarea"` [.tag-new]#NEW# is a field of several lines in that
 form rather than a one-line one: four lines of monospace text to start with, taller when dragged, its value sent as
-any other string's. The Mansart Data panel's *JDQL* tab uses it for its statement and its parameters
+any other string's.
+
+Such a field whose schema also says `"contentMediaType": "text/x-query"` and `"x-language": "<id>"` [.tag-new]#NEW#
+is the query editor, which colours, completes and checks a query with the vocabulary of the panel's language of that
+id, and one that says `"x-parameters-of": "<query property>"` [.tag-new]#NEW# is the JSON editor of that query's
+parameters, its schema following the query (xref:dev-console.adoc#query-language[A query language for a panel]).
+The Mansart Data panel's *JDQL* tab uses both for its statement and its parameters
 (xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]):
 
 [source,json]
 ----
 {"type": "object",
- "properties": {"query": {"type": "string", "format": "textarea"},
-                "params": {"type": "string", "format": "textarea"}},
+ "properties": {"query": {"type": "string", "format": "textarea", "contentMediaType": "text/x-query",
+                          "x-language": "jdql"},
+                "params": {"type": "string", "format": "textarea", "x-parameters-of": "query"}},
  "required": ["query"]}
 ----
 

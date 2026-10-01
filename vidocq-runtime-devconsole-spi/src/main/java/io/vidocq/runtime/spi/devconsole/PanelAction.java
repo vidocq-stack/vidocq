@@ -259,10 +259,12 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * <p>The page reads these keywords of {@code schema}: {@code type}, {@code properties}, {@code required},
          * {@code additionalProperties}, {@code items}, {@code enum}, {@code maxLength}, {@code format} ({@code date},
          * {@code time}, {@code date-time}, {@code uuid}; {@code textarea} for a field of several lines),
-         * {@code contentMediaType} ({@code text/csv}), {@code readOnly}, {@code description}, {@code default}, and a
-         * local {@code $ref} ({@code #/$defs/...}, {@code #/definitions/...}). It generates a form when the root is an
-         * object whose properties are scalars, enums of strings, or objects of those one level down, and offers its
-         * JSON editor otherwise, which checks and completes the value against the schema; neither refuses to send
+         * {@code contentMediaType} ({@code text/csv}; {@code text/x-query} for a query, with {@code x-language}, the
+         * id of one of the panel's {@link DevConsolePanel#languages() languages}), {@code x-parameters-of} (the
+         * query property whose parameters a property holds), {@code readOnly}, {@code description}, {@code default},
+         * and a local {@code $ref} ({@code #/$defs/...}, {@code #/definitions/...}). It generates a form when the root
+         * is an object whose properties are scalars, enums of strings, or objects of those one level down, and offers
+         * its JSON editor otherwise, which checks and completes the value against the schema; neither refuses to send
          * it: the action's target stays the judge.
          *
          * @param name   its name, by the key rule

@@ -565,6 +565,94 @@ sent: `entity.title is required`. A nested object that is not required and left 
 `2026-09-30T14:30:00`, `123e4567-e89b-12d3-a456-426614174000`.
 * The editor starts from the required properties, at each level. *Replay* fills the form, a nested object included;
 a value the panel masked is left for you to type again.
+
+[#query-editor]
+== Query editor [.tag-new]#NEW#
+
+A query argument — the `query` of the *JDQL* tab of *Mansart Data*, in *Query*, *Update / Delete* and *Export CSV*
+(xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]) — is typed in the
+same editor, in its query mode, five lines high, with the vocabulary its panel publishes: the entities and their
+attributes. The page fetches that vocabulary once, when the first form that needs it is drawn, and again after a dev
+reload only; until it arrives, or when it cannot be had, the editor works with the keywords alone and says why under
+it, `no vocabulary: 404`. It arrives without moving the text or the caret.
+
+* **Colours.** Keywords, functions, the entity, its attributes, strings, numbers and parameters (`:name`, `?1`) each
+have a colour of their own, in the light and the dark themes; a name the vocabulary does not know is plain.
+* **Completion.** `Ctrl+Space` lists what fits where the caret is: after `FROM` or `UPDATE`, the entities, each with
+its table; after `project.`, the attributes of the entity the reference leads to, one step at a time however long
+the path; in a `SELECT`, `WHERE`, `ORDER BY` or `SET` clause, the attributes of the query's entity, even when `FROM`
+comes after the caret, each with its Java type and its column, then `this`, the functions, inserted with `(` and the
+caret inside, and the other keywords; anywhere else, the keywords. Typing filters the list, ignoring case; a keyword
+is inserted in capitals.
+* **Diagnostics.** An unknown entity, an unknown attribute of the entity or of the one a reference leads to, a path
+through an attribute that is no reference (`title is not a reference`), an unterminated string, and a parenthesis
+never closed or closing none are errors, underlined as the JSON editor's. Nothing else: the grammar is the server's
+to judge, and it says what is wrong when the query runs. An entity written by its full class name is not checked.
+* **Keys.** `(` and `'` come in pairs; a `'` typed right before a closing one steps over it, and a doubled `''` inside
+a string is one quote. The other keys are the JSON editor's.
+* **Format.** *Format*, or `Shift+Alt+F`, writes the keywords in capitals, starts each clause on a line of its own and
+`AND` or `OR` on an indented line; the `AND` of a `BETWEEN` stays where it is, and names, strings, numbers and
+parameters are kept as written. A query with an unterminated string is not formatted: `not formatted: line 2:
+unterminated string`.
+
+[#query-parameters]
+=== Its parameters [.tag-new]#NEW#
+
+The `params` of a query is a JSON editor whose schema follows the query as you type it: one key per named parameter,
+in order of first use, all required, and no other. A parameter compared with an attribute takes its type, its format
+and its values: after `WHERE status = :status`, completion offers `"status"` with the values of its enum, and the
+editor flags the key while it is missing. `LIKE :pattern` takes a string, `BETWEEN :low AND :high` the attribute's
+type for both, `IN :statuses` a list of it, `SET title = :title` the attribute's type; the description of each says
+where it is used, such as `compared with price (number)`. A parameter used twice keeps its first typed use; one used
+otherwise, such as `price * :factor`, takes any value; a positional one, `?1`, has no key. Nothing is refused before
+the call. Its text is sent as typed; empty, it holds `{}`.
+
+[#query-language]
+=== A query language for a panel [.tag-new]#NEW#
+
+A panel gives a `json` argument's property this mode in two steps.
+
+. Its `languages()`, on `DevConsolePanel` or `LivePanel`, returns the `PanelLanguage` records it offers: an id, which
+follows the key rule of `PanelSample`, such as `jdql`, and the text of one JSON object, at most 1 MiB and 64 levels
+deep, checked when the record is built. It is read once per boot, with `actions()`, in a `dev` launch only. Two
+languages of one id leave the panel without languages, and the console logs a WARNING saying so; a `languages()`
+that throws leaves it without languages too. The snapshot names each panel's ids, `"languages": ["jdql"]`, never
+their content, which `GET /api/language/<panel>/<id>` serves as the panel wrote it: `GET` or `HEAD`, a `dev` launch
+only (`404` otherwise), no token since it only reads, an `Origin`, when there is one, that is the console's own
+(`403`), and never logged.
+. The schema of the argument names it. A string property of `"format": "textarea"` whose schema also says
+`"contentMediaType": "text/x-query"` and `"x-language": "<id>"` is the query editor; a string property of
+`"format": "textarea"` and `"x-parameters-of": "<query property>"`, beside the query, is the JSON editor of its
+parameters. Both are sent as strings, as typed.
+
+[source,json]
+----
+{ "mode": "query",
+  "dialect": {
+    "keywords": ["SELECT", "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT", "IS", "NULL", "BETWEEN", "LIKE",
+                 "IN", "ASC", "DESC", "UPDATE", "SET", "DELETE", "COUNT", "THIS", "SUM", "AVG", "MIN", "MAX",
+                 "TRUE", "FALSE"],
+    "functions": ["UPPER", "LOWER", "LENGTH", "ABS", "CONCAT", "COUNT", "SUM", "AVG", "MIN", "MAX"],
+    "clauses": ["SELECT", "FROM", "WHERE", "ORDER BY", "SET", "UPDATE", "DELETE FROM"],
+    "targetAfter": ["FROM", "UPDATE"],
+    "self": "this",
+    "quote": "'" },
+  "targets": {
+    "Task": { "detail": "table task",
+      "attributes": {
+        "id": { "type": "integer", "detail": "Long · id, generated" },
+        "title": { "type": "string", "detail": "String · column title" },
+        "dueDate": { "type": "string", "format": "date", "detail": "LocalDate · column due_date" },
+        "project": { "type": "integer", "detail": "→ Project · column project_id", "target": "Project" } } } } }
+----
+
+`mode` is `query`. `keywords` are matched ignoring case and written in capitals; `functions` are the names that may be
+followed by `(`; `clauses` start a clause; `targetAfter` are the words after which the entity is named; `self` is the
+entity's own name in an expression; `quote` delimits a string, doubled inside it. A word the dialect leaves out takes
+JDQL's. `targets` maps each entity's name to its `detail` and `attributes`; an attribute has a JSON Schema `type`
+(`string`, `integer`, `number`, `boolean`), optionally a `format` and an `enum`, a `detail`, and a `target` when it
+refers to another entity of the language. Data the editor does not understand makes it know less, never fail.
+
 [#security]
 == Security [.tag-new]#NEW#
 
@@ -575,6 +663,7 @@ The console shows what the application is made of, so it is built to be seen by 
 * **Read-only outside development** [.tag-new]#NEW#. In a `test` or `prod` launch the console answers `GET` and `HEAD` only, anything else gets `405`, `POST /api/action/…` included: no panel's `actions()` is called, and the snapshot carries neither a token nor an action.
 * **Actions in a `dev` launch, for the console's own page only** [.tag-new]#NEW#. A panel may offer actions, such as setting a log level; the console runs one only for a request its own page sent, behind the checks of <<actions>>.
 * **A read-only dev MCP in a `dev` launch** [.tag-new]#NEW#. `POST /mcp` serves the page's facts to a coding agent as MCP tools that change nothing, behind the checks of <<dev-mcp>>: no token, since nothing it answers is not already on the page, but an `Origin`, when there is one, that is the console's own.
+* **Query languages, read-only, in a `dev` launch** [.tag-new]#NEW#. `GET /api/language/<panel>/<id>` serves the vocabulary of a panel's query editor, its entities and attributes, behind the checks of <<query-language>>: `GET` or `HEAD`, no token, an `Origin`, when there is one, that is the console's own; outside `dev`, `404`.
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
 * **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
