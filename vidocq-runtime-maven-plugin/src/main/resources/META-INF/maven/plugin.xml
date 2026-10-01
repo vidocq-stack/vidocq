@@ -219,7 +219,21 @@
                     <type>java.util.List</type>
                     <required>false</required>
                     <editable>true</editable>
-                    <description>Liste de patterns groupId:artifactId à scanner (wildcard final * supporté)</description>
+                    <description>groupId:artifactId patterns of dependencies to scan for CDI beans (a trailing * is a wildcard), on top of those an extension declares and the bean archives detected</description>
+                </parameter>
+                <parameter>
+                    <name>scanExcludes</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>groupId:artifactId patterns of dependencies never scanned, whatever selects them</description>
+                </parameter>
+                <parameter>
+                    <name>autoScan</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Also scan every dependency that is a CDI bean archive (META-INF/beans.xml with a discovery mode other than none)</description>
                 </parameter>
                 <parameter>
                     <name>buildDirectory</name>
@@ -235,8 +249,62 @@
                 <outputDirectory implementation="java.io.File"
                                  default-value="${project.build.outputDirectory}"/>
                 <scanDependencies implementation="java.util.List"/>
+                <scanExcludes implementation="java.util.List"/>
+                <autoScan implementation="boolean" default-value="true">${vidocq.generate.autoScan}</autoScan>
                 <buildDirectory implementation="java.io.File"
                                 default-value="${project.build.directory}"/>
+            </configuration>
+        </mojo>
+
+        <!-- vidocq:analyze-deps -->
+        <mojo>
+            <goal>analyze-deps</goal>
+            <description>Print which dependencies vidocq:generate scans for CDI beans, why, and the scanDependencies block that makes the detected bean archives explicit. Changes nothing.</description>
+            <requiresDependencyResolution>compile</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <implementation>io.vidocq.runtime.maven.VidocqAnalyzeDepsMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>scanDependencies</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Same as vidocq:generate: configure it at plugin level so both goals see it</description>
+                </parameter>
+                <parameter>
+                    <name>scanExcludes</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Same as vidocq:generate: configure it at plugin level so both goals see it</description>
+                </parameter>
+                <parameter>
+                    <name>autoScan</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Same as vidocq:generate</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <scanDependencies implementation="java.util.List"/>
+                <scanExcludes implementation="java.util.List"/>
+                <autoScan implementation="boolean" default-value="true">${vidocq.generate.autoScan}</autoScan>
             </configuration>
         </mojo>
 
