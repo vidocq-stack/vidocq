@@ -705,17 +705,19 @@ export function keystroke(language, text, selectionStart, selectionEnd, key) {
   const opening = pairs.find((pair) => pair[0] === key);
   const closing = pairs.find((pair) => pair[1] === key);
   if (!opening && !closing) return null;
+  // a quote opens and closes its strings: " in JSON, ' in a query
+  const quote = pairs.some((pair) => pair[0] === key && pair[1] === key);
   if (start !== end) {
     return opening ? { from: start, to: end, insert: key + text.slice(start, end) + opening[1], anchor: 1,
       caret: 1 + end - start } : null;
   }
   const string = stringAround(language, text, start);
   if (closing && text[start] === key
-      && (key === "\"" ? string !== null && string.to === start + 1 && isClosed(text, string) : string === null)) {
+      && (quote ? string !== null && string.to === start + 1 && isClosed(text, string) : string === null)) {
     return { from: start + 1, to: start + 1, insert: "", caret: 0 };
   }
   if (!opening || string !== null) return null;
-  if (key === "\"" && /[\p{L}\p{N}]$/u.test(text.slice(Math.max(0, start - 2), start))) return null;
+  if (quote && /[\p{L}\p{N}]$/u.test(text.slice(Math.max(0, start - 2), start))) return null;
   return { from: start, to: start, insert: opening, caret: 1 };
 }
 
@@ -734,7 +736,7 @@ function enter(text, start, end) {
 /** Backspace right between an empty pair of the language, an empty string's quotes included, deletes both. */
 function backspace(language, pairs, text, offset) {
   if (offset === 0 || !pairs.includes(text.slice(offset - 1, offset + 1))) return null;
-  if (text[offset] === "\"") {
+  if (text[offset] === text[offset - 1]) {
     const empty = language.tokenize(text).find((t) => t.from === offset - 1);
     if (!empty || !isStringToken(empty) || empty.to !== offset + 1) return null;
   }
@@ -1134,6 +1136,48 @@ function useOf(text, v, tokens, k) {
   return {};
 }
 
+// ------------------------------------------------------------------------------------------------ query: formatting
+
+/**
+ * {@code text} with its keywords and functions in capitals (self as the dialect writes it), each clause on a line of
+ * its own, AND and OR on an indented line of their own (the AND of a BETWEEN stays on its line), one space between
+ * tokens but around a dot, inside parentheses, before a comma and after a sign; strings, numbers, parameters and
+ * names copied as written. Throws, saying where, on an unterminated string.
+ */
+function formatQuery(text, data) {
+  const { v, tokens } = read(text, data);
+  const open = tokens.find((t) => t.kind === "string" && !isClosed(text, t));
+  if (open !== undefined) throw new Error("line " + lineOf(text, open.from) + ": unterminated string");
+  let out = "";
+  let between = false;        // a BETWEEN waits for its AND
+  let glue = true;            // the previous token takes no space after it: "(", "." or a sign
+  let call = false;           // the previous token is a function: its "(" follows it
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k];
+    const c = t.kind === "punct" || t.kind === "operator" ? text.slice(t.from, t.to) : null;
+    const keyword = t.kind === "keyword" ? t.word : null;
+    const clause = keyword !== null ? clauseAt(v, tokens, k) : null;
+    let piece = t.self ? v.self : keyword !== null || t.kind === "function" ? t.word : text.slice(t.from, t.to);
+    let separator = glue || c === "," || c === ")" || c === "." || (c === "(" && call) ? "" : " ";
+    if (clause !== null) {
+      piece = clause.join(" ");
+      k += clause.length - 1;
+      separator = "\n";
+      between = false;
+    } else if (keyword === "OR" || (keyword === "AND" && !between)) {
+      separator = "\n" + INDENT;
+    } else if (keyword === "AND" || keyword === "BETWEEN") {
+      between = keyword === "BETWEEN";
+    }
+    const sign = (c === "-" || c === "+") && (out === "" || ["operator", "keyword"].includes(tokens[k - 1].kind)
+      || (tokens[k - 1].kind === "punct" && "(,".includes(text[tokens[k - 1].from])));
+    glue = c === "(" || c === "." || sign;
+    call = t.kind === "function";
+    out += (out === "" ? "" : separator) + piece;
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------------ the query language
 
 /** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
@@ -1142,6 +1186,7 @@ const QUERY = Object.freeze({
   tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
   diagnose: diagnoseQuery,
   complete: completeQuery,
+  format: formatQuery,
   parameters: parametersOf,
   pairs: Object.freeze(["()", "''"]),
 });

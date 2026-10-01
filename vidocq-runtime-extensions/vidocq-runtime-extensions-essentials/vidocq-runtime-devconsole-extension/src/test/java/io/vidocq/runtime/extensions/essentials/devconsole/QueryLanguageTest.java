@@ -535,4 +535,93 @@ class QueryLanguageTest {
         assertEquals(schema("\"__proto__\":{\"type\":\"string\",\"description\":\"compared with title (string)\"}",
                 "__proto__"), parameters("FROM Task WHERE title = :__proto__"));
     }
+
+    // ------------------------------------------------------------------------------------------------ formatting
+
+    private static String format(String text) {
+        return language.invokeMember("format", text, jdql).asString();
+    }
+
+    @Test
+    void formatStartsEachClauseOnALineOfItsOwnAndAndOrOnAnIndentedOne() {
+        assertEquals("""
+                SELECT title, price
+                FROM Task
+                WHERE status = :s
+                  AND price BETWEEN 1 AND :max
+                  OR NOT project.name LIKE 'a%'
+                ORDER BY title DESC""", format("select title , price from Task where status=:s and price between 1 "
+                + "and :max or not project.name like 'a%' order by title desc"));
+        assertEquals("DELETE FROM Task\nWHERE id = ?1", format("delete   from Task where id = ?1"));
+        assertEquals("UPDATE Task\nSET title = 'x', price = price * 2\nWHERE (id = 1\n  OR id = 2)",
+                format("update Task set title='x',price=price*2 where (id=1 or id=2)"));
+    }
+
+    @Test
+    void formatWritesKeywordsAndFunctionsInCapitalsSelfAsTheDialectDoesAndTheRestAsWritten() {
+        assertEquals("SELECT COUNT(this)\nFROM Task\nWHERE UPPER(title) = 'It''s'\n  AND price > -1.50\n  AND id IN "
+                + "(:a, :b)\n  AND dueDate = :Due", format("select count ( THIS ) from Task where upper(title)='It''s' "
+                + "and price>-1.50 and id in(:a,:b) and dueDate=:Due"));
+    }
+
+    @Test
+    void formattingAFormattedQueryChangesNothing() {
+        String once = format("select title from Task where title = '" + EMOJI + "' and (id = 1 or id = 2)");
+
+        assertEquals(once, format(once));
+    }
+
+    @Test
+    void aQueryWithAnUnterminatedStringIsNotFormattedAndSaysWhere() {
+        PolyglotException thrown = assertThrows(PolyglotException.class, () -> format("FROM Task\nWHERE title = 'a"));
+
+        assertTrue(thrown.isGuestException(), "an Error thrown by the module");
+        assertEquals("Error: line 2: unterminated string", thrown.getMessage());
+    }
+
+    // ------------------------------------------------------------------------------------------------ keystrokes
+
+    /**
+     * {@code marked} after {@code key} in the query language: one | is the caret, two | the ends of the selection;
+     * "null" when the module lets the browser type the key.
+     */
+    private static String press(String marked, String key) {
+        int start = marked.indexOf('|');
+        int second = marked.indexOf('|', start + 1);
+        String text = marked.replace("|", "");
+        int end = second < 0 ? start : second - 1;
+        Value edit = keystroke.execute(language, text, start, end, key);
+        if (edit.isNull()) {
+            return "null";
+        }
+        int from = number(edit, "from");
+        String next = text.substring(0, from) + edit.getMember("insert").asString()
+                + text.substring(number(edit, "to"));
+        int caret = from + number(edit, "caret");
+        Value anchor = edit.getMember("anchor");
+        if (anchor == null || anchor.isNull()) {
+            return next.substring(0, caret) + "|" + next.substring(caret);
+        }
+        int other = from + anchor.asInt();
+        return next.substring(0, Math.min(other, caret)) + "|" + next.substring(Math.min(other, caret),
+                Math.max(other, caret)) + "|" + next.substring(Math.max(other, caret));
+    }
+
+    @Test
+    void aQuoteOpensAPairWrapsASelectionAndStepsOverItsClosingQuote() {
+        assertEquals("title = '|'", press("title = |", "'"));
+        assertEquals("'|abc|'", press("|abc|", "'"));
+        assertEquals("'abc'|", press("'abc|'", "'"));
+        assertEquals("null", press("it|", "'"), "after a letter: typed as it is");
+        assertEquals("'it''|'", press("'it'|", "'"), "a doubled quote is typed as a pair, inside the string");
+    }
+
+    @Test
+    void aParenthesisPairsOutsideAStringOnlyAndBackspaceDeletesAnEmptyPair() {
+        assertEquals("UPPER(|)", press("UPPER|", "("));
+        assertEquals("null", press("'a|b'", "("), "a parenthesis in a string is text");
+        assertEquals("|", press("'|'", "Backspace"));
+        assertEquals("|", press("(|)", "Backspace"));
+        assertEquals("null", press("'it''|'", "Backspace"), "a doubled quote then the closing one");
+    }
 }
