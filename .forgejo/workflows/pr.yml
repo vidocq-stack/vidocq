@@ -173,6 +173,12 @@ jobs:
         # install runs the full lifecycle incl. integration-test/verify.
         run: mvn -B -ntp install
 
+      - name: Every published jar is a named module
+        if: steps.changes.outputs.docs-only != 'true'
+        # No Vidocq jar may reach an application's module path as an automatic module (Vidocq/vidocq#177,
+        # Vidocq/grimm#15). Reads the jars the install above just built. See check-named-modules.sh.
+        run: ./check-named-modules.sh
+
       # The repository's own TCK, on the pull request rather than after the merge.
       #
       # Opt-in and DECLARED BY THE REPOSITORY, in its root pom.xml:

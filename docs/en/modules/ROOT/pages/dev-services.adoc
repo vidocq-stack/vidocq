@@ -33,6 +33,14 @@ Testcontainers and the Docker client never reach the application's own module pa
 depends on nothing but `vidocq-runtime-devservices-extension`, which reads a small state file and
 has no Testcontainers, no Maven API and no JSON library of its own.
 
+[#named-modules]
+Every dev services jar is a named module [.tag-new]#NEW#, as every published Vidocq jar is: none of them
+reaches a module path as an automatic module. The providers name Testcontainers by the name its jar's
+file gives it (`testcontainers`), which is fine where they run, the plugin's class path, and they need
+Testcontainers' core only: the PostgreSQL provider configures a plain container rather than
+Testcontainers' `postgresql` module. `vidocq-runtime-devservices-junit` still lands on a test run's
+class path, where its `META-INF/services` entry finds it; on a module path, its `provides` does.
+
 [#configuration-sources]
 == Configuration sources [.tag-new]#NEW#
 

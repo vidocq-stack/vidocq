@@ -23,10 +23,12 @@ import io.vidocq.runtime.devservices.spi.DevContainers;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.devservices.spi.DevServiceState;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -67,7 +69,10 @@ public final class PostgresDevService implements DevService {
     /** The longest scheme a reason shows, {@code jdbc:} included. */
     private static final int MAX_SCHEME = 32;
 
-    private final List<PostgreSQLContainer<?>> containers = new ArrayList<>();
+    /** The port PostgreSQL listens on in its container. */
+    static final int PORT = 5432;
+
+    private final List<GenericContainer<?>> containers = new ArrayList<>();
     private final List<String> images = new ArrayList<>();
 
     @Override
@@ -109,39 +114,45 @@ public final class PostgresDevService implements DevService {
         }
         Map<String, String> props = new LinkedHashMap<>();
         for (DatasourcePlan ds : plan(ctx)) {
-            PostgreSQLContainer<?> c = container(ctx, ds, reuse);
+            GenericContainer<?> c = container(ctx, ds, reuse);
             c.start();
             containers.add(c);
             images.add(ds.image());
-            props.put(ds.poolPrefix() + "url", c.getJdbcUrl());
-            props.put(ds.poolPrefix() + "username", c.getUsername());
-            props.put(ds.poolPrefix() + "password", c.getPassword());
-            ctx.log().log(System.Logger.Level.INFO,
-                    "Postgres dev service '" + ds.name() + "' ready at " + c.getJdbcUrl());
+            String url = jdbcUrl(c.getHost(), c.getMappedPort(PORT), ds.db());
+            props.put(ds.poolPrefix() + "url", url);
+            props.put(ds.poolPrefix() + "username", ds.username());
+            props.put(ds.poolPrefix() + "password", ds.password());
+            ctx.log().log(System.Logger.Level.INFO, "Postgres dev service '" + ds.name() + "' ready at " + url);
         }
         return props;
     }
 
     /**
      * The container of one datasource, not started: named and labelled by {@link DevContainers}, the datasource's
-     * name as qualifier unless it is the {@code @Default} one.
+     * name as qualifier unless it is the {@code @Default} one. A plain {@link GenericContainer} configured as
+     * Testcontainers' {@code PostgreSQLContainer} configures itself (its environment, {@code fsync=off}, its port, the
+     * second "ready" line of the log): that class ships in a jar of its own whose package, also Testcontainers'
+     * core's, would split between two modules once this one is a named module (Vidocq/vidocq#177).
      */
-    static PostgreSQLContainer<?> container(DevServiceContext ctx, DatasourcePlan ds, boolean reuse) {
+    static GenericContainer<?> container(DevServiceContext ctx, DatasourcePlan ds, boolean reuse) {
         String qualifier = DEFAULT_NAME.equals(ds.name()) ? null : ds.name();
         String reuseKey = reuse
                 ? String.join("\n", ds.image(), ds.db(), ds.username(), ds.password(), String.valueOf(ds.fixedPort()))
                 : null;
         String name = DevContainers.name(ctx, "postgres", qualifier, reuseKey);
-        PostgreSQLContainer<?> c = new PostgreSQLContainer<>(
-                DockerImageName.parse(ds.image()).asCompatibleSubstituteFor("postgres"))
-                .withDatabaseName(ds.db())
-                .withUsername(ds.username())
-                .withPassword(ds.password())
+        GenericContainer<?> c = new GenericContainer<>(DockerImageName.parse(ds.image()))
+                .withEnv("POSTGRES_DB", ds.db())
+                .withEnv("POSTGRES_USER", ds.username())
+                .withEnv("POSTGRES_PASSWORD", ds.password())
+                .withCommand("postgres", "-c", "fsync=off")
+                .withExposedPorts(PORT)
+                .waitingFor(Wait.forLogMessage(".*database system is ready to accept connections.*\\s", 2)
+                        .withStartupTimeout(Duration.ofSeconds(60)))
                 .withLabels(DevContainers.labels(ctx, "postgres"))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
         if (ds.fixedPort() != null) {
             // Pin the host port so an external tool keeps the same coordinates across restarts.
-            c.setPortBindings(List.of(ds.fixedPort() + ":5432"));
+            c.setPortBindings(List.of(ds.fixedPort() + ":" + PORT));
         }
         if (reuse) {
             c.withReuse(true);
@@ -149,9 +160,14 @@ public final class PostgresDevService implements DevService {
         return c;
     }
 
+    /** The JDBC URL of a database at {@code host:port}, as Testcontainers' {@code PostgreSQLContainer} writes it. */
+    static String jdbcUrl(String host, int port, String db) {
+        return "jdbc:postgresql://" + host + ":" + port + "/" + db + "?loggerLevel=OFF";
+    }
+
     @Override
     public void stop() {
-        for (PostgreSQLContainer<?> c : containers) {
+        for (GenericContainer<?> c : containers) {
             try {
                 c.stop();
             } catch (RuntimeException ignored) {

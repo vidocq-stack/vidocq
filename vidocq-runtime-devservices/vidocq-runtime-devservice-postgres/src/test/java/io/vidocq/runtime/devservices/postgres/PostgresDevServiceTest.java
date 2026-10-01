@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Timeout;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.core.CreateContainerCmdModifier;
 
 import java.lang.reflect.Proxy;
@@ -373,13 +372,29 @@ class PostgresDevServiceTest {
         };
     }
 
+    // ---- the container: Testcontainers' core GenericContainer only (Vidocq/vidocq#177), pure, no Docker ----
+
+    @Test
+    void theContainerIsAPostgresImageConfiguredByItsEnvironmentSoOnlyTheTestcontainersCoreIsNeeded() {
+        DevServiceContext ctx = ctx(Map.of("vidocq.dev.postgres.db", "arago"));
+        PostgresDevService.DatasourcePlan ds = PostgresDevService.plan(ctx).getFirst();
+
+        GenericContainer<?> c = PostgresDevService.container(ctx, ds, false);
+
+        assertEquals(Map.of("POSTGRES_DB", "arago", "POSTGRES_USER", "vidocq", "POSTGRES_PASSWORD", "vidocq"),
+                c.getEnvMap());
+        assertEquals(List.of(5432), c.getExposedPorts());
+        assertEquals("jdbc:postgresql://localhost:55432/arago?loggerLevel=OFF",
+                PostgresDevService.jdbcUrl("localhost", 55432, "arago"), "the URL PostgreSQLContainer wrote");
+    }
+
     // ---- container name and labels (pure, no Docker) ----
 
     @Test
     void theDefaultDatasourceContainerIsNamedAfterVidocqTheApplicationAndPostgres() {
         PostgresDevService.DatasourcePlan ds = PostgresDevService.plan(ctx(Map.of())).getFirst();
 
-        PostgreSQLContainer<?> c = PostgresDevService.container(ctx(Map.of()), ds, false);
+        GenericContainer<?> c = PostgresDevService.container(ctx(Map.of()), ds, false);
 
         assertTrue(createdName(c).matches("vidocq-dev-[a-z0-9_.-]+-postgres-[0-9a-f]{8}"), createdName(c));
         assertEquals("true", c.getLabels().get("io.vidocq.dev"));
