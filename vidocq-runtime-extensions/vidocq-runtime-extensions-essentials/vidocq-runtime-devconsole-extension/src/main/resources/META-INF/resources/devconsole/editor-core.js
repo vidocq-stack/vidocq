@@ -960,12 +960,85 @@ function read(text, data) {
   return lastRead.read;
 }
 
+// ------------------------------------------------------------------------------------------------ query: completion
+
+/** The clauses whose expressions name the target's attributes (spec §3.3). */
+const EXPRESSION_CLAUSES = new Set(["SELECT", "WHERE", "ORDER BY", "SET"]);
+/** The kinds of a token that is a word being typed. */
+const WORDS = new Set(["keyword", "function", "target", "attribute", "identifier"]);
+
+/** The clause phrase that starts at token {@code k}, as its list of words, the longest one; null when none does. */
+const clauseAt = (v, tokens, k) => v.clauses.find((words) => words.every((w, i) => tokens[k + i] !== undefined
+  && tokens[k + i].kind === "keyword" && tokens[k + i].word === w)) || null;
+
+/** The clause the tokens before index {@code end} leave open: the last clause phrase, such as "ORDER BY", or null. */
+function clauseBefore(v, tokens, end) {
+  let clause = null;
+  for (let k = 0; k < end; k++) {
+    const words = clauseAt(v, tokens, k);
+    if (words !== null && k + words.length <= end) {
+      clause = words.join(" ");
+      k += words.length - 1;
+    }
+  }
+  return clause;
+}
+
+/** The completion items of the attributes of {@code entry}, in its order. */
+const attributeItems = (entry) => [...entry.attributes.values()].map((a) => ({ insert: a.name, label: a.name,
+  detail: a.detail, kind: "attribute" }));
+
+/**
+ * The completion at {@code caret} (spec §3.3): { from, to, items }, from-to the word being typed (a path's last
+ * segment only), items filtered by it ignoring case: after a targetAfter word the targets; after "name." the
+ * attributes of the target it refers to; in a SELECT, WHERE, ORDER BY or SET clause of a known target its
+ * attributes, self, the functions (inserted with "(" and the caret inside) and the other keywords; anywhere else the
+ * keywords. null in a string, a number or a parameter, or with nothing to offer.
+ */
+function completeQuery(text, caret, data) {
+  const { v, tokens, target } = read(text, data);
+  const current = tokens.find((t) => t.from < caret && caret <= t.to) || null;
+  const word = current !== null && WORDS.has(current.kind) ? current : null;
+  if (current !== null && word === null && current.kind !== "punct" && current.kind !== "operator") return null;
+  const from = word !== null ? word.from : caret;
+  const to = word !== null ? word.to : caret;
+  let p = -1;
+  while (p + 1 < tokens.length && tokens[p + 1].to <= from) p++;
+  const previous = tokens[p];
+  let items;
+  if (previous !== undefined && previous.kind === "punct" && text[previous.from] === "." && previous.to === from) {
+    const owner = tokens[p - 1];
+    const entry = owner === undefined || owner.to !== previous.from ? null : owner.self ? target
+      : owner.attribute !== undefined && owner.attribute.target !== null
+        ? v.targets.get(owner.attribute.target) || null : null;
+    items = entry !== null ? attributeItems(entry) : [];
+  } else if (previous !== undefined && previous.kind === "keyword" && v.targetAfter.has(previous.word)) {
+    items = [...v.targets.values()].map((t) => ({ insert: t.name, label: t.name, detail: t.detail, kind: "target" }));
+  } else {
+    const keywords = v.keywordList.map((k) => ({ insert: k, label: k, detail: "keyword", kind: "keyword" }));
+    if (target !== null && EXPRESSION_CLAUSES.has(clauseBefore(v, tokens, p + 1))) {
+      const call = text[to] === "(";
+      items = [...attributeItems(target),
+        { insert: v.self, label: v.self, detail: "the " + target.name + " itself", kind: "keyword" },
+        ...v.functionList.map((f) => call ? { insert: f, label: f, detail: "function", kind: "function" }
+          : { insert: f + "()", label: f, detail: "function", kind: "function", caret: f.length + 1 }),
+        ...keywords.filter((k) => !v.functions.has(k.label) && k.label !== v.self.toUpperCase())];
+    } else {
+      items = keywords;
+    }
+  }
+  const prefix = text.slice(from, caret).toLowerCase();
+  items = items.filter((item) => item.label.toLowerCase().startsWith(prefix));
+  return items.length ? { from, to, items } : null;
+}
+
 // ------------------------------------------------------------------------------------------------ the query language
 
 /** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
 const QUERY = Object.freeze({
   id: "query",
   tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
+  complete: completeQuery,
   pairs: Object.freeze(["()", "''"]),
 });
 

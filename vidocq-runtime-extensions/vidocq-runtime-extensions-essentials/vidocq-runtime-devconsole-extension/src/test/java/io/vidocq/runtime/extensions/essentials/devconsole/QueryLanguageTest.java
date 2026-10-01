@@ -233,4 +233,142 @@ class QueryLanguageTest {
         assertEquals("keyword:FROM target:Task keyword:WHERE identifier:p",
                 tokens("FROM Task WHERE p", parsed("{\"targets\": {\"Task\": {}}}")), "a target with no attributes");
     }
+
+    // ------------------------------------------------------------------------------------------------ completion
+
+    /** Every keyword of the fixture but the functions and self, in its order: what follows them in a clause. */
+    private static final String OTHER_KEYWORDS = "SELECT FROM WHERE ORDER BY AND OR NOT IS NULL BETWEEN LIKE IN ASC "
+            + "DESC UPDATE SET DELETE TRUE FALSE";
+    /** Every keyword of the fixture, in its order. */
+    private static final String KEYWORDS = "SELECT FROM WHERE ORDER BY AND OR NOT IS NULL BETWEEN LIKE IN ASC DESC "
+            + "UPDATE SET DELETE COUNT THIS SUM AVG MIN MAX TRUE FALSE";
+    /** The functions of the fixture as they are inserted, a | where the caret lands. */
+    private static final String FUNCTIONS = "UPPER(|) LOWER(|) LENGTH(|) ABS(|) CONCAT(|) COUNT(|) SUM(|) AVG(|) "
+            + "MIN(|) MAX(|)";
+
+    /**
+     * The completion where {@code marked} has its |, read with {@code data}: "from-to", then each item's insert, a |
+     * where the caret lands inside it, separated by spaces; "null" when there is none.
+     */
+    private static String complete(String marked, Value data) {
+        Value found = completion(marked, data);
+        if (found.isNull()) {
+            return "null";
+        }
+        List<String> out = new ArrayList<>(List.of(number(found, "from") + "-" + number(found, "to")));
+        Value items = found.getMember("items");
+        for (long i = 0; i < items.getArraySize(); i++) {
+            Value item = items.getArrayElement(i);
+            String insert = item.getMember("insert").asString();
+            Value caret = item.getMember("caret");
+            out.add(caret == null || caret.isNull() ? insert
+                    : insert.substring(0, caret.asInt()) + "|" + insert.substring(caret.asInt()));
+        }
+        return String.join(" ", out);
+    }
+
+    private static String complete(String marked) {
+        return complete(marked, jdql);
+    }
+
+    /** The items of that completion as label: detail, one per line. */
+    private static String details(String marked) {
+        Value items = completion(marked, jdql).getMember("items");
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < items.getArraySize(); i++) {
+            Value item = items.getArrayElement(i);
+            out.add(item.getMember("label").asString() + ": " + item.getMember("detail").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    private static Value completion(String marked, Value data) {
+        int caret = marked.indexOf('|');
+        return language.invokeMember("complete", marked.substring(0, caret) + marked.substring(caret + 1), caret,
+                data);
+    }
+
+    @Test
+    void afterFromOrUpdateTheTargetsWithTheirDetail() {
+        assertEquals("5-5 Task Project", complete("FROM |"));
+        assertEquals("Task: table task\nProject: table project", details("FROM |"));
+        assertEquals("5-6 Task", complete("FROM T|"));
+        assertEquals("12-16 Task", complete("DELETE FROM ta|sk WHERE id = 1"), "the whole word, ignoring case");
+        assertEquals("7-7 Task Project", complete("UPDATE |"));
+    }
+
+    @Test
+    void afterANameAndADotTheAttributesOfTheTargetItRefersTo() {
+        assertEquals("24-24 id name lead", complete("FROM Task WHERE project.|"));
+        assertEquals("id: Long · id, generated\nname: String · column name\nlead: → Task · column lead_id",
+                details("FROM Task WHERE project.|"));
+        assertEquals("24-26 name", complete("FROM Task WHERE project.na|"), "the last segment only");
+        assertEquals("29-29 id title status price dueDate project", complete("FROM Task WHERE project.lead.|"),
+                "back to the Task: a cycle is one step at a time");
+        assertEquals("21-21 id title status price dueDate project", complete("FROM Task WHERE this.|"));
+        assertEquals("null", complete("FROM Task WHERE title.|"), "a title is no reference");
+        assertEquals("null", complete("FROM Task WHERE nothing.|"));
+    }
+
+    @Test
+    void inAnExpressionClauseOfAKnownTargetItsAttributesSelfTheFunctionsThenTheOtherKeywords() {
+        assertEquals("7-7 id title status price dueDate project this " + FUNCTIONS + " " + OTHER_KEYWORDS,
+                complete("SELECT | FROM Task"), "the target written after the caret");
+        assertEquals("id: Long · id, generated\ntitle: String · column title\nstatus: Status · column status\n"
+                + "price: BigDecimal · column price\ndueDate: LocalDate · column due_date\n"
+                + "project: → Project · column project_id\nthis: the Task itself",
+                String.join("\n", details("SELECT | FROM Task").lines().limit(7).toList()));
+        assertEquals("16-18 title", complete("FROM Task WHERE ti|"));
+        assertEquals("16-18 UPPER(|) UPDATE", complete("FROM Task WHERE up|"));
+        assertEquals("16-18 UPPER UPDATE", complete("FROM Task WHERE up|(title) = 'A'"), "a parenthesis already there");
+        assertEquals("16-19 ORDER", complete("FROM Task WHERE ord|"));
+        assertEquals("26-26 id title status price dueDate project this " + FUNCTIONS + " " + OTHER_KEYWORDS,
+                complete("FROM Task ORDER BY title, |"));
+        assertEquals("16-18 status", complete("UPDATE Task SET st| = 'DONE'"));
+    }
+
+    @Test
+    void anywhereElseOrWithNoKnownTargetTheKeywordsInCapitals() {
+        assertEquals("0-0 " + KEYWORDS, complete("|"));
+        assertEquals("10-10 " + KEYWORDS, complete("FROM Task |"), "after the target");
+        assertEquals("10-12 WHERE", complete("FROM Task wh|"), "filtered ignoring case");
+        assertEquals("7-7 " + KEYWORDS, complete("SELECT |"), "no target yet");
+        assertEquals("16-16 " + KEYWORDS, complete("FROM Nope WHERE |"), "an unknown target");
+        assertEquals("16-18 UPDATE", complete("FROM Task WHERE up|", null), "no vocabulary");
+    }
+
+    @Test
+    void nothingInAStringANumberOrAParameter() {
+        assertEquals("null", complete("FROM Task WHERE title = 'a|'"));
+        assertEquals("null", complete("FROM Task WHERE title = 'open|"));
+        assertEquals("null", complete("FROM Task WHERE id = 1|"));
+        assertEquals("null", complete("FROM Task WHERE id = :i|"));
+        assertEquals("null", complete("FROM |", null), "a target position with no target to offer");
+    }
+
+    @Test
+    void oddDataOffersTheKeywordsAndNeverThrows() {
+        for (String odd : new String[] {"\"a string\"", "[]", "{\"targets\": {\"Task\": {}}}",
+                "{\"targets\": {\"Task\": {\"attributes\": {\"p\": {\"target\": \"Nothing\"}}}}}"}) {
+            assertEquals("16-18 UPDATE", complete("FROM Task WHERE up|", parsed(odd)).replace("UPPER(|) ", ""), odd);
+            assertEquals("null", complete("FROM Task WHERE p.|", parsed(odd)), odd);
+        }
+    }
+
+    @Test
+    void aLargeVocabularyIsReadOnceAndCompletesByPrefix() {
+        StringBuilder targets = new StringBuilder("{\"targets\": {");
+        for (int t = 0; t < 500; t++) {
+            targets.append(t == 0 ? "" : ",").append("\"T").append(t).append("\": {\"attributes\": {");
+            for (int a = 0; a < 30; a++) {
+                targets.append(a == 0 ? "" : ",").append("\"a").append(a).append("\": {\"type\": \"string\"}");
+            }
+            targets.append("}}");
+        }
+        Value large = parsed(targets.append("}}").toString());
+
+        assertEquals("5-8 T49 T490 T491 T492 T493 T494 T495 T496 T497 T498 T499", complete("FROM T49|", large));
+        large.getMember("targets").putMember("T4999", parsed("{\"attributes\": {}}"));
+        assertEquals("5-9 T499", complete("FROM T499|", large), "read once: a later change of the object is not seen");
+    }
 }
