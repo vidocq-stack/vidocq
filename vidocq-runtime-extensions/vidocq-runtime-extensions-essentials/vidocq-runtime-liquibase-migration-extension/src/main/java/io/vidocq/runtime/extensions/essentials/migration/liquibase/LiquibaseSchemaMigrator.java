@@ -27,6 +27,8 @@ import io.vidocq.runtime.spi.ApplicationLayer;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
+import liquibase.Scope;
+import liquibase.analytics.configuration.AnalyticsArgs;
 import liquibase.changelog.ChangeSet;
 import liquibase.changelog.RanChangeSet;
 import liquibase.database.Database;
@@ -39,6 +41,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Liquibase-backed {@link SchemaMigrator}. {@code locations.get(0)} is the changelog path.
@@ -129,19 +132,38 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
         R run(Liquibase liquibase) throws Exception;
     }
 
-    /** Runs {@code work} on a connection of its own to {@code t}, closed afterwards. */
+    /** Runs {@code work} on a connection of its own to {@code t}, closed afterwards, analytics off by default. */
     private static <R> R withLiquibase(MigrationTarget t, ResourceAccessor resources, String what, Work<R> work) {
         String changelog = t.locations().isEmpty() ? DEFAULT_CHANGELOG : t.locations().get(0);
-        try (Connection conn = DriverManager.getConnection(t.jdbcUrl(), t.username(), t.password())) {
-            Database database = DatabaseFactory.getInstance()
-                    .findCorrectDatabaseImplementation(new JdbcConnection(conn));
-            try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {
-                return work.run(liquibase);
-            }
+        try {
+            return withoutAnalyticsByDefault(() -> {
+                try (Connection conn = DriverManager.getConnection(t.jdbcUrl(), t.username(), t.password())) {
+                    Database database = DatabaseFactory.getInstance()
+                            .findCorrectDatabaseImplementation(new JdbcConnection(conn));
+                    try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {
+                        return work.run(liquibase);
+                    }
+                }
+            });
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Liquibase " + what + " failed for '" + t.dataSourceName() + "': " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Runs {@code work} with Liquibase's analytics off unless someone configured them. Liquibase 4.30+ sends usage
+     * data to Liquibase by default for OSS users ({@code liquibase.analytics.enabled}, fetching its settings from
+     * {@code config.liquibase.com}); a Vidocq application talks to no third party it was not told to. A value set
+     * anywhere Liquibase reads its configuration (a system property, the environment, a defaults file) is kept: a
+     * scope value would override it, so it is only set when no source holds one. The option declares no default —
+     * Liquibase decides "on for OSS users" elsewhere — so {@code found()} tells it, not {@code wasDefaultValueUsed()}.
+     */
+    static <R> R withoutAnalyticsByDefault(Scope.ScopedRunnerWithReturn<R> work) throws Exception {
+        if (AnalyticsArgs.ENABLED.getCurrentConfiguredValue().found()) {
+            return work.run();
+        }
+        return Scope.child(Map.of(AnalyticsArgs.ENABLED.getKey(), Boolean.FALSE), work);
     }
 
     private static ResourceAccessor currentResources() {

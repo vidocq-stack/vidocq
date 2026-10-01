@@ -36,7 +36,7 @@
 
 | `vidocq-runtime-liquibase-migration-extension`
 | `essentials`
-| Liquibase-based schema migrations.
+| Liquibase-based schema migrations. Liquibase's usage analytics stay off unless you configure them (<<schema-migration-liquibase-analytics>>).
 
 | `vidocq-runtime-langchain4j-cdi-mcp-extension` [.tag-new]#NEW#
 | `essentials`
@@ -1046,6 +1046,11 @@ The backends now list `classpath:` locations from the application's own modules,
 * Liquibase: the changelog, every file it includes, and the directories of `includeAll`.
 
 A `@VidocqMain` trampoline re-layers the application in `Vidocq.run()`, so its IDE and flat launches take this path too. A launch that leaves the application module in the JVM's boot layer keeps the backend's own scanning: `-Dvidocq.dev.layer=false` or `vidocq.package.layer=false` for an application without a trampoline, a class-path launch, and the tests. Flyway locations that mix `classpath:` with `filesystem:` are left to Flyway's scanner, which cannot list the `classpath:` ones in the application layer. The migration logs a warning saying so: keep the locations all `classpath:` or all `filesystem:`.
+
+[#schema-migration-liquibase-analytics]
+=== Liquibase analytics stay off [.tag-new]#NEW#
+
+Since 4.30, Liquibase sends usage data to Liquibase by default for open-source users (`liquibase.analytics.enabled`, with its settings fetched from `config.liquibase.com`). The extension runs every migration, listing and clean with that option off, unless a value is configured where Liquibase reads its configuration: `-Dliquibase.analytics.enabled=true`, `LIQUIBASE_ANALYTICS_ENABLED`, or a defaults file. A configured value, `true` or `false`, is kept as it is.
 
 [#schema-migration-report]
 === In the startup report [.tag-new]#NEW#

@@ -51,6 +51,41 @@ class LiquibaseSchemaMigratorTest {
         assertTrue(count(url, "widget") >= 0);
     }
 
+    // ── Liquibase analytics ───────────────────────────────────────────────────
+
+    @Test
+    void aMigrationRunsWithLiquibaseAnalyticsOff() throws Exception {
+        // Liquibase 4.30+ sends usage data to Liquibase by default for OSS users
+        // (liquibase.analytics.enabled). A Vidocq application does not talk to a third party
+        // unless it says so: read the effective value while Liquibase reads the changelog.
+        var seen = new java.util.ArrayList<Boolean>();
+        var spying = new ClassLoaderResourceAccessor(getClass().getClassLoader()) {
+            @Override
+            public List<liquibase.resource.Resource> getAll(String path) throws java.io.IOException {
+                seen.add(liquibase.analytics.configuration.AnalyticsArgs.ENABLED.getCurrentValue());
+                return super.getAll(path);
+            }
+        };
+
+        new LiquibaseSchemaMigrator().migrate(target(url(), "db/testchangelog/db.changelog-master.xml"), spying);
+
+        // Unset (null) means "enabled for OSS users" to Liquibase: only an explicit false turns it off.
+        assertFalse(seen.isEmpty(), "the changelog was never read");
+        assertTrue(seen.stream().allMatch(Boolean.FALSE::equals), "analytics not off during the migration: " + seen);
+    }
+
+    @Test
+    void aConfiguredAnalyticsChoiceIsKept() throws Exception {
+        String key = liquibase.analytics.configuration.AnalyticsArgs.ENABLED.getKey();
+        System.setProperty(key, "true");
+        try {
+            assertTrue(LiquibaseSchemaMigrator.withoutAnalyticsByDefault(
+                    liquibase.analytics.configuration.AnalyticsArgs.ENABLED::getCurrentValue));
+        } finally {
+            System.clearProperty(key);
+        }
+    }
+
     // ── vidocq#96 ─────────────────────────────────────────────────────────────
 
     @Test
