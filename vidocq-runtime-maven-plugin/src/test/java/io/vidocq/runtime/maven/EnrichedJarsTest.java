@@ -34,6 +34,8 @@ import java.lang.module.ModuleFinder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -198,6 +200,96 @@ class EnrichedJarsTest {
         assertFalse(md.isAutomatic());
         assertTrue(md.isOpen());
         assertTrue(md.provides().stream().anyMatch(p -> p.service().equals(SPI)));
+    }
+
+    static Object fileKey(Path file) throws Exception {
+        return Files.readAttributes(file, BasicFileAttributes.class).fileKey();
+    }
+
+    @Test
+    void anUnchangedCopyIsNotRewrittenSinceARunningJvmMayHoldItOpen() throws Exception {
+        Path build = tmp.resolve("target");
+        Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.dep"),
+                "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
+        var scanned = List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0"));
+        EnrichedJars.enrichAll(build, scanned, List.of("org.dep._VaubanComponents"), List.of(lib), line -> { },
+                line -> { });
+        Path copy = EnrichedJars.resolve(build, lib);
+        FileTime old = FileTime.fromMillis(0);
+        Files.setLastModifiedTime(copy, old);
+        Object key = fileKey(copy);
+
+        List<Path> again = EnrichedJars.enrichAll(build, scanned, List.of("org.dep._VaubanComponents"),
+                List.of(lib), line -> { }, line -> { });
+
+        assertEquals(List.of(lib), again);
+        assertEquals(old, Files.getLastModifiedTime(copy), "an unchanged copy must not be written again");
+        assertEquals(key, fileKey(copy), "nor replaced by a new file");
+    }
+
+    @Test
+    void aChangedPatchRewritesTheCopyAndAJarNoLongerScannedLosesItsCopy() throws Exception {
+        Path build = tmp.resolve("target");
+        Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.dep"),
+                "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
+        Path other = jar(tmp.resolve("m2/other-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.other"),
+                "org/other/O.class", emptyClass("org.other.O")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
+        patch(JpmsPatches.patchDirFor(build, "other"), Map.of(
+                "org/other/_VaubanComponents.class", emptyClass("org.other._VaubanComponents")));
+        List<String> providers = List.of("org.dep._VaubanComponents", "org.other._VaubanComponents");
+        EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0"),
+                        new EnrichedJars.Scanned(other, "other", "org.other:other:1.0")), providers,
+                List.of(lib, other), line -> { }, line -> { });
+        assertTrue(EnrichedJars.isEnriched(build, other));
+
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/Service_ClientProxy.class", emptyClass("org.dep.Service_ClientProxy")));
+        EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")), providers,
+                List.of(lib, other), line -> { }, line -> { });
+
+        try (JarFile copy = new JarFile(EnrichedJars.resolve(build, lib).toFile())) {
+            assertTrue(copy.getEntry("org/dep/Service_ClientProxy.class") != null, "the new class is in the copy");
+        }
+        assertFalse(EnrichedJars.isEnriched(build, other), "a jar no longer scanned keeps no stale copy");
+    }
+
+    @Test
+    void atPackagingTheCopyTakesTheDescriptorVaubanModularizeWrote() throws Exception {
+        Path build = tmp.resolve("target");
+        Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"),
+                Map.of("org/auto/A.class", emptyClass("org.auto.A")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "auto-lib"), Map.of(
+                "org/auto/_VaubanComponents.class", emptyClass("org.auto._VaubanComponents")));
+        var dep = new EnrichedJars.Scanned(auto, "auto-lib", "org.auto:auto-lib:1.0");
+        // A clean build: generate runs before vauban:modularize, so it synthesizes its own descriptor.
+        EnrichedJars.enrichAll(build, List.of(dep), List.of("org.auto._VaubanComponents"), List.of(auto),
+                line -> { }, line -> { });
+        // prepare-package: vauban:modularize, configured with a module name, writes its copy.
+        jar(build.resolve("vauban-modularized/auto-lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.renamed"),
+                "org/auto/A.class", emptyClass("org.auto.A")), Map.of());
+
+        EnrichedJars.rebaseOnModularized(build, dep, line -> { });
+
+        Path copy = EnrichedJars.resolve(build, auto);
+        ModuleDescriptor md = descriptorOf(copy);
+        assertEquals("org.renamed", md.name());
+        assertEquals(List.of("org.auto._VaubanComponents"), md.provides().stream()
+                .filter(p -> p.service().equals(SPI)).findFirst().orElseThrow().providers());
+        // The next build's generate starts from that same modularized jar: it keeps the copy as it is.
+        FileTime old = FileTime.fromMillis(0);
+        Files.setLastModifiedTime(copy, old);
+        EnrichedJars.enrichAll(build, List.of(dep), List.of("org.auto._VaubanComponents"), List.of(auto),
+                line -> { }, line -> { });
+        assertEquals(old, Files.getLastModifiedTime(copy));
+        assertEquals("org.renamed", descriptorOf(copy).name());
     }
 
     @Test

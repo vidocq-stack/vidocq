@@ -133,6 +133,9 @@ public class VidocqPackageMojo extends AbstractMojo {
                         continue;
                     }
                     Path original = artifact.getFile().toPath();
+                    EnrichedJars.rebaseOnModularized(buildDir.toPath(), new EnrichedJars.Scanned(original,
+                            artifact.getArtifactId(), artifact.getGroupId() + ":" + artifact.getArtifactId() + ":"
+                                    + artifact.getVersion()), getLog()::info);
                     Path src = EnrichedJars.resolve(buildDir.toPath(), original);
                     boolean enriched = EnrichedJars.isEnriched(buildDir.toPath(), original);
                     if (enriched) {

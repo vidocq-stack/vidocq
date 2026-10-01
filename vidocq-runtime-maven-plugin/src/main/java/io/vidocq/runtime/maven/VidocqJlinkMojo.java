@@ -174,6 +174,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
                 // descriptor), else the copy patched with a generated module-info by vauban:modularize:
                 // jlink rejects automatic modules, so this is what makes a non-modular
                 // dependency stageable at all.
+                EnrichedJars.rebaseOnModularized(buildDir.toPath(), new EnrichedJars.Scanned(f.toPath(),
+                        artifact.getArtifactId(), artifact.getGroupId() + ":" + artifact.getArtifactId() + ":"
+                                + artifact.getVersion()), getLog()::info);
                 Path modularized = EnrichedJars.resolve(buildDir.toPath(), f.toPath());
                 if (!modularized.equals(f.toPath())) {
                     src = modularized;

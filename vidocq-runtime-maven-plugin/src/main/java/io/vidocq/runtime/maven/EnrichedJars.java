@@ -35,6 +35,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -70,6 +71,9 @@ public final class EnrichedJars {
     static final String MODULE_INFO = "module-info.class";
     static final String ENRICHED_FROM = "Vidocq-Enriched-From";
     static final String ENRICHED_DIGEST = "Vidocq-Enriched-Digest";
+    /** A digest of everything the copy was written from, so a run with the same inputs leaves it alone. */
+    static final String ENRICHED_INPUTS = "Vidocq-Enriched-Inputs";
+    private static final String PROVIDER_CLASS_FILE = "_VaubanComponents.class";
 
     /** One scanned dependency: the original jar, its artifact id and {@code groupId:artifactId:version}. */
     public record Scanned(Path originalJar, String artifactId, String coordinates) {}
@@ -118,14 +122,28 @@ public final class EnrichedJars {
                                        List<Path> closure, Consumer<String> info, Consumer<String> warn)
             throws IOException {
         List<Path> enriched = new ArrayList<>();
+        Set<String> current = new HashSet<>();
         for (Scanned dep : scanned) {
             Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
             if (!Files.isDirectory(patchDir)) {
                 continue;
             }
             Path source = ModularizedJars.resolve(buildDir, dep.originalJar());
+            boolean synthesize = !hasRootDescriptor(source);
+            Set<String> packages = JpmsPatches.packagesOf(source);
+            List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
+            Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
+            String inputs = inputs(source, patchDir, own, dep.coordinates(), synthesize ? closure : List.of());
+            if (inputs.equals(inputsOf(out))) {
+                // Written by an earlier run from the same inputs: left untouched, since a running vidocq:dev
+                // child holds it open, and a jar held open cannot be replaced on every platform.
+                current.add(out.getFileName().toString());
+                enriched.add(dep.originalJar());
+                info.accept("Enriched copy of " + dep.originalJar().getFileName() + " is up to date");
+                continue;
+            }
             byte[] moduleInfo = null;
-            if (!hasRootDescriptor(source)) {
+            if (synthesize) {
                 Optional<byte[]> synthesized = Modularizer.synthesizeOne(source, closure, true, info);
                 if (synthesized.isEmpty()) {
                     warn.accept(dep.artifactId() + ": no module descriptor can be given to it here, so its"
@@ -134,15 +152,41 @@ public final class EnrichedJars {
                 }
                 moduleInfo = synthesized.get();
             }
-            Set<String> packages = JpmsPatches.packagesOf(source);
-            List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
-            Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
-            write(source, moduleInfo, patchDir, own, dep.coordinates(), dep.originalJar(), out);
+            write(source, moduleInfo, patchDir, own, dep.coordinates(), dep.originalJar(), out, inputs);
+            current.add(out.getFileName().toString());
             enriched.add(dep.originalJar());
             info.accept("Enriched " + dep.originalJar().getFileName() + " with its generated code (" + own.size()
                     + " provider(s)) → target/" + DIR_NAME + "/" + out.getFileName());
         }
+        retainOnly(buildDir, current);
         return enriched;
+    }
+
+    /**
+     * At packaging, after {@code vauban:modularize}: rebuilds the enriched copy of {@code dep} on the jar that goal
+     * modularized, when there is one, so the module name and openness it was configured with are those shipped. On a
+     * clean build {@code vidocq:generate} runs first and synthesizes a descriptor of its own; on a later build it
+     * starts from the modularized jar already. Either way the package ends the same. A no-op when nothing changed.
+     */
+    public static void rebaseOnModularized(Path buildDir, Scanned dep, Consumer<String> info) throws IOException {
+        Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
+        Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
+        if (!Files.isRegularFile(out) || !Files.isDirectory(patchDir)
+                || !ModularizedJars.isModularized(buildDir, dep.originalJar())) {
+            return;
+        }
+        Path source = ModularizedJars.resolve(buildDir, dep.originalJar());
+        if (!hasRootDescriptor(source)) {
+            return;
+        }
+        List<String> providers = providersIn(patchDir);
+        String inputs = inputs(source, patchDir, providers, dep.coordinates(), List.of());
+        if (inputs.equals(inputsOf(out))) {
+            return;
+        }
+        write(source, null, patchDir, providers, dep.coordinates(), dep.originalJar(), out, inputs);
+        info.accept("Rebuilt the enriched copy of " + dep.originalJar().getFileName()
+                + " on the module descriptor vauban:modularize generated");
     }
 
     /**
@@ -156,6 +200,12 @@ public final class EnrichedJars {
      */
     public static void write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers,
                              String coordinates, Path originalJar, Path out) throws IOException {
+        write(source, moduleInfo, patchDir, providers, coordinates, originalJar, out,
+                inputs(source, patchDir, providers, coordinates, List.of()));
+    }
+
+    private static void write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers,
+                              String coordinates, Path originalJar, Path out, String inputs) throws IOException {
         Map<String, byte[]> patch = readTree(patchDir);
         Set<String> requires = VaubanModuleReferences.of(patch.entrySet().stream()
                 .filter(e -> e.getKey().endsWith(".class")).map(Map.Entry::getValue).toList());
@@ -196,6 +246,7 @@ public final class EnrichedJars {
         main.putIfAbsent(Attributes.Name.MANIFEST_VERSION, "1.0");
         main.putValue(ENRICHED_FROM, coordinates);
         main.putValue(ENRICHED_DIGEST, "sha256:" + sha256(originalJar));
+        main.putValue(ENRICHED_INPUTS, inputs);
 
         Files.createDirectories(out.toAbsolutePath().getParent());
         Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
@@ -217,6 +268,57 @@ public final class EnrichedJars {
         String upper = name.toUpperCase(Locale.ROOT);
         return upper.endsWith(".SF") || upper.endsWith(".RSA") || upper.endsWith(".DSA") || upper.endsWith(".EC")
                 || upper.startsWith("META-INF/SIG-");
+    }
+
+    /**
+     * {@code sha256:…} over what a copy is written from: the source jar, the parked classes, the providers, the
+     * coordinates, and, when a descriptor is synthesized, the names of the jars jdeps resolves against.
+     */
+    private static String inputs(Path source, Path patchDir, List<String> providers, String coordinates,
+                                 List<Path> closure) throws IOException {
+        MessageDigest digest = sha256();
+        Consumer<String> add = s -> digest.update((s + "\n").getBytes(StandardCharsets.UTF_8));
+        add.accept("source " + sha256(source));
+        add.accept("coordinates " + coordinates);
+        providers.stream().sorted().forEach(p -> add.accept("provider " + p));
+        for (var e : readTree(patchDir).entrySet()) {
+            add.accept("class " + e.getKey() + " " + HexFormat.of().formatHex(sha256().digest(e.getValue())));
+        }
+        closure.stream().map(p -> p.getFileName().toString()).sorted().forEach(n -> add.accept("closure " + n));
+        return "sha256:" + HexFormat.of().formatHex(digest.digest());
+    }
+
+    /** The inputs stamp of an existing copy, or {@code null} when there is none or it cannot be read. */
+    private static String inputsOf(Path copy) {
+        if (!Files.isRegularFile(copy)) {
+            return null;
+        }
+        try (JarFile in = new JarFile(copy.toFile(), false)) {
+            return in.getManifest() == null ? null : in.getManifest().getMainAttributes().getValue(ENRICHED_INPUTS);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Deletes the copies this run did not keep or write: a jar no longer scanned is never substituted. */
+    private static void retainOnly(Path buildDir, Set<String> fileNames) throws IOException {
+        Path root = root(buildDir);
+        if (!Files.isDirectory(root)) {
+            return;
+        }
+        try (Stream<Path> files = Files.list(root)) {
+            for (Path p : files.filter(p -> !fileNames.contains(p.getFileName().toString())).toList()) {
+                Files.delete(p);
+            }
+        }
+    }
+
+    /** The {@code _VaubanComponents} classes parked in {@code patchDir}, as binary names. */
+    private static List<String> providersIn(Path patchDir) throws IOException {
+        return readTree(patchDir).keySet().stream()
+                .filter(name -> name.equals(PROVIDER_CLASS_FILE) || name.endsWith("/" + PROVIDER_CLASS_FILE))
+                .map(name -> name.substring(0, name.length() - ".class".length()).replace('/', '.'))
+                .sorted().toList();
     }
 
     private static boolean hasRootDescriptor(Path jar) throws IOException {
@@ -241,8 +343,12 @@ public final class EnrichedJars {
     }
 
     private static String sha256(Path file) throws IOException {
+        return HexFormat.of().formatHex(sha256().digest(Files.readAllBytes(file)));
+    }
+
+    private static MessageDigest sha256() {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)));
+            return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }

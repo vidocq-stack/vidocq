@@ -96,16 +96,12 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
-        try {
-            EnrichedJars.clear(buildDirectory.toPath());
-        } catch (IOException e) {
-            throw new MojoExecutionException("Cannot clear target/" + EnrichedJars.DIR_NAME, e);
-        }
         getLog().info("Vidocq - Generating bean index and proxies for dependencies");
 
         Path classesDir = outputDirectory.toPath();
         if (!Files.isDirectory(classesDir)) {
             getLog().info("No classes directory found, skipping");
+            clearEnrichedCopies();
             return;
         }
 
@@ -114,6 +110,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
             List<Path> vidocqDeps = new ArrayList<>(scannedByArtifactId.keySet());
             if (vidocqDeps.isEmpty()) {
                 getLog().info("No dependencies to process (scanDependencies empty or all pre-processed)");
+                clearEnrichedCopies();
                 return;
             }
 
@@ -205,7 +202,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
             List<EnrichedJars.Scanned> scanned = new ArrayList<>();
             List<Path> closure = new ArrayList<>();
             for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() == null) {
+                if (artifact.getFile() == null || !ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
                     continue;
                 }
                 Path jar = artifact.getFile().toPath();
@@ -220,6 +217,15 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to generate bean index", e);
+        }
+    }
+
+    /** Nothing is scanned this run: no earlier enriched copy may still stand in for its jar. */
+    private void clearEnrichedCopies() throws MojoExecutionException {
+        try {
+            EnrichedJars.clear(buildDirectory.toPath());
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot clear target/" + EnrichedJars.DIR_NAME, e);
         }
     }
 
