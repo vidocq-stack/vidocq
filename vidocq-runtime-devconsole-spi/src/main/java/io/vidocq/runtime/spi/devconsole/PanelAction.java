@@ -305,9 +305,9 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
      *
      * @param summary     one line, at most {@value #MAX_SUMMARY} characters, a longer one cut with {@code ...};
      *                    {@code null} reads as {@code done}
-     * @param contentType {@value #TEXT}, {@value #JSON}, which the page pretty-prints, or {@value #CSV}, which it
-     *                    shows as text with a Download button; {@code null} when there is no body,
-     *                    {@value #TEXT} when there is one and none was given
+     * @param contentType {@value #TEXT}, {@value #JSON}, which the page pretty-prints, {@value #CSV}, which it
+     *                    shows as text with a Download button, or {@value #ROWS}, which it draws as a table;
+     *                    {@code null} when there is no body, {@value #TEXT} when there is one and none was given
      * @param body        what to show, or {@code null}; at most {@value #MAX_CONTENT} characters, a longer one
      *                    truncated and ending with the marker {@code … truncated at 256 KiB}
      * @param error       {@code true} when the call went through but its outcome is an error of its target, such as
@@ -330,14 +330,24 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * {@code <action id>-<yyyyMMdd-HHmmss>.csv}, without a request. The body cap is the same.
          */
         public static final String CSV = "text/csv";
+        /**
+         * A table of rows, such as the answer of a SQL query: the page draws it as a table, a column's type dimmed
+         * under its name, a {@code null} as a dimmed {@code NULL}, with a switch to its JSON viewer and Copy as CSV.
+         * The body is {@code {"columns": [{"name": …, "type": …}…], "rows": [[…]…], "more": bool}}, each row one value
+         * per column, a value {@code null}, a boolean, a number or a string; {@link #rows} writes it. A body of
+         * another shape is shown as any other JSON. A column named {@link PanelSample#REPLAY_COLUMN replay} holds
+         * replays, as a sample table's does: each is a button, named after its action, that fills that action's form.
+         */
+        public static final String ROWS = "application/x-rows+json";
         /** What ends a body or details that was truncated. */
         public static final String TRUNCATED = "\n… truncated at 256 KiB";
 
         public ActionResult {
             summary = summary == null ? "done" : cut(summary);
             if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)
-                    && !CSV.equals(contentType)) {
-                throw new IllegalArgumentException("a result's content type is " + TEXT + ", " + JSON + " or " + CSV);
+                    && !CSV.equals(contentType) && !ROWS.equals(contentType)) {
+                throw new IllegalArgumentException("a result's content type is " + TEXT + ", " + JSON + ", " + CSV
+                        + " or " + ROWS);
             }
             if (body == null) {
                 contentType = null;
@@ -356,6 +366,47 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          */
         public static ActionResult of(String summary) {
             return new ActionResult(summary, null, null, false, null);
+        }
+
+        /**
+         * A {@link #ROWS} result: a line, and a body of these columns and rows that stays within
+         * {@value #MAX_CONTENT} characters, the rows that would pass it left out and {@code more} set.
+         *
+         * @param summary the line, such as {@code 3 rows in 12 ms}, or {@code null} for {@code done}
+         * @param columns the columns, in order
+         * @param rows    the rows, in order, each one value per column: {@code null}, a {@link Boolean}, a
+         *                {@link Number} or a {@link String}; anything else, a number JSON cannot write such as
+         *                {@code NaN} included, is written as its {@link String#valueOf}
+         * @param more    whether there are rows past those given
+         * @return the result
+         * @throws IllegalArgumentException when a row has another number of values than there are columns, or when
+         *                                  the columns alone pass {@value #MAX_CONTENT} characters
+         */
+        public static ActionResult rows(String summary, List<Column> columns, List<? extends List<?>> rows,
+                                        boolean more) {
+            return new ActionResult(summary, ROWS, RowsBody.write(columns, rows, more), false, null);
+        }
+
+        /**
+         * A column of a {@link #ROWS} result.
+         *
+         * @param name its name, such as {@code title}, at most {@value #MAX_NAME} characters
+         * @param type its type, shown dimmed under its name, such as {@code VARCHAR(200)}, at most
+         *             {@value #MAX_NAME} characters; empty for none
+         */
+        public record Column(String name, String type) {
+
+            /** The longest name or type of a column. */
+            public static final int MAX_NAME = 200;
+
+            public Column {
+                Objects.requireNonNull(name, "name");
+                Objects.requireNonNull(type, "type");
+                if (name.length() > MAX_NAME || type.length() > MAX_NAME) {
+                    throw new IllegalArgumentException("a column's name and type are at most " + MAX_NAME
+                            + " characters");
+                }
+            }
         }
 
         private static String cut(String summary) {
