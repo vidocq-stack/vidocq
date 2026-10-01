@@ -94,7 +94,7 @@ Bound to `process-classes`. Besides the application's own bean index, it generat
 | Any jar with a `META-INF/beans.xml` whose `bean-discovery-mode` is not `none`. On by default; `-Dvidocq.generate.autoScan=false` or `<autoScan>false</autoScan>` turns it off.
 |===
 
-A selected jar is left out when it already carries generated code (a Vidocq brick compiled with the Vauban processor), when `<scanExcludes>` names it, or when it is signed and `<scanDependencies>` does not name it: the build log says which, and why.
+The dependencies considered are the compile-scope and runtime-scope ones: everything the module path holds at run time. A selected jar is left out when it already carries generated code (a Vidocq brick compiled with the Vauban processor), when `<scanExcludes>` names it, or when it is signed and `<scanDependencies>` does not name it: the build log says which, and why.
 
 === The enriched copy
 
@@ -113,7 +113,7 @@ The copy is a modified third-party jar: its signature files are dropped, and its
 | `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
 |===
 
-The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]). A class that only an extension makes a bean, at boot — a JAX-RS `@Provider` that Cassini's build-compatible extension registers, say — is not seen at build time and still reads `reflection`.
+The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]). A class that only a build-compatible extension makes a bean — a JAX-RS `@Provider` to which Cassini's extension gives `@Dependent`, say — is covered too: `generate` resolves the runtime-scope dependencies as well as the compile-scope ones, so it runs every extension the application runs.
 
 [#analyze-deps]
 == `vidocq:analyze-deps` goal [.tag-new]#NEW#
