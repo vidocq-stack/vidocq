@@ -313,6 +313,77 @@ class SqlLanguageTest {
         }
     }
 
+    // ------------------------------------------------------------------------------------------------ diagnostics
+
+    /** The diagnostics of {@code text} read with the SQL fixture, one per line: severity from-to message. */
+    private static String diagnose(String text) {
+        Value found = language.invokeMember("diagnose", text, sql);
+        List<String> out = new ArrayList<>();
+        for (long i = 0; i < found.getArraySize(); i++) {
+            Value d = found.getArrayElement(i);
+            out.add(d.getMember("severity").asString() + " " + number(d, "from") + "-" + number(d, "to") + " "
+                    + d.getMember("message").asString());
+        }
+        return String.join("\n", out);
+    }
+
+    @Test
+    void anUnknownTargetAliasOrColumnIsAnError() {
+        assertEquals("error 14-18 unknown target taks", diagnose("SELECT * FROM taks"));
+        assertEquals("error 9-14 unknown column titel of tasks", diagnose("SELECT t.titel FROM tasks t"));
+        assertEquals("error 7-11 unknown column nope of tasks t or projects p",
+                diagnose("SELECT nope FROM tasks t JOIN projects p ON p.id = t.project_id"));
+        assertEquals("error 7-8 unknown table or alias x", diagnose("SELECT x.title FROM tasks t"),
+                "and nothing after it checked");
+        assertEquals("error 15-16 title is not a reference", diagnose("SELECT t.title.x FROM tasks t"));
+    }
+
+    @Test
+    void aColumnThatTwoTargetsHaveNamedAloneIsAWarning() {
+        assertEquals("warning 7-12 title is in tasks t and projects p",
+                diagnose("SELECT title FROM tasks t JOIN projects p ON p.id = t.project_id"));
+        assertEquals("", diagnose("SELECT t.title, lead FROM tasks t JOIN projects p ON p.id = t.project_id"),
+                "named with its alias, or a column of one table only");
+    }
+
+    @Test
+    void aQualifiedTargetIsCheckedOnlyWhenItIsFound() {
+        assertEquals("error 9-13 unknown column nope of sales.orders", diagnose("SELECT s.nope FROM sales.orders s"));
+        assertEquals("", diagnose("SELECT title FROM public.tasks"), "found without its schema");
+        assertEquals("", diagnose("SELECT nope FROM other.nothing"), "never checked, nor its columns");
+    }
+
+    @Test
+    void whatTheEditorCannotKnowIsNeverAnError() {
+        assertEquals("", diagnose("SELECT * FROM tasks WHERE id IN (SELECT nope FROM nothing)"), "a sub-query");
+        assertEquals("", diagnose("WITH recent AS (SELECT id FROM tasks) SELECT x FROM recent"),
+                "a common table expression");
+        assertEquals("", diagnose("SELECT title AS t2, price p2 FROM tasks ORDER BY t2, p2"),
+                "the select list's aliases");
+        assertEquals("", diagnose("SELECT due_date::text, date_trunc('day', due_date) FROM tasks"),
+                "a cast's type, an unknown function");
+        assertEquals("", diagnose("SELECT * FROM tasks WHERE title = OPEN"), "a name where a value goes, a literal");
+        assertEquals("", diagnose("SELECT COUNT(*) FROM tasks t, projects p WHERE t.project_id = p.id"));
+    }
+
+    @Test
+    void anUnterminatedQuotedNameOrCommentIsAnError() {
+        assertEquals("error 7-13 unterminated identifier", diagnose("SELECT \"Total\nFROM tasks"));
+        assertEquals("error 9-14 unterminated comment", diagnose("SELECT 1 /* x\n"));
+        assertEquals("", diagnose("SELECT 1 -- it's a \"comment (\nFROM tasks"), "a comment holds no token");
+    }
+
+    @Test
+    void aQueryBeingTypedIsCheckedForItsNamesOnlyAndNeverThrows() {
+        assertEquals("", diagnose("SELECT * FROM "));
+        assertEquals("", diagnose("SELECT t. FROM tasks t"), "a column being typed");
+        for (String typed : new String[] {"", "S", "SELECT \"", "FROM .", "FROM tasks t, ", "SELECT /* x",
+                "WITH r AS (SELECT", "SELECT a::", "SELECT * FROM tasks t JOIN projects p ON p.", "UPDATE \"",
+                "INSERT INTO tasks (", "SELECT * FROM (SELECT * FROM tasks) x WHERE x."}) {
+            diagnose(typed);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------ parameters
 
     @Test

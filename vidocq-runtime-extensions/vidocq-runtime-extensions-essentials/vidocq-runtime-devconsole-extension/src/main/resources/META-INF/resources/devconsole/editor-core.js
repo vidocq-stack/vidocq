@@ -1092,6 +1092,13 @@ function lookup(v, map, key, quoted) {
   return null;
 }
 
+/** {@code names} as a sentence: "a", "a and b", "a, b and c", with {@code word} for "and". */
+const sentence = (names, word) => names.length < 2 ? names.join("")
+  : names.slice(0, -1).join(", ") + " " + word + " " + names[names.length - 1];
+
+/** A target of a scope as a message names it: its table, and its alias when it has one, "tasks t". */
+const scopeName = (s) => s.written === null ? s.label : s.label + " " + s.written;
+
 /** The target of {@code scope} that {@code key} names: by its alias first, then by its name; null when none does. */
 const scoped = (v, scope, key) => scope.find((s) => s.alias !== null && sameName(v, s.alias, key))
   || scope.find((s) => sameName(v, s.name, key)) || null;
@@ -1152,6 +1159,8 @@ function readSql(text, v, tokens) {
         tokens[i].kind = entry !== null || cte ? "target" : "identifier";
         tokens[i].position = "target";
       }
+      // a qualified name that is not found is never checked, as JDQL's
+      if (entry === null && !cte && at === end && v.targets.size) last.problem = "unknown target " + keys[0];
       let next = end + 1;
       let alias = null;
       if (word(tokens[next], "AS") && isName(tokens[next + 1])) {
@@ -1193,8 +1202,10 @@ function readSql(text, v, tokens) {
       t.position = "call";
     }
   });
-  // Every other name heads a path, from an alias or a table of the scope, or from a column of its targets.
+  // Every other name heads a path, from an alias or a table of the scope, or from a column of its targets. A bare
+  // name that no target has is an error only when every target in scope is known with its columns.
   const isValue = valueTest(text, tokens);
+  const known = scope.length > 0 && scope.every((s) => s.entry !== null && s.entry.attributes.size > 0);
   tokens.forEach((head, k) => {
     if (!isName(head) || head.position !== undefined || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
     const dotted = isDot(tokens[k + 1]) && joined(head, tokens[k + 1]);
@@ -1217,8 +1228,18 @@ function readSql(text, v, tokens) {
       if (owners.length) {
         head.kind = "attribute";
         head.attribute = lookup(v, owners[0].entry.attributes, key(head), head.quoted === true);
+        if (owners.length > 1) {
+          head.warning = nameOf(text, head, v) + " is in " + sentence(owners.map(scopeName), "and");
+        }
+      } else if (!dotted && scoped(v, scope, key(head)) !== null) {
+        head.kind = "target";
       } else {
-        head.kind = !dotted && scoped(v, scope, key(head)) !== null ? "target" : "identifier";
+        head.kind = "identifier";
+        if (dotted && v.targets.size) {
+          head.problem = "unknown table or alias " + nameOf(text, head, v);
+        } else if (!dotted && known && !outputs.some((o) => sameName(v, o, key(head)))) {
+          head.problem = "unknown column " + nameOf(text, head, v) + " of " + sentence(scope.map(scopeName), "or");
+        }
       }
     }
     for (let at = k, t = head; ;) {
@@ -1227,6 +1248,9 @@ function readSql(text, v, tokens) {
       const after = tokens[at + 2];
       const more = isName(after) && joined(dot, after);
       if (t !== head || owner === null) {
+        if (t.attribute !== undefined && t.attribute.target === null) {
+          (more ? after : dot).problem = nameOf(text, t, v) + " is not a reference";
+        }
         entry = t.attribute !== undefined && t.attribute.target !== null
           ? v.targets.get(t.attribute.target) || null : null;
       }
@@ -1236,7 +1260,11 @@ function readSql(text, v, tokens) {
       t.pathFrom = head.from;
       const attribute = entry === null ? null : lookup(v, entry.attributes, key(t), t.quoted === true);
       t.kind = attribute !== null ? "attribute" : "identifier";
-      if (attribute !== null) t.attribute = attribute;
+      if (attribute !== null) {
+        t.attribute = attribute;
+      } else if (entry !== null && entry.attributes.size) {
+        t.problem = "unknown column " + nameOf(text, t, v) + " of " + entry.name;
+      }
     }
   });
   return { target: scope.length ? scope[0].entry : null, scope };
@@ -1404,15 +1432,20 @@ function sqlItems(text, v, tokens, scope, target, p, from, to) {
  * The errors of a query (spec §3.4), in the order of the text: an unknown target, an unknown attribute of the target
  * or of the target a reference leads to, a path through an attribute that is no reference, an unterminated string, a
  * parenthesis never closed or closing none. Without a vocabulary, or a known target, no attribute is checked; the
- * grammar never is: the server judges it when the query runs.
+ * grammar never is: the server judges it when the query runs. SQL adds (SQL spec §3) an unknown table or alias before
+ * a dot, an unterminated quoted name or comment, and a warning for a column two targets in scope have, named alone.
  */
 function diagnoseQuery(text, data) {
   const out = [];
   const error = (t, message) => out.push({ from: t.from, to: t.to, severity: "error", message });
   const open = [];
-  for (const t of read(text, data).tokens) {
+  const { tokens, comments } = read(text, data);
+  for (const c of comments) if (c.open) error(c, "unterminated comment");
+  for (const t of tokens) {
     if (t.problem !== undefined) error(t, t.problem);
+    if (t.warning !== undefined) out.push({ from: t.from, to: t.to, severity: "warning", message: t.warning });
     if (t.kind === "string" && !isClosed(text, t)) error(t, "unterminated string");
+    if (t.quoted && !isClosed(text, t)) error(t, "unterminated identifier");
     if (t.kind === "punct" && text[t.from] === "(") open.push(t);
     if (t.kind === "punct" && text[t.from] === ")" && open.pop() === undefined) error(t, "no '(' to close");
   }
