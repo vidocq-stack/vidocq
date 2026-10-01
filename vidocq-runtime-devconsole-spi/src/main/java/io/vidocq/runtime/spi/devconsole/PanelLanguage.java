@@ -50,6 +50,14 @@ import java.util.Objects;
  * optionally {@code format} and {@code enum}, a {@code detail}, and {@code target} when it refers to another target of
  * the same language. A word the dialect leaves out takes JDQL's.
  *
+ * <p><b>SQL's options.</b> A dialect with {@code "aliases": true} is SQL's: every target after a {@code targetAfter}
+ * word is in the statement's scope ({@code FROM} a list of them), a name after a target, or {@code AS} and a name, is
+ * its alias, and a path starts from an alias, a target or a column of a target in scope; what a sub-query holds is not
+ * checked; {@code --} and {@code /*} comments are skipped. {@code "identifierQuote": """} makes a quoted name a
+ * name, looked up as written; {@code "unquotedCase"}, {@code lower} or {@code upper}, says how the database stores a
+ * name written without quotes, so that completion quotes a name that needs it; {@code "self": null} says there is no
+ * self. A target of another schema, keyed {@code schema.name}, says {@code "schema"}. JDQL declares none of these.
+ *
  * @param id   identifies the language among those of its panel, stable across boots; it follows the rule of
  *             {@link PanelSample#requireKey}, such as {@code jdql}
  * @param json the language, the text of one JSON object of at most {@value #MAX_JSON} characters, nested

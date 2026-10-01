@@ -464,6 +464,32 @@ Two readings of the gauges would be wrong:
 * `maxSize - active - idle` is not free capacity: a borrower that is still opening its connection counts in none of them.
 * The figures are not read at one instant: each is read on its own, so `active + idle` can dip, or briefly exceed what the pool holds, while a connection moves from one to the other.
 
+[#mansart-pool-sql]
+=== Tables and a SQL editor [.tag-new]#NEW#
+
+Under `mvn vidocq:dev`, each pool also has a tab of the *Mansart pools* panel, named after it — `@Default` first, then the named pools in name order — whose list offers five actions. They answer in the dev console's xref:dev-console.adoc#rows-table[table of rows].
+
+* *Tables* lists the tables and views of the pool's catalog and its schemas, the system ones (`information_schema`, `pg_catalog`…) left out, in schema then name order: schema, name, kind (`TABLE`, `BASE TABLE`, `VIEW`…) and number of columns, with a *Describe* and a *Preview* button that fill those forms with the table. The line says `12 tables, 2 views`.
+* *Describe* takes one of the tables listed at boot: each column's name, SQL type with its size (`varchar(200)`, `numeric(10,2)`), whether it is nullable, its default, its place in the primary key, and the `table.column` a foreign key refers to; the line names its indexes, `9 columns · indexes: tasks_pkey (id), tasks_status_due_idx (status, due_date)`.
+* *Preview* shows the first rows of one, 100 unless you say from 1 to 1000: `SELECT * FROM "public"."tasks"`, the table quoted as the database quotes a name, read in a transaction rolled back.
+* *Query* runs a statement that only reads — its first word, comments skipped, is `SELECT`, `WITH`, `VALUES`, `SHOW`, `EXPLAIN` or `TABLE`, anything else refused before it runs: `Query only reads: use Execute` — on a read-only connection, in a transaction always rolled back. It shows 100 rows at most; the line says `3 rows in 12 ms`, or `first 100 rows in 40 ms` when there are more.
+* *Execute* runs any one statement, asked first (`Runs this SQL on @Default. A DDL statement (CREATE, ALTER, DROP, TRUNCATE…) may be committed by the database itself whatever is chosen.`), in a transaction that its *Transaction* list says to roll back, the default, or to commit; it is always rolled back when the statement fails. It answers the rows the statement returns, an `UPDATE … RETURNING` included, or how many it changed: `3 rows · rolled back`. PostgreSQL rolls a `CREATE TABLE` back; most databases commit a DDL statement whatever is asked.
+
+The form has two fields: `sql`, the statement, in the dev console's query editor with the pool's language (xref:dev-console.adoc#query-sql[SQL]), and `params`, its named parameters as a JSON object, whose schema follows the statement. A `:name` outside a string, a quoted name and a comment is bound with the member `name` of `params`, as `setObject`: a string, a number (an integer as a `long`), a boolean or `null`, and a list as a SQL array where the driver makes one (`WHERE id = ANY(:ids)`); a cast such as `due::text` is no parameter. A parameter with no member is refused before anything runs, `missing parameter id`, and so is a text of two statements, `one statement at a time`; a last `;` is fine.
+
+[source,text]
+----
+SELECT t.title, p.name FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.status = :status
+                                                                            params: {"status": "OPEN"}
+UPDATE tasks SET priority = 'HIGH' WHERE id = :id RETURNING id, priority      params: {"id": 3}
+----
+
+*Values.* A number is shown as a number, but a `numeric` and an integer past 2^53 as their text, so that nothing is rounded; a date, a time or a timestamp as ISO text, with its offset when it has a zone (`2026-10-01T12:00+02:00`); binary as `0x` and the hex of its first 64 bytes, `…` after when there are more; an array as the JSON of its elements; a text past 10 000 characters cut with `…`; anything else, a `json`, an `interval`, as the driver writes it.
+
+*Failures.* A statement runs at most 30 seconds, then is cancelled: `the statement ran past 30 s and was cancelled`. A failing statement shows the database's message, on one line, with the pool's URL, its password and its user after the word `user` masked; *Exchange* holds the statement, its parameters, the transaction, the `SQLState` and the vendor code. A pool with no connection to lend answers once its `acquireTimeout` has passed. Every call takes a connection from the pool and gives it back as it was, its auto-commit and read-only flag restored, whatever happened.
+
+*The `sql` language.* What the editor knows of the pool is read once per boot from `DatabaseMetaData` and offered as the language `sql-<pool>` — `sql-default` for `@Default`, a named pool's name in lower case: SQL-92's keywords and the product's (`getSQLKeywords()`), the common functions, the database's identifier quote and how it stores a name written without quotes; each table and view, bare in the current schema and `schema.name` in another, with its columns, their JSON type and `<SQL type> · column`, and a column of a single-column foreign key leading to the table it refers to. Past 1 MiB it is written without the details, then without the types; past it still, the pool has no language, which a WARNING says, and the editor colours the keywords it knows alone. A pool whose tables cannot be read at boot gets no language, no *Describe* and no *Preview*, which a WARNING says without its URL; *Tables*, *Query* and *Execute* still work. A table created later is listed by *Tables* but known to the editor, *Describe* and *Preview* after the next dev reload only.
+
 [#mansart-pool-001]
 === MANSART-POOL-001 — pre-fill opened nothing [.tag-new]#NEW#
 
@@ -633,7 +659,7 @@ DELETE FROM TaskEvent WHERE type = 'REOPENED'
 
 *Parameters.* A named parameter `:name` takes the member `name` of `params`; a parameter with no value, or a member no parameter uses, is refused (`:status: no value given`), and so is a positional `?1`. A value compared to an attribute — a parameter, a literal such as `'OPEN'` or `'2026-09-29'`, a value of `SET` — is converted to the attribute's Java type: an enum by the name of a constant, a date or a time as ISO text, a number exactly (`2.5` for an `int` is refused), a `Boolean` from `true` or `false`, a `UUID` from its text. A JSON array feeds an `IN :names`. A value that does not convert fails the statement before it runs: `:status: not a TaskStatus`.
 
-*Results.* Through the page's JSON viewer: the entities as objects, as a repository method returns them (<<mansart-data-run-method>>); a projection as one object per row, `{"title": "Release notes", "priority": "HIGH"}`; at most 100 rows, the line saying `3 rows in 12 ms` or `first 100 rows in 40 ms`. A count is its number, `42`; an aggregate its value, `null` when there is no row; a write the rows it changed, `4 rows · rolled back`. *Exchange* holds the entity, the statement, its parameters and the transaction asked. A statement that does not parse, or fails, shows the class of the exception and its message, cut after 500 characters and with a `user:password@` masked.
+*Results.* The entities as rows of a table [.tag-new]#NEW#, one column per attribute as a repository method returns them (<<mansart-data-run-method>>), each typed from its attribute (`integer`, `string`, `date`…); a projection's columns, a column of entities typed `object` and each written as its JSON; at most 100 rows, the line saying `3 rows in 12 ms` or `first 100 rows in 40 ms` (xref:dev-console.adoc#rows-table[A table of rows], with *JSON* and *Copy as CSV*). A count is its number, `42`; an aggregate its value, `null` when there is no row; a write the rows it changed, `4 rows · rolled back`. *Exchange* holds the entity, the statement, its parameters and the transaction asked. A statement that does not parse, or fails, shows the class of the exception and its message, cut after 500 characters and with a `user:password@` masked.
 
 *History.* The *JDQL* tab lists its last 20 statements, *Query* or *Update / Delete*, newest first, each with *Replay*, which fills the form again without sending it.
 

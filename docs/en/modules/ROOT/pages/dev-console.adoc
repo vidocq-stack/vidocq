@@ -246,7 +246,7 @@ The panels shipped today:
 | Panel | Shows
 
 | *Mansart pools*
-| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section].
+| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. In a `dev` launch, a tab per pool [.tag-new]#NEW# lists its tables, describes one, shows its first rows and runs the SQL you type, read-only or in a transaction rolled back unless committed. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section] and xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a SQL editor].
 
 | *Mansart Data* [.tag-new]#NEW#
 | The catalogue of `vidocq-runtime-mansart-data-extension`, one card per entity: its table and columns, then each of its repositories with its methods, their kind, `@Query` text, parameters and return type, and the methods inherited from Jakarta Data. Read once per boot; no connection, no query. See xref:modules/vidocq-runtime-extensions.adoc#mansart-data-catalogue[the Mansart Data catalogue].
@@ -508,6 +508,29 @@ The viewer keeps what is folded while the page polls, and forgets it when a new 
 A body that does not parse as JSON is shown as text. The tree is built with DOM calls only, never as markup, so a
 key or a string is never read as HTML.
 
+[#rows-table]
+== A table of rows [.tag-new]#NEW#
+
+A result of rows — what *Query* answers in a pool's tab or in the *JDQL* tab of *Mansart Data*, a table's columns,
+its first rows — is drawn as a table. Each column's header holds its name and, dimmed under it, its type; the header
+stays in view while the rows scroll, and a wide table scrolls sideways inside the result. A `NULL` is written `NULL`,
+dimmed, and is never mistaken for an empty string, which is an empty cell. A value longer than 200 characters is cut
+with `…`, and the whole of it shows when the pointer rests on the cell. When the panel sent only the first rows,
+`more rows not shown` says so under them.
+
+The result's bar adds *Table* and *JSON*, which shows the same body in the <<json-viewer,JSON viewer>>, and *Copy as
+CSV*, which copies the rows as RFC 4180 CSV: the header first, `,` between fields, a field with a comma, a quote or a
+line end quoted, each line ended by CRLF, `NULL` an empty field and an empty string `""`. The page remembers which of
+the two it shows while it polls. A cell of a column named `replay` is a button named after the action it fills, as
+*Tables* offers *Describe* and *Preview* for each table; nothing is sent until you submit.
+
+A panel answers rows with `PanelAction.ActionResult.rows(summary, columns, rows, more)`: `columns` are
+`ActionResult.Column(name, type)` records, a name and a type of 200 characters at most; each row holds one value per
+column, `null`, a `Boolean`, a `Number` or a `String`, anything else written as its `toString()`. The body,
+`{"columns": [{"name", "type"}…], "rows": [[…]…], "more": bool}` of type `application/x-rows+json`
+(`ActionResult.ROWS`), stays within the 256 KiB of a result: the rows past it are left out and `more` set. A body of
+another shape is shown as any other JSON.
+
 [#json-editor]
 == JSON editor [.tag-new]#NEW#
 
@@ -607,6 +630,34 @@ where it is used, such as `compared with price (number)`. A parameter used twice
 otherwise, such as `price * :factor`, takes any value; a positional one, `?1`, has no key. Nothing is refused before
 the call. Its text is sent as typed; empty, it holds `{}`.
 
+[#query-sql]
+=== SQL [.tag-new]#NEW#
+
+The `sql` of a pool's *Query* and *Execute* (xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a
+SQL editor]) is typed in the same editor, with what its panel publishes of the pool's tables, and reads SQL as SQL is
+written:
+
+* **Several tables.** Every table after `FROM`, `JOIN`, `UPDATE`, `INSERT INTO` or `DELETE FROM` is in the
+statement's scope, and so is each table of a `FROM` list; a name after a table, or `AS` and a name, is its alias
+(`FROM tasks t`, `JOIN projects AS p`), a keyword never. A table of another schema is written `sales.orders`.
+* **Quoted names.** `"Order"`, `"due date"` are names, a doubled `""` inside one quote; the editor looks them up as
+written, and a name written without quotes as the database stores it: in lower case for PostgreSQL, in capitals for
+H2. `"` pairs and steps over as `'` does. `--` and `/* … */` comments are dimmed and never checked.
+* **Completion.** After `FROM` or `JOIN`, the tables; after `t.` or `tasks.`, that table's columns; in `SELECT`, `ON`,
+`WHERE`, `GROUP BY`, `HAVING`, `ORDER BY` and `SET`, the aliases and the tables in scope, then the columns of each,
+their table in their detail (`varchar(200) · column · tasks`), the functions and the keywords. A name that needs quotes
+— a keyword, a space, a capital the database would not keep — is inserted with them.
+* **Diagnostics.** An unknown table, an unknown column of a table or an alias, and an unknown alias before a dot
+(`unknown table or alias x`) are errors; a column named alone that two tables in scope have is a warning, `title is in
+tasks t and projects p`. A table written with its schema is looked up as written, then without it, and not checked
+when neither is known. What a sub-query, a `WITH`'s table, an alias of the select list, a cast's type (`::text`) or a
+function the editor does not know holds is never checked: the database judges it when the statement runs.
+* **Format.** Each clause on a line of its own, a `LEFT JOIN … ON` on one line, `AND` and `OR` indented, the keywords
+in capitals, quoted names, strings and comments as written, a sub-query on the line it is on.
+
+A `:name` in the statement is a parameter, as in JDQL: `params` follows it, and a parameter compared with `t.price`
+takes the type of `price` in `t`'s table.
+
 [#query-language]
 === A query language for a panel [.tag-new]#NEW#
 
@@ -652,6 +703,26 @@ entity's own name in an expression; `quote` delimits a string, doubled inside it
 JDQL's. `targets` maps each entity's name to its `detail` and `attributes`; an attribute has a JSON Schema `type`
 (`string`, `integer`, `number`, `boolean`), optionally a `format` and an `enum`, a `detail`, and a `target` when it
 refers to another entity of the language. Data the editor does not understand makes it know less, never fail.
+
+*SQL's options* [.tag-new]#NEW#. `aliases`, `identifierQuote` and `unquotedCase` make a dialect SQL's (<<query-sql>>),
+with SQL's own words; JDQL declares none of them:
+
+[source,json]
+----
+"dialect": { "keywords": […], "functions": […], "self": null, "quote": "'",
+  "aliases": true,
+  "targetAfter": ["FROM", "JOIN", "UPDATE", "INTO"],
+  "identifierQuote": "\"",
+  "unquotedCase": "lower",
+  "clauses": ["SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "OFFSET", "SET",
+              "VALUES", "UPDATE", "DELETE FROM", "INSERT INTO"] }
+----
+
+`aliases` puts every target after a `targetAfter` word in scope, with its alias, skips `--` and `/*` comments, and
+leaves a sub-query unchecked; `identifierQuote` makes a quoted name a name; `unquotedCase`, `lower` or `upper`, says how
+the database stores a name written without quotes, and is left out when it keeps it as written; `"self": null` says
+there is none. A target of another schema is keyed `schema.name` and says its `"schema"`, so that completion quotes each
+part as needed.
 
 [#security]
 == Security [.tag-new]#NEW#
