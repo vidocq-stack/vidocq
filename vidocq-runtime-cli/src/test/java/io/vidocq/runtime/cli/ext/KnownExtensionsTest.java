@@ -57,6 +57,16 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void ravelConfigShipsACodegenBundle() {
+        // ravel#21: without Ravel's extension on the processor path, every
+        // @Inject @ConfigProperty point fails the compilation as unsatisfied.
+        assertEquals(java.util.Optional.of(new ExtensionCoordinate(
+                        "io.vidocq.runtime.extensions.microprofile",
+                        "vidocq-runtime-ravel-config-extension-codegen")),
+                KnownExtensions.codegenBundle("ravel-config"));
+    }
+
+    @Test
     void shortIdLookupIsCaseInsensitive() {
         assertTrue(KnownExtensions.byId("Knock-Health").isPresent());
         assertTrue(KnownExtensions.isKnown("CASSINI-REST"));

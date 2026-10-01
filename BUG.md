@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261001-01 — `@Inject @ConfigProperty` fails the compilation of a Vidocq application (ravel#21)
+
+- **Date** : 2026-10-01
+- **Statut** : FIXED (`fix/ravel-config-codegen-bundle`, with vauban `fix/extension-build-time-signal` and ravel `fix/config-values-checked-at-container-start`)
+- **Module touché** : vidocq-runtime-ravel-config-extension (no codegen bundle), vidocq-runtime-cli
+- **Symptôme** : reported by Sébastien Blanc on 0.3.0 (Vidocq/ravel#21): an application depending on
+  `vidocq-runtime-ravel-config-extension` cannot inject `@Inject @ConfigProperty String` — the Vauban
+  processor reports "Unsatisfied dependency" and the only way out is `-Avauban.validation=false`, which
+  turns off every compile-time check of the module. Resolving
+  `vidocq-runtime-ravel-config-extension-codegen` from Central failed: it never existed.
+- **Reproduction minimale** : `vidocq-runtime-integration-tests/vidocq-runtime-it-ravel-config` without
+  the bundle on its processor path.
+- **Hypothèse de cause** : nothing put Ravel's Build Compatible Extension on the processor path, so the
+  beans it synthesises for `@ConfigProperty` points did not exist when the processor validated.
+- **Correction** : new `vidocq-runtime-ravel-config-extension-codegen` bundle (→ `ravel-cdi-vauban`),
+  known to the CLI (`KnownExtensions.codegenBundle("ravel-config")`) and therefore required by
+  `checkpom`; added to the two examples and five TCK runners that declare the extension. The IT
+  compiles with validation on and boots, injecting both the value and `Config`.
+
 ## BUG-20260809-01 — the documented `vidocq.http.port` was read by nobody
 
 - **Date** : 2026-08-09

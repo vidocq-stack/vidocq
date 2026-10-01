@@ -60,7 +60,7 @@
 
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
-| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion.
+| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
 
 | `vidocq-runtime-knock-health-extension`
 | `microprofile`

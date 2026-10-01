@@ -34,6 +34,7 @@
         <module>vidocq-runtime-it-cervantes-jwt</module>
         <module>vidocq-runtime-it-grimm-openapi</module>
         <module>vidocq-runtime-it-cyrano-jpms</module>
+        <module>vidocq-runtime-it-ravel-config</module>
         <module>vidocq-runtime-it-langchain4j-cdi-mcp</module>
     </modules>
 

@@ -232,6 +232,12 @@
                             <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>

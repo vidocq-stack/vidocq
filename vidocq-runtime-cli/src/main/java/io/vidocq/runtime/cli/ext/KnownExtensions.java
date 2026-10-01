@@ -145,6 +145,9 @@ public final class KnownExtensions {
             case "mansart-transactions" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-transactions-extension-codegen"));
+            case "ravel-config" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.microprofile",
+                    "vidocq-runtime-ravel-config-extension-codegen"));
             default -> Optional.empty();
         };
     }

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: MicroProfile Extensions :: Config (Ravel) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-ravel-config-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Config extension; Maven resolves the transitive
+        APT dependencies below automatically.
+
+        Runs Ravel's Build Compatible Extension (ConfigCdiExtension) inside the Vauban
+        processor, so the @ConfigProperty / @ConfigProperties beans it synthesises
+        exist when the processor validates the deployment. Without it, every
+        @Inject @ConfigProperty point fails the compilation as an unsatisfied
+        dependency (ravel#21). Configuration values are still checked when the
+        container starts, where the deployment's configuration is known.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+    </dependencies>
+</project>
