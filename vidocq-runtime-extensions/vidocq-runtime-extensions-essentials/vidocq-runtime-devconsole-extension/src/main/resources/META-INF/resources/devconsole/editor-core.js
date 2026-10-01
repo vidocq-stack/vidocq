@@ -1233,3 +1233,47 @@ const QUERY = Object.freeze({
 export function queryLanguage() {
   return QUERY;
 }
+
+// ------------------------------------------------------------------------------------------------ rows
+
+/** Whether {@code v} is a value a row may hold: null, a boolean, a number or a string. */
+const isCell = (v) => v === null || typeof v === "boolean" || typeof v === "number" || typeof v === "string";
+
+/**
+ * The body of a result of rows (SQL spec §2), { columns: [{ name, type }], rows, more }, read from its text; null when
+ * it is not of that shape: columns a list of names and types, rows a list of lists of one value per column, each
+ * null, a boolean, a number or a string, more a boolean. An integer past 2^53 is kept as the text the server wrote
+ * where the engine gives a value's source, never rounded.
+ */
+export function readRows(text) {
+  let body;
+  try {
+    body = JSON.parse(text, (key, value, context) => typeof value === "number" && !Number.isSafeInteger(value)
+      && context && typeof context.source === "string" && /^-?\d+$/.test(context.source) ? context.source : value);
+  } catch (unreadable) {
+    return null;
+  }
+  if (!isObject(body) || !Array.isArray(body.columns) || !Array.isArray(body.rows)
+    || typeof body.more !== "boolean") return null;
+  const columns = body.columns;
+  if (!columns.every((c) => isObject(c) && typeof c.name === "string" && typeof c.type === "string")) return null;
+  if (!body.rows.every((row) => Array.isArray(row) && row.length === columns.length && row.every(isCell))) {
+    return null;
+  }
+  return { columns: columns.map((c) => ({ name: c.name, type: c.type })), rows: body.rows, more: body.more };
+}
+
+/**
+ * {@code rows}, a value of readRows, as RFC 4180 CSV: the names of the columns, then each row, every line ended by
+ * CRLF; a field holding a comma, a quote or a line end quoted, its quotes doubled; null an empty field, an empty
+ * string two quotes, so that the two stay apart; a number and a boolean as JSON writes them.
+ */
+export function rowsCsv(rows) {
+  const field = (v) => {
+    if (v === null) return "";
+    const s = String(v);
+    return s === "" || /[",\r\n]/.test(s) ? "\"" + s.replaceAll("\"", "\"\"") + "\"" : s;
+  };
+  return [rows.columns.map((c) => field(c.name)), ...rows.rows.map((row) => row.map(field))]
+    .map((fields) => fields.join(",") + "\r\n").join("");
+}
