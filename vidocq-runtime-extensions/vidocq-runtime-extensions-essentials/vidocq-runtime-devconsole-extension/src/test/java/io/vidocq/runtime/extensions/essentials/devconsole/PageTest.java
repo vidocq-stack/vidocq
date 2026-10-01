@@ -163,7 +163,8 @@ class PageTest {
         String editor = file("editor.js");
 
         assertEquals(List.of("./editor-core.js"), IMPORT.matcher(editor).results().map(m -> m.group(1)).toList());
-        assertTrue(editor.contains("export function createEditor({ language, data, value, rows, label })"), "spec §4");
+        assertTrue(editor.contains("export function createEditor({ language, data, value, rows, label, onDraw })"),
+                "spec §4");
         assertTrue(editor.contains("span.textContent = text.slice(part.from, part.to);"), "the <pre>'s text, as text");
         assertTrue(editor.contains("if (frame === 0) frame = requestAnimationFrame("), "one draw per frame at most");
         assertTrue(editor.contains("const LIMIT = 100_000;"), "past 100 000 characters, a plain textarea");
@@ -193,6 +194,26 @@ class PageTest {
     }
 
     @Test
+    void setDataGivesTheEditorOtherDataAndKeepsItsTextAndCaret() {
+        String editor = file("editor.js");
+        String setData = editor.substring(editor.indexOf("    setData(next, why) {"),
+                editor.indexOf("    disable(on) {"));
+
+        assertTrue(editor.contains("tokens = safely(() => language.tokenize(text, data), []);"),
+                "a query's tokens depend on its vocabulary");
+        assertTrue(editor.contains("formatted = language.format(textarea.value, data);"), "and its format");
+        assertTrue(setData.contains("data = next;") && setData.contains("closeList();")
+                && setData.contains("schedule();"), "colours and diagnostics again, the list closed (query spec §4)");
+        assertFalse(setData.contains("textarea.value") || setData.contains("setSelectionRange"),
+                "the vocabulary arriving while the user types loses neither the text nor the caret");
+        assertTrue(editor.contains("note.textContent = [limit, counts, formatNote, dataNote]"),
+                "no vocabulary: <status> said under the editor");
+        assertTrue(editor.contains("if (onDraw) safely(() => onDraw(text), null);"),
+                "after each draw, in its animation frame: the parameters follow the query");
+        assertTrue(editor.contains("export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };"));
+    }
+
+    @Test
     void theEditorColoursItsTokensWithTheViewersColoursInEveryTheme() {
         String style = file("console.css");
 
@@ -210,6 +231,28 @@ class PageTest {
         assertTrue(rule(style, ".ed-text {").contains("color: transparent"), "the textarea shows the <pre>'s text");
         assertTrue(rule(style, ".ed-pre, .ed-text, .ed-mirror {").contains("white-space: pre-wrap"),
                 "the <pre>, the textarea and the caret's mirror wrap alike");
+    }
+
+    @Test
+    void theQueryTokensHaveSevenDistinctColoursInEveryTheme() {
+        String style = file("console.css");
+
+        for (String kind : List.of("keyword", "function", "target", "attribute", "parameter")) {
+            assertTrue(rule(style, ".ed-" + kind + " {").contains("var(--code-" + kind + ")"), kind);
+        }
+        assertTrue(rule(style, ".ed-identifier {").contains("var(--ink)"), "a name the vocabulary does not know");
+        assertTrue(rule(style, ".ed-operator {").contains("var(--json-punct)"));
+        for (String opening : List.of(":root {", ":root:not([data-theme=\"light\"]) {",
+                ":root[data-theme=\"dark\"] {")) {
+            String theme = rule(style, opening);
+            List<String> colours = List.of("--code-keyword", "--code-function", "--code-target", "--code-attribute",
+                    "--code-parameter", "--json-string", "--json-number").stream().map(name -> {
+                        Matcher value = Pattern.compile(Pattern.quote(name) + ":\\s*(#[0-9A-Fa-f]{6});").matcher(theme);
+                        assertTrue(value.find(), name + " in " + opening);
+                        return value.group(1).toUpperCase();
+                    }).toList();
+            assertEquals(7, colours.stream().distinct().count(), "each distinct in " + opening + ": " + colours);
+        }
     }
 
     @Test

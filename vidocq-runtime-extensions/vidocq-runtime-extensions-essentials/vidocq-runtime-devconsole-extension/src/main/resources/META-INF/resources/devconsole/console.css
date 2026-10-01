@@ -48,6 +48,11 @@
   --json-number: #9C5A12;
   --json-literal: #8E3FA8;
   --json-punct: #8B94A2;
+  --code-keyword: #7A3E9D;
+  --code-function: #0F766E;
+  --code-target: #B0306E;
+  --code-attribute: #1F5F8B;
+  --code-parameter: #6D7A00;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --cond: "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -80,6 +85,11 @@
     --json-number: #E2A94B;
     --json-literal: #C99BE0;
     --json-punct: #6E7988;
+    --code-keyword: #C99BE0;
+    --code-function: #5FC8B8;
+    --code-target: #F08CB8;
+    --code-attribute: #7FB2E0;
+    --code-parameter: #C8D86A;
     color-scheme: dark;
   }
 }
@@ -109,6 +119,11 @@
   --json-number: #E2A94B;
   --json-literal: #C99BE0;
   --json-punct: #6E7988;
+  --code-keyword: #C99BE0;
+  --code-function: #5FC8B8;
+  --code-target: #F08CB8;
+  --code-attribute: #7FB2E0;
+  --code-parameter: #C8D86A;
   color-scheme: dark;
 }
 
@@ -332,6 +347,15 @@ button:disabled { opacity: 0.55; cursor: progress; }
 .ed-literal { color: var(--json-literal); }
 .ed-punct { color: var(--json-punct); }
 .ed-invalid { color: var(--crit); }
+/* The query mode's tokens: its strings, numbers and punctuation take JSON's colours. */
+.ed-keyword { color: var(--code-keyword); }
+.ed-function { color: var(--code-function); }
+.ed-target { color: var(--code-target); }
+.ed-attribute { color: var(--code-attribute); }
+.ed-parameter { color: var(--code-parameter); }
+.ed-identifier { color: var(--ink); }
+.ed-operator { color: var(--json-punct); }
+.ed-text::placeholder { color: var(--faint); }
 .ed-error { text-decoration: underline wavy var(--crit); text-decoration-skip-ink: none; text-underline-offset: 3px; }
 .ed-warning { text-decoration: underline wavy var(--warn); text-decoration-skip-ink: none; text-underline-offset: 3px; }
 .ed-mark::after { content: "\00a0"; }

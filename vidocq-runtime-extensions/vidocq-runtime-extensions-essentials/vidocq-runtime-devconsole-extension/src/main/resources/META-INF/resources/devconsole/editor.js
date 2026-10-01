@@ -29,10 +29,12 @@
 //   checking and shows the textarea's own text; completion and formatting still work when asked for.
 // - Every edit it makes goes through document.execCommand("insertText"), which keeps Ctrl+Z; where the browser
 //   refuses it, setRangeText and an input event.
+// - setData() gives it other data, such as a query's vocabulary once fetched or the schema a query's parameters
+//   follow: the next frame draws with it, the text and the caret untouched.
 
-import { jsonLanguage, keystroke, isShortcut, FORMAT_EXAMPLES } from "./editor-core.js";
+import { jsonLanguage, queryLanguage, keystroke, isShortcut, FORMAT_EXAMPLES } from "./editor-core.js";
 
-export { jsonLanguage, FORMAT_EXAMPLES };
+export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };
 
 /** Past this many characters, no colours and no diagnostics: the textarea alone. */
 const LIMIT = 100_000;
@@ -65,13 +67,17 @@ function safely(compute, fallback) {
 }
 
 /**
- * An editor of {@code language} (spec §4), {@code data} its data (for JSON, the argument's schema), starting with
- * {@code value}, {@code rows} lines high; {@code label} names it for a screen reader.
+ * An editor of {@code language} (spec §4), {@code data} its data (for JSON, the argument's schema; for a query, the
+ * language its panel publishes), starting with {@code value}, {@code rows} lines high; {@code label} names it for a
+ * screen reader. {@code onDraw}, when given, is called with the text at the end of each draw, in its animation frame.
+ * setData(data, note) gives it other data (a query's language once fetched, the schema a query's parameters follow):
+ * tokens, colours and diagnostics are computed again, an open completion list closes, the text and the caret stay;
+ * note, when given, is said under the editor, such as why the data could not be had.
  *
- * @returns {{root: HTMLElement, value(): string, setValue(text: string): void, disable(on: boolean): void,
- *   focus(): void, textarea: HTMLTextAreaElement}}
+ * @returns {{root: HTMLElement, value(): string, setValue(text: string): void, setData(data: *, note: string): void,
+ *   disable(on: boolean): void, focus(): void, textarea: HTMLTextAreaElement}}
  */
-export function createEditor({ language, data, value, rows, label }) {
+export function createEditor({ language, data, value, rows, label, onDraw }) {
   const id = "ed-" + ++editors;
   const root = el("div", "ed");
   const box = el("div", "ed-box");
@@ -115,6 +121,7 @@ export function createEditor({ language, data, value, rows, label }) {
   let shown = [];               // the lines drawn: { key, from, parts: [{ from, to }], node }
   let outlined = [];            // the spans of the matching brackets
   let formatNote = "";          // why Format refused, until the next edit
+  let dataNote = "";            // what setData said of its data, such as "no vocabulary: 404"
   let escaped = false;          // Escape was the last key: the next Tab leaves the editor
   let hovering = false;         // the tooltip shows what the pointer is on
   let completion = null;        // while the list is open: { from, to, items, active }
@@ -136,7 +143,7 @@ export function createEditor({ language, data, value, rows, label }) {
       if (shown.length) pre.replaceChildren();
       shown = [];
     } else {
-      tokens = safely(() => language.tokenize(text), []);
+      tokens = safely(() => language.tokenize(text, data), []);
       diagnostics = safely(() => language.diagnose(text, data), []);
       matches = bracketMatches(text);
       paint(text);
@@ -146,16 +153,17 @@ export function createEditor({ language, data, value, rows, label }) {
     follow();
     outline();
     tipAtCaret();
+    if (onDraw) safely(() => onDraw(text), null);
   }
 
-  /** The note under the editor: how many errors and warnings, the size limit, why Format refused. */
+  /** The note under the editor: how many errors and warnings, the size limit, why Format refused, setData's note. */
   function say() {
     const errors = diagnostics.filter((d) => d.severity === "error").length;
     const warnings = diagnostics.length - errors;
     const counts = [errors ? plural(errors, "error", "errors") : "", warnings ? plural(warnings, "warning", "warnings")
       : ""].filter(Boolean).join(", ");
     const limit = textarea.value.length > LIMIT ? "past 100 000 characters: no colours, no checks" : "";
-    note.textContent = [limit, counts, formatNote].filter(Boolean).join(" · ");
+    note.textContent = [limit, counts, formatNote, dataNote].filter(Boolean).join(" · ");
     note.classList.toggle("ed-bad", errors > 0 || formatNote !== "");
   }
 
@@ -410,7 +418,7 @@ export function createEditor({ language, data, value, rows, label }) {
   function formatText() {
     let formatted;
     try {
-      formatted = language.format(textarea.value);
+      formatted = language.format(textarea.value, data);
     } catch (refused) {
       formatNote = "not formatted: " + (refused && refused.message ? refused.message : String(refused));
       say();
@@ -576,6 +584,12 @@ export function createEditor({ language, data, value, rows, label }) {
       textarea.value = typeof text === "string" ? text : "";
       textarea.scrollTop = 0;
       formatNote = "";
+      closeList();
+      schedule();
+    },
+    setData(next, why) {
+      data = next;
+      dataNote = typeof why === "string" ? why : "";
       closeList();
       schedule();
     },
