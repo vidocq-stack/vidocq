@@ -105,15 +105,20 @@ public final class ScanSelection {
 
     private ScanSelection() {}
 
-    /** The project's dependencies that have a file. */
+    /** The project's dependencies that are a jar or a reactor classes directory: a pom or a zip holds no bean. */
     public static List<Dependency> dependenciesOf(Collection<Artifact> artifacts) {
         List<Dependency> deps = new ArrayList<>();
         for (Artifact a : artifacts) {
-            if (a.getFile() != null) {
+            if (a.getFile() != null && isJarOrDirectory(a.getFile().toPath())) {
                 deps.add(new Dependency(a.getGroupId(), a.getArtifactId(), a.getVersion(), a.getFile().toPath()));
             }
         }
         return deps;
+    }
+
+    /** Whether {@code file} is a directory or a {@code .jar}, the only dependency files a module path takes. */
+    static boolean isJarOrDirectory(Path file) {
+        return Files.isDirectory(file) || file.getFileName().toString().endsWith(".jar");
     }
 
     /** One decision per dependency, in their order. */

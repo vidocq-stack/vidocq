@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -67,6 +70,27 @@ class ScanSelectionTest {
         Map<String, ScanSelection.Decision> map = new LinkedHashMap<>();
         decisions.forEach(d -> map.put(d.dependency().artifactId(), d));
         return map;
+    }
+
+    static Artifact artifact(String artifactId, String type, Path file) {
+        Artifact a = new DefaultArtifact("org.x", artifactId, "1.0", "compile", type, null,
+                new DefaultArtifactHandler(type));
+        a.setFile(file.toFile());
+        return a;
+    }
+
+    @Test
+    void onlyJarsAndDirectoriesAreReadSoAPomOrZipDependencyBreaksNothing() throws Exception {
+        Path pom = Files.writeString(tmp.resolve("bom-1.0.pom"), "<project/>");
+        Path zip = Files.writeString(tmp.resolve("dist-1.0.zip"), "not an archive");
+        Path lib = jar("lib-1.0.jar", Map.of("META-INF/beans.xml", ""), null);
+        Path classes = Files.createDirectories(tmp.resolve("reactor/target/classes"));
+
+        List<ScanSelection.Dependency> deps = ScanSelection.dependenciesOf(List.of(artifact("bom", "pom", pom),
+                artifact("dist", "zip", zip), artifact("lib", "jar", lib), artifact("mod", "jar", classes)));
+
+        assertEquals(List.of("lib", "mod"), deps.stream().map(ScanSelection.Dependency::artifactId).toList());
+        assertEquals(2, ScanSelection.decide(deps, List.of("org.x:*"), List.of(), true).size());
     }
 
     @Test
