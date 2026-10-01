@@ -29,7 +29,9 @@
 //   oneOf, allOf, not or patternProperties. A schema, however odd, never makes it throw: it checks less.
 // - queryLanguage() reads a query (JDQL), its data being the language a panel publishes: a dialect and a vocabulary
 //   of targets and their attributes. It colours, completes and checks names, never the grammar, which the server
-//   judges; parameters() is the JSON Schema of the query's named parameters. Odd data reads as none.
+//   judges; parameters() is the JSON Schema of the query's named parameters. Odd data reads as none. A dialect with
+//   aliases is SQL's (SQL spec §3): several targets, their aliases, quoted identifiers, comments, sub-queries left
+//   unchecked; JDQL declares none of it.
 // - keystroke() is the edit a key makes, or null to let the browser type it.
 
 /** One level of indentation, as the formatter and the Tab key write it. */
@@ -45,7 +47,8 @@ const LITERALS = new Map([["true", true], ["false", false], ["null", null]]);
 
 const isBlank = (c) => c === " " || c === "\t" || c === "\n" || c === "\r";
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-const isStringToken = (t) => t.kind === "string" || t.kind === "key";
+/** Whether {@code t} is a string, a JSON key, or a quoted name of a query, whose quotes pair as a string's do. */
+const isStringToken = (t) => t.kind === "string" || t.kind === "key" || t.quoted === true;
 
 // ------------------------------------------------------------------------------------------------ tokens
 
@@ -97,12 +100,12 @@ const punctAt = (text, t) => t !== undefined && t.kind === "punct" ? text[t.from
 
 /**
  * Whether the string token {@code t} ends with its closing quote, the quote it opens with: in JSON ("), an escaped
- * quote is no closing one; in a query (the dialect's quote, ' in JDQL), a doubled one is none.
+ * quote is no closing one; in a query (the dialect's quote, ' in JDQL, and a quoted name's), a doubled one is none.
  */
 function isClosed(text, t) {
   const quote = text[t.from];
   if (t.to - t.from < 2 || text[t.to - 1] !== quote) return false;
-  if (quote !== "\"") {
+  if (quote !== "\"" || t.quoted === true) {
     let quotes = 0;
     for (let i = t.to - 1; i > t.from && text[i] === quote; i--) quotes++;
     return quotes % 2 === 1;
@@ -666,8 +669,8 @@ function lineSpan(text, start, end) {
 }
 
 /** The string token {@code offset} is inside of, its closing quote excluded, or null. */
-function stringAround(language, text, offset) {
-  for (const t of language.tokenize(text)) {
+function stringAround(language, text, offset, data) {
+  for (const t of language.tokenize(text, data)) {
     if (t.from >= offset) return null;
     if (isStringToken(t) && (offset < t.to || (offset === t.to && !isClosed(text, t)))) return t;
   }
@@ -686,13 +689,22 @@ export function isShortcut(key, ctrlKey, altKey, metaKey) {
 }
 
 /**
+ * The pairs of {@code language} with {@code data}: a query's own, which its dialect's quotes make (SQL spec §3), or
+ * its fixed pairs.
+ */
+export function pairsOf(language, data) {
+  if (typeof language.pairsOf === "function") return language.pairsOf(data);
+  return Array.isArray(language.pairs) ? language.pairs : [];
+}
+
+/**
  * The edit {@code key} makes in {@code text}, whose selection is {@code selectionStart}-{@code selectionEnd} (spec
  * §3.5): { from, to, insert, caret }, caret an offset into insert as on a completion item, and anchor, when present,
  * the other end of the selection it leaves, an offset into insert too; an empty insert over an empty range only moves
- * the caret. null: the browser types the key itself. The keys: an opening or closing character of language.pairs,
- * "Enter", "Backspace", "Tab", "Shift+Tab".
+ * the caret. null: the browser types the key itself. The keys: an opening or closing character of the language's
+ * pairs with {@code data} (pairsOf), "Enter", "Backspace", "Tab", "Shift+Tab".
  */
-export function keystroke(language, text, selectionStart, selectionEnd, key) {
+export function keystroke(language, text, selectionStart, selectionEnd, key, data) {
   const start = Math.min(selectionStart, selectionEnd);
   const end = Math.max(selectionStart, selectionEnd);
   if (key === "Enter") return enter(text, start, end);
@@ -700,18 +712,18 @@ export function keystroke(language, text, selectionStart, selectionEnd, key) {
     return start === end ? { from: start, to: start, insert: INDENT, caret: INDENT.length } : indent(text, start, end);
   }
   if (key === "Shift+Tab") return outdent(text, start, end);
-  const pairs = Array.isArray(language.pairs) ? language.pairs : [];
-  if (key === "Backspace") return start === end ? backspace(language, pairs, text, start) : null;
+  const pairs = pairsOf(language, data);
+  if (key === "Backspace") return start === end ? backspace(language, pairs, text, start, data) : null;
   const opening = pairs.find((pair) => pair[0] === key);
   const closing = pairs.find((pair) => pair[1] === key);
   if (!opening && !closing) return null;
-  // a quote opens and closes its strings: " in JSON, ' in a query
+  // a quote opens and closes its strings: " in JSON, ' in a query, and " around a SQL query's quoted name
   const quote = pairs.some((pair) => pair[0] === key && pair[1] === key);
   if (start !== end) {
     return opening ? { from: start, to: end, insert: key + text.slice(start, end) + opening[1], anchor: 1,
       caret: 1 + end - start } : null;
   }
-  const string = stringAround(language, text, start);
+  const string = stringAround(language, text, start, data);
   if (closing && text[start] === key
       && (quote ? string !== null && string.to === start + 1 && isClosed(text, string) : string === null)) {
     return { from: start + 1, to: start + 1, insert: "", caret: 0 };
@@ -734,10 +746,10 @@ function enter(text, start, end) {
 }
 
 /** Backspace right between an empty pair of the language, an empty string's quotes included, deletes both. */
-function backspace(language, pairs, text, offset) {
+function backspace(language, pairs, text, offset, data) {
   if (offset === 0 || !pairs.includes(text.slice(offset - 1, offset + 1))) return null;
   if (text[offset] === text[offset - 1]) {
-    const empty = language.tokenize(text).find((t) => t.from === offset - 1);
+    const empty = language.tokenize(text, data).find((t) => t.from === offset - 1);
     if (!empty || !isStringToken(empty) || empty.to !== offset + 1) return null;
   }
   return { from: offset - 1, to: offset + 1, insert: "", caret: 0 };
@@ -775,6 +787,8 @@ const DIALECT = Object.freeze({
 });
 /** The operators of a query, the longest first, so that <= is not read as < then =. */
 const OPERATORS = ["<=", ">=", "<>", "!=", "=", "<", ">", "+", "-", "*", "/"];
+/** SQL's, its concatenation and its modulo included; a cast, ::, is read before a parameter is. */
+const SQL_OPERATORS = ["||", ...OPERATORS, "%"];
 /** What starts a name and what continues it, as JDQL reads them: a letter or _, then digits too. */
 const NAME_START = /[\p{L}_]/u;
 const NAME_PART = /[\p{L}\p{N}_]/u;
@@ -789,9 +803,11 @@ const wordsOf = (list, fallback) => (Array.isArray(list) ? list : fallback)
 /**
  * The vocabulary of a query language's data (spec §2.2), read once per data object: keywords and functions (Sets of
  * capitals, and keywordList and functionList in the dialect's order), clauses (each a list of words, the longest
- * first), targetAfter (a Set), self, quote, and targets, a Map of each target's name to { name, detail, attributes },
- * attributes a Map of each name to { name, type, format, enum, detail, target }. Anything odd is left out; data that
- * is no object reads as the default dialect and no target.
+ * first), targetAfter (a Set), self (null when the dialect says null), quote, and targets, a Map of each target's name
+ * to { name, detail, schema, attributes }, attributes a Map of each name to { name, type, format, enum, detail,
+ * target }. SQL's options (SQL spec §3): aliases, identifierQuote (null for none) and unquotedCase ("lower", "upper"
+ * or null), how the database stores a name written without quotes. Anything odd is left out; data that is no object
+ * reads as the default dialect and no target.
  */
 function vocabulary(data) {
   if (!isObject(data)) return NO_VOCABULARY;
@@ -803,13 +819,17 @@ function vocabulary(data) {
   return known;
 }
 
+/** Whether {@code q} may delimit a string or a name: one character that is no blank, no name, no punctuation. */
+const isQuote = (q) => typeof q === "string" && q.length === 1 && !isBlank(q) && !NAME_PART.test(q)
+  && !"(),.:?!".includes(q) && !OPERATORS.includes(q);
+
 function readVocabulary(data) {
   const d = isObject(data.dialect) ? data.dialect : {};
   const keywords = wordsOf(d.keywords, DIALECT.keywords);
   const functions = wordsOf(d.functions, DIALECT.functions);
-  const quote = typeof d.quote === "string" && d.quote.length === 1 && !isBlank(d.quote) && !NAME_PART.test(d.quote)
-    && !"(),.:?!".includes(d.quote) && !OPERATORS.includes(d.quote) ? d.quote : DIALECT.quote;
-  const self = typeof d.self === "string" && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(d.self) ? d.self : DIALECT.self;
+  const quote = isQuote(d.quote) ? d.quote : DIALECT.quote;
+  const self = d.self === null ? null
+    : typeof d.self === "string" && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(d.self) ? d.self : DIALECT.self;
   const targets = new Map();
   for (const [name, t] of Object.entries(isObject(data.targets) ? data.targets : {})) {
     if (!isObject(t)) continue;
@@ -820,23 +840,32 @@ function readVocabulary(data) {
         format: typeof a.format === "string" ? a.format : null, enum: Array.isArray(a.enum) ? a.enum : null,
         detail: typeof a.detail === "string" ? a.detail : "", target: typeof a.target === "string" ? a.target : null });
     }
-    targets.set(name, { name, detail: typeof t.detail === "string" ? t.detail : "", attributes });
+    targets.set(name, { name, detail: typeof t.detail === "string" ? t.detail : "",
+      schema: typeof t.schema === "string" ? t.schema : null, attributes });
   }
   return { keywords: new Set(keywords), keywordList: keywords, functions: new Set(functions), functionList: functions,
     clauses: wordsOf(d.clauses, DIALECT.clauses).map((c) => c.split(/\s+/)).sort((a, b) => b.length - a.length),
-    targetAfter: new Set(wordsOf(d.targetAfter, DIALECT.targetAfter)), self, quote, targets };
+    targetAfter: new Set(wordsOf(d.targetAfter, DIALECT.targetAfter)), self, quote, targets,
+    aliases: d.aliases === true, identifierQuote: isQuote(d.identifierQuote) && d.identifierQuote !== quote
+      ? d.identifierQuote : null, unquotedCase: d.unquotedCase === "lower" || d.unquotedCase === "upper"
+      ? d.unquotedCase : null };
 }
 
 /** The vocabulary of no data: the default dialect, and no target. */
 const NO_VOCABULARY = readVocabulary({});
 
 /**
- * The raw tokens of a query: { from, to, kind }, kind name, string, number, parameter (:name, ?1), operator, punct
- * (( ) , .) or invalid (one character). A string runs from {@code quote} to the next one that is not doubled, or to
- * the end of its line when there is none; a number written into a name, 12ab, is invalid as a whole.
+ * The raw tokens of a query read with the vocabulary {@code v}: { tokens, comments }, a token { from, to, kind }, kind
+ * name, string, number, parameter (:name, ?1), operator, punct (( ) , .) or invalid (one character). A string runs
+ * from the dialect's quote to the next one that is not doubled, or to the end of its line when there is none; so does
+ * a quoted name, between two identifierQuote, a name marked quoted. A number written into a name, 12ab, is invalid as
+ * a whole. In SQL (a dialect with aliases) a -- or /* comment is no token: comments holds it, { from, to, kind:
+ * "comment", open }, open when a /* is never closed; ::, || and % are operators.
  */
-function lexQuery(text, quote) {
+function lexQuery(text, v) {
   const tokens = [];
+  const comments = [];
+  const sql = v.aliases;
   const n = text.length;
   let i = 0;
   while (i < n) {
@@ -847,12 +876,20 @@ function lexQuery(text, quote) {
     }
     let j = i + 1;
     let kind;
-    if (c === quote) {
-      kind = "string";
+    if (sql && ((c === "-" && text[j] === "-") || (c === "/" && text[j] === "*"))) {
+      const end = c === "/" ? text.indexOf("*/", j + 1) : -1;
+      if (c === "/") j = end < 0 ? n : end + 2;
+      else while (j < n && text[j] !== "\n" && text[j] !== "\r") j++;
+      comments.push({ from: i, to: j, kind: "comment", open: c === "/" && end < 0 });
+      i = j;
+      continue;
+    }
+    if (c === v.quote || c === v.identifierQuote) {
+      kind = c === v.quote ? "string" : "name";
       while (j < n && text[j] !== "\n" && text[j] !== "\r") {
-        if (text[j] === quote && text[j + 1] === quote) {
+        if (text[j] === c && text[j + 1] === c) {
           j += 2;
-        } else if (text[j++] === quote) {
+        } else if (text[j++] === c) {
           break;
         }
       }
@@ -868,45 +905,86 @@ function lexQuery(text, quote) {
     } else if (NAME_START.test(c)) {
       kind = "name";
       while (j < n && NAME_PART.test(text[j])) j++;
+    } else if (sql && c === ":" && text[j] === ":") {
+      kind = "operator";
+      j = i + 2;
     } else if ((c === ":" && j < n && NAME_PART.test(text[j])) || (c === "?" && isDigit(text[j]))) {
       kind = "parameter";
       while (j < n && (c === ":" ? NAME_PART.test(text[j]) : isDigit(text[j]))) j++;
     } else if ("(),.".includes(c)) {
       kind = "punct";
     } else {
-      const operator = OPERATORS.find((o) => text.startsWith(o, i));
+      const operator = (sql ? SQL_OPERATORS : OPERATORS).find((o) => text.startsWith(o, i));
       kind = operator ? "operator" : "invalid";
       if (operator) j = i + operator.length;
       else if (c >= "\uD800" && c <= "\uDBFF" && j < n) j++;          // a character outside the BMP stays whole
     }
-    tokens.push({ from: i, to: j, kind });
+    tokens.push(c === v.identifierQuote ? { from: i, to: j, kind, quoted: true } : { from: i, to: j, kind });
     i = j;
   }
-  return tokens;
+  return { tokens, comments };
 }
 
 /** The last text read and what it gave: one draw asks for the tokens, the diagnostics and the parameters of it. */
 let lastRead = { text: null, data: null, read: null };
 
 /**
- * {@code text} read with the vocabulary of {@code data} (spec §3.1-§3.2): { v, tokens, target }. A token is { from,
- * to, kind }, kind keyword, function, target, attribute, identifier, string, number, parameter, operator, punct or
- * invalid; a word also has word, its capitals; a name of a path pathFrom, where the path starts, and attribute when
- * it resolves to one, or self when it is the dialect's self; a name that is wrong, problem, what is wrong. target is
- * the target named right after the first targetAfter word, wherever the caret is, or null when that name is unknown,
- * qualified (a.b.C, never checked) or missing. A path goes through the targets one step at a time: a cycle of
- * references costs one lookup per step of the text.
+ * Whether token {@code k} of {@code tokens} is where a value goes: right of a comparison outside a SET, of LIKE, a
+ * bound of BETWEEN, an element of an IN (…) list. A name there is a literal (spec §3.4).
+ */
+function valueTest(text, tokens) {
+  const word = (t, w) => t !== undefined && t.kind === "keyword" && t.word === w;
+  const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
+  const inSet = (k) => {
+    for (let i = k - 1; i >= 0; i--) {
+      if (word(tokens[i], "SET") || word(tokens[i], "WHERE")) return word(tokens[i], "SET");
+    }
+    return false;
+  };
+  // The left operand of a comparison is a parameter or a literal (:min < price): the right one is the attribute.
+  const valueOnTheLeft = (t) => t !== undefined
+    && (t.kind === "parameter" || t.kind === "string" || t.kind === "number");
+  const inList = (k) => {
+    let depth = 0;
+    for (let i = k - 1; i >= 0; i--) {
+      if (punctIs(tokens[i], ")")) depth++;
+      else if (punctIs(tokens[i], "(") && depth-- === 0) return word(tokens[i - 1], "IN");
+    }
+    return false;
+  };
+  return (k) => {
+    const before = tokens[k - 1];
+    if (before === undefined) return false;
+    if (before.kind === "operator") {
+      return COMPARISONS.has(text.slice(before.from, before.to)) && !valueOnTheLeft(tokens[k - 2]) && !inSet(k);
+    }
+    if (word(before, "LIKE") || word(before, "BETWEEN")) return true;
+    if (word(before, "AND") && word(tokens[k - 3], "BETWEEN")) return true;
+    return (punctIs(before, "(") || punctIs(before, ",")) && inList(k);
+  };
+}
+
+/**
+ * {@code text} read with the vocabulary of {@code data} (spec §3.1-§3.2): { v, tokens, comments, target, scope }. A
+ * token is { from, to, kind }, kind keyword, function, target, attribute, identifier, string, number, parameter,
+ * operator, punct or invalid; a word also has word, its capitals; a name of a path pathFrom, where the path starts,
+ * and attribute when it resolves to one, or self when it is the dialect's self; a name that is wrong, problem, what is
+ * wrong. target is the target named right after the first targetAfter word, wherever the caret is, or null when that
+ * name is unknown, qualified (a.b.C, never checked) or missing. A path goes through the targets one step at a time: a
+ * cycle of references costs one lookup per step of the text. comments are SQL's (lexQuery); SQL reads its targets and
+ * paths with readSql, which gives scope, every target of the statement; JDQL's scope is empty.
  */
 function read(text, data) {
   if (lastRead.text === text && lastRead.data === data) return lastRead.read;
   const v = vocabulary(data);
-  const tokens = lexQuery(text, v.quote);
-  const self = v.self.toUpperCase();
+  const { tokens, comments } = lexQuery(text, v);
+  const self = v.self === null ? null : v.self.toUpperCase();
   const isDot = (t) => t !== undefined && t.kind === "punct" && text[t.from] === ".";
   const joined = (a, b) => a !== undefined && b !== undefined && a.to === b.from;
-  // A word next to a dot is a name of a path; else a function before "(", a keyword, or a name.
+  // A word next to a dot is a name of a path; else a function before "(", a keyword, or a name. A quoted name is a
+  // name, whatever it spells.
   tokens.forEach((t, k) => {
-    if (t.kind !== "name") return;
+    if (t.kind !== "name" || t.quoted) return;
     t.word = text.slice(t.from, t.to).toUpperCase();
     const next = tokens[k + 1];
     if ((isDot(tokens[k - 1]) && joined(tokens[k - 1], t)) || (isDot(next) && joined(t, next))) return;
@@ -917,6 +995,10 @@ function read(text, data) {
       if (t.word === self) t.self = true;
     }
   });
+  if (v.aliases) {
+    lastRead = { text, data, read: { v, tokens, comments, ...readSql(text, v, tokens) } };
+    return lastRead.read;
+  }
   // The name right after a targetAfter word is a target, known or not (a known one may be spelt as a keyword, such
   // as Order); the first one is the query's.
   let target = null;
@@ -937,36 +1019,8 @@ function read(text, data) {
     first = false;
   });
   // A name where a value goes is a literal, such as an enum constant (pkg.Status.OPEN) or a bare word read as a
-  // string: right of a comparison outside a SET, of LIKE, a bound of BETWEEN, an element of an IN (…) list.
-  const word = (t, w) => t !== undefined && t.kind === "keyword" && t.word === w;
-  const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
-  const inSet = (k) => {
-    for (let i = k - 1; i >= 0; i--) {
-      if (word(tokens[i], "SET") || word(tokens[i], "WHERE")) return word(tokens[i], "SET");
-    }
-    return false;
-  };
-  // The left operand of a comparison is a parameter or a literal (:min < price): the right one is the attribute.
-  const valueOnTheLeft = (t) => t !== undefined
-    && (t.kind === "parameter" || t.kind === "string" || t.kind === "number");
-  const inList = (k) => {
-    let depth = 0;
-    for (let i = k - 1; i >= 0; i--) {
-      if (punctIs(tokens[i], ")")) depth++;
-      else if (punctIs(tokens[i], "(") && depth-- === 0) return word(tokens[i - 1], "IN");
-    }
-    return false;
-  };
-  const isValue = (k) => {
-    const before = tokens[k - 1];
-    if (before === undefined) return false;
-    if (before.kind === "operator") {
-      return COMPARISONS.has(text.slice(before.from, before.to)) && !valueOnTheLeft(tokens[k - 2]) && !inSet(k);
-    }
-    if (word(before, "LIKE") || word(before, "BETWEEN")) return true;
-    if (word(before, "AND") && word(tokens[k - 3], "BETWEEN")) return true;
-    return (punctIs(before, "(") || punctIs(before, ",")) && inList(k);
-  };
+  // string.
+  const isValue = valueTest(text, tokens);
   // Every other name heads a path, name.name…, resolved from the target one step at a time; with no known target,
   // or after a qualified or unknown one, nothing is checked.
   tokens.forEach((head, k) => {
@@ -1005,8 +1059,187 @@ function read(text, data) {
       if (!more) break;
     }
   });
-  lastRead = { text, data, read: { v, tokens, target } };
+  lastRead = { text, data, read: { v, tokens, comments, target, scope: [] } };
   return lastRead.read;
+}
+
+/** A name written without quotes as the database stores it: in lower case or in capitals when the dialect says so. */
+const folded = (v, name) => v.unquotedCase === "lower" ? name.toLowerCase()
+  : v.unquotedCase === "upper" ? name.toUpperCase() : name;
+
+/** The name a name token stands for: a quoted one's text between its quotes, a doubled quote read as one. */
+function nameOf(text, t, v) {
+  if (!t.quoted) return text.slice(t.from, t.to);
+  const q = v.identifierQuote;
+  return text.slice(t.from + 1, isClosed(text, t) ? t.to - 1 : t.to).replaceAll(q + q, q);
+}
+
+/** The key of a name token: a quoted name as written, an unquoted one as the database stores it. */
+const keyOf = (text, t, v) => t.quoted ? nameOf(text, t, v) : folded(v, nameOf(text, t, v));
+
+/** Whether two keys name the same thing: equal, or equal ignoring case when the dialect keeps names as written. */
+const sameName = (v, a, b) => a === b || (v.unquotedCase === null && a.toLowerCase() === b.toLowerCase());
+
+/**
+ * The entry of {@code map}, targets or attributes, that {@code key} names: as it is, then, for an unquoted name when
+ * the dialect does not say how it stores names, ignoring case (SQL spec §3); null when none does.
+ */
+function lookup(v, map, key, quoted) {
+  const found = map.get(key);
+  if (found !== undefined || quoted || v.unquotedCase !== null) return found || null;
+  const lower = key.toLowerCase();
+  for (const [name, entry] of map) if (name.toLowerCase() === lower) return entry;
+  return null;
+}
+
+/** The target of {@code scope} that {@code key} names: by its alias first, then by its name; null when none does. */
+const scoped = (v, scope, key) => scope.find((s) => s.alias !== null && sameName(v, s.alias, key))
+  || scope.find((s) => sameName(v, s.name, key)) || null;
+
+/**
+ * The targets and the paths of a SQL query (SQL spec §3), its dialect having aliases: { target, scope }, scope one {
+ * entry, label, name, alias, written } per target of the statement in the order of the text — its vocabulary entry
+ * (null when it has none), its name as a message says it, the key of its name and of its alias (null for none), its
+ * alias as written. Only the outer level names targets: a targetAfter word in parentheses (EXTRACT(YEAR FROM d))
+ * names none, and what a sub-query holds stays unchecked. FROM takes a list, comma separated; a name after a target,
+ * or AS and a name, aliases it, a keyword never; schema.name is looked up as written, then without its schema. A
+ * path's head is an alias, a target's name or a column of a target in scope; a bare name is a column of any target in
+ * scope; a name where a value goes is a literal, unless it is a path from an alias or a table. A common table
+ * expression's name, an alias of the select list, a cast's type (::type) and an unknown function are not checked.
+ * target is the first target's entry.
+ */
+function readSql(text, v, tokens) {
+  const isDot = (t) => t !== undefined && t.kind === "punct" && text[t.from] === ".";
+  const joined = (a, b) => a !== undefined && b !== undefined && a.to === b.from;
+  const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
+  const word = (t, w) => t !== undefined && t.kind === "keyword" && t.word === w;
+  const isName = (t) => t !== undefined && t.kind === "name";
+  const key = (t) => keyOf(text, t, v);
+  // How deep in parentheses each token is, and whether it is inside a sub-query's.
+  const open = [];
+  tokens.forEach((t, k) => {
+    if (punctIs(t, ")") && open.length) open.pop();
+    t.depth = open.length;
+    t.sub = open.length > 0 && open[open.length - 1];
+    if (punctIs(t, "(")) open.push(t.sub || ["SELECT", "WITH", "VALUES"].some((w) => word(tokens[k + 1], w)));
+  });
+  // WITH name AS (…): a common table expression, a target whose columns are unknown.
+  const ctes = [];
+  tokens.forEach((t, k) => {
+    if (isName(t) && t.depth === 0 && word(tokens[k + 1], "AS") && punctIs(tokens[k + 2], "(")) {
+      t.kind = "target";
+      t.position = "target";
+      ctes.push(key(t));
+    }
+  });
+  const scope = [];
+  tokens.forEach((t, k) => {
+    if (t.kind !== "keyword" || !v.targetAfter.has(t.word) || t.depth !== 0) return;
+    for (let at = k + 1; ;) {
+      const first = tokens[at];
+      if (!isName(first) && !(first !== undefined && first.kind === "keyword"
+        && lookup(v, v.targets, key(first), false) !== null)) return;
+      let end = at;
+      while (isDot(tokens[end + 1]) && joined(tokens[end], tokens[end + 1]) && isName(tokens[end + 2])
+        && joined(tokens[end + 1], tokens[end + 2])) end += 2;
+      const keys = [];
+      for (let i = at; i <= end; i += 2) keys.push(key(tokens[i]));
+      const last = tokens[end];
+      let entry = lookup(v, v.targets, keys.join("."), at === end && first.quoted === true);
+      if (entry === null && end > at) entry = lookup(v, v.targets, keys[keys.length - 1], last.quoted === true);
+      const cte = at === end && ctes.some((c) => sameName(v, c, keys[0]));
+      for (let i = at; i <= end; i += 2) {
+        tokens[i].kind = entry !== null || cte ? "target" : "identifier";
+        tokens[i].position = "target";
+      }
+      let next = end + 1;
+      let alias = null;
+      if (word(tokens[next], "AS") && isName(tokens[next + 1])) {
+        alias = tokens[next + 1];
+        next += 2;
+      } else if (isName(tokens[next])) {
+        alias = tokens[next];
+        next += 1;
+      }
+      if (alias !== null) {
+        alias.kind = "target";
+        alias.position = "alias";
+      }
+      scope.push({ entry, label: entry !== null ? entry.name : text.slice(first.from, last.to),
+        name: keys[keys.length - 1], alias: alias === null ? null : key(alias),
+        written: alias === null ? null : nameOf(text, alias, v) });
+      if (t.word !== "FROM" || !punctIs(tokens[next], ",")) return;
+      at = next + 1;
+    }
+  });
+  // An alias of the select list (AS name, or a name right after an expression), a cast's type and an unknown
+  // function's name: names, never checked; the select list's aliases may be named again (ORDER BY n).
+  const ends = (t) => t !== undefined && (["name", "string", "number", "parameter"].includes(t.kind)
+    || punctIs(t, ")") || ["END", "NULL", "TRUE", "FALSE"].some((w) => word(t, w)));
+  const outputs = [];
+  tokens.forEach((t, k) => {
+    const before = tokens[k - 1];
+    if (!isName(t) || t.position !== undefined || (isDot(before) && joined(before, t))
+      || (isDot(tokens[k + 1]) && joined(t, tokens[k + 1]))) return;
+    if (word(before, "AS") || (ends(before) && !t.sub)) {
+      t.kind = "identifier";
+      t.position = "alias";
+      outputs.push(key(t));
+    } else if (before !== undefined && before.kind === "operator" && text.slice(before.from, before.to) === "::") {
+      t.kind = "identifier";
+      t.position = "type";
+    } else if (punctIs(tokens[k + 1], "(")) {
+      t.kind = "identifier";
+      t.position = "call";
+    }
+  });
+  // Every other name heads a path, from an alias or a table of the scope, or from a column of its targets.
+  const isValue = valueTest(text, tokens);
+  tokens.forEach((head, k) => {
+    if (!isName(head) || head.position !== undefined || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
+    const dotted = isDot(tokens[k + 1]) && joined(head, tokens[k + 1]);
+    const owner = dotted ? scoped(v, scope, key(head)) : null;
+    if (head.sub || (head.quoted && !isClosed(text, head)) || (owner === null && isValue(k))) {
+      for (let at = k; tokens[at] !== undefined && (at === k || isName(tokens[at])); at += 2) {
+        tokens[at].kind = "identifier";
+        if (!isDot(tokens[at + 1]) || !joined(tokens[at], tokens[at + 1])) break;
+      }
+      return;
+    }
+    head.pathFrom = head.from;
+    let entry = null;
+    if (owner !== null) {
+      head.kind = "target";
+      entry = owner.entry;
+    } else {
+      const owners = scope.filter((s) => s.entry !== null
+        && lookup(v, s.entry.attributes, key(head), head.quoted === true) !== null);
+      if (owners.length) {
+        head.kind = "attribute";
+        head.attribute = lookup(v, owners[0].entry.attributes, key(head), head.quoted === true);
+      } else {
+        head.kind = !dotted && scoped(v, scope, key(head)) !== null ? "target" : "identifier";
+      }
+    }
+    for (let at = k, t = head; ;) {
+      const dot = tokens[at + 1];
+      if (!isDot(dot) || !joined(t, dot)) break;
+      const after = tokens[at + 2];
+      const more = isName(after) && joined(dot, after);
+      if (t !== head || owner === null) {
+        entry = t.attribute !== undefined && t.attribute.target !== null
+          ? v.targets.get(t.attribute.target) || null : null;
+      }
+      if (!more) break;
+      at += 2;
+      t = after;
+      t.pathFrom = head.from;
+      const attribute = entry === null ? null : lookup(v, entry.attributes, key(t), t.quoted === true);
+      t.kind = attribute !== null ? "attribute" : "identifier";
+      if (attribute !== null) t.attribute = attribute;
+    }
+  });
+  return { target: scope.length ? scope[0].entry : null, scope };
 }
 
 // ------------------------------------------------------------------------------------------------ query: completion
@@ -1068,10 +1301,11 @@ function completeQuery(text, caret, data) {
     if (target !== null && EXPRESSION_CLAUSES.has(clauseBefore(v, tokens, p + 1))) {
       const call = text[to] === "(";
       items = [...attributeItems(target),
-        { insert: v.self, label: v.self, detail: "the " + target.name + " itself", kind: "keyword" },
+        ...(v.self === null ? [] : [{ insert: v.self, label: v.self, detail: "the " + target.name + " itself",
+          kind: "keyword" }]),
         ...v.functionList.map((f) => call ? { insert: f, label: f, detail: "function", kind: "function" }
           : { insert: f + "()", label: f, detail: "function", kind: "function", caret: f.length + 1 }),
-        ...keywords.filter((k) => !v.functions.has(k.label) && k.label !== v.self.toUpperCase())];
+        ...keywords.filter((k) => !v.functions.has(k.label) && (v.self === null || k.label !== v.self.toUpperCase()))];
     } else {
       items = keywords;
     }
@@ -1221,12 +1455,21 @@ function formatQuery(text, data) {
 /** A query, its data the language a panel publishes (spec §3); every function reads odd data as none. */
 const QUERY = Object.freeze({
   id: "query",
-  tokenize: (text, data) => read(text, data).tokens.map(({ from, to, kind }) => ({ from, to, kind })),
+  tokenize(text, data) {
+    const { tokens, comments } = read(text, data);
+    const all = comments.length ? [...tokens, ...comments].sort((a, b) => a.from - b.from) : tokens;
+    return all.map(({ from, to, kind, quoted }) => quoted ? { from, to, kind, quoted } : { from, to, kind });
+  },
   diagnose: diagnoseQuery,
   complete: completeQuery,
   format: formatQuery,
   parameters: parametersOf,
   pairs: Object.freeze(["()", "''"]),
+  /** The pairs with {@code data}: parentheses, the dialect's quote, and its identifier quote when it has one. */
+  pairsOf(data) {
+    const v = vocabulary(data);
+    return ["()", v.quote + v.quote, ...(v.identifierQuote === null ? [] : [v.identifierQuote + v.identifierQuote])];
+  },
 });
 
 /** The query language (spec §3), with the contract of jsonLanguage plus parameters(text, data). */

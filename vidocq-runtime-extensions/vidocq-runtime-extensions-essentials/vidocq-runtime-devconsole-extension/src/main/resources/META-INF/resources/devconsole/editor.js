@@ -32,7 +32,7 @@
 // - setData() gives it other data, such as a query's vocabulary once fetched or the schema a query's parameters
 //   follow: the next frame draws with it, the text and the caret untouched.
 
-import { jsonLanguage, queryLanguage, keystroke, isShortcut, FORMAT_EXAMPLES } from "./editor-core.js";
+import { jsonLanguage, queryLanguage, keystroke, isShortcut, pairsOf, FORMAT_EXAMPLES } from "./editor-core.js";
 
 export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };
 /** A result's rows, read from its body and written as CSV: console.js draws them, editor-core.js reads them. */
@@ -528,10 +528,11 @@ export function createEditor({ language, data, value, rows, label, onDraw }) {
     const key = event.key === "Tab" && event.shiftKey ? "Shift+Tab" : event.key;
     const tab = key === "Tab" || key === "Shift+Tab";
     if (tab && leaving) return;
-    const paired = key.length === 1 && Array.isArray(language.pairs) && language.pairs.some((p) => p.includes(key));
+    // a query's pairs depend on its data: a SQL dialect pairs its identifier quote too
+    const paired = key.length === 1 && pairsOf(language, data).some((p) => p.includes(key));
     if (!KEYS.has(key) && !paired) return;
     const change = safely(() => keystroke(language, textarea.value, textarea.selectionStart, textarea.selectionEnd,
-      key), null);
+      key, data), null);
     if (change === null) {
       if (tab) event.preventDefault();
       return;

@@ -214,6 +214,18 @@ class PageTest {
     }
 
     @Test
+    void theKeystrokesOfAQueryFollowItsDataAndASqlCommentIsDimmed() {
+        String editor = file("editor.js");
+
+        assertTrue(editor.contains(
+                "const paired = key.length === 1 && pairsOf(language, data).some((p) => p.includes(key));"),
+                "a SQL dialect pairs its identifier quote too");
+        assertTrue(editor.contains("textarea.selectionEnd,\n      key, data), null);"),
+                "the keystrokes read the quotes of the query's data");
+        assertTrue(rule(file("console.css"), ".ed-comment {").contains("var(--faint)"), "a SQL comment, dimmed");
+    }
+
+    @Test
     void theEditorColoursItsTokensWithTheViewersColoursInEveryTheme() {
         String style = file("console.css");
 

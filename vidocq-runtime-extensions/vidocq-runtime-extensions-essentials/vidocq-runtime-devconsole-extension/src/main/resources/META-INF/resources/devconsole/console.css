@@ -355,6 +355,8 @@ button:disabled { opacity: 0.55; cursor: progress; }
 .ed-parameter { color: var(--code-parameter); }
 .ed-identifier { color: var(--ink); }
 .ed-operator { color: var(--json-punct); }
+/* A SQL comment: dimmed, its width untouched. */
+.ed-comment { color: var(--faint); }
 .ed-text::placeholder { color: var(--faint); }
 .ed-error { text-decoration: underline wavy var(--crit); text-decoration-skip-ink: none; text-underline-offset: 3px; }
 .ed-warning { text-decoration: underline wavy var(--warn); text-decoration-skip-ink: none; text-underline-offset: 3px; }
