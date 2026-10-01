@@ -123,6 +123,27 @@ class ApplicationLaunchTest {
         assertEquals(List.of(), dropped);
     }
 
+    @Test
+    void anEnrichedCopyReplacesTheJarAndNeedsNoPatch(@TempDir Path dir) throws Exception {
+        Path lib = jar(dir, "dep-lib.jar", null);
+        MavenProject project = project();
+        project.setArtifacts(Set.of(artifact("dep-lib", lib)));
+        Path build = dir.resolve("target");
+        Files.createDirectories(JpmsPatches.patchDirFor(build, "dep-lib").resolve("a"));
+        assertEquals("--patch-module", ApplicationLaunch.patchModuleArgs(project, build).getFirst(),
+                "without a copy, the parked classes are patched in");
+
+        Path enriched = EnrichedJars.root(build).resolve("dep-lib.jar");
+        Files.createDirectories(enriched.getParent());
+        Files.copy(lib, enriched);
+        List<Path> replaced = new ArrayList<>();
+
+        assertEquals(List.of(enriched),
+                ApplicationLaunch.modulePath(project, build, build.resolve("classes"), true, replaced::add));
+        assertEquals(List.of(lib), replaced);
+        assertEquals(List.of(), ApplicationLaunch.patchModuleArgs(project, build), "its classes are in the copy");
+    }
+
     private static Path jar(Path dir, String name, String devOnly) throws Exception {
         Path jar = dir.resolve(name);
         Manifest manifest = new Manifest();

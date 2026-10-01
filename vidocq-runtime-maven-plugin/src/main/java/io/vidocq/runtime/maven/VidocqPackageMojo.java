@@ -19,7 +19,6 @@
  */
 package io.vidocq.runtime.maven;
 
-import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -134,13 +133,17 @@ public class VidocqPackageMojo extends AbstractMojo {
                         continue;
                     }
                     Path original = artifact.getFile().toPath();
-                    Path src = ModularizedJars.resolve(buildDir.toPath(), original);
-                    if (!src.equals(original)) {
+                    Path src = EnrichedJars.resolve(buildDir.toPath(), original);
+                    boolean enriched = EnrichedJars.isEnriched(buildDir.toPath(), original);
+                    if (enriched) {
+                        getLog().info("Packaging enriched copy of " + original.getFileName()
+                                + " (vidocq:generate added its generated code and declared it)");
+                    } else if (!src.equals(original)) {
                         getLog().info("Packaging modularized copy of " + original.getFileName()
                                 + " (vauban:modularize generated its module descriptor)");
                     }
                     Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
-                    if (Files.isDirectory(patchDir)) {
+                    if (!enriched && Files.isDirectory(patchDir)) {
                         JpmsPatches.enrich(src, patchDir, libDir.resolve(src.getFileName().toString()));
                         getLog().info("Enriched " + src.getFileName()
                                 + " with its generated classes (JPMS cross-module)");

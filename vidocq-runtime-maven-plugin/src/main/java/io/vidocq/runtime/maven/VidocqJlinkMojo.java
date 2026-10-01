@@ -170,20 +170,24 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     getLog().info("Staging sealed copy of " + artifact.getArtifactId()
                             + " (resource package closed, adapters via provides)");
                 }
-                // Prefer the copy patched with a generated module-info by vauban:modularize:
+                // Prefer the enriched copy vidocq:generate wrote (its generated code declared in its
+                // descriptor), else the copy patched with a generated module-info by vauban:modularize:
                 // jlink rejects automatic modules, so this is what makes a non-modular
                 // dependency stageable at all.
-                Path modularized = ModularizedJars.resolve(buildDir.toPath(), f.toPath());
+                Path modularized = EnrichedJars.resolve(buildDir.toPath(), f.toPath());
                 if (!modularized.equals(f.toPath())) {
                     src = modularized;
-                    getLog().info("Staging modularized copy of " + artifact.getArtifactId()
-                            + " (vauban:modularize generated its module descriptor)");
+                    getLog().info(EnrichedJars.isEnriched(buildDir.toPath(), f.toPath())
+                            ? "Staging enriched copy of " + artifact.getArtifactId()
+                                    + " (vidocq:generate added its generated code and declared it)"
+                            : "Staging modularized copy of " + artifact.getArtifactId()
+                                    + " (vauban:modularize generated its module descriptor)");
                 }
                 // Stage an enriched copy when vidocq:generate parked cross-module classes
                 // for this dependency: the generated classes ship inside the module that
                 // owns their package, so the image has no split package to reject.
                 Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
-                if (Files.isDirectory(patchDir)) {
+                if (!EnrichedJars.isEnriched(buildDir.toPath(), f.toPath()) && Files.isDirectory(patchDir)) {
                     JpmsPatches.enrich(src, patchDir, stage.resolve(f.getName()));
                     getLog().info("Staging enriched copy of " + artifact.getArtifactId()
                             + " (carries its generated classes, JPMS cross-module)");

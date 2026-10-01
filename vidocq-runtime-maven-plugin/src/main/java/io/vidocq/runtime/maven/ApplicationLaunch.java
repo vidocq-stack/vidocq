@@ -56,7 +56,8 @@ public final class ApplicationLaunch {
      * @param classesDir  {@code target/classes}
      * @param layerMode   universal-loader mode: the application classes travel through
      *                    {@code -Dvidocq.app.path} instead, since a module must not be on both paths
-     * @param modularized called with each dependency jar that a modularized copy replaces
+     * @param modularized called with each dependency jar that a copy replaces: enriched by {@code vidocq:generate}
+     *                    or modularized by {@code vauban:modularize}
      */
     public static List<Path> modulePath(MavenProject project, Path buildDir, Path classesDir, boolean layerMode,
                                         Consumer<Path> modularized) {
@@ -74,7 +75,8 @@ public final class ApplicationLaunch {
      * @param classesDir  {@code target/classes}
      * @param layerMode   universal-loader mode: the application classes travel through
      *                    {@code -Dvidocq.app.path} instead, since a module must not be on both paths
-     * @param modularized called with each dependency jar that a modularized copy replaces
+     * @param modularized called with each dependency jar that a copy replaces: enriched by {@code vidocq:generate}
+     *                    or modularized by {@code vauban:modularize}
      * @param dropDevOnly when {@code true}, an artifact whose jar is dev-only is left off the path
      * @param dropped     called with the artifact id of each dev-only jar that was dropped
      */
@@ -91,7 +93,7 @@ public final class ApplicationLaunch {
                     dropped.accept(artifact.getArtifactId());
                     continue;
                 }
-                Path resolved = ModularizedJars.resolve(buildDir, jar);
+                Path resolved = EnrichedJars.resolve(buildDir, jar);
                 if (!resolved.equals(jar)) {
                     modularized.accept(jar);
                 }
@@ -142,12 +144,13 @@ public final class ApplicationLaunch {
      * {@code target/vidocq-patches/} to the dependency jar they belong to. Empty when nothing was parked.
      *
      * <p>The jars named here are the ones {@link #modulePath} puts on the path — a modularized copy when
-     * there is one — otherwise {@code --patch-module} would target a jar that is not on the path.
+     * there is one — otherwise {@code --patch-module} would target a jar that is not on the path. A jar with an
+     * enriched copy is left out: the copy carries the classes.
      */
     public static List<String> patchModuleArgs(MavenProject project, Path buildDir) throws IOException {
         Map<String, Path> jarsByArtifactId = new HashMap<>();
         for (var artifact : project.getArtifacts()) {
-            if (artifact.getFile() != null) {
+            if (artifact.getFile() != null && !EnrichedJars.isEnriched(buildDir, artifact.getFile().toPath())) {
                 jarsByArtifactId.put(artifact.getArtifactId(),
                         ModularizedJars.resolve(buildDir, artifact.getFile().toPath()));
             }
