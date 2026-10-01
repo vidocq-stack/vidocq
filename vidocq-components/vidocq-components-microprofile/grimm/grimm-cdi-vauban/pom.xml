@@ -26,10 +26,11 @@
       <artifactId>ravel-mp-config-api</artifactId>
       <scope>provided</scope>
     </dependency>
+    <!-- Compile scope: OpenApiResource is a JAX-RS resource and its API returns a Response, so the
+         module requires jakarta.ws.rs transitively — every consumer needs the API (a Jakarta spec). -->
     <dependency>
       <groupId>jakarta.ws.rs</groupId>
       <artifactId>jakarta.ws.rs-api</artifactId>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>jakarta.enterprise</groupId>
@@ -95,9 +96,37 @@
         _VaubanComponents). Combined with META-INF/services BCE registration and META-INF/beans.xml,
         this lets any Vidocq runtime discover grimm's beans and run GrimmExtension (which synthesises
         GrimmModelCache) without scanning the dependency from the consumer. Build-time only; the
-        output is inert for a standard CDI container (Weld). module-info stays uncompiled here (the
-        jar remains an automatic module) — consistent with the rest of grimm.
+        output is inert for a standard CDI container (Weld).
       -->
+      <!--
+        Java Modules: module-info.java sits in src/main/module-info/ so that testCompile stays on the
+        class path (test-scope dependencies are not modules). It is compiled alone at prepare-package
+        and ships in the jar: Grimm's jars are named modules, never automatic ones (grimm#15).
+        A module-info.class left in target/classes by a previous build would switch the main
+        compile to module mode before the module path is complete: it is removed first.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-clean-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>remove-stale-module-info-before-compile</id>
+            <phase>process-resources</phase>
+            <goals><goal>clean</goal></goals>
+            <configuration>
+              <excludeDefaultDirectories>true</excludeDefaultDirectories>
+              <filesets>
+                <fileset>
+                  <directory>${project.build.outputDirectory}</directory>
+                  <includes>
+                    <include>module-info.class</include>
+                  </includes>
+                </fileset>
+              </filesets>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -121,6 +150,17 @@
             <id>default-testCompile</id>
             <configuration>
               <proc>none</proc>
+            </configuration>
+          </execution>
+          <execution>
+            <id>compile-module-info</id>
+            <phase>prepare-package</phase>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <proc>none</proc>
+              <compileSourceRoots>
+                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+              </compileSourceRoots>
             </configuration>
           </execution>
         </executions>
