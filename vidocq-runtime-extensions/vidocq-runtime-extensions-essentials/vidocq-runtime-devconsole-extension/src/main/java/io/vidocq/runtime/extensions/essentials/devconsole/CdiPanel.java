@@ -39,11 +39,14 @@ import java.util.stream.Collectors;
  *       request-scoped), 4 interceptors, 0 decorators, 12 observers}; then {@code beans}, {@code interceptors} and
  *       {@code observers}, each with how many are the application's; {@code scopes}; {@code decorators}, always
  *       none, since Vauban implements CDI Lite; {@code application}, how the application's classes were told apart;
- *       {@code <table> left out} when a table could not show every row; and {@code source}.</li>
+ *       {@code beans codegen}, {@code interceptors codegen}, {@code observers codegen}: how many rows each
+ *       code-generation verdict has; {@code <table> left out} when a table could not show every row; and
+ *       {@code source}.</li>
  *   <li><b>Tables:</b> {@code beans} (class, kind, scope, qualifiers without {@code @Any}, alternative, from),
  *       {@code interceptors} (class, bindings, priority, from) and {@code observers} (event type, qualifiers,
- *       declaring class and method, sync or async, from), the application's rows first, {@value
- *       CdiInventory#MAX_ROWS} rows each at most. A table with no row is written absent.</li>
+ *       declaring class and method, sync or async, from), then, for every row, codegen (the generator that covers
+ *       it, partial, reflection, unknown or n/a) and by reflection (what falls back); the application's rows first,
+ *       {@value CdiInventory#MAX_ROWS} rows each at most. A table with no row is written absent.</li>
  * </ul>
  *
  * <p>Everything is read once, in the console's {@code onStart}, from metadata only: the bean manager's
@@ -114,6 +117,9 @@ final class CdiPanel implements DevConsolePanel {
                 .row("decorators", "none: Vauban implements CDI Lite, which has no decorators")
                 .row("observers", sides(held.observers(), held.applicationObservers()))
                 .row("application", held.applicationRule());
+        codegen(section, "beans", held.beanCodegen());
+        codegen(section, "interceptors", held.interceptorCodegen());
+        codegen(section, "observers", held.observerCodegen());
         leftOut(section, "beans", held.beans(), held.beanRows());
         leftOut(section, "interceptors", held.interceptors(), held.interceptorRows());
         leftOut(section, "observers", held.observers(), held.observerRows());
@@ -137,6 +143,12 @@ final class CdiPanel implements DevConsolePanel {
             sample.absent(key, NONE);
         } else {
             sample.table(key, columns, rows);
+        }
+    }
+
+    private static void codegen(StartupReportSection section, String table, String summary) {
+        if (!summary.isEmpty()) {
+            section.row(table + " codegen", summary);
         }
     }
 

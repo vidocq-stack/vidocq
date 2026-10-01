@@ -323,12 +323,18 @@ The console's own panel, `cdi`, just before the logs of a `dev` launch and the J
 ** `scopes`: the beans by scope, most first;
 ** `decorators`: always none — Vauban implements CDI Lite, which has no decorators;
 ** `application`: how the application's classes were told apart. When Vidocq booted the application in a module layer of its own, as `vidocq:dev`, `vidocq:run`, the packaged launcher and a `@VidocqMain` trampoline do, they are the classes of that layer, and every other class — Vidocq's, an extension's such as the MCP server's, a third-party jar's — is a library's. Otherwise they are the classes outside the `io.vidocq`, `jakarta` and `java` packages, plus those of the main module;
+** `beans codegen`, `interceptors codegen`, `observers codegen`: how many rows each code-generation verdict has, such as `41 APT, 12 Class-File, 3 partial, 20 reflection`;
 ** `beans left out`, `interceptors left out`, `observers left out`: how many rows a table could not show, only when it could not;
 ** `source`: Vauban's metadata, read once at boot.
 * **Tables**, the application's rows first, then by class name, 100 rows each at most:
 ** `beans`: the class, the kind (`managed`, `producer method`, `producer field`, `synthetic`, `built-in`), the scope, the qualifiers without `@Any`, which every bean has, whether it is an alternative, and where it comes from, `application` or `library`. A disabled alternative is not listed: the container does not resolve it;
 ** `interceptors`: the class, its interceptor bindings, its priority or `disabled: no @Priority`, and where it comes from, `application` or `library`;
 ** `observers`: the event type, its qualifiers, the declaring class and method, `sync` or `async`, and where it comes from, `application` or `library`.
+
+Every table ends with two columns that say whether a row runs code generated at build time or falls back to reflection, as Vauban reads it from what each generated `_VaubanComponents` provider declares:
+
+* `codegen`: `APT` when the annotation processor generated everything the row needs, `Class-File` when `vauban:generate` or `vidocq:generate` did, `APT + Class-File` for both, `partial` when some of it falls back, `reflection` when all of it does, `unknown` when a provider built before Vauban declared its coverage serves it — rebuild that jar — and `n/a` for synthetic and built-in beans;
+* `by reflection`: what falls back, such as `field logger`, `@PostConstruct init()` or `client proxy`. An interceptor's `@AroundInvoke` always does today (https://codefloe.com/Vidocq/vauban/issues/109[vauban#109]), and so does a producer field.
 
 A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
 

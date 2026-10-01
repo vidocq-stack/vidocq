@@ -24,6 +24,7 @@ import io.vidocq.vauban.core.bean.model.InterceptorDescriptor;
 import io.vidocq.vauban.core.bean.model.ObserverDescriptor;
 import io.vidocq.vauban.core.bean.model.QualifierInstance;
 import io.vidocq.vauban.core.container.BuiltInBean;
+import io.vidocq.vauban.core.container.CodegenCoverage;
 import io.vidocq.vauban.core.container.ManagedBean;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.indexer.model.DotName;
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +49,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -68,25 +71,31 @@ import java.util.stream.Collectors;
  * @param applicationObservers those of the application
  * @param observerRows     the rows of the observers table
  * @param applicationRule  how the application's classes were told apart from the libraries'
+ * @param beanCodegen      how many beans each code-generation verdict has, such as {@code 41 APT, 3 partial}
+ * @param interceptorCodegen the same for the interceptors
+ * @param observerCodegen  the same for the observers
  */
 record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans, List<List<String>> beanRows,
                     int interceptors, int applicationInterceptors, List<List<String>> interceptorRows,
                     int observers, int applicationObservers, List<List<String>> observerRows,
-                    String applicationRule) {
+                    String applicationRule, String beanCodegen, String interceptorCodegen, String observerCodegen) {
 
     /** The rows of a table the console keeps. */
     static final int MAX_ROWS = 100;
-    static final List<String> BEAN_COLUMNS = List.of("class", "kind", "scope", "qualifiers", "alternative", "from");
-    static final List<String> INTERCEPTOR_COLUMNS = List.of("interceptor", "bindings", "priority", "from");
-    static final List<String> OBSERVER_COLUMNS = List.of("event", "qualifiers", "observer", "mode", "from");
+    static final List<String> BEAN_COLUMNS = List.of("class", "kind", "scope", "qualifiers", "alternative", "from",
+            "codegen", "by reflection");
+    static final List<String> INTERCEPTOR_COLUMNS = List.of("interceptor", "bindings", "priority", "from", "codegen",
+            "by reflection");
+    static final List<String> OBSERVER_COLUMNS = List.of("event", "qualifiers", "observer", "mode", "from",
+            "codegen", "by reflection");
+    private static final int BEAN_FROM = BEAN_COLUMNS.indexOf("from");
+    private static final int INTERCEPTOR_FROM = INTERCEPTOR_COLUMNS.indexOf("from");
+    private static final int OBSERVER_FROM = OBSERVER_COLUMNS.indexOf("from");
 
     private static final String APPLICATION = "application";
     private static final String LIBRARY = "library";
     /** The packages of the runtime when the application has no layer of its own. */
     private static final List<String> RUNTIME_PACKAGES = List.of("io.vidocq.", "jakarta.", "java.");
-    private static final Comparator<List<String>> APPLICATION_FIRST = Comparator
-            .comparing((List<String> row) -> !APPLICATION.equals(row.getLast()))
-            .thenComparing(row -> row.getFirst());
 
     CdiInventory {
         scopes = Collections.unmodifiableMap(new LinkedHashMap<>(scopes));
@@ -139,8 +148,34 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     }
 
     /**
+     * How Vauban covers each row with generated code, as three functions so a test can hand rows of its own. Read
+     * once with the inventory; only strings are kept.
+     *
+     * @param beans        the coverage of a bean
+     * @param interceptors the coverage of an interceptor
+     * @param observers    the coverage of an observer method
+     */
+    record Coverages(Function<Bean<?>, CodegenCoverage.Coverage> beans,
+                     Function<InterceptorDescriptor, CodegenCoverage.Coverage> interceptors,
+                     Function<ObserverDescriptor, CodegenCoverage.Coverage> observers) {
+
+        private static final CodegenCoverage.Coverage NOT_EVALUATED =
+                new CodegenCoverage.Coverage(CodegenCoverage.Verdict.NOT_APPLICABLE, List.of());
+
+        /** Every row {@code n/a}. */
+        static final Coverages NONE = new Coverages(bean -> NOT_EVALUATED, interceptor -> NOT_EVALUATED,
+                observer -> NOT_EVALUATED);
+
+        /** What {@code coverage} says of each row. */
+        static Coverages of(CodegenCoverage coverage) {
+            return new Coverages(coverage::of, coverage::of, coverage::of);
+        }
+    }
+
+    /**
      * Reads the metadata of {@code container}: the enabled beans its bean manager knows, of any type and qualifier,
-     * its interceptors and its observer methods. Creates no bean and reads no context.
+     * its interceptors and its observer methods, and how Vauban covers each with generated code. Creates no bean and
+     * reads no context.
      *
      * @param container   the running container
      * @param application how to tell the application's classes apart
@@ -148,7 +183,20 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     static CdiInventory read(VaubanContainer container, ApplicationClasses application) {
         return of(container.getBeanManager().getBeans(Object.class, Any.Literal.INSTANCE),
                 container.interceptorManager().getInterceptors(), container.eventDispatcher().observers(),
-                application);
+                application, Coverages.of(container.codegenCoverage()));
+    }
+
+    /**
+     * The inventory of these beans, interceptors and observers, every row {@code n/a} for code generation.
+     *
+     * @param beans        the enabled beans
+     * @param interceptors the interceptors
+     * @param observers    the observer methods
+     * @param application  how to tell the application's classes apart
+     */
+    static CdiInventory of(Collection<? extends Bean<?>> beans, List<InterceptorDescriptor> interceptors,
+                           List<ObserverDescriptor> observers, ApplicationClasses application) {
+        return of(beans, interceptors, observers, application, Coverages.NONE);
     }
 
     /**
@@ -158,42 +206,57 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
      * @param interceptors the interceptors
      * @param observers    the observer methods
      * @param application  how to tell the application's classes apart
+     * @param coverages    how Vauban covers each row with generated code
      */
     static CdiInventory of(Collection<? extends Bean<?>> beans, List<InterceptorDescriptor> interceptors,
-                           List<ObserverDescriptor> observers, ApplicationClasses application) {
+                           List<ObserverDescriptor> observers, ApplicationClasses application, Coverages coverages) {
         Predicate<String> ofApplication = application.isApplication();
         Map<String, Integer> scopes = new TreeMap<>();
         List<List<String>> beanRows = new ArrayList<>();
+        List<CodegenCoverage.Coverage> beanCoverages = new ArrayList<>();
         for (Bean<?> bean : beans) {
             String scope = scope(bean.getScope());
             scopes.merge(scope, 1, Integer::sum);
             String name = bean.getBeanClass().getName();
+            CodegenCoverage.Coverage coverage = coverages.beans().apply(bean);
+            beanCoverages.add(coverage);
             beanRows.add(List.of(name, kind(bean), scope, qualifiers(bean.getQualifiers()),
-                    bean.isAlternative() ? "yes" : "no", from(ofApplication, name)));
+                    bean.isAlternative() ? "yes" : "no", from(ofApplication, name), codegen(coverage),
+                    byReflection(coverage)));
         }
         List<List<String>> interceptorRows = new ArrayList<>();
+        List<CodegenCoverage.Coverage> interceptorCoverages = new ArrayList<>();
         for (InterceptorDescriptor interceptor : interceptors) {
             String name = interceptor.interceptorClass().value();
+            CodegenCoverage.Coverage coverage = coverages.interceptors().apply(interceptor);
+            interceptorCoverages.add(coverage);
             interceptorRows.add(List.of(name, annotations(interceptor.bindings()),
                     interceptor.enabled() ? String.valueOf(interceptor.priority()) : "disabled: no @Priority",
-                    from(ofApplication, name)));
+                    from(ofApplication, name), codegen(coverage), byReflection(coverage)));
         }
         List<List<String>> observerRows = new ArrayList<>();
+        List<CodegenCoverage.Coverage> observerCoverages = new ArrayList<>();
         for (ObserverDescriptor observer : observers) {
             String name = observer.declaringClass().value();
             List<DotName> qualifiers = observer.qualifiers().stream().map(QualifierInstance::annotationName)
                     .filter(qualifier -> !qualifier.equals(QualifierInstance.ANY_NAME)).toList();
+            CodegenCoverage.Coverage coverage = coverages.observers().apply(observer);
+            observerCoverages.add(coverage);
             observerRows.add(List.of(type(observer.eventType()), annotations(qualifiers),
                     name + "#" + observer.methodName(), observer.async() ? "async" : "sync",
-                    from(ofApplication, name)));
+                    from(ofApplication, name), codegen(coverage), byReflection(coverage)));
         }
         Map<String, Integer> byCount = new LinkedHashMap<>();
         scopes.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                 .forEach(entry -> byCount.put(entry.getKey(), entry.getValue()));
-        return new CdiInventory(byCount, beanRows.size(), ofApplication(beanRows), firstRows(beanRows),
-                interceptorRows.size(), ofApplication(interceptorRows), firstRows(interceptorRows),
-                observerRows.size(), ofApplication(observerRows), firstRows(observerRows),
-                application.rule());
+        return new CdiInventory(byCount, beanRows.size(), ofApplication(beanRows, BEAN_FROM),
+                firstRows(beanRows, BEAN_FROM),
+                interceptorRows.size(), ofApplication(interceptorRows, INTERCEPTOR_FROM),
+                firstRows(interceptorRows, INTERCEPTOR_FROM),
+                observerRows.size(), ofApplication(observerRows, OBSERVER_FROM),
+                firstRows(observerRows, OBSERVER_FROM),
+                application.rule(), codegenSummary(beanCoverages), codegenSummary(interceptorCoverages),
+                codegenSummary(observerCoverages));
     }
 
     /**
@@ -274,13 +337,48 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
         return ofApplication.test(className) ? APPLICATION : LIBRARY;
     }
 
-    private static int ofApplication(List<List<String>> rows) {
-        return (int) rows.stream().filter(row -> APPLICATION.equals(row.getLast())).count();
+    /** A verdict as the console writes it: {@code APT}, {@code Class-File}, {@code partial}, {@code n/a}… */
+    static String codegen(CodegenCoverage.Coverage coverage) {
+        return label(coverage.verdict());
+    }
+
+    private static String label(CodegenCoverage.Verdict verdict) {
+        return switch (verdict) {
+            case APT -> "APT";
+            case CLASS_FILE -> "Class-File";
+            case APT_AND_CLASS_FILE -> "APT + Class-File";
+            case PARTIAL -> "partial";
+            case REFLECTION -> "reflection";
+            case UNKNOWN -> "unknown";
+            case NOT_APPLICABLE -> "n/a";
+        };
+    }
+
+    /** The operations that fall back, or that a provider predating coverage leaves unknown; empty when none. */
+    static String byReflection(CodegenCoverage.Coverage coverage) {
+        String operations = String.join(", ", coverage.byReflection());
+        return coverage.verdict() == CodegenCoverage.Verdict.UNKNOWN
+                ? "provider predates coverage: " + operations : operations;
+    }
+
+    /** {@code 41 APT, 3 partial, 20 reflection}: each verdict met, in the order of the verdicts; empty when none. */
+    private static String codegenSummary(List<CodegenCoverage.Coverage> coverages) {
+        Map<CodegenCoverage.Verdict, Integer> counts = new EnumMap<>(CodegenCoverage.Verdict.class);
+        coverages.forEach(coverage -> counts.merge(coverage.verdict(), 1, Integer::sum));
+        return counts.entrySet().stream().map(entry -> entry.getValue() + " " + label(entry.getKey()))
+                .collect(Collectors.joining(", "));
+    }
+
+    private static int ofApplication(List<List<String>> rows, int from) {
+        return (int) rows.stream().filter(row -> APPLICATION.equals(row.get(from))).count();
     }
 
     /** The application's rows first, then by their first cell; the first {@value #MAX_ROWS}. */
-    private static List<List<String>> firstRows(List<List<String>> rows) {
-        return rows.stream().sorted(APPLICATION_FIRST).limit(MAX_ROWS).toList();
+    private static List<List<String>> firstRows(List<List<String>> rows, int from) {
+        Comparator<List<String>> applicationFirst = Comparator
+                .comparing((List<String> row) -> !APPLICATION.equals(row.get(from)))
+                .thenComparing(row -> row.getFirst());
+        return rows.stream().sorted(applicationFirst).limit(MAX_ROWS).toList();
     }
 
     private static String packageOf(String className) {

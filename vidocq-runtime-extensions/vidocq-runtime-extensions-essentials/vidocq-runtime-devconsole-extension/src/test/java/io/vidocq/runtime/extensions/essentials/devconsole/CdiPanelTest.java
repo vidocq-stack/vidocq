@@ -25,6 +25,7 @@ import io.vidocq.runtime.spi.report.ReportSection;
 import io.vidocq.vauban.core.bean.model.InterceptorDescriptor;
 import io.vidocq.vauban.core.bean.model.ObserverDescriptor;
 import io.vidocq.vauban.core.bean.model.QualifierInstance;
+import io.vidocq.vauban.core.container.CodegenCoverage;
 import io.vidocq.vauban.indexer.model.DotName;
 import io.vidocq.vauban.indexer.model.TypeInfo;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -212,7 +213,10 @@ class CdiPanelTest {
                 + "0 decorators, 2 observers", section.summary());
         Map<String, List<String>> facts = facts(section);
         assertEquals(List.of("beans", "scopes", "interceptors", "decorators", "observers", "application",
-                "source"), List.copyOf(facts.keySet()));
+                "beans codegen", "interceptors codegen", "observers codegen", "source"), List.copyOf(facts.keySet()));
+        assertEquals(List.of("4 n/a"), facts.get("beans codegen"));
+        assertEquals(List.of("2 n/a"), facts.get("interceptors codegen"));
+        assertEquals(List.of("2 n/a"), facts.get("observers codegen"));
         assertEquals(List.of("4: 2 of the application, 2 of the libraries"), facts.get("beans"));
         assertEquals(List.of("2 application-scoped", "1 dependent", "1 request-scoped"), facts.get("scopes"));
         assertEquals(List.of("2: 1 of the application, 1 of the libraries"), facts.get("interceptors"));
@@ -229,22 +233,26 @@ class CdiPanelTest {
         Map<String, Object> beans = table(sampled(new CdiPanel(inventory())), "beans");
 
         assertEquals("table", beans.get("kind"));
-        assertEquals(List.of("class", "kind", "scope", "qualifiers", "alternative", "from"), beans.get("columns"));
+        assertEquals(List.of("class", "kind", "scope", "qualifiers", "alternative", "from", "codegen",
+                "by reflection"), beans.get("columns"));
         assertEquals(List.of(
-                List.of("com.acme.Cart", "other", "request-scoped", "@Default", "no", "application"),
-                List.of("com.acme.Clock", "other", "application-scoped", "@Named(\"clock\")", "yes", "application"),
-                List.of("java.lang.Integer", "other", "application-scoped", "@Default", "no", "library"),
-                List.of("java.lang.String", "other", "dependent", "@Default", "no", "library")), rows(beans));
+                List.of("com.acme.Cart", "other", "request-scoped", "@Default", "no", "application", "n/a", ""),
+                List.of("com.acme.Clock", "other", "application-scoped", "@Named(\"clock\")", "yes", "application",
+                        "n/a", ""),
+                List.of("java.lang.Integer", "other", "application-scoped", "@Default", "no", "library", "n/a", ""),
+                List.of("java.lang.String", "other", "dependent", "@Default", "no", "library", "n/a", "")),
+                rows(beans));
     }
 
     @Test
     void theInterceptorsTableShowsTheirBindingsAndPriority() {
         Map<String, Object> interceptors = table(sampled(new CdiPanel(inventory())), "interceptors");
 
-        assertEquals(List.of("interceptor", "bindings", "priority", "from"), interceptors.get("columns"));
+        assertEquals(List.of("interceptor", "bindings", "priority", "from", "codegen", "by reflection"),
+                interceptors.get("columns"));
         assertEquals(List.of(
-                List.of("com.acme.Timed", "@Audit, @Timing", "10", "application"),
-                List.of("io.vidocq.runtime.Logged", "@Log", "disabled: no @Priority", "library")),
+                List.of("com.acme.Timed", "@Audit, @Timing", "10", "application", "n/a", ""),
+                List.of("io.vidocq.runtime.Logged", "@Log", "disabled: no @Priority", "library", "n/a", "")),
                 rows(interceptors));
     }
 
@@ -252,10 +260,41 @@ class CdiPanelTest {
     void theObserversTableShowsTheEventItsQualifiersAndTheMethod() {
         Map<String, Object> observers = table(sampled(new CdiPanel(inventory())), "observers");
 
-        assertEquals(List.of("event", "qualifiers", "observer", "mode", "from"), observers.get("columns"));
+        assertEquals(List.of("event", "qualifiers", "observer", "mode", "from", "codegen", "by reflection"),
+                observers.get("columns"));
         assertEquals(List.of(
-                List.of("List<Order>", "@Paid", "com.acme.Orders#placed", "async", "application"),
-                List.of("Startup", "", "io.vidocq.runtime.Boot#started", "sync", "library")), rows(observers));
+                List.of("List<Order>", "@Paid", "com.acme.Orders#placed", "async", "application", "n/a", ""),
+                List.of("Startup", "", "io.vidocq.runtime.Boot#started", "sync", "library", "n/a", "")),
+                rows(observers));
+    }
+
+    @Test
+    void theCodegenColumnsSayWhatCoversEachRowAndTheBootFactsCountThem() {
+        Map<Class<?>, CodegenCoverage.Coverage> byClass = Map.of(
+                com.acme.Cart.class, new CodegenCoverage.Coverage(CodegenCoverage.Verdict.APT, List.of()),
+                com.acme.Clock.class, new CodegenCoverage.Coverage(CodegenCoverage.Verdict.PARTIAL,
+                        List.of("field zone", "@PostConstruct start()")),
+                String.class, new CodegenCoverage.Coverage(CodegenCoverage.Verdict.REFLECTION, List.of("constructor")),
+                Integer.class, new CodegenCoverage.Coverage(CodegenCoverage.Verdict.UNKNOWN, List.of("constructor")));
+        CdiInventory.Coverages coverages = new CdiInventory.Coverages(bean -> byClass.get(bean.getBeanClass()),
+                CdiInventory.Coverages.NONE.interceptors(), CdiInventory.Coverages.NONE.observers());
+        CdiInventory inventory = CdiInventory.of(List.of(
+                        bean(String.class, Dependent.class, Default.Literal.INSTANCE),
+                        bean(com.acme.Clock.class, ApplicationScoped.class, Default.Literal.INSTANCE),
+                        bean(com.acme.Cart.class, RequestScoped.class, Default.Literal.INSTANCE),
+                        bean(Integer.class, ApplicationScoped.class, Default.Literal.INSTANCE)),
+                List.of(), List.of(), ACME, coverages);
+        CdiPanel panel = new CdiPanel(inventory);
+
+        List<List<String>> rows = rows(table(sampled(panel), "beans"));
+        assertEquals(List.of(
+                List.of("APT", ""),
+                List.of("partial", "field zone, @PostConstruct start()"),
+                List.of("unknown", "provider predates coverage: constructor"),
+                List.of("reflection", "constructor")),
+                rows.stream().map(row -> row.subList(6, 8)).toList());
+        assertEquals(List.of("1 APT, 1 partial, 1 reflection, 1 unknown"),
+                facts(contributed(panel)).get("beans codegen"));
     }
 
     @Test
