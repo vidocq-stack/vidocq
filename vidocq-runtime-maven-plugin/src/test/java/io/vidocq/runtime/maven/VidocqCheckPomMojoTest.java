@@ -190,6 +190,48 @@ class VidocqCheckPomMojoTest {
         assertTrue(failure.getMessage().contains("1 issue(s)"), failure.getMessage());
     }
 
+    /**
+     * ravel#21: the message named a consequence true for Cassini only ("the runtime falls back to
+     * reflection-based adapters"), while a missing Ravel bundle fails the compilation. Whatever the
+     * extension, the message gives the entry to add, ready to paste.
+     */
+    @Test
+    void aMissingCodegenBundleIsReportedWithTheEntryToAdd(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "ravel.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        Dependency ravel = new Dependency();
+        ravel.setGroupId("io.vidocq.runtime.extensions.microprofile");
+        ravel.setArtifactId("vidocq-runtime-ravel-config-extension");
+        ravel.setVersion("0.4.0");
+        model.addDependency(ravel);
+        List<String> errors = new ArrayList<>();
+        VidocqCheckPomMojo mojo = strictCheckpom(new MavenProject(model), plain);
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void info(CharSequence content) {
+            }
+
+            @Override
+            public void error(CharSequence content) {
+                errors.add(content.toString());
+            }
+        });
+
+        assertThrows(MojoFailureException.class, mojo::execute);
+
+        assertEquals(1, errors.size(), errors.toString());
+        String expected = """
+                <path>
+                    <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                    <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+                    <version>0.4.0</version>
+                    <type>pom</type>
+                </path>""";
+        assertTrue(errors.getFirst().contains(expected), errors.getFirst());
+        assertFalse(errors.getFirst().contains("reflection"), errors.getFirst());
+    }
+
     /** A checkpom mojo failing on its issues, every codegen bundle published, every dependency resolving to jar. */
     private static VidocqCheckPomMojo strictCheckpom(MavenProject project, Path jarFile) throws Exception {
         VidocqCheckPomMojo mojo = new VidocqCheckPomMojo() {

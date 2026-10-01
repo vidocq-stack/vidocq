@@ -257,9 +257,19 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                 continue;
             }
 
+            // What a missing bundle costs depends on the extension — a failed compilation for Ravel,
+            // a reflective fallback for Cassini — and the bundle's own description says it. The
+            // message gives what every case needs: the entry to add (ravel#21).
             result.add("Vidocq extension '" + extName + "' is declared but its codegen bundle '"
-                    + codegenName + "' is missing from maven-compiler-plugin/annotationProcessorPaths. "
-                    + "Without it, the runtime falls back to reflection-based adapters.");
+                    + codegenName + "' is missing from maven-compiler-plugin/annotationProcessorPaths,"
+                    + " so the extension's compile-time processing does not run. Add it inside"
+                    + " <annotationProcessorPaths combine.children=\"append\">:\n"
+                    + "<path>\n"
+                    + "    <groupId>" + extensionGroups.get(extName) + "</groupId>\n"
+                    + "    <artifactId>" + codegenName + "</artifactId>\n"
+                    + "    <version>" + extVer + "</version>\n"
+                    + "    <type>pom</type>\n"
+                    + "</path>");
         }
         return result;
     }
