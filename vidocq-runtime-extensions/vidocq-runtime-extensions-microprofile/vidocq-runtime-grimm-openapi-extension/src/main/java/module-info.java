@@ -26,14 +26,10 @@ module io.vidocq.runtime.extensions.microprofile.grimm.openapi {
     requires io.vidocq.runtime.extensions.essentials.chappe;
     requires io.vidocq.chappe.api;
     requires io.vidocq.vauban.core;
-    // Grimm currently ships as an AUTOMATIC module (its module-info sources are not compiled into the
-    // jar), hence the filename-derived name grimm.cdi.vauban (which holds both OpenApiResource and
-    // GrimmModelCache). Switch to io.vidocq.grimm.cdi.vauban once Grimm ships an explicit module.
-    requires grimm.cdi.vauban;
-    // grimm.cdi.vauban is an AUTOMATIC module: it uses the MicroProfile OpenAPI API but does not
-    // declare requires, so on the module path the API module would not be pulled into the resolved
-    // graph (NoClassDefFoundError: org.eclipse.microprofile.openapi.models.OpenAPI). Require it
-    // transitively here so every consumer (e.g. an app module) resolves it.
+    // OpenApiResource and GrimmModelCache. A named module: an automatic one let cassini-maven-plugin
+    // split its package into the application module (Vidocq/grimm#15).
+    requires io.vidocq.grimm.cdi.vauban;
+    // The application annotates its resources with the MicroProfile OpenAPI annotations.
     requires transitive org.eclipse.microprofile.openapi;
 
     provides io.vidocq.runtime.spi.VidocqExtension
