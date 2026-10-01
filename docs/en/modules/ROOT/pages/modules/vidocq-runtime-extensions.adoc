@@ -752,7 +752,7 @@ Compile the application with `-parameters`, or name every argument with `@ToolAr
 | `parsson`, `yasson`, and the Jakarta API versions the application pinned.
 
 | `META-INF/vauban-beans.list`, generated from the langchain4j-cdi jar when the extension is built
-| `scanDependencies` on `vidocq:generate`. The goal has nothing left to index for MCP, and an IDE launch without a Maven step finds `/mcp`.
+| `scanDependencies` on `vidocq:generate`: the extension's manifest declares the two jars, so the application's own `vidocq:generate` scans them without configuration (see below), and an IDE launch without a Maven step still finds `/mcp`, its beans then created by reflection.
 |===
 
 [#langchain4j-cdi-mcp-layer]
@@ -760,7 +760,7 @@ Compile the application with `-parameters`, or name every argument with `@ToolAr
 
 The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`, is kept in the boot layer like every `io.vidocq.runtime.extensions` module, and it reads `dev.langchain4j.cdi.mcp.server` and the invoker. A module kept in the boot layer keeps what it reads, so the MCP server lives in the boot layer in every launch shape: `vidocq:dev`, `vidocq:run`, the generated launcher and a `@VidocqMain` trampoline started from the IDE. The application layer holds the application's modules only, and the report's `layer` section shows it.
 
-The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`) [.tag-new]#NEW#: the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
+The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`) [.tag-new]#NEW#: the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. Three of them still fall back to reflection: the JAX-RS providers `McpExceptionMapper`, `McpListenRoutingFilter` and `McpSseStreamHeadersFilter` carry `@Provider` alone, and become beans at boot through Cassini's build-compatible extension, which `vidocq:generate` does not run over a dependency jar. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
 
 Two hand-made layouts break this:
 

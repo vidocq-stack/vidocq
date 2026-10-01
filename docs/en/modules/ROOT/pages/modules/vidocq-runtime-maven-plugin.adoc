@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes eleven goals: `generate`, `package`, `dev`, `run`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twelve goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -64,16 +64,15 @@
 [NOTE]
 .Scanned dependencies and Java Modules — new in 0.3.0
 ====
-When `vidocq:generate` runs with `<scanDependencies>`, the classes it produces for a scanned
-dependency belong to *that dependency's* packages. The plugin now keeps the module path
-split-package-free end to end: `generate` parks those classes in
-`target/vidocq-patches/<artifactId>/`, `package` and `jlink` ship *enriched* copies of the
-dependency jars carrying their own generated classes, and `dev` adds the matching
-`--patch-module` options to the child JVM. Zero configuration. See
+When `vidocq:generate` scans a dependency, the classes it produces for it belong to *that
+dependency's* packages. The plugin keeps the module path split-package-free end to end: `generate`
+parks those classes in `target/vidocq-patches/<artifactId>/`, then writes an *enriched* copy of the
+jar that carries them and declares its providers (<<generate>>); `dev`, `run`, `package` and `jlink`
+use that copy in place of the original. Only a jar that cannot be given a module descriptor keeps
+its original, its classes attached with `--patch-module`. Zero configuration. See
 xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-module applications].
 ====
 
-[#modularize]
 [#generate]
 == `vidocq:generate` goal [.tag-new]#NEW#
 
@@ -101,6 +100,8 @@ A selected jar is left out when it already carries generated code (a Vidocq bric
 
 Each scanned jar gets a copy in `target/vidocq-enriched/`, under its original file name: the jar with its generated classes, and a module descriptor that `provides io.vidocq.vauban.api.VaubanComponentProvider` with them and `requires` the Vauban modules they call. A jar without a descriptor is first given one, an `open module` synthesized as `vauban:modularize` does. `vidocq:dev`, `vidocq:run`, `vidocq:package` and `vidocq:jlink` put the copy on the module path in place of the original.
 
+A copy is written again only when what it is made from changes — the jar, its generated classes, its providers — so a `vidocq:dev` reload leaves alone the jar its JVM holds open. On a clean build `generate` runs before `vauban:modularize`; at packaging, when that goal gave the jar a descriptor, the copy is rebuilt on it, so the module name and openness configured there are the ones shipped.
+
 The copy is a modified third-party jar: its signature files are dropped, and its manifest records `Vidocq-Enriched-From` (the coordinates) and `Vidocq-Enriched-Digest` (`sha256:` of the original). A packaged application ships it; declare it to your SBOM tooling, or turn the detection off. A jar for which no descriptor can be synthesized — a `ServiceLoader` lookup no explicit module may declare — keeps its original and gets its generated classes through `--patch-module`, and the build says so. An IDE launch without a Maven step uses the original jars, and the beans fall back to reflection.
 
 [cols="1,1,3"]
@@ -112,13 +113,14 @@ The copy is a modified third-party jar: its signature files are dropped, and its
 | `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
 |===
 
-The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]).
+The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]). A class that only an extension makes a bean, at boot — a JAX-RS `@Provider` that Cassini's build-compatible extension registers, say — is not seen at build time and still reads `reflection`.
 
 [#analyze-deps]
 == `vidocq:analyze-deps` goal [.tag-new]#NEW#
 
 `mvn vidocq:analyze-deps` prints, for each bean archive and each named dependency, what it is — its discovery mode, an explicit or automatic module, signed or not — what selects or excludes it, and what `vidocq:generate` does with it: an enriched copy, an open module synthesized first, or nothing and why. It ends with the `<scanDependencies>` block that makes the detected bean archives explicit, to paste in the pom. It reads the same `scanDependencies`, `scanExcludes` and `autoScan` as `vidocq:generate`: configure them at plugin level so both goals see them. It changes nothing.
 
+[#modularize]
 == `modularize` moved to the Vauban plugin
 
 The `vidocq:modularize` goal no longer exists. It is now **`vauban:modularize`**, in
@@ -247,9 +249,9 @@ That forked lifecycle is the reason the goal exists. An IDE that builds with its
 <<idea,`vidocq:idea`>> now writes.
 
 The forked JVM is the one `vidocq:dev` forks, without the source watcher, the reload file and
-`-Dvidocq.profile=dev`: the module path of the packaged distribution (every runtime dependency, the modularized
-copy of a jar when `vauban:modularize` produced one, plus the `--patch-module` options of the classes
-`vidocq:generate` parked for a scanned dependency), `--add-modules ALL-MODULE-PATH`, the application classes
+`-Dvidocq.profile=dev`: the module path of the packaged distribution (every runtime dependency, the enriched
+copy of a scanned jar, else the modularized copy of a jar when `vauban:modularize` produced one, plus the
+`--patch-module` options of a scanned jar that could get no enriched copy), `--add-modules ALL-MODULE-PATH`, the application classes
 handed to the runtime through `-Dvidocq.app.path` so that they boot in a Vauban-defined module layer, the
 project directory as the working directory, and inherited I/O — the application writes straight to Maven's
 console.

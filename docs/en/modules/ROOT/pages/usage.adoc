@@ -151,12 +151,15 @@ out of the main module automatically:
 
 * `vidocq:generate` parks them in `target/vidocq-patches/<artifactId>/`
   (log line: `JPMS: parked N generated class(es) of '…'`);
-* `vidocq:package` and `vidocq:jlink` copy/stage *enriched* dependency jars that carry their
-  own generated classes — the packages already exist in those jars, so their module descriptor
-  stays exact and the module path never sees a split package;
-* `vidocq:dev` adds the matching `--patch-module` options to the child JVM automatically.
+* `vidocq:generate` then writes an *enriched* copy of each such jar in `target/vidocq-enriched/`,
+  carrying its own generated classes, with a module descriptor that declares its providers — the
+  packages already exist in those jars, so the module path never sees a split package;
+* `vidocq:dev`, `vidocq:run`, `vidocq:package` and `vidocq:jlink` use that copy in place of the
+  original; only a jar that cannot be given a descriptor keeps its original, and `vidocq:dev`
+  attaches its classes with `--patch-module`.
 
-No extra configuration is needed beyond `<scanDependencies>`.
+No configuration is needed: see
+xref:modules/vidocq-runtime-maven-plugin.adoc#generate[which jars `vidocq:generate` scans].
 ====
 
 [WARNING]
