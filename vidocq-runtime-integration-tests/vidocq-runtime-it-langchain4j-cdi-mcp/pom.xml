@@ -122,6 +122,49 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Vidocq/vidocq#186: as an application builds, vidocq:generate scans the langchain4j-cdi jars the
+                 extension declares and writes their enriched copies (generated code inside, providers declared)
+                 into target/vidocq-enriched/. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>generate-dependency-code</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- ...and the launched JVMs run those copies, as vidocq:dev, run and package do: they overwrite the
+                 originals copied above, under the same file names. Declared after maven-dependency-plugin, so it
+                 runs after the copies in the same phase. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-enriched-jars</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/it-lib</outputDirectory>
+                            <overwrite>true</overwrite>
+                            <resources>
+                                <resource>
+                                    <directory>${project.build.directory}/vidocq-enriched</directory>
+                                    <includes>
+                                        <include>*.jar</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>

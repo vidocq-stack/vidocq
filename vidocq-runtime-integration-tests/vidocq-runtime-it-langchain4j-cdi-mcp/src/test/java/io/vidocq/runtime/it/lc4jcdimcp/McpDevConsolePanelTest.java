@@ -21,6 +21,10 @@ package io.vidocq.runtime.it.lc4jcdimcp;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.regex.MatchResult;
+import java.util.regex.Pattern;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +65,21 @@ class McpDevConsolePanelTest {
             int runtime = cdi.indexOf("\"runtime\"]");
             assertTrue(runtime < 0 || cdi.indexOf("\"application\"]") < runtime,
                     "the application's beans come first: " + cdi);
+            // Vidocq/vidocq#186: vidocq:generate scanned the langchain4j-cdi jars the extension declares, and the
+            // launched JVM runs their enriched copies, so their beans have build-time code instead of reflection.
+            List<String> mcpRows = Pattern.compile("\\[\"dev\\.langchain4j\\.cdi\\.mcp\\.[^\\[\\]]*]").matcher(cdi)
+                    .results().map(MatchResult::group).toList();
+            assertTrue(mcpRows.stream().anyMatch(row -> row.startsWith(
+                    "[\"dev.langchain4j.cdi.mcp.server.transport.McpEndpoint\",")
+                    && row.matches(".*\"library\",\"(Class-File|partial)\".*")), "McpEndpoint: " + mcpRows);
+            // Except the three JAX-RS providers: they carry @Provider alone and become beans at boot through
+            // Cassini's build-compatible extension, which vidocq:generate does not run over a dependency jar.
+            assertEquals(List.of("McpExceptionMapper", "McpListenRoutingFilter", "McpSseStreamHeadersFilter"),
+                    mcpRows.stream().filter(row -> row.contains("\"library\",\"reflection\""))
+                            .map(row -> row.substring(row.lastIndexOf('.', row.indexOf("\",")) + 1,
+                                    row.indexOf("\",")))
+                            .sorted().toList(),
+                    "the langchain4j-cdi beans still created by reflection: " + mcpRows);
 
             McpCalls calls = new McpCalls(server.mcpUrl());
             calls.initialize();
