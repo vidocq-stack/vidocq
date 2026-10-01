@@ -47,8 +47,12 @@
 // - A text/csv answer is shown as text with a Download button, which saves it in the browser, no request sent. A
 //   textarea of a form whose schema says "contentMediaType": "text/csv" gets Choose file, which reads a local file of
 //   60 KiB at most into it; nothing is sent until the form is.
+// - A string property of "contentMediaType": "text/x-query" is the query editor: its vocabulary is the panel's
+//   language its "x-language" names, fetched once per boot from api/language (a GET, no token) and shared by every
+//   editor waiting for it. A property of "x-parameters-of": "<query property>" is a JSON editor whose schema is that
+//   query's parameters, computed again as the query is typed; both send their text as typed.
 
-import { createEditor, jsonLanguage, FORMAT_EXAMPLES } from "./editor.js";
+import { createEditor, jsonLanguage, queryLanguage, FORMAT_EXAMPLES } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -768,6 +772,55 @@ const hasMasked = (values) => Object.values(values).some((v) => v === MASKED || 
 const unmasked = (values) => Object.fromEntries(Object.entries(values).filter(([, v]) => v !== MASKED)
   .map(([k, v]) => [k, isObject(v) ? unmasked(v) : v]));
 
+/** The media type of a string property that is a query: its field is the query editor (query mode spec §4). */
+const QUERY_TYPE = "text/x-query";
+/** The keyword of a query property that names its panel's language, and the one of its parameters' property. */
+const LANGUAGE = "x-language";
+const PARAMETERS_OF = "x-parameters-of";
+/** The languages the query editors asked for, by panel and id, each fetched once for the boot languagesBoot. */
+const languages = new Map();
+let languagesBoot = null;
+
+/**
+ * The language {@code id} of panel {@code panelId}, for the query editors (query mode spec §4): a promise of { data,
+ * note }, fetched once per boot (a dev reload may bring other entities), only when the snapshot says the panel offers
+ * it, and shared by every editor waiting for it; data null and note "no vocabulary: <why>" when it cannot be had.
+ */
+function panelLanguage(panelId, id) {
+  const snapshot = page.snapshot;
+  const boot = snapshot && snapshot.console ? snapshot.console.boot : null;
+  if (boot !== languagesBoot) {
+    languages.clear();
+    languagesBoot = boot;
+  }
+  const key = panelId + "\u0000" + id;
+  if (!languages.has(key)) {
+    const panel = snapshot && Array.isArray(snapshot.panels) ? snapshot.panels.find((p) => p.id === panelId) : null;
+    const offered = !!panel && Array.isArray(panel.languages) && panel.languages.includes(id);
+    languages.set(key, offered ? fetchLanguage(panelId, id)
+      : Promise.resolve({ data: null, note: "no vocabulary: not offered" }));
+  }
+  return languages.get(key);
+}
+
+/** GET api/language/<panel>/<id>, same-origin, no token: { data, note }, never rejected. */
+async function fetchLanguage(panelId, id) {
+  let response;
+  try {
+    response = await fetch("api/language/" + encodeURIComponent(panelId) + "/" + encodeURIComponent(id), {
+      headers: { Accept: "application/json" },
+    });
+  } catch (unreachable) {
+    return { data: null, note: "no vocabulary: the console did not answer" };
+  }
+  if (!response.ok) return { data: null, note: "no vocabulary: " + response.status };
+  try {
+    return { data: await response.json(), note: "" };
+  } catch (unreadable) {
+    return { data: null, note: "no vocabulary: unreadable" };
+  }
+}
+
 /** Past this size a chosen file is not read: the console takes a request of 64 KiB at most. */
 const MAX_FILE_BYTES = 60 * 1024;
 
@@ -837,9 +890,10 @@ function fileChooser(target) {
  * otherwise, checking and completing against the schema, starting from the required properties. A "JSON" switch shows
  * the form's value in that editor; switching back keeps the values. value() returns the JSON text sent, or throws
  * what is wrong: the editor's own text once it parses as an object, so that an id past 2^53 reaches the server as
- * typed.
+ * typed. A query property of the form is the query editor, the vocabulary of panel {@code panelId}'s language it
+ * names given to it once fetched; a property holding its parameters, a JSON editor whose schema follows the query.
  */
-function jsonField(argument) {
+function jsonField(argument, panelId) {
   const root = el("div", "json-arg");
   const schema = argument.schema;
   const name = argument.label || argument.name;
@@ -851,19 +905,56 @@ function jsonField(argument) {
     rows: 8, label: name });
   editor.textarea.name = argument.name;
   const form = el("div", "json-form");
-  const inputs = new Map();             // by field of the shape: { input, kind, text }
+  const inputs = new Map();             // by field of the shape: { input, kind, text, code }
   const choosers = [];                  // the file inputs of the CSV fields, disabled with the form
+  const queries = new Map();            // the query editors by path: { editor, data, followers }
+  const followers = [];                 // the parameters editors: { of, follow(text, data) }, joined once all are built
   const raw = el("input");
   raw.type = "checkbox";
+
+  /**
+   * The query editor of a query property (spec §4), five lines high: the query language, whose data is the panel's
+   * language its x-language names, given to it once fetched; its followers are told its text after each draw.
+   */
+  function queryEditor(definition, path) {
+    const query = { editor: null, data: null, followers: [] };
+    query.editor = createEditor({ language: queryLanguage(), data: null, value: "", rows: 5, label: path,
+      onDraw: (text) => { for (const follow of query.followers) follow(text, query.data); } });
+    const id = definition[LANGUAGE];
+    if (typeof id === "string" && id !== "") {
+      panelLanguage(panelId, id).then(({ data, note }) => {
+        query.data = data;
+        query.editor.setData(data, note);
+      });
+    }
+    queries.set(path, query);
+    return query.editor;
+  }
+
+  /**
+   * The JSON editor of a property holding the parameters of the query property its x-parameters-of names, beside it:
+   * its schema is that query's parameters(), computed again after each draw of the query; "{}" when it is empty.
+   */
+  function parametersEditor(definition, path, property) {
+    const editor = createEditor({ language: jsonLanguage, data: null, value: "{}", rows: 4, label: path });
+    followers.push({ of: path.slice(0, path.length - property.length) + definition[PARAMETERS_OF],
+      follow: (text, data) => editor.setData(queryLanguage().parameters(text, data)) });
+    return editor;
+  }
 
   /** The label and input of field {@code f}, {@code path} its name from the root, "entity.title". */
   function field(f, path) {
     const definition = f.definition;
     const kind = f.kind;
-    const wrap = el("label", "arg");
+    const multiLine = kind === "string" && definition.format === "textarea";
+    const query = multiLine && definition.contentMediaType === QUERY_TYPE;
+    const parameters = multiLine && !query && typeof definition[PARAMETERS_OF] === "string";
+    // an editor's buttons and completion list are no part of a label
+    const wrap = el(query || parameters ? "div" : "label", "arg");
     wrap.append(el("span", null, f.name + (f.required ? " *" : "") + (f.readOnly ? " (generated)" : "")));
     let input;
     let chooser = null;
+    let code = null;
     if (kind === "enum" || kind === "boolean") {
       input = el("select");
       for (const v of ["", ...(kind === "enum" ? definition.enum : ["true", "false"])]) {
@@ -871,8 +962,13 @@ function jsonField(argument) {
         option.value = v;
         input.append(option);
       }
+    } else if (query || parameters) {
+      // A query, or its parameters: a code editor, read, filled and sent as a textarea is, through its own textarea.
+      code = query ? queryEditor(definition, path) : parametersEditor(definition, path, f.name);
+      input = code.textarea;
+      wrap.classList.add("wide");
     } else if (kind === "string" && definition.format === "textarea") {
-      // A text of several lines, such as a query: a textarea, read, filled and sent as an input is.
+      // A text of several lines, such as a CSV file: a textarea, read, filled and sent as an input is.
       input = el("textarea", "json-text");
       input.rows = 4;
       input.spellcheck = false;
@@ -886,15 +982,22 @@ function jsonField(argument) {
       if (kind !== "string") input.inputMode = "decimal";
       input.placeholder = f.readOnly ? "generated" : FORMAT_EXAMPLES.get(definition.format) || "";
     }
-    if (definition.default !== undefined && definition.default !== null) input.value = String(definition.default);
-    if (typeof definition.description === "string") input.title = definition.description;
+    if (definition.default !== undefined && definition.default !== null) {
+      if (code) code.setValue(String(definition.default));
+      else input.value = String(definition.default);
+    }
+    if (typeof definition.description === "string") {
+      // an editor's own tooltips show its diagnostics: its description is the placeholder of an empty text
+      if (code) input.placeholder = definition.description;
+      else input.title = definition.description;
+    }
     input.name = argument.name + "." + path;
-    wrap.append(input);
+    wrap.append(code ? code.root : input);
     if (chooser) {
       wrap.append(chooser.root);
       choosers.push(chooser.file);
     }
-    inputs.set(f, { input, kind, text: chooser ? chooser.text : null });
+    inputs.set(f, { input, kind, text: chooser ? chooser.text : null, code });
     return wrap;
   }
 
@@ -913,6 +1016,13 @@ function jsonField(argument) {
     const toggle = el("label", "json-switch");
     toggle.append(raw, el("span", null, "JSON"));
     head.append(toggle);
+  }
+  // each parameters editor follows the query it names, from now on and from its text of now
+  for (const { of, follow } of followers) {
+    const query = queries.get(of);
+    if (!query) continue;
+    query.followers.push(follow);
+    follow(query.editor.value(), query.data);
   }
   head.append(note);
   root.append(head);
@@ -984,8 +1094,11 @@ function jsonField(argument) {
         toForm(v, f.fields);
         continue;
       }
-      inputs.get(f).input.value = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v)
-        : String(v);
+      const shown = v === undefined || v === null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+      const { input, code } = inputs.get(f);
+      // an empty parameters editor holds {}, which the schema of a query without parameters accepts
+      if (code) code.setValue(shown === "" && typeof f.definition[PARAMETERS_OF] === "string" ? "{}" : shown);
+      else input.value = shown;
     }
   }
   raw.addEventListener("change", () => {
@@ -1015,6 +1128,7 @@ function jsonField(argument) {
     disable(on) {
       editor.disable(on);
       for (const c of [raw, ...[...inputs.values()].map((i) => i.input), ...choosers]) c.disabled = on;
+      for (const { code } of inputs.values()) if (code) code.disable(on);
     },
   };
 }
@@ -1332,7 +1446,7 @@ function actionRow(panelId, action, outlet) {
   }
   const fields = [];
   for (const argument of action.arguments || []) {
-    const field = isObject(argument.schema) ? jsonField(argument) : stringField(argument);
+    const field = isObject(argument.schema) ? jsonField(argument, panelId) : stringField(argument);
     fields.push(field);
     root.append(field.root);
   }

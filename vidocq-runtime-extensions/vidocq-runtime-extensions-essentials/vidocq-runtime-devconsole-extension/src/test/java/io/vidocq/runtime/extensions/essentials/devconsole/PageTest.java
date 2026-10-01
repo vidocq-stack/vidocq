@@ -391,7 +391,7 @@ class PageTest {
         assertTrue(script.contains("function formShape(schema)"), "the form's rule, written once");
         assertFalse(script.contains("isFlatSchema"), "formShape replaced it");
         assertTrue(script.contains("\"$ref\""), "a $ref is never a form");
-        assertTrue(script.contains("function jsonField(argument)"), "a json argument's field");
+        assertTrue(script.contains("function jsonField(argument, panelId)"), "a json argument's field");
         assertTrue(script.contains("const editor = createEditor({ language: jsonLanguage, data: schema,"),
                 "the JSON mode is the editor, checking against the argument's schema");
         assertFalse(script.contains("\"json-editor\""), "no raw textarea left");
@@ -407,7 +407,8 @@ class PageTest {
         String script = file("console.js");
 
         assertEquals(List.of("./editor.js"), IMPORT.matcher(script).results().map(m -> m.group(1)).toList());
-        assertTrue(script.contains("import { createEditor, jsonLanguage, FORMAT_EXAMPLES } from \"./editor.js\";"));
+        assertTrue(script.contains(
+                "import { createEditor, jsonLanguage, queryLanguage, FORMAT_EXAMPLES } from \"./editor.js\";"));
         assertEquals(1, Pattern.compile("<script").matcher(file("index.html")).results().count(),
                 "the index still loads console.js only");
     }
@@ -524,13 +525,57 @@ class PageTest {
 
         assertTrue(chooser.contains("text: () => raw !== null && target.value === raw.replace(/\\r\\n?/g, \"\\n\") ? raw"
                 + " : target.value,"), "the file's own text while the textarea still shows it, else the textarea");
-        assertTrue(script.contains("inputs.set(f, { input, kind, text: chooser ? chooser.text : null });"),
+        assertTrue(script.contains("inputs.set(f, { input, kind, text: chooser ? chooser.text : null, code });"),
                 "the form keeps it");
         assertTrue(script.contains("object[property] = fileText ? fileText() : input.value;"), "and sends it");
     }
 
     private static String chooser(String script) {
         return script.substring(script.indexOf("function fileChooser("), script.indexOf("function jsonField("));
+    }
+
+    @Test
+    void aQueryPropertyIsTheQueryEditorItsPanelsLanguageFetchedOncePerBootAndShared() {
+        String script = file("console.js");
+        String fetching = script.substring(script.indexOf("async function fetchLanguage("),
+                script.indexOf("const MAX_FILE_BYTES"));
+
+        assertTrue(script.contains("const QUERY_TYPE = \"text/x-query\";"), "contentMediaType: text/x-query");
+        assertTrue(script.contains("const query = multiLine && definition.contentMediaType === QUERY_TYPE;"),
+                "a string property of format textarea and that media type");
+        assertTrue(script.contains("createEditor({ language: queryLanguage(), data: null, value: \"\", rows: 5,"),
+                "five lines, no vocabulary until it arrives");
+        assertTrue(script.contains("const id = definition[LANGUAGE];") && script.contains("const LANGUAGE = "
+                + "\"x-language\";"), "the id its x-language names");
+        assertTrue(script.contains("if (!languages.has(key)) {")
+                && script.contains("languages.set(key, offered ? fetchLanguage(panelId, id)"),
+                "one request per panel and id, a promise every editor shares");
+        assertTrue(script.contains("if (boot !== languagesBoot) {"), "fetched again after a dev reload only");
+        assertTrue(script.contains("query.editor.setData(data, note);"), "given to the editor once it arrives");
+        assertTrue(fetching.contains("fetch(\"api/language/\" + encodeURIComponent(panelId)"),
+                "to the console itself, never another origin");
+        assertFalse(fetching.contains("X-Vidocq-Console-Token"), "a GET that only reads: no token");
+        assertTrue(fetching.contains("\"no vocabulary: \" + response.status"), "a failed fetch says why");
+    }
+
+    @Test
+    void aParametersPropertyIsAJsonEditorWhoseSchemaFollowsItsQueryAndItsTextIsSentAsTyped() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("const PARAMETERS_OF = \"x-parameters-of\";"));
+        assertTrue(script.contains(
+                "const parameters = multiLine && !query && typeof definition[PARAMETERS_OF] === \"string\";"));
+        assertTrue(script.contains("follow: (text, data) => editor.setData(queryLanguage().parameters(text, data))"),
+                "its schema is the query's parameters()");
+        assertTrue(script.contains(
+                "onDraw: (text) => { for (const follow of query.followers) follow(text, query.data); }"),
+                "computed again after each draw of the query, and when its vocabulary arrives");
+        assertTrue(script.contains("wrap.append(code ? code.root : input);"), "the editor in place of the textarea");
+        assertTrue(script.contains("if (code) code.setValue("), "a replay fills the query and its parameters");
+        assertTrue(script.contains("for (const { code } of inputs.values()) if (code) code.disable(on);"),
+                "disabled while the form is sent");
+        assertTrue(script.contains("object[property] = fileText ? fileText() : input.value;"),
+                "sent as typed: an id past 2^53 is never rounded");
     }
 
     @Test
