@@ -206,4 +206,39 @@ class OtlpJsonEncoderTest {
                 + "{\"stringValue\":\"a\"},{\"boolValue\":false}]}}}"), json);
         assertTrue(json.contains("{\"key\":\"nothing\",\"value\":{}}"), "an empty value is an empty AnyValue: " + json);
     }
+
+    @Test
+    void encodes_non_finite_doubles_as_json_strings() {
+        // JSON has no NaN/Infinity literal: like OpenTelemetry's JsonEncoding (and the proto3 JSON mapping),
+        // non-finite doubles are written as the strings "NaN", "Infinity" and "-Infinity".
+        SpanData s = new SpanData(
+                CTX, null, "non-finite", SpanKind.INTERNAL, 1L, 2L,
+                Attributes.builder()
+                        .put(AttributeKey.doubleKey("ratio"), Double.NaN)
+                        .put(AttributeKey.doubleKey("ceiling"), Double.POSITIVE_INFINITY)
+                        .put(AttributeKey.doubleKey("floor"), Double.NEGATIVE_INFINITY)
+                        .put(AttributeKey.doubleArrayKey("samples"), List.of(1.5, Double.NaN))
+                        .put(AttributeKey.valueKey("stats"), Value.of(
+                                KeyValue.of("mean", Value.of(Double.NaN)),
+                                KeyValue.of("bounds", Value.of(
+                                        Value.of(Double.NEGATIVE_INFINITY), Value.of(Double.POSITIVE_INFINITY)))))
+                        .build(),
+                List.of(), List.of(),
+                StatusData.unset(),
+                Resource.empty(), InstrumentationScope.of("x"));
+
+        String json = OtlpJsonEncoder.encode(List.of(s));
+
+        assertTrue(json.contains("{\"key\":\"ratio\",\"value\":{\"doubleValue\":\"NaN\"}}"), json);
+        assertTrue(json.contains("{\"key\":\"ceiling\",\"value\":{\"doubleValue\":\"Infinity\"}}"), json);
+        assertTrue(json.contains("{\"key\":\"floor\",\"value\":{\"doubleValue\":\"-Infinity\"}}"), json);
+        assertTrue(json.contains("{\"key\":\"samples\",\"value\":{\"arrayValue\":{\"values\":["
+                + "{\"doubleValue\":1.5},{\"doubleValue\":\"NaN\"}]}}}"), json);
+        assertTrue(json.contains("{\"key\":\"stats\",\"value\":{\"kvlistValue\":{\"values\":["
+                + "{\"key\":\"mean\",\"value\":{\"doubleValue\":\"NaN\"}},"
+                + "{\"key\":\"bounds\",\"value\":{\"arrayValue\":{\"values\":["
+                + "{\"doubleValue\":\"-Infinity\"},{\"doubleValue\":\"Infinity\"}]}}}"
+                + "]}}}"), json);
+        assertFalse(json.matches("(?s).*[:,\\[]-?(NaN|Infinity).*"), "no bare NaN/Infinity token: " + json);
+    }
 }

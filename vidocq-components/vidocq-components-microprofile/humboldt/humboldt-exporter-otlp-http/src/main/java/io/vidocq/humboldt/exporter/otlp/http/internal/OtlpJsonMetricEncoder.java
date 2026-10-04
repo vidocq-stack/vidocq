@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.appendDouble;
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.appendString;
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeAttributesArray;
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeResource;
@@ -186,13 +187,20 @@ public final class OtlpJsonMetricEncoder {
         sb.append("{\"startTimeUnixNano\":\"").append(p.startEpochNanos()).append('"');
         sb.append(",\"timeUnixNano\":\"").append(p.epochNanos()).append('"');
         sb.append(",\"count\":\"").append(p.count()).append('"');
-        sb.append(",\"sum\":").append(p.sum());
-        if (!Double.isNaN(p.min())) sb.append(",\"min\":").append(p.min());
-        if (!Double.isNaN(p.max())) sb.append(",\"max\":").append(p.max());
+        sb.append(",\"sum\":");
+        appendDouble(sb, p.sum());
+        if (!Double.isNaN(p.min())) {
+            sb.append(",\"min\":");
+            appendDouble(sb, p.min());
+        }
+        if (!Double.isNaN(p.max())) {
+            sb.append(",\"max\":");
+            appendDouble(sb, p.max());
+        }
         sb.append(",\"explicitBounds\":[");
         for (int i = 0; i < p.boundaries().size(); i++) {
             if (i > 0) sb.append(',');
-            sb.append(p.boundaries().get(i));
+            appendDouble(sb, p.boundaries().get(i));
         }
         sb.append("],\"bucketCounts\":[");
         for (int i = 0; i < p.bucketCounts().size(); i++) {

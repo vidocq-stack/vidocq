@@ -77,6 +77,21 @@ final class OtlpJsonCommon {
     }
 
     /**
+     * Writes a double as a JSON number, or — JSON having no literal for them — a non-finite double as the
+     * string {@code "NaN"}, {@code "Infinity"} or {@code "-Infinity"}, like OpenTelemetry's
+     * {@code JsonEncoding} and the proto3 JSON mapping that OTLP/JSON follows.
+     */
+    static void appendDouble(StringBuilder sb, double d) {
+        if (Double.isNaN(d)) {
+            sb.append("\"NaN\"");
+        } else if (Double.isInfinite(d)) {
+            sb.append(d > 0 ? "\"Infinity\"" : "\"-Infinity\"");
+        } else {
+            sb.append(d);
+        }
+    }
+
+    /**
      * Encodes an {@link Attributes} as a JSON array {@code [{"key":"k","value":AnyValue}, ...]}.
      */
     static void writeAttributesArray(StringBuilder sb, Attributes attrs) {
@@ -115,7 +130,10 @@ final class OtlpJsonCommon {
             }
             case BOOLEAN -> sb.append("\"boolValue\":").append((boolean) v);
             case LONG -> sb.append("\"intValue\":\"").append((long) v).append('"');
-            case DOUBLE -> sb.append("\"doubleValue\":").append((double) v);
+            case DOUBLE -> {
+                sb.append("\"doubleValue\":");
+                appendDouble(sb, (double) v);
+            }
             case STRING_ARRAY, BOOLEAN_ARRAY, LONG_ARRAY, DOUBLE_ARRAY -> {
                 sb.append("\"arrayValue\":{\"values\":[");
                 List<?> list = (List<?>) v;
