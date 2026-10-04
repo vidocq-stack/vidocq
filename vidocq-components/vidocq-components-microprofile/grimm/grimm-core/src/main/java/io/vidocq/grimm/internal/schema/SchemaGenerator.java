@@ -22,6 +22,7 @@ package io.vidocq.grimm.internal.schema;
 import io.vidocq.grimm.internal.scanner.AnnotationModelMappings;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
+import org.eclipse.microprofile.openapi.models.media.Discriminator;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 
 import java.lang.reflect.Field;
@@ -450,6 +451,52 @@ public final class SchemaGenerator {
         if (base == null) {
             base = OASFactory.createObject(Schema.class);
         }
+        applyAttributes(base, SchemaAttributes.of(ann));
+        if (ann.properties().length > 0) {
+            Map<String, Schema> mergedProperties = base.getProperties() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(base.getProperties());
+            List<String> mergedRequired = base.getRequired() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(base.getRequired());
+            for (org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property : ann.properties()) {
+                String propertyName = property.name();
+                if (propertyName.isEmpty()) {
+                    continue;
+                }
+                if (property.hidden()) {
+                    mergedProperties.remove(propertyName);
+                    mergedRequired.remove(propertyName);
+                    continue;
+                }
+                Schema propertySchema = mergedProperties.get(propertyName);
+                if (propertySchema == null) {
+                    Type baseType = property.implementation() != Void.class ? property.implementation() : Object.class;
+                    propertySchema = generate(baseType);
+                }
+                if (!property.ref().isEmpty()) {
+                    propertySchema.setRef(property.ref());
+                }
+                // The property declared here is applied after the field's own @Schema (if any), so the
+                // attributes it sets win and the others of the field are kept.
+                applyAttributes(propertySchema, SchemaAttributes.of(property));
+                mergedProperties.put(propertyName, propertySchema);
+            }
+            if (!mergedProperties.isEmpty()) {
+                base.setProperties(mergedProperties);
+            }
+            if (!mergedRequired.isEmpty()) {
+                base.setRequired(mergedRequired);
+            }
+        }
+        return base;
+    }
+
+    /**
+     * The one mapping of the attributes shared by {@code @Schema} and {@code @SchemaProperty}
+     * (BUG-20261004-07): each attribute left at its default leaves {@code base} untouched.
+     */
+    private void applyAttributes(Schema base, SchemaAttributes ann) {
         if (ann.type() != SchemaType.DEFAULT) {
             if (ann.type() == SchemaType.ARRAY && base.getRef() != null && base.getItems() == null) {
                 Schema itemRef = OASFactory.createObject(Schema.class);
@@ -468,6 +515,7 @@ public final class SchemaGenerator {
             base.setExample(ann.example());
             base.setExamples(List.of(ann.example()));
         }
+        if (ann.examples().length > 0) base.setExamples(List.of(ann.examples()));
         if (!ann.defaultValue().isEmpty()) base.setDefaultValue(ann.defaultValue());
         if (ann.minLength() > 0) base.setMinLength(ann.minLength());
         if (ann.maxLength() != Integer.MAX_VALUE) base.setMaxLength(ann.maxLength());
@@ -497,6 +545,7 @@ public final class SchemaGenerator {
         }
         if (!ann.contentEncoding().isEmpty()) base.setContentEncoding(ann.contentEncoding());
         if (!ann.contentMediaType().isEmpty()) base.setContentMediaType(ann.contentMediaType());
+        if (ann.contentSchema() != Void.class) base.setContentSchema(schemaOfClass(ann.contentSchema()));
         if (!ann.constValue().isEmpty()) base.setConstValue(constValueOf(base, ann.constValue()));
         if (ann.requiredProperties().length > 0) {
             List<String> mergedRequired = base.getRequired() == null
@@ -511,71 +560,35 @@ public final class SchemaGenerator {
                 base.setRequired(mergedRequired);
             }
         }
-        if (ann.properties().length > 0) {
-            Map<String, Schema> mergedProperties = base.getProperties() == null
-                    ? new LinkedHashMap<>()
-                    : new LinkedHashMap<>(base.getProperties());
-            List<String> mergedRequired = base.getRequired() == null
-                    ? new ArrayList<>()
-                    : new ArrayList<>(base.getRequired());
-            for (org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property : ann.properties()) {
-                String propertyName = property.name();
-                if (propertyName.isEmpty()) {
-                    continue;
-                }
-                if (property.hidden()) {
-                    mergedProperties.remove(propertyName);
-                    mergedRequired.remove(propertyName);
-                    continue;
-                }
-                Schema propertySchema = mergedProperties.get(propertyName);
-                if (propertySchema == null) {
-                    Type baseType = property.implementation() != Void.class ? property.implementation() : Object.class;
-                    propertySchema = generate(baseType);
-                }
-                if (!property.ref().isEmpty()) {
-                    propertySchema.setRef(property.ref());
-                }
-                if (property.type() != SchemaType.DEFAULT) {
-                    propertySchema.setType(new ArrayList<>(List.of(mapAnnotationType(property.type()))));
-                }
-                if (!property.constValue().isEmpty()) {
-                    propertySchema.setConstValue(constValueOf(propertySchema, property.constValue()));
-                }
-                if (!property.externalDocs().url().isEmpty()) {
-                    propertySchema.setExternalDocs(
-                            AnnotationModelMappings.toModelExternalDocs(property.externalDocs()));
-                }
-                if (!property.title().isEmpty()) {
-                    propertySchema.setTitle(property.title());
-                }
-                if (!property.description().isEmpty()) {
-                    propertySchema.setDescription(property.description());
-                }
-                if (!property.format().isEmpty()) {
-                    propertySchema.setFormat(property.format());
-                }
-                if (!property.example().isEmpty()) {
-                    propertySchema.setExample(property.example());
-                    propertySchema.setExamples(List.of(property.example()));
-                }
-                if (!property.comment().isEmpty()) {
-                    propertySchema.setComment(property.comment());
-                }
-                AnnotationModelMappings.applyExtensions(propertySchema, property.extensions());
-                mergedProperties.put(propertyName, propertySchema);
-            }
-            if (!mergedProperties.isEmpty()) {
-                base.setProperties(mergedProperties);
-            }
-            if (!mergedRequired.isEmpty()) {
-                base.setRequired(mergedRequired);
-            }
-        }
         if (ann.enumeration().length > 0) {
             List<Object> values = new ArrayList<>(ann.enumeration().length);
             for (String v : ann.enumeration()) values.add(v);
             base.setEnumeration(values);
+        }
+        if (ann.allOf().length > 0) base.setAllOf(schemasOfClasses(ann.allOf()));
+        if (ann.anyOf().length > 0) base.setAnyOf(schemasOfClasses(ann.anyOf()));
+        if (ann.oneOf().length > 0) base.setOneOf(schemasOfClasses(ann.oneOf()));
+        if (ann.not() != Void.class) base.setNot(schemaOfClass(ann.not()));
+        applyDiscriminator(base, ann);
+        if (ann.ifSchema() != Void.class) base.setIfSchema(schemaOfClass(ann.ifSchema()));
+        if (ann.thenSchema() != Void.class) base.setThenSchema(schemaOfClass(ann.thenSchema()));
+        if (ann.elseSchema() != Void.class) base.setElseSchema(schemaOfClass(ann.elseSchema()));
+        if (ann.contains() != Void.class) base.setContains(schemaOfClass(ann.contains()));
+        if (ann.minContains() > 0) base.setMinContains(ann.minContains());
+        if (ann.maxContains() != Integer.MAX_VALUE) base.setMaxContains(ann.maxContains());
+        if (ann.prefixItems().length > 0) base.setPrefixItems(schemasOfClasses(ann.prefixItems()));
+        if (ann.propertyNames() != Void.class) base.setPropertyNames(schemaOfClass(ann.propertyNames()));
+        if (ann.patternProperties().length > 0) {
+            Map<String, Schema> patternProperties = base.getPatternProperties() == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(base.getPatternProperties());
+            for (var pp : ann.patternProperties()) {
+                if (pp.regex().isEmpty()) continue;
+                patternProperties.put(pp.regex(), schemaOfClass(pp.schema()));
+            }
+            if (!patternProperties.isEmpty()) {
+                base.setPatternProperties(patternProperties);
+            }
         }
         if (ann.dependentRequired().length > 0) {
             Map<String, List<String>> dependentRequired = base.getDependentRequired() == null
@@ -595,18 +608,7 @@ public final class SchemaGenerator {
                     : new LinkedHashMap<>(base.getDependentSchemas());
             for (var ds : ann.dependentSchemas()) {
                 if (ds.name().isEmpty()) continue;
-                Class<?> schemaImpl = ds.schema();
-                Schema schema;
-                if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
-                    schema = OASFactory.createObject(Schema.class);
-                    schema.setBooleanSchema(Boolean.TRUE);
-                } else if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.False.class) {
-                    schema = OASFactory.createObject(Schema.class);
-                    schema.setBooleanSchema(Boolean.FALSE);
-                } else {
-                    schema = generate(schemaImpl);
-                }
-                dependentSchemas.put(ds.name(), schema);
+                dependentSchemas.put(ds.name(), schemaOfClass(ds.schema()));
             }
             if (!dependentSchemas.isEmpty()) {
                 base.setDependentSchemas(dependentSchemas);
@@ -624,7 +626,48 @@ public final class SchemaGenerator {
             base.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(ann.externalDocs()));
         }
         AnnotationModelMappings.applyExtensions(base, ann.extensions());
-        return base;
+    }
+
+    private void applyDiscriminator(Schema base, SchemaAttributes ann) {
+        if (ann.discriminatorProperty().isEmpty() && ann.discriminatorMapping().length == 0) {
+            return;
+        }
+        Discriminator discriminator = base.getDiscriminator() == null
+                ? OASFactory.createObject(Discriminator.class)
+                : base.getDiscriminator();
+        if (!ann.discriminatorProperty().isEmpty()) {
+            discriminator.setPropertyName(ann.discriminatorProperty());
+        }
+        for (var mapping : ann.discriminatorMapping()) {
+            Schema target = schemaOfClass(mapping.schema());
+            if (!mapping.value().isEmpty() && target.getRef() != null) {
+                discriminator.addMapping(mapping.value(), target.getRef());
+            }
+        }
+        base.setDiscriminator(discriminator);
+    }
+
+    private List<Schema> schemasOfClasses(Class<?>[] classes) {
+        List<Schema> schemas = new ArrayList<>(classes.length);
+        for (Class<?> c : classes) {
+            schemas.add(schemaOfClass(c));
+        }
+        return schemas;
+    }
+
+    /** A class named by an annotation attribute, with {@code Schema.True}/{@code False} as boolean schemas. */
+    private Schema schemaOfClass(Class<?> schemaImpl) {
+        if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
+            Schema schema = OASFactory.createObject(Schema.class);
+            schema.setBooleanSchema(Boolean.TRUE);
+            return schema;
+        }
+        if (schemaImpl == org.eclipse.microprofile.openapi.annotations.media.Schema.False.class) {
+            Schema schema = OASFactory.createObject(Schema.class);
+            schema.setBooleanSchema(Boolean.FALSE);
+            return schema;
+        }
+        return generate(schemaImpl);
     }
 
     /**
