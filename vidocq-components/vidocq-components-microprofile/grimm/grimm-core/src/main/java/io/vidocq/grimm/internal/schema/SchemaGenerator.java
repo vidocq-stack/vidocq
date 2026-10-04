@@ -583,7 +583,7 @@ public final class SchemaGenerator {
                     ? new LinkedHashMap<>()
                     : new LinkedHashMap<>(base.getPatternProperties());
             for (var pp : ann.patternProperties()) {
-                if (pp.regex().isEmpty()) continue;
+                if (pp.regex().isEmpty() || pp.schema() == Void.class) continue;
                 patternProperties.put(pp.regex(), schemaOfClass(pp.schema()));
             }
             if (!patternProperties.isEmpty()) {
@@ -639,8 +639,13 @@ public final class SchemaGenerator {
             discriminator.setPropertyName(ann.discriminatorProperty());
         }
         for (var mapping : ann.discriminatorMapping()) {
+            if (mapping.value().isEmpty() || mapping.schema() == Void.class) {
+                continue;
+            }
+            // A discriminator mapping value is a schema reference: a target that generates inline
+            // (a scalar or any schema without a $ref) has nothing to point to, so it is dropped.
             Schema target = schemaOfClass(mapping.schema());
-            if (!mapping.value().isEmpty() && target.getRef() != null) {
+            if (target != null && target.getRef() != null) {
                 discriminator.addMapping(mapping.value(), target.getRef());
             }
         }

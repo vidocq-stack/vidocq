@@ -217,4 +217,43 @@ class SchemaPropertyMappingTest {
                 () -> assertEquals(Integer.valueOf(1), name.getMinLength()),
                 () -> assertEquals("field title", name.getTitle()));
     }
+
+    @Schema(properties = {
+            @SchemaProperty(name = "pet", discriminatorProperty = "kind",
+                    discriminatorMapping = {@DiscriminatorMapping(value = "none"),
+                            @DiscriminatorMapping(value = "cat", schema = Cat.class)}),
+            @SchemaProperty(name = "dyn", patternProperties = {
+                    @org.eclipse.microprofile.openapi.annotations.media.PatternProperty(regex = "^x-", schema = Void.class),
+                    @org.eclipse.microprofile.openapi.annotations.media.PatternProperty(regex = "^y-", schema = Cat.class)})})
+    static final class DefaultedSchemas {
+        Object pet;
+        Object dyn;
+    }
+
+    @Test
+    void discriminatorMappingAndPatternProperty_withoutSchemaAreSkipped() {
+        generator.generate(DefaultedSchemas.class);
+        var properties = registry.snapshot().get("DefaultedSchemas").getProperties();
+
+        assertAll(
+                () -> assertEquals(java.util.Set.of("cat"),
+                        properties.get("pet").getDiscriminator().getMapping().keySet()),
+                () -> assertEquals(java.util.Set.of("^y-"), properties.get("dyn").getPatternProperties().keySet()));
+    }
+
+    static final class Node {
+        String label;
+        @Schema(allOf = Node.class, not = Node.class)
+        Object self;
+    }
+
+    @Test
+    void compositionOnSelfReferencingClass_resolvesToRefWithoutRecursion() {
+        generator.generate(Node.class);
+        var self = registry.snapshot().get("Node").getProperties().get("self");
+
+        assertAll(
+                () -> assertEquals("#/components/schemas/Node", self.getAllOf().get(0).getRef()),
+                () -> assertEquals("#/components/schemas/Node", self.getNot().getRef()));
+    }
 }
