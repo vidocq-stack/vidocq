@@ -19,8 +19,7 @@
  */
 package io.vidocq.grimm.internal.scanner;
 
-import java.util.ArrayList;
-import java.util.List;
+import io.vidocq.grimm.internal.serialization.JsonDeserializer;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
@@ -84,8 +83,8 @@ public final class AnnotationModelMappings {
     }
 
     /**
-     * Adds each named {@code @Extension}; with {@code parseValue = true} the value becomes a boolean,
-     * a number, an object or an array, as written.
+     * Adds each named {@code @Extension}; with {@code parseValue = true} the value is read as JSON
+     * ({@link #parseJsonValue}). A JSON {@code null} adds nothing: the model keeps no null extension.
      */
     public static void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible,
                                        Extension[] extensions) {
@@ -102,152 +101,17 @@ public final class AnnotationModelMappings {
     }
 
     /**
-     * Reads an annotation value written as JSON — an object, an array, a boolean or a number —
-     * as an extension value with {@code parseValue = true} and a {@code constValue} are read; any
-     * other value stays the string as written.
+     * Reads an annotation value written as JSON — an extension value with {@code parseValue = true},
+     * a {@code constValue} — with grimm's JSON reader, the one of static files: an object, an array,
+     * a string, a number ({@code Long}, or {@code Double} with a fraction or an exponent),
+     * {@code true}/{@code false} or {@code null}, surrounding whitespace allowed. A value that is not
+     * JSON stays the string as written.
      */
     public static Object parseJsonValue(String rawValue) {
-        if (rawValue.startsWith("{") && rawValue.endsWith("}")) {
-            return parseInlineObject(rawValue);
-        }
-        if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
-            return parseInlineValue(rawValue);
-        }
-        if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
-            return Boolean.parseBoolean(rawValue);
-        }
         try {
-            if (rawValue.contains(".")) {
-                return Double.parseDouble(rawValue);
-            }
-            return Long.parseLong(rawValue);
-        } catch (NumberFormatException ignored) {
-            // Leave as plain string when parseValue=true but no primitive conversion applies.
+            return JsonDeserializer.parseRaw(rawValue);
+        } catch (IllegalArgumentException notJson) {
             return rawValue;
         }
-    }
-
-    private static Object parseInlineObject(String rawValue) {
-        String body = rawValue.substring(1, rawValue.length() - 1).trim();
-        if (body.isEmpty()) {
-            return java.util.Map.of();
-        }
-        java.util.LinkedHashMap<String, Object> result = new java.util.LinkedHashMap<>();
-        for (String entry : splitTopLevel(body, ',')) {
-            String[] kv = splitKeyValue(entry);
-            if (kv.length != 2) {
-                continue;
-            }
-            String key = stripQuotes(kv[0].trim());
-            result.put(key, parseInlineValue(kv[1].trim()));
-        }
-        return result;
-    }
-
-    private static Object parseInlineValue(String value) {
-        if (value.startsWith("{") && value.endsWith("}")) {
-            return parseInlineObject(value);
-        }
-        if (value.startsWith("[") && value.endsWith("]")) {
-            String body = value.substring(1, value.length() - 1).trim();
-            if (body.isEmpty()) {
-                return List.of();
-            }
-            List<Object> items = new ArrayList<>();
-            for (String item : splitTopLevel(body, ',')) {
-                items.add(parseInlineValue(item.trim()));
-            }
-            return items;
-        }
-        if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
-            return Boolean.parseBoolean(value);
-        }
-        String numericCandidate = value;
-        if (numericCandidate.endsWith("f") || numericCandidate.endsWith("F")
-                || numericCandidate.endsWith("d") || numericCandidate.endsWith("D")
-                || numericCandidate.endsWith("l") || numericCandidate.endsWith("L")) {
-            numericCandidate = numericCandidate.substring(0, numericCandidate.length() - 1);
-        }
-        try {
-            if (numericCandidate.contains(".")) {
-                double parsed = Double.parseDouble(numericCandidate);
-                if (parsed == Math.rint(parsed)) {
-                    return (long) parsed;
-                }
-                return parsed;
-            }
-            return Long.parseLong(numericCandidate);
-        } catch (NumberFormatException ignored) {
-            return stripQuotes(value);
-        }
-    }
-
-    private static String[] splitKeyValue(String entry) {
-        int depth = 0;
-        boolean inSingle = false;
-        boolean inDouble = false;
-        for (int i = 0; i < entry.length(); i++) {
-            char ch = entry.charAt(i);
-            if (ch == '\'' && !inDouble) {
-                inSingle = !inSingle;
-                continue;
-            }
-            if (ch == '"' && !inSingle) {
-                inDouble = !inDouble;
-                continue;
-            }
-            if (inSingle || inDouble) {
-                continue;
-            }
-            if (ch == '{' || ch == '[') {
-                depth++;
-            } else if (ch == '}' || ch == ']') {
-                depth--;
-            } else if (ch == ':' && depth == 0) {
-                return new String[] {entry.substring(0, i), entry.substring(i + 1)};
-            }
-        }
-        return new String[0];
-    }
-
-    private static List<String> splitTopLevel(String value, char separator) {
-        List<String> out = new ArrayList<>();
-        int depth = 0;
-        boolean inSingle = false;
-        boolean inDouble = false;
-        int start = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char ch = value.charAt(i);
-            if (ch == '\'' && !inDouble) {
-                inSingle = !inSingle;
-                continue;
-            }
-            if (ch == '"' && !inSingle) {
-                inDouble = !inDouble;
-                continue;
-            }
-            if (inSingle || inDouble) {
-                continue;
-            }
-            // Objects and arrays nest: a separator inside either does not split the enclosing value.
-            if (ch == '{' || ch == '[') {
-                depth++;
-            } else if (ch == '}' || ch == ']') {
-                depth--;
-            } else if (ch == separator && depth == 0) {
-                out.add(value.substring(start, i).trim());
-                start = i + 1;
-            }
-        }
-        out.add(value.substring(start).trim());
-        return out;
-    }
-
-    private static String stripQuotes(String value) {
-        if ((value.startsWith("\"") && value.endsWith("\""))
-                || (value.startsWith("'") && value.endsWith("'"))) {
-            return value.substring(1, value.length() - 1);
-        }
-        return value;
     }
 }

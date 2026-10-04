@@ -29,6 +29,7 @@ import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -78,6 +79,34 @@ class AnnotationModelMappingsTest {
                         "b", Map.of("c", List.of(true, "d")),
                         "e", List.of(List.of(1L, 2L), List.of(3L))),
                 AnnotationModelMappings.parseExtensionValue(NestedArrays.class.getAnnotation(Extension.class)));
+    }
+
+    @Test
+    void parsedValueIsReadAsJson() {
+        // Extension values with parseValue = true and constValue go through grimm's JSON reader.
+        Map<String, Object> withEscapedQuote = new java.util.LinkedHashMap<>();
+        withEscapedQuote.put("a", "x\"y");
+        withEscapedQuote.put("b", 1L);
+        assertAll(
+                () -> assertEquals(withEscapedQuote, AnnotationModelMappings.parseJsonValue("{\"a\": \"x\\\"y\", \"b\": 1}")),
+                () -> assertNull(AnnotationModelMappings.parseJsonValue("null")),
+                () -> assertEquals(1000.0, AnnotationModelMappings.parseJsonValue("1e3")),
+                () -> assertEquals("abc", AnnotationModelMappings.parseJsonValue("\"abc\"")),
+                () -> assertEquals(Map.of("a", 1L), AnnotationModelMappings.parseJsonValue(" {\"a\": 1} ")),
+                () -> assertEquals(1.0, AnnotationModelMappings.parseJsonValue("1.0")),
+                () -> assertEquals(List.of(1.0), AnnotationModelMappings.parseJsonValue("[1.0]")),
+                () -> assertEquals(117L, AnnotationModelMappings.parseJsonValue("117")),
+                () -> assertEquals(Boolean.TRUE, AnnotationModelMappings.parseJsonValue("true")));
+    }
+
+    @Test
+    void parsedValueThatIsNotJsonStaysTheStringAsWritten() {
+        assertAll(
+                () -> assertEquals("hello", AnnotationModelMappings.parseJsonValue("hello")),
+                () -> assertEquals("{a: 1}", AnnotationModelMappings.parseJsonValue("{a: 1}")),
+                () -> assertEquals(" 'x' ", AnnotationModelMappings.parseJsonValue(" 'x' ")),
+                () -> assertEquals("[1, 2", AnnotationModelMappings.parseJsonValue("[1, 2")),
+                () -> assertEquals("", AnnotationModelMappings.parseJsonValue("")));
     }
 
     @Path("/e")
