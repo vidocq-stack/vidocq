@@ -190,8 +190,12 @@ Track reproducible bugs with:
   minimum = "0"))` on a class with an `int age` field: the `age` schema has no `minimum`.
 - **hypothesis**: the `@SchemaProperty` mapping was written as a subset of the `@Schema` one; the
   two annotation types share no interface, so the `@Schema` code cannot be reused as it stands.
-- **status**: OPEN — found while working on BUG-20261004-06, outside its scope. Not covered by
-  the official TCK (367/367).
+- **status**: FIXED — 2026-10-04, commit c75ff4e. `@Schema` and `@SchemaProperty` are read into
+  `SchemaAttributes` and applied by one `applyAttributes` method (no second copy); it also maps
+  `examples()`, composition, the discriminator and the 2020-12 keywords, for both annotations (the
+  `@Schema` branch did not map those either). A property declared by both the field's `@Schema` and
+  the class's `@Schema(properties = ...)`: the latter is applied last, attribute by attribute.
+  Covered by `SchemaPropertyMappingTest`; official TCK still 367/367.
 
 ### BUG-20261004-08 — The `OASModelReader` model overrides the static file (spec order reversed)
 
