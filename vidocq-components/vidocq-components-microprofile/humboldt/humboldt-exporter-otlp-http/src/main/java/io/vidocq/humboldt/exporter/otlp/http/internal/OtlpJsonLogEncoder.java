@@ -34,6 +34,7 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.appe
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeAttributesArray;
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeResource;
 import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeScopeHeader;
+import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writeValue;
 
 /**
  * Encodes a collection of {@link LogRecordData} in OTLP/HTTP-JSON format.
@@ -117,10 +118,10 @@ public final class OtlpJsonLogEncoder {
             sb.append(",\"severityText\":");
             appendString(sb, r.severityText());
         }
-        if (!r.body().isEmpty()) {
-            sb.append(",\"body\":{\"stringValue\":");
-            appendString(sb, r.body());
-            sb.append('}');
+        if (r.bodyValue() != null) {
+            // a string body is a stringValue; a structured body keeps its AnyValue shape
+            sb.append(",\"body\":");
+            writeValue(sb, r.bodyValue());
         }
         if (!r.attributes().isEmpty()) {
             sb.append(",\"attributes\":");

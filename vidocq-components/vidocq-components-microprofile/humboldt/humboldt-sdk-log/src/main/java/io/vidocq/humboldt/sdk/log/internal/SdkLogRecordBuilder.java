@@ -22,6 +22,7 @@ package io.vidocq.humboldt.sdk.log.internal;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.logs.LogRecordBuilder;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.Span;
@@ -61,7 +62,8 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     private Context context;
     private Severity severity = Severity.UNDEFINED_SEVERITY_NUMBER;
     private String severityText = "";
-    private String body = "";
+    /** The body as set — a string body is kept as {@code Value.of(string)}; {@code null} when there is none. */
+    private Value<?> body;
     private AttributesBuilder attributes = Attributes.builder();
     private String eventName = "";
 
@@ -124,6 +126,16 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
 
     @Override
     public LogRecordBuilder setBody(String body) {
+        if (body != null) this.body = body.isEmpty() ? null : Value.of(body);
+        return this;
+    }
+
+    /**
+     * Keeps the structured body as is (the API default would flatten it with {@link Value#asString()}), so
+     * that the OTLP exporter writes it as an {@code AnyValue}; text exporters print its string form.
+     */
+    @Override
+    public LogRecordBuilder setBody(Value<?> body) {
         if (body != null) this.body = body;
         return this;
     }
@@ -170,7 +182,7 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
         SpanContext sc = Span.fromContext(ctx).getSpanContext();
         LogRecordData record = new LogRecordData(
                 resource, scope, ts, observed, sc,
-                severity, severityText, body, attributes.build(), eventName);
+                severity, severityText, body != null ? body.asString() : "", attributes.build(), eventName, body);
         for (LogRecordProcessor p : processors) {
             p.onEmit(record);
         }

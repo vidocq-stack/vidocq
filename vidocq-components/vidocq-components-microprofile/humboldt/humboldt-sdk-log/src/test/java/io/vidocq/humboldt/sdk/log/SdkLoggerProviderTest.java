@@ -21,6 +21,8 @@ package io.vidocq.humboldt.sdk.log;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.KeyValue;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.logs.Logger;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.Span;
@@ -231,6 +233,42 @@ class SdkLoggerProviderTest {
         assertNull(anonymous.getClass().getCanonicalName(), "an anonymous class has no canonical name");
         assertEquals(anonymous.getClass().getName(),
                 exporter.getCollected().getFirst().attributes().get(EXCEPTION_TYPE));
+    }
+
+    @Test
+    void setBody_value_keeps_the_structured_body() {
+        Value<?> body = Value.of(
+                KeyValue.of("user", Value.of("alice")),
+                KeyValue.of("count", Value.of(3L)));
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setBody(body)
+                    .emit();
+        }
+        LogRecordData r = exporter.getCollected().getFirst();
+        assertEquals(body, r.bodyValue(), "the structured body is kept, not flattened to a string");
+        assertEquals(body.asString(), r.body(), "body() is the string form of the structured body");
+    }
+
+    @Test
+    void setBody_string_is_also_exposed_as_a_string_value() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder().setBody("plain").emit();
+            p.get("x").logRecordBuilder().emit();
+            p.get("x").logRecordBuilder().setBody(Value.of(KeyValue.of("k", Value.of("v")))).setBody("last wins").emit();
+        }
+        List<LogRecordData> records = exporter.getCollected();
+        assertEquals(Value.of("plain"), records.get(0).bodyValue());
+        assertEquals("plain", records.get(0).body());
+        assertNull(records.get(1).bodyValue(), "no body set: no body value");
+        assertEquals("", records.get(1).body());
+        assertEquals(Value.of("last wins"), records.get(2).bodyValue());
     }
 
     @Test

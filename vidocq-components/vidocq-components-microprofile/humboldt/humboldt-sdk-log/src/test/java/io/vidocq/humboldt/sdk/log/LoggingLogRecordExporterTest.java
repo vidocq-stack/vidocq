@@ -20,6 +20,8 @@
 package io.vidocq.humboldt.sdk.log;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.KeyValue;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.SpanContext;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
@@ -54,6 +56,31 @@ class LoggingLogRecordExporterTest {
         List<String> lines = export(dir, record(""));
 
         assertTrue(lines.getFirst().endsWith(" INFO done scopeInfo:io.vidocq.test:1.0"), lines.getFirst());
+    }
+
+    @Test
+    void prints_a_structured_body_in_its_json_string_form(@TempDir Path dir) throws Exception {
+        Value<?> body = Value.of(
+                KeyValue.of("user", Value.of("alice")),
+                KeyValue.of("count", Value.of(3L)));
+        LogRecordData structured = new LogRecordData(
+                Resource.empty(), new InstrumentationScope("io.vidocq.test", "1.0", null, Attributes.empty()),
+                1_000L, 2_000L, SpanContext.getInvalid(),
+                Severity.INFO, "INFO", "", Attributes.empty(), "", body);
+
+        List<String> lines = export(dir, structured);
+
+        assertTrue(lines.getFirst().endsWith(" INFO {\"user\":\"alice\",\"count\":3} scopeInfo:io.vidocq.test:1.0"),
+                lines.getFirst());
+        assertTrue(lines.getFirst().matches(".*INFO.*alice.*scopeInfo:.*"), lines.getFirst());
+    }
+
+    @Test
+    void a_string_body_record_exposes_the_body_as_a_string_value() {
+        LogRecordData r = record("");
+
+        assertEquals("done", r.body());
+        assertEquals(Value.of("done"), r.bodyValue());
     }
 
     private static List<String> export(Path dir, LogRecordData record) throws Exception {

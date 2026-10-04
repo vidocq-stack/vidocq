@@ -44,7 +44,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * {@link OutputStream} (stdout by default, or a file).
  * <p>
  * Format: {@code <YYYY-MM-DD HH:MM:SS.fffZ> <SEVERITY_TEXT> <body> [eventName:<name>] scopeInfo:<scope>:<version>}
- * (the {@code eventName:} part only for a record with an event name)
+ * (the {@code eventName:} part only for a record with an event name; {@code <body>} is
+ * {@link LogRecordData#body()}, so a structured body prints in its JSON string form, e.g.
+ * {@code {"user":"alice","count":3}})
  * — compatible with the MP Telemetry Logs TCK fixture ({@code JulTest})
  * which matches lines via the regex {@code .*INFO.*<msg>.*scopeInfo:.*}.
  *

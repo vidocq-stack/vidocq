@@ -75,6 +75,34 @@ class OtlpJsonLogEncoderTest {
                 + "{\"key\":\"coupon\",\"value\":{\"stringValue\":\"WELCOME\"}}]}}}"), json);
     }
 
+    @Test
+    void encodes_a_structured_body_as_an_otlp_AnyValue() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider provider = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            provider.get("io.vidocq.test").logRecordBuilder()
+                    .setBody(Value.of(
+                            KeyValue.of("user", Value.of("alice")),
+                            KeyValue.of("tags", Value.of(Value.of("a"), Value.of(2L)))))
+                    .emit();
+        }
+
+        String json = OtlpJsonLogEncoder.encode(exporter.getCollected());
+
+        assertTrue(json.contains("\"body\":{\"kvlistValue\":{\"values\":["
+                + "{\"key\":\"user\",\"value\":{\"stringValue\":\"alice\"}},"
+                + "{\"key\":\"tags\",\"value\":{\"arrayValue\":{\"values\":["
+                + "{\"stringValue\":\"a\"},{\"intValue\":\"2\"}]}}}]}}"), json);
+    }
+
+    @Test
+    void encodes_a_string_body_as_a_stringValue() {
+        String json = OtlpJsonLogEncoder.encode(List.of(record("", Attributes.empty())));
+
+        assertTrue(json.contains("\"body\":{\"stringValue\":\"done\"}"), json);
+    }
+
     static LogRecordData record(String eventName, Attributes attributes) {
         return new LogRecordData(
                 Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
