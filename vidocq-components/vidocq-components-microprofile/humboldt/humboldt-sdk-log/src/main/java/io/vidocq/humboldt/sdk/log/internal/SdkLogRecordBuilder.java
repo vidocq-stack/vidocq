@@ -33,6 +33,8 @@ import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import io.vidocq.humboldt.sdk.log.export.LogRecordProcessor;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -40,10 +42,14 @@ import java.util.concurrent.TimeUnit;
 /**
  * Internal implementation of {@link LogRecordBuilder}.
  *
- * <p>Collect-then-emit: accumulates severity/body/attrs/context until {@link #emit()},
+ * <p>Collect-then-emit: accumulates severity/body/attrs/event name/context until {@link #emit()},
  * then creates an immutable {@link LogRecordData} and notifies all processors.</p>
  */
 public final class SdkLogRecordBuilder implements LogRecordBuilder {
+
+    private static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
+    private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
+    private static final AttributeKey<String> EXCEPTION_STACKTRACE = AttributeKey.stringKey("exception.stacktrace");
 
     private final Resource resource;
     private final InstrumentationScope scope;
@@ -57,6 +63,7 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     private String severityText = "";
     private String body = "";
     private AttributesBuilder attributes = Attributes.builder();
+    private String eventName = "";
 
     public SdkLogRecordBuilder(
             Resource resource, InstrumentationScope scope,
@@ -130,6 +137,28 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     }
 
     @Override
+    public LogRecordBuilder setEventName(String eventName) {
+        this.eventName = eventName != null ? eventName : "";
+        return this;
+    }
+
+    /**
+     * Derives {@code exception.type} (canonical class name), {@code exception.message} and
+     * {@code exception.stacktrace} from {@code throwable}, as the OpenTelemetry SDK 1.66 does: an attribute
+     * already set on this builder is kept, a {@code null} class name or message adds no attribute, and an
+     * attribute set after this call overrides the derived value.
+     */
+    @Override
+    public LogRecordBuilder setException(Throwable throwable) {
+        if (throwable == null) return this;
+        Attributes alreadySet = attributes.build();
+        putIfAbsent(alreadySet, EXCEPTION_TYPE, throwable.getClass().getCanonicalName());
+        putIfAbsent(alreadySet, EXCEPTION_MESSAGE, throwable.getMessage());
+        putIfAbsent(alreadySet, EXCEPTION_STACKTRACE, stackTraceOf(throwable));
+        return this;
+    }
+
+    @Override
     public void emit() {
         long observed = observedEpochNanos > 0 ? observedEpochNanos : clock.now();
         long ts = timestampEpochNanos > 0 ? timestampEpochNanos : observed;
@@ -137,9 +166,23 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
         SpanContext sc = Span.fromContext(ctx).getSpanContext();
         LogRecordData record = new LogRecordData(
                 resource, scope, ts, observed, sc,
-                severity, severityText, body, attributes.build());
+                severity, severityText, body, attributes.build(), eventName);
         for (LogRecordProcessor p : processors) {
             p.onEmit(record);
         }
+    }
+
+    private void putIfAbsent(Attributes alreadySet, AttributeKey<String> key, String value) {
+        if (value != null && alreadySet.get(key) == null) {
+            attributes.put(key, value);
+        }
+    }
+
+    private static String stackTraceOf(Throwable throwable) {
+        StringWriter out = new StringWriter();
+        try (PrintWriter writer = new PrintWriter(out)) {
+            throwable.printStackTrace(writer);
+        }
+        return out.toString();
     }
 }

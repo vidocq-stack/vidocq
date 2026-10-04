@@ -43,7 +43,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * Exporter that writes each {@link LogRecordData} as one text line to an
  * {@link OutputStream} (stdout by default, or a file).
  * <p>
- * Format: {@code <YYYY-MM-DD HH:MM:SS.fffZ> <SEVERITY_TEXT> <body> scopeInfo:<scope>:<version>}
+ * Format: {@code <YYYY-MM-DD HH:MM:SS.fffZ> <SEVERITY_TEXT> <body> [eventName:<name>] scopeInfo:<scope>:<version>}
+ * (the {@code eventName:} part only for a record with an event name)
  * — compatible with the MP Telemetry Logs TCK fixture ({@code JulTest})
  * which matches lines via the regex {@code .*INFO.*<msg>.*scopeInfo:.*}.
  *
@@ -165,7 +166,8 @@ public final class LoggingLogRecordExporter implements LogRecordExporter {
         String level = !r.severityText().isEmpty() ? r.severityText() : r.severity().name();
         String scopeName = r.scope() != null ? r.scope().name() : "";
         String scopeVersion = (r.scope() != null && r.scope().version() != null) ? r.scope().version() : "";
-        return ts + " " + level + " " + r.body() + " scopeInfo:" + scopeName + ":" + scopeVersion;
+        String event = r.eventName().isEmpty() ? "" : " eventName:" + r.eventName();
+        return ts + " " + level + " " + r.body() + event + " scopeInfo:" + scopeName + ":" + scopeVersion;
     }
 
     private static Writer stdoutWriter() {

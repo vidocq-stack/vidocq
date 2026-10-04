@@ -132,6 +132,11 @@ public final class OtlpJsonLogEncoder {
             sb.append(",\"spanId\":\"").append(sc.getSpanId()).append('"');
             sb.append(",\"flags\":").append(sc.getTraceFlags().asByte() & 0xFF);
         }
+        if (!r.eventName().isEmpty()) {
+            // OTLP LogRecord.event_name (field 12), lowerCamelCase in the JSON mapping
+            sb.append(",\"eventName\":");
+            appendString(sb, r.eventName());
+        }
         sb.append('}');
     }
 }

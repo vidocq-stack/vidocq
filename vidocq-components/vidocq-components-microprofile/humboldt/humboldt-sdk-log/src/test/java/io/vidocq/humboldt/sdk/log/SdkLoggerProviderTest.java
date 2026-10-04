@@ -40,6 +40,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -155,6 +157,83 @@ class SdkLoggerProviderTest {
     }
 
     @Test
+    void setException_records_type_message_and_stacktrace_attributes() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setBody("payment failed")
+                    .setException(new IllegalStateException("boom"))
+                    .emit();
+        }
+        Attributes attrs = exporter.getCollected().getFirst().attributes();
+        assertEquals("java.lang.IllegalStateException", attrs.get(EXCEPTION_TYPE));
+        assertEquals("boom", attrs.get(EXCEPTION_MESSAGE));
+        String stacktrace = attrs.get(EXCEPTION_STACKTRACE);
+        assertNotNull(stacktrace, "exception.stacktrace must be set");
+        assertTrue(stacktrace.startsWith("java.lang.IllegalStateException: boom"), stacktrace);
+        assertTrue(stacktrace.contains("setException_records_type_message_and_stacktrace_attributes"),
+                "the stack trace must list the throwing frame: " + stacktrace);
+    }
+
+    @Test
+    void setException_keeps_exception_attributes_already_set() {
+        // Same rule as the OpenTelemetry SDK: an attribute set by the caller wins over the derived one.
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setAttribute(EXCEPTION_TYPE, "com.example.PaymentRefused")
+                    .setException(new IllegalStateException("boom"))
+                    .emit();
+        }
+        Attributes attrs = exporter.getCollected().getFirst().attributes();
+        assertEquals("com.example.PaymentRefused", attrs.get(EXCEPTION_TYPE));
+        assertEquals("boom", attrs.get(EXCEPTION_MESSAGE));
+        assertNotNull(attrs.get(EXCEPTION_STACKTRACE));
+    }
+
+    @Test
+    void setException_uses_the_canonical_class_name_and_skips_a_null_message() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setException(new NestedFailure())
+                    .emit();
+            p.get("x").logRecordBuilder()
+                    .setException(null)
+                    .emit();
+        }
+        Attributes nested = exporter.getCollected().getFirst().attributes();
+        assertEquals(SdkLoggerProviderTest.class.getName() + ".NestedFailure", nested.get(EXCEPTION_TYPE),
+                "canonical name ('.' before the nested class), as the OpenTelemetry SDK does");
+        assertNull(nested.get(EXCEPTION_MESSAGE), "no message attribute for a null message");
+        assertTrue(exporter.getCollected().get(1).attributes().isEmpty(), "setException(null) is a no-op");
+    }
+
+    @Test
+    void setEventName_is_carried_to_the_exported_record() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setEventName("checkout.completed")
+                    .setBody("done")
+                    .emit();
+            p.get("x").logRecordBuilder()
+                    .setBody("plain log")
+                    .emit();
+        }
+        assertEquals("checkout.completed", exporter.getCollected().getFirst().eventName());
+        assertEquals("", exporter.getCollected().get(1).eventName(), "a plain log record has no event name");
+    }
+
+    @Test
     void timestamp_unit_conversion_works() {
         InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
@@ -169,5 +248,13 @@ class SdkLoggerProviderTest {
         LogRecordData r = exporter.getCollected().getFirst();
         assertEquals(1_000_000_000L, r.timestampEpochNanos());
         assertEquals(2_000_000_000L, r.observedEpochNanos());
+    }
+
+    private static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
+    private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
+    private static final AttributeKey<String> EXCEPTION_STACKTRACE = AttributeKey.stringKey("exception.stacktrace");
+
+    /** Nested exception without a message — its canonical and binary names differ. */
+    static final class NestedFailure extends RuntimeException {
     }
 }
