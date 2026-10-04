@@ -22,6 +22,8 @@ module io.opentelemetry.context {
 
     exports io.opentelemetry.context;
     exports io.opentelemetry.context.propagation;
+    // Unqualified on purpose: the ComponentLoader SPI is used by the optional OpenTelemetry SDK autoconfigure modules,
+    // which humboldt-otel-interop reads with "requires static", so the export cannot name them.
     exports io.opentelemetry.common;
     // Internal logger used by the API module only (opentelemetry-common is shaded in here since 1.66).
     exports io.opentelemetry.common.impl to io.opentelemetry.api;

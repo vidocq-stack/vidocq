@@ -1,16 +1,16 @@
 = TCK
-:description: MicroProfile Telemetry 2.1 TCK status, in-reactor runner behind the tck profile, commands, Arquillian / ShrinkWrap constraints.
+:description: MicroProfile Telemetry 2.2 TCK status, in-reactor runner behind the tck profile, commands, Arquillian / ShrinkWrap constraints.
 
 [.lead]
-Humboldt passes the official **MicroProfile Telemetry 2.1** TCK — **85/85 PASS** across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
+Humboldt implements **MicroProfile Telemetry 2.2** and passes the official TCK **2.2-RC3** (byte-identical to the 2.2 final under ballot) — **85/85 PASS** on 2026-10-04 across the three suites (tracing + metrics + logs), with W3C TraceContext + Baggage propagation and `OTEL_*` configuration. The `humboldt-tck` runner is part of the reactor but **gated behind the `tck` Maven profile** (TCK harmonisation — same pattern as the `vidocq-runtime-tck-*` runners and the dirac pilot): a plain `mvn install` neither downloads nor runs anything TCK-related.
 
 == Target
 
-100 % conformance to the official **MicroProfile Telemetry 2.1** TCK across the three suites:
+100 % pass rate on the official **MicroProfile Telemetry 2.2** TCK (2.2-RC3) across the three suites:
 
-* `microprofile-telemetry-tracing-tck:2.1`
-* `microprofile-telemetry-metrics-tck:2.1`
-* `microprofile-telemetry-logs-tck:2.1`
+* `microprofile-telemetry-tracing-tck:2.2-RC3`
+* `microprofile-telemetry-metrics-tck:2.2-RC3`
+* `microprofile-telemetry-logs-tck:2.2-RC3`
 
 TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 
@@ -28,7 +28,7 @@ TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 ----
 
-First achieved on 2026-05-24, re-verified stable on `main` on 2026-06-01 (`./run-official-tck-telemetry-2.1.sh all`, Temurin 25, Maven 3.9.16). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md].
+On 2026-10-04 the TCK 2.2-RC3 ran 85/85 (`./run-official-tck-telemetry-2.2.sh all`, Temurin 25, Maven 3.9.16), including `code.function.name` on `@WithSpan` spans and `@WithSpan(inheritContext = false)`. History with the 2.1 TCK: first 85/85 on 2026-05-24, re-verified on 2026-06-01 and 2026-06-24 (`run-official-tck-telemetry-2.1.sh`, since renamed). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md].
 
 The road to green (M7b Arquillian adapter, M7c failure clusters — `@ArquillianResource URL` wiring, ShrinkWrap deployments, required CDI beans, commons-io conflicts) is preserved in the dated reports under `tck-runs/` for archaeology.
 

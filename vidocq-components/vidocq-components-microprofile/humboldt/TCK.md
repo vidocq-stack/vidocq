@@ -1,4 +1,19 @@
-# Humboldt — MicroProfile Telemetry 2.1 TCK status
+# Humboldt — MicroProfile Telemetry TCK status
+
+## MicroProfile Telemetry 2.2 (TCK 2.2-RC3, byte-identical to the 2.2 final under ballot; re-run on the final in Task E1)
+
+Date: 2026-10-04 — OpenTelemetry 1.66.0, instrumentation-annotations 2.31.1, semconv 1.44.0.
+Command: `./run-official-tck-telemetry-2.2.sh all`.
+
+```
+Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
+```
+
+New in 2.2 and covered: `code.function.name` on `@WithSpan` spans, `@WithSpan(inheritContext = false)`.
+
+The sections below are the **MicroProfile Telemetry 2.1** history (TCK 2.1, last run 2026-06-24), kept as is.
+
+# MicroProfile Telemetry 2.1 TCK status
 
 ## Target
 

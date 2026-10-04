@@ -94,7 +94,7 @@ There is **one deliberate exception to the no-dynamic-proxy rule**: `HumboldtTel
 
 . **Java Modules startup** — `ServiceLoader` loads `HumboldtContextStorageProvider` via `provides ... with` (and `META-INF/services` fallback on classpath).
 . **`HumboldtAutoConfigure.configure()`** is called by the application `main()`.
-. **`EnvConfig.system()`** reads `System.getenv()` + `System.getProperties()` (env vars win). If `OTEL_SDK_DISABLED` is `true` — the MP Telemetry 2.1 default — configuration stops here: providers are built with no processor or reader, so the OTel API stays fully usable but nothing is ever exported.
+. **`EnvConfig.system()`** reads `System.getenv()` + `System.getProperties()` (env vars win). If `OTEL_SDK_DISABLED` is `true` — the MP Telemetry 2.2 default — configuration stops here: providers are built with no processor or reader, so the OTel API stays fully usable but nothing is ever exported.
 . Builds the `Resource` from `OTEL_SERVICE_NAME` + `OTEL_RESOURCE_ATTRIBUTES`.
 . Based on `OTEL_TRACES_EXPORTER` — instantiates the exporter (`Otlp`, `InMemory`, `Logging`, or no-op).
 . Builds the `Sampler` from `OTEL_TRACES_SAMPLER` + `_ARG`.

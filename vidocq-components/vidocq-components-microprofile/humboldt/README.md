@@ -2,13 +2,13 @@
 
 > *Alexander von Humboldt (1769–1859) — Prussian polymath, naturalist-explorer. The man who performed the foundational act of modern observability: observe simultaneously, measure rigorously, correlate across layers. On Chimborazo in 1802 he records pressure, temperature, magnetism, humidity, fauna, flora together — and draws the first isotherm maps. OpenTelemetry, in modern Java SE.*
 
-**Humboldt** is the MicroProfile Telemetry 2.1 implementation in the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem. Distributed tracing, metrics, and logs, on the public [OpenTelemetry](https://opentelemetry.io/) API surface — **without embedding `opentelemetry-sdk` or third-party exporters**.
+**Humboldt** is the MicroProfile Telemetry 2.2 implementation (OpenTelemetry 1.66) in the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem. Distributed tracing, metrics, and logs, on the public [OpenTelemetry](https://opentelemetry.io/) API surface — **without embedding `opentelemetry-sdk` or third-party exporters**.
 
 > 🇬🇧 English version: [README_EN.md](README_EN.md)
 
 ## Status
 
-**MicroProfile Telemetry 2.1 TCK: 85/85 PASS (2026-06-24).** See [`TCK.md`](TCK.md).
+**MicroProfile Telemetry 2.2 implemented (OpenTelemetry 1.66). Official TCK 2.2-RC3 (byte-identical to the 2.2 final under ballot): 85/85 PASS (2026-10-04).** The 2.1 TCK passed 85/85 on 2026-06-24. See [`TCK.md`](TCK.md).
 
 See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
 

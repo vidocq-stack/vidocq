@@ -64,7 +64,7 @@ Humboldt reads the standard OpenTelemetry env vars (`OTEL_*`), with fallback to 
 
 [IMPORTANT]
 ====
-Per the MicroProfile Telemetry 2.1 specification, the SDK is **disabled by default**: `OTEL_SDK_DISABLED` defaults to `true`. You MUST export `OTEL_SDK_DISABLED=false`, otherwise Humboldt boots as a no-op and nothing is ever exported.
+Per the MicroProfile Telemetry 2.2 specification, the SDK is **disabled by default**: `OTEL_SDK_DISABLED` defaults to `true`. You MUST export `OTEL_SDK_DISABLED=false`, otherwise Humboldt boots as a no-op and nothing is ever exported.
 ====
 
 [source,bash]

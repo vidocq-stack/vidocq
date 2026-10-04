@@ -118,7 +118,7 @@ Recommendation: align on the standard OTel keys (`OTEL_*`) for portability. Humb
 
 * **No JVM agent** — SmallRye/Quarkus sometimes relies on the OTel Java agent to instrument external libraries (JDBC, gRPC clients…). Humboldt does not support the agent: use manual instrumentation or wait for native Vidocq modules (for example `humboldt-jdbc`, post-MVP).
 * **No direct Jaeger exporter** — use the OTLP Collector as a proxy to Jaeger.
-* **SDK disabled by default** — per MP Telemetry 2.1, `OTEL_SDK_DISABLED` defaults to `true`: coming from the OTel Java SDK (opposite default), remember to export `OTEL_SDK_DISABLED=false` or nothing is emitted. To disable a single signal, use `OTEL_TRACES_EXPORTER=none` / `_METRICS_EXPORTER=none` / `_LOGS_EXPORTER=none`.
+* **SDK disabled by default** — per MP Telemetry 2.2, `OTEL_SDK_DISABLED` defaults to `true`: coming from the OTel Java SDK (opposite default), remember to export `OTEL_SDK_DISABLED=false` or nothing is emitted. To disable a single signal, use `OTEL_TRACES_EXPORTER=none` / `_METRICS_EXPORTER=none` / `_LOGS_EXPORTER=none`.
 
 == Migration checklist
 

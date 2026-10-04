@@ -72,7 +72,7 @@ This page consolidates Humboldt's public surface: artifacts to declare, exported
 
 | `io.vidocq.humboldt`
 | `humboldt-tck`
-| Official MicroProfile Telemetry 2.1 TCK runner — in-reactor, gated by the `tck` Maven profile. Do not declare as an application dependency.
+| Official MicroProfile Telemetry 2.2 TCK runner — in-reactor, gated by the `tck` Maven profile. Do not declare as an application dependency.
 |===
 
 All versions are `{project-version}`.
@@ -137,7 +137,7 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 
 | `OTEL_SDK_DISABLED` / `otel.sdk.disabled`
 | **`true`**
-| Per MP Telemetry 2.1 the SDK is **disabled by default**: the OTel API stays usable but nothing is exported. Set explicitly to `false` to enable telemetry.
+| Per MP Telemetry 2.2 the SDK is **disabled by default**: the OTel API stays usable but nothing is exported. Set explicitly to `false` to enable telemetry.
 |===
 
 === Service identification

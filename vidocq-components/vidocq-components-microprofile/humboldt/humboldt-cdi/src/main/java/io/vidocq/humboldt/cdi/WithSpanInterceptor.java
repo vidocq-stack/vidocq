@@ -67,7 +67,10 @@ import java.lang.reflect.Parameter;
 @Priority(Interceptor.Priority.APPLICATION + 1)
 public class WithSpanInterceptor {
 
-    /** OTel semconv {@code code.function.name} — mandatory on @WithSpan spans since MP Telemetry 2.2. */
+    /**
+     * Attribute name {@code code.function.name} as defined by the OpenTelemetry semantic conventions (no semconv
+     * dependency needed) — mandatory on @WithSpan spans since MP Telemetry 2.2.
+     */
     private static final AttributeKey<String> CODE_FUNCTION_NAME = AttributeKey.stringKey("code.function.name");
 
     @AroundInvoke

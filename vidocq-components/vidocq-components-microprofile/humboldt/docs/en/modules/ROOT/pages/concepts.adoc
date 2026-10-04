@@ -1,8 +1,8 @@
 = Concepts
-:description: OpenTelemetry model — signals, context, propagation, scope, semantic conventions — and what MicroProfile Telemetry 2.1 adds.
+:description: OpenTelemetry model — signals, context, propagation, scope, semantic conventions — and what MicroProfile Telemetry 2.2 adds.
 
 [.lead]
-Humboldt implements OpenTelemetry. To use Humboldt correctly you need to know the OTel abstractions: the three signals (traces, metrics, logs), the `Context` that correlates them, the `Resource` that identifies the producer, and the `TextMapPropagator` that carries context across processes. MicroProfile Telemetry 2.1 adds a thin layer of CDI integration and configuration.
+Humboldt implements OpenTelemetry. To use Humboldt correctly you need to know the OTel abstractions: the three signals (traces, metrics, logs), the `Context` that correlates them, the `Resource` that identifies the producer, and the `TextMapPropagator` that carries context across processes. MicroProfile Telemetry 2.2 adds a thin layer of CDI integration and configuration.
 
 == Three signals, one SDK
 
@@ -107,9 +107,9 @@ OTel _semantic conventions_ standardize attribute and metric names: `http.reques
 
 Reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions]. Humboldt does not re-implement the convention: it consumes it.
 
-== MicroProfile Telemetry 2.1 vs raw OTel API
+== MicroProfile Telemetry 2.2 vs raw OTel API
 
-MicroProfile Telemetry 2.1 is a thin layer on top of OpenTelemetry, essentially adding:
+MicroProfile Telemetry 2.2 is a thin layer on top of OpenTelemetry, essentially adding:
 
 * CDI producers: `@Inject OpenTelemetry`, `@Inject Tracer`, `@Inject Meter`, `@Inject io.opentelemetry.api.logs.Logger`, `@Inject Span` (current), `@Inject Baggage` (current).
 * An opt-in gate: the SDK is disabled unless `OTEL_SDK_DISABLED=false` is set. Humboldt reads the standard `OTEL_*` environment variables and `otel.*` system properties directly (`EnvConfig`) — no MicroProfile Config dependency.
