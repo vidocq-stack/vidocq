@@ -15,8 +15,8 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 | via xref:cassini::tck.adoc[Cassini] — also see `vidocq/TCK.md`
 
 | Jakarta Servlet 6.1
-| ~90 %
-| via xref:foy::tck.adoc[Foy] — runner `vidocq-servlet-chappe-tck-runner`
+| 921/1714 raw, `api.*` 95.6 % (2026-06-12)
+| via xref:foy::tck.adoc[Foy] — runner `foy-tck`
 
 | Jakarta JSON-P 2.1
 | Green
@@ -68,21 +68,23 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 Vidocq Runtime does not re-run Jakarta TCKs: they are validated by the underlying bricks. The following runners cover the ecosystem:
 
 * `cassini-tck` — Jakarta REST 4.0
-* `foy-tck` / `vidocq-servlet-chappe-tck-runner` — Jakarta Servlet 6.1
+* `foy-tck` — Jakarta Servlet 6.1
 * `champollion-tck` — JSON-P 2.1 + JSON-B 3.0
 * `vauban-tck-runner` — CDI 4.1 Lite (774/774)
 
-All of them are **deliberately outside the reactor** (standalone POM `modelVersion 4.0.0`, no `<parent>`). The historical trigger — a ShrinkWrap Resolver incompatibility with the Maven Model 4.1 POMs of the pre-migration workspace — is gone; the separation is kept on purpose to **decouple the release cycle of each brick from the release cycle of its official TCK** (a TCK upstream bump must not force a runtime release, and vice versa).
+`cassini-tck`, `foy-tck` and `champollion-tck` live in the reactor of their own brick, behind the `tck` Maven profile: a plain `mvn install` neither downloads nor runs anything from the official TCK. `vauban-tck-runner` is a regular module of the Vauban reactor. The runners that remain **outside** their brick's reactor (standalone POM `modelVersion 4.0.0`, no `<parent>`) are `grimm-tck`, the Mansart TCKs (`mansart-data-tck`, `mansart-transactions-tck`) and `champollion-protobuf-tck`; this keeps the release cycle of those bricks decoupled from the release cycle of their official TCK.
 
-Operational consequence: these TCKs always launch via their dedicated shell script, never via `mvn -pl`.
+Launch each runner from the root of its own brick, through the dedicated script (recommended) or through Maven:
 
 [source,bash]
 ----
-cd vidocq-runtime-rest-cassini-tck-runner
+# from the root of the cassini repository
 ./run-official-tck-restful-4.0.sh
 
-cd vidocq-servlet-chappe-tck-runner
+# from the root of the foy repository
 ./run-official-tck-servlet6.1.sh
+# or, equivalently
+./mvnw -Ptck,tck-official -pl foy-tck test
 ----
 
 [#microprofile-tcks-on-the-assembled-runtime]

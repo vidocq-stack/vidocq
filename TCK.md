@@ -35,7 +35,7 @@ documents their exclusion via `excludedGroups` for standalone certifications
 ### Tags excluded for the Core Profile / SE-Bootstrap target
 
 Configured in
-[`vidocq-runtime-rest-cassini-tck-runner/pom.xml`](vidocq-runtime-extensions/vidocq-runtime-rest-cassini-tck-runner/pom.xml):
+`cassini-tck/pom.xml` in the Cassini repository (the runner was extracted from this repository to Cassini):
 
 ```xml
 <excludedGroups>servlet,xml_binding</excludedGroups>
@@ -52,8 +52,8 @@ native SE-Bootstrap).
 ### Official challenges (TCK Process 1.4.1)
 
 Six tests are disabled via the
-[`TckChallengeExclusions`](vidocq-runtime-extensions/vidocq-runtime-rest-cassini-tck-runner/src/test/java/io/vidocq/runtime/ext/rest/cassini/tck/TckChallengeExclusions.java)
-class (JUnit 5 `ExecutionCondition` auto-discovered) with documented
+`TckChallengeExclusions` (`cassini-tck/src/test/java/io/vidocq/cassini/tck/TckChallengeExclusions.java`
+in the Cassini repository) class (JUnit 5 `ExecutionCondition` auto-discovered) with documented
 justification:
 
 | Test | Category | Reason |
@@ -71,8 +71,10 @@ justification:
 
 ```
 vidocq-runtime-extensions/vidocq-runtime-extensions-jakartaee-core/
-├── vidocq-runtime-cassini-rest-extension/   ← the Cassini implementation
-└── vidocq-runtime-rest-cassini-tck-runner/  ← Arquillian harness + TCK runner
+└── vidocq-runtime-cassini-rest-extension/   ← the Cassini implementation
+
+cassini/ (separate repository, in-reactor under the `tck` profile)
+└── cassini-tck/                             ← Arquillian harness + TCK runner
 ```
 
 ### Jakarta RESTful Web Services 4.0 spec coverage
@@ -181,13 +183,13 @@ See §2.2 above.
 ## 6. Reproducing the run
 
 ```bash
-# From the project root:
+# From the root of the Cassini repository:
 ./run-official-tck-restful-4.0.sh all
 ```
 
 This script:
-1. Compiles and installs `vidocq-runtime-cassini-rest-extension`
-2. Activates the `tck-official` profile of the `vidocq-runtime-rest-cassini-tck-runner` module
+1. Compiles and installs the Cassini modules
+2. Activates the `tck` and `tck-official` profiles of the `cassini-tck` module
 3. Activates `excludedGroups=servlet,xml_binding`
 4. Loads `TckChallengeExclusions` via JUnit 5 autodetection
 5. Runs the complete TCK 4.0.1 suite (2670 `@Test` tests)
