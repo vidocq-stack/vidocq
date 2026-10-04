@@ -190,9 +190,37 @@ class DefaultJwtValidatorTest {
         //config without leaving: iss du token ignored
         DefaultJwtValidator validator = new DefaultJwtValidator(
                 new ConfiguredKeyResolver(RSA.getPublic()),
-                new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false),
+                new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false, Optional.empty()),
                 CLOCK);
         String token = rsaToken(baseClaims().add("iss", "https://whatever").build());
         assertNotNull(validator.validate(token));
+    }
+
+    private static String signedWith(KeyPair pair, SignatureAlgorithm alg) throws Exception {
+        return TestJwts.sign(TestJwts.header(alg, null), baseClaims().build(), pair.getPrivate(), alg);
+    }
+
+    @Test
+    void acceptsEs256AndRs256WhenNoAlgorithmConfigured() throws Exception {
+        JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
+                true, Optional.empty(), false, Optional.empty());
+        io.vidocq.cervantes.api.KeyResolver both = (kid, alg) -> Optional.of(
+                alg.family() == SignatureAlgorithm.Family.EC ? EC.getPublic() : RSA.getPublic());
+        DefaultJwtValidator validator = new DefaultJwtValidator(both, config, CLOCK, null);
+
+        assertNotNull(validator.validate(signedWith(RSA, SignatureAlgorithm.RS256)));
+        assertNotNull(validator.validate(signedWith(EC, SignatureAlgorithm.ES256)));
+    }
+
+    @Test
+    void rejectsTokenWhoseAlgorithmFamilyDiffersFromConfiguredOne() throws Exception {
+        JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
+                true, Optional.empty(), false, Optional.of(SignatureAlgorithm.ES256));
+        io.vidocq.cervantes.api.KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
+        DefaultJwtValidator validator = new DefaultJwtValidator(rsaOnly, config, CLOCK, null);
+
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> validator.validate(signedWith(RSA, SignatureAlgorithm.RS256)));
+        assertTrue(ex.getMessage().contains("ES256"));
     }
 }

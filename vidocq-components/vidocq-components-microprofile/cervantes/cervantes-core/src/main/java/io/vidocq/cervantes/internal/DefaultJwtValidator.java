@@ -73,6 +73,13 @@ public final class DefaultJwtValidator implements JwtValidator {
         SignatureAlgorithm alg = SignatureAlgorithm.fromJoseName(algName)
                 .orElseThrow(() -> new JwtValidationException("unsupported or missing 'alg' header: " + algName));
 
+        if (config.requiredAlgorithm().isPresent()
+                && config.requiredAlgorithm().get().family() != alg.family()) {
+            throw new JwtValidationException("token algorithm " + alg.name()
+                    + " does not match the configured mp.jwt.verify.publickey.algorithm="
+                    + config.requiredAlgorithm().get().name());
+        }
+
         String kid = headerString(jwt, "kid");
         PublicKey key = keyResolver.resolve(kid, alg)
                 .orElseThrow(() -> new JwtValidationException("no verification key found (kid=" + kid + ")"));

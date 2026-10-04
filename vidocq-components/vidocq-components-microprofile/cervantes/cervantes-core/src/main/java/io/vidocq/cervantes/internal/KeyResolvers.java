@@ -43,7 +43,7 @@ public final class KeyResolvers {
      * Accepts: PEM (PKIX), JWK JSON ({...}), JWK Set JSON ({"keys":[...]}), or base64-encoded JWK/JWKS.
      * MP JWT spec §9.2.1: the value can be a PEM key, base64 X.509, JWK or JWKS.
      */
-    public static KeyResolver fromInlinePem(String value, SignatureAlgorithm.Family family) throws JwtValidationException {
+    public static KeyResolver fromInlinePem(String value, Optional<SignatureAlgorithm.Family> family) throws JwtValidationException {
         String trimmed = value.trim();
         if (trimmed.startsWith("{")) {
             //JWK or JWKS JSON inline — route to JwksKeyResolver with a static byte begging
@@ -63,7 +63,7 @@ public final class KeyResolvers {
                 //Not valid base64 — fall through to PEM parsing
             }
         }
-        return new ConfiguredKeyResolver(PemKeys.fromPem(trimmed, family));
+        return new ConfiguredKeyResolver(parsePem(trimmed, family));
     }
 
     /**
@@ -77,7 +77,7 @@ public final class KeyResolvers {
      * server startup ({@code mp.jwt.verify.publickey.location} can be updated in
      * system properties between the construction of the solver and the first request).</p>
      */
-    public static KeyResolver fromLocation(String location, SignatureAlgorithm.Family family) throws JwtValidationException {
+    public static KeyResolver fromLocation(String location, Optional<SignatureAlgorithm.Family> family) throws JwtValidationException {
         if (location.startsWith("http://") || location.startsWith("https://")) {
             // Lazy auto-detect resolver: URL is re-read from system properties at detection time
             // to capture port rewrites applied after server startup (TCK harness pattern).
@@ -88,7 +88,7 @@ public final class KeyResolvers {
         if (content.startsWith("{")) {
             return new JwksKeyResolver(() -> bytes);
         }
-        return new ConfiguredKeyResolver(PemKeys.fromPem(content, family));
+        return new ConfiguredKeyResolver(parsePem(content, family));
     }
 
     /**
@@ -102,11 +102,11 @@ public final class KeyResolvers {
 
         /** The config key that holds the actual current URL (may change after rewrite). */
         private final String initialLocation;
-        private final SignatureAlgorithm.Family family;
+        private final Optional<SignatureAlgorithm.Family> family;
         /** Initialized on first resolve(); reset on URL change. */
         private final AtomicReference<KeyResolver> delegate = new AtomicReference<>();
 
-        LazyHttpKeyResolver(String initialLocation, SignatureAlgorithm.Family family) {
+        LazyHttpKeyResolver(String initialLocation, Optional<SignatureAlgorithm.Family> family) {
             this.initialLocation = initialLocation;
             this.family = family;
         }
@@ -133,7 +133,11 @@ public final class KeyResolvers {
                 return new JwksKeyResolver(JwksSource.fromLocation(location));
             }
             // PEM served over HTTP
-            return new ConfiguredKeyResolver(PemKeys.fromPem(content, family));
+            return new ConfiguredKeyResolver(parsePem(content, family));
         }
+    }
+
+    private static PublicKey parsePem(String pem, Optional<SignatureAlgorithm.Family> family) throws JwtValidationException {
+        return family.isPresent() ? PemKeys.fromPem(pem, family.get()) : PemKeys.fromPem(pem);
     }
 }

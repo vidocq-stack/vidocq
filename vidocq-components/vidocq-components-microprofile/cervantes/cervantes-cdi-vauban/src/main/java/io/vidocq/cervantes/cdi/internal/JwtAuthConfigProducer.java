@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
  * <li>{@code mp.jwt.verify.audiences} → hearings (separate)</li>
  * <li>{@code mp.jwt.verify.publickey} → inline public key (PEM/base64 X.509)</li>
  * <li>{@code mp.jwt.verify.publickey.location} → PEM file / JWKS file / JWKS</li> URL
- * <li>{@code mp.jwt.verify.publickey.algorithm} → {@code RS256} (default) or {@code ES256},...</li>
+ * <li>{@code mp.jwt.verify.publickey.algorithm} → {@code RS256}, {@code ES256},... (unset = both RS256 and ES256 accepted)</li>
  * </ul>
  *
  * <p>Producer and product are {@code @Dependent} (Ravel {@code RavelConfigProducer} pattern;
@@ -115,14 +115,17 @@ public class JwtAuthConfigProducer {
         // Encryption required when a decryption key is configured (mp.jwt.decrypt.key or .location)
         boolean encryptionRequired = config.getOptionalValue("mp.jwt.decrypt.key", String.class).isPresent()
                 || config.getOptionalValue("mp.jwt.decrypt.key.location", String.class).isPresent();
-        return new JwtConfig(issuer, audiences, JwtConfig.DEFAULT_CLOCK_SKEW, true, tokenAge, encryptionRequired);
+        return new JwtConfig(issuer, audiences, JwtConfig.DEFAULT_CLOCK_SKEW, true, tokenAge,
+                encryptionRequired, configuredAlgorithm(config));
+    }
+
+    private static Optional<SignatureAlgorithm> configuredAlgorithm(Config config) {
+        return config.getOptionalValue("mp.jwt.verify.publickey.algorithm", String.class)
+                .flatMap(SignatureAlgorithm::fromJoseName);
     }
 
     static KeyResolver buildKeyResolver(Config config) throws JwtValidationException {
-        SignatureAlgorithm.Family family = config.getOptionalValue("mp.jwt.verify.publickey.algorithm", String.class)
-                .flatMap(SignatureAlgorithm::fromJoseName)
-                .map(SignatureAlgorithm::family)
-                .orElse(SignatureAlgorithm.Family.RSA);
+        Optional<SignatureAlgorithm.Family> family = configuredAlgorithm(config).map(SignatureAlgorithm::family);
 
         Optional<String> inline = config.getOptionalValue("mp.jwt.verify.publickey", String.class);
         if (inline.isPresent()) {

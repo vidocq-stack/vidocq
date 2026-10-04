@@ -23,6 +23,7 @@ import io.vidocq.cervantes.api.JwtConfig;
 import io.vidocq.cervantes.api.JwtValidationException;
 import io.vidocq.cervantes.api.JwtValidator;
 import io.vidocq.cervantes.api.KeyResolver;
+import io.vidocq.cervantes.api.SignatureAlgorithm;
 import io.vidocq.cervantes.cdi.CdiTestSupport;
 import io.vidocq.cervantes.internal.DefaultJwtValidator;
 import jakarta.json.Json;
@@ -100,5 +101,27 @@ class JwtAuthConfigProducerTest {
         JwtConfig jwtConfig = JwtAuthConfigProducer.buildConfig(CdiTestSupport.config(Map.of()));
         assertTrue(jwtConfig.audiences().isEmpty());
         assertTrue(jwtConfig.issuer().isEmpty());
+    }
+
+    @Test
+    void noAlgorithmMeansBothFamiliesAccepted() throws Exception {
+        java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance("EC");
+        g.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        String ecPem = "-----BEGIN PUBLIC KEY-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(g.generateKeyPair().getPublic().getEncoded())
+                + "\n-----END PUBLIC KEY-----\n";
+        Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey", ecPem));
+
+        KeyResolver resolver = JwtAuthConfigProducer.buildKeyResolver(config);
+
+        assertTrue(resolver.resolve(null, SignatureAlgorithm.ES256).isPresent());
+        assertTrue(JwtAuthConfigProducer.buildConfig(config).requiredAlgorithm().isEmpty());
+    }
+
+    @Test
+    void configuredAlgorithmIsExposedOnJwtConfig() {
+        Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", "ES256"));
+        assertEquals(SignatureAlgorithm.ES256,
+                JwtAuthConfigProducer.buildConfig(config).requiredAlgorithm().orElseThrow());
     }
 }

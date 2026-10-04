@@ -174,4 +174,16 @@ class JwksKeyResolverTest {
         Optional<PublicKey> key = resolver.resolve(null, SignatureAlgorithm.RS256);
         assertNotNull(key.orElse(null));
     }
+
+    @Test
+    void mixedRsaAndEcJwksYieldsTheRightKeyPerAlgorithm() throws Exception {
+        Map<String, PublicKey> set = new LinkedHashMap<>();
+        set.put("rskey", RSA_A.getPublic());
+        set.put("eckey", EC.getPublic());
+        byte[] jwks = TestJwks.jwksJson(set);
+        DefaultJwtValidator validator = validator(new JwksKeyResolver(() -> jwks));
+
+        assertEquals("u-1", validator.validate(token("rskey", RSA_A, SignatureAlgorithm.RS256)).getSubject());
+        assertEquals("u-1", validator.validate(token("eckey", EC, SignatureAlgorithm.ES256)).getSubject());
+    }
 }
