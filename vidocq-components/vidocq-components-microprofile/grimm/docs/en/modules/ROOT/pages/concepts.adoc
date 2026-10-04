@@ -26,13 +26,13 @@ The MP OpenAPI 4.2 spec's Java model mirrors that structure: the `OpenAPI` inter
 
 == Three sources, one merge
 
-MP OpenAPI 4.2 §3 prescribes three model sources, merged in this order (lowest to highest priority):
+The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged in this order (lowest to highest priority):
 
+. **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically; it is the starting model.
 . **Static file** — `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath. Loaded by `StaticFileReader`. Acts as the "editorial skeleton" supplied by the design team.
-. **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically.
 . **Annotation scan** — visits every application class discovered by the CDI container: `@Path` resources, but also standalone carriers of `@OpenAPIDefinition`, `@Server`, `@Tag`, `@SecurityScheme` or `@Schema`. Driven by `AnnotationScanner`.
 
-`ModelMerger` combines the three with the spec priority annotations > reader > static file: annotations win on conflicts, and the reader model overrides the static file. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
+`ModelMerger` combines the three with the spec priority annotations > static file > reader: the static file overrides the conflicting elements of the reader model, and the annotations override any conflicting element of both. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
 
 == `OASFilter` filters
 

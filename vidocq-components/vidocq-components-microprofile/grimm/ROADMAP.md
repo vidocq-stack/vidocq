@@ -241,7 +241,7 @@ JSON Schema dialect.
 | `FilterInvoker` | Loads class named by `mp.openapi.filter`; calls each `filterXxx` method in the order defined by spec §4.3 | ☑ |
 | Filter method order | `filterOpenAPI` is called last (§4.3); implement the full sequence: `filterPathItem`, `filterOperation`, `filterParameter`, `filterRequestBody`, `filterAPIResponse`, `filterSchema`, `filterHeader`, `filterTag`, `filterServer`, `filterLink`, `filterCallback`, `filterOpenAPI` | ☑ |
 | `null` return from filter | A filter method returning `null` removes the element from the model (spec §4.3.1) | ☑ |
-| `ModelMerger` — three-source merge | Priority: annotations > `OASModelReader` > static file (spec §4.4) | ☑ |
+| `ModelMerger` — three-source merge | Priority: annotations > static file > `OASModelReader` (spec "Processing rules"; reader and static file swapped on 2026-10-04, BUG-20261004-08) | ☑ |
 | `ModelSource` sealed interface | `StaticFileSource`, `AnnotationSource`, `ReaderSource` — used by `ModelMerger` | ☑ |
 | Unit tests `FilterInvoker` | Filter that removes operations; filter that renames tags | ☑ |
 | Unit tests `ModelReaderInvoker` | Reader that adds a server; reader that sets `info` | ☑ |
@@ -342,8 +342,8 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       separation — same pattern as Heisenberg core/cdi-vauban
 - [x] JSON serialization via Champollion (Jakarta JSON-P 2.1) — no new dependency
 - [x] YAML serialization hand-written — no Snakeyaml, no third-party parser
-- [x] Model build pipeline order: static file → OASModelReader → annotation scanner → merge →
-      OASFilter (spec §4.4)
+- [x] Model build pipeline order: OASModelReader → static file → annotation scanner → merge →
+      OASFilter (spec "Processing rules")
 - [x] `grimm-tck/pom.xml` on Model 4.0.0 — ShrinkWrap constraint (ecosystem-wide)
 - [x] `/openapi` endpoint as a plain JAX-RS resource discovered by Cassini — no special adapter
 - [x] M1 completed: all MP OpenAPI model POJOs + `OASFactoryResolver` ServiceLoader wiring

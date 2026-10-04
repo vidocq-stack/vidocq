@@ -22,8 +22,8 @@ package io.vidocq.grimm.internal.merger;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 
 /**
- * Source produced by the configured {@code OASModelReader} (spec §4.1). Medium priority
- * in {@link ModelMerger} (above static file, below annotations).
+ * Source produced by the configured {@code OASModelReader} (spec §4.1). Lowest priority in
+ * {@link ModelMerger}: the starting model, which the static file and the annotations override.
  */
 public final class ReaderSource implements ModelSource {
 

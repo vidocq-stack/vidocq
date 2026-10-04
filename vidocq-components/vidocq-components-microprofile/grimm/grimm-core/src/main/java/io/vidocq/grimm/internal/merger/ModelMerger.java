@@ -55,7 +55,9 @@ import java.util.Set;
 /**
  * Merges multiple {@link ModelSource} instances according to spec priority.
  *
- * Spec §4.4: Priority order is annotations > OASModelReader > static file.
+ * <p>Spec "Processing rules": the {@code OASModelReader} builds the starting model, the static
+ * file overrides its conflicting elements, then the annotations override any conflicting element
+ * of both — priority annotations &gt; static file &gt; OASModelReader.</p>
  *
  * This merger uses pattern matching on the sealed {@link ModelSource} interface.
  */
@@ -89,12 +91,12 @@ public final class ModelMerger {
         // Start with an empty model
         OpenAPI result = OASFactory.createObject(OpenAPI.class);
 
-        // Priority order per spec: static file → reader → annotations
-        if (staticModel != null) {
-            mergeStaticFile(result, staticModel);
-        }
+        // Processing order per spec: reader → static file → annotations
         if (readerModel != null) {
             mergeReader(result, readerModel);
+        }
+        if (staticModel != null) {
+            mergeStaticFile(result, staticModel);
         }
         if (annotationModel != null) {
             mergeAnnotations(result, annotationModel);
@@ -104,16 +106,16 @@ public final class ModelMerger {
     }
 
     /**
-     * Merges a static file model (lowest priority, baseline).
+     * Merges a reader model (lowest priority, baseline: the starting model of the spec).
      */
-    private void mergeStaticFile(OpenAPI target, OpenAPI source) {
+    private void mergeReader(OpenAPI target, OpenAPI source) {
         mergeTopLevel(target, source, false);
     }
 
     /**
-     * Merges a reader model (medium priority, overrides static file).
+     * Merges a static file model (medium priority, overrides the reader model).
      */
-    private void mergeReader(OpenAPI target, OpenAPI source) {
+    private void mergeStaticFile(OpenAPI target, OpenAPI source) {
         mergeTopLevel(target, source, true);
     }
 

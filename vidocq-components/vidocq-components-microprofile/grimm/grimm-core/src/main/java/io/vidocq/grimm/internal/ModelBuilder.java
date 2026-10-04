@@ -42,13 +42,13 @@ import java.util.Optional;
 /**
  * Orchestrates the full MicroProfile OpenAPI 4.2 model build pipeline (spec §4.4).
  *
- * <p>Six steps, executed once at startup:</p>
+ * <p>Six steps, executed once at startup, in the order of the spec "Processing rules":</p>
  * <ol>
- *   <li>Read static file ({@link StaticFileReader})</li>
  *   <li>Invoke {@link org.eclipse.microprofile.openapi.OASModelReader} if configured
  *       ({@link ModelReaderInvoker})</li>
+ *   <li>Read static file ({@link StaticFileReader})</li>
  *   <li>Scan annotated classes ({@link AnnotationScanner})</li>
- *   <li>Merge the three sources with spec priority annotation &gt; reader &gt; static
+ *   <li>Merge the three sources with spec priority annotations &gt; static file &gt; reader
  *       ({@link ModelMerger})</li>
  *   <li>Apply {@code mp.openapi.servers} / {@code mp.openapi.schema.<FQCN>}
  *       ({@link ConfigApplier})</li>
@@ -82,15 +82,15 @@ public final class ModelBuilder {
 
         List<ModelSource> sources = new ArrayList<>(3);
 
-        // Step 1 — static file (spec §4.2)
-        Optional<OpenAPI> staticModel = staticFileReader.readOpenAPI(annotatedTypes);
-        staticModel.ifPresent(m -> sources.add(new StaticFileSource(m)));
-
-        // Step 2 — OASModelReader (spec §4.1)
+        // Step 1 — OASModelReader: the starting model (spec "Processing rules", step 2)
         OpenAPI readerModel = modelReaderInvoker.invokeModelReader(config.filter());
         if (readerModel != null) {
             sources.add(new ReaderSource(readerModel));
         }
+
+        // Step 2 — static file, overriding the reader's conflicting elements (step 3)
+        Optional<OpenAPI> staticModel = staticFileReader.readOpenAPI(annotatedTypes);
+        staticModel.ifPresent(m -> sources.add(new StaticFileSource(m)));
 
         // Step 3 — annotation source: compile-time $$GrimmModel contributions first
         // (CG-06, APT-first rule), reflective scan as documented fallback for the rest.

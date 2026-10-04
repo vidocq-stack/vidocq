@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for {@link ModelMerger}.
  *
- * Spec §4.4: Priority order is annotations > OASModelReader > static file.
+ * Spec "Processing rules": priority order is annotations > static file > OASModelReader.
  */
 class ModelMergerTest {
 
@@ -70,8 +70,9 @@ class ModelMergerTest {
     }
 
     @Test
-    void merge_prioritizesReaderOverStaticFile() {
-        // Spec §4.4: Reader has higher priority than static file
+    void merge_prioritizesStaticFileOverReader() {
+        // Spec "Processing rules": the OASModelReader builds the starting model, then
+        // "conflicting elements from the static file will override the values from the original model".
         OpenAPI staticModel = OASFactory.createObject(OpenAPI.class)
             .info(createInfo("Static API", "1.0.0"));
 
@@ -84,8 +85,46 @@ class ModelMergerTest {
             new ReaderSource(readerModel)
         ));
 
-        assertEquals("Reader API", result.getInfo().getTitle(),
-            "Reader model should take priority over static file");
+        assertEquals("Static API", result.getInfo().getTitle(),
+            "Static file should take priority over the reader model");
+    }
+
+    @Test
+    void merge_staticFileOverridesConflictingReaderElementsAndAnnotationsOverrideBoth() {
+        // Spec "Processing rules": 2. OASModelReader, 3. static file (overrides conflicts),
+        // 4. annotations ("further overriding any conflicting elements").
+        OpenAPI readerModel = OASFactory.createObject(OpenAPI.class)
+                .paths(OASFactory.createObject(Paths.class)
+                        .addPathItem("/shared", OASFactory.createObject(PathItem.class).summary("reader")
+                                .GET(OASFactory.createObject(Operation.class).operationId("readerOp")))
+                        .addPathItem("/reader-only", OASFactory.createObject(PathItem.class).summary("reader")))
+                .components(OASFactory.createObject(Components.class)
+                        .addSchema("Pet", OASFactory.createObject(Schema.class).description("reader")))
+                .tags(List.of(OASFactory.createObject(Tag.class).name("t").description("reader")));
+        OpenAPI staticModel = OASFactory.createObject(OpenAPI.class)
+                .paths(OASFactory.createObject(Paths.class)
+                        .addPathItem("/shared", OASFactory.createObject(PathItem.class).summary("static")
+                                .GET(OASFactory.createObject(Operation.class).operationId("staticOp"))))
+                .components(OASFactory.createObject(Components.class)
+                        .addSchema("Pet", OASFactory.createObject(Schema.class).description("static")))
+                .tags(List.of(OASFactory.createObject(Tag.class).name("t").description("static")));
+        OpenAPI annotationModel = OASFactory.createObject(OpenAPI.class)
+                .paths(OASFactory.createObject(Paths.class)
+                        .addPathItem("/shared", OASFactory.createObject(PathItem.class)
+                                .GET(OASFactory.createObject(Operation.class).operationId("annotationOp"))));
+
+        OpenAPI readerAndStatic = new ModelMerger().merge(List.of(
+                new ReaderSource(readerModel), new StaticFileSource(staticModel)));
+        assertAll(
+                () -> assertEquals("static", readerAndStatic.getPaths().getPathItem("/shared").getSummary()),
+                () -> assertEquals("staticOp", readerAndStatic.getPaths().getPathItem("/shared").getGET().getOperationId()),
+                () -> assertEquals("reader", readerAndStatic.getPaths().getPathItem("/reader-only").getSummary()),
+                () -> assertEquals("static", readerAndStatic.getComponents().getSchemas().get("Pet").getDescription()),
+                () -> assertEquals("static", readerAndStatic.getTags().get(0).getDescription()));
+
+        OpenAPI all = new ModelMerger().merge(List.of(
+                new AnnotationSource(annotationModel), new StaticFileSource(staticModel), new ReaderSource(readerModel)));
+        assertEquals("annotationOp", all.getPaths().getPathItem("/shared").getGET().getOperationId());
     }
 
     @Test
@@ -203,7 +242,7 @@ class ModelMergerTest {
     }
 
     @Test
-    void merge_readerOverridesStaticInfo() {
+    void merge_staticFileOverridesReaderInfo() {
         OpenAPI staticModel = OASFactory.createObject(OpenAPI.class)
                 .info(createInfo("Static", "1.0"));
         OpenAPI readerModel = OASFactory.createObject(OpenAPI.class)
@@ -213,8 +252,8 @@ class ModelMergerTest {
                 new StaticFileSource(staticModel),
                 new ReaderSource(readerModel)));
 
-        assertEquals("Reader", result.getInfo().getTitle());
-        assertEquals("2.0", result.getInfo().getVersion());
+        assertEquals("Static", result.getInfo().getTitle());
+        assertEquals("1.0", result.getInfo().getVersion());
     }
 
     @Test
@@ -347,11 +386,12 @@ class ModelMergerTest {
     void merge_verbatimRefSurvivesACollidingComponentCallback() {
         // callbacks.yaml is a document reference: copying it must not expand it to
         // #/components/callbacks/callbacks.yaml.
-        Callback fromStaticFile = OASFactory.createObject(Callback.class)
+        // The reader model is the lower source, the static file the higher one.
+        Callback fromReader = OASFactory.createObject(Callback.class)
                 .addPathItem("{$request.body#/url}", OASFactory.createObject(PathItem.class)
                         .POST(OASFactory.createObject(Operation.class).operationId("notify")));
-        Callback fromReader = OASFactory.createObject(Callback.class);
-        AbstractExtensibleRef.setVerbatimRef(fromReader, "callbacks.yaml");
+        Callback fromStaticFile = OASFactory.createObject(Callback.class);
+        AbstractExtensibleRef.setVerbatimRef(fromStaticFile, "callbacks.yaml");
 
         OpenAPI result = new ModelMerger().merge(List.of(
                 new StaticFileSource(OASFactory.createObject(OpenAPI.class).components(

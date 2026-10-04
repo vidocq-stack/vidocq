@@ -23,7 +23,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 
 /**
  * Source coming from the static {@code META-INF/openapi.*} file (spec §4.2).
- * Lowest priority in {@link ModelMerger}.
+ * Medium priority in {@link ModelMerger} (above the {@code OASModelReader} model, below annotations).
  */
 public final class StaticFileSource implements ModelSource {
 

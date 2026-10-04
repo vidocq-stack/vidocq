@@ -39,8 +39,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * startup.</p>
  *
  * <p>The BCE itself performs no scanning — it merely tells CDI which classes are
- * candidates. The actual model build pipeline (spec §4.4 — static file → reader →
- * annotation scan → merge → config-apply → filter) runs inside
+ * candidates. The actual model build pipeline (spec "Processing rules" — reader → static
+ * file → annotation scan → merge → config-apply → filter) runs inside
  * {@link io.vidocq.grimm.internal.ModelBuilder} when the model cache is instantiated.</p>
  *
  * <p>Registered as a Java Modules service in {@code module-info.java}:

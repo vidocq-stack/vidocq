@@ -17,10 +17,10 @@ Six steps, executed once when the container activates (`ModelBuilder` in `grimm-
 [mermaid]
 ....
 flowchart LR
-  S1["1. StaticFileReader<br/>META-INF/openapi.{yaml,yml,json}"]
-  S2["2. ModelReaderInvoker<br/>application OASModelReader"]
+  S1["1. ModelReaderInvoker<br/>application OASModelReader"]
+  S2["2. StaticFileReader<br/>META-INF/openapi.{yaml,yml,json}"]
   S3["3. Annotation source<br/>$$GrimmModel fragments + AnnotationScanner"]
-  Merge["4. ModelMerger<br/>annotations > reader > static"]
+  Merge["4. ModelMerger<br/>annotations > static > reader"]
   Cfg["5. ConfigApplier<br/>mp.openapi.servers*, mp.openapi.schema.*"]
   S4["6. FilterInvoker<br/>application OASFilter"]
   Cache["GrimmModelCache<br/>cached OpenAPI"]
@@ -33,10 +33,10 @@ flowchart LR
   S4 --> Cache
 ....
 
+. **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (CDI lookup preferred, no-arg constructor as fallback) and calls `buildModel()`: the starting model.
 . **`StaticFileReader`** — searches for `META-INF/openapi.yaml`, `.yml`, then `.json`. Read through the current classloader. Returns `Optional<OpenAPI>`.
-. **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (CDI lookup preferred, no-arg constructor as fallback) and calls `buildModel()`.
 . **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`).
-. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > reader > static file.
+. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both).
 . **`ConfigApplier`** — applies the configuration overrides on the merged document: `mp.openapi.servers`, `mp.openapi.servers.path.<path>`, `mp.openapi.servers.operation.<operationId>`, and the `mp.openapi.schema.<FQCN>` schema overrides (registered before the scan so that references resolve, applied here).
 . **`FilterInvoker`** — if `mp.openapi.filter` is set, loads the `OASFilter` (CDI lookup or no-arg constructor) and walks it across the tree. The filter is dispatched recursively via a typed visitor that `switch`es on the sealed model types.
 

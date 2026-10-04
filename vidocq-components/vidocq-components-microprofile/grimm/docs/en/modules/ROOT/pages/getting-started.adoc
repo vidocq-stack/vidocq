@@ -184,7 +184,7 @@ Grimm merges up to three sources of truth:
 | `mp.openapi.model.reader=fqn.ModelReader`.
 |===
 
-Priority order is defined by the MP OpenAPI 4.2 spec: static file < `OASModelReader` < annotations — annotations win on conflict. The `OASFilter` then transforms the merged document. See xref:concepts.adoc[Concepts] for the detailed mechanics.
+Priority order is defined by the MP OpenAPI 4.2 spec: `OASModelReader` < static file < annotations — annotations win on conflict. The `OASFilter` then transforms the merged document. See xref:concepts.adoc[Concepts] for the detailed mechanics.
 
 == Next step
 

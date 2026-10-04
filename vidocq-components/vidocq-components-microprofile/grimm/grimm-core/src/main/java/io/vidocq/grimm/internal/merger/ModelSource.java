@@ -24,7 +24,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 /**
  * Sealed hierarchy of model sources fed to {@link ModelMerger} (spec §4.4).
  *
- * <p>Priority order (high → low): annotations &gt; {@code OASModelReader} &gt; static file.
+ * <p>Priority order (high → low): annotations &gt; static file &gt; {@code OASModelReader}.
  * Each concrete subtype carries the {@link OpenAPI} model produced by one of the three
  * pipeline stages.</p>
  */

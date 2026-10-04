@@ -66,11 +66,12 @@ annotated beans at startup, orchestrates the model build pipeline, and exposes t
 JAX-RS resource class.
 
 **Model build pipeline** (executed once at container startup, result cached):
-1. Read static file (`META-INF/openapi.yaml` / `.json` / `.yml`) — `StaticFileReader`
-2. Invoke `OASModelReader` if configured (`mp.openapi.model.reader`) — `ModelReaderInvoker`
+1. Invoke `OASModelReader` if configured (`mp.openapi.model.reader`) — `ModelReaderInvoker`
+2. Read static file (`META-INF/openapi.yaml` / `.json` / `.yml`) — `StaticFileReader`
 3. Annotation source: compile-time `$$GrimmModel` fragments first (ContributionRegistry,
    CG-06), then scan of the remaining classes — `AnnotationScanner` (fallback + oracle)
-4. Merge all three sources — `ModelMerger`
+4. Merge all three sources, priority annotations > static file > reader (spec "Processing
+   rules") — `ModelMerger`
 5. Apply `OASFilter` if configured (`mp.openapi.filter`) — `FilterInvoker`
 6. Cache the final `OpenAPI` document — `GrimmModelCache`
 

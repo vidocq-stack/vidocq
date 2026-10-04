@@ -71,14 +71,14 @@
 
 The OpenAPI document is assembled once at CDI container startup by `grimm-cdi-vauban`:
 
-1. **`StaticFileReader`** — reads `META-INF/openapi.yaml` / `.json` / `.yml` from the
+1. **`ModelReaderInvoker`** — instantiates the class named by `mp.openapi.model.reader` (if
+   set) and calls `buildModel()`: the starting model.
+2. **`StaticFileReader`** — reads `META-INF/openapi.yaml` / `.json` / `.yml` from the
    deployment classpath.
-2. **`ModelReaderInvoker`** — instantiates the class named by `mp.openapi.model.reader` (if
-   set) and calls `buildModel()`.
 3. **`AnnotationScanner`** — scans JAX-RS resource classes + MP OpenAPI annotations
    (respecting `mp.openapi.scan.*` config keys).
 4. **`ModelMerger`** — merges the three `ModelSource` values with spec order/priority:
-   annotations > `OASModelReader` > static file (MP OpenAPI §4.4).
+   annotations > static file > `OASModelReader` (MP OpenAPI "Processing rules").
 5. **`FilterInvoker`** — instantiates the class named by `mp.openapi.filter` (if set) and
    applies each filter method.
 6. **`GrimmModelCache`** — holds the immutable final `OpenAPI` document for the lifetime of
