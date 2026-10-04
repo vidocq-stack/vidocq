@@ -62,7 +62,12 @@ Track reproducible bugs with:
   the store of unknown properties only. A fix must clear (and list) the typed fields too, and
   `OpenApiValueMapper` must then stop serializing `getAll()` with `putIfAbsent`, or the standard
   properties would be written under their Java names. Not covered by the 4.2-RC5 TCK (367/367).
-- **status**: OPEN
+- **status**: FIXED — 2026-10-04, commit e137051. `get`/`set` resolve the standard properties by
+  JSON name through an explicit table (no reflective accessor lookup, so `extensions`, `all`, `ref`
+  or `class` are plain unknown properties); `getAll` lists every non-null property (`$ref` and the
+  extensions included) and `setAll` clears all of them first. `OpenApiValueMapper` no longer writes
+  `getAll()`, a view of the getters it already writes. Covered by `SchemaImplTest` and
+  `OpenApiValueMapperTest`; official TCK still 367/367.
 
 ### BUG-20261004-02 — `@Schema` extensions: scalar-only value parsing, and no extensions on `externalDocs`
 
@@ -82,7 +87,10 @@ Track reproducible bugs with:
 - **hypothesis**: duplicated logic — `SchemaGenerator` should reuse
   `AnnotationModelMappings.parseExtensionValue` and the shared external-documentation mapping
   instead of its own copies. Not covered by the 4.2-RC5 TCK (367/367).
-- **status**: OPEN
+- **status**: FIXED — 2026-10-04, commit 8b75298. `SchemaGenerator` uses
+  `AnnotationModelMappings.applyExtensions` (`@Schema` and `@SchemaProperty`) and
+  `toModelExternalDocs`; its own extension parser is gone. Covered by `SchemaGeneratorTest`;
+  official TCK still 367/367.
 
 ### BUG-20261004-03 — APT-generated model ignores Bean Validation on scalar parameters
 
@@ -102,4 +110,7 @@ Track reproducible bugs with:
   Either apply the same mapping in the processor (from the annotation mirrors) or hand any class
   with Bean Validation on a parameter to the runtime scan (`SkipGeneration`). The processor's
   oracle tests, which compare against the runtime scan, do not cover this case.
-- **status**: OPEN
+- **status**: FIXED — 2026-10-04, commit a6cd5b6. The processor skips a class whose operation
+  parameter carries a `jakarta.validation.constraints.*` or `javax.validation.constraints.*`
+  annotation (matched by name), so the runtime scan documents it, as for the other constructs
+  outside the M1 subset. Covered by `GrimmModelProcessorOracleTest`; official TCK still 367/367.
