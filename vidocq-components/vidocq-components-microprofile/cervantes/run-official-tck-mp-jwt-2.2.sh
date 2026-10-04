@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# run-official-tck-mp-jwt-2.1.sh
+# run-official-tck-mp-jwt-2.2.sh
 #
-# Runs the official MicroProfile JWT 2.1 TCK for Cervantes.
+# Runs the official MicroProfile JWT 2.2 TCK for Cervantes.
 #
 # cervantes-tck is in-reactor behind the `tck` Maven profile (TCK harmonisation):
 # a plain `mvn install` never builds it; this script activates it with
 # `-P"tck,<smoke|tck-official>" -pl cervantes-tck test` from the repo root.
 #
 # Usage:
-#   ./run-official-tck-mp-jwt-2.1.sh             # smoke test (default)
-#   ./run-official-tck-mp-jwt-2.1.sh all          # full TCK suite
-#   ./run-official-tck-mp-jwt-2.1.sh -Dtest=Foo   # targeted test
+#   ./run-official-tck-mp-jwt-2.2.sh             # smoke test (default)
+#   ./run-official-tck-mp-jwt-2.2.sh all          # full TCK suite
+#   ./run-official-tck-mp-jwt-2.2.sh -Dtest=Foo   # targeted test
 #
 # Prerequisites:
 #   - Java 25 + Maven 3.9.16 (sdk env in the cervantes/ directory)
 #   - The cervantes reactor installed locally:
 #       PATH="$HOME/.sdkman/candidates/maven/3.9.16/bin:$PATH" ./mvnw -ntp install -DskipTests
 #   - The TCK artifacts on Maven Central (downloaded automatically):
-#       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1
-#       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1:tests
+#       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2
+#       org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2:tests
 # ---------------------------------------------------------------------------
 set -e
 
@@ -46,7 +46,7 @@ fi
 
 case "${1:-}" in
     all)
-        echo "==> Running FULL MP JWT 2.1 TCK (tck-official profile)..."
+        echo "==> Running FULL MP JWT 2.2 TCK (tck-official profile)..."
         ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,tck-official" -pl cervantes-tck test )
         ;;
     -Dtest=*)

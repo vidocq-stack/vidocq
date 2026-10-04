@@ -1,4 +1,4 @@
-# TCK.md — Cervantes (MicroProfile JWT 2.1)
+# TCK.md — Cervantes (MicroProfile JWT 2.2)
 
 ## Artifact
 
@@ -10,7 +10,7 @@ with forged tokens.
 Official (non-public) artifact to install in the local M2:
 
 ```
-org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1
+org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2
 ```
 
 Detailed installation procedure in `cervantes-tck/README.md` (to be created at milestone M6).
@@ -18,9 +18,9 @@ Detailed installation procedure in `cervantes-tck/README.md` (to be created at m
 ## Launch
 
 ```bash
-./run-official-tck-mp-jwt-2.1.sh            # smoke test
-./run-official-tck-mp-jwt-2.1.sh all        # full suite
-./run-official-tck-mp-jwt-2.1.sh -Dtest=... # targeted test
+./run-official-tck-mp-jwt-2.2.sh            # smoke test
+./run-official-tck-mp-jwt-2.2.sh all        # full suite
+./run-official-tck-mp-jwt-2.2.sh -Dtest=... # targeted test
 ```
 
 > `cervantes-tck` is **in-reactor behind the `tck` Maven profile**: a plain `mvn install`
@@ -32,9 +32,10 @@ Detailed installation procedure in `cervantes-tck/README.md` (to be created at m
 
 | Date | PASS | FAIL | SKIP | Note |
 |------|------|------|------|------|
-| 2026-06-04 | **206** | 0 | 0 | Full official suite — **100% PASS** |
+| 2026-10-04 | **208** | 0 | 0 | MP JWT **2.2** — full official suite, **100% PASS** (+2 `RsaAndEcSignatureAlgorithmTest`; the EJB/JACC/Servlet container tests no longer exist in the 2.2 `tests` jar) |
+| 2026-06-04 | 206 | 0 | 0 | MP JWT 2.1 — full official suite — 100% PASS (history) |
 
-**206/206 — 100% of the official MicroProfile JWT 2.1 TCK passes.**
+**208/208 — 100% of the official MicroProfile JWT 2.2 TCK passes (2026-10-04).**
 
 Any test exclusion will be documented here with its justification (non-portable spec
 interpretation, environment limitation, etc.).

@@ -2,7 +2,7 @@
 :description: @RolesAllowed, typed @Claim, dynamic JWKS, JWE, cookie transport, controlled refresh, anonymous principal, audit.
 
 [.lead]
-This page covers the MicroProfile JWT 2.1 patterns commonly encountered in a JAX-RS API protected by bearer token, and shows how Cervantes expresses them — with no hot reflection, no third-party dependency, no `ThreadLocal`.
+This page covers the MicroProfile JWT 2.2 patterns commonly encountered in a JAX-RS API protected by bearer token, and shows how Cervantes expresses them — with no hot reflection, no third-party dependency, no `ThreadLocal`.
 
 == Securing a resource with `@RolesAllowed`
 
@@ -126,7 +126,7 @@ On a _primitive_ field (`int`, `boolean`), Vauban had a long-standing bug (VAU-I
 
 == Cookie transport instead of `Authorization`
 
-MP JWT 2.1 §9.2.3 allows a cookie transport for apps that dislike `Authorization`.
+MP JWT 2.2 §9.2.3 allows a cookie transport for apps that dislike `Authorization`.
 
 [source,properties]
 ----

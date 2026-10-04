@@ -82,7 +82,7 @@ mp.jwt.verify.audiences=orders-api
 mp.jwt.verify.publickey.algorithm=RS256
 ----
 
-All these keys are defined by MP JWT 2.1 §9. See xref:reference.adoc[Reference] for the exhaustive list.
+All these keys are defined by MP JWT 2.2 §9. See xref:reference.adoc[Reference] for the exhaustive list.
 
 == Annotate the JAX-RS resource
 

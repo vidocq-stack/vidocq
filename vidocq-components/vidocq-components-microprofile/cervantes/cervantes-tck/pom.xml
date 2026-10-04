@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    cervantes-tck — official MicroProfile JWT 2.1 TCK runner, in-reactor behind the
+    cervantes-tck — official MicroProfile JWT 2.2 TCK runner, in-reactor behind the
     `tck` Maven profile of cervantes-parent (TCK harmonisation, vidocq-runtime-tck-*
     pattern). Historically this module was a standalone Model 4.0.0 POM without
     <parent> because ShrinkWrap Maven Resolver 3.3 could not parse Model 4.1.0 POMs;
     that constraint is obsolete since the workspace moved to Maven 3.9.16 / Model 4.0.0.
 
     Invocation:
-      ./run-official-tck-mp-jwt-2.1.sh [all|-Dtest=...]        (wrapper script)
+      ./run-official-tck-mp-jwt-2.2.sh [all|-Dtest=...]        (wrapper script)
       ./mvnw -P"tck,smoke"        -pl cervantes-tck test        (smoke test)
       ./mvnw -P"tck,tck-official" -pl cervantes-tck test        (full official suite)
 -->
@@ -27,13 +27,13 @@
     <packaging>jar</packaging>
 
     <name>Cervantes :: TCK Runner</name>
-    <description>Harness de conformance MicroProfile JWT 2.1 — TCK officiel TestNG/Arquillian</description>
+    <description>Harness de conformance MicroProfile JWT 2.2 — TCK officiel TestNG/Arquillian</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
         <cervantes.version>0.4.0-SNAPSHOT</cervantes.version>
-        <microprofile.jwt.version>2.1</microprofile.jwt.version>
+        <microprofile.jwt.version>2.2</microprofile.jwt.version>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
@@ -213,7 +213,7 @@
     <profiles>
         <!--
             Profil par défaut : smoke test JUnit — vérifie que les modules Cervantes
-            et la spec MP JWT 2.1 sont bien sur le classpath.
+            et la spec MP JWT 2.2 sont bien sur le classpath.
         -->
         <profile>
             <id>smoke</id>
@@ -266,15 +266,9 @@
                                 <include>**/*Test.class</include>
                                 <include>**/*Tests.class</include>
                             </includes>
-                            <excludes>
-                                <!-- EJB optional tests — not applicable -->
-                                <exclude>org/eclipse/microprofile/jwt/tck/container/ejb/**</exclude>
-                                <!-- JACC optional tests — not applicable -->
-                                <exclude>org/eclipse/microprofile/jwt/tck/container/jacc/**</exclude>
-                                <!-- Servlet optional tests — Chappe is not a Jakarta Servlet container -->
-                                <exclude>org/eclipse/microprofile/jwt/tck/container/servlet/**</exclude>
-                            </excludes>
-                            <!-- TestNG group exclusions:
+                            <!-- MP JWT 2.2 dropped the EJB/JACC/Servlet container tests, so no
+                                 package exclusions are needed any more.
+                                 TestNG group exclusions:
                                  ee-security-optional: group-to-role mapping via EE Security API, not implemented.
                             -->
                             <excludedGroups>ee-security-optional</excludedGroups>

@@ -1,11 +1,11 @@
-# ROADMAP — Cervantes (MicroProfile JWT 2.1)
+# ROADMAP — Cervantes (MicroProfile JWT 2.2)
 
 Source of truth for milestones and TCK score. TDD at each step (Red → Green → Refactor).
 
 ## Milestones
 
 - [x] **M0 — Skeleton & green build.** Repo, parent pom (Model 4.1.0, `vidocq-parent:1.0.0`,
-  `<subprojects>`), `cervantes-mp-jwt-api` (repackaging spec MP JWT 2.1), modules
+  `<subprojects>`), `cervantes-mp-jwt-api` (repackaging spec MP JWT 2.2), modules
   `api/core/cdi-vauban/cassini/bench/examples`, CI (`.forgejo/workflows`), docs, `.sdkmanrc`.
   Criterion: `./mvnw -ntp install -DskipTests` green.
 - [x] **M1 — Core, signed tokens.** base64url decoding + JSON parsing (Champollion),
@@ -58,7 +58,7 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   (Model 4.0.0 standalone, heisenberg-tck template), `CervantesJwtDeployableContainer` Arquillian
   (`Vauban` CDI + Cassini HTTP per deployment: ShrinkWrap archive → bean classes, archive MP-Config →
   system props, rewrite `*.location` `http://localhost:8080` → real ephemeral URL after server
-  startup), `run-official-tck-mp-jwt-2.1.sh`. **206 tests, 0 failure, 0 skip**
+  startup), `run-official-tck-mp-jwt-2.1.sh` (renamed to 2.2 on the MP 7.2 bump). **206 tests, 0 failure, 0 skip**
   (verified on a clean run). Documented exclusions (not applicable to the Core+JWT profile): *servlet*
   container tests (`…/tck/container/servlet/**`) and TestNG group `ee-security-optional`.
   - Delivered prerequisites: **cassini** patch `@Context SecurityContext` (merged on main, REST TCK 4.0
@@ -82,6 +82,7 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
 | Date | Suite | PASS | FAIL | SKIP | Note |
 |------|-------|------|------|------|------|
 | 2026-05-26 | MP JWT 2.1 | 206 | 0 | 0 | 100 % ; exclusions : container servlet + group `ee-security-optional` |
+| 2026-10-04 | MP JWT 2.2 | 208 | 0 | 0 | 100 % ; +2 tests (`RsaAndEcSignatureAlgorithmTest`) ; EJB/JACC/Servlet container tests removed upstream, only group `ee-security-optional` still excluded |
 
 ## Actioned decisions
 
@@ -114,5 +115,5 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   out-of-reactor decision (M6, standalone Model 4.0.0 POM without `<parent>`). The original
   ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 constraint is obsolete since the workspace migrated
   to Maven 3.9.16 / Model 4.0.0. A plain `mvn install` still skips the runner; activation via
-  `run-official-tck-mp-jwt-2.1.sh` or `./mvnw -P"tck,smoke|tck-official" -pl cervantes-tck test`.
+  `run-official-tck-mp-jwt-2.2.sh` or `./mvnw -P"tck,smoke|tck-official" -pl cervantes-tck test`.
   Verified: reactor build green without the profile, smoke PASS, full suite 206/206 PASS.

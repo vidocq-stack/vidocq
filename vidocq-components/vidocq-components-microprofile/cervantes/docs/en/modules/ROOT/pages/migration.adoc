@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Cervantes is at `{project-version}`. The MicroProfile JWT 2.1 spec is fully covered (TCK 206 / 206, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a staged migration.
+Cervantes is at `{project-version}`. The MicroProfile JWT 2.2 spec is fully covered (TCK 208 / 208, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a staged migration.
 ====
 
 [.lead]
@@ -31,7 +31,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 | `mp.jwt.verify.*` keys
 | Same keys
-| `publickey`, `publickey.location`, `issuer`, `audiences`, `publickey.algorithm`, `token.age` — identical. `clock.skew` is *not* read by Cervantes: the tolerance is fixed at 60 seconds.
+| `publickey`, `publickey.location`, `issuer`, `audiences`, `publickey.algorithm`, `token.age` — identical (as of MP JWT 2.2, an unset `publickey.algorithm` accepts both RS256 and ES256 instead of defaulting to RS256). `clock.skew` is *not* read by Cervantes: the tolerance is fixed at 60 seconds.
 
 | `mp.jwt.token.*` keys
 | Same keys
@@ -39,7 +39,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 | `mp.jwt.decrypt.key*` keys
 | Same keys
-| `RSA-OAEP` + `A256GCM` supported. `A128CBC-HS256` not yet — not covered by the 2.1 TCK.
+| `RSA-OAEP` + `A256GCM` supported. `A128CBC-HS256` not yet — not covered by the 2.2 TCK.
 
 | Transitive dependencies: jose4j, Jackson, …
 | None (`java.security` + Champollion)
@@ -47,7 +47,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 | `smallrye.jwt.path.sub`, `…path.groups`, `…claims.groups`
 | No equivalent (standard claims only)
-| If the issuer does not place `groups` in the standard location, configure a filter on the issuer side or an `OASModelReader` on the client side. Out of scope for standard MP JWT 2.1.
+| If the issuer does not place `groups` in the standard location, configure a filter on the issuer side or an `OASModelReader` on the client side. Out of scope for standard MP JWT 2.2.
 
 | `smallrye.jwt.verify.aud` (alias)
 | `mp.jwt.verify.audiences` (standard key)
@@ -90,7 +90,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 . Migrate `smallrye.jwt.*` properties to their standard `mp.jwt.*` equivalents.
 . Verify that the expected claims really exist on the tokens: `iss`, `aud`, `exp`, `groups`. No exotic path-based remapping.
 . Run unit tests: `./mvnw test`.
-. Run the TCK to validate conformance: `./run-official-tck-mp-jwt-2.1.sh` (see xref:tck.adoc[TCK]).
+. Run the TCK to validate conformance: `./run-official-tck-mp-jwt-2.2.sh` (see xref:tck.adoc[TCK]).
 . Verify in a staging environment: a valid token passes through with 200, an expired one with 401, a missing role with 403.
 . Measure validation latency and compare (see xref:reference.adoc[Reference] and `BENCH.md`). Cervantes is ~1.5× slower than SmallRye on the RS256 hot-path — a deliberate trade-off against ~3 MB of vanished transitive dependencies.
 

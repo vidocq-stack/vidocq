@@ -1,6 +1,6 @@
-# Cervantes — MicroProfile JWT 2.1
+# Cervantes — MicroProfile JWT 2.2
 
-**MicroProfile JWT 2.1** ("JWT RBAC for MicroProfile") implementation for the
+**MicroProfile JWT 2.2** ("JWT RBAC for MicroProfile") implementation for the
 [Vidocq](https://codefloe.com/Vidocq) ecosystem, with **zero implementation dependencies**:
 signature verification via `java.security`, JSON parsing via [Champollion](https://codefloe.com/Vidocq/champollion)
 (JSON-P), configuration via [Ravel](https://codefloe.com/Vidocq/ravel) (MP Config), CDI injection
@@ -33,14 +33,14 @@ via [Vauban](https://codefloe.com/Vidocq/vauban), JAX-RS security via
 sdk env
 ./mvnw -ntp install -DskipTests   # full build
 ./mvnw test                        # unit tests
-./run-official-tck-mp-jwt-2.1.sh   # official TCK (non-public artifact must be installed — see cervantes-tck/README.md)
+./run-official-tck-mp-jwt-2.2.sh   # official TCK (non-public artifact must be installed — see cervantes-tck/README.md)
 ```
 
 ## Modules
 
 | Module | Role |
 |--------|------|
-| `cervantes-mp-jwt-api` | MP JWT 2.1 spec repackaged as a named module (jlink-compatible) |
+| `cervantes-mp-jwt-api` | MP JWT 2.2 spec repackaged as a named module (jlink-compatible) |
 | `cervantes-api` | Stable public SPI + spec re-export |
 | `cervantes-core` | Pure validation engine (signature, claims, keys) — no HTTP, no CDI |
 | `cervantes-cdi-vauban` | `JsonWebToken` producer, `@Claim` injection (Vauban BCE) |
@@ -51,6 +51,6 @@ sdk env
 
 ## Status
 
-**MicroProfile JWT 2.1 TCK: 206/206 PASS (2026-06-04).** See [`TCK.md`](TCK.md).
+**MicroProfile JWT 2.2 TCK: 208/208 PASS (2026-10-04).** See [`TCK.md`](TCK.md).
 
 Under active development (milestones M0–M8 in [`ROADMAP.md`](ROADMAP.md)). License: Apache 2.0.

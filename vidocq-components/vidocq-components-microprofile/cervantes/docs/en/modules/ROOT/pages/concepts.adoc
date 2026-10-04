@@ -2,7 +2,7 @@
 :description: JSON Web Token (RFC 7519), standard and MP claims, JOSE signature (RFC 7515), JWK Set (RFC 7517), JWE (RFC 7516), trust model, key rotation.
 
 [.lead]
-Cervantes implements the MicroProfile JWT 2.1 spec, which itself builds on the IETF JOSE suite: JWT (RFC 7519), JWS (RFC 7515), JWK (RFC 7517), JWE (RFC 7516), JWA (RFC 7518). This page summarises the vocabulary — _claims_, _signature_, _kid_, _algorithm_, _JWK Set_, _audience_ — and the trust mechanism that enables _offline_ verification (no callback to the issuer).
+Cervantes implements the MicroProfile JWT 2.2 spec, which itself builds on the IETF JOSE suite: JWT (RFC 7519), JWS (RFC 7515), JWK (RFC 7517), JWE (RFC 7516), JWA (RFC 7518). This page summarises the vocabulary — _claims_, _signature_, _kid_, _algorithm_, _JWK Set_, _audience_ — and the trust mechanism that enables _offline_ verification (no callback to the issuer).
 
 == The JWT — three-part structure
 
@@ -52,7 +52,7 @@ An even more opaque variant: JWE (RFC 7516) with _five_ segments — encrypted h
 | JWT ID — unique identifier of the token (useful for application-level blocklists).
 |===
 
-== MicroProfile JWT 2.1 claims
+== MicroProfile JWT 2.2 claims
 
 [cols="1,3"]
 |===
@@ -75,7 +75,7 @@ The interface `org.eclipse.microprofile.jwt.JsonWebToken` exposes all these clai
 
 == JOSE signatures — supported algorithms
 
-Cervantes supports the families covered by MP JWT 2.1 and by the JDK, with no external dependency.
+Cervantes supports the families covered by MP JWT 2.2 and by the JDK, with no external dependency.
 
 [cols="1,2,3"]
 |===
@@ -94,7 +94,7 @@ Cervantes supports the families covered by MP JWT 2.1 and by the JDK, with no ex
 | `SignatureAlgorithm.fromJoseName` resolves only the six RS/ES values above; any other `alg` — including `none` — fails validation with `unsupported or missing 'alg' header`.
 |===
 
-`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. Defence in depth against `alg=none` downgrade — and because the HMAC family is not implemented at all, the classic RS256→HS256 key-confusion attack is structurally impossible.
+`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. When the property is unset, both RS256 and ES256 are accepted (MP JWT 2.2), and a JWK Set mixing RSA and EC keys is resolved by `kid`. Defence in depth against `alg=none` downgrade — and because the HMAC family is not implemented at all, the classic RS256→HS256 key-confusion attack is structurally impossible.
 
 == JWK Set — distributing public keys
 
@@ -137,7 +137,7 @@ No distributed coordination is required: rotation is carried by the JWK Set and 
 
 == JWE — encrypted tokens (optional)
 
-MP JWT 2.1 §4 allows the carried token to be encrypted (JWE) rather than only signed (JWS). Cervantes supports this:
+MP JWT 2.2 §4 allows the carried token to be encrypted (JWE) rather than only signed (JWS). Cervantes supports this:
 
 * **Key wrapping**: `RSA-OAEP`, `RSA-OAEP-256`. Recipient's private key (`mp.jwt.decrypt.key` / `.location`).
 * **Content encryption**: `A256GCM` (the spec default). `A128CBC-HS256` is not yet supported — to be added if required.

@@ -1,11 +1,11 @@
 = Cervantes
-:description: MicroProfile JWT 2.1 implementation — signed-bearer-token RBAC for the Vidocq ecosystem — zero implementation dependency, strict Java Modules, virtual threads, Java 25.
+:description: MicroProfile JWT 2.2 implementation — signed-bearer-token RBAC for the Vidocq ecosystem — zero implementation dependency, strict Java Modules, virtual threads, Java 25.
 
 [.text-center]
 image::cervantes-logo.png[Cervantes,300,role=module-logo]
 
 [.lead]
-Cervantes is the MicroProfile JWT 2.1 implementation of the Vidocq ecosystem. It validates signed (and optionally encrypted) JWT bearer tokens using `java.security` exclusively, parses JSON through xref:champollion::index.adoc[Champollion], reads its configuration through xref:ravel::index.adoc[Ravel], exposes the `JsonWebToken` principal in CDI through xref:vauban::index.adoc[Vauban], and enforces `@RolesAllowed` on JAX-RS endpoints through xref:cassini::index.adoc[Cassini]. Goal: 100 % conformance to the MicroProfile JWT 2.1 TCK (achieved, *206 / 206* at M6), zero third-party crypto or JWT library, strict Java Modules, jlink-ready.
+Cervantes is the MicroProfile JWT 2.2 implementation of the Vidocq ecosystem. It validates signed (and optionally encrypted) JWT bearer tokens using `java.security` exclusively, parses JSON through xref:champollion::index.adoc[Champollion], reads its configuration through xref:ravel::index.adoc[Ravel], exposes the `JsonWebToken` principal in CDI through xref:vauban::index.adoc[Vauban], and enforces `@RolesAllowed` on JAX-RS endpoints through xref:cassini::index.adoc[Cassini]. Goal: 100 % conformance to the MicroProfile JWT 2.2 TCK (achieved, *208 / 208* on 2.2; 206 / 206 at M6 on 2.1), zero third-party crypto or JWT library, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -50,10 +50,10 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
 | Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.jaxrs.*` (JAX-RS integration)
-| Runtime dependencies | `microprofile-jwt-auth-api` 2.1, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Runtime dependencies | `microprofile-jwt-auth-api` 2.2, `jakarta.json-api` (via Champollion), `jakarta.enterprise.cdi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | Crypto | `java.security` (`Signature`, `KeyFactory`), `javax.crypto` (JWE) — *no* third-party library
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback
-| MP JWT 2.1 TCK | ✅ *206 / 206* (100 %) — see xref:tck.adoc[detailed status]
+| MP JWT 2.2 TCK | ✅ *208 / 208* (100 %) — see xref:tck.adoc[detailed status]
 |===
 
 == Three identifying traits
@@ -103,7 +103,7 @@ Cervantes consumes the ecosystem from the bottom up: xref:chappe::index.adoc[Cha
 * xref:usage.adoc[Usage patterns] — `@RolesAllowed`, `@Claim`, JWKS, JWE, cookies, refresh.
 * xref:reference.adoc[Reference] — artefacts, annotations, `mp.jwt.*` keys, algorithms.
 * xref:internals.adoc[Internals] — pure engine, auth filter, JWKS cache, threading.
-* xref:tck.adoc[TCK] — execution, status *206 / 206*, exclusions.
+* xref:tck.adoc[TCK] — execution, status *208 / 208*, exclusions.
 * xref:migration.adoc[Migration] — from SmallRye JWT.
 
 Next: xref:getting-started.adoc[Getting started].

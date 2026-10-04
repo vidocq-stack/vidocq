@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Cervantes</name>
-    <description>Implémentation MicroProfile JWT 2.1 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, Java Modules strict, virtual threads, CDI via Vauban</description>
+    <description>Implémentation MicroProfile JWT 2.2 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, Java Modules strict, virtual threads, CDI via Vauban</description>
     <url>https://codefloe.com/Vidocq/cervantes</url>
 
     <!--
@@ -54,12 +54,12 @@
 
     <properties>
         <!--
-            MicroProfile JWT 2.1 API. L'artefact officiel n'a NI module-info NI
+            MicroProfile JWT 2.2 API. L'artefact officiel n'a NI module-info NI
             Automatic-Module-Name : il est repackagé en module nommé explicite par
             cervantes-mp-jwt-api (nom de module : org.eclipse.microprofile.jwt).
             Dépendances compile de la spec : jakarta.json-api + jakarta.enterprise.cdi-api.
         -->
-        <microprofile.jwt.version>2.1</microprofile.jwt.version>
+        <microprofile.jwt.version>2.2</microprofile.jwt.version>
 
         <!-- Jakarta EE 11 -->
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
@@ -90,7 +90,7 @@
             module never used — it named CassiniTestHarness in one Javadoc comment and nothing else.
 
             Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
-            official MicroProfile JWT 2.1 TCK runs 206 tests in 13 s, all green, every artefact
+            official MicroProfile JWT 2.1 TCK ran 206 tests in 13 s, all green, every artefact
             resolved from Maven Central.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl cervantes-tck test</ci.tck.command>
@@ -103,7 +103,7 @@
         Resolver 3.3 unable to parse Model 4.1.0 POMs — is obsolete since the workspace
         migrated to Maven 3.9.16 / Model 4.0.0. A regular `mvn install` still skips it;
         activate it with `./mvnw -Ptck -pl cervantes-tck test` or via
-        run-official-tck-mp-jwt-2.1.sh.
+        run-official-tck-mp-jwt-2.2.sh.
     -->
     <modules>
         <module>cervantes-mp-jwt-api</module>
@@ -117,7 +117,7 @@
 
     <profiles>
         <!--
-            `tck` profile: pulls the official MP JWT 2.1 TCK runner into the reactor.
+            `tck` profile: pulls the official MP JWT 2.2 TCK runner into the reactor.
             Not active by default so a plain build never downloads nor runs the TCK.
         -->
         <profile>
@@ -130,7 +130,7 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Spec MP JWT 2.1 — repackagée (named module) consommée par les modules Cervantes -->
+            <!-- Spec MP JWT 2.2 — repackagée (named module) consommée par les modules Cervantes -->
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>

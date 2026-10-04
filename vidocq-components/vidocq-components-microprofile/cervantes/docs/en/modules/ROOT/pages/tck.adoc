@@ -1,8 +1,8 @@
-= MicroProfile JWT 2.1 TCK
-:description: 206/206 status, runner execution, in-reactor architecture behind the tck profile, documented exclusions, gaps resolved during the race to 100 %.
+= MicroProfile JWT 2.2 TCK
+:description: 208/208 status, runner execution, in-reactor architecture behind the tck profile, the documented exclusion, gaps resolved during the race to 100 %.
 
 [.lead]
-The official MicroProfile JWT 2.1 TCK verifies that an implementation correctly accepts, rejects and exposes a wide range of forged tokens against an Arquillian reference application — inline keys, JWKS, JWE, standard claims, MP claims, `Authorization` and cookie transport, key rotation, falsified signatures, `exp` / `nbf` / `iat` at the boundaries. Cervantes passes it at **206 / 206** on the 2.1 release (May 2026, milestone M6).
+The official MicroProfile JWT 2.2 TCK verifies that an implementation correctly accepts, rejects and exposes a wide range of forged tokens against an Arquillian reference application — inline keys, JWKS, JWE, standard claims, MP claims, `Authorization` and cookie transport, key rotation, falsified signatures, `exp` / `nbf` / `iat` at the boundaries. Cervantes passes it at **208 / 208** on the 2.2 release (October 2026, MicroProfile 7.2). The 2.1 release was passed at 206 / 206 (May 2026, milestone M6); the 2.2 suite adds `RsaAndEcSignatureAlgorithmTest` (2 tests: RS256 and ES256 tokens verified against one mixed RSA+EC JWKS) and drops the EJB, JACC and Servlet container tests.
 
 == Status
 
@@ -11,10 +11,10 @@ The official MicroProfile JWT 2.1 TCK verifies that an implementation correctly 
 | Metric | Value
 
 | Tests executed
-| 206
+| 208
 
 | Passed
-| 206 ✅
+| 208 ✅
 
 | Failed
 | 0
@@ -30,7 +30,7 @@ Any future regression must be logged in the repository's `TCK.md` with: test nam
 
 == Prerequisites
 
-The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` artefact (and its `tests` classifier) is now available on Maven Central — it is downloaded automatically. The runner also installs `cassini-tck` into the local M2 to provide `CassiniTestHarness`.
+The `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` artefact (and its `tests` classifier) is now available on Maven Central — it is downloaded automatically. The runner also installs `cassini-tck` into the local M2 to provide `CassiniTestHarness`.
 
 [source,bash]
 ----
@@ -40,18 +40,18 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 == Runner execution
 
-The `run-official-tck-mp-jwt-2.1.sh` script at the repository root drives every variant.
+The `run-official-tck-mp-jwt-2.2.sh` script at the repository root drives every variant.
 
 [source,bash]
 ----
 # Smoke — single fast test to validate the installation
-./run-official-tck-mp-jwt-2.1.sh
+./run-official-tck-mp-jwt-2.2.sh
 
-# Full suite — equivalent to the official 206-test TCK
-./run-official-tck-mp-jwt-2.1.sh all
+# Full suite — equivalent to the official 208-test TCK
+./run-official-tck-mp-jwt-2.2.sh all
 
 # Targeted test via -Dtest=
-./run-official-tck-mp-jwt-2.1.sh -Dtest=PublicKeyAsPEMTest
+./run-official-tck-mp-jwt-2.2.sh -Dtest=PublicKeyAsPEMTest
 ----
 
 The runner uses Arquillian. The Surefire report lands in `cervantes-tck/target/surefire-reports/`.
@@ -72,7 +72,7 @@ Stack assembled by the runner:
 | Layer | Component
 
 | Spec
-| `microprofile-jwt-auth-api` 2.1, `microprofile-jwt-auth-tck` 2.1 (+ `tests` classifier)
+| `microprofile-jwt-auth-api` 2.2, `microprofile-jwt-auth-tck` 2.2 (+ `tests` classifier)
 
 | MP JWT implementation
 | `cervantes-mp-jwt-api`, `cervantes-api`, `cervantes-core`, `cervantes-cdi-vauban`, `cervantes-jaxrs`
@@ -92,26 +92,19 @@ Stack assembled by the runner:
 
 == Documented exclusions
 
-Four exclusions, not applicable to the Core + JWT profile targeted by Cervantes:
+One exclusion, not applicable to the Core + JWT profile targeted by Cervantes:
 
 [cols="2,3"]
 |===
 | Exclusion | Justification
 
-| `<exclude>org/eclipse/microprofile/jwt/tck/container/ejb/**</exclude>`
-| EJB optional tests — not applicable (no EJB container in the Vidocq ecosystem).
-
-| `<exclude>org/eclipse/microprofile/jwt/tck/container/jacc/**</exclude>`
-| JACC optional tests — not applicable.
-
-| `<exclude>org/eclipse/microprofile/jwt/tck/container/servlet/**</exclude>`
-| Servlet optional tests — Chappe is not a Jakarta Servlet container. Cervantes targets the _Core_ (MicroProfile) profile; the Servlet role is filled by xref:foy::index.adoc[Foy], out of scope for this MP JWT implementation.
-
 | `<excludedGroups>ee-security-optional</excludedGroups>`
-| TestNG group for group-to-role mapping via the Jakarta EE Security API — marked _optional_ by the spec, not required for MP JWT 2.1 conformance, and not implemented.
+| TestNG group for group-to-role mapping via the Jakarta EE Security API — marked _optional_ by the spec, not required for MP JWT 2.2 conformance, and not implemented.
 |===
 
-The exclusions are declared in the Surefire configuration of `cervantes-tck/pom.xml` (`<excludes>` + `<excludedGroups>`). Any future exclusion must be tracked in `TCK.md` with its justification.
+The MP JWT 2.2 `tests` jar no longer ships the EJB, JACC and Servlet container tests. The 2.1 runner excluded those three packages by path, and the exclusions were removed from `cervantes-tck/pom.xml` with the bump to 2.2.
+
+The exclusion is declared in the Surefire configuration of `cervantes-tck/pom.xml` (`<excludedGroups>`). Any future exclusion must be tracked in `TCK.md` with its justification.
 
 == Gaps resolved during the race to 100 %
 
@@ -148,14 +141,14 @@ The TCK surfaced several gaps between the spec and the initial implementation; e
 
 == Prerequisites delivered upstream
 
-Two external fixes were necessary to reach 206/206:
+Two external fixes were necessary to reach 206/206 on the 2.1 TCK (still part of the 2.2 score):
 
 * **cassini** — `@Context SecurityContext` patch injected _into a resource_ to reflect the JWT from `JwtAuthenticationFilter`. Merged on Cassini main, REST TCK 4.0 (2535 tests) preserved.
 * **vauban** — VAU-INJ-PRIM fix: `TypeMapper` was exposing a primitive injection point (`boolean`) as `ClassType[name=boolean]` instead of `PrimitiveType`, silently breaking `@Claim boolean` injection. Fix + regression test `PrimitiveQualifiedInjectionTest`. Merged on Vauban main.
 
 == Quality contract
 
-Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-jaxrs` must preserve the 206 / 206 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-jaxrs` must preserve the 208 / 208 score before merge. A TCK regression is a CI blocker: the PR does not pass.
 
 == Further reading
 

@@ -13,10 +13,10 @@
     <artifactId>cervantes-mp-jwt-api</artifactId>
     <name>Cervantes :: MicroProfile JWT API (modularisé)</name>
     <description>
-        Re-package de org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1 avec un
+        Re-package de org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2 avec un
         module-info.class explicite (nom : org.eclipse.microprofile.jwt). L'API officielle ne
         fournit ni module-info ni Automatic-Module-Name, ce qui empêche son usage avec jlink.
-        Cet artefact est l'unique source de la spec MP JWT 2.1 consommée par les modules
+        Cet artefact est l'unique source de la spec MP JWT 2.2 consommée par les modules
         Cervantes ; le TCK officiel (hors reactor) continue d'utiliser l'API d'origine.
     </description>
 

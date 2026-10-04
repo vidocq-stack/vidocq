@@ -3,14 +3,14 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > Miguel de Cervantes wrote *Don Quixote*, a hidalgo who *proclaims* himself a knight and demands
-> the world accept his titles as true. The Cervantes project implements **MicroProfile JWT 2.1**:
+> the world accept his titles as true. The Cervantes project implements **MicroProfile JWT 2.2**:
 > it receives identity claims asserted by a token bearer and, unlike the windmills of La Mancha,
 > actually verifies them — signature, issuer, audience, expiration — before granting any role.
 
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
-- The official TCK `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.1` must be installed
+- The official TCK `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` must be installed
   in the local M2 (non-public artifact — see `cervantes-tck/README.md`)
 
 ## Essential Commands
@@ -26,9 +26,9 @@ sdk env
 ./mvnw test
 
 # TCK — smoke test / full suite / targeted test
-./run-official-tck-mp-jwt-2.1.sh
-./run-official-tck-mp-jwt-2.1.sh all
-./run-official-tck-mp-jwt-2.1.sh -Dtest=TestName
+./run-official-tck-mp-jwt-2.2.sh
+./run-official-tck-mp-jwt-2.2.sh all
+./run-official-tck-mp-jwt-2.2.sh -Dtest=TestName
 ```
 
 > `cervantes-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation,
@@ -40,12 +40,12 @@ sdk env
 
 ## Architecture
 
-Cervantes is a **MicroProfile JWT 2.1** implementation with zero implementation dependencies:
+Cervantes is a **MicroProfile JWT 2.2** implementation with zero implementation dependencies:
 crypto via `java.security`, JSON via Champollion (JSON-P), config via Ravel (MP Config), CDI via
 Vauban, JAX-RS security via Cassini.
 
 ```
-cervantes-mp-jwt-api   ← MP JWT 2.1 spec repackaged as named module (org.eclipse.microprofile.jwt)
+cervantes-mp-jwt-api   ← MP JWT 2.2 spec repackaged as named module (org.eclipse.microprofile.jwt)
 cervantes-api          ← stable public SPI (JwtValidator, KeyResolver, TokenHolder, JwtConfig)
 cervantes-core         ← pure engine: JWT parsing, signature verification (RS/ES 256/384/512),
                          claim validation (iss/aud/exp/nbf/iat + clock-skew), key loading (PEM, JWKS).
@@ -75,7 +75,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 4. **No runtime reflection / no dynamic proxy**: `@Claim` injection and `@RolesAllowed` enforcement
    via BCE Vauban + `MethodHandle`, no `setAccessible(true)` in production.
 5. **`cervantes-tck/pom.xml` stays at Model 4.0.0**, outside `<subprojects>`.
-6. **TCK 100% PASS is a hard contract** — **206/206 PASS (2026-06-04)**. Any structural change must preserve this score.
+6. **TCK 100% PASS is a hard contract** — **208/208 PASS (2026-10-04)**. Any structural change must preserve this score.
 
 ## Conventions
 
@@ -92,7 +92,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 ## TDD Methodology
 
 - **Red → Green → Refactor** — no production line without prior test.
-- Cite the MicroProfile JWT 2.1 spec section (and RFC 7515/7519/7517) in test Javadoc.
+- Cite the MicroProfile JWT 2.2 spec section (and RFC 7515/7519/7517) in test Javadoc.
 - No Mockito — manual doubles, key pairs generated on the fly (`KeyPairGenerator`).
 - CDI integration tests via embedded Vauban (without Arquillian) in `cervantes-cdi-vauban`.
 
@@ -101,13 +101,13 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 - `java-modules-guardian` — after any `module-info.java` modification or package addition
 - `virtual-threads-reviewer` — for JWKS fetch (HttpClient + cache) and auth filter
 - `dependency-gatekeeper` — before any dependency addition (zero-dep philosophy)
-- `tck-runner` — to diagnose MP JWT 2.1 TCK failures
+- `tck-runner` — to diagnose MP JWT 2.2 TCK failures
 - `classfile-codegen` — if `@Claim` injection requires static generation
 
 ## Allowed Spec Dependencies
 
 ```
-org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1   (repackaged via cervantes-mp-jwt-api)
+org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2   (repackaged via cervantes-mp-jwt-api)
 jakarta.json (via io.vidocq.champollion:champollion-api)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1            (provided, cdi-vauban)
 jakarta.ws.rs (via io.vidocq.cassini:cassini-api)            (provided, cassini)
