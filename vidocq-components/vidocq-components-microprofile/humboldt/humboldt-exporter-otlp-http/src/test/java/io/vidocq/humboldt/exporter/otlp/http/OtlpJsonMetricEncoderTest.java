@@ -88,7 +88,8 @@ class OtlpJsonMetricEncoderTest {
     void encodes_a_synchronous_long_gauge_as_a_gauge() {
         String json = encode(InstrumentType.GAUGE, false, new LongPointData(1L, 2L, Attributes.empty(), 42L));
 
-        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asInt\":\"42\"}]}}"),
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{"
+                        + POINT_TIMES + ",\"asInt\":\"42\"}]}}"),
                 json);
     }
 
@@ -96,7 +97,8 @@ class OtlpJsonMetricEncoderTest {
     void encodes_a_synchronous_double_gauge_as_a_gauge() {
         String json = encode(InstrumentType.GAUGE, false, new DoublePointData(1L, 2L, Attributes.empty(), 0.75));
 
-        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":0.75}]}}"),
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{"
+                        + POINT_TIMES + ",\"asDouble\":0.75}]}}"),
                 json);
     }
 
@@ -105,7 +107,8 @@ class OtlpJsonMetricEncoderTest {
         String json = encode(InstrumentType.OBSERVABLE_GAUGE, false,
                 new DoublePointData(1L, 2L, Attributes.empty(), 21.5));
 
-        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":21.5}]}}"),
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{"
+                        + POINT_TIMES + ",\"asDouble\":21.5}]}}"),
                 json);
     }
 

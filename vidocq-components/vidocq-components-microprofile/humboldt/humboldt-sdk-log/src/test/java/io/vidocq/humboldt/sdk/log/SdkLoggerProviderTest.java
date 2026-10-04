@@ -262,7 +262,10 @@ class SdkLoggerProviderTest {
                 .build()) {
             p.get("x").logRecordBuilder().setBody("plain").emit();
             p.get("x").logRecordBuilder().emit();
-            p.get("x").logRecordBuilder().setBody(Value.of(KeyValue.of("k", Value.of("v")))).setBody("last wins").emit();
+            p.get("x").logRecordBuilder()
+                    .setBody(Value.of(KeyValue.of("k", Value.of("v"))))
+                    .setBody("last wins")
+                    .emit();
         }
         List<LogRecordData> records = exporter.getCollected();
         assertEquals(Value.of("plain"), records.get(0).bodyValue());
