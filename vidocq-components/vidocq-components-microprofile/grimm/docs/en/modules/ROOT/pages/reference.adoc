@@ -32,7 +32,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 
 | `io.vidocq.grimm`
 | `grimm-tck`
-| Official MP OpenAPI 4.1 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
+| Official MP OpenAPI 4.2 TCK runner — out of reactor (Model 4.0.0). Do not declare as an application dependency.
 |===
 
 Every artefact is at `{project-version}`.

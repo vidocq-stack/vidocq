@@ -1,10 +1,10 @@
 # Grimm
 
-Grimm is a MicroProfile OpenAPI 4.1 implementation for the Vidocq ecosystem.
+Grimm is a MicroProfile OpenAPI 4.2 implementation for the Vidocq ecosystem.
 
 ## Current status
 
-Core implementation and CDI integration are in place, with official MicroProfile OpenAPI 4.1 TCK currently green (349/349).
+Core implementation and CDI integration are in place, with the official MicroProfile OpenAPI 4.2 TCK 4.2-RC5 (byte-identical to the 4.2 final under ballot) green at 367/367 on 2026-10-04 (each parameterized test runs once per JSON and YAML format). It will be re-run on the 4.2 final.
 
 ## Prerequisites
 
@@ -17,7 +17,7 @@ Core implementation and CDI integration are in place, with official MicroProfile
 sdk env
 ./mvnw -ntp install -DskipTests
 ./mvnw test
-./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.2.sh all
 ```
 
 ## Repository layout
@@ -33,9 +33,9 @@ sdk env
 Run the root script to install the reactor and launch the TCK harness:
 
 ```bash
-./run-official-tck-mp-openapi-4.1.sh
-./run-official-tck-mp-openapi-4.1.sh all
-./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+./run-official-tck-mp-openapi-4.2.sh
+./run-official-tck-mp-openapi-4.2.sh all
+./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AnnotationScanTest
 ```
 

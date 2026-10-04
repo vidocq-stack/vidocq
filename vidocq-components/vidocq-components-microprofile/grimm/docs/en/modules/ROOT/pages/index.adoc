@@ -1,11 +1,11 @@
 = Grimm
-:description: MicroProfile OpenAPI 4.1 implementation, JAX-RS annotation scan at startup, cacheable static document, zero external dependency.
+:description: MicroProfile OpenAPI 4.2 implementation, JAX-RS annotation scan at startup, cacheable static document, zero external dependency.
 
 [.text-center]
 image::grimm-logo.png[Grimm,300,role=module-logo]
 
 [.lead]
-Grimm is the MicroProfile OpenAPI 4.1 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.1 TCK conformance (currently 349/349), zero external dependency, strict Java Modules, jlink-ready.
+Grimm is the MicroProfile OpenAPI 4.2 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.2 TCK conformance (currently 349/349), zero external dependency, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -40,14 +40,14 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 
 [cols="1,3"]
 |===
-| Implemented spec | MicroProfile OpenAPI 4.1
+| Implemented spec | MicroProfile OpenAPI 4.2
 | Repo | https://codefloe.com/Vidocq/grimm
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.processor`, `io.vidocq.grimm.cdi.vauban`
 | Public packages | `io.vidocq.grimm.spi.gen` (compile-time contribution SPI), `io.vidocq.grimm.internal.reader` (static-document readers), `io.vidocq.grimm.cdi` (CDI integration)
-| Runtime dependencies | `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Runtime dependencies | `microprofile-openapi-api` 4.2, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback.
-| MP OpenAPI 4.1 TCK | ✅ 349 / 349 — see xref:tck.adoc[detailed status]
+| MP OpenAPI 4.2 TCK | ✅ 367 / 367 (TCK 4.2-RC5) — see xref:tck.adoc[detailed status]
 |===
 
 == Three identifying traits
@@ -70,7 +70,7 @@ flowchart LR
   Static --> Grimm
   Reader --> Grimm
 
-  Grimm["Grimm<br/>MicroProfile OpenAPI 4.1"]
+  Grimm["Grimm<br/>MicroProfile OpenAPI 4.2"]
   Grimm -->|merge| Cache["GrimmModelCache<br/>OpenAPI 3.1"]
   Cache --> Filter
   Filter --> Endpoint["GET /openapi<br/>YAML by default, JSON on demand"]

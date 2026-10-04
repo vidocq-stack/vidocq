@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > Jacob Grimm (1785–1863) devoted his life to cataloguing language — codifying the rules of
 > phonetic transformation (Grimm's Law), gathering folk stories, and compiling the
-> _Deutsches Wörterbuch_. **Grimm** the project implements **MicroProfile OpenAPI 4.1**: it
+> _Deutsches Wörterbuch_. **Grimm** the project implements **MicroProfile OpenAPI 4.2**: it
 > catalogues API contracts, describes every endpoint, and turns running services into living
 > documentation.
 
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — run `sdk env`)
-- The official TCK `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.1`
+- The official TCK `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5`
   must be installed in the local M2 repository (non-public artifact — see `grimm-tck/README.md`)
 
 ## Essential Commands
@@ -27,13 +27,13 @@ sdk env
 ./mvnw test
 
 # TCK — smoke test
-./run-official-tck-mp-openapi-4.1.sh
+./run-official-tck-mp-openapi-4.2.sh
 
 # TCK — full suite
-./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.2.sh all
 
 # TCK — targeted test
-./run-official-tck-mp-openapi-4.1.sh -Dtest=ClassName
+./run-official-tck-mp-openapi-4.2.sh -Dtest=ClassName
 ```
 
 > `grimm-tck` is **outside the reactor** (pom.xml with standalone Model 4.0.0) to work around
@@ -43,7 +43,7 @@ sdk env
 
 ## Architecture
 
-Grimm is a **MicroProfile OpenAPI 4.1** implementation with zero implementation dependencies:
+Grimm is a **MicroProfile OpenAPI 4.2** implementation with zero implementation dependencies:
 only the MicroProfile OpenAPI API, required Jakarta specs, and the Vidocq modular repackage
 `io.vidocq.ravel:ravel-mp-config-api` are compiled.
 
@@ -55,7 +55,7 @@ grimm-processor    ← APT processor (CG-06 M1): generates $$GrimmModel companio
                      objects inside javac) — primary path for the structural JAX-RS subset;
                      the runtime scan is the fallback AND the behavioural oracle of its tests
 grimm-cdi-vauban   ← CDI BCE (model built at startup) + /openapi JAX-RS endpoint
-grimm-tck          ← TestNG + Arquillian + official MP OpenAPI 4.1 TCK runner (out-of-reactor)
+grimm-tck          ← TestNG + Arquillian + official MP OpenAPI 4.2 TCK runner (out-of-reactor)
 grimm-bench        ← JMH benchmarks vs SmallRye OpenAPI
 grimm-examples     ← Standalone and integrated usage examples
 ```
@@ -115,7 +115,7 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 ## TDD Methodology
 
 - **Red → Green → Refactor** — no production code without a prior test.
-- Cite the MicroProfile OpenAPI 4.1 spec section in test Javadoc/comments (e.g. `// §2.3.1`).
+- Cite the MicroProfile OpenAPI 4.2 spec section in test Javadoc/comments (e.g. `// §2.3.1`).
 - Unit tests in the same package as the tested class, named `<Class>Test`.
 - No Mockito — manual test doubles (`FakeOASModelReader`, `FakeOASFilter`,
   `FakeConfigSource`, etc.).
@@ -136,13 +136,13 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 - `virtual-threads-reviewer` — for any concurrent scanning or model caching code
 - `java-modules-guardian` — after `module-info.java` modification or new package introduction
 - `dependency-gatekeeper` — before any `pom.xml` dependency addition
-- `tck-runner` — to diagnose MicroProfile OpenAPI 4.1 TCK failures
+- `tck-runner` — to diagnose MicroProfile OpenAPI 4.2 TCK failures
 
-## MicroProfile OpenAPI 4.1 TCK
+## MicroProfile OpenAPI 4.2 TCK
 
 - Framework: **TestNG** (not JUnit — upstream TCK constraint)
 - Arquillian container: Vauban embedded + Cassini/Chappe (HTTP transport for `/openapi`)
-- TCK artifact: `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.1`
+- TCK artifact: `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5`
 - Suite file: `grimm-tck/src/test/resources/tck-suite.xml`
 - Target score: **100% PASS**
 - Excluded tests (if any) documented in `TCK.md` with justification
@@ -150,7 +150,7 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 ## Allowed Spec Dependencies
 
 ```
-org.eclipse.microprofile.openapi:microprofile-openapi-api:4.1
+org.eclipse.microprofile.openapi:microprofile-openapi-api:4.2-RC5
 jakarta.ws.rs:jakarta.ws.rs-api:4.0                            (provided)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1              (provided)
 jakarta.annotation:jakarta.annotation-api:3.0                   (provided)

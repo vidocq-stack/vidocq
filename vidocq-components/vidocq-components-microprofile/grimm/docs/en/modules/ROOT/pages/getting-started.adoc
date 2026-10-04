@@ -36,7 +36,7 @@ sdk env
     <dependency>
         <groupId>org.eclipse.microprofile.openapi</groupId>
         <artifactId>microprofile-openapi-api</artifactId>
-        <version>4.1</version>
+        <version>4.2-RC5</version>
     </dependency>
 </dependencies>
 ----
@@ -114,7 +114,7 @@ At startup, the `GrimmExtension` BCE scans the classpath, merges sources, and pu
 
 [source,bash]
 ----
-# YAML — default format, MP OpenAPI 4.1 §2.2
+# YAML — default format, MP OpenAPI 4.2 §2.2
 curl http://localhost:8080/openapi
 
 # JSON via Accept
@@ -184,7 +184,7 @@ Grimm merges up to three sources of truth:
 | `mp.openapi.model.reader=fqn.ModelReader`.
 |===
 
-Priority order is defined by the MP OpenAPI 4.1 spec: static file < `OASModelReader` < annotations — annotations win on conflict. The `OASFilter` then transforms the merged document. See xref:concepts.adoc[Concepts] for the detailed mechanics.
+Priority order is defined by the MP OpenAPI 4.2 spec: static file < `OASModelReader` < annotations — annotations win on conflict. The `OASFilter` then transforms the merged document. See xref:concepts.adoc[Concepts] for the detailed mechanics.
 
 == Next step
 

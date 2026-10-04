@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Orchestrates the full MicroProfile OpenAPI 4.1 model build pipeline (spec §4.4).
+ * Orchestrates the full MicroProfile OpenAPI 4.2 model build pipeline (spec §4.4).
  *
  * <p>Six steps, executed once at startup:</p>
  * <ol>

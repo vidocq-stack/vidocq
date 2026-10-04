@@ -14,7 +14,7 @@
   <packaging>pom</packaging>
 
   <name>Grimm</name>
-  <description>MicroProfile OpenAPI 4.1 implementation for Vidocq</description>
+  <description>MicroProfile OpenAPI 4.2 implementation for Vidocq</description>
   <url>https://codefloe.com/Vidocq/grimm</url>
 
   <developers>

@@ -1,6 +1,6 @@
 # Grimm — Implementation Roadmap
 
-> MicroProfile OpenAPI 4.1 implementation in the Vidocq style: zero third-party implementation
+> MicroProfile OpenAPI 4.2 implementation in the Vidocq style: zero third-party implementation
 > libraries (Jakarta EE / MicroProfile spec APIs only), Java 25, virtual threads, strict Java Modules,
 > CDI via Vauban, configuration via Ravel, transport via Cassini/Chappe.
 
@@ -23,7 +23,7 @@
   without a CDI container.
 - **Layer 2 — CDI integration tests**: multi-component scenarios with Vauban embedded.
   Verify the build pipeline without TCK overhead.
-- **Layer 3 — Official TCK** (`microprofile-openapi-tck:4.1`): hard 100% PASS contract before
+- **Layer 3 — Official TCK** (`microprofile-openapi-tck:4.2-RC5`): hard 100% PASS contract before
   any structural merge. Out-of-reactor module (Model 4.0.0).
 - **Layer 4 — JMH benchmarks**: `grimm-bench` measures scanning throughput and serialization
   latency vs SmallRye OpenAPI on the same JVM.
@@ -81,7 +81,7 @@ grimm-examples          io.vidocq.grimm.examples
       `grimm-core`, `grimm-cdi-vauban`, `grimm-bench`, `grimm-examples`, `grimm-tck` (out-of-reactor)
 - [x] `LICENSE` (Apache 2.0)
 - [x] `README.md`
-- [x] `run-official-tck-mp-openapi-4.1.sh` (root TCK script)
+- [x] `run-official-tck-mp-openapi-4.2.sh` (root TCK script)
 - [x] Validate `./mvnw -ntp install -DskipTests` passes on the reactor
 - [x] Validate `mvn -f grimm-tck/pom.xml -DskipTests compile` passes (out-of-reactor)
 
@@ -295,9 +295,9 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 
 ---
 
-### M10 — Official TCK MicroProfile OpenAPI 4.1
+### M10 — Official TCK MicroProfile OpenAPI 4.2
 
-**Scope:** Full `microprofile-openapi-tck:4.1` suite.
+**Scope:** Full `microprofile-openapi-tck:4.2-RC5` suite.
 
 | Task | Notes | Status |
 |---|---|---|
@@ -306,7 +306,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 | TCK deployment bootstrap | Class/config loading + CDI bridge via `TckDeploymentContext`/`TckGrimmSupportProducer` | ☑ |
 | Arquillian integration | `GrimmArquillianExtension` + `arquillian.xml` (`qualifier=grimm`, default) | ☑ |
 | Official test discovery | `tck-official` profile via `dependenciesToScan` (no dedicated `tck-suite.xml`) | ☑ |
-| `run-official-tck-mp-openapi-4.1.sh` | Root script: `smoke` / `all` / `matrix` / targeted `-Dtest=...` | ☑ |
+| `run-official-tck-mp-openapi-4.2.sh` | Root script: `smoke` / `all` / `matrix` / targeted `-Dtest=...` | ☑ |
 | Smoke TCK green | `GrimmTckSmokeTest` PASS | ☑ |
 | Progressive TCK pass | Iterative runs recorded in `TCK.md` | ☑ |
 | TCK 100% PASS | Full official suite green (349 tests) | ☑ |

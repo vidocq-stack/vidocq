@@ -2,7 +2,7 @@
 :description: OpenAPI 3.1 model, combinable sources, merge, OASFilter filters, MicroProfile Config keys.
 
 [.lead]
-Grimm implements MicroProfile OpenAPI 4.1, which in turn rides on OpenAPI 3.1.0. This page lays out the vocabulary — _Components_, _Paths_, _Operations_, _Schemas_ — and the mechanics of merging the various model sources.
+Grimm implements MicroProfile OpenAPI 4.2, which in turn rides on OpenAPI 3.1.0. This page lays out the vocabulary — _Components_, _Paths_, _Operations_, _Schemas_ — and the mechanics of merging the various model sources.
 
 == The OpenAPI 3.1 model
 
@@ -22,11 +22,11 @@ The OpenAPI format describes an HTTP service through a structured JSON or YAML t
 | Reuse catalogue: `schemas`, `parameters`, `responses`, `requestBodies`, `headers`, `securitySchemes`, `links`, `callbacks`, `examples`.
 |===
 
-The MP OpenAPI 4.1 spec's Java model mirrors that structure: the `OpenAPI` interface → `Info`, `Paths`, `Components`. Grimm provides concrete implementations (records or final classes) in `io.vidocq.grimm.internal.model`, produced by its own `OASFactoryResolver`.
+The MP OpenAPI 4.2 spec's Java model mirrors that structure: the `OpenAPI` interface → `Info`, `Paths`, `Components`. Grimm provides concrete implementations (records or final classes) in `io.vidocq.grimm.internal.model`, produced by its own `OASFactoryResolver`.
 
 == Three sources, one merge
 
-MP OpenAPI 4.1 §3 prescribes three model sources, merged in this order (lowest to highest priority):
+MP OpenAPI 4.2 §3 prescribes three model sources, merged in this order (lowest to highest priority):
 
 . **Static file** — `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath. Loaded by `StaticFileReader`. Acts as the "editorial skeleton" supplied by the design team.
 . **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically.
@@ -45,7 +45,7 @@ The filter runs once, at document build time, not per request. It therefore has 
 
 == Configuration via MicroProfile Config
 
-MP OpenAPI 4.1 §4 defines a set of `mp.openapi.*` keys read through MicroProfile Config — supplied by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
+MP OpenAPI 4.2 §4 defines a set of `mp.openapi.*` keys read through MicroProfile Config — supplied by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
 
 [cols="2,3"]
 |===
@@ -83,7 +83,7 @@ See xref:reference.adoc[Reference] for the exhaustive list and the `mp.openapi.s
 
 == Differences from OpenAPI 3.0 (reminder)
 
-OpenAPI 3.1 (served by MP OpenAPI 4.1) fully aligns with JSON Schema 2020-12: `type` may be an array (`["string", "null"]`), `nullable` is replaced by that syntax, `examples` is an array, `webhooks` is added at the root. Grimm reflects these choices in its serializer.
+OpenAPI 3.1 (served by MP OpenAPI 4.2) fully aligns with JSON Schema 2020-12: `type` may be an array (`["string", "null"]`), `nullable` is replaced by that syntax, `examples` is an array, `webhooks` is added at the root. Grimm reflects these choices in its serializer.
 
 == Further reading
 

@@ -1,6 +1,6 @@
 # grimm-tck
 
-Out-of-reactor runner for the official MicroProfile OpenAPI 4.1 TCK.
+Out-of-reactor runner for the official MicroProfile OpenAPI 4.2 TCK.
 
 ## Why this module is out of reactor
 
@@ -9,17 +9,17 @@ Out-of-reactor runner for the official MicroProfile OpenAPI 4.1 TCK.
 ## Local prerequisites
 
 1. Install the reactor artifacts in your local repository.
-2. Install the non-public TCK artifact `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.1` in local M2.
+2. Install the non-public TCK artifact `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` in local M2.
 
 ## Commands
 
 From the repository root:
 
 ```bash
-./run-official-tck-mp-openapi-4.1.sh
-./run-official-tck-mp-openapi-4.1.sh all
-./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+./run-official-tck-mp-openapi-4.2.sh
+./run-official-tck-mp-openapi-4.2.sh all
+./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AnnotationScanTest
 ```
 
 ## Runtime matrix knobs

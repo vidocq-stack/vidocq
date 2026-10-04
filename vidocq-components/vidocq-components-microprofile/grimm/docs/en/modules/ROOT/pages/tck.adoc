@@ -1,8 +1,8 @@
-= TCK MicroProfile OpenAPI 4.1
+= TCK MicroProfile OpenAPI 4.2
 :description: Status, runner execution, out-of-reactor architecture, documented exclusions.
 
 [.lead]
-The official MicroProfile OpenAPI 4.1 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm passes it at *349 / 349* on the 4.1 release (May 2026).
+The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm passes it at *367 / 367* on TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. For reference, the 4.1 TCK had 349 tests (passed 349 / 349 in May 2026): 4.2-RC5 adds 18, since each parameterized method runs once per JSON and YAML format.
 
 == Status
 
@@ -11,10 +11,10 @@ The official MicroProfile OpenAPI 4.1 TCK verifies that an implementation produc
 | Metric | Value
 
 | Tests executed
-| 349
+| 367
 
 | Passed
-| 349 ✅
+| 367 ✅
 
 | Failed
 | 0
@@ -30,7 +30,7 @@ Any future regression must be logged in the repository's `TCK.md` with: test nam
 
 == Prerequisites
 
-The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.1` artefact is not published on Maven Central — it must be installed manually into the local M2. Procedure detailed in `grimm-tck/README.md`.
+The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` artefact is not published on Maven Central — it must be installed manually into the local M2. Procedure detailed in `grimm-tck/README.md`.
 
 [source,bash]
 ----
@@ -40,24 +40,24 @@ sdk env                              # Java 25 + Maven 3.9.16
 
 == Runner execution
 
-The `run-official-tck-mp-openapi-4.1.sh` script at the repository root drives every variant.
+The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives every variant.
 
 [source,bash]
 ----
 # Smoke suite (default) — runs GrimmTckSmokeTest to validate the installation
-./run-official-tck-mp-openapi-4.1.sh
+./run-official-tck-mp-openapi-4.2.sh
 
-# Full suite — the official 349-test TCK
-./run-official-tck-mp-openapi-4.1.sh all
+# Full suite — the official 367-test TCK
+./run-official-tck-mp-openapi-4.2.sh all
 
 # Readiness matrix — runs one test (default PetStoreAppTest) under three profiles:
 #   default-readiness (10 s timeout)
 #   extended-readiness (30 s timeout)
 #   no-readiness-probe
-./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest
+./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest
 
 # Targeted test via -Dtest=
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AirlinesAppTest
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AirlinesAppTest
 ----
 
 The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-official test`. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
@@ -78,7 +78,7 @@ Stack assembled by the runner:
 | Layer | Component
 
 | Spec
-| `microprofile-openapi-api` 4.1, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
+| `microprofile-openapi-api` 4.2, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
 
 | OpenAPI implementation
 | `grimm-core` + `grimm-cdi-vauban`
@@ -116,11 +116,11 @@ The readiness probe is parameterisable:
 
 == Documented exclusions
 
-None to date: the full suite runs and passes at 349/349. Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
+None to date: the full suite runs and passes at 367/367. Should an exclusion ever be added, it would be declared as a Surefire exclusion in `grimm-tck/pom.xml` and tracked in `TCK.md`.
 
 == Quality contract
 
-Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 349/349 score before merge. A TCK regression is a CI blocker: the PR does not pass.
+Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge. A TCK regression is a CI blocker: the PR does not pass.
 
 == Further reading
 

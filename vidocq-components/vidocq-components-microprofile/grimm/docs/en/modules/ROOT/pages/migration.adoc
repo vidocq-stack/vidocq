@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.1 spec is fully covered (TCK 349/349, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
+Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.2 spec is fully covered (TCK 4.2-RC5 367/367, see xref:tck.adoc[TCK status]), but the public SPI may still evolve before `1.0.0`. This page documents model mappings to prepare a staged migration.
 ====
 
 [.lead]
@@ -83,7 +83,7 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 . Declare `grimm-core` + `grimm-cdi-vauban` instead of SmallRye / Quarkus OpenAPI.
 . Audit application annotations: they must all come from `org.eclipse.microprofile.openapi.annotations.*`. Replace any proprietary annotation.
 . Migrate `quarkus.smallrye-openapi.*` properties to `@OpenAPIDefinition` / `@SecurityScheme` / `@Server` or `mp.openapi.*` keys.
-. Run `./mvnw test` then `./run-official-tck-mp-openapi-4.1.sh` (see xref:tck.adoc[TCK]).
+. Run `./mvnw test` then `./run-official-tck-mp-openapi-4.2.sh` (see xref:tck.adoc[TCK]).
 . Diff the produced document before/after — verify `info`, `servers`, `paths`, `components/schemas`.
 . Wire Swagger UI or Redoc on the application side if needed.
 

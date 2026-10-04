@@ -6,7 +6,7 @@
 
 ## Repository Mission
 
-- Grimm implements **MicroProfile OpenAPI 4.1** in Java 25, with **zero third-party
+- Grimm implements **MicroProfile OpenAPI 4.2** in Java 25, with **zero third-party
   implementation libraries**: only spec APIs (`microprofile-openapi-api`, `jakarta.ws.rs-api`,
   `jakarta.enterprise.cdi-api`, `jakarta.annotation-api`) plus the Vidocq modular repackage
   `io.vidocq.ravel:ravel-mp-config-api` are compiled into `grimm-core` and
@@ -62,7 +62,7 @@
 - Module-path JARs are assembled by `maven-dependency-plugin` in the `initialize` phase
   (copied to `target/javamodules/`). Any new module-path dependency must be referenced in
   that copy step.
-- `microprofile-openapi-api:4.1` provides `module-info.class`; use
+- `microprofile-openapi-api:4.2-RC5` provides `module-info.class`; use
   `requires org.eclipse.microprofile.openapi` in `module-info.java`.
 - MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api`, which provides
   `module org.eclipse.microprofile.config` for Java Modules/jlink compatibility.
@@ -106,13 +106,13 @@ sdk env
 ./mvnw test
 
 # TCK — smoke test (installs reactor then runs TCK)
-./run-official-tck-mp-openapi-4.1.sh
+./run-official-tck-mp-openapi-4.2.sh
 
 # TCK — full suite
-./run-official-tck-mp-openapi-4.1.sh all
+./run-official-tck-mp-openapi-4.2.sh all
 
 # TCK — targeted test (e.g. AnnotationScanTest)
-./run-official-tck-mp-openapi-4.1.sh -Dtest=AnnotationScanTest
+./run-official-tck-mp-openapi-4.2.sh -Dtest=AnnotationScanTest
 
 # JMH benchmarks
 ./mvnw -pl grimm-bench -Pbench package
@@ -127,7 +127,7 @@ java -jar grimm-bench/target/benchmarks.jar
 ## Contribution Conventions
 
 - **Strict TDD**: Red → Green → Refactor. No production line before a failing test justifies it.
-  Cite the MicroProfile OpenAPI 4.1 spec section in test comments (e.g. `// §3.5.1`).
+  Cite the MicroProfile OpenAPI 4.2 spec section in test comments (e.g. `// §3.5.1`).
 - Unit tests in the same package as the tested class, named `<Class>Test`.
 - No Mockito — manual test doubles (`FakeOASModelReader`, `FakeOASFilter`,
   `FakeConfigSource`, etc.).
@@ -161,7 +161,7 @@ java -jar grimm-bench/target/benchmarks.jar
   method-level for Info, Tags, Servers; method-level `@Operation` takes precedence over
   class-level `@Tag`).
 - Before any structural change to `GrimmExtension` or `AnnotationScanner`, reason against the
-  contract: **MicroProfile OpenAPI 4.1 TCK at 100% PASS**.
+  contract: **MicroProfile OpenAPI 4.2 TCK at 100% PASS**.
 
 ## Documentation (Antora) conventions
 

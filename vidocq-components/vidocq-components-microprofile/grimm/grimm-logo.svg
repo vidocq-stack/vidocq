@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 560" width="400" height="560"
-     role="img" aria-label="Grimm — MicroProfile OpenAPI 4.1">
+     role="img" aria-label="Grimm — MicroProfile OpenAPI 4.2">
   <defs>
     <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%"   stop-color="#faf3e3"/>
@@ -48,7 +48,7 @@
   <!-- ═══ TOP LABEL ═══ -->
   <text x="200" y="34" text-anchor="middle"
         font-family="Georgia, 'Times New Roman', serif"
-        font-size="7" letter-spacing="2.5" fill="#1c2f5e" opacity="0.72">MICROPROFILE OPENAPI 4.1</text>
+        font-size="7" letter-spacing="2.5" fill="#1c2f5e" opacity="0.72">MICROPROFILE OPENAPI 4.2</text>
 
   <!-- ═══ OPEN BOOK — CENTRAL ILLUSTRATION ═══ -->
 

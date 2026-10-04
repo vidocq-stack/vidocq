@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Immutable snapshot of all MicroProfile OpenAPI 4.1 configuration keys (spec §4.1).
+ * Immutable snapshot of all MicroProfile OpenAPI 4.2 configuration keys (spec §4.1).
  *
  * <p>Built once from a {@link Config} or {@link Map} source at container startup and
  * exposed to downstream pipeline stages (scanner, merger, filter invoker, endpoint).</p>

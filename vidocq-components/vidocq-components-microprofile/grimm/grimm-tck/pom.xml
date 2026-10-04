@@ -9,7 +9,7 @@
   <packaging>jar</packaging>
 
   <name>grimm-tck</name>
-  <description>Official MicroProfile OpenAPI 4.1 TCK harness for Grimm</description>
+  <description>Official MicroProfile OpenAPI 4.2 TCK harness for Grimm</description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

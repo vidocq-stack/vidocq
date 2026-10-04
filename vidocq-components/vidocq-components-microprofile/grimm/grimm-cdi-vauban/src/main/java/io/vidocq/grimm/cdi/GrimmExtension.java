@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * MicroProfile OpenAPI 4.1 integration as a CDI 4.1
+ * MicroProfile OpenAPI 4.2 integration as a CDI 4.1
  * {@link BuildCompatibleExtension Build-Compatible Extension}.
  *
  * <p>During the {@code @Enhancement} phase, every class annotated with

@@ -34,7 +34,7 @@ import java.util.Map;
 
 /**
  * Mutable implementation of {@link Schema}.
- * Supports the full OpenAPI 3.1 / JSON Schema 2020-12 dialect as required by MP OpenAPI 4.1.
+ * Supports the full OpenAPI 3.1 / JSON Schema 2020-12 dialect as required by MP OpenAPI 4.2.
  * §3.1 model POJO — all fields nullable (absent optional fields stored as null).
  */
 public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema {

@@ -1,13 +1,17 @@
 # TCK Scoreboard
 
-Track MicroProfile OpenAPI 4.1 TCK progress here.
+Track MicroProfile OpenAPI 4.2 TCK progress here.
 
 ## Current score
 
 - Status: M10 completed
-- Official full suite: **349 tests, 0 failures, 0 errors, 0 skipped**
+- Official full suite: **367 tests, 0 failures, 0 errors, 0 skipped** (2026-10-04)
+- Run against TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot); re-run on the 4.2 final.
+- Count: 349 on the 4.1 TCK, 367 on 4.2-RC5 (+18): `ExternalDocumentationAnnotationTest` (+2), `SchemaExtensionPropertyTest` (+6),
+  `BeanValidationTest` (+8, four new `@Digits` methods), `AirlinesAppTest` (+2, `testExamplesInHeaders`); every method
+  runs once per format (JSON and YAML).
 - Evidence (Surefire): `grimm-tck/target/surefire-reports/TEST-TestSuite.xml`
-- Last targeted reference also green: `AirlinesAppTest` (**118/118**) in
+- Last targeted reference also green: `AirlinesAppTest` (**120/120** on 4.2-RC5) in
   `grimm-tck/target/surefire-reports/TEST-org.eclipse.microprofile.openapi.tck.AirlinesAppTest.xml`
 
 ## Runtime matrix (Cassini/Chappe)
@@ -22,9 +26,9 @@ The TCK harness now supports a small execution matrix to isolate infra regressio
 
 Entrypoints:
 
-- `./run-official-tck-mp-openapi-4.1.sh smoke`
-- `./run-official-tck-mp-openapi-4.1.sh matrix PetStoreAppTest`
-- `./run-official-tck-mp-openapi-4.1.sh all`
+- `./run-official-tck-mp-openapi-4.2.sh smoke`
+- `./run-official-tck-mp-openapi-4.2.sh matrix PetStoreAppTest`
+- `./run-official-tck-mp-openapi-4.2.sh all`
 
 ## Harness knobs
 
