@@ -34,7 +34,7 @@ import java.lang.reflect.Proxy;
 
 /**
  * CDI producers for the standard OpenTelemetry types required by the
- * MicroProfile Telemetry 2.1 spec §"Required CDI beans".
+ * MicroProfile Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API".
  *
  * <ul>
  *   <li>{@link OpenTelemetry} — resolved via {@link GlobalOpenTelemetry#get()}</li>
@@ -75,7 +75,7 @@ public class HumboldtTelemetryProducers {
     /**
      * Producer for {@link Span} — returns a dynamic proxy that delegates each method
      * call to {@link Span#current()} at invocation time (not at injection time).
-     * MP Telemetry 2.1 spec §"Required CDI beans": {@code SpanBeanTest.spanBeanChange}
+     * MP Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API": {@code SpanBeanTest.spanBeanChange}
      * mutates the Context after injection and expects subsequent accesses to
      * {@code injectedSpan} to reflect the new current span.
      */

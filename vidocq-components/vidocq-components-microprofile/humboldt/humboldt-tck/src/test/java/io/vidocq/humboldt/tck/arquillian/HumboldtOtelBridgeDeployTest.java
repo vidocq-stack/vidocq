@@ -75,7 +75,7 @@ public class HumboldtOtelBridgeDeployTest extends Arquillian {
                 .addAsServiceProvider(ConfigurableSpanExporterProvider.class,
                         TckInMemorySpanExporterProvider.class)
                 .addAsResource(new StringAsset(
-                                // MP Telemetry 2.1 §3.1: SDK disabled by default —
+                                // MP Telemetry 2.2 §"Enabling OpenTelemetry support": SDK disabled by default —
                                 // must be explicitly enabled for this bridge test to see spans.
                                 "otel.sdk.disabled=false\n" +
                                         "otel.traces.exporter=in-memory\n" +

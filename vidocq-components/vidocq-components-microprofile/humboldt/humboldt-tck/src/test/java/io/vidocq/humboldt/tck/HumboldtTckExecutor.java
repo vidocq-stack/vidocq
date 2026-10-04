@@ -23,7 +23,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 /**
- * {@link Executor} implementation required by the MicroProfile Telemetry 2.1 TCK
+ * {@link Executor} implementation required by the MicroProfile Telemetry 2.2 TCK
  * porting SPI ({@code org.eclipse.microprofile.telemetry.tracing.tck.porting.PropertiesBasedConfigurationBuilder}).
  *
  * <p>The TCK reads the {@code telemetry.tck.executor} property (system property or

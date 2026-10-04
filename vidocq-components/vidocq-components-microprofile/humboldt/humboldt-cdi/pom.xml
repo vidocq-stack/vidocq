@@ -32,9 +32,9 @@
             <artifactId>humboldt-otel-context</artifactId>
         </dependency>
         <!--
-            Annotation @WithSpan publique standard OTel — c'est l'annotation
-            attendue par MicroProfile Telemetry 2.1 et son TCK. API/SPI only,
-            pas d'impl runtime (juste les annotations marqueurs).
+            Standard public OTel @WithSpan annotation: the annotation expected by
+            MicroProfile Telemetry 2.2 and its TCK. API/SPI only, no runtime
+            implementation (marker annotations only).
         -->
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>

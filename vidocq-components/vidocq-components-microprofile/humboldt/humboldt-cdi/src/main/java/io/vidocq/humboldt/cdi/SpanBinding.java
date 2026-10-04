@@ -36,7 +36,7 @@ import java.lang.annotation.Target;
  * (at CDI build time) on every class or method annotated with
  * {@link io.opentelemetry.instrumentation.annotations.WithSpan} —
  * the standard OpenTelemetry public API annotation expected by the
- * MicroProfile Telemetry 2.1 TCK.</p>
+ * MicroProfile Telemetry 2.2 TCK.</p>
  *
  * <p>The annotation is exposed for technical visibility reasons
  * (the BCE extension can only add publicly accessible annotations),

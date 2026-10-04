@@ -46,25 +46,25 @@
             <version>4.1.0</version>
             <scope>provided</scope>
         </dependency>
-        <!-- M7c.12 — MicroProfile Rest Client API : scope provided.
-             Le HumboldtMpRestClientListener n'est invoqué que si MP Rest Client est
-             effectivement présent en runtime (typiquement via cyrano-core dans le
-             classpath de l'app). Permet l'auto-instrumentation des Rest Client
-             créés via @RegisterRestClient/RestClientBuilder.
-             Scope provided plutôt qu'optional=true pour que default-testCompile voie
-             aussi le module microprofile.rest.client.api (requires static dans le
-             module-info du main), sinon `module not found` en testCompile sous
-             maven-compiler-plugin 4.0.0-beta-4. provided = visible compile+test,
-             absent du runtime classpath publié — équivalent fonctionnel d'optional. -->
+        <!-- M7c.12 — MicroProfile Rest Client API: provided scope.
+             HumboldtMpRestClientListener is only invoked when MP Rest Client is
+             actually present at runtime (typically through cyrano-core on the
+             application class path). It enables auto-instrumentation of the Rest Clients
+             created through @RegisterRestClient/RestClientBuilder.
+             Provided scope rather than optional=true so that default-testCompile also
+             sees the microprofile.rest.client.api module (requires static in the
+             main module-info), otherwise `module not found` in testCompile under
+             maven-compiler-plugin 4.0.0-beta-4. provided = visible at compile+test,
+             absent from the published runtime class path — functionally equivalent to optional. -->
         <dependency>
             <groupId>org.eclipse.microprofile.rest.client</groupId>
             <artifactId>microprofile-rest-client-api</artifactId>
             <version>4.0</version>
             <scope>provided</scope>
         </dependency>
-        <!-- jakarta.annotation pour @Priority sur HumboldtSpanFinalizer.
-             Petite dep API standard, requise par la sémantique JAX-RS pour
-             les ExceptionMapper priorités. -->
+        <!-- jakarta.annotation for @Priority on HumboldtSpanFinalizer.
+             Small standard API dependency, required by the JAX-RS semantics for
+             ExceptionMapper priorities. -->
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
@@ -91,28 +91,28 @@
 
     <build>
         <!--
-            Java Modules workaround aligné sur cyrano-core (cf. cyrano/cyrano-core/pom.xml).
+            Java Modules workaround aligned with cyrano-core (see cyrano/cyrano-core/pom.xml).
 
-            Problème : maven-compiler-plugin 4.0.0-beta-4 détecte le mode Java Modules dès que
-            module-info.class est présent dans target/classes. En mode Java Modules pour
-            testCompile, il reconstruit un module-path qui ignore le -p custom et
-            échoue sur `module not found: microprofile.rest.client.api` (JAR sans
+            Problem: maven-compiler-plugin 4.0.0-beta-4 detects Java Modules mode as soon as
+            module-info.class is present in target/classes. In Java Modules mode for
+            testCompile, it rebuilds a module path that ignores the custom -p and
+            fails on `module not found: microprofile.rest.client.api` (JAR without
             Automatic-Module-Name).
 
-            Solution :
-            1. module-info.java déplacé hors de src/main/java (dans src/main/module-info) :
-               default-compile ne le voit pas → pas de module-info.class dans
-               target/classes → Maven ne détecte pas Java Modules pour testCompile, qui
-               s'exécute sur classpath normal.
-            2. maven-clean-plugin (generate-test-sources) supprime un éventuel
-               module-info.class stale avant testCompile.
-            3. maven-compiler-plugin (prepare-package) recompile module-info.java seul
-               dans target/classes avant l'assemblage du JAR.
-            4. surefire avec useModulePath=false pour rester aligné classpath en test.
+            Solution:
+            1. module-info.java moved out of src/main/java (into src/main/module-info):
+               default-compile does not see it → no module-info.class in
+               target/classes → Maven does not detect Java Modules for testCompile, which
+               runs on the plain class path.
+            2. maven-clean-plugin (generate-test-sources) removes any stale
+               module-info.class before testCompile.
+            3. maven-compiler-plugin (prepare-package) recompiles module-info.java alone
+               into target/classes before the JAR is assembled.
+            4. surefire with useModulePath=false to stay aligned on the class path in tests.
 
-            Le code main compile reste sur classpath (sans module-info visible) — c'est
-            permis car les types utilisés sont exportés par leurs modules respectifs et
-            on s'appuie sur l'unnamed module pour la résolution.
+            The main code still compiles on the class path (no visible module-info) — this is
+            allowed because the types used are exported by their respective modules and
+            the unnamed module is relied upon for resolution.
         -->
         <plugins>
             <plugin>
@@ -141,11 +141,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
-                    <!-- Copie toutes les deps (incl. provided microprofile-rest-client-api)
-                         dans target/javamodules pour que javac puisse dériver le nom de
-                         module depuis le nom de fichier. Phase initialize : disponible
-                         à default-compile (les deps Java Modules forcent le mode module-path)
-                         et à compile-module-info en prepare-package. -->
+                    <!-- Copies all dependencies (incl. provided microprofile-rest-client-api)
+                         into target/javamodules so that javac can derive the module name
+                         from the file name. Phase initialize: available
+                         at default-compile (Java Modules dependencies force module-path mode)
+                         and at compile-module-info in prepare-package. -->
                     <execution>
                         <id>copy-deps-to-module-path</id>
                         <phase>initialize</phase>
@@ -161,11 +161,11 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <!-- -p javamodules appliqué à toutes les executions sauf override.
-                         Nécessaire car maven-compiler-plugin 4.0.0-beta-4 active le mode
-                         Java Modules dès qu'une dep est nommée module (humboldt-api etc.) — il
-                         faut alors lui dire où trouver microprofile-rest-client-api
-                         (JAR sans Automatic-Module-Name, copié par dependency-plugin). -->
+                    <!-- -p javamodules applied to all executions unless overridden.
+                         Needed because maven-compiler-plugin 4.0.0-beta-4 enables
+                         Java Modules mode as soon as a dependency is a named module (humboldt-api etc.) — it
+                         must then be told where to find microprofile-rest-client-api
+                         (JAR without Automatic-Module-Name, copied by the dependency plugin). -->
                     <compilerArgs>
                         <arg>-p</arg>
                         <arg>${project.build.directory}/javamodules</arg>

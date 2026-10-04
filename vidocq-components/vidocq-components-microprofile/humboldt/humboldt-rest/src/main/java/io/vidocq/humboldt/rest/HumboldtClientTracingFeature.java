@@ -26,7 +26,7 @@ import jakarta.ws.rs.core.FeatureContext;
  * {@link Feature} that registers {@link HumboldtClientRequestFilter} and
  * {@link HumboldtClientResponseFilter} on any JAX-RS {@code Client} — discovered
  * via {@code META-INF/services/jakarta.ws.rs.core.Feature} for auto-instrumentation
- * conformant with MP Telemetry 2.1 §3.2 (the TCK does {@code ClientBuilder.newClient()}
+ * conformant with MP Telemetry 2.2 §"Automatic Instrumentation" (the TCK does {@code ClientBuilder.newClient()}
  * without an explicit {@code .register()} and expects CLIENT spans to be set).
  *
  * <p>Convention: returns {@code true} to signal that the Feature has configured

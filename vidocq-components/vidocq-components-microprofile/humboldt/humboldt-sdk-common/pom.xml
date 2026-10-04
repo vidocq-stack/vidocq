@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-sdk-common</artifactId>
     <name>Humboldt :: SDK Common</name>
-    <description>Briques communes du SDK Humboldt : Clock, IdGenerator (Random128), Resource — partagés par sdk-trace, sdk-metric, sdk-log.</description>
+    <description>Common building blocks of the Humboldt SDK: Clock, IdGenerator (Random128), Resource — shared by sdk-trace, sdk-metric, sdk-log.</description>
 
     <dependencies>
         <dependency>

@@ -38,7 +38,7 @@ import jakarta.ws.rs.ext.Provider;
  * sets ERROR status if code ≥ 500, closes the {@link Scope} and ends the span. Also
  * records a Histogram {@code http.server.request.duration} (OTel SemConv 1.27+)
  * with attrs {@code http.request.method / http.response.status_code / http.route /
- * url.scheme} — conformant with MP Telemetry 2.1 §"HTTP server metrics".
+ * url.scheme} — conformant with MP Telemetry 2.2 §"Required Metrics" (HTTP Server).
  */
 @Provider
 @jakarta.enterprise.context.Dependent

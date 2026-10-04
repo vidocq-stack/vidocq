@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Suite TestNG agrégant les 3 TCK MicroProfile Telemetry 2.1.
-    Activée via le profile -Ptck-official.
+    TestNG suite aggregating the 3 MicroProfile Telemetry 2.2 TCKs.
+    Enabled through the -Ptck-official profile.
 
-    M7 SCAFFOLD : aucun de ces tests ne passe encore. L'adapter Arquillian
-    Humboldt (Vauban+Cassini+Chappe) viendra en M7b.
+    Historical note (M7 scaffold): none of these tests passed at first; the
+    Humboldt Arquillian adapter (Vauban+Cassini+Chappe) arrived in M7b.
 -->
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
-<suite name="microprofile-telemetry-tck-2.1" verbose="2" configfailurepolicy="continue">
+<suite name="microprofile-telemetry-tck-2.2" verbose="2" configfailurepolicy="continue">
     <test name="microprofile-telemetry-tracing-tck">
         <packages>
             <package name="org.eclipse.microprofile.telemetry.tracing.tck.*"/>

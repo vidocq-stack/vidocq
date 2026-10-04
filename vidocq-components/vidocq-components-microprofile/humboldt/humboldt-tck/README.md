@@ -3,9 +3,11 @@
 **MicroProfile Telemetry 2.2** conformance harness — runs the official
 Eclipse TCK against the Humboldt implementation.
 
-> **STANDALONE** Maven project (Model Version 4.0.0, without `<parent>`),
-> intentionally OUTSIDE the Humboldt reactor. ShrinkWrap constraint
-> documented in the `pom.xml` and the workspace CLAUDE.md.
+> **In-reactor** Maven module, behind the `tck` profile of the Humboldt root
+> POM (same pattern as the `vidocq-runtime-tck-*` runners): a plain
+> `./mvnw install` neither downloads nor runs any TCK. Activate it with
+> `./mvnw -Ptck,<tck-smoke|tck-official> -pl humboldt-tck test`, or through
+> `run-official-tck-telemetry-2.2.sh` (recommended entry point).
 
 ## M7 status — SCAFFOLD (2026-05-21)
 
@@ -50,15 +52,16 @@ Eclipse TCK against the Humboldt implementation.
 ```
 
 The script performs:
-1. `mvn install -DskipTests` on the parent Humboldt reactor (to install
-   the local M2 snapshots 0.1.0 that the standalone runner will consume)
-2. `cd humboldt-tck && mvn ...` (according to the activated profile)
+1. `./mvnw clean install -Dmaven.test.skip=true` on the Humboldt reactor
+   (installs the SNAPSHOT artifacts that the runner consumes)
+2. `./mvnw -Ptck,<profile> -pl humboldt-tck clean test` (`tck-official` with
+   `all`, `tck-smoke` otherwise)
 
 ## Structure
 
 ```
 humboldt-tck/
-├── pom.xml                                      # Model 4.0.0 standalone
+├── pom.xml                                      # in-reactor module (profile `tck`)
 ├── README.md                                    # this file
 ├── src/
 │   ├── main/java/io/vidocq/humboldt/tck/        # possible M7b extensions

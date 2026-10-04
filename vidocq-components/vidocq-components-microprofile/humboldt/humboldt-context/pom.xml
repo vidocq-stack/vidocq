@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-context</artifactId>
     <name>Humboldt :: Context</name>
-    <description>Fournisseur ContextStorageProvider OpenTelemetry pour Humboldt — implémentation ThreadLocal compatible virtual threads (JDK 21+).</description>
+    <description>OpenTelemetry ContextStorageProvider for Humboldt — ThreadLocal-free implementation compatible with virtual threads (JDK 21+).</description>
 
     <dependencies>
         <dependency>

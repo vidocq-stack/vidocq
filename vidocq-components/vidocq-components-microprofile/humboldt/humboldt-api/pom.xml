@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-api</artifactId>
     <name>Humboldt :: API</name>
-    <description>Façade publique et SPI stable de Humboldt — surface stable utilisée par les modules SDK et les extensions Vidocq.</description>
+    <description>Public facade and stable SPI of Humboldt — the stable surface used by the SDK modules and the Vidocq extensions.</description>
 
     <dependencies>
         <dependency>

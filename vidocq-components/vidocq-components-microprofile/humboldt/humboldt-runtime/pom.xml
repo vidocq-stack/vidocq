@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-runtime</artifactId>
     <name>Humboldt :: Runtime</name>
-    <description>Façade autoconfig — assemble SDK trace/metric/log + propagators W3C + OTLP exporters depuis env vars OTEL_* / MP_TELEMETRY_*. Point d'entrée des applications Humboldt.</description>
+    <description>Autoconfiguration facade — assembles the trace/metric/log SDKs + W3C propagators + OTLP exporters from OTEL_* / MP_TELEMETRY_* environment variables. Entry point of Humboldt applications.</description>
 
     <dependencies>
         <dependency>

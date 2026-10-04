@@ -51,7 +51,7 @@ echo "============================================"
 # path by default in strict Java Modules mode — Maven still runs default-testCompile
 # with -DskipTests). The humboldt-rest tests can still be run by hand with
 # `mvn test -pl humboldt-rest` once the Java Modules main compilation is disabled.
-"${MVN_CMD[@]}" install -Dmaven.test.skip=true
+"${MVN_CMD[@]}" clean install -Dmaven.test.skip=true
 
 echo ""
 echo "============================================"

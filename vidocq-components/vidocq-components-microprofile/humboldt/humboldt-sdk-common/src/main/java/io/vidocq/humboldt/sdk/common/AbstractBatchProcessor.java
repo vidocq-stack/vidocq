@@ -170,7 +170,7 @@ public abstract class AbstractBatchProcessor<T> {
         try {
             exportBatch.accept(List.copyOf(batch));
         } catch (RuntimeException e) {
-            LOG.log(Level.WARNING, "Ébatch export failure " + workerName + " (" + batch.size() + " items)", e);
+            LOG.log(Level.WARNING, "Batch export failure " + workerName + " (" + batch.size() + " items)", e);
         }
     }
 }

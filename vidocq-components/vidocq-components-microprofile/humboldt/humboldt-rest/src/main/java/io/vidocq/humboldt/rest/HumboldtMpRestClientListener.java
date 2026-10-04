@@ -26,7 +26,7 @@ import org.eclipse.microprofile.rest.client.spi.RestClientListener;
  * {@link RestClientListener} that registers {@link HumboldtClientRequestFilter} and
  * {@link HumboldtClientResponseFilter} on every MP Rest Client created via
  * {@link org.eclipse.microprofile.rest.client.RestClientBuilder} — auto-instrumentation
- * conformant with MP Telemetry 2.1 §3.2 (the TCK does {@code RestClientBuilder.newBuilder()
+ * conformant with MP Telemetry 2.2 §"Automatic Instrumentation" (the TCK does {@code RestClientBuilder.newBuilder()
  * .baseUri(...).build(MyClient.class)} without an explicit {@code .register()} and expects
  * {@code kind=CLIENT} spans to be set around each call).
  *

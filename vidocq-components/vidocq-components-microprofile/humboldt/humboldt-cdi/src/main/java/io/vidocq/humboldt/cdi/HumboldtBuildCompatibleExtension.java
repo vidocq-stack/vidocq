@@ -36,7 +36,7 @@ import java.lang.System.Logger.Level;
  * the activation of {@link WithSpanInterceptor} by the CDI container.
  *
  * <p>Result: the user only writes {@code @WithSpan} (the standardised OTel public API
- * annotation expected by the MicroProfile Telemetry 2.1 TCK). No double annotation.</p>
+ * annotation expected by the MicroProfile Telemetry 2.2 TCK). No double annotation.</p>
  *
  * <p>Discovery: via CDI ServiceLoader (entry in
  * {@code META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension}

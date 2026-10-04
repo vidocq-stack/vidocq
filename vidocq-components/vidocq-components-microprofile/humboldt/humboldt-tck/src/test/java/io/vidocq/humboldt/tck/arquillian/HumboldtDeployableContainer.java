@@ -55,7 +55,7 @@ import java.util.Properties;
 /**
  * "Embedded" Humboldt Arquillian container — assembles Vauban CDI Lite +
  * (future Cassini JAX-RS / Chappe HTTP) + in-process humboldt-runtime to
- * execute the MicroProfile Telemetry 2.1 TCK.
+ * execute the MicroProfile Telemetry 2.2 TCK.
  *
  * <p>From-scratch approach (see {@code tasks/m7b-architecture-analysis.md}
  * Option C) — no reuse of vidocq to avoid the

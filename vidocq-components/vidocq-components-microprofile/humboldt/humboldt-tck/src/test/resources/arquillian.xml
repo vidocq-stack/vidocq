@@ -4,12 +4,12 @@
             xsi:schemaLocation="http://jboss.org/schema/arquillian http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
 
     <!--
-        Container Arquillian Humboldt (M7b.4b.1 squelette).
-        Enregistré via META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension
+        Humboldt Arquillian container (M7b.4b.1 skeleton).
+        Registered through META-INF/services/org.jboss.arquillian.core.spi.LoadableExtension
         → HumboldtLoadableExtension → HumboldtDeployableContainer.
     -->
     <container qualifier="humboldt" default="true">
-        <!-- M7b.4b.1 : aucune option de configuration exposée pour l'instant -->
+        <!-- M7b.4b.1: no configuration option exposed for now -->
     </container>
 
     <engine>

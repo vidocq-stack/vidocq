@@ -214,7 +214,7 @@ class HumboldtAutoConfigureTest {
 
     @Test
     void sdk_disabled_by_default_per_mp_telemetry_spec() {
-        // MP Telemetry 2.1 §3.1: OTEL_SDK_DISABLED defaults to true.
+        // MP Telemetry 2.2 §"Enabling OpenTelemetry support": OTEL_SDK_DISABLED defaults to true.
         // Without explicit config, providers are built without processors -> 0 export.
         try (AutoConfiguredHumboldt h = HumboldtAutoConfigure.configure(EnvConfig.of(
                 Map.of("OTEL_TRACES_EXPORTER", "in-memory"),

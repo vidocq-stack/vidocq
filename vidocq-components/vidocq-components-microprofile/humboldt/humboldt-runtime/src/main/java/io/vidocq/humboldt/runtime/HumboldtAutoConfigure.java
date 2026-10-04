@@ -147,14 +147,14 @@ public final class HumboldtAutoConfigure {
                                                     ContextPropagators overridePropagators) {
         Resource resource = buildResource(env);
 
-        // MP Telemetry 2.1 §3.1: by default the OpenTelemetry SDK is disabled.
+        // MP Telemetry 2.2 §"Enabling OpenTelemetry support": by default the OpenTelemetry SDK is disabled.
         // The application must explicitly set OTEL_SDK_DISABLED=false to enable
         // export. Note: the native OTel SDK Java has the opposite default (enabled),
         // but for MP Telemetry conformance and TCK stability we align with the MP spec.
         boolean sdkDisabled = env.getBoolean("OTEL_SDK_DISABLED", true);
         if (sdkDisabled) {
             LOG.log(Level.INFO,
-                    "Humboldt: SDK disabled (OTEL_SDK_DISABLED=true or unset, MP Telemetry 2.1 default)");
+                    "Humboldt: SDK disabled (OTEL_SDK_DISABLED=true or unset, MP Telemetry 2.2 default)");
             // Providers built with no SpanProcessor/MetricReader/LogRecordProcessor
             // → the OTel API remains fully usable (Span.current(), Tracer.spanBuilder())
             //   but nothing is ever exported or accumulated in memory.
@@ -230,7 +230,7 @@ public final class HumboldtAutoConfigure {
 
         // M4b — JVM metrics OTel SemConv 1.27+: binds Observable instruments
         // (memory, cpu, class, thread, gc) on the humboldt-runtime Meter. Conformant
-        // with MP Telemetry 2.1 §"Required JVM metrics". Skipped if no exporter (none).
+        // with MP Telemetry 2.2 §"Required Metrics". Skipped if no exporter (none).
         if (metricExporter != null || !EXTRA_METRIC_EXPORTERS.get().isEmpty()) {
             try {
                 JvmMetricsBinder.bindAll(meterProvider.get("io.vidocq.humboldt.runtime.jvm"));

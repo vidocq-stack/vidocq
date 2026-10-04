@@ -112,7 +112,7 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  Humboldt runtime + SDK (à tester contre le TCK)             -->
+        <!--  Humboldt runtime + SDK (the code under test)                -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
@@ -139,8 +139,8 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  Vauban CDI Lite — container utilisé par le container        -->
-        <!--  Arquillian Humboldt pour booter les beans du war ShrinkWrap -->
+        <!--  Vauban CDI Lite — container used by the Humboldt Arquillian -->
+        <!--  container to boot the beans of the ShrinkWrap war           -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
@@ -149,8 +149,8 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  M7c.2 : Chappe HTTP + Cassini JAX-RS — assemblés in-process -->
-        <!--  par le container Arquillian pour les tests TCK REST.        -->
+        <!--  M7c.2: Chappe HTTP + Cassini JAX-RS — assembled in-process  -->
+        <!--  by the Arquillian container for the REST TCK tests.         -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
@@ -189,9 +189,9 @@
         </dependency>
         <!-- ============================================================ -->
         <!--  M7c.6 — Cassini JAX-RS Client (jakarta.ws.rs.client.*)      -->
-        <!--  Débloque BaggageTest, RestClientSpan*Test, etc. qui font    -->
+        <!--  Unblocks BaggageTest, RestClientSpan*Test, etc., which call -->
         <!--  ClientBuilder.newClient().target(...).request().get().      -->
-        <!--  Fournit aussi un RuntimeDelegate provider (autonome).       -->
+        <!--  Also provides a RuntimeDelegate provider (standalone).      -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
@@ -200,8 +200,8 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  Annotation @WithSpan OFFICIELLE attendue par le TCK         -->
-        <!--  (différente de notre humboldt-cdi WithSpan — voir TCK.md)   -->
+        <!--  OFFICIAL @WithSpan annotation expected by the TCK           -->
+        <!--  (different from our humboldt-cdi WithSpan — see TCK.md)     -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.opentelemetry.instrumentation</groupId>
@@ -240,10 +240,10 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  Cyrano — implémentation MicroProfile Rest Client 4.0        -->
-        <!--  pour que RestClientBuilder.newBuilder() retourne une impl   -->
-        <!--  concrète (TCK MP Telemetry RestClientSpan*Test, W3*Test).   -->
-        <!--  Cyrano fournit RestClientBuilderResolver via ServiceLoader. -->
+        <!--  Cyrano — MicroProfile Rest Client 4.0 implementation, so    -->
+        <!--  that RestClientBuilder.newBuilder() returns a concrete impl -->
+        <!--  (MP Telemetry TCK RestClientSpan*Test, W3*Test).            -->
+        <!--  Cyrano provides RestClientBuilderResolver via ServiceLoader.-->
         <!-- ============================================================ -->
         <dependency>
             <groupId>io.vidocq.cyrano</groupId>
@@ -257,8 +257,9 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  OTel SDK officiel — utilisé par le TCK pour ses fixtures.   -->
-        <!--  Hors-Humboldt-prod : ne pollue pas le runtime applicatif.   -->
+        <!--  Official OTel SDK — used by the TCK for its fixtures.       -->
+        <!--  Not part of Humboldt production: does not pollute the app   -->
+        <!--  runtime.                                                    -->
         <!-- ============================================================ -->
         <!-- Test scope: the runner has no main code any more — the OTel SDK <-> Humboldt bridges
              (SpanDataMapper, OtelSpanExporterBridge, ...) come from humboldt-otel-interop, whose OTel SDK
@@ -308,10 +309,10 @@
         </dependency>
 
         <!-- ============================================================ -->
-        <!--  M7c.4 : force commons-io 2.16 — la version 2.11 tirée par   -->
-        <!--  awaitility 4.3 (transitive depuis le TCK metrics) n'a pas   -->
-        <!--  Tailer.builder() utilisé par JvmMemoryTest/JvmThreadTest/    -->
-        <!--  JvmCpuTest. Bump débloque 24 tests.                          -->
+        <!--  M7c.4: force commons-io 2.16 — version 2.11, pulled in by    -->
+        <!--  awaitility 4.3 (transitive from the metrics TCK), lacks      -->
+        <!--  the Tailer.builder() used by JvmMemoryTest/JvmThreadTest/    -->
+        <!--  JvmCpuTest. The bump unblocks 24 tests.                      -->
         <!-- ============================================================ -->
         <dependency>
             <groupId>commons-io</groupId>
@@ -356,7 +357,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven.surefire.version}</version>
                 <configuration>
-                    <!-- TCK = TestNG, pas JUnit. Activé via le runtime testng -->
+                    <!-- The TCK uses TestNG, not JUnit. Picked up through the testng runtime -->
                     <useSystemClassLoader>false</useSystemClassLoader>
                 </configuration>
             </plugin>
@@ -364,10 +365,10 @@
     </build>
 
     <profiles>
-        <!-- Profile par défaut : tous les tests Humboldt-tck locaux
+        <!-- Default profile: all local humboldt-tck tests
              (HumboldtTckSmokeTest, bridge tests, Arquillian boot smoke, etc.)
-             sans exécuter les vraies suites TCK officielles (réservées au
-             profile tck-official). -->
+             without running the real official TCK suites (reserved for the
+             tck-official profile). -->
         <profile>
             <id>tck-smoke</id>
             <activation>
@@ -375,10 +376,10 @@
             </activation>
         </profile>
 
-        <!-- Profile ciblé : exécute UNIQUEMENT OpenTelemetryBeanTest du TCK tracing.
-             Utilisé en M7b.5 pour valider que la chaîne Arquillian → HumboldtContainer
-             → Vauban CDI → @Inject OpenTelemetry fonctionne sur un test TCK officiel,
-             sans encore viser le passage de la suite complète. -->
+        <!-- Targeted profile: runs ONLY OpenTelemetryBeanTest of the tracing TCK.
+             Used in M7b.5 to validate that the Arquillian → HumboldtContainer
+             → Vauban CDI → @Inject OpenTelemetry chain works on an official TCK test,
+             without yet aiming at the full suite. -->
         <profile>
             <id>tck-cdi-bean</id>
             <build>
@@ -397,7 +398,7 @@
             </build>
         </profile>
 
-        <!-- Profile complet : exécute toute la suite TCK officielle. -->
+        <!-- Full profile: runs the whole official TCK suite. -->
         <profile>
             <id>tck-official</id>
             <build>
@@ -423,10 +424,10 @@
                                      implementations of Executor, check that
                                      telemetry.tck.executor is specified". -->
                                 <telemetry.tck.executor>io.vidocq.humboldt.tck.HumboldtTckExecutor</telemetry.tck.executor>
-                                <!-- MP Telemetry Logs TCK (JulTest) lit cette property dans son
-                                     static{} pour ouvrir le fichier de log à vérifier. Le
-                                     LoggingLogRecordExporter Humboldt y écrit chaque LogRecord
-                                     quand OTEL_LOGS_EXPORTER=logging. -->
+                                <!-- The MP Telemetry Logs TCK (JulTest) reads this property in its
+                                     static{} block to open the log file to check. The Humboldt
+                                     LoggingLogRecordExporter writes every LogRecord there
+                                     when OTEL_LOGS_EXPORTER=logging. -->
                                 <mptelemetry.tck.log.file.path>${project.build.directory}/humboldt-tck-logs.txt</mptelemetry.tck.log.file.path>
                             </systemPropertyVariables>
                         </configuration>

@@ -43,7 +43,7 @@ import static org.testng.Assert.assertTrue;
  * <ul>
  *   <li>the Humboldt artifacts (humboldt-runtime, humboldt-cdi, humboldt-rest)
  *       are resolved in the local M2 from the parent reactor;</li>
- *   <li>the official MP Telemetry 2.1 TCK classes are on the classpath;</li>
+ *   <li>the official MP Telemetry 2.2 TCK classes are on the classpath;</li>
  *   <li>{@code AutoConfiguredHumboldt} produces a valid {@code OpenTelemetry}
  *       that can be registered globally and used to create a span.</li>
  * </ul>
@@ -79,7 +79,7 @@ public class HumboldtTckSmokeTest {
 
     @Test
     public void humboldt_can_be_set_as_global_open_telemetry() {
-        // MP Telemetry 2.1 §3.1 default = SDK disabled; the smoke explicitly
+        // MP Telemetry 2.2 §"Enabling OpenTelemetry support" default = SDK disabled; the smoke explicitly
         // enables it so that the in-memory pipeline is actually wired.
         humboldt = HumboldtAutoConfigure.configure(EnvConfig.of(
                 Map.of("OTEL_SDK_DISABLED", "false",

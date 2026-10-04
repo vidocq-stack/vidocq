@@ -38,7 +38,7 @@ import java.util.List;
  * Registers OTel SemConv 1.27+ Observable instruments for standard JVM metrics —
  * invoked at {@code HumboldtAutoConfigure} boot after {@link MeterProvider} creation.
  *
- * <p>Conformant with MP Telemetry 2.1 §"Required JVM metrics":</p>
+ * <p>Conformant with MP Telemetry 2.2 §"Required Metrics":</p>
  * <ul>
  *   <li>{@code jvm.memory.used / committed / limit / used_after_last_gc}</li>
  *   <li>{@code jvm.cpu.time / count / recent_utilization}</li>
