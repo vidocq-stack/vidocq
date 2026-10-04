@@ -233,6 +233,9 @@ Track reproducible bugs with:
   reader; a value that is not JSON stays the string as written. A JSON `null` extension adds
   nothing (the model keeps no null extension). Covered by `AnnotationModelMappingsTest`; official
   TCK still 367/367.
+- **behaviour change**: lenient non-JSON values (`{a: 1}`, single quotes, `TRUE`, `1f`, `1d`, `1L`)
+  now stay raw strings, and an integral `1.0` inside an array is now a `Double` (it was a `Long`).
+  Grimm has no release notes or whats-new page yet, so this entry is the only record.
 
 ### BUG-20261004-10 — `summary` next to a `$ref` is lost (MP OpenAPI model limitation)
 
