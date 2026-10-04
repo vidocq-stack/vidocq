@@ -19,9 +19,9 @@
     </description>
 
     <!--
-        Volontairement PAS de VaubanProcessor APT ni de vidocq-runtime-maven-plugin.
-        Ce module simule une dependance externe non pre-traitee.
-        Pas de META-INF/vauban-beans.list, pas de vauban-bce-processed.
+        Deliberately NO VaubanProcessor APT and no vidocq-runtime-maven-plugin.
+        This module simulates an external dependency that was not pre-processed.
+        No META-INF/vauban-beans.list, no vauban-bce-processed.
     -->
 
     <dependencies>

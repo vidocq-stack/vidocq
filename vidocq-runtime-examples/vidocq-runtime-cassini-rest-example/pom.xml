@@ -44,7 +44,7 @@
             <artifactId>jakarta.json.bind-api</artifactId>
             <version>3.0.1</version>
         </dependency>
-        <!-- Yasson + Parsson en runtime pour la sérialisation JSON-B des Todos. -->
+        <!-- Yasson + Parsson at runtime for the JSON-B serialization of the Todos. -->
         <dependency>
             <groupId>org.eclipse</groupId>
             <artifactId>yasson</artifactId>
@@ -91,8 +91,8 @@
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
                 <version>${project.version}</version>
                 <executions>
-                    <!-- `generate` reste actif sur chaque build : il produit
-                         les classes nécessaires à la compilation et aux tests. -->
+                    <!-- `generate` stays active on every build: it produces
+                         the classes needed for compilation and tests. -->
                     <execution>
                         <id>generate</id>
                         <goals>
@@ -110,13 +110,13 @@
     </build>
 
     <profiles>
-        <!-- Packaging final (jlink + jpackage + docker) — actif par défaut.
-             Tous les jars de l'exemple (et ses dépendances transitives) sont
-             des modules Java nommés : `ravel-mp-config-api` fournit
-             `org.eclipse.microprofile.config` en module nommé, levant la
-             dernière limitation jlink historique.
-             Pour court-circuiter ces goals (CI rapide compile+tests uniquement),
-             utiliser `-P!dist` ou `-Dvidocq.jlink.skip=true`. -->
+        <!-- Final packaging (jlink + jpackage + docker) — active by default.
+             All jars of the example (and their transitive dependencies) are
+             named Java modules: `ravel-mp-config-api` provides
+             `org.eclipse.microprofile.config` as a named module, lifting the
+             last historical jlink limitation.
+             To bypass these goals (fast CI, compile + tests only),
+             use `-P!dist` or `-Dvidocq.jlink.skip=true`. -->
         <profile>
             <id>dist</id>
             <activation>
@@ -149,8 +149,8 @@
                                     <mainModule>io.vidocq.runtime.examples.rest</mainModule>
                                     <mainClass>io.vidocq.runtime.examples.rest.RestExampleApp</mainClass>
                                     <appName>todo-app</appName>
-                                    <!-- macOS app-image refuse 0.x.y → on fixe 1.0.0 ; à
-                                         incrémenter à chaque release de l'exemple. -->
+                                    <!-- macOS app-image rejects 0.x.y → we pin 1.0.0; to be
+                                         bumped on every release of the example. -->
                                     <appVersion>1.0.0</appVersion>
                                     <type>app-image</type>
                                 </configuration>
@@ -163,9 +163,9 @@
                                 <configuration>
                                     <launcher>todo-app</launcher>
                                     <imageTag>vidocq/todo-app:${project.version}</imageTag>
-                                    <!-- build=false par défaut : on génère seulement le Dockerfile.
-                                         Mettre <build>true</build> ou -Dvidocq.docker.build=true
-                                         pour invoquer 'docker build' dans la foulée. -->
+                                    <!-- build=false by default: only the Dockerfile is generated.
+                                         Set <build>true</build> or -Dvidocq.docker.build=true
+                                         to invoke 'docker build' right away. -->
                                 </configuration>
                             </execution>
                         </executions>

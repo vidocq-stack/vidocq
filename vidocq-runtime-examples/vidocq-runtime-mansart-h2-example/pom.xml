@@ -52,12 +52,12 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- MicroProfile Config 3.1 (opt-in). Quand cette extension est sur le
-             module path, RavelConfigSourceProvider remplace les ConfigSource
-             natifs du core ; vidocq.properties est lu via la MP ConfigSource
-             VidocqPropertiesConfigSource (ordinal 105) embarquée par
-             l'extension. @ConfigProperty devient également disponible côté
-             user. -->
+        <!-- MicroProfile Config 3.1 (opt-in). When this extension is on the
+             module path, RavelConfigSourceProvider replaces the native
+             ConfigSource implementations of the core; vidocq.properties is read through the MP ConfigSource
+             VidocqPropertiesConfigSource (ordinal 105) shipped by
+             the extension. @ConfigProperty also becomes available on the
+             user side. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
             <artifactId>vidocq-runtime-ravel-config-extension</artifactId>

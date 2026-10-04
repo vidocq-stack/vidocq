@@ -35,11 +35,11 @@
         </dependency>
 
         <!--
-            Ravel (MicroProfile Config 3.1) est volontairement EXCLU du core.
-            Pour activer @ConfigProperty ou les sources MP custom, ajouter
-            l'opt-in vidocq-runtime-ravel-config-extension dans le pom de l'application.
-            Le core reste agnostique du moteur de configuration choisi —
-            VidocqConfigImpl découvre les ConfigSourceProvider via ServiceLoader.
+            Ravel (MicroProfile Config 3.1) is deliberately EXCLUDED from the core.
+            To enable @ConfigProperty or custom MP sources, add the opt-in
+            vidocq-runtime-ravel-config-extension to the application pom.
+            The core stays agnostic of the chosen configuration engine —
+            VidocqConfigImpl discovers the ConfigSourceProvider implementations via ServiceLoader.
         -->
 
         <dependency>

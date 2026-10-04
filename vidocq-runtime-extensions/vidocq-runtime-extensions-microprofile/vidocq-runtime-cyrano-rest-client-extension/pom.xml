@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
     <name>Vidocq :: Core Extensions :: Rest Client (Cyrano)</name>
-    <description>Wrapper Maven/Java Modules qui active Cyrano (MicroProfile Rest Client 4.0) dans un deploiement vidocq.</description>
+    <description>Maven/Java Modules wrapper that activates Cyrano (MicroProfile Rest Client 4.0) in a vidocq deployment.</description>
 
     <dependencies>
         <dependency>
@@ -97,16 +97,16 @@
                 </executions>
             </plugin>
             <!--
-                Le pattern `src/main/module-info` separe maintient `target/classes`
-                sans `module-info.class` pendant `test-compile`, ce qui evite que
-                maven-compiler-plugin 4.x ne bascule en mode patch-module et n'exige
-                la resolution Java Modules de `microprofile.rest.client.api` (jar sans
-                Automatic-Module-Name place sur classpath, donc introuvable cote
-                module-path). `compile-module-info` (phase prepare-package) ecrit
-                ensuite `module-info.class` dans `target/classes` pour le packaging,
-                ce qui pollue la sortie pour un eventuel second `mvn` sans `clean`
-                (ex : CI Forgejo qui chaine `mvn verify` puis `mvn deploy`).
-                On supprime donc cet artefact avant chaque `test-compile`.
+                The separate `src/main/module-info` pattern keeps `target/classes`
+                free of `module-info.class` during `test-compile`, which prevents
+                maven-compiler-plugin 4.x from switching to patch-module mode and
+                requiring Java Modules resolution of `microprofile.rest.client.api` (a jar
+                without Automatic-Module-Name placed on the classpath, hence not found on
+                the module path). `compile-module-info` (prepare-package phase) then writes
+                `module-info.class` into `target/classes` for packaging,
+                which pollutes the output for a possible second `mvn` without `clean`
+                (e.g. a Forgejo CI that chains `mvn verify` then `mvn deploy`).
+                We therefore delete this artifact before each `test-compile`.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

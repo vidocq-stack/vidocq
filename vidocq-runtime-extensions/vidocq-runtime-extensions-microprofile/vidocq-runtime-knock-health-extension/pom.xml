@@ -28,9 +28,9 @@
 
     <dependencies>
         <!--
-            Knock — implémentation MicroProfile Health 4.0 (zéro lib tierce).
-            knock-cassini tire transitivement knock-core et knock-api.
-            knock-cdi-vauban contient la BCE qui auto-découvre @Liveness/@Readiness/@Startup.
+            Knock — MicroProfile Health 4.0 implementation (no third-party library).
+            knock-cassini transitively pulls knock-core and knock-api.
+            knock-cdi-vauban contains the BCE that auto-discovers @Liveness/@Readiness/@Startup.
         -->
         <dependency>
             <groupId>io.vidocq.knock</groupId>
@@ -44,8 +44,8 @@
         </dependency>
 
         <!--
-            champollion-jsonp : implémentation runtime de jakarta.json (JSON-P)
-            utilisée par knock-core pour sérialiser HealthCheckResponse.
+            champollion-jsonp: runtime implementation of jakarta.json (JSON-P)
+            used by knock-core to serialize HealthCheckResponse.
         -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
@@ -55,9 +55,9 @@
         </dependency>
 
         <!--
-            L'extension REST Cassini est requise pour que KnockHealthResource
-            (@Path("/health")) soit montée sur le moteur HTTP — c'est elle qui
-            interroge VaubanBeanProvider.getResourceClasses() au démarrage.
+            The Cassini REST extension is required for KnockHealthResource
+            (@Path("/health")) to be mounted on the HTTP engine — it is the one that
+            queries VaubanBeanProvider.getResourceClasses() at startup.
         -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
@@ -78,7 +78,7 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
-        <!-- jakarta.ws.rs-api est tiré transitivement par knock-cassini -->
+        <!-- jakarta.ws.rs-api is pulled transitively by knock-cassini -->
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -101,14 +101,14 @@
     <build>
         <plugins>
             <!--
-                Workaround Java Modules identique à knock-core / knock-parent (ADR-001 du repo knock).
+                Java Modules workaround identical to knock-core / knock-parent (ADR-001 of the knock repo).
 
-                microprofile-health-api:4.0.1 n'a pas d'Automatic-Module-Name. Pour que le
-                module-info de ce wrapper puisse `requires transitive io.vidocq.knock.api`
-                (qui lui-même `requires transitive microprofile.health.api`), javac doit
-                résoudre `microprofile.health.api` par dérivation du nom de fichier. On
-                copie donc toutes les deps compile dans target/javamodules/ et on passe
-                explicitement le module-path à javac via un compilerArg.
+                microprofile-health-api:4.0.1 has no Automatic-Module-Name. For the
+                module-info of this wrapper to `requires transitive io.vidocq.knock.api`
+                (which itself `requires transitive microprofile.health.api`), javac must
+                resolve `microprofile.health.api` by deriving it from the file name. We
+                therefore copy all compile deps into target/javamodules/ and pass the
+                module path explicitly to javac through a compilerArg.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

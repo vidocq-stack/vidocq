@@ -15,9 +15,9 @@
     <description>Arquillian integration tests for vidocq-runtime-cassini-rest-extension</description>
 
     <!--
-        Pas de module-info.java (unnamed module) pour eviter les contraintes
-        Java Modules dans les tests. Les resources @Path de test sont accessibles
-        par cassini et vauban sans opens explicites.
+        No module-info.java (unnamed module), to avoid the Java Modules constraints
+        in the tests. The test @Path resources are reachable by Cassini
+        and Vauban without explicit opens.
     -->
 
     <dependencies>

@@ -28,9 +28,9 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-spi</artifactId>
         </dependency>
-        <!-- vidocq-runtime-spi transitively requires vauban.core ; on le
-             déclare explicitement au cas où la transitivité Maven 4 ne suffirait
-             pas pour la résolution Java Modules du compilateur. -->
+        <!-- vidocq-runtime-spi transitively requires vauban.core ; we
+             declare it explicitly in case Maven 4 transitivity is not enough
+             for the compiler's Java Modules resolution. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>

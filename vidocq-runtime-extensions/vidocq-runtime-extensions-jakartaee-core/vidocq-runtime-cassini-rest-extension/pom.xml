@@ -12,14 +12,14 @@
 
     <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
     <name>Vidocq :: Core Extensions :: REST (Cassini)</name>
-    <description>Extension Vidocq Runtime qui branche Cassini (Jakarta REST 4.0 standalone) sur le moteur HTTP Chappe via le SPI io.vidocq.cassini.spi.http</description>
+    <description>Vidocq Runtime extension that plugs Cassini (standalone Jakarta REST 4.0) into the Chappe HTTP engine through the io.vidocq.cassini.spi.http SPI</description>
 
     <dependencies>
-        <!-- Cassini standalone — extrait avril 2026 vers io.vidocq.cassini.
+        <!-- Cassini standalone — extracted in April 2026 to io.vidocq.cassini.
              Le bootstrap passe par cassini-api (CassiniStack.builder), cassini-chappe
              (ChappeHttpAdapter) et cassini-cdi-vauban (BeanProvider).
-             cassini-core est runtime-only : il fournit le BuilderFactory découvert
-             par ServiceLoader, mais ses paquets internal/ ne sont exportés qu'au TCK. -->
+             cassini-core is runtime-only: it provides the BuilderFactory discovered
+             by ServiceLoader, but its internal/ packages are exported only to the TCK. -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
             <artifactId>cassini-api</artifactId>
