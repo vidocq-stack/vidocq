@@ -50,6 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Merges multiple {@link ModelSource} instances according to spec priority.
@@ -358,12 +359,19 @@ public final class ModelMerger {
     }
 
     /**
+     * The keywords whose empty value leaves the lower source's value in place, as the merge has
+     * always done for them. Any other property, extensions included, is copied even when empty:
+     * {@code default: []} or {@code const: {}} is a value.
+     */
+    private static final Set<String> KEPT_WHEN_EMPTY = Set.of("type", "enum", "required", "properties");
+
+    /**
      * Every property the higher-priority {@code source} sets wins, extensions included: the
      * properties are those of {@link Schema#getAll()}, named as in the JSON document, so the merge
      * follows the property table of the model and a property added to it cannot be forgotten
-     * here. {@code items} and {@code properties} merge recursively; an empty list or map does not
-     * override what the lower source says. {@code $ref} is copied as written: {@code set("$ref")}
-     * does not expand a short name.
+     * here. {@code items} and {@code properties} merge recursively; an empty {@code type},
+     * {@code enum}, {@code required} or {@code properties} does not override what the lower source
+     * says. {@code $ref} is copied as written: {@code set("$ref")} does not expand a short name.
      */
     private Schema mergeSchema(Schema target, Schema source) {
         for (Map.Entry<String, ?> property : source.getAll().entrySet()) {
@@ -381,14 +389,14 @@ public final class ModelMerger {
                     merged.merge(entry.getKey(), entry.getValue(), this::mergeSchema);
                 }
                 target.setProperties(merged);
-            } else if (!isEmptyCollection(value)) {
+            } else if (!(KEPT_WHEN_EMPTY.contains(name) && isEmpty(value))) {
                 target.set(name, value);
             }
         }
         return target;
     }
 
-    private static boolean isEmptyCollection(Object value) {
+    private static boolean isEmpty(Object value) {
         return value instanceof java.util.Collection<?> collection && collection.isEmpty()
                 || value instanceof Map<?, ?> map && map.isEmpty();
     }

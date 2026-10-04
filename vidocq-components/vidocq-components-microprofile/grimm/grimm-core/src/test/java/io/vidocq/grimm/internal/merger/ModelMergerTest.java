@@ -438,6 +438,31 @@ class ModelMergerTest {
     }
 
     @Test
+    void merge_explicitEmptyValuesOfTheHigherSourceStillOverride() {
+        // Only an empty type, enum, required or properties leaves the lower source's value in place
+        // (as before the property-table merge); any other property or extension is copied as given.
+        Schema fromStaticFile = OASFactory.createObject(Schema.class)
+                .defaultValue(List.of("old"))
+                .type(List.of(Schema.SchemaType.ARRAY))
+                .addExtension("x-tags", List.of("old"));
+        Schema fromAnnotations = OASFactory.createObject(Schema.class)
+                .defaultValue(List.of())
+                .constValue(Map.of())
+                .type(List.of())
+                .addExtension("x-tags", List.of());
+
+        Schema merged = mergedResponseSchema(
+                new StaticFileSource(withResponseSchema(fromStaticFile)),
+                new AnnotationSource(withResponseSchema(fromAnnotations)));
+
+        assertAll(
+                () -> assertEquals(List.of(), merged.getDefaultValue()),
+                () -> assertEquals(Map.of(), merged.getConstValue()),
+                () -> assertEquals(List.of(), merged.getExtensions().get("x-tags")),
+                () -> assertEquals(List.of(Schema.SchemaType.ARRAY), merged.getType()));
+    }
+
+    @Test
     void merge_collidingNestedPropertySchemaTakesEveryPropertyOfTheHigherSource() {
         Schema fromStaticFile = OASFactory.createObject(Schema.class)
                 .addProperty("a", OASFactory.createObject(Schema.class).type(List.of(Schema.SchemaType.INTEGER)))
