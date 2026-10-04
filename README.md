@@ -230,15 +230,20 @@ myapp-1.0/
 
 ## MicroProfile 7.2 Extensions
 
+Metrics 5.1 is a standalone MicroProfile spec, not part of the 7.2 platform; it is listed here because Vidocq delivers it.
+
 | Spec | Extension | Status |
 |------|-----------|--------|
 | JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
 | Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
 | MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` | Done |
 | MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` | Done |
-| MicroProfile Metrics 5.1 | `vidocq-runtime-dirac-metrics-extension` | Done |
+| MicroProfile Metrics 5.1 (standalone, not in the 7.2 platform) | `vidocq-runtime-dirac-metrics-extension` | Done |
 | MicroProfile OpenAPI 4.2 | `vidocq-runtime-grimm-openapi-extension` | Done |
 | MicroProfile JWT Auth 2.2 | `vidocq-runtime-cervantes-jwt-extension` | Done |
+| MicroProfile Telemetry 2.2 | `vidocq-runtime-humboldt-telemetry-extension` | Done |
+| MicroProfile Rest Client 4.0 | `vidocq-runtime-cyrano-rest-client-extension` | Done |
+| MicroProfile Fault Tolerance 4.1 | `vidocq-runtime-heisenberg-fault-tolerance-extension` | Done |
 
 ## Jakarta Servlet 6.1 TCK
 

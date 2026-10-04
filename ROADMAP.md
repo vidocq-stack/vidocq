@@ -7,7 +7,7 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 > Product view: see [`README.md`](README.md). User documentation: `docs/`.
 
-## Status of MicroProfile 7.2 specs
+## Status of MicroProfile 7.2 specs (and Metrics, a standalone spec)
 
 | MicroProfile spec | Implementation | Vidocq extension | Status |
 |---|---|---|---|
@@ -18,7 +18,7 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 | **Fault Tolerance 4.1** | [heisenberg](../heisenberg) | `vidocq-runtime-heisenberg-fault-tolerance-extension` | ✅ delivered |
 | **JWT Auth 2.2** | [cervantes](../cervantes) | `vidocq-runtime-cervantes-jwt-extension` | ✅ delivered |
 | **OpenAPI 4.2** | [grimm](../grimm) | `vidocq-runtime-grimm-openapi-extension` | ✅ delivered (TCK green: 364, against TCK 4.2-RC5) |
-| **Metrics 5.1** | [dirac](../dirac) | `vidocq-runtime-dirac-metrics-extension` | ✅ delivered |
+| **Metrics 5.1** (standalone spec, not part of the MicroProfile 7.2 platform) | [dirac](../dirac) | `vidocq-runtime-dirac-metrics-extension` | ✅ delivered (TCK green: 127) |
 
 ## Extensions outside the MicroProfile specs
 
@@ -80,8 +80,7 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 - [x] **`vidocq-runtime-fault-tolerance-extension`** (delivered as `vidocq-runtime-heisenberg-fault-tolerance-extension`) — `@Retry`, `@Timeout`, `@Bulkhead`,
       `@CircuitBreaker`. Virtual-thread compatibility: avoid ThreadLocal pinning,
       prefer `ScopedValue`. SmallRye wrapper possible.
-- [x] **`vidocq-runtime-jwt-extension`** (delivered as `vidocq-runtime-cervantes-jwt-extension`) — Bearer JWT gating auth. Implementation
-      likely in a new repo (placeholder `heisenberg`?). MP JWT Auth 2.2.
+- [x] **`vidocq-runtime-jwt-extension`** (delivered as `vidocq-runtime-cervantes-jwt-extension`) — Bearer JWT gating auth. MP JWT Auth 2.2.
 - [x] **`vidocq-runtime-openapi-extension`** (delivered as `vidocq-runtime-grimm-openapi-extension`) — OpenAPI 3.1 generation from Cassini
       JAX-RS resources. MP OpenAPI 4.2.
 - [x] **`vidocq-runtime-metrics-extension`** — delivered separately as `vidocq-runtime-dirac-metrics-extension` (Dirac, Metrics 5.1).

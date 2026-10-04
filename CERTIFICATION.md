@@ -12,7 +12,7 @@ compatibility request once Vidocq 0.3.0 is released.
 > (see [Status](#status)). The compatibility request itself is not yet filed —
 > it certifies a *released* product, and 0.3.0 is not cut.
 
-MicroProfile 7.2 explicitly allows Jakarta EE 11 Core Profile as the base.
+MicroProfile 7.2 (a platform release still under ballot as of 2026-10-04) explicitly allows the Jakarta EE 11 Core Profile as its base, which is the base Vidocq uses.
 
 ## 1. What Core Profile 11 certification requires
 
