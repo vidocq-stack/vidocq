@@ -44,7 +44,7 @@ fi
 echo "==> Clean install of the cervantes reactor (tests skipped)..."
 ( cd "$ROOT_DIR" && "${MVN[@]}" clean install -DskipTests )
 
-# `clean` the TCK module on every run: a stale target/ gives false results.
+# Every mode below runs `clean test` on the TCK module: a stale target/ gives false results.
 
 case "${1:-}" in
     all)
