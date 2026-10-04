@@ -187,6 +187,24 @@ class ConfigApplierTest {
         assertEquals("#/components/schemas/Extra", s.getAdditionalPropertiesSchema().getRef());
     }
 
+    @Test
+    void applySchemaOverrides_refAliasIsExpandedInsideDefsAndDefinitions() {
+        // $defs (JSON Schema 2020-12 §8.2.4) and the older definitions hold schemas too.
+        SchemaRegistry registry = new SchemaRegistry();
+        String json = "{\"$defs\":{\"A\":{\"ref\":\"Pet\"},\"B\":{\"items\":{\"ref\":\"Item\"}}},"
+                + "\"definitions\":{\"C\":{\"ref\":\"Cat\"},\"D\":{\"$ref\":\"Dog.yaml\",\"ref\":\"Ignored\"}}}";
+        ConfigApplier.applySchemaOverrides(registry, GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), json)));
+        Schema s = registry.snapshot().get("Sample");
+
+        Map<?, ?> defs = assertInstanceOf(Map.class, s.get("$defs"));
+        Map<?, ?> definitions = assertInstanceOf(Map.class, s.get("definitions"));
+        assertEquals(Map.of("$ref", "#/components/schemas/Pet"), defs.get("A"));
+        assertEquals(Map.of("items", Map.of("$ref", "#/components/schemas/Item")), defs.get("B"));
+        assertEquals(Map.of("$ref", "#/components/schemas/Cat"), definitions.get("C"));
+        assertEquals(Map.of("$ref", "Dog.yaml"), definitions.get("D"));
+    }
+
     @SuppressWarnings("unused")
     static final class Sample {
         String name;

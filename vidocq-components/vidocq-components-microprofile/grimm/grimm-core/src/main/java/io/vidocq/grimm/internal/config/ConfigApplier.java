@@ -161,7 +161,9 @@ public final class ConfigApplier {
     private static final List<String> SCHEMA_KEYS = List.of("items", "additionalProperties", "not", "if", "then",
             "else", "contains", "propertyNames", "unevaluatedItems", "unevaluatedProperties", "contentSchema");
     private static final List<String> SCHEMA_LIST_KEYS = List.of("allOf", "anyOf", "oneOf", "prefixItems");
-    private static final List<String> SCHEMA_MAP_KEYS = List.of("properties", "patternProperties", "dependentSchemas");
+    // $defs (JSON Schema 2020-12) and definitions (its earlier drafts) are maps of schemas too.
+    private static final List<String> SCHEMA_MAP_KEYS = List.of("properties", "patternProperties", "dependentSchemas",
+            "$defs", "definitions");
 
     /**
      * Historical alias of {@code mp.openapi.schema.*} values: a {@code ref} key, at any schema level
