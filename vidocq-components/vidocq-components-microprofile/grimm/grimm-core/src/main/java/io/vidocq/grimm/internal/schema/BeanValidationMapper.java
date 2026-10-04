@@ -90,6 +90,8 @@ public final class BeanValidationMapper {
                 }
             } else if (matches(name, "NotEmpty")) {
                 applyNotEmpty(schema);
+            } else if (matches(name, "Digits")) {
+                applyDigits(schema, ann);
             }
         }
     }
@@ -190,6 +192,29 @@ public final class BeanValidationMapper {
             setMinPropertiesAtLeast(schema, 1);
         } else {
             setMinLengthAtLeast(schema, 1);
+        }
+    }
+
+    /**
+     * Maps {@code @Digits(integer, fraction)} (MicroProfile OpenAPI 4.2, issue #717): a {@code multipleOf}
+     * of {@code 10^-fraction} on numbers, a {@code pattern} on strings, nothing on integers (implied by the
+     * type). Explicit values on the schema are never overridden.
+     */
+    private static void applyDigits(Schema schema, Annotation ann) {
+        int integer = intAttr(ann, "integer", 0);
+        int fraction = intAttr(ann, "fraction", 0);
+        List<Schema.SchemaType> types = schema.getType();
+        if (types == null) {
+            return;
+        }
+        if (types.contains(Schema.SchemaType.STRING)) {
+            if (schema.getPattern() == null || schema.getPattern().isBlank()) {
+                schema.setPattern(fraction > 0
+                        ? "^-?\\d{1," + integer + "}(\\.\\d{1," + fraction + "})?$"
+                        : "^-?\\d{1," + integer + "}$");
+            }
+        } else if (types.contains(Schema.SchemaType.NUMBER) && schema.getMultipleOf() == null) {
+            schema.setMultipleOf(BigDecimal.ONE.movePointLeft(fraction));
         }
     }
 

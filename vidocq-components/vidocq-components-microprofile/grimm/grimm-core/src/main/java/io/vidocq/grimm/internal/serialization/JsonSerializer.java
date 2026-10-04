@@ -21,6 +21,7 @@ package io.vidocq.grimm.internal.serialization;
 
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -40,6 +41,10 @@ public final class JsonSerializer {
         }
         if (value instanceof String stringValue) {
             return '"' + escapeJson(stringValue) + '"';
+        }
+        if (value instanceof BigDecimal decimal) {
+            // Plain notation: YAML 1.1 parsers read 1E-10 as a string.
+            return decimal.toPlainString();
         }
         if (value instanceof Number || value instanceof Boolean) {
             return String.valueOf(value);
