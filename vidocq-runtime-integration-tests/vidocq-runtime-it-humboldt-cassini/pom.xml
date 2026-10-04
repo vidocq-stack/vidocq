@@ -12,16 +12,16 @@
 
     <artifactId>vidocq-runtime-it-humboldt-cassini</artifactId>
     <name>Vidocq :: Integration Tests :: Humboldt (Cassini)</name>
-    <description>Arquillian E2E tests : valide BuildCompatibleExtension @WithSpan + filters JAX-RS humboldt-rest + propagation W3C entrante + status ERROR sur 500. Combinaison humboldt-runtime + humboldt-cdi + humboldt-rest + cassini + vauban.</description>
+    <description>Arquillian E2E tests: validate the BuildCompatibleExtension @WithSpan + the humboldt-rest JAX-RS filters + incoming W3C propagation + ERROR status on a 500. Combination of humboldt-runtime + humboldt-cdi + humboldt-rest + cassini + vauban.</description>
 
     <!--
-        Pas de module-info.java (unnamed module) pour éviter les contraintes
-        Java Modules dans les tests. Les resources @Path/beans CDI sont accessibles
-        par cassini et vauban sans opens explicites.
+        No module-info.java (unnamed module), to avoid the Java Modules constraints
+        in the tests. The @Path resources and CDI beans are reachable by Cassini
+        and Vauban without explicit opens.
 
-        Valide en runtime le risk PLAN.md §15.1 : "CDI 4.1 Lite (Vauban) suffit-il
-        pour la BCE humboldt-cdi qui auto-applique @SpanBinding sur les méthodes
-        @WithSpan OTel ?" → ce module répond OUI si les 4 tests passent.
+        Validates at runtime the PLAN.md §15.1 risk: "Is CDI 4.1 Lite (Vauban) enough
+        for the humboldt-cdi BCE that auto-applies @SpanBinding to the OTel
+        @WithSpan methods?" → this module answers YES if the 4 tests pass.
     -->
 
     <dependencies>
@@ -43,7 +43,7 @@
             <artifactId>vauban-core</artifactId>
         </dependency>
 
-        <!-- Humboldt directs : nécessaires pour @WithSpan API + AutoConfiguredHumboldt -->
+        <!-- Direct Humboldt dependencies: required for the @WithSpan API + AutoConfiguredHumboldt -->
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-runtime</artifactId>
