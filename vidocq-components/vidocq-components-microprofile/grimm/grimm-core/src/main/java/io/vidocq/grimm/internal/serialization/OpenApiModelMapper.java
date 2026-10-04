@@ -413,6 +413,8 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             if ("description".equals(key)) {
                 response.setDescription(asString(value));
+            } else if ("$ref".equals(key)) {
+                AbstractExtensibleRef.setVerbatimRef(response, asString(value));
             } else if ("content".equals(key)) {
                 response.setContent(toContent(value));
             } else if ("headers".equals(key)) {
@@ -522,7 +524,16 @@ final class OpenApiModelMapper {
                 case "in" -> parameter.setIn(toParameterIn(asString(value)));
                 case "required" -> parameter.setRequired(asBoolean(value));
                 case "description" -> parameter.setDescription(asString(value));
+                case "deprecated" -> parameter.setDeprecated(asBoolean(value));
+                case "allowEmptyValue" -> parameter.setAllowEmptyValue(asBoolean(value));
+                case "style" -> parameter.setStyle(toParameterStyle(asString(value)));
+                case "explode" -> parameter.setExplode(asBoolean(value));
+                case "allowReserved" -> parameter.setAllowReserved(asBoolean(value));
                 case "schema" -> parameter.setSchema(toSchema(value));
+                case "example" -> parameter.setExample(value);
+                case "examples" -> parameter.setExamples(toExamples(value));
+                case "content" -> parameter.setContent(toContent(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(parameter, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         parameter.addExtension(key, value);
@@ -546,6 +557,22 @@ final class OpenApiModelMapper {
         };
     }
 
+    private static Parameter.Style toParameterStyle(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        return switch (raw) {
+            case "matrix" -> Parameter.Style.MATRIX;
+            case "label" -> Parameter.Style.LABEL;
+            case "form" -> Parameter.Style.FORM;
+            case "simple" -> Parameter.Style.SIMPLE;
+            case "spaceDelimited" -> Parameter.Style.SPACEDELIMITED;
+            case "pipeDelimited" -> Parameter.Style.PIPEDELIMITED;
+            case "deepObject" -> Parameter.Style.DEEPOBJECT;
+            default -> null;
+        };
+    }
+
     private static RequestBody toRequestBody(Object raw) {
         if (!(raw instanceof Map<?, ?> map)) {
             return null;
@@ -558,6 +585,7 @@ final class OpenApiModelMapper {
                 case "description" -> requestBody.setDescription(asString(value));
                 case "required" -> requestBody.setRequired(asBoolean(value));
                 case "content" -> requestBody.setContent(toContent(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(requestBody, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         requestBody.addExtension(key, value);
@@ -590,7 +618,9 @@ final class OpenApiModelMapper {
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String expression = String.valueOf(entry.getKey());
             Object value = entry.getValue();
-            if (expression.startsWith("x-")) {
+            if ("$ref".equals(expression)) {
+                AbstractExtensibleRef.setVerbatimRef(callback, asString(value));
+            } else if (expression.startsWith("x-")) {
                 callback.addExtension(expression, value);
             } else {
                 callback.addPathItem(expression, toPathItem(value));
@@ -977,7 +1007,7 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "description" -> schema.setDescription(asString(value));
                 case "format" -> schema.setFormat(asString(value));
-                case "type" -> schema.setType(toSchemaTypes(value));
+                case "type" -> setTyped(schema, key, value, toSchemaTypes(value), schema::setType);
                 case "required" -> schema.setRequired(toStringList(value));
                 case "properties" -> schema.setProperties(toSchemas(value));
                 case "items" -> schema.setItems(toSchema(value));
@@ -1187,29 +1217,32 @@ final class OpenApiModelMapper {
         return xml;
     }
 
+    /** The type names, or {@code null} when one of them is not a JSON Schema type (kept as written then). */
     private static List<Schema.SchemaType> toSchemaTypes(Object raw) {
         if (raw instanceof List<?> list) {
             ArrayList<Schema.SchemaType> types = new ArrayList<>(list.size());
             for (Object item : list) {
-                Schema.SchemaType parsed = toSchemaType(asString(item));
-                if (parsed != null) {
-                    types.add(parsed);
+                Schema.SchemaType parsed = toSchemaType(item);
+                if (parsed == null) {
+                    return null;
                 }
+                types.add(parsed);
             }
             return types;
         }
-        Schema.SchemaType parsed = toSchemaType(asString(raw));
+        Schema.SchemaType parsed = toSchemaType(raw);
         return parsed == null ? null : List.of(parsed);
     }
 
-    private static Schema.SchemaType toSchemaType(String raw) {
-        if (raw == null) {
+    private static Schema.SchemaType toSchemaType(Object raw) {
+        if (!(raw instanceof String name)) {
             return null;
         }
-        return switch (raw) {
+        return switch (name) {
             case "array" -> Schema.SchemaType.ARRAY;
             case "boolean" -> Schema.SchemaType.BOOLEAN;
             case "integer" -> Schema.SchemaType.INTEGER;
+            case "null" -> Schema.SchemaType.NULL;
             case "number" -> Schema.SchemaType.NUMBER;
             case "object" -> Schema.SchemaType.OBJECT;
             case "string" -> Schema.SchemaType.STRING;

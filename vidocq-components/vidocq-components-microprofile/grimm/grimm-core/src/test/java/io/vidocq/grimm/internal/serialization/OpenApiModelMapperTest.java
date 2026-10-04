@@ -20,8 +20,10 @@
 package io.vidocq.grimm.internal.serialization;
 
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.headers.Header;
 import org.eclipse.microprofile.openapi.models.media.Schema;
+import org.eclipse.microprofile.openapi.models.parameters.Parameter;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -29,10 +31,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -491,6 +495,128 @@ class OpenApiModelMapperTest {
         assertEquals(List.of(Schema.SchemaType.STRING),
                 header.getContent().getMediaType("application/json").getSchema().getType());
         assertFalse(header.hasExtension("style"));
+    }
+
+    @Test
+    void staticRefsOnParametersRequestBodiesResponsesAndCallbacksAreKeptVerbatim() {
+        // OAS 3.1 §4.8.12/13/17/18: each of these objects may be a Reference Object.
+        String json = """
+                {
+                  "openapi": "3.1.0",
+                  "info": {"title": "t", "version": "1"},
+                  "paths": {"/p": {"post": {
+                    "parameters": [{"$ref": "Param.yaml"}],
+                    "requestBody": {"$ref": "Body.yaml"},
+                    "responses": {"200": {"$ref": "Response.yaml"}},
+                    "callbacks": {"cb": {"$ref": "Callback.yaml"}}
+                  }}},
+                  "components": {
+                    "parameters": {"P": {"$ref": "#/components/parameters/Q"}},
+                    "requestBodies": {"B": {"$ref": "Body.yaml"}},
+                    "responses": {"R": {"$ref": "Response.yaml"}},
+                    "callbacks": {
+                      "C": {"$ref": "Callback.yaml"},
+                      "D": {"{$request.body#/url}": {"post": {"operationId": "notify"}}, "x-c": "v"}
+                    }
+                  }
+                }
+                """;
+        OpenAPI doc = new JsonDeserializer().deserialize(json);
+        Operation post = doc.getPaths().getPathItem("/p").getPOST();
+        var components = doc.getComponents();
+
+        assertAll(
+                () -> assertEquals("Param.yaml", post.getParameters().get(0).getRef()),
+                () -> assertEquals("Body.yaml", post.getRequestBody().getRef()),
+                () -> assertEquals("Response.yaml", post.getResponses().getAPIResponse("200").getRef()),
+                () -> assertEquals("Callback.yaml", post.getCallbacks().get("cb").getRef()),
+                () -> assertTrue(post.getCallbacks().get("cb").getPathItems() == null
+                        || post.getCallbacks().get("cb").getPathItems().isEmpty(), "$ref is not an expression"),
+                () -> assertEquals("#/components/parameters/Q", components.getParameters().get("P").getRef()),
+                () -> assertEquals("Body.yaml", components.getRequestBodies().get("B").getRef()),
+                () -> assertEquals("Response.yaml", components.getResponses().get("R").getRef()),
+                () -> assertEquals("Callback.yaml", components.getCallbacks().get("C").getRef()),
+                () -> assertEquals("notify", components.getCallbacks().get("D")
+                        .getPathItem("{$request.body#/url}").getPOST().getOperationId()),
+                () -> assertEquals("v", components.getCallbacks().get("D").getExtensions().get("x-c")));
+
+        String written = new JsonSerializer().serialize(doc);
+        assertTrue(written.contains("\"cb\":{\"$ref\":\"Callback.yaml\"}"), written);
+        assertTrue(written.contains("\"parameters\":[{\"$ref\":\"Param.yaml\"}]"), written);
+    }
+
+    @Test
+    void staticParameterFieldsAreMapped() {
+        String json = """
+                {
+                  "openapi": "3.1.0",
+                  "info": {"title": "t", "version": "1"},
+                  "paths": {"/p/{id}": {"get": {
+                    "parameters": [
+                      {"name": "q", "in": "query", "style": "form", "explode": false, "allowReserved": true,
+                       "deprecated": true, "allowEmptyValue": true, "example": "ex",
+                       "examples": {"e1": {"value": "v1"}},
+                       "content": {"application/json": {"schema": {"type": "string"}}}},
+                      {"name": "id", "in": "path", "style": "matrix"},
+                      {"name": "l", "in": "path", "style": "label"},
+                      {"name": "h", "in": "header", "style": "simple"},
+                      {"name": "s", "in": "query", "style": "spaceDelimited"},
+                      {"name": "pd", "in": "query", "style": "pipeDelimited"},
+                      {"name": "o", "in": "query", "style": "deepObject"}
+                    ],
+                    "responses": {"200": {"description": "ok"}}
+                  }}}
+                }
+                """;
+        OpenAPI doc = new JsonDeserializer().deserialize(json);
+        List<Parameter> parameters = doc.getPaths().getPathItem("/p/{id}").getGET().getParameters();
+        Parameter q = parameters.get(0);
+
+        assertAll(
+                () -> assertEquals(Parameter.Style.FORM, q.getStyle()),
+                () -> assertEquals(Boolean.FALSE, q.getExplode()),
+                () -> assertEquals(Boolean.TRUE, q.getAllowReserved()),
+                () -> assertEquals(Boolean.TRUE, q.getDeprecated()),
+                () -> assertEquals(Boolean.TRUE, q.getAllowEmptyValue()),
+                () -> assertEquals("ex", q.getExample()),
+                () -> assertEquals("v1", q.getExamples().get("e1").getValue()),
+                () -> assertEquals(List.of(Schema.SchemaType.STRING),
+                        q.getContent().getMediaType("application/json").getSchema().getType()),
+                () -> assertEquals(List.of(Parameter.Style.MATRIX, Parameter.Style.LABEL, Parameter.Style.SIMPLE,
+                                Parameter.Style.SPACEDELIMITED, Parameter.Style.PIPEDELIMITED,
+                                Parameter.Style.DEEPOBJECT),
+                        parameters.subList(1, parameters.size()).stream().map(Parameter::getStyle).toList()));
+
+        String written = new JsonSerializer().serialize(doc);
+        assertTrue(written.contains("\"style\":\"form\""), written);
+        assertTrue(written.contains("\"explode\":false"), written);
+        assertTrue(written.contains("\"style\":\"deepObject\""), written);
+    }
+
+    @Test
+    void staticNullTypeIsMappedAndAnUnknownTypeIsKeptAsWritten() {
+        // JSON Schema 2020-12 §6.1.1 lists "null" among the simple types; OAS 3.1 uses it for nullable.
+        String json = """
+                {
+                  "openapi": "3.1.0",
+                  "info": {"title": "t", "version": "1"},
+                  "components": {"schemas": {
+                    "Nullable": {"type": ["string", "null"]},
+                    "Null": {"type": "null"},
+                    "Custom": {"type": "file"},
+                    "Mixed": {"type": ["string", "file"]}
+                  }}
+                }
+                """;
+        OpenAPI doc = new JsonDeserializer().deserialize(json);
+        assertAll(
+                () -> assertEquals(List.of(Schema.SchemaType.STRING, Schema.SchemaType.NULL),
+                        schema(doc, "Nullable").getType()),
+                () -> assertEquals(List.of(Schema.SchemaType.NULL), schema(doc, "Null").getType()),
+                () -> assertNull(schema(doc, "Custom").getType()),
+                () -> assertEquals("file", schema(doc, "Custom").get("type")),
+                () -> assertNull(schema(doc, "Mixed").getType()),
+                () -> assertEquals(List.of("string", "file"), schema(doc, "Mixed").get("type")));
     }
 
     private static void assertMinimalSchema(Schema s) {
