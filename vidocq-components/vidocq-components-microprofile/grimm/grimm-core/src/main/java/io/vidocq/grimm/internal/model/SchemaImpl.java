@@ -25,10 +25,13 @@ import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.media.XML;
 
 import java.math.BigDecimal;
-import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Mutable implementation of {@link Schema}.
@@ -391,32 +394,32 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     @Override public void removeExample(Object example) { if (examples != null) { examples = ModelCollections.copyOnWriteList(examples); examples.remove(example); } }
 
     // ── generic property access (Schema.get / Schema.set / getAll / setAll) ──
+    // A property is named as in the JSON document. A standard name holds its value either in its
+    // typed field or, when set() gave it a value of another type (alternative dialect), in
+    // extraProperties — never in both. Any other name is an extension.
     @Override
     public Object get(String propertyName) {
         if (extraProperties != null && extraProperties.containsKey(propertyName)) {
             return extraProperties.get(propertyName);
         }
-        Method getter = resolveGetter(propertyName);
-        if (getter != null) {
-            try {
-                return getter.invoke(this);
-            } catch (ReflectiveOperationException ignored) {
-                // Fall through to null for unknown/non-invocable properties.
-            }
-        }
-        return null;
+        Property property = propertyName == null ? null : STANDARD_PROPERTIES.get(propertyName);
+        return property == null ? null : property.getter().apply(this);
     }
 
     @Override
     public Schema set(String propertyName, Object value) {
-        Method setter = resolveSetter(propertyName, value);
-        if (setter != null) {
-            try {
-                setter.invoke(this, value);
+        if (propertyName == null) {
+            return this;
+        }
+        Property property = STANDARD_PROPERTIES.get(propertyName);
+        if (property != null) {
+            boolean typed = value == null || property.accepts().test(value);
+            property.setter().accept(this, typed ? value : null);
+            if (typed) {
+                removeExtension(propertyName);
                 return this;
-            } catch (ReflectiveOperationException ignored) {
-                // Fall through to extension-style storage for unknown properties.
             }
+            // A value of another type is kept as written, below.
         }
         if (value == null) {
             removeExtension(propertyName);
@@ -427,18 +430,29 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         return this;
     }
 
+    /** Every property set to a non-null value, standard ones first, as {@link #get(String)} reads them. */
     @Override
     public Map<String, ?> getAll() {
-        return extraProperties == null ? Map.of() : ModelCollections.immutableMapView(extraProperties);
+        Map<String, Object> all = new LinkedHashMap<>();
+        STANDARD_PROPERTIES.forEach((name, property) -> {
+            Object value = property.getter().apply(this);
+            if (value != null) {
+                all.put(name, value);
+            }
+        });
+        if (extraProperties != null) {
+            all.putAll(extraProperties);
+        }
+        return Collections.unmodifiableMap(all);
     }
 
+    /** Clears every property, extensions and {@code $ref} included, then sets each entry with {@link #set}. */
     @Override
     public void setAll(Map<String, ?> allProperties) {
-        extraProperties = null; // clears extensions (TCK testSetAllClearsExtensions)
+        STANDARD_PROPERTIES.values().forEach(property -> property.setter().accept(this, null));
+        extraProperties = null;
         if (allProperties != null) {
-            for (Map.Entry<String, ?> entry : allProperties.entrySet()) {
-                set(entry.getKey(), entry.getValue()); // standard keys go through their setter
-            }
+            allProperties.forEach(this::set);
         }
     }
 
@@ -466,7 +480,7 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
 
     @Override
     public void removeExtension(String name) {
-        if (extraProperties != null) {
+        if (extraProperties != null && extraProperties.containsKey(name)) {
             extraProperties = ModelCollections.copyOnWriteMap(extraProperties);
             extraProperties.remove(name);
         }
@@ -482,70 +496,110 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         return extraProperties == null ? null : extraProperties.get(name);
     }
 
-    private Method resolveGetter(String propertyName) {
-        if (propertyName == null || propertyName.isEmpty()) {
-            return null;
-        }
-        String suffix = accessorSuffix(propertyName);
-        try {
-            return getClass().getMethod("get" + suffix);
-        } catch (NoSuchMethodException ignored) {
-            try {
-                return getClass().getMethod("is" + suffix);
-            } catch (NoSuchMethodException ignoredToo) {
-                return null;
-            }
+    // ── the standard properties, by JSON name ──
+
+    /**
+     * A standard property: the values its typed setter takes, and its typed accessors.
+     * Only these names are properties — {@code extensions}, {@code all} or {@code defaultValue},
+     * the names of Java accessors, are unknown properties, hence extensions.
+     */
+    private record Property(Predicate<Object> accepts, Function<SchemaImpl, Object> getter,
+                            BiConsumer<SchemaImpl, Object> setter) {
+
+        static <T> Property of(Class<T> type, Function<SchemaImpl, ? extends T> getter,
+                               BiConsumer<SchemaImpl, T> setter) {
+            return new Property(type::isInstance, getter::apply,
+                    (schema, value) -> setter.accept(schema, type.cast(value)));
         }
     }
 
-    private Method resolveSetter(String propertyName, Object value) {
-        if (propertyName == null || propertyName.isEmpty()) {
-            return null;
-        }
-        if ("additionalProperties".equals(propertyName)) {
-            try {
-                if (value instanceof Boolean || value == null) {
-                    return getClass().getMethod("setAdditionalPropertiesBoolean", Boolean.class);
-                }
-                return getClass().getMethod("setAdditionalPropertiesSchema", Schema.class);
-            } catch (NoSuchMethodException ignored) {
-                return null;
-            }
-        }
-        String name = "set" + accessorSuffix(propertyName);
-        Method[] methods = getClass().getMethods();
-        for (Method method : methods) {
-            if (!method.getName().equals(name) || method.getParameterCount() != 1) {
-                continue;
-            }
-            Class<?> parameterType = method.getParameterTypes()[0];
-            if (value == null || parameterType.isInstance(value)) {
-                return method;
-            }
-        }
-        return null;
-    }
+    private static final Map<String, Property> STANDARD_PROPERTIES = standardProperties();
 
-    private static String capitalize(String value) {
-        if (value.length() == 1) {
-            return value.toUpperCase();
-        }
-        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
-    }
-
-    private static String accessorSuffix(String propertyName) {
-        return switch (propertyName) {
-            case "default" -> "DefaultValue";
-            case "enum" -> "Enumeration";
-            case "$schema" -> "SchemaDialect";
-            case "$comment" -> "Comment";
-            case "if" -> "IfSchema";
-            case "then" -> "ThenSchema";
-            case "else" -> "ElseSchema";
-            case "const" -> "ConstValue";
-            case "additionalProperties" -> "AdditionalPropertiesSchema";
-            default -> capitalize(propertyName);
-        };
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Map<String, Property> standardProperties() {
+        Map<String, Property> p = new LinkedHashMap<>();
+        // $ref is read and written as it stands: no short-name expansion, as for a static file.
+        p.put("$ref", Property.of(String.class, SchemaImpl::getRef, (s, v) -> setVerbatimRef(s, v)));
+        p.put("$schema", Property.of(String.class, SchemaImpl::getSchemaDialect, SchemaImpl::setSchemaDialect));
+        p.put("$comment", Property.of(String.class, SchemaImpl::getComment, SchemaImpl::setComment));
+        p.put("discriminator", Property.of(Discriminator.class, SchemaImpl::getDiscriminator,
+                SchemaImpl::setDiscriminator));
+        p.put("title", Property.of(String.class, SchemaImpl::getTitle, SchemaImpl::setTitle));
+        p.put("default", Property.of(Object.class, SchemaImpl::getDefaultValue, SchemaImpl::setDefaultValue));
+        p.put("enum", Property.of(List.class, SchemaImpl::getEnumeration, (s, v) -> s.setEnumeration(v)));
+        p.put("multipleOf", Property.of(BigDecimal.class, SchemaImpl::getMultipleOf, SchemaImpl::setMultipleOf));
+        p.put("maximum", Property.of(BigDecimal.class, SchemaImpl::getMaximum, SchemaImpl::setMaximum));
+        p.put("exclusiveMaximum", Property.of(BigDecimal.class, SchemaImpl::getExclusiveMaximum,
+                SchemaImpl::setExclusiveMaximum));
+        p.put("minimum", Property.of(BigDecimal.class, SchemaImpl::getMinimum, SchemaImpl::setMinimum));
+        p.put("exclusiveMinimum", Property.of(BigDecimal.class, SchemaImpl::getExclusiveMinimum,
+                SchemaImpl::setExclusiveMinimum));
+        p.put("maxLength", Property.of(Integer.class, SchemaImpl::getMaxLength, SchemaImpl::setMaxLength));
+        p.put("minLength", Property.of(Integer.class, SchemaImpl::getMinLength, SchemaImpl::setMinLength));
+        p.put("pattern", Property.of(String.class, SchemaImpl::getPattern, SchemaImpl::setPattern));
+        p.put("maxItems", Property.of(Integer.class, SchemaImpl::getMaxItems, SchemaImpl::setMaxItems));
+        p.put("minItems", Property.of(Integer.class, SchemaImpl::getMinItems, SchemaImpl::setMinItems));
+        p.put("uniqueItems", Property.of(Boolean.class, SchemaImpl::getUniqueItems, SchemaImpl::setUniqueItems));
+        p.put("maxProperties", Property.of(Integer.class, SchemaImpl::getMaxProperties,
+                SchemaImpl::setMaxProperties));
+        p.put("minProperties", Property.of(Integer.class, SchemaImpl::getMinProperties,
+                SchemaImpl::setMinProperties));
+        p.put("required", Property.of(List.class, SchemaImpl::getRequired, (s, v) -> s.setRequired(v)));
+        p.put("type", Property.of(List.class, SchemaImpl::getType, (s, v) -> s.setType(v)));
+        p.put("not", Property.of(Schema.class, SchemaImpl::getNot, SchemaImpl::setNot));
+        p.put("properties", Property.of(Map.class, SchemaImpl::getProperties, (s, v) -> s.setProperties(v)));
+        // The boolean form is read as a boolean schema, as getAdditionalPropertiesSchema() does.
+        p.put("additionalProperties", new Property(
+                value -> value instanceof Schema || value instanceof Boolean,
+                SchemaImpl::getAdditionalPropertiesSchema,
+                (s, v) -> {
+                    if (v instanceof Boolean b) {
+                        s.setAdditionalPropertiesBoolean(b);
+                    } else {
+                        s.setAdditionalPropertiesSchema((Schema) v);
+                    }
+                }));
+        p.put("description", Property.of(String.class, SchemaImpl::getDescription, SchemaImpl::setDescription));
+        p.put("format", Property.of(String.class, SchemaImpl::getFormat, SchemaImpl::setFormat));
+        p.put("readOnly", Property.of(Boolean.class, SchemaImpl::getReadOnly, SchemaImpl::setReadOnly));
+        p.put("writeOnly", Property.of(Boolean.class, SchemaImpl::getWriteOnly, SchemaImpl::setWriteOnly));
+        p.put("example", Property.of(Object.class, SchemaImpl::getExample, SchemaImpl::setExample));
+        p.put("externalDocs", Property.of(ExternalDocumentation.class, SchemaImpl::getExternalDocs,
+                SchemaImpl::setExternalDocs));
+        p.put("deprecated", Property.of(Boolean.class, SchemaImpl::getDeprecated, SchemaImpl::setDeprecated));
+        p.put("xml", Property.of(XML.class, SchemaImpl::getXml, SchemaImpl::setXml));
+        p.put("items", Property.of(Schema.class, SchemaImpl::getItems, SchemaImpl::setItems));
+        p.put("allOf", Property.of(List.class, SchemaImpl::getAllOf, (s, v) -> s.setAllOf(v)));
+        p.put("anyOf", Property.of(List.class, SchemaImpl::getAnyOf, (s, v) -> s.setAnyOf(v)));
+        p.put("oneOf", Property.of(List.class, SchemaImpl::getOneOf, (s, v) -> s.setOneOf(v)));
+        p.put("if", Property.of(Schema.class, SchemaImpl::getIfSchema, SchemaImpl::setIfSchema));
+        p.put("then", Property.of(Schema.class, SchemaImpl::getThenSchema, SchemaImpl::setThenSchema));
+        p.put("else", Property.of(Schema.class, SchemaImpl::getElseSchema, SchemaImpl::setElseSchema));
+        p.put("dependentSchemas", Property.of(Map.class, SchemaImpl::getDependentSchemas,
+                (s, v) -> s.setDependentSchemas(v)));
+        p.put("prefixItems", Property.of(List.class, SchemaImpl::getPrefixItems, (s, v) -> s.setPrefixItems(v)));
+        p.put("contains", Property.of(Schema.class, SchemaImpl::getContains, SchemaImpl::setContains));
+        p.put("patternProperties", Property.of(Map.class, SchemaImpl::getPatternProperties,
+                (s, v) -> s.setPatternProperties(v)));
+        p.put("propertyNames", Property.of(Schema.class, SchemaImpl::getPropertyNames,
+                SchemaImpl::setPropertyNames));
+        p.put("unevaluatedItems", Property.of(Schema.class, SchemaImpl::getUnevaluatedItems,
+                SchemaImpl::setUnevaluatedItems));
+        p.put("unevaluatedProperties", Property.of(Schema.class, SchemaImpl::getUnevaluatedProperties,
+                SchemaImpl::setUnevaluatedProperties));
+        p.put("const", Property.of(Object.class, SchemaImpl::getConstValue, SchemaImpl::setConstValue));
+        p.put("maxContains", Property.of(Integer.class, SchemaImpl::getMaxContains, SchemaImpl::setMaxContains));
+        p.put("minContains", Property.of(Integer.class, SchemaImpl::getMinContains, SchemaImpl::setMinContains));
+        p.put("dependentRequired", Property.of(Map.class, SchemaImpl::getDependentRequired,
+                (s, v) -> s.setDependentRequired(v)));
+        p.put("contentEncoding", Property.of(String.class, SchemaImpl::getContentEncoding,
+                SchemaImpl::setContentEncoding));
+        p.put("contentMediaType", Property.of(String.class, SchemaImpl::getContentMediaType,
+                SchemaImpl::setContentMediaType));
+        p.put("contentSchema", Property.of(Schema.class, SchemaImpl::getContentSchema,
+                SchemaImpl::setContentSchema));
+        p.put("examples", Property.of(List.class, SchemaImpl::getExamples, (s, v) -> s.setExamples(v)));
+        return Collections.unmodifiableMap(p);
     }
 }
 

@@ -24,7 +24,9 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -49,6 +51,50 @@ class OpenApiValueMapperTest {
 
         assertNotNull(payload);
         assertEquals(Boolean.TRUE, payload.get("additionalProperties"));
+    }
+
+    /**
+     * BUG-20261004-01: {@code Schema.getAll()} lists the standard properties as well as the
+     * extensions, so the serializer must not write it next to the typed getters — each key once,
+     * under its JSON name, with the value of the typed getter ({@code type} unwrapped).
+     */
+    @Test
+    void toSerializable_writesEachSchemaPropertyOnceUnderItsJsonName() {
+        Schema schema = OASFactory.createSchema()
+                .type(List.of(Schema.SchemaType.STRING))
+                .title("t")
+                .defaultValue("d")
+                .enumeration(List.of("a"))
+                .schemaDialect("https://example.com/dialect")
+                .comment("c")
+                .constValue("k")
+                .ifSchema(OASFactory.createSchema().minLength(1))
+                .addExtension("x-a", "v")
+                .set("unknownKeyword", 1);
+        OpenAPI openAPI = OASFactory.createOpenAPI()
+                .components(OASFactory.createComponents().addSchema("S", schema));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> root = (Map<String, Object>) OpenApiValueMapper.toSerializable(openAPI);
+        Map<?, ?> s = (Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) root.get("components")).get("schemas")).get("S");
+
+        assertEquals(Set.of("type", "title", "default", "enum", "$schema", "$comment", "const", "if",
+                "x-a", "unknownKeyword"), s.keySet());
+        assertEquals("string", s.get("type"));
+        assertEquals(List.of("a"), s.get("enum"));
+
+        String json = new JsonSerializer().serialize(openAPI);
+        for (Object key : s.keySet()) {
+            assertEquals(1, count(json, "\"" + key + "\":"), key + " in " + json);
+        }
+    }
+
+    private static int count(String text, String needle) {
+        int n = 0;
+        for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + 1)) {
+            n++;
+        }
+        return n;
     }
 }
 

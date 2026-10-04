@@ -146,31 +146,18 @@ final class OpenApiValueMapper {
             if (!isGetter(method)) {
                 continue;
             }
+            String propertyName = getterNameToProperty(method.getName());
+            // Schema.getAll() is a view of the other getters plus the extensions, both written
+            // here already: serializing it as well would write every schema property twice.
+            if (propertyName == null || "class".equals(propertyName) || "operations".equals(propertyName)
+                    || "all".equals(propertyName)) {
+                continue;
+            }
             Object rawValue = invoke(method, bean);
             if (rawValue == null) {
                 continue;
             }
 
-            String propertyName = getterNameToProperty(method.getName());
-            if (propertyName == null || "class".equals(propertyName)) {
-                continue;
-            }
-            if ("operations".equals(propertyName)) {
-                continue;
-            }
-            if ("all".equals(propertyName) && rawValue instanceof Map<?, ?> allMap) {
-                for (Map.Entry<?, ?> entry : allMap.entrySet()) {
-                    if (entry.getKey() == null || entry.getValue() == null) {
-                        continue;
-                    }
-                    String key = String.valueOf(entry.getKey());
-                    if ("schemaDialect".equals(key)) {
-                        key = "$schema";
-                    }
-                    result.putIfAbsent(key, toSerializable(entry.getValue()));
-                }
-                continue;
-            }
             if ("extensions".equals(propertyName)) {
                 Map<?, ?> extensions = (Map<?, ?>) rawValue;
                 for (Map.Entry<?, ?> extension : extensions.entrySet()) {
