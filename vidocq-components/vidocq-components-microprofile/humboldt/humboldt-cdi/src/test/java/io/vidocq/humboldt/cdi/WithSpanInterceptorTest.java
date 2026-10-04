@@ -162,6 +162,17 @@ class WithSpanInterceptorTest {
                 "default kind = INTERNAL when annotation is missing");
     }
 
+    @Test
+    void sets_code_function_name_with_binary_class_name() throws Exception {
+        interceptor.aroundInvoke(invocationFor("annotatedDefault", "hello"));
+
+        SpanData s = exporter.getFinishedSpans().getFirst();
+        assertEquals(Target.class.getName() + ".annotatedDefault",
+                s.attributes().get(AttributeKey.stringKey("code.function.name")),
+                "MP Telemetry 2.2: code.function.name is mandatory, binary name + '.' + method");
+        assertTrue(Target.class.getName().contains("$"), "target is a nested class, so '$' form is asserted");
+    }
+
     // ----- helpers -----
 
     private InvocationContext invocationFor(String methodName, Object... args) throws Exception {

@@ -21,6 +21,7 @@ package io.vidocq.humboldt.cdi;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.SpanKind;
@@ -66,6 +67,9 @@ import java.lang.reflect.Parameter;
 @Priority(Interceptor.Priority.APPLICATION + 1)
 public class WithSpanInterceptor {
 
+    /** OTel semconv {@code code.function.name} — mandatory on @WithSpan spans since MP Telemetry 2.2. */
+    private static final AttributeKey<String> CODE_FUNCTION_NAME = AttributeKey.stringKey("code.function.name");
+
     @AroundInvoke
     public Object aroundInvoke(InvocationContext ctx) throws Exception {
         Method method = ctx.getMethod();
@@ -76,7 +80,9 @@ public class WithSpanInterceptor {
         SpanKind kind = annotation == null ? SpanKind.INTERNAL : annotation.kind();
 
         Tracer t = tracer();
-        SpanBuilder builder = t.spanBuilder(spanName).setSpanKind(kind);
+        SpanBuilder builder = t.spanBuilder(spanName)
+                .setSpanKind(kind)
+                .setAttribute(CODE_FUNCTION_NAME, method.getDeclaringClass().getName() + "." + method.getName());
         Span span = builder.startSpan();
         applySpanAttributes(span, method, ctx.getParameters());
         try (Scope ignored = span.makeCurrent()) {
