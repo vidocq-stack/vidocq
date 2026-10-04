@@ -39,7 +39,7 @@ public final class PemKeys {
     private PemKeys() {}
 
     /** Strips the PEM armour and decodes the base64 body. */
-    private static byte[] derOf(String pem) throws JwtValidationException {
+    private static byte[] derOf(String pem, String kind) throws JwtValidationException {
         String base64 = pem
                 .replaceAll("-----BEGIN[^-]*-----", "")
                 .replaceAll("-----END[^-]*-----", "")
@@ -47,12 +47,12 @@ public final class PemKeys {
         try {
             return Base64.getDecoder().decode(base64);
         } catch (IllegalArgumentException e) {
-            throw new JwtValidationException("invalid PEM public key", e);
+            throw new JwtValidationException("invalid PEM " + kind + " key", e);
         }
     }
 
     public static PublicKey fromPem(String pem, SignatureAlgorithm.Family family) throws JwtValidationException {
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem));
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem, "public"));
         String algorithm = switch (family) {
             case RSA -> "RSA";
             case EC -> "EC";
@@ -70,16 +70,21 @@ public final class PemKeys {
      * accepted). Tries the RSA {@link KeyFactory} first, then EC.
      */
     public static PublicKey fromPem(String pem) throws JwtValidationException {
-        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem));
-        GeneralSecurityException last = null;
-        for (String algorithm : new String[] {"RSA", "EC"}) {
-            try {
-                return KeyFactory.getInstance(algorithm).generatePublic(spec);
-            } catch (GeneralSecurityException e) {
-                last = e;
-            }
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem, "public"));
+        GeneralSecurityException rsaFailure;
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(spec);
+        } catch (GeneralSecurityException e) {
+            rsaFailure = e;
         }
-        throw new JwtValidationException("invalid PEM public key (neither RSA nor EC)", last);
+        try {
+            return KeyFactory.getInstance("EC").generatePublic(spec);
+        } catch (GeneralSecurityException ecFailure) {
+            JwtValidationException failure =
+                    new JwtValidationException("invalid PEM public key (neither RSA nor EC)", ecFailure);
+            failure.addSuppressed(rsaFailure);
+            throw failure;
+        }
     }
 
     /**
@@ -87,14 +92,10 @@ public final class PemKeys {
      * JWE decryption ({@code mp.jwt.decrypt.key} / {@code.location}).
      */
     public static PrivateKey privateKeyFromPem(String pem) throws JwtValidationException {
-        String base64 = pem
-                .replaceAll("-----BEGIN[^-]*-----", "")
-                .replaceAll("-----END[^-]*-----", "")
-                .replaceAll("\\s", "");
+        byte[] der = derOf(pem, "private");
         try {
-            byte[] der = Base64.getDecoder().decode(base64);
             return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(der));
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+        } catch (GeneralSecurityException e) {
             throw new JwtValidationException("invalid PEM private key", e);
         }
     }

@@ -40,7 +40,7 @@ import java.util.Set;
  * <li>{@code encryptionRequired} — if true (when {@code mp.jwt.decrypt.key*} is configured),
  * unencrypted JWS must be rejected with 401.</li>
  * <li>{@code requiredAlgorithm} — {@code mp.jwt.verify.publickey.algorithm}: if present, only tokens
- * signed with this algorithm family are accepted; empty = RS256 and ES256 both accepted (MP JWT 2.2).</li>
+ * signed with this algorithm family are accepted; empty = every RS256/384/512 and ES256/384/512 algorithm accepted (MP JWT 2.2).</li>
  * </ul>
  *
  * <p>Immutable record; {@code audiences} is defensively copied. Construction from
@@ -69,7 +69,7 @@ public record JwtConfig(
 
     /**
      * Pre-0.4 constructor without {@code requiredAlgorithm} (kept for source and binary compatibility):
-     * no algorithm is required, so RS256 and ES256 families are both accepted.
+     * no algorithm is required, so every RS256/RS384/RS512 and ES256/ES384/ES512 algorithm is accepted.
      */
     public JwtConfig(Optional<String> issuer, Set<String> audiences, Duration clockSkew,
             boolean requireExpiration, Optional<Long> tokenAge, boolean encryptionRequired) {

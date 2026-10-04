@@ -31,7 +31,9 @@ import java.security.interfaces.RSAPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** MP JWT 2.2: without a configured algorithm both RSA and EC PEM keys must load. */
@@ -72,5 +74,28 @@ class PemKeysTest {
     void garbageIsRejected() {
         assertThrows(JwtValidationException.class,
                 () -> PemKeys.fromPem("-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----"));
+    }
+
+    @Test
+    void invalidBase64IsRejectedWithClearMessage() {
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> PemKeys.fromPem("-----BEGIN PUBLIC KEY-----\n!!not*base64!!\n-----END PUBLIC KEY-----"));
+        assertEquals("invalid PEM public key", ex.getMessage());
+        assertInstanceOf(IllegalArgumentException.class, ex.getCause());
+    }
+
+    @Test
+    void familyAgnosticFailureKeepsTheRsaFailureAsSuppressed() {
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> PemKeys.fromPem("-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----"));
+        assertNotNull(ex.getCause(), "the EC failure is the cause");
+        assertEquals(1, ex.getSuppressed().length, "the RSA failure is kept as suppressed");
+    }
+
+    @Test
+    void privateKeyInvalidBase64IsRejected() {
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> PemKeys.privateKeyFromPem("-----BEGIN PRIVATE KEY-----\n!!not*base64!!\n-----END PRIVATE KEY-----"));
+        assertInstanceOf(IllegalArgumentException.class, ex.getCause());
     }
 }
