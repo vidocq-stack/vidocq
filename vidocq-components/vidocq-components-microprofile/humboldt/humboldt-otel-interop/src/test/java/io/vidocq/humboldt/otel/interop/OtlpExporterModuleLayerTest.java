@@ -37,6 +37,8 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -44,7 +46,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
 
@@ -174,6 +178,48 @@ class OtlpExporterModuleLayerTest {
         assertFalse(api.isExported("io.opentelemetry.api.internal", humboldt.module(INTEROP)),
                 "only the modules the descriptor names");
         assertTheExportFailsOnTheConnectionOnly(humboldt, application, signal);
+    }
+
+    /**
+     * The qualified exports of the layer helpers go to {@code io.vidocq.humboldt.otel.interop} by name, and a
+     * qualified export reaches only target modules of the same layer or of a parent layer. When interop sits in a
+     * child layer of the OpenTelemetry API module, it cannot read {@code io.vidocq.humboldt.otel.api.layer}: the
+     * extension of the exports fails with an {@link IllegalAccessError}. That failure must not drop the provider
+     * it was extending the exports for (the exports are an optimisation of the child-layer layout, not a
+     * condition of discovering a provider).
+     */
+    @Test
+    void interop_in_a_child_layer_keeps_a_provider_whose_exports_cannot_be_extended() {
+        List<String> humboldtWithoutInterop = HUMBOLDT.subList(1, HUMBOLDT.size());
+        Layer parent = Layer.of(humboldtWithoutInterop, OTEL_SDK);
+        Layer application = parent.child(List.of(HUMBOLDT.get(0)), OTEL_EXPORTER);
+        Module api = parent.module("io.opentelemetry.api");
+        Module interop = application.module(INTEROP);
+        assertFalse(api.isExported("io.vidocq.humboldt.otel.api.layer", interop),
+                "the qualified export to interop does not reach a child layer");
+
+        Logger logger = Logger.getLogger(INTEROP + ".OtelSpiAutoConfiguration");
+        List<String> messages = new ArrayList<>();
+        Handler capture = new Handler() {
+            @Override public void publish(LogRecord record) {
+                messages.add(MessageFormat.format(record.getMessage(), record.getParameters()));
+            }
+            @Override public void flush() {}
+            @Override public void close() {}
+        };
+        boolean useParentHandlers = logger.getUseParentHandlers();
+        logger.setUseParentHandlers(false);
+        logger.addHandler(capture);
+        try {
+            application.callStatic(INTEROP + ".OtelSpiAutoConfiguration", "discover", Map.of(), application.loader());
+        } finally {
+            logger.removeHandler(capture);
+            logger.setUseParentHandlers(useParentHandlers);
+        }
+
+        assertTrue(messages.stream().anyMatch(m -> m.contains("SpanExporterProvider discovered")
+                        && m.contains("OtlpSpanExporterProvider")),
+                "the OTLP span exporter provider must still be discovered, got: " + messages);
     }
 
     /**

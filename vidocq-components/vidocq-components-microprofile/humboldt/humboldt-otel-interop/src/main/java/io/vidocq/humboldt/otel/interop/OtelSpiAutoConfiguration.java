@@ -371,11 +371,25 @@ public final class OtelSpiAutoConfiguration {
             if (!hasNext) return;
             try {
                 ServiceLoader.Provider<S> provider = it.next();
-                OtelLayerExports.extendTo(provider.type());
+                extendExports(provider.type());
                 action.accept(provider.get());
             } catch (Throwable t) {
                 LOG.log(Level.WARNING, "  Provider ignored ({0}): {1}", spi.getSimpleName(), t.toString());
             }
+        }
+    }
+
+    /**
+     * Extends the qualified exports to the layer of {@code type}, without ever dropping the provider: when this
+     * module cannot read the Humboldt layer helpers (it is on the class path, or in a child layer of the
+     * OpenTelemetry API modules), the call fails with an {@link IllegalAccessError} and the provider is kept as
+     * it was before the exports were extended.
+     */
+    private static void extendExports(Class<?> type) {
+        try {
+            OtelLayerExports.extendTo(type);
+        } catch (RuntimeException | LinkageError e) {
+            LOG.log(Level.DEBUG, "  Qualified exports not extended to the layer of {0}: {1}", type.getName(), e.toString());
         }
     }
 
