@@ -35,7 +35,7 @@ import java.util.List;
  * Converts a {@link io.vidocq.humboldt.sdk.trace.data.SpanData Humboldt SpanData}
  * to the {@link SpanData OTel SDK SpanData} format expected by exporters
  * created through the OTel SDK autoconfigure SPI (for example those provided
- * by the MicroProfile Telemetry 2.1 TCK).
+ * by the MicroProfile Telemetry 2.2 TCK).
  *
  * <p>This is the adaptation layer that lets Humboldt interoperate with
  * OTel-SDK-based exporters without embedding the OTel SDK in its application

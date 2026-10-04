@@ -41,7 +41,7 @@ import java.util.function.Supplier;
  * {@code ServiceLoader}. The callback chains are then applied at the appropriate
  * time in the Humboldt pipeline by {@link OtelSpiAutoConfiguration}.
  *
- * <p>MP Telemetry 2.1 spec §3.2 + OTel SDK autoconfigure: each
+ * <p>MP Telemetry 2.2 spec §"Enabling OpenTelemetry support" + OTel SDK autoconfigure: each
  * {@code AutoConfigurationCustomizerProvider} discovered via
  * {@code ServiceLoader<AutoConfigurationCustomizerProvider>} has its {@code customize(this)}
  * invoked. The customizer accumulates callbacks; they are then applied in order

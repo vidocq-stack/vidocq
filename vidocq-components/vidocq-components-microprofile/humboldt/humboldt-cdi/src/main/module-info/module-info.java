@@ -21,7 +21,7 @@
  * Humboldt CDI — automatic interception of
  * {@link io.opentelemetry.instrumentation.annotations.WithSpan @WithSpan}
  * (standard OpenTelemetry public API annotation, aligned with the MicroProfile
- * Telemetry 2.1 TCK).
+ * Telemetry 2.2 TCK).
  *
  * <p>The user only writes {@code @WithSpan}. The
  * {@link io.vidocq.humboldt.cdi.HumboldtBuildCompatibleExtension} (CDI 4.x
