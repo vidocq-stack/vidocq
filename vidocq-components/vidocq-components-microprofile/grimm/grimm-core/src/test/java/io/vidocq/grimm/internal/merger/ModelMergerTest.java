@@ -340,6 +340,67 @@ class ModelMergerTest {
                 new ReaderSource(withResponseSchema(OASFactory.createObject(Schema.class).description("d")))).getRef());
     }
 
+    @Test
+    @SuppressWarnings("deprecation") // getAdditionalPropertiesBoolean: the form under test
+    void merge_collidingMediaTypeSchemaTakesEveryPropertyOfTheHigherSource() {
+        // §4.4: annotations win on conflict, property by property, at the same position; what only
+        // the static file says stays (BUG-20261004-04).
+        Schema fromStaticFile = OASFactory.createObject(Schema.class)
+                .type(List.of(Schema.SchemaType.STRING))
+                .description("static")
+                .minLength(1)
+                .required(List.of("kept"));
+        Schema fromAnnotations = OASFactory.createObject(Schema.class)
+                .minimum(java.math.BigDecimal.ONE)
+                .maxLength(5)
+                .pattern("[a-z]+")
+                .readOnly(Boolean.TRUE)
+                .examples(List.of("abc"))
+                .contentMediaType("text/plain")
+                .not(OASFactory.createObject(Schema.class).pattern("x"))
+                .additionalPropertiesBoolean(Boolean.FALSE)
+                .required(List.of())
+                .addExtension("x-a", "v");
+
+        Schema merged = mergedResponseSchema(
+                new StaticFileSource(withResponseSchema(fromStaticFile)),
+                new AnnotationSource(withResponseSchema(fromAnnotations)));
+
+        assertEquals(List.of(Schema.SchemaType.STRING), merged.getType());
+        assertEquals("static", merged.getDescription());
+        assertEquals(1, merged.getMinLength());
+        assertEquals(List.of("kept"), merged.getRequired(), "an empty list does not wipe the lower source's");
+        assertEquals(java.math.BigDecimal.ONE, merged.getMinimum());
+        assertEquals(5, merged.getMaxLength());
+        assertEquals("[a-z]+", merged.getPattern());
+        assertEquals(Boolean.TRUE, merged.getReadOnly());
+        assertEquals(List.of("abc"), merged.getExamples());
+        assertEquals("text/plain", merged.getContentMediaType());
+        assertEquals("x", merged.getNot().getPattern());
+        assertEquals(Boolean.FALSE, merged.getAdditionalPropertiesBoolean());
+        assertEquals("v", merged.getExtensions().get("x-a"));
+    }
+
+    @Test
+    void merge_collidingNestedPropertySchemaTakesEveryPropertyOfTheHigherSource() {
+        Schema fromStaticFile = OASFactory.createObject(Schema.class)
+                .addProperty("a", OASFactory.createObject(Schema.class).type(List.of(Schema.SchemaType.INTEGER)))
+                .items(OASFactory.createObject(Schema.class).format("int32"));
+        Schema fromAnnotations = OASFactory.createObject(Schema.class)
+                .addProperty("a", OASFactory.createObject(Schema.class).minimum(java.math.BigDecimal.TEN))
+                .items(OASFactory.createObject(Schema.class).maximum(java.math.BigDecimal.TEN));
+
+        Schema merged = mergedResponseSchema(
+                new StaticFileSource(withResponseSchema(fromStaticFile)),
+                new AnnotationSource(withResponseSchema(fromAnnotations)));
+
+        Schema a = merged.getProperties().get("a");
+        assertEquals(List.of(Schema.SchemaType.INTEGER), a.getType());
+        assertEquals(java.math.BigDecimal.TEN, a.getMinimum());
+        assertEquals("int32", merged.getItems().getFormat());
+        assertEquals(java.math.BigDecimal.TEN, merged.getItems().getMaximum());
+    }
+
     private static Schema mergedResponseSchema(ModelSource lower, ModelSource higher) {
         return new ModelMerger().merge(List.of(lower, higher)).getPaths().getPathItem("/p").getGET()
                 .getResponses().getAPIResponse("200").getContent().getMediaType("application/json").getSchema();

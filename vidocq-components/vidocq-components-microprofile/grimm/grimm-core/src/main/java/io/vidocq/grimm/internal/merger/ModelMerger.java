@@ -357,58 +357,40 @@ public final class ModelMerger {
         return target;
     }
 
+    /**
+     * Every property the higher-priority {@code source} sets wins, extensions included: the
+     * properties are those of {@link Schema#getAll()}, named as in the JSON document, so the merge
+     * follows the property table of the model and a property added to it cannot be forgotten
+     * here. {@code items} and {@code properties} merge recursively; an empty list or map does not
+     * override what the lower source says. {@code $ref} is copied as written: {@code set("$ref")}
+     * does not expand a short name.
+     */
     private Schema mergeSchema(Schema target, Schema source) {
-        if (source.getRef() != null) {
-            AbstractExtensibleRef.setVerbatimRef(target, source.getRef());
-        }
-        if (source.getFormat() != null) {
-            target.setFormat(source.getFormat());
-        }
-        if (source.getType() != null && !source.getType().isEmpty()) {
-            target.setType(source.getType());
-        }
-        if (source.getTitle() != null) {
-            target.setTitle(source.getTitle());
-        }
-        if (source.getDefaultValue() != null) {
-            target.setDefaultValue(source.getDefaultValue());
-        }
-        if (source.getEnumeration() != null && !source.getEnumeration().isEmpty()) {
-            target.setEnumeration(source.getEnumeration());
-        }
-        if (source.getRequired() != null && !source.getRequired().isEmpty()) {
-            target.setRequired(source.getRequired());
-        }
-        if (source.getItems() != null) {
-            target.setItems(target.getItems() == null
-                    ? source.getItems()
-                    : mergeSchema(target.getItems(), source.getItems()));
-        }
-        if (source.getProperties() != null && !source.getProperties().isEmpty()) {
-            Map<String, Schema> merged = new LinkedHashMap<>();
-            if (target.getProperties() != null) {
-                merged.putAll(target.getProperties());
+        for (Map.Entry<String, ?> property : source.getAll().entrySet()) {
+            String name = property.getKey();
+            Object value = property.getValue();
+            if ("items".equals(name) && value instanceof Schema items && target.getItems() != null) {
+                target.setItems(mergeSchema(target.getItems(), items));
+            } else if ("properties".equals(name) && source.getProperties() != null
+                    && !source.getProperties().isEmpty()) {
+                Map<String, Schema> merged = new LinkedHashMap<>();
+                if (target.getProperties() != null) {
+                    merged.putAll(target.getProperties());
+                }
+                for (Map.Entry<String, Schema> entry : source.getProperties().entrySet()) {
+                    merged.merge(entry.getKey(), entry.getValue(), this::mergeSchema);
+                }
+                target.setProperties(merged);
+            } else if (!isEmptyCollection(value)) {
+                target.set(name, value);
             }
-            for (Map.Entry<String, Schema> entry : source.getProperties().entrySet()) {
-                merged.merge(entry.getKey(), entry.getValue(), this::mergeSchema);
-            }
-            target.setProperties(merged);
         }
-        if (source.getDescription() != null) {
-            target.setDescription(source.getDescription());
-        }
-        if (source.getAdditionalPropertiesBoolean() != null) {
-            target.setAdditionalPropertiesBoolean(source.getAdditionalPropertiesBoolean());
-        }
-        if (source.getAdditionalPropertiesSchema() != null) {
-            target.setAdditionalPropertiesSchema(source.getAdditionalPropertiesSchema());
-        }
-        if (source.getSchemaDialect() != null) {
-            target.setSchemaDialect(source.getSchemaDialect());
-        }
-        mergeReference(target, source);
-        mergeExtensions(target, source, true);
         return target;
+    }
+
+    private static boolean isEmptyCollection(Object value) {
+        return value instanceof java.util.Collection<?> collection && collection.isEmpty()
+                || value instanceof Map<?, ?> map && map.isEmpty();
     }
 
     private List<Parameter> mergeParameters(List<Parameter> base, List<Parameter> incoming) {
