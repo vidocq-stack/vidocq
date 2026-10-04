@@ -104,13 +104,26 @@ class OtlpJsonLogEncoderTest {
     }
 
     @Test
-    void writes_no_body_for_an_empty_string_body_value() {
+    void writes_an_empty_stringValue_for_an_empty_string_body_value() {
+        // As the OpenTelemetry 1.66 marshaler: the AnyValue oneof is written even when the string is empty.
         LogRecordData emptyBody = new LogRecordData(
                 Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
                 1_000L, 2_000L, SpanContext.getInvalid(),
                 Severity.INFO, "INFO", null, Attributes.empty(), "", Value.of(""));
 
         String json = OtlpJsonLogEncoder.encode(List.of(emptyBody));
+
+        assertTrue(json.contains("\"body\":{\"stringValue\":\"\"}"), json);
+    }
+
+    @Test
+    void writes_no_body_when_none_was_set() {
+        LogRecordData noBody = new LogRecordData(
+                Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
+                1_000L, 2_000L, SpanContext.getInvalid(),
+                Severity.INFO, "INFO", null, Attributes.empty(), "", null);
+
+        String json = OtlpJsonLogEncoder.encode(List.of(noBody));
 
         assertFalse(json.contains("\"body\""), json);
     }

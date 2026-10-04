@@ -63,8 +63,8 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     private Severity severity = Severity.UNDEFINED_SEVERITY_NUMBER;
     private String severityText = "";
     /**
-     * The body as set — a string body is kept as {@code Value.of(string)}; {@code null} when none was set.
-     * {@link LogRecordData} renders its string form and treats an empty string as no body.
+     * The body as set — a string body, even an empty one, is kept as {@code Value.of(string)}; {@code null} when
+     * none was set. {@link LogRecordData} renders its string form.
      */
     private Value<?> body;
     private AttributesBuilder attributes = Attributes.builder();

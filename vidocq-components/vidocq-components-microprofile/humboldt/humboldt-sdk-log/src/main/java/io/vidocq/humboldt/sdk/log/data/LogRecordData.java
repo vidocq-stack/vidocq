@@ -21,7 +21,6 @@ package io.vidocq.humboldt.sdk.log.data;
 
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.common.Value;
-import io.opentelemetry.api.common.ValueType;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.SpanContext;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
@@ -38,10 +37,12 @@ import io.vidocq.humboldt.sdk.common.Resource;
  * {@link #bodyValue()}; text exporters print {@link #body()}. The string form is computed once, here, when the
  * record is built.</p>
  *
- * <p>An empty string is no body, however it was set: {@code setBody("")}, {@code setBody(Value.of(""))} and an
- * empty {@code body} all give {@code bodyValue() == null} and {@code body() == ""}, and OTLP exporters write
- * no body. (The OpenTelemetry SDK keeps an empty string body and exports it.) An empty structured value — an
- * empty map, array or byte array — is still a body.</p>
+ * <p>As in the OpenTelemetry 1.66 SDK, a body set explicitly is kept even when empty: {@code setBody("")} and
+ * {@code setBody(Value.of(""))} both give {@code bodyValue() == Value.of("")} and {@code body() == ""}, and OTLP
+ * exporters write an empty {@code stringValue}. Only a record whose body was never set has
+ * {@code bodyValue() == null}. The constructors that take a string body only cannot tell an empty body from no
+ * body: there an empty {@code body} means no body — pass {@code Value.of("")} as {@code bodyValue} for an
+ * empty one.</p>
  *
  * @param resource              attributes of the telemetry source
  * @param scope                 identity of the source library
@@ -56,8 +57,7 @@ import io.vidocq.humboldt.sdk.common.Resource;
  * @param eventName             event name set through {@code LogRecordBuilder.setEventName} — empty for a
  *                              plain log record (a record with a non-empty event name is an Event)
  * @param bodyValue             the body as set, or {@code null} when there is none; a non-empty {@code body}
- *                              given without a {@code bodyValue} becomes {@code Value.of(body)}, and an empty
- *                              string value becomes {@code null}
+ *                              given without a {@code bodyValue} becomes {@code Value.of(body)}
  */
 public record LogRecordData(
         Resource resource,
@@ -79,9 +79,6 @@ public record LogRecordData(
         if (severityText == null) severityText = "";
         if (bodyValue != null) {
             body = bodyValue.asString();
-            if (body.isEmpty() && bodyValue.getType() == ValueType.STRING) {
-                bodyValue = null;
-            }
         } else if (body != null && !body.isEmpty()) {
             bodyValue = Value.of(body);
         }

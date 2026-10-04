@@ -273,7 +273,7 @@ class SdkLoggerProviderTest {
     }
 
     @Test
-    void an_empty_string_body_is_no_body_whether_set_as_a_string_or_as_a_value() {
+    void an_explicitly_set_empty_string_body_is_kept_whether_set_as_a_string_or_as_a_value() {
         InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
                 .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
@@ -283,12 +283,15 @@ class SdkLoggerProviderTest {
             p.get("x").logRecordBuilder().setBody("earlier").setBody(Value.of("")).emit();
         }
         for (LogRecordData r : exporter.getCollected()) {
-            assertNull(r.bodyValue(), "an empty string body is no body");
+            assertEquals(Value.of(""), r.bodyValue(), "an empty string body set explicitly is a body (OTel 1.66)");
             assertEquals("", r.body());
         }
         LogRecordData direct = new LogRecordData(null, null, 0L, 0L, SpanContext.getInvalid(),
                 null, null, "", null, "", Value.of(""));
-        assertNull(direct.bodyValue(), "the record applies the same rule when built directly");
+        assertEquals(Value.of(""), direct.bodyValue(), "the record keeps it when built directly");
+        LogRecordData stringOnly = new LogRecordData(null, null, 0L, 0L, SpanContext.getInvalid(),
+                null, null, "", null, "");
+        assertNull(stringOnly.bodyValue(), "an empty string without a body value still means no body");
     }
 
     @Test
