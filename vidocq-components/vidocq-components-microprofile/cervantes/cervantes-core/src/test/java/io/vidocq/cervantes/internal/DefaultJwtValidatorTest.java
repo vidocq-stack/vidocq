@@ -182,7 +182,7 @@ class DefaultJwtValidatorTest {
         //alg "none" (unsigned token) must be refused
         String h = TestJwts.B64URL.encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
         String p = TestJwts.B64URL.encodeToString("{\"sub\":\"x\"}".getBytes());
-        String token = h + "." + p + "."; // signature vide
+        String token = h + "." + p + "."; // empty signature
         assertThrows(JwtValidationException.class, () -> rsaValidator().validate(token));
     }
 

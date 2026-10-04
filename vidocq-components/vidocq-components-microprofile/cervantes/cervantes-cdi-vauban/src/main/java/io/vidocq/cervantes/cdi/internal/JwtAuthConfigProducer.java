@@ -108,9 +108,10 @@ public class JwtAuthConfigProducer {
     }
 
     /**
-     * Optional JWE decryption: {@code mp.jwt.decrypt.key} (inline) or {@code mp.jwt.decrypt.key.location}.
-     * {@code null} if absent. Optionally reads {@code mp.jwt.decrypt.key.algorithm} to
-     * validate that the algorithm in the JWE corresponds to that configured.
+     * Builds the optional JWE decryptor from {@code mp.jwt.decrypt.key} (inline) or
+     * {@code mp.jwt.decrypt.key.location}. Returns {@code null} when neither is set. When
+     * {@code mp.jwt.decrypt.key.algorithm} is set, a JWE whose header announces another
+     * algorithm is rejected.
      */
     static JweDecryptor buildDecryptor(Config config) throws JwtValidationException {
         Optional<String> algorithm = config.getOptionalValue("mp.jwt.decrypt.key.algorithm", String.class);

@@ -18,8 +18,8 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Public CDI API of Cervantes: {@link io.vidocq.cervantes.cdi.JsonWebTokenContext}, the context
- * a request bearing the validated {@code JsonWebToken} (tabled by the JAX-RS authentication filter,
- * read by the injectable principal's producer).
+ * Public CDI API of Cervantes: {@link io.vidocq.cervantes.cdi.JsonWebTokenContext}, the
+ * request-scoped context that holds the validated {@code JsonWebToken}. The JAX-RS authentication
+ * filter publishes the token there, and the producer of the injectable principal reads it.
  */
 package io.vidocq.cervantes.cdi;

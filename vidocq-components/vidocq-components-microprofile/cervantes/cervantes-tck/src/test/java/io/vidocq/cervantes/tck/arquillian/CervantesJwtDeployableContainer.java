@@ -78,20 +78,20 @@ import java.util.Properties;
  * <p>Per-deployment strategy:</p>
  * <ol>
  *   <li>Extract {@code META-INF/microprofile-config.properties} from the archive and
- *       export them as system properties (Ravel reads system properties).</li>
- *   <li>Stop any previous VaubanContainer.</li>
+ *       export its entries as system properties (Ravel reads system properties).</li>
+ *   <li>Stop the VaubanContainer of the previous deployment, if any.</li>
  *   <li>Collect the archive classes (TCK application beans).</li>
  *   <li>Start a VaubanContainer with the Cervantes beans (BCE extension, CDI producers)
  *       and the archive classes.</li>
  *   <li>Build the Cassini runtime via {@link CassiniStack.Builder#beanProvider} with
  *       {@link VaubanBeanProvider} — the {@code @Path} classes are discovered from the
  *       BeanManager (real class, not the CDI proxy) and instantiated via CDI.</li>
- *   <li>Mount on Chappe + ephemeral port + ContextStrippingHandler.</li>
+ *   <li>Start a Chappe server on an ephemeral port behind the ContextStrippingHandler.</li>
  *   <li>Return Servlet 3.0 ProtocolMetaData.</li>
  * </ol>
  *
- * <p>Protocol {@code Servlet 3.0}: Arquillian TCK tests use HTTP client
- * the standard Java client against the container base URL (baseUrl = http://127.0.0.1:port/ctxPath).</p>
+ * <p>Protocol {@code Servlet 3.0}: the Arquillian TCK tests call the container over HTTP with the
+ * standard Java client, using the container base URL (baseUrl = http://127.0.0.1:port/ctxPath).</p>
  */
 public class CervantesJwtDeployableContainer implements DeployableContainer<CervantesContainerConfiguration> {
 
@@ -194,8 +194,8 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
             }
         }
 
-        //Determines @ApplicationPath prefix (e.g. "/pem", "/jwks") — strip it before routing.
-        //JAX-RS spec §2.1: @ApplicationPath definitions the base URI relative to the deployment root.
+        // Determine the @ApplicationPath prefix (e.g. "/pem", "/jwks") and strip it before routing.
+        // JAX-RS spec §2.1: @ApplicationPath defines the base URI relative to the deployment root.
         String applicationPath = "";
         if (applicationClass != null) {
             jakarta.ws.rs.ApplicationPath ap = applicationClass.getAnnotation(jakarta.ws.rs.ApplicationPath.class);
@@ -214,9 +214,9 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
         //
         // IMPORTANT: JwtAuthenticationFilter has @Provider @PreMatching on the *real* class.
         // CassiniStackBuilderImpl.build() creates a CDI proxy for it and registers it
-        //via FilterEntry.of(proxy) — which checks proxy.getClass() for @PreMatching and
+        // via FilterEntry.of(proxy) — which checks proxy.getClass() for @PreMatching and
         // finds nothing (CDI proxies don't carry annotations). Result: filter registers as
-        //post-matching, and setSecurityContext() throws IllegalStateException (§6.6).
+        // post-matching, and setSecurityContext() throws IllegalStateException (§6.6).
         //
         // Fix: use a wrapping BeanProvider that excludes JwtAuthenticationFilter from
         // getResourceClasses(), then pass PreMatchingJwtAuthDelegate explicitly.
@@ -255,7 +255,7 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
         // e.g. for archive "PublicKeyAsPEMLocationTest.war" with PEMApplication(@ApplicationPath("/pem")):
         //   request path = /PublicKeyAsPEMLocationTest/pem/endp/publicKey4k
         //   stripping prefix = /PublicKeyAsPEMLocationTest/pem
-        //→ Cassini sees /endp/publicKey4k
+        // → Cassini sees /endp/publicKey4k
         String stripPrefix = contextPath;
         if (!applicationPath.isEmpty()) {
             stripPrefix = "/".equals(contextPath) ? applicationPath : contextPath + applicationPath;
@@ -492,9 +492,9 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
      *       The filter is instead registered via {@link PreMatchingJwtAuthDelegate}.</li>
      *   <li>Intercepts {@code getBean(JsonWebToken.class)} to directly resolve the current token
      *       from {@link io.vidocq.cervantes.cdi.JsonWebTokenContext}, bypassing a Vauban bug
-     * where the client proxy for a {@code @RequestScoped} producer-method bean is typed
+     *       where the client proxy for a {@code @RequestScoped} producer-method bean is typed
      *       after the DECLARING class ({@code JsonWebTokenProducer_ClientProxy}) instead of
-     * the PRODUCTED type ({@code JsonWebToken}) — making the cast fail at injection.
+     *       the PRODUCED type ({@code JsonWebToken}), which makes the cast fail at injection.
      *       See Vauban {@code InterceptorBeanWrapper.getOrCreateProxy()} for the root cause.</li>
      * </ol>
      */
@@ -533,14 +533,14 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
 
         @Override
         public Object contextualInstance(Class<?> type, Object bean) {
-            //Delegates to VaubanBeanProvider to deproxify @RequestScoped resources
-            //(if not @Context SecurityContext remains null in the body of the resource method).
+            // Delegates to VaubanBeanProvider to unwrap @RequestScoped resources
+            // (otherwise @Context SecurityContext stays null inside the resource method).
             return delegate.contextualInstance(type, bean);
         }
     }
 
     /**
-     * Handler Chappe stripping the contextPath before delegating to Cassini.
+     * Chappe handler that strips the contextPath before delegating to Cassini.
      *
      * <p>Reproduces the {@code ContextStrippingHandler} pattern of
      * {@code CassiniTestHarness}: the Cassini router sees the relative path
