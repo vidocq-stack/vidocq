@@ -170,8 +170,9 @@
     `ServiceConfigurationError: ... module io.opentelemetry.context does not declare 'uses'`, both for a
     service the interop module declares (`ConfigurablePropagatorProvider`) and for one no module declares
     (`java.util.spi.ToolProvider`, standing for an exporter's `HttpSenderProvider`).
-- **Fix**: the suggested one. `MapConfigProperties.getComponentLoader()` returns an `InteropComponentLoader`
-  owned by humboldt-otel-interop, which calls `Module.addUses(spiClass)` on its own module, then
+- **Fix**: the suggested one. `MapConfigProperties.getComponentLoader()` returned an `InteropComponentLoader`
+  owned by humboldt-otel-interop (since removed: BUG-20261004-04 fixed the default loader, which
+  `MapConfigProperties` now returns), which called `Module.addUses(spiClass)` on its own module, then
   `ServiceLoader.load(spiClass, classLoader)`. `OtelSpiAutoConfiguration` gives the SPI providers and
   customizers properties whose loader searches the discovery ClassLoader (the OpenTelemetry autoconfigure
   does the same); `new MapConfigProperties(map)` keeps the upstream default (the autoconfigure SPI's class

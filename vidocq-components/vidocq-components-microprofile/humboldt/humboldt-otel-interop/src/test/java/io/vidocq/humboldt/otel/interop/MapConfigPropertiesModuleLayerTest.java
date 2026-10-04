@@ -113,11 +113,11 @@ class MapConfigPropertiesModuleLayerTest {
     }
 
     @Test
-    void the_component_loader_class_is_owned_by_the_interop_module() throws Exception {
+    void the_component_loader_class_is_owned_by_the_context_module() throws Exception {
         Object componentLoader = componentLoaderOf(newMapConfigProperties());
 
-        assertEquals(INTEROP, componentLoader.getClass().getModule().getName(),
-                "the loader must belong to a module that may declare the services it loads");
+        assertEquals("io.opentelemetry.context", componentLoader.getClass().getModule().getName(),
+                "the default loader is Humboldt's, which adds the uses of the services it loads (BUG-20261004-04)");
     }
 
     private static List<?> loadThroughTheComponentLoader(Class<?> service) throws Exception {

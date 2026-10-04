@@ -39,8 +39,9 @@ import java.util.Map;
  * ignore the config entirely.</p>
  *
  * <p>{@link #getComponentLoader()} — through which OpenTelemetry components (exporters among them) load
- * their own services — returns a loader owned by this module, which works on the module path where the
- * OpenTelemetry default does not (see {@link InteropComponentLoader}).</p>
+ * their own services — returns the OpenTelemetry default for the class loader, {@link ComponentLoader#forClassLoader}. It works on the
+ * module path because humboldt-otel-context ships a version of that default which adds the service dependence
+ * before loading (BUG-20261004-04).</p>
  */
 public final class MapConfigProperties implements ConfigProperties {
 
@@ -63,7 +64,7 @@ public final class MapConfigProperties implements ConfigProperties {
      */
     public MapConfigProperties(Map<String, String> props, ClassLoader classLoader) {
         this.props = props;
-        this.componentLoader = new InteropComponentLoader(classLoader);
+        this.componentLoader = ComponentLoader.forClassLoader(classLoader);
     }
 
     @Override
