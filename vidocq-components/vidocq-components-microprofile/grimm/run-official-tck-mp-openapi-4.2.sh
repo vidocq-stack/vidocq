@@ -8,7 +8,7 @@ run_tck() {
   shift
   echo "[grimm] Running TCK variant: ${label}"
   # clean: the harness is always compiled from scratch (a stale target/ gives false results)
-  mvn -f grimm-tck/pom.xml -Ptck-official clean test "$@"
+  ./mvnw -f grimm-tck/pom.xml -Ptck-official clean test "$@"
 }
 
 if [[ "$MODE" == "all" ]]; then
