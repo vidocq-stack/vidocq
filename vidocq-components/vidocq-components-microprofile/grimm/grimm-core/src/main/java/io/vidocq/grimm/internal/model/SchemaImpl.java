@@ -396,7 +396,8 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     // ── generic property access (Schema.get / Schema.set / getAll / setAll) ──
     // A property is named as in the JSON document. A standard name holds its value either in its
     // typed field or, when set() gave it a value of another type (alternative dialect), in
-    // extraProperties — never in both. Any other name is an extension.
+    // extraProperties — never in both. A list or map whose elements the typed field cannot hold
+    // is a value of another type. Any other name is an extension.
     @Override
     public Object get(String propertyName) {
         if (extraProperties != null && extraProperties.containsKey(propertyName)) {
@@ -446,11 +447,15 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         return Collections.unmodifiableMap(all);
     }
 
-    /** Clears every property, extensions and {@code $ref} included, then sets each entry with {@link #set}. */
+    /**
+     * Clears every property, extensions, {@code $ref} and the boolean-schema form included, then
+     * sets each entry with {@link #set}.
+     */
     @Override
     public void setAll(Map<String, ?> allProperties) {
         STANDARD_PROPERTIES.values().forEach(property -> property.setter().accept(this, null));
         extraProperties = null;
+        booleanSchema = null;
         if (allProperties != null) {
             allProperties.forEach(this::set);
         }
@@ -513,6 +518,22 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         }
     }
 
+    /** A list whose every element is an {@code element}: what a typed list property holds. */
+    private static Predicate<Object> listOf(Class<?> element) {
+        return value -> value instanceof List<?> list && list.stream().allMatch(element::isInstance);
+    }
+
+    /** A map from {@code String} keys to values that {@code valueAccepts}: what a typed map property holds. */
+    private static Predicate<Object> mapOf(Predicate<Object> valueAccepts) {
+        return value -> value instanceof Map<?, ?> map && map.entrySet().stream()
+                .allMatch(entry -> entry.getKey() instanceof String && valueAccepts.test(entry.getValue()));
+    }
+
+    /** The boolean schema {@code true} or {@code false}, with no other property. */
+    private static boolean isBareBooleanSchema(Schema schema) {
+        return schema.getBooleanSchema() != null && schema.getAll().isEmpty();
+    }
+
     private static final Map<String, Property> STANDARD_PROPERTIES = standardProperties();
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -544,17 +565,22 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
                 SchemaImpl::setMaxProperties));
         p.put("minProperties", Property.of(Integer.class, SchemaImpl::getMinProperties,
                 SchemaImpl::setMinProperties));
-        p.put("required", Property.of(List.class, SchemaImpl::getRequired, (s, v) -> s.setRequired(v)));
-        p.put("type", Property.of(List.class, SchemaImpl::getType, (s, v) -> s.setType(v)));
+        p.put("required", new Property(listOf(String.class), SchemaImpl::getRequired,
+                (s, v) -> s.setRequired((List) v)));
+        p.put("type", new Property(listOf(SchemaType.class), SchemaImpl::getType, (s, v) -> s.setType((List) v)));
         p.put("not", Property.of(Schema.class, SchemaImpl::getNot, SchemaImpl::setNot));
-        p.put("properties", Property.of(Map.class, SchemaImpl::getProperties, (s, v) -> s.setProperties(v)));
-        // The boolean form is read as a boolean schema, as getAdditionalPropertiesSchema() does.
+        p.put("properties", new Property(mapOf(Schema.class::isInstance), SchemaImpl::getProperties,
+                (s, v) -> s.setProperties((Map) v)));
+        // The boolean form is read as a boolean schema, as getAdditionalPropertiesSchema() does, and
+        // a bare boolean schema written back takes the boolean form again: setAll(getAll()) keeps it.
         p.put("additionalProperties", new Property(
                 value -> value instanceof Schema || value instanceof Boolean,
                 SchemaImpl::getAdditionalPropertiesSchema,
                 (s, v) -> {
                     if (v instanceof Boolean b) {
                         s.setAdditionalPropertiesBoolean(b);
+                    } else if (v instanceof Schema schema && isBareBooleanSchema(schema)) {
+                        s.setAdditionalPropertiesBoolean(schema.getBooleanSchema());
                     } else {
                         s.setAdditionalPropertiesSchema((Schema) v);
                     }
@@ -569,18 +595,19 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         p.put("deprecated", Property.of(Boolean.class, SchemaImpl::getDeprecated, SchemaImpl::setDeprecated));
         p.put("xml", Property.of(XML.class, SchemaImpl::getXml, SchemaImpl::setXml));
         p.put("items", Property.of(Schema.class, SchemaImpl::getItems, SchemaImpl::setItems));
-        p.put("allOf", Property.of(List.class, SchemaImpl::getAllOf, (s, v) -> s.setAllOf(v)));
-        p.put("anyOf", Property.of(List.class, SchemaImpl::getAnyOf, (s, v) -> s.setAnyOf(v)));
-        p.put("oneOf", Property.of(List.class, SchemaImpl::getOneOf, (s, v) -> s.setOneOf(v)));
+        p.put("allOf", new Property(listOf(Schema.class), SchemaImpl::getAllOf, (s, v) -> s.setAllOf((List) v)));
+        p.put("anyOf", new Property(listOf(Schema.class), SchemaImpl::getAnyOf, (s, v) -> s.setAnyOf((List) v)));
+        p.put("oneOf", new Property(listOf(Schema.class), SchemaImpl::getOneOf, (s, v) -> s.setOneOf((List) v)));
         p.put("if", Property.of(Schema.class, SchemaImpl::getIfSchema, SchemaImpl::setIfSchema));
         p.put("then", Property.of(Schema.class, SchemaImpl::getThenSchema, SchemaImpl::setThenSchema));
         p.put("else", Property.of(Schema.class, SchemaImpl::getElseSchema, SchemaImpl::setElseSchema));
-        p.put("dependentSchemas", Property.of(Map.class, SchemaImpl::getDependentSchemas,
-                (s, v) -> s.setDependentSchemas(v)));
-        p.put("prefixItems", Property.of(List.class, SchemaImpl::getPrefixItems, (s, v) -> s.setPrefixItems(v)));
+        p.put("dependentSchemas", new Property(mapOf(Schema.class::isInstance), SchemaImpl::getDependentSchemas,
+                (s, v) -> s.setDependentSchemas((Map) v)));
+        p.put("prefixItems", new Property(listOf(Schema.class), SchemaImpl::getPrefixItems,
+                (s, v) -> s.setPrefixItems((List) v)));
         p.put("contains", Property.of(Schema.class, SchemaImpl::getContains, SchemaImpl::setContains));
-        p.put("patternProperties", Property.of(Map.class, SchemaImpl::getPatternProperties,
-                (s, v) -> s.setPatternProperties(v)));
+        p.put("patternProperties", new Property(mapOf(Schema.class::isInstance), SchemaImpl::getPatternProperties,
+                (s, v) -> s.setPatternProperties((Map) v)));
         p.put("propertyNames", Property.of(Schema.class, SchemaImpl::getPropertyNames,
                 SchemaImpl::setPropertyNames));
         p.put("unevaluatedItems", Property.of(Schema.class, SchemaImpl::getUnevaluatedItems,
@@ -590,8 +617,8 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
         p.put("const", Property.of(Object.class, SchemaImpl::getConstValue, SchemaImpl::setConstValue));
         p.put("maxContains", Property.of(Integer.class, SchemaImpl::getMaxContains, SchemaImpl::setMaxContains));
         p.put("minContains", Property.of(Integer.class, SchemaImpl::getMinContains, SchemaImpl::setMinContains));
-        p.put("dependentRequired", Property.of(Map.class, SchemaImpl::getDependentRequired,
-                (s, v) -> s.setDependentRequired(v)));
+        p.put("dependentRequired", new Property(mapOf(listOf(String.class)), SchemaImpl::getDependentRequired,
+                (s, v) -> s.setDependentRequired((Map) v)));
         p.put("contentEncoding", Property.of(String.class, SchemaImpl::getContentEncoding,
                 SchemaImpl::setContentEncoding));
         p.put("contentMediaType", Property.of(String.class, SchemaImpl::getContentMediaType,
