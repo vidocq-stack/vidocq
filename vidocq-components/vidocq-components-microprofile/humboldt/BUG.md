@@ -180,7 +180,8 @@
   local repository), so exporters created through the SPI get the module-path-safe loader for their
   `HttpSenderProvider` lookup. Out of scope, still upstream behaviour: an OpenTelemetry exporter built directly on the
   module path without `setComponentLoader(...)` uses `ComponentLoader.forClassLoader(...)` and hits the same
-  error; such code must pass a loader of its own.
+  error; such code must pass a loader of its own. (Closed since by BUG-20261004-04: humboldt's own
+  `ServiceLoaderComponentLoader` makes that default work on the module path too.)
 - **Validation**: `MapConfigPropertiesModuleLayerTest` 3/3 (RED before the fix: 3 failures),
   `OtelSpiAutoConfigurationTest` 3/3, full reactor `./mvnw -ntp clean install` green, official TCK
   (2.2-RC3) 85/85 — that TCK runs on the class path, so it guards the class-path behaviour only.
@@ -231,7 +232,7 @@
 ## BUG-20261004-03 — OpenTelemetry SDK components cannot use `io.opentelemetry.api.internal` on the module path
 
 - **Date**: 2026-10-04
-- **Status**: OPEN
+- **Status**: FIXED (commit cd3b6ed on branch `pr/ybl/mp-7.2`, 2026-10-04)
 - **Component**: humboldt-otel-api (`module io.opentelemetry.api`, `src/main/moditect/module-info.java`)
 - **Affected**: humboldt 0.4.0-SNAPSHOT (and earlier); any OpenTelemetry SDK artifact used next to it on the
   module path, e.g. through humboldt-otel-interop in the Vidocq runtime
@@ -266,13 +267,37 @@
   - 2026-10-04: found during Task FC3 of the MicroProfile 7.2 upgrade while checking, on the module path, that
     the OpenTelemetry 1.66 OTLP exporter providers load their senders through the humboldt-otel-interop
     `ComponentLoader` (BUG-20261004-01). Logged, not fixed (module design decision).
+  - 2026-10-04 (Task FC4): the maintainer chose a qualified export. `jdeps -verbose:class` (with the 1.66 API on
+    the class path, `--multi-release 25`) over every jar of `opentelemetry-bom` 1.66.0 and
+    `opentelemetry-bom-alpha` 1.66.0-alpha, cross-checked by a scan of the class constant pools: the stable
+    artifacts that reference `io.opentelemetry.api.internal` are `opentelemetry-sdk-common`, `-sdk-trace`,
+    `-sdk-metrics`, `-sdk-logs`, `-sdk-extension-autoconfigure-spi`, `-sdk-extension-jaeger-remote-sampler`,
+    `-extension-trace-propagators`, `-exporter-common`, `-exporter-otlp-common` and `-exporter-otlp`. The
+    others (`opentelemetry-sdk`, `-sdk-testing`, `-sdk-extension-autoconfigure`, `-exporter-logging`,
+    `-exporter-logging-otlp`, the three senders, `-opentracing-shim`, `-extension-kotlin`) do not. Incubating
+    artifacts that do (`-api-incubator`, `-sdk-extension-incubator`, `-sdk-profiles`,
+    `-exporter-otlp-profiles`, `-exporter-prometheus`) are left out.
+- **Fix**: `exports io.opentelemetry.api.internal to` the ten Automatic-Module-Names of those stable artifacts
+  (`io.opentelemetry.sdk.common`, `.sdk.trace`, `.sdk.metrics`, `.sdk.logs`, `.sdk.autoconfigure.spi`,
+  `.sdk.extension.trace.jaeger`, `.extension.trace.propagation`, `.exporter.internal`,
+  `.exporter.internal.otlp`, `.exporter.otlp`) in the ModiTect descriptor, with a comment giving the reason, the
+  artifact → module mapping and the re-check rule for OpenTelemetry upgrades. A target module that is absent at
+  run time is ignored. ModiTect folds comments placed inside the `to` list into the module names (invalid
+  descriptor), so the mapping sits above the statement. An incubating artifact still needs
+  `--add-exports io.opentelemetry.api/io.opentelemetry.api.internal=<module>`.
+- **Validation**: `OtlpExporterModuleLayerTest` (humboldt-otel-interop) defines a module layer with the
+  Humboldt explicit modules and the OpenTelemetry 1.66 SDK and OTLP exporter jars as automatic modules (the
+  exporter jars are test-scope dependencies of humboldt-otel-interop only). It creates the span, metric and log
+  exporters through the upstream `Otlp*ExporterProvider`s and a `MapConfigProperties`, and checks that the
+  export stays qualified (not to humboldt-otel-interop nor to `io.opentelemetry.sdk`). RED before the fix: the
+  `IllegalAccessError` above for the three providers. Full reactor `./mvnw -ntp clean install` green.
 
 ---
 
 ## BUG-20261004-04 — the OTLP exporter's compressor registry still uses the default ComponentLoader on the module path
 
 - **Date**: 2026-10-04
-- **Status**: OPEN
+- **Status**: FIXED (commit 5380bc3 on branch `pr/ybl/mp-7.2`, 2026-10-04)
 - **Component**: humboldt-otel-context (`module io.opentelemetry.context`, which holds
   `io.opentelemetry.common.ServiceLoaderComponentLoader`); seen with `opentelemetry-exporter-otlp` 1.66
 - **Affected**: humboldt 0.4.0-SNAPSHOT (OpenTelemetry 1.66 upgrade, branch `pr/ybl/mp-7.2`)
@@ -306,3 +331,27 @@
 - **Investigations**:
   - 2026-10-04: found during Task FC3 of the MicroProfile 7.2 upgrade (`javap -c` of
     `opentelemetry-exporter-otlp`/`-exporter-common` 1.66.0 and the scratch harness above). Logged, not fixed.
+  - 2026-10-04 (Task FC4): `CompressorUtil` lives in `opentelemetry-exporter-otlp` 1.66
+    (`io.opentelemetry.exporter.otlp.internal`); its `<clinit>` calls
+    `ComponentLoader.forClassLoader(CompressorUtil.class.getClassLoader())`, and `HttpExporterBuilder`
+    defaults its `componentLoader` the same way. The upstream `ServiceLoaderComponentLoader` 1.66 (`javap`): a
+    package-private, non-final class, a package-private `(ClassLoader)` constructor, `load` =
+    `ServiceLoader.load(spiClass, classLoader)`, `toString` = `ServiceLoaderComponentLoader{classLoader=…}`.
+- **Fix**: the suggested one. humboldt-otel-context gains `src/main/java/io/opentelemetry/common/
+  ServiceLoaderComponentLoader.java` with the same contract, whose `load` first calls
+  `ServiceLoaderComponentLoader.class.getModule().addUses(spiClass)` (a no-op on the class path). The shade
+  keeps that class (and its source) from the module's own jar and excludes the upstream class and source from
+  `opentelemetry-common`. Build adjustments in that module: `maven.javadoc.skip` (a source tree with one
+  package-private class makes the snapshot/release `javadoc:jar` fail with "No public or protected classes
+  found to document"; the module keeps its own empty javadoc jar, which now excludes `io/**`), and
+  `opentelemetry-common` declared (optional, already shaded in) since `src/main/java` compiles against it. This
+  also closes the residual of BUG-20261004-01: an OpenTelemetry component built directly on the module path
+  without `setComponentLoader(...)` now finds its services.
+- **Validation**: `OtlpExporterModuleLayerTest` (humboldt-otel-interop, on the shaded jar): the span exporter
+  provider with `otel.exporter.otlp.compression` = `gzip` and `none`, and an `OtlpHttpSpanExporter` built
+  directly with `setCompression("gzip")` (sender and compressor through the default loader) — RED before the
+  fix (with BUG-20261004-03 fixed): `ServiceConfigurationError: io.opentelemetry.sdk.common.export.Compressor:
+  module io.opentelemetry.context does not declare `uses`` for the three; GREEN after.
+  `ServiceLoaderComponentLoaderTest` (humboldt-otel-context, class path) guards the upstream contract.
+  `-Psnapshot package` of the module checked: the published sources jar holds Humboldt's source, javadoc
+  skipped. Full reactor `./mvnw -ntp clean install` green.

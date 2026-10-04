@@ -123,6 +123,11 @@ All versions are `{project-version}`.
 | Java modules of the public OTel artifacts, rebundled with explicit `module-info`.
 |===
 
+Upstream, the OpenTelemetry jars are automatic modules. Two details of the rebundled modules let the OpenTelemetry SDK and OTLP exporter jars run next to them on the module path:
+
+* `io.opentelemetry.api` exports `io.opentelemetry.api.internal` only to the OpenTelemetry 1.66 stable SDK and exporter modules that use it (the list is in `humboldt-otel-api/src/main/moditect/module-info.java`). An incubating (`-alpha`) artifact that needs it must be given `--add-exports io.opentelemetry.api/io.opentelemetry.api.internal=<module>`.
+* `io.opentelemetry.context` ships Humboldt's own `io.opentelemetry.common.ServiceLoaderComponentLoader`, the default `ComponentLoader`: it adds the `uses` of a service to the module before loading it, so an exporter finds its sender and its compressor.
+
 `io.vidocq.humboldt.internal.*` packages are never exported. Any direct access fails with a clear Java Modules crash.
 
 == Configuration keys
