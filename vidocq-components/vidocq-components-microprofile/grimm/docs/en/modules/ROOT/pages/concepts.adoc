@@ -36,10 +36,10 @@ The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged i
 
 === How the sources combine
 
-The sources are applied in the order above, each one on top of the result of the previous ones: reader, then static file, then annotations. Two rules decide what happens when several sources describe the same element:
+The sources are applied in the order above, each one on top of the result of the previous ones: reader, then static file, then annotations, and finally the `OASFilter` if one is configured. Two rules decide what happens when several sources describe the same element:
 
 * **A named component schema is taken whole.** When two sources define `components/schemas/Pet`, the definition of the higher-priority source replaces the other one entirely. Properties of the lower-priority `Pet` that the winner does not declare are not kept.
-* **Schemas at the same position are merged property by property.** This covers the schema of a media type, the entries of a schema's `properties`, and its `items`. Every keyword the higher-priority source sets wins; keywords it does not set are kept from the lower-priority source. Extensions (`x-*`) are merged the same way. An empty `type`, `enum`, `required` or `properties` does not erase what a lower-priority source says.
+* **Schemas at the same position are merged property by property.** This covers the schema of a media type, the entries of a schema's `properties`, and its `items`. Every keyword the higher-priority source sets wins; keywords it does not set are kept from the lower-priority source. Extensions (`x-*`) are merged the same way. Explicit empty values from the higher-priority source are kept (`default: []`, `const: {}`, empty extensions); only an empty `type`, `enum`, `required` or `properties` does not erase what a lower-priority source says. A `$ref` read from a static file is copied verbatim, with no short-name expansion.
 
 [NOTE]
 ====

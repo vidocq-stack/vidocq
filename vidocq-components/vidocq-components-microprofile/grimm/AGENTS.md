@@ -120,7 +120,7 @@ java -jar grimm-bench/target/benchmarks.jar
 ```
 
 - The TCK always goes through the root script, which first runs `clean install` on the reactor then
-  invokes `mvn -f grimm-tck/pom.xml -Ptck-official clean test`.
+  invokes `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`.
 - The TCK artifact (`microprofile-openapi-tck` 4.2-RC5, like 4.1) is published on Maven Central:
   Maven resolves it, nothing to install by hand.
 

@@ -37,7 +37,7 @@ sdk env
 ```
 
 > `grimm-tck` is **outside the reactor** (standalone `pom.xml`, Model 4.0.0, no `<parent>`, no
-> `<module>` entry in the root POM, run with `mvn -f grimm-tck/pom.xml`) to keep the released
+> `<module>` entry in the root POM, run with `./mvnw -f grimm-tck/pom.xml`) to keep the released
 > runtime decoupled from the official TCK. The old ShrinkWrap / Model 4.1.0 reason no longer
 > applies (every POM of the workspace is Model 4.0.0). See the workspace `CLAUDE.md` § *TCK
 > runners*.

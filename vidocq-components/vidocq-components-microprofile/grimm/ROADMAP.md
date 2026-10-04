@@ -83,7 +83,7 @@ grimm-examples          io.vidocq.grimm.examples
 - [x] `README.md`
 - [x] `run-official-tck-mp-openapi-4.2.sh` (root TCK script)
 - [x] Validate `./mvnw -ntp install -DskipTests` passes on the reactor
-- [x] Validate `mvn -f grimm-tck/pom.xml -DskipTests compile` passes (out-of-reactor)
+- [x] Validate `./mvnw -f grimm-tck/pom.xml -DskipTests compile` passes (out-of-reactor)
 
 **Deliverable:** Compilable reactor, coherent `module-info.java` skeletons, out-of-reactor TCK
 compilable.

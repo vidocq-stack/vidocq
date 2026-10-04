@@ -60,7 +60,7 @@ The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives ev
 ./run-official-tck-mp-openapi-4.2.sh -Dtest=AirlinesAppTest
 ----
 
-The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-official clean test` after a `clean install` of the reactor, so the harness is always compiled from scratch. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
+The runner uses Arquillian + TestNG, invoking `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test` after a `clean install` of the reactor, so the harness is always compiled from scratch. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
 
 == Runner architecture
 
@@ -68,7 +68,7 @@ The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-of
 
 [NOTE]
 ====
-This detachment is deliberate: it keeps the released runtime decoupled from the official TCK, so a normal build of Grimm never resolves or runs any TCK artifact. The runner has no `<parent>` and is not listed as a module of the root POM; it is run with `mvn -f grimm-tck/pom.xml` (or `./run-official-tck-mp-openapi-4.2.sh`).
+This detachment is deliberate: it keeps the released runtime decoupled from the official TCK, so a normal build of Grimm never resolves or runs any TCK artifact. The runner has no `<parent>` and is not listed as a module of the root POM; it is run with `./mvnw -f grimm-tck/pom.xml` (or `./run-official-tck-mp-openapi-4.2.sh`).
 ====
 
 Stack assembled by the runner:
