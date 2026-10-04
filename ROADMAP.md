@@ -12,13 +12,13 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 | MicroProfile spec | Implementation | Vidocq extension | Status |
 |---|---|---|---|
 | **Rest Client 4.0** | [cyrano](../cyrano) | `vidocq-runtime-cyrano-rest-client-extension` | ✅ delivered |
-| **Telemetry 2.2** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ delivered (M7 TCK in progress) |
+| **Telemetry 2.2** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ delivered (TCK green: 85, against TCK 2.2-RC3) |
 | **Health 4.0** | [knock](../knock) | `vidocq-runtime-knock-health-extension` | ✅ delivered |
-| **Config 3.1** | _smallrye config_ | — | ❌ to package as an extension |
-| **Fault Tolerance 4.1** | _smallrye fault tolerance_ | — | ❌ to package as an extension |
-| **JWT Auth 2.2** | — | — | ❌ TODO (heisenberg?) |
-| **OpenAPI 4.0** | — | — | ❌ TODO |
-| **Metrics 5.1** | — | — | ❌ TODO (often merged with Telemetry) |
+| **Config 3.1** | [ravel](../ravel) | `vidocq-runtime-ravel-config-extension` | ✅ delivered |
+| **Fault Tolerance 4.1** | [heisenberg](../heisenberg) | `vidocq-runtime-heisenberg-fault-tolerance-extension` | ✅ delivered |
+| **JWT Auth 2.2** | [cervantes](../cervantes) | `vidocq-runtime-cervantes-jwt-extension` | ✅ delivered |
+| **OpenAPI 4.2** | [grimm](../grimm) | `vidocq-runtime-grimm-openapi-extension` | ✅ delivered (TCK green: 364, against TCK 4.2-RC5) |
+| **Metrics 5.1** | [dirac](../dirac) | `vidocq-runtime-dirac-metrics-extension` | ✅ delivered |
 
 ## Extensions outside the MicroProfile specs
 
@@ -74,17 +74,17 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 
 ### Short term (missing MP extensions)
 
-- [ ] **`vidocq-runtime-config-extension`** — SmallRye Config wrapper / simple in-house config.
+- [x] **`vidocq-runtime-config-extension`** — delivered as `vidocq-runtime-ravel-config-extension` (Ravel, Config 3.1).
+      Original goal: SmallRye Config wrapper / simple in-house config.
       CDI prerequisite for `@ConfigProperty`; must integrate with the Vauban init lifecycle.
-- [ ] **`vidocq-runtime-fault-tolerance-extension`** — `@Retry`, `@Timeout`, `@Bulkhead`,
+- [x] **`vidocq-runtime-fault-tolerance-extension`** (delivered as `vidocq-runtime-heisenberg-fault-tolerance-extension`) — `@Retry`, `@Timeout`, `@Bulkhead`,
       `@CircuitBreaker`. Virtual-thread compatibility: avoid ThreadLocal pinning,
       prefer `ScopedValue`. SmallRye wrapper possible.
-- [ ] **`vidocq-runtime-jwt-extension`** — Bearer JWT gating auth. Implementation
+- [x] **`vidocq-runtime-jwt-extension`** (delivered as `vidocq-runtime-cervantes-jwt-extension`) — Bearer JWT gating auth. Implementation
       likely in a new repo (placeholder `heisenberg`?). MP JWT Auth 2.2.
-- [ ] **`vidocq-runtime-openapi-extension`** — OpenAPI 3.1 generation from Cassini
+- [x] **`vidocq-runtime-openapi-extension`** (delivered as `vidocq-runtime-grimm-openapi-extension`) — OpenAPI 3.1 generation from Cassini
       JAX-RS resources. MP OpenAPI 4.2.
-- [ ] **`vidocq-runtime-metrics-extension`** — either separate or merged into humboldt.
-      Decision: to be settled based on the evolution of MP Metrics 5.1 vs Telemetry.
+- [x] **`vidocq-runtime-metrics-extension`** — delivered separately as `vidocq-runtime-dirac-metrics-extension` (Dirac, Metrics 5.1).
 
 ### Medium term (integration & packaging)
 

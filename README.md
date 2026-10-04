@@ -234,11 +234,11 @@ myapp-1.0/
 |------|-----------|--------|
 | JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
 | Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
-| MicroProfile Config | - | Planned |
-| MicroProfile Health | - | Planned |
-| MicroProfile Metrics | - | Planned |
-| MicroProfile OpenAPI | - | Planned |
-| MicroProfile JWT Auth | - | Planned |
+| MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` | Done |
+| MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` | Done |
+| MicroProfile Metrics 5.1 | `vidocq-runtime-dirac-metrics-extension` | Done |
+| MicroProfile OpenAPI 4.2 | `vidocq-runtime-grimm-openapi-extension` | Done |
+| MicroProfile JWT Auth 2.2 | `vidocq-runtime-cervantes-jwt-extension` | Done |
 
 ## Jakarta Servlet 6.1 TCK
 

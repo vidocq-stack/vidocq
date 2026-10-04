@@ -228,4 +228,4 @@ fixed the spec way:
 
 The per-brick runners stay green after these changes: ravel 378/378 (Weld),
 cyrano 168/168, dirac 127/127, heisenberg 463/463 — so both CDI paths of the
-same extensions are certified.
+same extensions pass their official TCKs.

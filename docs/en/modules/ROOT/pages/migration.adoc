@@ -225,7 +225,7 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 |===
 
-All eight extensions are certified on the assembled runtime by the MicroProfile TCK runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1837 TCK tests green. See xref:tck.adoc[TCK status].
+All eight extensions pass their official MicroProfile 7.2 TCKs on the assembled runtime, run by the runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1888 TCK tests green. The OpenAPI 4.2 and Telemetry 2.2 runs use release candidates, byte-identical to the finals; the 7.2 platform release is still under ballot. See xref:tck.adoc[TCK status].
 
 [#dev-console-dependency]
 == The dev console is no longer a dependency [.tag-new]#NEW#
