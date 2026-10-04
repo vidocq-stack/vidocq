@@ -21,11 +21,14 @@ package io.vidocq.humboldt.tck.arquillian;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider;
+import io.vidocq.humboldt.otel.interop.MapConfigProperties;
+import io.vidocq.humboldt.otel.interop.OtelMetricExporterBridge;
+import io.vidocq.humboldt.otel.interop.OtelSamplerBridge;
+import io.vidocq.humboldt.otel.interop.OtelSpanExporterBridge;
 import io.vidocq.humboldt.runtime.AutoConfiguredHumboldt;
 import io.vidocq.humboldt.runtime.EnvConfig;
 import io.vidocq.humboldt.runtime.HumboldtAutoConfigure;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
-import io.vidocq.humboldt.tck.bridge.OtelSpanExporterBridge;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.humboldt.rest.HumboldtServerRequestFilter;

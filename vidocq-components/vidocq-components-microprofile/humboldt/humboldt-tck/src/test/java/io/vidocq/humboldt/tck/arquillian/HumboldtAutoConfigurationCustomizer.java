@@ -26,6 +26,7 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProviderBuilder;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
+import io.vidocq.humboldt.otel.interop.MapConfigProperties;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

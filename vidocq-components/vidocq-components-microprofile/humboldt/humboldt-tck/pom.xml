@@ -129,6 +129,14 @@
             <artifactId>humboldt-rest</artifactId>
             <version>${humboldt.version}</version>
         </dependency>
+        <!-- OTel SDK <-> Humboldt bridges (SpanDataMapper, OtelSpanExporterBridge, OtelMetricExporterBridge,
+             OtelSamplerBridge, MapConfigProperties) the Arquillian container uses to plug the exporters,
+             samplers and providers the TCK ships through the OTel autoconfigure SPI. -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-interop</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
 
         <!-- ============================================================ -->
         <!--  Vauban CDI Lite — container utilisé par le container        -->
@@ -252,16 +260,18 @@
         <!--  OTel SDK officiel — utilisé par le TCK pour ses fixtures.   -->
         <!--  Hors-Humboldt-prod : ne pollue pas le runtime applicatif.   -->
         <!-- ============================================================ -->
-        <!-- Compile scope on purpose: the bridge in humboldt-tck/src/main (OtelSpanExporterBridge,
-             SpanDataMapper) imports io.opentelemetry.sdk.*, so the SDK artifacts below cannot be test scope.
-             Only semconv and instrumentation-annotations (unused by src/main) are test scope. -->
+        <!-- Test scope: the runner has no main code any more — the OTel SDK <-> Humboldt bridges
+             (SpanDataMapper, OtelSpanExporterBridge, ...) come from humboldt-otel-interop, whose OTel SDK
+             dependencies are provided scope, so the SDK artifacts below supply them to the TCK tests. -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
+            <scope>test</scope>
         </dependency>
         <!-- Propagateurs B3 (single+multi) et Jaeger — utilisés par B3PropagationTest,
              B3MultiPropagationTest, JaegerPropagationTest. Disponibles via la
@@ -271,12 +281,13 @@
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-extension-trace-propagators</artifactId>
         </dependency>
-        <!-- TestSpanData.builder() — fournit l'impl concrète io.opentelemetry.sdk.trace.data.SpanData
-             utilisée par le bridge humboldt-tck pour convertir nos humboldt.SpanData vers le format
-             OTel SDK attendu par les exporters fournis par le TCK (InMemorySpanExporter, etc.). -->
+        <!-- TestSpanData.builder() — the concrete io.opentelemetry.sdk.trace.data.SpanData that the
+             humboldt-otel-interop SpanDataMapper builds to hand Humboldt spans to the exporters the TCK
+             provides (InMemorySpanExporter, etc.). -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.opentelemetry.semconv</groupId>
