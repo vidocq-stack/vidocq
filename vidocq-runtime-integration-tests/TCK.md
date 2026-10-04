@@ -47,10 +47,10 @@ neither downloads nor runs anything TCK-related.
 
 ## Results (2026-10-04 — full re-run on the assembled runtime, MicroProfile 7.2 release candidates)
 
-| Runner | Spec (MicroProfile 7.2) | Tests | Container |
+| Runner | Spec | Tests | Container |
 |---|---|---:|---|
 | `vidocq-runtime-tck-knock-health` | Health 4.0 | 28 | Vidocq embedded |
-| `vidocq-runtime-tck-dirac-metrics` | Metrics 5.1 | 127 | Vidocq embedded |
+| `vidocq-runtime-tck-dirac-metrics` | Metrics 5.1 (not in the 7.2 platform) | 127 | Vidocq embedded |
 | `vidocq-runtime-tck-cyrano-restclient` | Rest Client 4.0 | 235 | Vidocq embedded |
 | `vidocq-runtime-tck-heisenberg-faulttolerance` | Fault Tolerance 4.1 | 463 | Vidocq embedded |
 | `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.2 (TCK 4.2-RC5) | 364 | Vidocq embedded |
