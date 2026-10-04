@@ -69,7 +69,7 @@
   </modules>
 
   <properties>
-    <version.mp.openapi>4.1</version.mp.openapi>
+    <version.mp.openapi>4.2-RC5</version.mp.openapi>
     <version.ravel.mp.config>0.4.0-SNAPSHOT</version.ravel.mp.config>
     <version.jakarta.ws.rs>4.0.0</version.jakarta.ws.rs>
     <version.jakarta.cdi>4.1.0</version.jakarta.cdi>

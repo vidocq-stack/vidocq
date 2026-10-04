@@ -18,7 +18,7 @@
          versions and silently validate stale M2 jars otherwise (same trap as
          cassini-tck and foy-tck). -->
     <grimm.version>0.4.0-SNAPSHOT</grimm.version>
-    <microprofile.openapi.version>4.1</microprofile.openapi.version>
+    <microprofile.openapi.version>4.2-RC5</microprofile.openapi.version>
     <ravel.mp.config.version>0.4.0-SNAPSHOT</ravel.mp.config.version>
   </properties>
 
