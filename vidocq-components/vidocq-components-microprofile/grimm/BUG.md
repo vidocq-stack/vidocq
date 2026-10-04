@@ -189,3 +189,23 @@ Track reproducible bugs with:
   two annotation types share no interface, so the `@Schema` code cannot be reused as it stands.
 - **status**: OPEN — found while working on BUG-20261004-06, outside its scope. Not covered by
   the official TCK (367/367).
+
+### BUG-20261004-10 — `summary` next to a `$ref` is lost (MP OpenAPI model limitation)
+
+- **id**: BUG-20261004-10
+- **date**: 2026-10-04
+- **symptom**: OpenAPI 3.1 (§4.8.23) lets a Reference Object carry `summary` and `description`
+  next to `$ref`. A static file with `parameters: [{$ref: '#/components/parameters/P', summary: s}]`
+  serves the parameter without `summary`. The same holds for a request body, a response, a header,
+  a link and a security scheme. On a callback, `summary` and `description` are both lost: every key
+  other than `$ref` and `x-*` is read as a callback expression.
+- **minimal repro**: the static file above; or programmatically, there is no `setSummary` on
+  `Parameter`, `RequestBody`, `APIResponse`, `Header`, `Link`, `SecurityScheme` or `Callback` in
+  the MP OpenAPI 4.2-RC5 API (`javap`), and `Callback` is a map of expressions to path items.
+- **hypothesis (confirmed)**: an API limitation, not a grimm defect. `description` survives
+  wherever the object has its own `description` field. `Schema` keeps `summary` as an unknown
+  keyword. `PathItem` and `Example` have a `summary` field.
+- **status**: WON'T FIX in grimm — the model has nowhere to put the value. A side store outside
+  the API would be invisible to `OASFilter` and `OASModelReader` code, and would make Grimm's
+  model differ from the spec model. The fix belongs upstream: a `summary` (and, for `Callback`,
+  `description`) on the Reference-capable model interfaces. Documented in `concepts.adoc`.
