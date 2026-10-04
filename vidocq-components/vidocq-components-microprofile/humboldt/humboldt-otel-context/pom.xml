@@ -45,6 +45,22 @@
 
     <build>
         <plugins>
+            <!-- Bound here, not only in the snapshot/release profiles: the shade plugin's createSourcesJar merges the
+                 module's own -sources.jar, which must exist (with Humboldt's sources) before the shade runs. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>${maven.source.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
