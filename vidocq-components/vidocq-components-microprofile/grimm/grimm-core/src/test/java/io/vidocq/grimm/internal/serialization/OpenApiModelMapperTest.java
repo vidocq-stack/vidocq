@@ -253,7 +253,6 @@ class OpenApiModelMapperTest {
     }
 
     @Test
-    @SuppressWarnings("removal")
     void staticHeaderExampleAndExamplesAreMapped() {
         // MP OpenAPI 4.2 (#697): Header example / examples, read from a static file.
         String yaml = """
