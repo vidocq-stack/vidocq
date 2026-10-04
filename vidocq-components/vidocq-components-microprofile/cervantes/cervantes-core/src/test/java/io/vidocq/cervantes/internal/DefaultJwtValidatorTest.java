@@ -21,6 +21,7 @@ package io.vidocq.cervantes.internal;
 
 import io.vidocq.cervantes.api.JwtConfig;
 import io.vidocq.cervantes.api.JwtValidationException;
+import io.vidocq.cervantes.api.KeyResolver;
 import io.vidocq.cervantes.api.SignatureAlgorithm;
 import jakarta.json.Json;
 import jakarta.json.JsonObject;
@@ -204,7 +205,7 @@ class DefaultJwtValidatorTest {
     void acceptsEs256AndRs256WhenNoAlgorithmConfigured() throws Exception {
         JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
                 true, Optional.empty(), false, Optional.empty());
-        io.vidocq.cervantes.api.KeyResolver both = (kid, alg) -> Optional.of(
+        KeyResolver both = (kid, alg) -> Optional.of(
                 alg.family() == SignatureAlgorithm.Family.EC ? EC.getPublic() : RSA.getPublic());
         DefaultJwtValidator validator = new DefaultJwtValidator(both, config, CLOCK, null);
 
@@ -216,11 +217,21 @@ class DefaultJwtValidatorTest {
     void rejectsTokenWhoseAlgorithmFamilyDiffersFromConfiguredOne() throws Exception {
         JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
                 true, Optional.empty(), false, Optional.of(SignatureAlgorithm.ES256));
-        io.vidocq.cervantes.api.KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
+        KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
         DefaultJwtValidator validator = new DefaultJwtValidator(rsaOnly, config, CLOCK, null);
 
         JwtValidationException ex = assertThrows(JwtValidationException.class,
                 () -> validator.validate(signedWith(RSA, SignatureAlgorithm.RS256)));
         assertTrue(ex.getMessage().contains("ES256"));
+    }
+
+    @Test
+    void acceptsSameFamilyAlgorithmDifferentFromConfiguredOne() throws Exception {
+        JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
+                true, Optional.empty(), false, Optional.of(SignatureAlgorithm.RS256));
+        KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
+        DefaultJwtValidator validator = new DefaultJwtValidator(rsaOnly, config, CLOCK, null);
+
+        assertNotNull(validator.validate(signedWith(RSA, SignatureAlgorithm.RS512)));
     }
 }
