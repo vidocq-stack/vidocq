@@ -40,21 +40,29 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Built the {@link JwtValidator} application from MicroProfile Config properties
- * {@code mp.jwt.verify.*} (lues via Ravel) :
+ * Builds the application {@link JwtValidator} from the MicroProfile Config properties
+ * {@code mp.jwt.verify.*} and {@code mp.jwt.decrypt.*} (read through the MicroProfile Config
+ * API, so any implementation works, for instance Ravel):
  *
  * <ul>
- * <li>{@code mp.jwt.verify.issuer} → Expected transmitter</li>
- * <li>{@code mp.jwt.verify.audiences} → hearings (separate)</li>
- * <li>{@code mp.jwt.verify.publickey} → inline public key (PEM/base64 X.509)</li>
- * <li>{@code mp.jwt.verify.publickey.location} → PEM file / JWKS file / JWKS</li> URL
- * <li>{@code mp.jwt.verify.publickey.algorithm} → {@code RS256}, {@code ES256},... (unset = both RS256 and ES256 accepted)</li>
+ * <li>{@code mp.jwt.verify.issuer}: the expected issuer</li>
+ * <li>{@code mp.jwt.verify.audiences}: the accepted audiences, comma separated</li>
+ * <li>{@code mp.jwt.verify.publickey}: inline public key (PEM or base64 X.509)</li>
+ * <li>{@code mp.jwt.verify.publickey.location}: location of a PEM file, a JWKS file or a JWKS URL</li>
+ * <li>{@code mp.jwt.verify.publickey.algorithm}: {@code RS256}, {@code ES256}, and so on; when unset,
+ * every RS256/384/512 and ES256/384/512 algorithm is accepted</li>
  * </ul>
  *
- * <p>Producer and product are {@code @Dependent} (Ravel {@code RavelConfigProducer} pattern;
- * a normal-scoped product triggers a bad proxy resolution on the current Vauban side —
- * {@code @ApplicationScoped} when the Vauban defect is corrected). The filter
- * the JAX-RS authentication filter (M4) will inject the validator to validate each bearer token.</p>
+ * <p>The producer and its product are {@code @Dependent}, following the Ravel
+ * {@code RavelConfigProducer} pattern: a normal-scoped product currently triggers a bad proxy
+ * resolution on the Vauban side, so {@code @ApplicationScoped} is deferred until that defect is
+ * corrected. The JAX-RS authentication filter injects the validator to check each bearer
+ * token.</p>
+ *
+ * <p>Because the product is {@code @Dependent}, it is built lazily, at its first injection. To
+ * fail fast instead, {@link io.vidocq.cervantes.cdi.CervantesClaimExtension} calls
+ * {@link #createValidator(Config)} during its {@code @Validation} phase, so an invalid
+ * configuration aborts the container start.</p>
  */
 @Dependent
 public class JwtAuthConfigProducer {
@@ -62,7 +70,18 @@ public class JwtAuthConfigProducer {
     @Produces
     @Dependent
     public JwtValidator jwtValidator() {
-        Config config = ConfigProvider.getConfig();
+        return createValidator(ConfigProvider.getConfig());
+    }
+
+    /**
+     * Builds the validator described by {@code config}.
+     *
+     * @return the validator, or {@code null} when MP-JWT is off (no verification key configured)
+     * @throws IllegalStateException if a verification key is configured but the configuration is
+     *         invalid (unrecognised algorithm, unreadable key, and so on); the cause carries the
+     *         property name, the bad value and the supported values
+     */
+    public static JwtValidator createValidator(Config config) {
         if (!isVerificationKeyConfigured(config)) {
             // MP-JWT not configured (no verification key at all): produce a null validator so the
             // JAX-RS authentication filter stays inert (requests remain anonymous) instead of failing.
@@ -77,7 +96,8 @@ public class JwtAuthConfigProducer {
                     java.time.Clock.systemUTC(),
                     buildDecryptor(config));
         } catch (JwtValidationException e) {
-            throw new IllegalStateException("invalid MicroProfile JWT configuration (mp.jwt.verify.* / mp.jwt.decrypt.*)", e);
+            throw new IllegalStateException("invalid MicroProfile JWT configuration (mp.jwt.verify.* / mp.jwt.decrypt.*): "
+                    + e.getMessage(), e);
         }
     }
 

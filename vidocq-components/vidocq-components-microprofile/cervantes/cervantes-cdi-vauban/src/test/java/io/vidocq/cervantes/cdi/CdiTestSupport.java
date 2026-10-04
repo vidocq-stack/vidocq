@@ -55,6 +55,15 @@ public final class CdiTestSupport {
         return Base64.getEncoder().encodeToString(key.getEncoded());
     }
 
+    /** A freshly generated EC (secp256r1) public key as a PEM {@code SubjectPublicKeyInfo}. */
+    public static String ecPublicKeyPem() throws Exception {
+        KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+        g.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        return "-----BEGIN PUBLIC KEY-----\n"
+                + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(g.generateKeyPair().getPublic().getEncoded())
+                + "\n-----END PUBLIC KEY-----\n";
+    }
+
     public static String signRs256(JsonObject claims, PrivateKey key) throws Exception {
         JsonObject header = Json.createObjectBuilder().add("alg", "RS256").add("typ", "JWT").build();
         String h = B64URL.encodeToString(toBytes(header));

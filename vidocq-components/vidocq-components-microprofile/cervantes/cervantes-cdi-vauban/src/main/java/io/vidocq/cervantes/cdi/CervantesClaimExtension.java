@@ -23,17 +23,22 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
+import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
+import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.types.ArrayType;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.PrimitiveType;
 import jakarta.enterprise.lang.model.types.Type;
+import io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.jwt.Claim;
 
 import java.lang.reflect.Array;
@@ -65,6 +70,29 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
                 Type type = injectionPoint.type();
                 claimTypes.putIfAbsent(type.toString(), type);
             }
+        }
+    }
+
+    /**
+     * Fails the container start on an invalid {@code mp.jwt.*} configuration (unrecognised
+     * {@code mp.jwt.verify.publickey.algorithm}, unreadable key, and so on) instead of at the first
+     * injection of the {@code @Dependent} validator. A runtime {@code Startup} observer cannot do
+     * this: Vauban swallows exceptions thrown from it. When no verification key is configured,
+     * MP-JWT is off and nothing happens; the same holds when no MicroProfile Config implementation
+     * is present, since nothing can then configure a key.
+     */
+    @Validation
+    public void validateJwtConfiguration(Messages messages) {
+        Config config;
+        try {
+            config = ConfigProvider.getConfig();
+        } catch (IllegalStateException noConfigImplementation) {
+            return;
+        }
+        try {
+            JwtAuthConfigProducer.createValidator(config);
+        } catch (IllegalStateException e) {
+            messages.error(e.getMessage());
         }
     }
 

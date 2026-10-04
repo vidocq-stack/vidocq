@@ -149,6 +149,21 @@ class JwtAuthConfigProducerTest {
     }
 
     @Test
+    void ecPemWithRsaAlgorithmIsRejected() throws Exception {
+        Config config = CdiTestSupport.config(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.ecPublicKeyPem(),
+                "mp.jwt.verify.publickey.algorithm", "RS256"));
+        assertThrows(JwtValidationException.class, () -> JwtAuthConfigProducer.buildKeyResolver(config));
+        assertThrows(IllegalStateException.class, () -> JwtAuthConfigProducer.createValidator(config));
+    }
+
+    @Test
+    void createValidatorIsNullWhenNoKeyIsConfigured() {
+        assertNull(JwtAuthConfigProducer.createValidator(
+                CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", "bogus"))));
+    }
+
+    @Test
     void recognisedAlgorithmsStillAccepted() throws Exception {
         for (SignatureAlgorithm alg : SignatureAlgorithm.values()) {
             Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", alg.name()));
