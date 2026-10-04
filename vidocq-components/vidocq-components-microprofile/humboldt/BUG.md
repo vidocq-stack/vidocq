@@ -130,7 +130,7 @@
 ## BUG-20261004-01 — OpenTelemetry ComponentLoader service lookups fail on the module path
 
 - **Date**: 2026-10-04
-- **Status**: OPEN
+- **Status**: FIXED (commit 19479e2 on branch `pr/ybl/mp-7.2`, 2026-10-04)
 - **Component**: humboldt-otel-context (`module io.opentelemetry.context`), humboldt-otel-interop
 - **Affected**: humboldt 0.4.0-SNAPSHOT (OpenTelemetry 1.66 upgrade, branch `pr/ybl/mp-7.2`)
 - **Symptom**: since OpenTelemetry 1.66, `opentelemetry-common` is shaded into humboldt-otel-context, so
@@ -162,3 +162,48 @@
 - **Investigations**:
   - 2026-10-04: found during the final review of the MicroProfile Telemetry 2.2 / OpenTelemetry 1.66
     branch. Logged only; no fix on that branch.
+  - 2026-10-04: reproduced in-repo by `MapConfigPropertiesModuleLayerTest` (humboldt-otel-interop). The
+    bricks' surefire runs tests on the class path, where the lookup always works, so the test defines a real
+    `ModuleLayer` from the module jars (humboldt-otel-interop and `io.opentelemetry.context` explicit, the
+    OpenTelemetry autoconfigure SPI and trace propagators automatic) and looks services up through
+    `MapConfigProperties.getComponentLoader()` from inside it. Before the fix every lookup threw
+    `ServiceConfigurationError: ... module io.opentelemetry.context does not declare 'uses'`, both for a
+    service the interop module declares (`ConfigurablePropagatorProvider`) and for one no module declares
+    (`java.util.spi.ToolProvider`, standing for an exporter's `HttpSenderProvider`).
+- **Fix**: the suggested one. `MapConfigProperties.getComponentLoader()` returns an `InteropComponentLoader`
+  owned by humboldt-otel-interop, which calls `Module.addUses(spiClass)` on its own module, then
+  `ServiceLoader.load(spiClass, classLoader)`. `OtelSpiAutoConfiguration` gives the SPI providers and
+  customizers properties whose loader searches the discovery ClassLoader (the OpenTelemetry autoconfigure
+  does the same); `new MapConfigProperties(map)` keeps the upstream default (the autoconfigure SPI's class
+  loader). The OpenTelemetry OTLP exporter providers pass `config.getComponentLoader()` to their builders
+  (`OtlpConfigUtil.configureOtlpExporterBuilder`, seen in the exporter-otlp 1.62 bytecode — the newest in the
+  local repository), so exporters created through the SPI get the module-path-safe loader for their
+  `HttpSenderProvider` lookup. Out of scope, still upstream behaviour: an OpenTelemetry exporter built directly on the
+  module path without `setComponentLoader(...)` uses `ComponentLoader.forClassLoader(...)` and hits the same
+  error; such code must pass a loader of its own.
+- **Validation**: `MapConfigPropertiesModuleLayerTest` 3/3 (RED before the fix: 3 failures),
+  `OtelSpiAutoConfigurationTest` 3/3, full reactor `./mvnw -ntp clean install` green, official TCK
+  (2.2-RC3) 85/85 — that TCK runs on the class path, so it guards the class-path behaviour only.
+
+---
+
+## BUG-20261004-02 — the OTLP/JSON metric encoder drops double data points and synchronous gauges
+
+- **Date**: 2026-10-04
+- **Status**: OPEN
+- **Component**: humboldt-exporter-otlp-http (`OtlpJsonMetricEncoder`)
+- **Affected**: humboldt 0.4.0-SNAPSHOT (and earlier)
+- **Symptom**: `writeSum` and `writeGauge` only encode `LongPointData` (`if (!(p instanceof LongPointData lp))
+  continue;`), so the `DoublePointData` produced by double counters, double up-down counters and double gauges
+  (`DoubleSumAggregator`, `DoubleLastValueAggregator`) is exported as an empty `dataPoints` array. `writeMetric`
+  also has no `case GAUGE`: a synchronous gauge (`InstrumentType.GAUGE`, built by `SdkLongGaugeBuilder` /
+  `SdkDoubleGaugeBuilder`) is written with a name and no data field at all.
+- **Minimal reproduction** (found by reading the code while fixing the non-finite doubles of the same
+  encoder; not run): record a value on a `DoubleCounter`, or set a synchronous gauge, of an `SdkMeterProvider`
+  whose reader exports through `OtlpHttpMetricExporter`, and look at the JSON body: no data point for it.
+- **Cause hypothesis**: the encoder was written when humboldt-sdk-metric produced long points and
+  histograms only (M4); double points and synchronous gauges came later and the encoder was not extended.
+- **Suggested fix**: encode `DoublePointData` as `"asDouble"` (through `OtlpJsonCommon.appendDouble`, so that
+  non-finite values stay valid JSON) in `writeSum`/`writeGauge`, and route `GAUGE` to `writeGauge`.
+- **Investigations**:
+  - 2026-10-04: logged during Task FC1 of the MicroProfile 7.2 upgrade (out of its scope); no fix yet.
