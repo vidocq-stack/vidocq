@@ -9,6 +9,11 @@ keeps the upstream contract, but adds the `uses` of the requested service to `io
 (`Module.addUses`) before calling `ServiceLoader.load`, so that the lookups of optional OpenTelemetry artifacts
 (an OTLP exporter's `Compressor` or `HttpSenderProvider`) work on the module path (BUG-20261004-04).
 
+The descriptor also exports `io.opentelemetry.context.internal.shaded` (a `WeakConcurrentMap`) to
+`opentelemetry-exporter-otlp-common` only, which caches its marshalers in it (BUG-20261004-03). As in
+humboldt-otel-api, `io.vidocq.humboldt.otel.context.layer.ContextLayerExports` extends that qualified export to an
+exporter in a child module layer, which the descriptor's export does not reach; humboldt-otel-interop calls it.
+
 ## Quick verification
 
 ```zsh

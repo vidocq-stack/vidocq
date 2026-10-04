@@ -229,11 +229,14 @@
 
 ---
 
-## BUG-20261004-03 — OpenTelemetry SDK components cannot use `io.opentelemetry.api.internal` on the module path
+## BUG-20261004-03 — OpenTelemetry SDK and exporter jars cannot use the internal packages of `io.opentelemetry.api` and `io.opentelemetry.context` on the module path
 
 - **Date**: 2026-10-04
-- **Status**: FIXED (commit cd3b6ed on branch `pr/ybl/mp-7.2`, 2026-10-04)
-- **Component**: humboldt-otel-api (`module io.opentelemetry.api`, `src/main/moditect/module-info.java`)
+- **Status**: FIXED (commits 12ed18f and 87808e5 on branch `pr/ybl/mp-7.2`, 2026-10-04). The first commit,
+  cd3b6ed, fixed `io.opentelemetry.api.internal` only: an export still failed (see the investigations).
+- **Component**: humboldt-otel-api (`module io.opentelemetry.api`) and humboldt-otel-context
+  (`module io.opentelemetry.context`): `src/main/moditect/module-info.java`; humboldt-otel-interop
+  (`OtelSpiAutoConfiguration`)
 - **Affected**: humboldt 0.4.0-SNAPSHOT (and earlier); any OpenTelemetry SDK artifact used next to it on the
   module path, e.g. through humboldt-otel-interop in the Vidocq runtime
 - **Symptom**: humboldt-otel-api repackages `opentelemetry-api` as the explicit module `io.opentelemetry.api`,
@@ -276,21 +279,55 @@
     others (`opentelemetry-sdk`, `-sdk-testing`, `-sdk-extension-autoconfigure`, `-exporter-logging`,
     `-exporter-logging-otlp`, the three senders, `-opentracing-shim`, `-extension-kotlin`) do not. Incubating
     artifacts that do (`-api-incubator`, `-sdk-extension-incubator`, `-sdk-profiles`,
-    `-exporter-otlp-profiles`, `-exporter-prometheus`) are left out.
-- **Fix**: `exports io.opentelemetry.api.internal to` the ten Automatic-Module-Names of those stable artifacts
-  (`io.opentelemetry.sdk.common`, `.sdk.trace`, `.sdk.metrics`, `.sdk.logs`, `.sdk.autoconfigure.spi`,
-  `.sdk.extension.trace.jaeger`, `.extension.trace.propagation`, `.exporter.internal`,
-  `.exporter.internal.otlp`, `.exporter.otlp`) in the ModiTect descriptor, with a comment giving the reason, the
-  artifact → module mapping and the re-check rule for OpenTelemetry upgrades. A target module that is absent at
-  run time is ignored. ModiTect folds comments placed inside the `to` list into the module names (invalid
-  descriptor), so the mapping sits above the statement. An incubating artifact still needs
-  `--add-exports io.opentelemetry.api/io.opentelemetry.api.internal=<module>`.
-- **Validation**: `OtlpExporterModuleLayerTest` (humboldt-otel-interop) defines a module layer with the
-  Humboldt explicit modules and the OpenTelemetry 1.66 SDK and OTLP exporter jars as automatic modules (the
-  exporter jars are test-scope dependencies of humboldt-otel-interop only). It creates the span, metric and log
-  exporters through the upstream `Otlp*ExporterProvider`s and a `MapConfigProperties`, and checks that the
-  export stays qualified (not to humboldt-otel-interop nor to `io.opentelemetry.sdk`). RED before the fix: the
-  `IllegalAccessError` above for the three providers. Full reactor `./mvnw -ntp clean install` green.
+    `-exporter-otlp-profiles`, `-exporter-prometheus`) are left out. Commit cd3b6ed exported that package, and
+    its test only created and shut down the exporters.
+  - 2026-10-04 (FC4 review): the fix was incomplete. A reviewer probe on the module path got
+    `IllegalAccessError … io.opentelemetry.context does not export io.opentelemetry.context.internal.shaded` and
+    `… does not export io.opentelemetry.api.impl`; since every signal marshals its resource, no export could
+    succeed. `jdeps -verbose:class` over every stable jar of `opentelemetry-bom` 1.66.0, against the two Humboldt
+    jars, cross-checked by a constant-pool scan, lists every non-exported package they reference:
+    `io.opentelemetry.api.internal` (the ten modules above), `io.opentelemetry.api.impl` (`InstrumentationUtil`:
+    `-exporter-common`, `-exporter-sender-jdk`, `-exporter-sender-okhttp`),
+    `io.opentelemetry.api.trace.propagation.internal` (`W3CTraceContextEncoding`, for a non-empty trace state:
+    `-exporter-otlp-common`) and `io.opentelemetry.context.internal.shaded` (`WeakConcurrentMap`, in
+    `ResourceMarshaler` and `InstrumentationScopeMarshaler`: `-exporter-otlp-common`). No stable jar uses
+    `io.opentelemetry.common.impl` or `io.opentelemetry.context.propagation.internal`.
+  - 2026-10-04 (FC4 review): a qualified export reaches only target modules of the same module layer or of a
+    parent layer, and `--add-exports` applies to the boot layer only. In the Vidocq runtime the OpenTelemetry jars
+    land in the boot layer next to Humboldt's modules (`vidocq.app.path` mode: dependencies on the JVM module
+    path, only the application archives in the Vauban child layer; trampoline mode: Vauban keeps automatic
+    modules, and Humboldt's modules are read by kept `io.vidocq.humboldt.*` modules). An OpenTelemetry jar can
+    still end up in a child layer: listed in `vidocq.app.path`, or made explicit by `vauban:modularize` and
+    re-layered with the application. Reproduced by a two-layer test: the descriptor's export does not reach the
+    child layer, and the export fails with the same `IllegalAccessError`.
+- **Fix**:
+  - The descriptors export each of those packages, qualified, to exactly the modules that reference it, named by
+    their Automatic-Module-Name (cd3b6ed for `api.internal`; 12ed18f for `api.impl`,
+    `api.trace.propagation.internal` and `context.internal.shaded`). A comment in each descriptor gives the
+    reason, the artifact → module mapping, what the test covers, the layer rule and the re-check rule for
+    OpenTelemetry upgrades. A target module that is absent at run time is ignored. ModiTect folds comments placed
+    inside a `to` list into the module names (invalid descriptor), so the mappings sit above the statements.
+  - 87808e5: `ApiLayerExports` (humboldt-otel-api) and `ContextLayerExports` (humboldt-otel-context), in
+    packages exported to humboldt-otel-interop only, export at run time to the modules of a given layer and of its
+    parents exactly the packages their module's descriptor exports to those names (`Module.addExports`, legal
+    from inside the owning module). humboldt-otel-interop calls both for the layer of each OpenTelemetry provider
+    it discovers, before instantiating it. On the class path nothing is done. An OpenTelemetry component the
+    application builds itself, outside that discovery, in a child layer, does not get the exports.
+  - Not covered: an artifact outside the lists (an incubating one) needs
+    `--add-exports io.opentelemetry.api/<package>=<module>`, which works in the boot layer only.
+- **Validation**: `OtlpExporterModuleLayerTest` (humboldt-otel-interop; the exporter jars are test-scope
+  dependencies of that module only) defines module layers with the Humboldt explicit modules and the
+  OpenTelemetry 1.66 SDK, OTLP exporter and JDK sender jars as automatic modules. It exports a span (with a trace
+  state), a metric and a log record through the upstream `Otlp*ExporterProvider`s to a closed local port and
+  asserts a failed `CompletableResultCode` whose cause is the connection (`IOException`), with no `Error`
+  thrown or reported — once with everything in one layer, once with the exporter jars in a child layer after
+  humboldt-otel-interop's discovery. It also checks that each export stays qualified. RED before 12ed18f: the
+  `IllegalAccessError` on `context.internal.shaded` for the three signals; with the `api.impl` and
+  `api.trace.propagation.internal` exports removed again, the span fails on `W3CTraceContextEncoding` and the
+  metric and the log on `InstrumentationUtil`. RED before 87808e5: in the child layer, the exports are not there
+  after discovery, and the exports fail with the `IllegalAccessError`. The other targets of the lists (the OkHttp
+  sender, the Jaeger remote sampler, ...) rest on `jdeps` only. Full reactor `./mvnw -ntp clean install` and the
+  official TCK (class path) green.
 
 ---
 
