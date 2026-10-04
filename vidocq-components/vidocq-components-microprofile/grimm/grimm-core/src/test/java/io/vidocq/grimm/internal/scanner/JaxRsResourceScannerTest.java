@@ -30,6 +30,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.callbacks.Callback;
 import org.eclipse.microprofile.openapi.annotations.enums.ParameterIn;
@@ -691,6 +692,29 @@ class JaxRsResourceScannerTest {
         assertEquals("Strong", header.getExamples().get("strong").getSummary());
         assertEquals("10", header.getExamples().get("strong").getValue());
         assertEquals("5.1", header.getExamples().get("weak").getValue());
+    }
+
+    @Test
+    void mapsMethodLevelExternalDocumentationOntoTheOperation() {
+        // MP OpenAPI 4.2: @ExternalDocumentation on a resource method populates operation.externalDocs.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI openAPI = scanner.scanClasses(List.of(ExternalDocsResource.class));
+
+        var docs = openAPI.getPaths().getPathItem("/a").getGET().getExternalDocs();
+        assertNotNull(docs);
+        assertEquals("https://example.org/AResource.java", docs.getUrl());
+        assertEquals("Find more information about this application resource", docs.getDescription());
+        assertNull(openAPI.getExternalDocs(), "method-level docs must not leak to the document root");
+    }
+
+    @Path("/a")
+    static class ExternalDocsResource {
+        @GET
+        @ExternalDocumentation(description = "Find more information about this application resource",
+                url = "https://example.org/AResource.java")
+        public String get() {
+            return "";
+        }
     }
 
     @Path("/hdr")

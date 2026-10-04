@@ -31,6 +31,7 @@ import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.callbacks.Callback;
 import org.eclipse.microprofile.openapi.annotations.callbacks.CallbackOperation;
@@ -344,6 +345,19 @@ final class JaxRsResourceScanner {
             applyExtensions(op, opAnn.extensions());
         }
         applyExtensions(op, collectStandaloneExtensions(method));
+
+        // MP OpenAPI 4.2: @ExternalDocumentation on a resource method documents the operation.
+        ExternalDocumentation extDocs = method.getAnnotation(ExternalDocumentation.class);
+        if (extDocs != null && !extDocs.url().isEmpty()) {
+            var docs = OASFactory.createObject(
+                    org.eclipse.microprofile.openapi.models.ExternalDocumentation.class);
+            docs.setUrl(extDocs.url());
+            if (!extDocs.description().isEmpty()) {
+                docs.setDescription(extDocs.description());
+            }
+            applyExtensions(docs, extDocs.extensions());
+            op.setExternalDocs(docs);
+        }
 
         // Tags coming from @Operation are not in MP OpenAPI 4.1 Operation annotation members.
         // Operation tags are composed from class and method @Tag declarations (spec §3.5 / §3.7).
