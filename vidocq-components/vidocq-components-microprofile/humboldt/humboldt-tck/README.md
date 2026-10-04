@@ -1,6 +1,6 @@
 # Humboldt :: TCK Runner
 
-**MicroProfile Telemetry 2.1** conformance harness — runs the official
+**MicroProfile Telemetry 2.2** conformance harness — runs the official
 Eclipse TCK against the Humboldt implementation.
 
 > **STANDALONE** Maven project (Model Version 4.0.0, without `<parent>`),
@@ -10,11 +10,13 @@ Eclipse TCK against the Humboldt implementation.
 ## M7 status — SCAFFOLD (2026-05-21)
 
 ✅ **Completed**:
-- TCK coordinates confirmed public on Maven Central:
+- TCK coordinates confirmed public on Maven Central (MicroProfile Telemetry 2.1 at the time):
   - `org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck:2.1`
   - `org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck:2.1`
   - `org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck:2.1`
   - No single `microprofile-telemetry-tck:2.1` aggregator — it is split.
+  - Since 2026-10-04 the runner uses the `2.2-RC3` version of the same three artifacts
+    (MicroProfile Telemetry 2.2) — see [`../TCK.md`](../TCK.md).
 - TCK stack: **TestNG + Arquillian + ShrinkWrap** (not JUnit).
 - The runner's Model 4.0.0 `pom.xml` resolves all its dependencies.
 - `HumboldtTckSmokeTest` validates that Humboldt runtime + TCK classes + OTel

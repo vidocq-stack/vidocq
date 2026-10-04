@@ -1,6 +1,6 @@
 # Humboldt — MicroProfile Telemetry TCK status
 
-## MicroProfile Telemetry 2.2 (TCK 2.2-RC3, byte-identical to the 2.2 final under ballot; re-run on the final in Task E1)
+## MicroProfile Telemetry 2.2 (TCK 2.2-RC3, byte-identical to the 2.2 final under ballot; to be re-run on the final once it is published)
 
 Date: 2026-10-04 — OpenTelemetry 1.66.0, instrumentation-annotations 2.31.1, semconv 1.44.0.
 Command: `./run-official-tck-telemetry-2.2.sh all`.
@@ -11,17 +11,18 @@ Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 
 New in 2.2 and covered: `code.function.name` on `@WithSpan` spans, `@WithSpan(inheritContext = false)`.
 
-The sections below are the **MicroProfile Telemetry 2.1** history (TCK 2.1, last run 2026-06-24), kept as is.
+The next section is the **MicroProfile Telemetry 2.1** history (TCK 2.1, last run 2026-06-24), kept as is.
+The runner architecture and challenge format sections after it apply to both versions.
 
-# MicroProfile Telemetry 2.1 TCK status
+## MicroProfile Telemetry 2.1 (history)
 
-## Target
+### Target
 
 100% official TCK compliance for **MicroProfile Telemetry 2.1** across the 3 suites
 (tracing + metrics + logs), with `OTEL_*` / `MP_TELEMETRY_*` configuration,
 propagation W3C TraceContext + Baggage.
 
-## TCK coordinates (M7.1 audit — 2026-05-21)
+### TCK coordinates (M7.1 audit — 2026-05-21)
 
 ✅ **Public Maven Central** — no non-public manual install required:
 
@@ -38,7 +39,7 @@ propagation W3C TraceContext + Baggage.
 except for the `@WithSpan` annotation from
 `io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations`).
 
-## TCK stack
+### TCK stack
 
 **TestNG + Arquillian + ShrinkWrap** (not JUnit). The TCK brings its own
 copy of `io.opentelemetry:opentelemetry-sdk` for its internal fixtures
@@ -46,7 +47,7 @@ copy of `io.opentelemetry:opentelemetry-sdk` for its internal fixtures
 gated behind the `tck` Maven profile), it does not pollute the Humboldt
 application code in production.
 
-## Current status
+### Status
 
 **100 % PASS (2026-06-24 re-validated)** — TCK MicroProfile Telemetry 2.1 (tracing suite) fully green:
 
@@ -62,29 +63,29 @@ Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 | Baggage | ✅ W3C propagator delivered in M3 | |
 | Config | ✅ OTEL_* / MP_TELEMETRY_* vars delivered in M6c | |
 
-### Run history
+#### Run history
 
 | Date | PASS | FAIL | SKIP | Notes |
 |---|---|---|---|---|
 | 2026-05-24 | **85** | 0 | 0 | M7c final run — 100% PASS |
 | 2026-06-24 | **85** | 0 | 0 | Re-validated — confirmed 100% PASS |
 
-## M7 roadmap
+### M7 roadmap
 
-### M7a — Scaffold (✅ completed)
+#### M7a — Scaffold (✅ completed)
 - pom `humboldt-tck/` Model 4.0.0 standalone outside-reactor
 - arquillian.xml placeholder + tck-suite.xml TestNG
 - HumboldtTckSmokeTest : valide classpath + AutoConfiguredHumboldt fonctionnel
 - Script `run-official-tck-telemetry-2.1.sh` at the root
 
-### M7b — Humboldt Arquillian adapter (✅ completed)
+#### M7b — Humboldt Arquillian adapter (✅ completed)
 
 `HumboldtDeployableContainer` + `HumboldtCdiEnricher` + `CassiniHarness` HTTP
 + `HumboldtTelemetryProducers` CDI + bridge OTel SDK `withExtraSpanExporter`.
 
-### M7c — Run + triage (✅ completed — 85/85 PASS)
+#### M7c — Run + triage (✅ completed — 85/85 PASS)
 
-#### Final run (2026-05-24) — `mvn -Ptck-official test`
+##### Final run (2026-05-24) — `mvn -Ptck-official test`
 
 ```
 Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
@@ -108,7 +109,7 @@ Complete progression of the 2026-05-21→24 session (5 → 85 PASS, +1600%):
 | M7c.10-12 | B3/Jaeger propagators, SPI Propagator/Sampler, auto-instrumentation MP Rest Client | +8 |
 | M7c (final) | BCE `@WithSpan` + `@SpanAttribute` on parameters, `HumboldtTckExecutor` SPI | +4 |
 
-#### Quality gate
+##### Quality gate
 
 **100 % de tests applicables PASS** ✅
 

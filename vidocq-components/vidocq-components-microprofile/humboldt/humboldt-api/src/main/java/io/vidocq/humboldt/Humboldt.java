@@ -26,7 +26,7 @@ import java.lang.System.Logger.Level;
 import java.util.Properties;
 
 /**
- * Public facade of Humboldt, the entry point for the MicroProfile Telemetry 2.1 runtime.
+ * Public facade of Humboldt, the entry point for the MicroProfile Telemetry 2.2 runtime.
  *
  * <p>M0 stub — the functional surface (Tracer/Meter/Logger provided by the SDKs)
  * arrives in M1.</p>

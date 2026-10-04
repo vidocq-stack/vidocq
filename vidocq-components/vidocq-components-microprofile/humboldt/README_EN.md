@@ -2,13 +2,15 @@
 
 > *Alexander von Humboldt (1769–1859) — Prussian polymath, naturalist, explorer. The man who made the founding gesture of modern observability: observe simultaneously, measure rigorously, correlate across layers. On Chimborazo in 1802 he recorded jointly pressure, temperature, magnetism, humidity, fauna, flora — and drew the first isothermal maps. OpenTelemetry, in modern Java SE.*
 
-**Humboldt** is the MicroProfile Telemetry 2.1 implementation of the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem. Distributed tracing, metrics and logs, on top of the [OpenTelemetry](https://opentelemetry.io/) public API — **without embedding `opentelemetry-sdk` or third-party exporters**.
+**Humboldt** is the MicroProfile Telemetry 2.2 implementation (OpenTelemetry 1.66) of the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem. Distributed tracing, metrics and logs, on top of the [OpenTelemetry](https://opentelemetry.io/) public API — **without embedding `opentelemetry-sdk` or third-party exporters**.
 
 > 🇫🇷 French version: [README.md](README.md)
 
 ## Status
 
-**M0 — Java Modules skeleton** (in progress). See [`PLAN.md`](PLAN.md) for the detailed roadmap M0 → M9, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
+**MicroProfile Telemetry 2.2 implemented (OpenTelemetry 1.66). Official TCK 2.2-RC3 (byte-identical to the 2.2 final under ballot): 85/85 PASS (2026-10-04).** The 2.1 TCK passed 85/85 on 2026-06-24. See [`TCK.md`](TCK.md).
+
+See [`PLAN.md`](PLAN.md) for the detailed roadmap M0 → M9, and [`tasks/todo.md`](tasks/todo.md) for task tracking.
 
 ## Scope
 

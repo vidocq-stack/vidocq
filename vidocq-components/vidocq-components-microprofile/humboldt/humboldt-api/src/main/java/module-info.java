@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Humboldt — MicroProfile Telemetry 2.1 implementation.
+ * Humboldt — MicroProfile Telemetry 2.2 implementation.
  *
  * <p>API module: stable public surface. Exports the {@code Humboldt} facade
  * and the SPI interfaces consumed by the SDK modules (trace, metric, log)

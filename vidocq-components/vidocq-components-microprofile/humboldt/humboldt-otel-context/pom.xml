@@ -12,7 +12,7 @@
 
     <artifactId>humboldt-otel-context</artifactId>
     <name>Humboldt :: OTel Context (Java Modules)</name>
-    <description>Repackage io.opentelemetry:opentelemetry-context (+ opentelemetry-common) avec module-info explicite io.opentelemetry.context pour jlink.</description>
+    <description>Repackages io.opentelemetry:opentelemetry-context (+ opentelemetry-common) with an explicit io.opentelemetry.context module-info, for jlink.</description>
 
     <dependencies>
         <dependency>

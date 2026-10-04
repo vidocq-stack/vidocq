@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Humboldt</name>
-    <description>Implémentation MicroProfile Telemetry 2.1 — tracing/metrics/logs OpenTelemetry-native, Java Modules strict, zéro SDK tiers, Java 25.</description>
+    <description>MicroProfile Telemetry 2.2 implementation — OpenTelemetry-native tracing/metrics/logs, strict Java Modules, no third-party SDK, Java 25.</description>
     <url>https://codefloe.com/Vidocq/humboldt</url>
 
     <developers>
@@ -244,7 +244,7 @@
 
     <profiles>
         <!--
-            TCK harmonisation: the official MicroProfile Telemetry 2.1 TCK runner
+            TCK harmonisation: the official MicroProfile Telemetry TCK runner
             joins the reactor only when this profile is active.
 
                 ./mvnw -Ptck,tck-smoke -pl humboldt-tck test        # smoke
