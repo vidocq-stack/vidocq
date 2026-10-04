@@ -51,8 +51,8 @@ public class HeaderImpl extends AbstractExtensibleRef<Header> implements Header 
     @Override public Boolean getDeprecated() { return deprecated; }
     @Override public void setDeprecated(Boolean deprecated) { this.deprecated = deprecated; }
 
-    @Override public Boolean getAllowEmptyValue() { return allowEmptyValue; }
-    @Override public void setAllowEmptyValue(Boolean allowEmptyValue) { this.allowEmptyValue = allowEmptyValue; }
+    @SuppressWarnings("removal") @Override public Boolean getAllowEmptyValue() { return allowEmptyValue; }
+    @SuppressWarnings("removal") @Override public void setAllowEmptyValue(Boolean allowEmptyValue) { this.allowEmptyValue = allowEmptyValue; }
 
     @Override public Style getStyle() { return style; }
     @Override public void setStyle(Style style) { this.style = style; }
