@@ -34,9 +34,11 @@ import org.eclipse.microprofile.openapi.models.info.Contact;
 import org.eclipse.microprofile.openapi.models.info.License;
 import org.eclipse.microprofile.openapi.models.links.Link;
 import org.eclipse.microprofile.openapi.models.media.Content;
+import org.eclipse.microprofile.openapi.models.media.Discriminator;
 import org.eclipse.microprofile.openapi.models.media.Encoding;
 import org.eclipse.microprofile.openapi.models.media.MediaType;
 import org.eclipse.microprofile.openapi.models.media.Schema;
+import org.eclipse.microprofile.openapi.models.media.XML;
 import org.eclipse.microprofile.openapi.models.parameters.Parameter;
 import org.eclipse.microprofile.openapi.models.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
@@ -47,9 +49,12 @@ import org.eclipse.microprofile.openapi.models.servers.Server;
 import org.eclipse.microprofile.openapi.models.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 final class OpenApiModelMapper {
 
@@ -932,7 +937,21 @@ final class OpenApiModelMapper {
         return schemas;
     }
 
+    /**
+     * Maps a raw JSON/YAML schema onto the model. Since MP OpenAPI 4.2 (#698) a schema treats
+     * every property it does not know as an extension, so each standard keyword is converted
+     * here to the type of its model property (numbers to {@code BigDecimal}/{@code Integer},
+     * objects to {@code Schema}/{@code Discriminator}/{@code XML}/{@code ExternalDocumentation}).
+     * A keyword whose value has another JSON type is kept as written through
+     * {@link Schema#set(String, Object)}, as an alternative dialect may use it.
+     */
     private static Schema toSchema(Object raw) {
+        if (raw instanceof Boolean booleanSchema) {
+            // JSON Schema 2020-12 §4.3.2: true / false are schemas wherever a schema is expected.
+            Schema schema = OASFactory.createObject(Schema.class);
+            schema.setBooleanSchema(booleanSchema);
+            return schema;
+        }
         if (!(raw instanceof Map<?, ?> map)) {
             return null;
         }
@@ -947,6 +966,49 @@ final class OpenApiModelMapper {
                 case "required" -> schema.setRequired(toStringList(value));
                 case "properties" -> schema.setProperties(toSchemas(value));
                 case "items" -> schema.setItems(toSchema(value));
+                case "multipleOf" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMultipleOf);
+                case "maximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMaximum);
+                case "exclusiveMaximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMaximum);
+                case "minimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMinimum);
+                case "exclusiveMinimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMinimum);
+                case "maxLength" -> setTyped(schema, key, value, asInteger(value), schema::setMaxLength);
+                case "minLength" -> setTyped(schema, key, value, asInteger(value), schema::setMinLength);
+                case "maxItems" -> setTyped(schema, key, value, asInteger(value), schema::setMaxItems);
+                case "minItems" -> setTyped(schema, key, value, asInteger(value), schema::setMinItems);
+                case "maxProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMaxProperties);
+                case "minProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMinProperties);
+                case "maxContains" -> setTyped(schema, key, value, asInteger(value), schema::setMaxContains);
+                case "minContains" -> setTyped(schema, key, value, asInteger(value), schema::setMinContains);
+                case "uniqueItems" -> setTyped(schema, key, value,
+                        value instanceof Boolean b ? b : null, schema::setUniqueItems);
+                case "not" -> setTyped(schema, key, value, toSchema(value), schema::setNot);
+                case "if" -> setTyped(schema, key, value, toSchema(value), schema::setIfSchema);
+                case "then" -> setTyped(schema, key, value, toSchema(value), schema::setThenSchema);
+                case "else" -> setTyped(schema, key, value, toSchema(value), schema::setElseSchema);
+                case "contains" -> setTyped(schema, key, value, toSchema(value), schema::setContains);
+                case "propertyNames" -> setTyped(schema, key, value, toSchema(value), schema::setPropertyNames);
+                case "unevaluatedItems" -> setTyped(schema, key, value, toSchema(value), schema::setUnevaluatedItems);
+                case "unevaluatedProperties" -> setTyped(schema, key, value, toSchema(value),
+                        schema::setUnevaluatedProperties);
+                case "contentSchema" -> setTyped(schema, key, value, toSchema(value), schema::setContentSchema);
+                case "allOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAllOf);
+                case "anyOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAnyOf);
+                case "oneOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setOneOf);
+                case "prefixItems" -> setTyped(schema, key, value, toSchemaList(value), schema::setPrefixItems);
+                case "dependentSchemas" -> setTyped(schema, key, value, toSchemas(value), schema::setDependentSchemas);
+                case "patternProperties" -> setTyped(schema, key, value, toSchemas(value),
+                        schema::setPatternProperties);
+                case "dependentRequired" -> setTyped(schema, key, value, toDependentRequired(value),
+                        schema::setDependentRequired);
+                case "discriminator" -> setTyped(schema, key, value, toDiscriminator(value), schema::setDiscriminator);
+                case "xml" -> setTyped(schema, key, value, toXml(value), schema::setXml);
+                case "externalDocs" -> setTyped(schema, key, value, toExternalDocs(value), schema::setExternalDocs);
+                case "contentEncoding" -> setTyped(schema, key, value,
+                        value instanceof String s ? s : null, schema::setContentEncoding);
+                case "contentMediaType" -> setTyped(schema, key, value,
+                        value instanceof String s ? s : null, schema::setContentMediaType);
+                case "const" -> schema.setConstValue(value);
+                case "example" -> schema.setExample(value);
                 case "$ref" -> schema.setRef(asString(value));
                 case "$schema" -> schema.setSchemaDialect(asString(value));
                 case "$comment" -> schema.setComment(asString(value));
@@ -989,6 +1051,122 @@ final class OpenApiModelMapper {
             }
         }
         return schema;
+    }
+
+    /**
+     * Sets {@code converted} through its typed setter, or keeps {@code raw} as written when it does
+     * not have the JSON type of the standard keyword.
+     */
+    private static <T> void setTyped(Schema schema, String key, Object raw, T converted, Consumer<T> setter) {
+        if (converted != null || raw == null) {
+            setter.accept(converted);
+        } else {
+            schema.set(key, raw);
+        }
+    }
+
+    private static BigDecimal asBigDecimal(Object raw) {
+        if (raw instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (!(raw instanceof Number number)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(number.toString());
+        } catch (NumberFormatException notFinite) {
+            return null; // NaN or an infinity has no BigDecimal form
+        }
+    }
+
+    private static Integer asInteger(Object raw) {
+        BigDecimal decimal = asBigDecimal(raw);
+        if (decimal == null) {
+            return null;
+        }
+        try {
+            return decimal.intValueExact();
+        } catch (ArithmeticException notAnInt) {
+            return null;
+        }
+    }
+
+    private static List<Schema> toSchemaList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return null;
+        }
+        ArrayList<Schema> schemas = new ArrayList<>(list.size());
+        for (Object item : list) {
+            Schema schema = toSchema(item);
+            if (schema != null) {
+                schemas.add(schema);
+            }
+        }
+        return schemas;
+    }
+
+    private static Map<String, List<String>> toDependentRequired(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        LinkedHashMap<String, List<String>> dependentRequired = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            List<String> names = toStringList(entry.getValue());
+            if (names != null) {
+                dependentRequired.put(String.valueOf(entry.getKey()), names);
+            }
+        }
+        return dependentRequired;
+    }
+
+    private static Discriminator toDiscriminator(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        // Discriminator is not Extensible in MP OpenAPI 4.2: keys other than these two are dropped.
+        Discriminator discriminator = OASFactory.createObject(Discriminator.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "propertyName" -> discriminator.setPropertyName(asString(value));
+                case "mapping" -> {
+                    if (value instanceof Map<?, ?> mapping) {
+                        for (Map.Entry<?, ?> m : mapping.entrySet()) {
+                            discriminator.addMapping(String.valueOf(m.getKey()), asString(m.getValue()));
+                        }
+                    }
+                }
+                default -> {
+                    // not representable in the model
+                }
+            }
+        }
+        return discriminator;
+    }
+
+    private static XML toXml(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        XML xml = OASFactory.createObject(XML.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "name" -> xml.setName(asString(value));
+                case "namespace" -> xml.setNamespace(asString(value));
+                case "prefix" -> xml.setPrefix(asString(value));
+                case "attribute" -> xml.setAttribute(asBoolean(value));
+                case "wrapped" -> xml.setWrapped(asBoolean(value));
+                default -> {
+                    if (key.startsWith("x-")) {
+                        xml.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return xml;
     }
 
     private static List<Schema.SchemaType> toSchemaTypes(Object raw) {
