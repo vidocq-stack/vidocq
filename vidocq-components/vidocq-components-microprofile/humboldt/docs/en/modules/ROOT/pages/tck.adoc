@@ -40,13 +40,13 @@ cd humboldt
 sdk env
 
 # Smoke — local harness tests to validate the install
-./run-official-tck-telemetry-2.1.sh
+./run-official-tck-telemetry-2.2.sh
 
 # Full official suite — 85 tests (tracing + metrics + logs)
-./run-official-tck-telemetry-2.1.sh all
+./run-official-tck-telemetry-2.2.sh all
 
 # Targeted test
-./run-official-tck-telemetry-2.1.sh -Dtest=BasicAppTest
+./run-official-tck-telemetry-2.2.sh -Dtest=BasicAppTest
 ----
 
 The script:

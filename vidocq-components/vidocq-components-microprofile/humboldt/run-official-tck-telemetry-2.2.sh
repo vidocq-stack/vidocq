@@ -2,20 +2,20 @@
 set -e
 
 # ==============================================================================
-# Script de lancement du TCK officiel MicroProfile Telemetry 2.1 — Humboldt
+# Script de lancement du TCK officiel MicroProfile Telemetry 2.2 — Humboldt
 # ==============================================================================
 #
 # Stack : TestNG + Arquillian + ShrinkWrap (cf. humboldt-tck/README.md)
 #
 # Coordonnées TCK confirmées (publiques Maven Central, M7.1 audit 2026-05-21) :
-#   org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck:2.1
-#   org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck:2.1
-#   org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck:2.1
+#   org.eclipse.microprofile.telemetry:microprofile-telemetry-tracing-tck:2.2-RC3
+#   org.eclipse.microprofile.telemetry:microprofile-telemetry-metrics-tck:2.2-RC3
+#   org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck:2.2-RC3
 #
 # Utilisation :
-#   ./run-official-tck-telemetry-2.1.sh                       # smoke
-#   ./run-official-tck-telemetry-2.1.sh all                   # suite complète (M7c+)
-#   ./run-official-tck-telemetry-2.1.sh -Dtest=BasicAppTest   # test ciblé
+#   ./run-official-tck-telemetry-2.2.sh                       # smoke
+#   ./run-official-tck-telemetry-2.2.sh all                   # suite complète (M7c+)
+#   ./run-official-tck-telemetry-2.2.sh -Dtest=BasicAppTest   # test ciblé
 #
 # humboldt-tck est in-reactor, activé par le profil Maven `tck` (harmonisation
 # TCK, même pattern que les runners vidocq-runtime-tck-*) : ce script est un
@@ -55,7 +55,7 @@ echo "============================================"
 
 echo ""
 echo "============================================"
-echo " Étape 2 — Lancement TCK MP Telemetry 2.1   "
+echo " Étape 2 — Lancement TCK MP Telemetry 2.2   "
 echo "============================================"
 
 if $USE_ALL; then

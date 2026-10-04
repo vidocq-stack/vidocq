@@ -22,8 +22,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./mvnw -ntp -pl humboldt-api install
 
 # TCK — smoke test / full suite / targeted test
-./run-official-tck-telemetry-2.1.sh         # smoke
-./run-official-tck-telemetry-2.1.sh all     # full suite (85 tests)
+./run-official-tck-telemetry-2.2.sh         # smoke
+./run-official-tck-telemetry-2.2.sh all     # full suite (85 tests)
 
 # TCK — direct reactor invocation (humboldt-tck is gated by the `tck` profile)
 ./mvnw -Ptck,tck-smoke -pl humboldt-tck test        # smoke

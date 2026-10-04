@@ -22,6 +22,9 @@ module io.opentelemetry.context {
 
     exports io.opentelemetry.context;
     exports io.opentelemetry.context.propagation;
+    exports io.opentelemetry.common;
+    // Internal logger used by the API module only (opentelemetry-common is shaded in here since 1.66).
+    exports io.opentelemetry.common.impl to io.opentelemetry.api;
 
     uses io.opentelemetry.context.ContextStorageProvider;
 }

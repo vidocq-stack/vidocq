@@ -42,9 +42,9 @@ Eclipse TCK against the Humboldt implementation.
 
 ```bash
 # From humboldt/ (above this folder)
-./run-official-tck-telemetry-2.1.sh         # smoke (HumboldtTckSmokeTest only)
-./run-official-tck-telemetry-2.1.sh all     # full TCK suite (M7c+)
-./run-official-tck-telemetry-2.1.sh -Dtest=BasicAppTest  # targeted test
+./run-official-tck-telemetry-2.2.sh         # smoke (HumboldtTckSmokeTest only)
+./run-official-tck-telemetry-2.2.sh all     # full TCK suite (M7c+)
+./run-official-tck-telemetry-2.2.sh -Dtest=BasicAppTest  # targeted test
 ```
 
 The script performs:
