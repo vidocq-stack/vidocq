@@ -11,8 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — run `sdk env`)
-- The official TCK `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5`
-  must be installed in the local M2 repository (non-public artifact — see `grimm-tck/README.md`)
+- The official TCK `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` is
+  published on Maven Central (as is the 4.1 TCK): Maven resolves it, nothing to install by hand
 
 ## Essential Commands
 

@@ -9,7 +9,8 @@ Out-of-reactor runner for the official MicroProfile OpenAPI 4.2 TCK.
 ## Local prerequisites
 
 1. Install the reactor artifacts in your local repository.
-2. Install the non-public TCK artifact `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` in local M2.
+2. Nothing to install for the TCK itself: `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` (like the 4.1 TCK)
+   is published on Maven Central and resolved by Maven during the run.
 
 ## Commands
 

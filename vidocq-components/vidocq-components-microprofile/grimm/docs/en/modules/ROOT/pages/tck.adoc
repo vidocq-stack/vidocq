@@ -2,7 +2,7 @@
 :description: Status, runner execution, out-of-reactor architecture, documented exclusions.
 
 [.lead]
-The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm passes it at *367 / 367* on TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. For reference, the 4.1 TCK had 349 tests (passed 349 / 349 in May 2026): 4.2-RC5 adds 18, since each parameterized method runs once per JSON and YAML format.
+The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produces a conformant OpenAPI 3.1 document from a set of reference applications and their test classes (`PetStoreAppTest`, `AirlinesAppTest`, `StaticDocumentTest`, `FilterTest`, `ModelReaderAppTest`, `OASConfigServersTest`, …). Grimm's TCK run passes at *367 / 367* on TCK `4.2-RC5` (byte-identical to the 4.2 final under ballot), run on 2026-10-04; the run will be repeated on the 4.2 final. The 367 tests are the 364 tests of the official TCK plus 3 Grimm harness tests (`GrimmTckSmokeTest`, 1 test; `DotNameCompatibilityTest`, 2 tests). For reference, the same run counted 349 tests on the 4.1 TCK (passed 349 / 349 in May 2026). 4.2-RC5 adds 18: `ExternalDocumentationAnnotationTest` (1 method, run once per JSON and YAML format: 2), `SchemaExtensionPropertyTest` (6 plain model tests, run once each: 6), the 4 new `@Digits` methods of `BeanValidationTest` (run once per format: 8) and `testExamplesInHeaders` (run once per format: 2).
 
 == Status
 
@@ -11,7 +11,7 @@ The official MicroProfile OpenAPI 4.2 TCK verifies that an implementation produc
 | Metric | Value
 
 | Tests executed
-| 367
+| 367 (364 official TCK tests + 3 Grimm harness tests)
 
 | Passed
 | 367 ✅
@@ -30,7 +30,7 @@ Any future regression must be logged in the repository's `TCK.md` with: test nam
 
 == Prerequisites
 
-The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` artefact is not published on Maven Central — it must be installed manually into the local M2. Procedure detailed in `grimm-tck/README.md`.
+The `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5` artefact is published on Maven Central, like the 4.1 TCK before it: Maven resolves it during the run, with no manual installation.
 
 [source,bash]
 ----
@@ -47,7 +47,7 @@ The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives ev
 # Smoke suite (default) — runs GrimmTckSmokeTest to validate the installation
 ./run-official-tck-mp-openapi-4.2.sh
 
-# Full suite — the official 367-test TCK
+# Full suite — 367 tests: the 364 official TCK tests + 3 Grimm harness tests
 ./run-official-tck-mp-openapi-4.2.sh all
 
 # Readiness matrix — runs one test (default PetStoreAppTest) under three profiles:
@@ -60,7 +60,7 @@ The `run-official-tck-mp-openapi-4.2.sh` script at the repository root drives ev
 ./run-official-tck-mp-openapi-4.2.sh -Dtest=AirlinesAppTest
 ----
 
-The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-official test`. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
+The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-official clean test` after a `clean install` of the reactor, so the harness is always compiled from scratch. The TCK test classes come straight from the official `microprofile-openapi-tck` jar, picked up by Surefire's `<dependenciesToScan>` — there is no local TestNG suite file. The Surefire report lands in `grimm-tck/target/surefire-reports/`.
 
 == Runner architecture
 
@@ -78,7 +78,7 @@ Stack assembled by the runner:
 | Layer | Component
 
 | Spec
-| `microprofile-openapi-api` 4.2, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
+| `microprofile-openapi-api` 4.2 (the build pins `4.2-RC5` until the final reaches Maven Central), `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1
 
 | OpenAPI implementation
 | `grimm-core` + `grimm-cdi-vauban`

@@ -309,7 +309,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 | `run-official-tck-mp-openapi-4.2.sh` | Root script: `smoke` / `all` / `matrix` / targeted `-Dtest=...` | ☑ |
 | Smoke TCK green | `GrimmTckSmokeTest` PASS | ☑ |
 | Progressive TCK pass | Iterative runs recorded in `TCK.md` | ☑ |
-| TCK 100% PASS | Full official suite green (349 tests) | ☑ |
+| TCK 100% PASS | Full suite green on 4.2-RC5: 367 tests (364 official + 3 Grimm harness tests) | ☑ |
 | `TCK.md` | Current score + documented exclusions (no active exclusions) | ☑ |
 | `grimm-tck/README.md` | Local install procedure + runner architecture documented | ☑ |
 

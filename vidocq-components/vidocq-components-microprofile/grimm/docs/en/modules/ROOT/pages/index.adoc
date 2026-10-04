@@ -5,7 +5,7 @@
 image::grimm-logo.png[Grimm,300,role=module-logo]
 
 [.lead]
-Grimm is the MicroProfile OpenAPI 4.2 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.2 TCK conformance (currently 349/349), zero external dependency, strict Java Modules, jlink-ready.
+Grimm is the MicroProfile OpenAPI 4.2 implementation of the Vidocq ecosystem. It scans the annotations scattered across JAX-RS resources, merges them with an optional static document and an optional `OASModelReader`, applies `OASFilter` filters, and publishes a unified OpenAPI 3.1 document on `/openapi`. Goal: 100 % MicroProfile OpenAPI 4.2 TCK conformance (currently 367/367 on TCK 4.2-RC5), zero external dependency, strict Java Modules, jlink-ready.
 
 == Origin of the name
 
@@ -45,7 +45,7 @@ The Grimms gathered scattered oral tradition — tales, legends, word roots — 
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.grimm.core`, `io.vidocq.grimm.processor`, `io.vidocq.grimm.cdi.vauban`
 | Public packages | `io.vidocq.grimm.spi.gen` (compile-time contribution SPI), `io.vidocq.grimm.internal.reader` (static-document readers), `io.vidocq.grimm.cdi` (CDI integration)
-| Runtime dependencies | `microprofile-openapi-api` 4.2, `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
+| Runtime dependencies | `microprofile-openapi-api` 4.2 (the build pins `4.2-RC5` until the final reaches Maven Central), `jakarta.ws.rs-api` 4.0, `jakarta.enterprise.cdi-api` 4.1, `jakarta.annotation-api` 3.0, `io.vidocq.ravel:ravel-mp-config-api`
 | jlink-ready | ✅ — every sub-module ships its own `module-info.java`, no `Automatic-Module-Name` fallback.
 | MP OpenAPI 4.2 TCK | ✅ 367 / 367 (TCK 4.2-RC5) — see xref:tck.adoc[detailed status]
 |===

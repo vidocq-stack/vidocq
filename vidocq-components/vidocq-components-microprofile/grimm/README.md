@@ -4,7 +4,7 @@ Grimm is a MicroProfile OpenAPI 4.2 implementation for the Vidocq ecosystem.
 
 ## Current status
 
-Core implementation and CDI integration are in place, with the official MicroProfile OpenAPI 4.2 TCK 4.2-RC5 (byte-identical to the 4.2 final under ballot) green at 367/367 on 2026-10-04 (each parameterized test runs once per JSON and YAML format). It will be re-run on the 4.2 final.
+Core implementation and CDI integration are in place, with the MicroProfile OpenAPI 4.2 TCK run green at 367/367 on 2026-10-04 against TCK 4.2-RC5 (byte-identical to the 4.2 final under ballot): the 364 tests of the official TCK plus 3 Grimm harness tests. It will be re-run on the 4.2 final.
 
 ## Prerequisites
 
