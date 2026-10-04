@@ -4,7 +4,7 @@ Out-of-reactor runner for the official MicroProfile OpenAPI 4.2 TCK.
 
 ## Why this module is out of reactor
 
-`grimm-tck/pom.xml` stays on Maven model `4.0.0` to avoid the ShrinkWrap Maven Resolver incompatibility with model `4.1.0`.
+The runner is a standalone POM (model `4.0.0`, no `<parent>`, not a module of the root POM). This keeps the released runtime decoupled from the official TCK: a normal build never resolves or runs any TCK artifact. Run it with `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`, or through `run-official-tck-mp-openapi-4.2.sh`.
 
 ## Local prerequisites
 

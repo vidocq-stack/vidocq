@@ -36,8 +36,8 @@
 
 ## Boundaries Not to Break
 
-- Never put `grimm-tck` back in the reactor: deliberately excluded due to the ShrinkWrap Maven
-  Resolver / Model 4.0.0 vs 4.1.0 incompatibility (ecosystem-wide Vidocq constraint).
+- Never put `grimm-tck` back in the reactor: it is deliberately a standalone runner, so the released
+  runtime stays decoupled from the official TCK.
 - `grimm-core` must **never import** any CDI class (`jakarta.enterprise.*`, `jakarta.inject.*`),
   any Vauban class, or any Cassini/Chappe class.
 - **No `synchronized` blocks** — use `ReentrantLock.tryLock()`, `Semaphore`, `AtomicReference`.

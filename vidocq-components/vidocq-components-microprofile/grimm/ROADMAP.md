@@ -75,7 +75,7 @@ grimm-examples          io.vidocq.grimm.examples
 
 - [x] `.sdkmanrc` (`java=25-tem`, `maven=3.9.16`)
 - [x] `.gitignore`, `.mvn/maven.config`
-- [x] Parent `pom.xml` (Model 4.1.0, multi-module, dependency management Jakarta + MicroProfile)
+- [x] Parent `pom.xml` (Model 4.0.0, multi-module, dependency management Jakarta + MicroProfile)
 - [x] `CLAUDE.md`, `AGENTS.md`, `ROADMAP.md` (these files)
 - [x] Sub-module scaffolding with `pom.xml` + `module-info.java` skeletons:
       `grimm-core`, `grimm-cdi-vauban`, `grimm-bench`, `grimm-examples`, `grimm-tck` (out-of-reactor)
@@ -331,7 +331,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 | OpenAPI 3.1 JSON Schema dialect | `SchemaImpl` must support `$vocabulary`, `$schema`, `if/then/else`, `unevaluatedProperties` (new in 3.1) | Track breaking changes vs 3.0 in `TCK.md`; add tests per dialect feature |
 | YAML serialization correctness | Hand-written YAML may miss edge cases (multi-line strings, special chars) | Extensive round-trip tests; validate against OpenAPI Parser in `grimm-tck` |
 | Circular schema detection | StackOverflow risk in deep object graphs | `SchemaRegistry` with a `Set<Class<?>>` visited guard in `SchemaGenerator` |
-| TCK non-public artifact | Blocked if not installed in M2 local | Document in `grimm-tck/README.md`; CI install script |
+| TCK artifact availability | The official TCK is published on Maven Central; the runner is standalone and needs the reactor installed in the local M2 | Documented in `grimm-tck/README.md`; the TCK script runs `install -DskipTests` first |
 | `OASFactory` ServiceLoader in Java Modules | `provides` declaration in `module-info.java` must match the `GrimmOASFactoryResolver` class exactly | Validate with `java --list-modules` smoke test in M0 |
 | Cassini resource scanning | `GrimmExtension` must discover JAX-RS resources before Cassini scans them | Hook BCE in the `@Enhancement` phase; ensure ordering via CDI priorities |
 | MP Config key `mp.openapi.schema.<FQCN>` | FQCN contains dots — may collide with Config key namespace | Use `Config.getPropertyNames()` + prefix filter; test with Ravel |
@@ -344,7 +344,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
 - [x] YAML serialization hand-written — no Snakeyaml, no third-party parser
 - [x] Model build pipeline order: OASModelReader → static file → annotation scanner → merge →
       OASFilter (spec "Processing rules")
-- [x] `grimm-tck/pom.xml` on Model 4.0.0 — ShrinkWrap constraint (ecosystem-wide)
+- [x] `grimm-tck/pom.xml` standalone (Model 4.0.0, no parent) — decoupled from the released runtime
 - [x] `/openapi` endpoint as a plain JAX-RS resource discovered by Cassini — no special adapter
 - [x] M1 completed: all MP OpenAPI model POJOs + `OASFactoryResolver` ServiceLoader wiring
 - [x] Java Modules alignment: use `requires org.eclipse.microprofile.openapi` (real module name in MP OpenAPI 4.1)
@@ -376,7 +376,7 @@ endpoint, integrated with Vauban (CDI) and Cassini (JAX-RS).
       `OpenApiResource` bound to `/openapi`; verified with embedded Vauban injection test
       (`GrimmVaubanIntegrationTest`) and real HTTP transport test through Cassini+Chappe
       (`OpenApiHttpChappeTest`) covering YAML default and JSON `format` override.
-- [x] M10 completed: harness TCK stable (`grimm-tck` out-of-reactor, custom Arquillian container, smoke + targeted runs + full run) with official score **349/349 PASS**.
+- [x] M10 completed: harness TCK stable (`grimm-tck` out-of-reactor, custom Arquillian container, smoke + targeted runs + full run) with official TCK run green at the time (history: the "349" of that period was the official TCK tests plus 3 Grimm harness tests, not the official count alone; see `TCK.md` for the current figures).
 - [x] M10 infra hardening: custom Arquillian container supports a runtime matrix
       (`default-readiness` / `extended-readiness` / `no-readiness-probe`) with
       configurable `grimm.tck.*` overrides and `/openapi` readiness probing to

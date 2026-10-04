@@ -36,10 +36,11 @@ sdk env
 ./run-official-tck-mp-openapi-4.2.sh -Dtest=ClassName
 ```
 
-> `grimm-tck` is **outside the reactor** (pom.xml with standalone Model 4.0.0) to work around
-> the ShrinkWrap Maven Resolver 3.3 / Model 4.1.0 incompatibility. Do not change this model.
-> See the root Vidocq `CLAUDE.md` § *Critical architecture constraint: TCK runners outside the
-> reactor*.
+> `grimm-tck` is **outside the reactor** (standalone `pom.xml`, Model 4.0.0, no `<parent>`, no
+> `<module>` entry in the root POM, run with `mvn -f grimm-tck/pom.xml`) to keep the released
+> runtime decoupled from the official TCK. The old ShrinkWrap / Model 4.1.0 reason no longer
+> applies (every POM of the workspace is Model 4.0.0). See the workspace `CLAUDE.md` § *TCK
+> runners*.
 
 ## Architecture
 
@@ -90,8 +91,8 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
    reflective access; document any `opens` in the `module-info`.
 4. **No `java.lang.reflect.Proxy`** — annotation reading via direct reflection or `MethodHandle`;
    no dynamic proxies.
-5. **`grimm-tck/pom.xml` stays on Model 4.0.0** — do not upgrade to 4.1.0 while ShrinkWrap
-   is not updated (ecosystem-wide Vidocq constraint).
+5. **`grimm-tck` stays outside the reactor** (standalone POM, no `<parent>`): the released
+   runtime stays decoupled from the official TCK.
 6. **TCK 100% PASS is a contract** — any structural change to `grimm-core` or
    `grimm-cdi-vauban` must preserve this score before merge.
 
@@ -144,7 +145,8 @@ reads from `GrimmModelCache` and serves the document as `application/json` or `a
 - Framework: **TestNG** (not JUnit — upstream TCK constraint)
 - Arquillian container: Vauban embedded + Cassini/Chappe (HTTP transport for `/openapi`)
 - TCK artifact: `org.eclipse.microprofile.openapi:microprofile-openapi-tck:4.2-RC5`
-- Suite file: `grimm-tck/src/test/resources/tck-suite.xml`
+- Test discovery: the `tck-official` profile of `grimm-tck/pom.xml` scans the official TCK jar
+  (`dependenciesToScan`); there is no suite file
 - Target score: **100% PASS**
 - Excluded tests (if any) documented in `TCK.md` with justification
 
@@ -155,7 +157,7 @@ org.eclipse.microprofile.openapi:microprofile-openapi-api:4.2-RC5
 jakarta.ws.rs:jakarta.ws.rs-api:4.0                            (provided)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1              (provided)
 jakarta.annotation:jakarta.annotation-api:3.0                   (provided)
-io.vidocq.ravel:ravel-mp-config-api:0.3.0-SNAPSHOT              (provided)
+io.vidocq.ravel:ravel-mp-config-api:0.4.0-SNAPSHOT              (provided)
 org.junit:junit-bom:6.0.3                                       (test, BOM)
 ```
 

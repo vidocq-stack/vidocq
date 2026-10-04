@@ -68,7 +68,7 @@ The runner uses Arquillian + TestNG, invoking `mvn -f grimm-tck/pom.xml -Ptck-of
 
 [NOTE]
 ====
-This detachment is forced by ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, which cannot parse Model 4.1.0 POMs and crashes on the Vidocq reactor. The rule is documented at the workspace root: **do not reintegrate `grimm-tck` into the `<subprojects>` of `grimm-parent`**.
+This detachment is deliberate: it keeps the released runtime decoupled from the official TCK, so a normal build of Grimm never resolves or runs any TCK artifact. The runner has no `<parent>` and is not listed as a module of the root POM; it is run with `mvn -f grimm-tck/pom.xml` (or `./run-official-tck-mp-openapi-4.2.sh`).
 ====
 
 Stack assembled by the runner:
