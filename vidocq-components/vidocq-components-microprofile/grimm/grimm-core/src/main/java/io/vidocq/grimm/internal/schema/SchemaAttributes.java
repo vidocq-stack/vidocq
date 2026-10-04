@@ -28,9 +28,10 @@ import org.eclipse.microprofile.openapi.annotations.media.SchemaProperty;
 /**
  * The attributes {@code @Schema} and {@code @SchemaProperty} share, read once from either
  * annotation so that {@link SchemaGenerator} maps them with a single piece of code. The two
- * annotation types have no common interface; this record is the adapter. Attributes that only
- * one of them has ({@code name}, {@code required}, {@code properties}, {@code implementation},
- * {@code ref}, {@code hidden}) stay with the caller.
+ * annotation types have no common interface; this record is the adapter. Attributes handled
+ * by the caller ({@code name}, {@code implementation}, {@code ref}, {@code hidden}, present on
+ * both annotations, and {@code required}, {@code properties}, which only {@code @Schema} has)
+ * are not in the record.
  */
 record SchemaAttributes(
         SchemaType type,

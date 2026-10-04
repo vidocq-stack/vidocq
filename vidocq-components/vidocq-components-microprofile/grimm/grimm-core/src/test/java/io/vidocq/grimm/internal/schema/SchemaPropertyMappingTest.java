@@ -28,7 +28,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -61,7 +63,9 @@ class SchemaPropertyMappingTest {
                     discriminatorMapping = @DiscriminatorMapping(value = "cat", schema = Cat.class)),
             @SchemaProperty(name = "both", allOf = Cat.class, anyOf = {Cat.class, Dog.class},
                     contentEncoding = "base64", contentMediaType = "image/png"),
-            @SchemaProperty(name = "lone", examples = {"\"a\"", "\"b\""})})
+            @SchemaProperty(name = "lone", type = SchemaType.STRING, examples = {"a", "b"}),
+            @SchemaProperty(name = "num", type = SchemaType.INTEGER, examples = {"1", "2"}),
+            @SchemaProperty(name = "obj", type = SchemaType.OBJECT, examples = "{\"k\": 1}")})
     static final class DeclaredByProperties {
         int age;
         String code;
@@ -70,6 +74,8 @@ class SchemaPropertyMappingTest {
         Object pet;
         Object both;
         String lone;
+        int num;
+        Object obj;
     }
 
     @Test
@@ -139,7 +145,82 @@ class SchemaPropertyMappingTest {
         generator.generate(DeclaredByProperties.class);
         var lone = registry.snapshot().get("DeclaredByProperties").getProperties().get("lone");
 
-        assertEquals(List.of("\"a\"", "\"b\""), lone.getExamples());
+        assertEquals(List.of("a", "b"), lone.getExamples());
+    }
+
+    @Test
+    void schemaProperty_examplesOfNonStringTypeAreParsedAsJson() {
+        generator.generate(DeclaredByProperties.class);
+        var properties = registry.snapshot().get("DeclaredByProperties").getProperties();
+
+        var numbers = properties.get("num").getExamples();
+        var objects = properties.get("obj").getExamples();
+
+        assertAll(
+                () -> assertEquals(2, numbers.size()),
+                () -> assertEquals(1, ((Number) numbers.get(0)).intValue()),
+                () -> assertEquals(2, ((Number) numbers.get(1)).intValue()),
+                () -> assertEquals(1, objects.size()),
+                () -> assertEquals(1, ((Number) ((java.util.Map<?, ?>) objects.get(0)).get("k")).intValue()));
+    }
+
+    @Schema(description = "only a description")
+    static final class OnlyDescription {
+        @Schema(description = "field description")
+        String field;
+    }
+
+    @Schema(properties = @SchemaProperty(name = "age", minimum = "0"))
+    static final class OnlyPropertyMinimum {
+        int age;
+    }
+
+    private static void assertNoCountConstraints(org.eclipse.microprofile.openapi.models.media.Schema schema) {
+        assertAll(
+                () -> assertNull(schema.getMinItems()),
+                () -> assertNull(schema.getMaxItems()),
+                () -> assertNull(schema.getMinProperties()),
+                () -> assertNull(schema.getMaxProperties()),
+                () -> assertNull(schema.getMinLength()),
+                () -> assertNull(schema.getMaxLength()),
+                () -> assertNull(schema.getMinContains()),
+                () -> assertNull(schema.getMaxContains()),
+                () -> assertFalse(schema.getAll().containsKey("minItems")),
+                () -> assertFalse(schema.getAll().containsKey("maxItems")),
+                () -> assertFalse(schema.getAll().containsKey("maxProperties")));
+    }
+
+    @Test
+    void schemaWithoutCountAttributes_hasNoCountConstraints() {
+        generator.generate(OnlyDescription.class);
+        var schema = registry.snapshot().get("OnlyDescription");
+
+        assertAll(
+                () -> assertNoCountConstraints(schema),
+                () -> assertNoCountConstraints(schema.getProperties().get("field")));
+    }
+
+    @Test
+    void schemaPropertyWithoutCountAttributes_hasNoCountConstraints() {
+        generator.generate(OnlyPropertyMinimum.class);
+
+        assertNoCountConstraints(registry.snapshot().get("OnlyPropertyMinimum").getProperties().get("age"));
+    }
+
+    @Schema(minItems = 0, maxItems = 0, maxProperties = 5, minLength = 0, maxLength = 0)
+    static final class ExplicitZeros {
+    }
+
+    @Test
+    void explicitCountValuesAreMapped() {
+        generator.generate(ExplicitZeros.class);
+        var schema = registry.snapshot().get("ExplicitZeros");
+
+        assertAll(
+                () -> assertEquals(Integer.valueOf(0), schema.getMinItems()),
+                () -> assertEquals(Integer.valueOf(0), schema.getMaxItems()),
+                () -> assertEquals(Integer.valueOf(5), schema.getMaxProperties()),
+                () -> assertEquals(Integer.valueOf(0), schema.getMaxLength()));
     }
 
     static final class ExamplesOnFields {

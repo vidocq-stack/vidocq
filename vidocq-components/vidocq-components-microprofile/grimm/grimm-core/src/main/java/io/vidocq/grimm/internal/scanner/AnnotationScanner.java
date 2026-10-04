@@ -141,7 +141,7 @@ public final class AnnotationScanner {
         addSecurityRequirementSets(openAPI, annotation.securitySets());
         addComponents(openAPI, annotation.components());
         addWebhooks(openAPI, annotation.webhooks());
-        applyExtensions(openAPI, annotation.extensions());
+        AnnotationModelMappings.applyExtensions(openAPI, annotation.extensions());
 
         ExternalDocumentation externalDocs = annotation.externalDocs();
         if (!externalDocs.url().isEmpty()) {
@@ -165,7 +165,7 @@ public final class AnnotationScanner {
         if (!infoAnnotation.termsOfService().isEmpty()) {
             info.setTermsOfService(infoAnnotation.termsOfService());
         }
-        applyExtensions(info, infoAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(info, infoAnnotation.extensions());
 
         Contact contactAnnotation = infoAnnotation.contact();
         if (!contactAnnotation.name().isEmpty()
@@ -183,7 +183,7 @@ public final class AnnotationScanner {
             if (!contactAnnotation.email().isEmpty()) {
                 contact.setEmail(contactAnnotation.email());
             }
-            applyExtensions(contact, contactAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(contact, contactAnnotation.extensions());
             info.setContact(contact);
         }
 
@@ -203,7 +203,7 @@ public final class AnnotationScanner {
             if (!licenseAnnotation.identifier().isEmpty()) {
                 license.setIdentifier(licenseAnnotation.identifier());
             }
-            applyExtensions(license, licenseAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(license, licenseAnnotation.extensions());
             info.setLicense(license);
         }
     }
@@ -271,7 +271,7 @@ public final class AnnotationScanner {
             if (!webhookAnnotation.summary().isEmpty()) {
                 webhookPathItem.setSummary(webhookAnnotation.summary());
             }
-            applyExtensions(webhookPathItem, webhookAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(webhookPathItem, webhookAnnotation.extensions());
             for (PathItemOperation operationAnnotation : webhookAnnotation.operations()) {
                 var operation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
                 if (!operationAnnotation.summary().isEmpty()) {
@@ -302,7 +302,7 @@ public final class AnnotationScanner {
                     modelBody.setRef(operationAnnotation.requestBody().ref());
                     operation.setRequestBody(modelBody);
                 }
-                applyExtensions(operation, operationAnnotation.extensions());
+                AnnotationModelMappings.applyExtensions(operation, operationAnnotation.extensions());
                 switch (operationAnnotation.method().toUpperCase()) {
                     case "GET" -> webhookPathItem.setGET(operation);
                     case "PUT" -> webhookPathItem.setPUT(operation);
@@ -342,7 +342,7 @@ public final class AnnotationScanner {
             if (!serverAnnotation.description().isEmpty()) {
                 server.setDescription(serverAnnotation.description());
             }
-            applyExtensions(server, serverAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(server, serverAnnotation.extensions());
             for (ServerVariable variableAnnotation : serverAnnotation.variables()) {
                 String variableName = variableAnnotation.name();
                 if (variableName.isEmpty()) {
@@ -358,7 +358,7 @@ public final class AnnotationScanner {
                 if (variableAnnotation.enumeration().length > 0) {
                     variable.setEnumeration(List.of(variableAnnotation.enumeration()));
                 }
-                applyExtensions(variable, variableAnnotation.extensions());
+                AnnotationModelMappings.applyExtensions(variable, variableAnnotation.extensions());
                 server.addVariable(variableName, variable);
             }
             openAPI.addServer(server);
@@ -379,7 +379,7 @@ public final class AnnotationScanner {
         addComponentLinks(openAPI, componentsAnnotation.links());
         addComponentCallbacks(openAPI, componentsAnnotation.callbacks());
         addComponentPathItems(openAPI, componentsAnnotation.pathItems());
-        applyExtensions(getOrCreateComponents(openAPI), componentsAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(getOrCreateComponents(openAPI), componentsAnnotation.extensions());
     }
 
     private org.eclipse.microprofile.openapi.models.Components getOrCreateComponents(OpenAPI openAPI) {
@@ -456,7 +456,7 @@ public final class AnnotationScanner {
             if (headerAnnotation.schema() != null) {
                 header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
             }
-            applyExtensions(header, headerAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());
             components.addHeader(name, header);
         }
     }
@@ -488,12 +488,12 @@ public final class AnnotationScanner {
                     if (!contentAnnotation.example().isEmpty()) {
                         mediaType.setExample(contentAnnotation.example());
                     }
-                    applyExtensions(mediaType, contentAnnotation.extensions());
+                    AnnotationModelMappings.applyExtensions(mediaType, contentAnnotation.extensions());
                     content.addMediaType(mediaTypeName, mediaType);
                 }
                 modelResponse.setContent(content);
             }
-            applyExtensions(modelResponse, responseAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(modelResponse, responseAnnotation.extensions());
             components.addResponse(responseAnnotation.name(), modelResponse);
         }
     }
@@ -536,7 +536,7 @@ public final class AnnotationScanner {
                 }
                 parameter.setContent(content);
             }
-            applyExtensions(parameter, parameterAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(parameter, parameterAnnotation.extensions());
             components.addParameter(parameterAnnotation.name(), parameter);
         }
     }
@@ -610,7 +610,7 @@ public final class AnnotationScanner {
                 }
                 requestBody.setContent(content);
             }
-            applyExtensions(requestBody, requestBodyAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(requestBody, requestBodyAnnotation.extensions());
             components.addRequestBody(requestBodyAnnotation.name(), requestBody);
         }
     }
@@ -651,7 +651,7 @@ public final class AnnotationScanner {
                     // Ignore incompatible enum values.
                 }
             }
-            applyExtensions(scheme, schemeAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
             components.addSecurityScheme(schemeAnnotation.securitySchemeName(), scheme);
         }
     }
@@ -680,7 +680,7 @@ public final class AnnotationScanner {
                     link.addParameter(parameter.name(), parameter.expression());
                 }
             }
-            applyExtensions(link, linkAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
             components.addLink(linkAnnotation.name(), link);
         }
     }
@@ -730,7 +730,7 @@ public final class AnnotationScanner {
                 pathItem.setRef(callbackAnnotation.pathItemRef());
                 callback.addPathItem(callbackAnnotation.callbackUrlExpression(), pathItem);
             }
-            applyExtensions(callback, callbackAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(callback, callbackAnnotation.extensions());
             components.addCallback(callbackAnnotation.name(), callback);
         }
     }
@@ -802,7 +802,7 @@ public final class AnnotationScanner {
                     if (!serverAnnotation.description().isEmpty()) {
                         server.setDescription(serverAnnotation.description());
                     }
-                    applyExtensions(server, serverAnnotation.extensions());
+                    AnnotationModelMappings.applyExtensions(server, serverAnnotation.extensions());
                     operation.addServer(server);
                 }
                 for (Parameter parameterAnnotation : operationAnnotation.parameters()) {
@@ -824,7 +824,7 @@ public final class AnnotationScanner {
                     if (schemaGenerator != null && hasSchemaContent(parameterAnnotation.schema())) {
                         parameter.setSchema(schemaGenerator.generate(Object.class, parameterAnnotation.schema()));
                     }
-                    applyExtensions(parameter, parameterAnnotation.extensions());
+                    AnnotationModelMappings.applyExtensions(parameter, parameterAnnotation.extensions());
                     operation.addParameter(parameter);
                 }
                 for (SecurityRequirement requirement : operationAnnotation.security()) {
@@ -880,7 +880,7 @@ public final class AnnotationScanner {
                         }
                         requestBody.setContent(content);
                     }
-                    applyExtensions(requestBody, requestBodyAnnotation.extensions());
+                    AnnotationModelMappings.applyExtensions(requestBody, requestBodyAnnotation.extensions());
                     operation.setRequestBody(requestBody);
                 }
                 for (APIResponse responseAnnotation : operationAnnotation.responses()) {
@@ -936,13 +936,13 @@ public final class AnnotationScanner {
                         }
                         callback.addPathItem(callbackAnnotation.callbackUrlExpression(), callbackPathItem);
                     }
-                    applyExtensions(callback, callbackAnnotation.extensions());
+                    AnnotationModelMappings.applyExtensions(callback, callbackAnnotation.extensions());
                     operation.addCallback(callbackName, callback);
                 }
-                applyExtensions(operation, operationAnnotation.extensions());
+                AnnotationModelMappings.applyExtensions(operation, operationAnnotation.extensions());
                 assignPathItemOperation(pathItem, operationAnnotation.method(), operation);
             }
-            applyExtensions(pathItem, pathItemAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(pathItem, pathItemAnnotation.extensions());
             for (Parameter parameterAnnotation : pathItemAnnotation.parameters()) {
                 String parameterName = parameterAnnotation.name();
                 if (parameterName.isEmpty()) {
@@ -962,7 +962,7 @@ public final class AnnotationScanner {
                 if (schemaGenerator != null && hasSchemaContent(parameterAnnotation.schema())) {
                     parameter.setSchema(schemaGenerator.generate(Object.class, parameterAnnotation.schema()));
                 }
-                applyExtensions(parameter, parameterAnnotation.extensions());
+                AnnotationModelMappings.applyExtensions(parameter, parameterAnnotation.extensions());
                 pathItem.addParameter(parameter);
             }
             components.addPathItem(pathItemAnnotation.name(), pathItem);
@@ -1010,7 +1010,7 @@ public final class AnnotationScanner {
         if (schemaGenerator != null && hasSchemaContent(headerAnnotation.schema())) {
             header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
         }
-        applyExtensions(header, headerAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());
         return header;
     }
 
@@ -1023,11 +1023,6 @@ public final class AnnotationScanner {
             return slash >= 0 ? headerAnnotation.ref().substring(slash + 1) : headerAnnotation.ref();
         }
         return null;
-    }
-
-    private void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible,
-                                 Extension[] extensions) {
-        AnnotationModelMappings.applyExtensions(extensible, extensions);
     }
 
     private boolean containsServer(OpenAPI openAPI, String url) {

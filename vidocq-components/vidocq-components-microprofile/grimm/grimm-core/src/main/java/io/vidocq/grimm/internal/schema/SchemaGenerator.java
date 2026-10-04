@@ -44,7 +44,6 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -515,14 +514,22 @@ public final class SchemaGenerator {
             base.setExample(ann.example());
             base.setExamples(List.of(ann.example()));
         }
-        if (ann.examples().length > 0) base.setExamples(List.of(ann.examples()));
+        if (ann.examples().length > 0) {
+            // Same clause as constValue: literal when the type is STRING, JSON otherwise.
+            List<Object> examples = new ArrayList<>(ann.examples().length);
+            for (String raw : ann.examples()) {
+                examples.add(constValueOf(base, raw));
+            }
+            base.setExamples(examples);
+        }
         if (!ann.defaultValue().isEmpty()) base.setDefaultValue(ann.defaultValue());
         if (ann.minLength() > 0) base.setMinLength(ann.minLength());
         if (ann.maxLength() != Integer.MAX_VALUE) base.setMaxLength(ann.maxLength());
         if (ann.minProperties() > 0) base.setMinProperties(ann.minProperties());
-        if (ann.maxProperties() != Integer.MAX_VALUE) base.setMaxProperties(ann.maxProperties());
-        if (ann.minItems() > 0) base.setMinItems(ann.minItems());
-        if (ann.maxItems() != Integer.MAX_VALUE) base.setMaxItems(ann.maxItems());
+        // Defaults in the annotation: maxProperties 0, minItems MAX_VALUE, maxItems MIN_VALUE.
+        if (ann.maxProperties() > 0) base.setMaxProperties(ann.maxProperties());
+        if (ann.minItems() != Integer.MAX_VALUE) base.setMinItems(ann.minItems());
+        if (ann.maxItems() != Integer.MIN_VALUE) base.setMaxItems(ann.maxItems());
         if (ann.uniqueItems()) base.setUniqueItems(Boolean.TRUE);
         BigDecimal minimum = ann.minimum().isEmpty() ? null : new BigDecimal(ann.minimum());
         BigDecimal maximum = ann.maximum().isEmpty() ? null : new BigDecimal(ann.maximum());
@@ -696,11 +703,6 @@ public final class SchemaGenerator {
             case OBJECT -> Schema.SchemaType.OBJECT;
             case DEFAULT -> Schema.SchemaType.OBJECT;
         };
-    }
-
-    @SuppressWarnings("unused")
-    private static String lower(String s) {
-        return s == null ? null : s.toLowerCase(Locale.ROOT);
     }
 }
 

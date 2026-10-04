@@ -181,11 +181,8 @@ public final class ModelMerger {
     }
 
     /**
-     * Merges {@code source} path items into {@code target}.
-     *
-     * @param overwriteOnConflict if {@code true}, source path items override existing ones in
-     *                            target (used by reader/annotation merges); if {@code false},
-     *                            existing target items are preserved (static file merges).
+     * Merges {@code source} path items into {@code target}: a path present on both sides is
+     * merged item by item, a new path is added.
      */
     private void mergePaths(Paths target, Paths source) {
         if (source.getPathItems() != null) {
@@ -621,8 +618,3 @@ public final class ModelMerger {
         }
     }
 }
-
-
-
-
-

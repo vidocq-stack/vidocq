@@ -977,11 +977,6 @@ final class OpenApiModelMapper {
         return schemas;
     }
 
-    /** Maps a raw (already parsed) JSON/YAML schema onto the model; see {@link #toSchema(Object)}. */
-    static Schema toStaticSchema(Object raw) {
-        return toSchema(raw);
-    }
-
     /**
      * Maps a raw JSON/YAML schema onto the model. Since MP OpenAPI 4.2 (#698) a schema treats
      * every property it does not know as an extension, so each standard keyword is converted
@@ -990,7 +985,7 @@ final class OpenApiModelMapper {
      * A keyword whose value has another JSON type is kept as written through
      * {@link Schema#set(String, Object)}, as an alternative dialect may use it.
      */
-    private static Schema toSchema(Object raw) {
+    static Schema toSchema(Object raw) {
         if (raw instanceof Boolean booleanSchema) {
             // JSON Schema 2020-12 §4.3.2: true / false are schemas wherever a schema is expected.
             Schema schema = OASFactory.createObject(Schema.class);

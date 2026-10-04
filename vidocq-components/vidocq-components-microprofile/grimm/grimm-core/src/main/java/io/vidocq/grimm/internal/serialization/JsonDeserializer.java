@@ -55,7 +55,7 @@ public final class JsonDeserializer {
      * from {@code openapi.yaml}.
      */
     public static Schema toSchema(Object rawSchema) {
-        return OpenApiModelMapper.toStaticSchema(rawSchema);
+        return OpenApiModelMapper.toSchema(rawSchema);
     }
 
     private static final class Parser {

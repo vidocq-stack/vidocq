@@ -352,7 +352,7 @@ final class JaxRsResourceScanner {
             op.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(extDocs));
         }
 
-        // Tags coming from @Operation are not in MP OpenAPI 4.1 Operation annotation members.
+        // Tags coming from @Operation are not in the MP OpenAPI Operation annotation members.
         // Operation tags are composed from class and method @Tag declarations (spec §3.5 / §3.7).
         applyClassAndMethodTags(resourceClass, method, op);
         applyOperationServers(resourceClass, method, op);
@@ -394,7 +394,7 @@ final class JaxRsResourceScanner {
                 }
             }
         }
-        // @Operation in MP OpenAPI 4.1 has no `tags()` member.
+        // @Operation in MP OpenAPI has no `tags()` member.
     }
 
     private static void addOperationTag(org.eclipse.microprofile.openapi.models.Operation op, String tag) {
@@ -606,10 +606,10 @@ final class JaxRsResourceScanner {
                 || !s.description().isEmpty()
                 || !s.title().isEmpty()
                 || !s.example().isEmpty()
-                || s.maxProperties() != Integer.MAX_VALUE
+                || s.maxProperties() != 0
                 || s.minProperties() != 0
-                || s.maxItems() != Integer.MAX_VALUE
-                || s.minItems() != 0
+                || s.maxItems() != Integer.MIN_VALUE
+                || s.minItems() != Integer.MAX_VALUE
                 || s.maxLength() != Integer.MAX_VALUE
                 || s.minLength() != 0
                 || s.properties().length > 0
