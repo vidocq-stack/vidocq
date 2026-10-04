@@ -22,11 +22,15 @@ package io.vidocq.humboldt.exporter.otlp.http.internal;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.AttributeType;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.KeyValue;
+import io.opentelemetry.api.common.Value;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 
+import java.nio.ByteBuffer;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -94,10 +98,15 @@ final class OtlpJsonCommon {
 
     /**
      * Encodes a value as an OTLP/JSON {@code AnyValue} — supports all
-     * {@link AttributeType} variants from the OTel public API, including
-     * array variants (encoded as {@code arrayValue.values}).
+     * {@link AttributeType} variants from the OTel public API: scalars, the
+     * array variants (encoded as {@code arrayValue.values}) and complex
+     * {@link AttributeType#VALUE} attributes (see {@link #writeValue}).
      */
     static void writeAnyValue(StringBuilder sb, AttributeType type, Object v) {
+        if (type == AttributeType.VALUE) {
+            writeValue(sb, (Value<?>) v);
+            return;
+        }
         sb.append('{');
         switch (type) {
             case STRING -> {
@@ -127,6 +136,57 @@ final class OtlpJsonCommon {
             }
         }
         sb.append('}');
+    }
+
+    /**
+     * Encodes a complex {@link Value} (an {@link AttributeType#VALUE} attribute, set for example through
+     * {@code setAttribute(String, Value)}) as an OTLP/JSON {@code AnyValue}, recursively: scalars as
+     * {@code stringValue}/{@code boolValue}/{@code intValue}/{@code doubleValue}, arrays as
+     * {@code arrayValue.values}, maps as {@code kvlistValue.values} of {@code {"key","value"}} pairs,
+     * bytes as base64 {@code bytesValue}, and an empty value as an {@code AnyValue} with no field set.
+     */
+    static void writeValue(StringBuilder sb, Value<?> value) {
+        switch (value.getType()) {
+            case STRING -> writeAnyValue(sb, AttributeType.STRING, value.getValue());
+            case BOOLEAN -> writeAnyValue(sb, AttributeType.BOOLEAN, value.getValue());
+            case LONG -> writeAnyValue(sb, AttributeType.LONG, value.getValue());
+            case DOUBLE -> writeAnyValue(sb, AttributeType.DOUBLE, value.getValue());
+            case BYTES -> {
+                ByteBuffer buffer = (ByteBuffer) value.getValue();
+                byte[] bytes = new byte[buffer.remaining()];
+                buffer.get(bytes);
+                sb.append("{\"bytesValue\":");
+                appendString(sb, Base64.getEncoder().encodeToString(bytes));
+                sb.append('}');
+            }
+            case ARRAY -> {
+                sb.append("{\"arrayValue\":{\"values\":[");
+                boolean first = true;
+                for (Object item : (List<?>) value.getValue()) {
+                    if (!first) sb.append(',');
+                    first = false;
+                    writeValue(sb, (Value<?>) item);
+                }
+                sb.append("]}}");
+            }
+            case KEY_VALUE_LIST -> {
+                sb.append("{\"kvlistValue\":{\"values\":[");
+                boolean first = true;
+                for (Object item : (List<?>) value.getValue()) {
+                    KeyValue entry = (KeyValue) item;
+                    if (!first) sb.append(',');
+                    first = false;
+                    sb.append("{\"key\":");
+                    appendString(sb, entry.getKey());
+                    sb.append(",\"value\":");
+                    writeValue(sb, entry.getValue());
+                    sb.append('}');
+                }
+                sb.append("]}}");
+            }
+            // ValueType.EMPTY (and any variant a later API may add): an AnyValue with no field set
+            default -> sb.append("{}");
+        }
     }
 
     /**

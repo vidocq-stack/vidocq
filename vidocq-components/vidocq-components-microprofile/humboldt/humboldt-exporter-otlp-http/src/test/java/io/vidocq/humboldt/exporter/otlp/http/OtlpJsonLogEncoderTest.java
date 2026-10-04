@@ -20,12 +20,17 @@
 package io.vidocq.humboldt.exporter.otlp.http;
 
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.KeyValue;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.SpanContext;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonLogEncoder;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
+import io.vidocq.humboldt.sdk.log.SdkLoggerProvider;
+import io.vidocq.humboldt.sdk.log.SimpleLogRecordProcessor;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
+import io.vidocq.humboldt.sdk.log.export.InMemoryLogRecordExporter;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -47,6 +52,27 @@ class OtlpJsonLogEncoderTest {
         String json = OtlpJsonLogEncoder.encode(List.of(record("", Attributes.empty())));
 
         assertFalse(json.contains("eventName"), json);
+    }
+
+    @Test
+    void encodes_a_complex_value_attribute_set_through_the_log_api() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider provider = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            provider.get("io.vidocq.test").logRecordBuilder()
+                    .setBody("checkout")
+                    .setAttribute("cart", Value.of(
+                            KeyValue.of("items", Value.of(2L)),
+                            KeyValue.of("coupon", Value.of("WELCOME"))))
+                    .emit();
+        }
+
+        String json = OtlpJsonLogEncoder.encode(exporter.getCollected());
+
+        assertTrue(json.contains("{\"key\":\"cart\",\"value\":{\"kvlistValue\":{\"values\":["
+                + "{\"key\":\"items\",\"value\":{\"intValue\":\"2\"}},"
+                + "{\"key\":\"coupon\",\"value\":{\"stringValue\":\"WELCOME\"}}]}}}"), json);
     }
 
     static LogRecordData record(String eventName, Attributes attributes) {

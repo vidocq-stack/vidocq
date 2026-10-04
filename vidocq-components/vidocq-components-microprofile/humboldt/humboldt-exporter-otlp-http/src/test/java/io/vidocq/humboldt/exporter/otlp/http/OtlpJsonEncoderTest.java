@@ -21,6 +21,8 @@ package io.vidocq.humboldt.exporter.otlp.http;
 
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.KeyValue;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.TraceFlags;
@@ -165,5 +167,43 @@ class OtlpJsonEncoderTest {
         assertTrue(json.contains("\"intValue\":\"1\""));
         assertTrue(json.contains("\"intValue\":\"2\""));
         assertTrue(json.contains("\"intValue\":\"3\""));
+    }
+
+    @Test
+    void encodes_complex_value_attributes_per_the_otlp_json_mapping() {
+        // Attributes.builder() narrows homogeneous scalar arrays and scalars to the plain types; what stays
+        // AttributeType.VALUE (maps, bytes, mixed arrays, empty) must still become a real AnyValue, never {}.
+        SpanData s = new SpanData(
+                CTX, null, "value-test", SpanKind.INTERNAL, 1L, 2L,
+                Attributes.builder()
+                        .put(AttributeKey.valueKey("order"), Value.of(
+                                KeyValue.of("id", Value.of("o-1")),
+                                KeyValue.of("count", Value.of(2L)),
+                                KeyValue.of("paid", Value.of(true)),
+                                KeyValue.of("total", Value.of(12.5)),
+                                KeyValue.of("lines", Value.of(Value.of("sku-1"), Value.of(3L)))))
+                        .put(AttributeKey.valueKey("payload"), Value.of(new byte[] {1, 2, 3}))
+                        .put(AttributeKey.valueKey("mixed"), Value.of(Value.of("a"), Value.of(false)))
+                        .put(AttributeKey.valueKey("nothing"), Value.empty())
+                        .build(),
+                List.of(), List.of(),
+                StatusData.unset(),
+                Resource.empty(), InstrumentationScope.of("x"));
+
+        String json = OtlpJsonEncoder.encode(List.of(s));
+
+        assertTrue(json.contains("{\"key\":\"order\",\"value\":{\"kvlistValue\":{\"values\":["
+                + "{\"key\":\"id\",\"value\":{\"stringValue\":\"o-1\"}},"
+                + "{\"key\":\"count\",\"value\":{\"intValue\":\"2\"}},"
+                + "{\"key\":\"paid\",\"value\":{\"boolValue\":true}},"
+                + "{\"key\":\"total\",\"value\":{\"doubleValue\":12.5}},"
+                + "{\"key\":\"lines\",\"value\":{\"arrayValue\":{\"values\":["
+                + "{\"stringValue\":\"sku-1\"},{\"intValue\":\"3\"}]}}}"
+                + "]}}}"), json);
+        assertTrue(json.contains("{\"key\":\"payload\",\"value\":{\"bytesValue\":\"AQID\"}}"),
+                "bytes are base64-encoded: " + json);
+        assertTrue(json.contains("{\"key\":\"mixed\",\"value\":{\"arrayValue\":{\"values\":["
+                + "{\"stringValue\":\"a\"},{\"boolValue\":false}]}}}"), json);
+        assertTrue(json.contains("{\"key\":\"nothing\",\"value\":{}}"), "an empty value is an empty AnyValue: " + json);
     }
 }
