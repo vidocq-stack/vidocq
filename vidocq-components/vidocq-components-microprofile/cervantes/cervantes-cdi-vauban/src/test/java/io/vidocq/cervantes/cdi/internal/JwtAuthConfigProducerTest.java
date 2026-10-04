@@ -164,6 +164,43 @@ class JwtAuthConfigProducerTest {
     }
 
     @Test
+    void unrecognisedDecryptAlgorithmFailsInBuildDecryptor() {
+        for (String bad : new String[] {"rsa-oaep", "RSA-OAEP-512", "RSA1_5", "A128KW"}) {
+            Config config = CdiTestSupport.config(Map.of("mp.jwt.decrypt.key.algorithm", bad));
+            JwtValidationException ex = assertThrows(JwtValidationException.class,
+                    () -> JwtAuthConfigProducer.buildDecryptor(config), bad);
+            assertTrue(ex.getMessage().contains("mp.jwt.decrypt.key.algorithm"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("'" + bad + "'"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("RSA-OAEP, RSA-OAEP-256"), ex.getMessage());
+        }
+    }
+
+    @Test
+    void unrecognisedDecryptAlgorithmFailsCreateValidator() throws Exception {
+        Config config = CdiTestSupport.config(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(CdiTestSupport.rsaKeyPair().getPublic()),
+                "mp.jwt.decrypt.key.algorithm", "RSA-OAEP-512"));
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> JwtAuthConfigProducer.createValidator(config));
+        assertTrue(ex.getMessage().contains("mp.jwt.decrypt.key.algorithm"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("'RSA-OAEP-512'"), ex.getMessage());
+    }
+
+    @Test
+    void supportedDecryptAlgorithmsAndUnsetAreAccepted() throws Exception {
+        String verifyKey = CdiTestSupport.publicKeyBase64(CdiTestSupport.rsaKeyPair().getPublic());
+        for (String alg : new String[] {"RSA-OAEP", "RSA-OAEP-256"}) {
+            Config config = CdiTestSupport.config(Map.of(
+                    "mp.jwt.verify.publickey", verifyKey, "mp.jwt.decrypt.key.algorithm", alg));
+            assertNotNull(JwtAuthConfigProducer.createValidator(config), alg);
+            assertNull(JwtAuthConfigProducer.buildDecryptor(
+                    CdiTestSupport.config(Map.of("mp.jwt.decrypt.key.algorithm", alg))), alg);
+        }
+        assertNotNull(JwtAuthConfigProducer.createValidator(
+                CdiTestSupport.config(Map.of("mp.jwt.verify.publickey", verifyKey))));
+    }
+
+    @Test
     void recognisedAlgorithmsStillAccepted() throws Exception {
         for (SignatureAlgorithm alg : SignatureAlgorithm.values()) {
             Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", alg.name()));

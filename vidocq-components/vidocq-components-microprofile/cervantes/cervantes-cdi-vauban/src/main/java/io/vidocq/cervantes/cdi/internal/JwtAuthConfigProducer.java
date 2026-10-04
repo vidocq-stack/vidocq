@@ -114,8 +114,7 @@ public class JwtAuthConfigProducer {
      * algorithm is rejected.
      */
     static JweDecryptor buildDecryptor(Config config) throws JwtValidationException {
-        Optional<String> algorithm = config.getOptionalValue("mp.jwt.decrypt.key.algorithm", String.class);
-        String requiredAlgorithm = algorithm.orElse(null);
+        String requiredAlgorithm = configuredDecryptAlgorithm(config);
         Optional<String> inline = config.getOptionalValue("mp.jwt.decrypt.key", String.class);
         if (inline.isPresent()) {
             return Jwe.decryptorFromInlinePem(inline.get(), requiredAlgorithm);
@@ -125,6 +124,23 @@ public class JwtAuthConfigProducer {
             return Jwe.decryptorFromLocation(location.get(), requiredAlgorithm);
         }
         return null;
+    }
+
+    /**
+     * Reads {@code mp.jwt.decrypt.key.algorithm}. Unset means no constraint (null); a value that is
+     * set but is not one of {@link JweDecryptor#SUPPORTED_ALGORITHMS} (exact JOSE names, RFC 7518,
+     * case-sensitive) fails instead of silently rejecting every encrypted token at request time.
+     */
+    private static String configuredDecryptAlgorithm(Config config) throws JwtValidationException {
+        Optional<String> raw = config.getOptionalValue("mp.jwt.decrypt.key.algorithm", String.class);
+        if (raw.isEmpty()) {
+            return null;
+        }
+        if (!JweDecryptor.SUPPORTED_ALGORITHMS.contains(raw.get())) {
+            throw new JwtValidationException("unsupported mp.jwt.decrypt.key.algorithm '" + raw.get()
+                    + "': supported values are " + String.join(", ", JweDecryptor.SUPPORTED_ALGORITHMS));
+        }
+        return raw.get();
     }
 
     static JwtConfig buildConfig(Config config) throws JwtValidationException {

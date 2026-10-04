@@ -72,6 +72,20 @@ class FailFastStartupTest {
     }
 
     @Test
+    void unrecognisedDecryptAlgorithmFailsContainerStartWithTheClearMessage() throws Exception {
+        CdiTestSupport.registerGlobalConfig(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(CdiTestSupport.rsaKeyPair().getPublic()),
+                "mp.jwt.decrypt.key.algorithm", "rsa-oaep"));
+
+        DeploymentException ex = assertThrows(DeploymentException.class, FailFastStartupTest::start);
+
+        String message = fullMessage(ex);
+        assertTrue(message.contains("mp.jwt.decrypt.key.algorithm"), message);
+        assertTrue(message.contains("'rsa-oaep'"), message);
+        assertTrue(message.contains("RSA-OAEP, RSA-OAEP-256"), message);
+    }
+
+    @Test
     void unreadableKeyFailsContainerStart() {
         CdiTestSupport.registerGlobalConfig(Map.of(
                 "mp.jwt.verify.publickey", "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----"));

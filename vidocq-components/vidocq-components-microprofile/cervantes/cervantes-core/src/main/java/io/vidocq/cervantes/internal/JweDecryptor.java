@@ -53,6 +53,9 @@ public final class JweDecryptor {
     private static final Base64.Decoder B64URL = Base64.getUrlDecoder();
     private static final int GCM_TAG_BITS = 128;
 
+    /** The JWE key-management algorithms this decryptor can unwrap (exact, case-sensitive JOSE names). */
+    public static final java.util.List<String> SUPPORTED_ALGORITHMS = java.util.List.of("RSA-OAEP", "RSA-OAEP-256");
+
     private final PrivateKey decryptionKey;
     /**
      * If non-null, only JWE tokens whose header {@code alg} exactly matches this value are

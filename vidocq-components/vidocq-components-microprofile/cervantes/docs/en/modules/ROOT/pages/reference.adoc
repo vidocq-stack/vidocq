@@ -182,7 +182,7 @@ The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the
 
 [NOTE]
 ====
-The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unreadable verification key (`mp.jwt.verify.publickey` or `mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`) fails the application at container start, with a message naming the property and the offending value. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. A wrong `mp.jwt.decrypt.key.algorithm` is not checked at start: it only rejects the JWE tokens that announce another algorithm.
+The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable verification key (`mp.jwt.verify.publickey` or `mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`) fails the application at container start, with a message naming the property and the offending value. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. A valid `mp.jwt.decrypt.key.algorithm` that differs from the token's then only rejects the JWE tokens that announce another algorithm.
 ====
 
 === Token transport
@@ -211,7 +211,7 @@ The configuration is validated when the container starts, never during compilati
 | Decryption private-key location.
 
 | `mp.jwt.decrypt.key.algorithm`
-| Expected key-wrapping algorithm: `RSA-OAEP` (default) or `RSA-OAEP-256`. If set, rejects JWEs announcing anything else.
+| Expected key-wrapping algorithm: `RSA-OAEP` or `RSA-OAEP-256` (exact names; any other value fails at container start). If set, rejects JWEs announcing anything else; if unset, either algorithm is accepted.
 |===
 
 == Supported signature algorithms
