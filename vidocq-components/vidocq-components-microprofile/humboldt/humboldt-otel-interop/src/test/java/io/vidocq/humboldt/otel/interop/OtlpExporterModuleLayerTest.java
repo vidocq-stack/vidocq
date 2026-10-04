@@ -19,33 +19,51 @@
  */
 package io.vidocq.humboldt.otel.interop;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.lang.invoke.MethodType;
 import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * The OpenTelemetry OTLP exporter ({@code opentelemetry-exporter-otlp} 1.66, which an application adds to export
  * through the OpenTelemetry autoconfigure SPI) on the module path, next to the Humboldt explicit modules
  * {@code io.opentelemetry.api} and {@code io.opentelemetry.context}.
  *
- * <p>BUG-20261004-03: the OpenTelemetry SDK and exporter jars use {@code io.opentelemetry.api.internal} across
- * jars. Upstream the API jar is an automatic module and exports every package; Humboldt's explicit
- * {@code io.opentelemetry.api} must export that package to them, and to them only.</p>
+ * <p>BUG-20261004-03: the OpenTelemetry SDK, exporter and sender jars use packages of those two modules that are
+ * not public API ({@code io.opentelemetry.api.internal}, {@code io.opentelemetry.api.impl},
+ * {@code io.opentelemetry.api.trace.propagation.internal}, {@code io.opentelemetry.context.internal.shaded}).
+ * Upstream the API and context jars are automatic modules and export every package; Humboldt's explicit modules
+ * must export those packages to them, and to them only. The tests export a span, a metric and a log record for
+ * real — to a closed local port, so that the request fails on the connection and nowhere else.</p>
  *
  * <p>Surefire runs this module's tests on the class path, where no module check applies, so each test defines
  * a real {@link ModuleLayer} from the jars — Humboldt's explicit modules plus the OpenTelemetry jars as
@@ -55,31 +73,53 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OtlpExporterModuleLayerTest {
 
     private static final String INTEROP = "io.vidocq.humboldt.otel.interop";
-    private static final String API_INTERNAL = "io.opentelemetry.api.internal";
     private static final String OTLP_INTERNAL = "io.opentelemetry.exporter.otlp.internal.";
+    private static final String RESULT_CODE = "io.opentelemetry.sdk.common.CompletableResultCode";
+    private static final String TESTING = "io.opentelemetry.sdk.testing.exporter.";
 
-    /** One class per jar of the module path; the jar is the location the class was loaded from. */
-    private static final List<String> MODULE_PATH_ANCHORS = List.of(
-            // Humboldt explicit modules
-            INTEROP + ".MapConfigProperties",                                  // humboldt-otel-interop
-            "io.opentelemetry.context.Context",                                // humboldt-otel-context
-            "io.opentelemetry.api.OpenTelemetry",                              // humboldt-otel-api
-            "io.vidocq.humboldt.Humboldt",                                     // humboldt-api
-            "io.vidocq.humboldt.sdk.common.Resource",                          // humboldt-sdk-common
-            "io.vidocq.humboldt.sdk.trace.BatchSpanProcessor",                 // humboldt-sdk-trace
-            "io.vidocq.humboldt.sdk.metric.PeriodicMetricReader",              // humboldt-sdk-metric
-            "io.vidocq.humboldt.propagator.w3c.W3CPropagators",                // humboldt-propagator-w3c
-            // OpenTelemetry 1.66 jars (automatic modules)
-            "io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties",         // opentelemetry-sdk-extension-autoconfigure-spi
-            "io.opentelemetry.sdk.OpenTelemetrySdk",                           // opentelemetry-sdk
-            "io.opentelemetry.sdk.common.CompletableResultCode",               // opentelemetry-sdk-common
-            "io.opentelemetry.sdk.trace.SdkTracerProvider",                    // opentelemetry-sdk-trace
-            "io.opentelemetry.sdk.metrics.SdkMeterProvider",                   // opentelemetry-sdk-metrics
-            "io.opentelemetry.sdk.logs.SdkLoggerProvider",                     // opentelemetry-sdk-logs
-            "io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter",  // opentelemetry-exporter-otlp
-            "io.opentelemetry.exporter.internal.otlp.traces.TraceRequestMarshaler", // opentelemetry-exporter-otlp-common
-            "io.opentelemetry.exporter.internal.SenderUtil",                   // opentelemetry-exporter-common
-            "io.opentelemetry.exporter.sender.jdk.internal.JdkHttpSenderProvider"); // opentelemetry-exporter-sender-jdk
+    /** Humboldt's explicit modules, each located by one of its classes. */
+    private static final List<String> HUMBOLDT = List.of(
+            INTEROP + ".MapConfigProperties",                        // humboldt-otel-interop
+            "io.opentelemetry.context.Context",                      // humboldt-otel-context
+            "io.opentelemetry.api.OpenTelemetry",                    // humboldt-otel-api
+            "io.vidocq.humboldt.Humboldt",                           // humboldt-api
+            "io.vidocq.humboldt.context.HumboldtContextStorageProvider", // humboldt-context
+            "io.vidocq.humboldt.sdk.common.Resource",                // humboldt-sdk-common
+            "io.vidocq.humboldt.sdk.trace.BatchSpanProcessor",       // humboldt-sdk-trace
+            "io.vidocq.humboldt.sdk.metric.PeriodicMetricReader",    // humboldt-sdk-metric
+            "io.vidocq.humboldt.propagator.w3c.W3CPropagators");     // humboldt-propagator-w3c
+
+    /** The OpenTelemetry 1.66 SDK (automatic modules), as the Vidocq telemetry extension brings it. */
+    private static final List<String> OTEL_SDK = List.of(
+            "io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties",     // ...-sdk-extension-autoconfigure-spi
+            "io.opentelemetry.sdk.OpenTelemetrySdk",                       // opentelemetry-sdk
+            "io.opentelemetry.sdk.common.CompletableResultCode",           // opentelemetry-sdk-common
+            "io.opentelemetry.sdk.trace.SdkTracerProvider",                // opentelemetry-sdk-trace
+            "io.opentelemetry.sdk.metrics.SdkMeterProvider",               // opentelemetry-sdk-metrics
+            "io.opentelemetry.sdk.logs.SdkLoggerProvider",                 // opentelemetry-sdk-logs
+            TESTING + "InMemorySpanExporter");                            // opentelemetry-sdk-testing (test data)
+
+    /** The OpenTelemetry 1.66 OTLP exporter (automatic modules), as an application adds it. */
+    private static final List<String> OTEL_EXPORTER = List.of(
+            "io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter",       // opentelemetry-exporter-otlp
+            "io.opentelemetry.exporter.internal.otlp.traces.TraceRequestMarshaler", // ...-exporter-otlp-common
+            "io.opentelemetry.exporter.internal.SenderUtil",                        // ...-exporter-common
+            "io.opentelemetry.exporter.sender.jdk.internal.JdkHttpSenderProvider"); // ...-exporter-sender-jdk
+
+    /** The exporter logs each failed export: expected here, kept out of the build output. */
+    private static final Logger EXPORTER_LOGGER = Logger.getLogger("io.opentelemetry.exporter");
+    private static Level exporterLoggerLevel;
+
+    @BeforeAll
+    static void silenceTheExpectedExportFailures() {
+        exporterLoggerLevel = EXPORTER_LOGGER.getLevel();
+        EXPORTER_LOGGER.setLevel(Level.OFF);
+    }
+
+    @AfterAll
+    static void restoreTheExporterLogger() {
+        EXPORTER_LOGGER.setLevel(exporterLoggerLevel);
+    }
 
     @ParameterizedTest(name = "{0}")
     @CsvSource({
@@ -87,12 +127,25 @@ class OtlpExporterModuleLayerTest {
             "OtlpMetricExporterProvider, OtlpHttpMetricExporter",
             "OtlpLogRecordExporterProvider, OtlpHttpLogRecordExporter"})
     void the_otlp_exporter_provider_creates_its_exporter_on_the_module_path(String provider, String exporter) {
-        ModuleLayer layer = defineTheModuleLayer();
+        Layer layer = Layer.of(HUMBOLDT, OTEL_SDK, OTEL_EXPORTER);
 
         Object created = createExporter(layer, provider, Map.of());
 
         assertEquals(exporter, created.getClass().getSimpleName());
-        shutdown(created);
+        shutdown(layer, created);
+    }
+
+    /**
+     * Every signal marshals its resource and scope (through {@code io.opentelemetry.context.internal.shaded}), a
+     * span its trace state ({@code io.opentelemetry.api.trace.propagation.internal}), and the JDK sender
+     * suppresses the instrumentation of its own request ({@code io.opentelemetry.api.impl}).
+     */
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(Signal.class)
+    void the_otlp_exporter_exports_a_signal_on_the_module_path(Signal signal) throws IOException {
+        Layer layer = Layer.of(HUMBOLDT, OTEL_SDK, OTEL_EXPORTER);
+
+        assertTheExportFailsOnTheConnectionOnly(layer, layer, signal);
     }
 
     /**
@@ -104,15 +157,15 @@ class OtlpExporterModuleLayerTest {
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {"gzip", "none"})
     void the_otlp_exporter_provider_applies_a_configured_compression_on_the_module_path(String compression) {
-        ModuleLayer layer = defineTheModuleLayer();
+        Layer layer = Layer.of(HUMBOLDT, OTEL_SDK, OTEL_EXPORTER);
 
         Object created = createExporter(layer, "OtlpSpanExporterProvider",
                 Map.of("otel.exporter.otlp.compression", compression));
 
         assertEquals("OtlpHttpSpanExporter", created.getClass().getSimpleName());
-        assertTrue(created.toString().contains("compressorEncoding=" + ("none".equals(compression) ? "null" : compression)),
-                created.toString());
-        shutdown(created);
+        String encoding = "none".equals(compression) ? "null" : compression;
+        assertTrue(created.toString().contains("compressorEncoding=" + encoding), created.toString());
+        shutdown(layer, created);
     }
 
     /**
@@ -122,104 +175,292 @@ class OtlpExporterModuleLayerTest {
      */
     @Test
     void an_otlp_exporter_built_without_a_component_loader_finds_its_sender_and_compressor_on_the_module_path() {
-        ModuleLayer layer = defineTheModuleLayer();
-        ClassLoader loader = layer.findLoader(INTEROP);
+        Layer layer = Layer.of(HUMBOLDT, OTEL_SDK, OTEL_EXPORTER);
+        String exporterType = "io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter";
 
-        Object created = onTheModulePath("build an exporter with the default component loader", () -> {
-            Object builder = loader.loadClass("io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter")
-                    .getMethod("builder").invoke(null);
-            builder.getClass().getMethod("setCompression", String.class).invoke(builder, "gzip");
-            return builder.getClass().getMethod("build").invoke(builder);
-        });
+        Object builder = layer.callStatic(exporterType, "builder");
+        layer.call(builder, exporterType + "Builder", "setCompression", "gzip");
+        Object created = layer.call(builder, exporterType + "Builder", "build");
 
         assertEquals("OtlpHttpSpanExporter", created.getClass().getSimpleName());
         assertTrue(created.toString().contains("compressorEncoding=gzip"), created.toString());
-        shutdown(created);
+        shutdown(layer, created);
     }
 
-    @Test
-    void io_opentelemetry_api_internal_is_exported_only_to_the_opentelemetry_modules_that_use_it() {
-        ModuleLayer layer = defineTheModuleLayer();
-        Module api = module(layer, "io.opentelemetry.api");
+    @ParameterizedTest(name = "{1} to {2}")
+    @CsvSource({
+            "io.opentelemetry.api, io.opentelemetry.api.internal, io.opentelemetry.sdk.autoconfigure.spi",
+            "io.opentelemetry.api, io.opentelemetry.api.impl, io.opentelemetry.exporter.sender.jdk.internal",
+            "io.opentelemetry.api, io.opentelemetry.api.trace.propagation.internal,"
+                    + " io.opentelemetry.exporter.internal.otlp",
+            "io.opentelemetry.context, io.opentelemetry.context.internal.shaded,"
+                    + " io.opentelemetry.exporter.internal.otlp"})
+    void an_internal_package_is_exported_only_to_the_opentelemetry_modules_that_use_it(
+            String owner, String pkg, String user) {
+        Layer layer = Layer.of(HUMBOLDT, OTEL_SDK, OTEL_EXPORTER);
+        Module source = layer.module(owner);
 
-        assertFalse(api.isExported(API_INTERNAL), "the export must stay qualified");
-        assertFalse(api.isExported(API_INTERNAL, module(layer, INTEROP)), "no Humboldt module uses it");
-        assertFalse(api.isExported(API_INTERNAL, module(layer, "io.opentelemetry.sdk")),
-                "opentelemetry-sdk does not use it");
-        assertTrue(api.isExported(API_INTERNAL, module(layer, "io.opentelemetry.sdk.autoconfigure.spi")));
-        assertTrue(api.isExported(API_INTERNAL, module(layer, "io.opentelemetry.exporter.otlp")));
+        assertFalse(source.isExported(pkg), "the export must stay qualified");
+        assertFalse(source.isExported(pkg, layer.module(INTEROP)), "no Humboldt module uses it");
+        assertFalse(source.isExported(pkg, layer.module("io.opentelemetry.sdk")), "opentelemetry-sdk does not use it");
+        assertTrue(source.isExported(pkg, layer.module(user)));
+    }
+
+    /** The three signals, each with the OpenTelemetry SDK code that produces one item of it. */
+    enum Signal {
+        SPAN("OtlpSpanExporterProvider", "io.opentelemetry.sdk.trace.export.SpanExporter") {
+            @Override
+            Object produceOneItem(Layer sdk) {
+                Object inMemory = sdk.callStatic(TESTING + "InMemorySpanExporter", "create");
+                Object processor = sdk.callStatic("io.opentelemetry.sdk.trace.export.SimpleSpanProcessor", "create",
+                        inMemory);
+                Object builder = sdk.callStatic("io.opentelemetry.sdk.trace.SdkTracerProvider", "builder");
+                sdk.call(builder, "io.opentelemetry.sdk.trace.SdkTracerProviderBuilder", "addSpanProcessor", processor);
+                Object provider = sdk.call(builder, "io.opentelemetry.sdk.trace.SdkTracerProviderBuilder", "build");
+                Object tracer = sdk.call(provider, "io.opentelemetry.api.trace.TracerProvider", "get", "fc4");
+                Object spanBuilder = sdk.call(tracer, "io.opentelemetry.api.trace.Tracer", "spanBuilder", "exported");
+                // A remote parent with a trace state: the span inherits it, and the OTLP marshaler encodes a
+                // non-empty trace state only (W3CTraceContextEncoding).
+                Object traceStateBuilder = sdk.callStatic("io.opentelemetry.api.trace.TraceState", "builder");
+                sdk.call(traceStateBuilder, "io.opentelemetry.api.trace.TraceStateBuilder", "put", "fc4", "1");
+                Object traceState = sdk.call(traceStateBuilder, "io.opentelemetry.api.trace.TraceStateBuilder",
+                        "build");
+                Object parent = sdk.callStatic("io.opentelemetry.api.trace.SpanContext", "createFromRemoteParent",
+                        "0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331",
+                        sdk.callStatic("io.opentelemetry.api.trace.TraceFlags", "getSampled"), traceState);
+                Object parentSpan = sdk.callStatic("io.opentelemetry.api.trace.Span", "wrap", parent);
+                Object root = sdk.callStatic("io.opentelemetry.context.Context", "root");
+                Object context = sdk.call(root, "io.opentelemetry.context.Context", "with", parentSpan);
+                sdk.call(spanBuilder, "io.opentelemetry.api.trace.SpanBuilder", "setParent", context);
+                Object span = sdk.call(spanBuilder, "io.opentelemetry.api.trace.SpanBuilder", "startSpan");
+                sdk.call(span, "io.opentelemetry.api.trace.Span", "end");
+                return sdk.call(inMemory, TESTING + "InMemorySpanExporter", "getFinishedSpanItems");
+            }
+        },
+        METRIC("OtlpMetricExporterProvider", "io.opentelemetry.sdk.metrics.export.MetricExporter") {
+            @Override
+            Object produceOneItem(Layer sdk) {
+                Object reader = sdk.callStatic(TESTING + "InMemoryMetricReader", "create");
+                Object builder = sdk.callStatic("io.opentelemetry.sdk.metrics.SdkMeterProvider", "builder");
+                sdk.call(builder, "io.opentelemetry.sdk.metrics.SdkMeterProviderBuilder", "registerMetricReader",
+                        reader);
+                Object provider = sdk.call(builder, "io.opentelemetry.sdk.metrics.SdkMeterProviderBuilder", "build");
+                Object meter = sdk.call(provider, "io.opentelemetry.api.metrics.MeterProvider", "get", "fc4");
+                Object counterBuilder = sdk.call(meter, "io.opentelemetry.api.metrics.Meter", "counterBuilder",
+                        "exported");
+                Object counter = sdk.call(counterBuilder, "io.opentelemetry.api.metrics.LongCounterBuilder", "build");
+                sdk.call(counter, "io.opentelemetry.api.metrics.LongCounter", "add", 1L);
+                return sdk.call(reader, TESTING + "InMemoryMetricReader", "collectAllMetrics");
+            }
+        },
+        LOG("OtlpLogRecordExporterProvider", "io.opentelemetry.sdk.logs.export.LogRecordExporter") {
+            @Override
+            Object produceOneItem(Layer sdk) {
+                Object inMemory = sdk.callStatic(TESTING + "InMemoryLogRecordExporter", "create");
+                Object processor = sdk.callStatic("io.opentelemetry.sdk.logs.export.SimpleLogRecordProcessor",
+                        "create", inMemory);
+                Object builder = sdk.callStatic("io.opentelemetry.sdk.logs.SdkLoggerProvider", "builder");
+                sdk.call(builder, "io.opentelemetry.sdk.logs.SdkLoggerProviderBuilder", "addLogRecordProcessor",
+                        processor);
+                Object provider = sdk.call(builder, "io.opentelemetry.sdk.logs.SdkLoggerProviderBuilder", "build");
+                Object logger = sdk.call(provider, "io.opentelemetry.api.logs.LoggerProvider", "get", "fc4");
+                Object record = sdk.call(logger, "io.opentelemetry.api.logs.Logger", "logRecordBuilder");
+                sdk.call(record, "io.opentelemetry.api.logs.LogRecordBuilder", "setBody", "exported");
+                sdk.call(record, "io.opentelemetry.api.logs.LogRecordBuilder", "emit");
+                return sdk.call(inMemory, TESTING + "InMemoryLogRecordExporter", "getFinishedLogRecordItems");
+            }
+        };
+
+        final String provider;
+        final String exporterType;
+
+        Signal(String provider, String exporterType) {
+            this.provider = provider;
+            this.exporterType = exporterType;
+        }
+
+        /** The collection of one span, metric or log record that the SDK of {@code sdk} produced. */
+        abstract Object produceOneItem(Layer sdk);
+    }
+
+    /**
+     * Creates the OTLP exporter of {@code signal} in {@code exporters}, exports one item produced by the SDK of
+     * {@code sdk} to a closed local port, and checks that the export fails on the connection — and on nothing
+     * else: no {@link Error} (an {@code IllegalAccessError} above all), thrown or reported.
+     */
+    static void assertTheExportFailsOnTheConnectionOnly(Layer sdk, Layer exporters, Signal signal)
+            throws IOException {
+        Object items = signal.produceOneItem(sdk);
+        Object exporter = createExporter(exporters, signal.provider, Map.of(
+                "otel.exporter.otlp.endpoint", closedLocalEndpoint(),
+                "otel.java.exporter.otlp.retry.disabled", "true"));
+
+        Object result = exporters.call(exporter, signal.exporterType, "export", items);
+        exporters.call(result, RESULT_CODE, "join", 10L, TimeUnit.SECONDS);
+
+        assertFalse((Boolean) exporters.call(result, RESULT_CODE, "isSuccess"), "nothing listens on the port");
+        Throwable failure = (Throwable) exporters.call(result, RESULT_CODE, "getFailureThrowable");
+        boolean connectionFailure = false;
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof Error) {
+                fail("the " + signal + " export failed on the module path: " + causes(failure), failure);
+            }
+            connectionFailure |= t instanceof IOException;
+        }
+        assertTrue(connectionFailure, "the export must fail on the connection, failure: " + causes(failure));
+        shutdown(exporters, exporter);
     }
 
     /**
      * Lets the upstream exporter provider create its exporter from a humboldt-otel-interop
      * {@link MapConfigProperties} — the path humboldt-otel-interop's discovery takes.
      */
-    private static Object createExporter(ModuleLayer layer, String providerName, Map<String, String> extra) {
-        ClassLoader loader = layer.findLoader(INTEROP);
+    static Object createExporter(Layer layer, String providerName, Map<String, String> extra) {
         Map<String, String> properties = new HashMap<>();
         properties.put("otel.exporter.otlp.protocol", "http/protobuf");
         properties.put("otel.exporter.otlp.endpoint", "http://127.0.0.1:4318");
         properties.putAll(extra);
-        return onTheModulePath("create the exporter of " + providerName, () -> {
-            Object config = loader.loadClass(INTEROP + ".MapConfigProperties")
-                    .getConstructor(Map.class, ClassLoader.class)
-                    .newInstance(properties, loader);
-            Class<?> configType = loader.loadClass("io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties");
-            Object provider = loader.loadClass(OTLP_INTERNAL + providerName).getConstructor().newInstance();
-            return provider.getClass().getMethod("createExporter", configType).invoke(provider, config);
-        });
+        Object config = layer.newInstance(INTEROP + ".MapConfigProperties", properties, layer.loader());
+        Object provider = layer.newInstance(OTLP_INTERNAL + providerName);
+        return layer.call(provider, OTLP_INTERNAL + providerName, "createExporter", config);
     }
 
-    private static void shutdown(Object exporter) {
-        onTheModulePath("shut the exporter down", () -> exporter.getClass().getMethod("shutdown").invoke(exporter));
+    static void shutdown(Layer layer, Object exporter) {
+        layer.call(exporter, exporter.getClass().getName(), "shutdown");
     }
 
-    private static ModuleLayer defineTheModuleLayer() {
-        Path[] modulePath = MODULE_PATH_ANCHORS.stream()
-                .map(OtlpExporterModuleLayerTest::locationOf)
-                .distinct()
-                .toArray(Path[]::new);
-        ModuleLayer boot = ModuleLayer.boot();
-        Configuration configuration = boot.configuration().resolve(
-                ModuleFinder.of(modulePath), ModuleFinder.of(),
-                Set.of(INTEROP, "io.opentelemetry.exporter.otlp", "io.opentelemetry.exporter.sender.jdk.internal"));
-        ModuleLayer layer = boot.defineModulesWithOneLoader(configuration, ClassLoader.getSystemClassLoader());
-        assertFalse(module(layer, "io.opentelemetry.api").getDescriptor().isAutomatic(),
-                "io.opentelemetry.api must be the explicit Humboldt module");
-        assertFalse(module(layer, "io.opentelemetry.context").getDescriptor().isAutomatic(),
-                "io.opentelemetry.context must be the explicit Humboldt module");
-        return layer;
-    }
-
-    private static Module module(ModuleLayer layer, String name) {
-        return layer.findModule(name).orElseThrow(() -> new AssertionError("module not in the layer: " + name));
-    }
-
-    private static Object onTheModulePath(String what, ReflectiveCall call) {
-        try {
-            return call.run();
-        } catch (InvocationTargetException e) {
-            throw new AssertionError("failed to " + what + " on the module path: " + causes(e.getCause()),
-                    e.getCause());
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
+    /** An endpoint on a local port that was free a moment ago: connecting to it is refused. */
+    private static String closedLocalEndpoint() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            return "http://127.0.0.1:" + socket.getLocalPort();
         }
     }
 
     private static String causes(Throwable t) {
         StringBuilder sb = new StringBuilder(String.valueOf(t));
-        for (Throwable c = t.getCause(); c != null && c != c.getCause(); c = c.getCause()) {
+        for (Throwable c = t == null ? null : t.getCause(); c != null && c != c.getCause(); c = c.getCause()) {
             sb.append(" <- caused by ").append(c);
         }
         return sb.toString();
     }
 
-    private static Path locationOf(String className) {
-        try {
-            Class<?> type = Class.forName(className, false, OtlpExporterModuleLayerTest.class.getClassLoader());
-            return Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI());
-        } catch (ClassNotFoundException | URISyntaxException e) {
-            throw new IllegalStateException("cannot locate the jar of " + className, e);
+    /**
+     * A module layer defined from jars, with reflective calls on the objects its classes create. Calls go through
+     * the public types of the layer's modules, the way the code of an application module would make them.
+     */
+    record Layer(ModuleLayer layer, ClassLoader loader) {
+
+        /** One layer over the boot layer, with every module of {@code anchors}; the roots are all its modules. */
+        @SafeVarargs
+        static Layer of(List<String>... anchors) {
+            return over(ModuleLayer.boot(), ClassLoader.getSystemClassLoader(), anchors);
+        }
+
+        /** A child layer of this one, with the modules of {@code anchors}. */
+        @SafeVarargs
+        final Layer child(List<String>... anchors) {
+            return over(layer, loader, anchors);
+        }
+
+        @SafeVarargs
+        private static Layer over(ModuleLayer parent, ClassLoader parentLoader, List<String>... anchors) {
+            Path[] modulePath = Stream.of(anchors).flatMap(List::stream)
+                    .map(Layer::locationOf)
+                    .distinct()
+                    .toArray(Path[]::new);
+            ModuleFinder finder = ModuleFinder.of(modulePath);
+            Set<String> roots = new HashSet<>();
+            finder.findAll().forEach(reference -> roots.add(reference.descriptor().name()));
+            Configuration configuration = parent.configuration().resolve(finder, ModuleFinder.of(), roots);
+            ModuleLayer layer = parent.defineModulesWithOneLoader(configuration, parentLoader);
+            ClassLoader loader = layer.modules().iterator().next().getClassLoader();
+            Layer defined = new Layer(layer, loader);
+            for (String explicit : List.of("io.opentelemetry.api", "io.opentelemetry.context")) {
+                layer.findModule(explicit).ifPresent(module -> assertFalse(module.getDescriptor().isAutomatic(),
+                        explicit + " must be the explicit Humboldt module"));
+            }
+            return defined;
+        }
+
+        /** The module {@code name} of this layer or of a parent layer. */
+        Module module(String name) {
+            return layer.findModule(name).orElseThrow(() -> new AssertionError("module not in the layers: " + name));
+        }
+
+        Class<?> type(String name) {
+            try {
+                return Class.forName(name, false, loader);
+            } catch (ClassNotFoundException e) {
+                throw new AssertionError("class not visible from the layer: " + name, e);
+            }
+        }
+
+        Object newInstance(String type, Object... args) {
+            for (var constructor : type(type).getConstructors()) {
+                if (accepts(constructor.getParameterTypes(), args)) {
+                    return inTheLayer("new " + type, () -> constructor.newInstance(args));
+                }
+            }
+            throw new AssertionError("no constructor of " + type + " for " + Arrays.toString(args));
+        }
+
+        Object callStatic(String type, String method, Object... args) {
+            return invoke(type(type), null, method, args);
+        }
+
+        Object call(Object target, String type, String method, Object... args) {
+            return invoke(type(type), target, method, args);
+        }
+
+        private Object invoke(Class<?> type, Object target, String name, Object... args) {
+            for (Method method : type.getMethods()) {
+                if (method.getName().equals(name) && accepts(method.getParameterTypes(), args)) {
+                    return inTheLayer(type.getSimpleName() + "." + name, () -> method.invoke(target, args));
+                }
+            }
+            throw new AssertionError("no method " + type.getName() + "." + name + " for " + Arrays.toString(args));
+        }
+
+        /**
+         * Runs {@code call} with this layer's loader as the context class loader, as in an application on the
+         * module path: OpenTelemetry looks some services up through it ({@code ContextStorageProvider}), and the
+         * class path of this test holds copies of the same classes.
+         */
+        private Object inTheLayer(String what, ReflectiveCall call) {
+            Thread thread = Thread.currentThread();
+            ClassLoader previous = thread.getContextClassLoader();
+            thread.setContextClassLoader(loader);
+            try {
+                return call.run();
+            } catch (InvocationTargetException e) {
+                throw new AssertionError(what + " failed on the module path: " + causes(e.getCause()), e.getCause());
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(e);
+            } finally {
+                thread.setContextClassLoader(previous);
+            }
+        }
+
+        private static boolean accepts(Class<?>[] parameters, Object[] args) {
+            if (parameters.length != args.length) {
+                return false;
+            }
+            for (int i = 0; i < args.length; i++) {
+                Class<?> parameter = MethodType.methodType(parameters[i]).wrap().returnType();
+                if (args[i] != null && !parameter.isInstance(args[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static Path locationOf(String className) {
+            try {
+                Class<?> type = Class.forName(className, false, OtlpExporterModuleLayerTest.class.getClassLoader());
+                return Path.of(type.getProtectionDomain().getCodeSource().getLocation().toURI());
+            } catch (ClassNotFoundException | URISyntaxException e) {
+                throw new IllegalStateException("cannot locate the jar of " + className, e);
+            }
         }
     }
 

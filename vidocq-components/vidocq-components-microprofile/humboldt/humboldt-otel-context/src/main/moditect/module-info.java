@@ -27,6 +27,12 @@ module io.opentelemetry.context {
     exports io.opentelemetry.common;
     // Internal logger used by the API module only (opentelemetry-common is shaded in here since 1.66).
     exports io.opentelemetry.common.impl to io.opentelemetry.api;
+    // WeakConcurrentMap, which opentelemetry-exporter-otlp-common (ResourceMarshaler,
+    // InstrumentationScopeMarshaler) uses to cache marshalers: without it every OTLP export fails on the module
+    // path with an IllegalAccessError (BUG-20261004-03). Qualified to the only OpenTelemetry 1.66 stable artifact
+    // that references the package (jdeps over opentelemetry-bom 1.66.0); see humboldt-otel-api's descriptor for
+    // the layer rule.
+    exports io.opentelemetry.context.internal.shaded to io.opentelemetry.exporter.internal.otlp;
 
     uses io.opentelemetry.context.ContextStorageProvider;
 }
