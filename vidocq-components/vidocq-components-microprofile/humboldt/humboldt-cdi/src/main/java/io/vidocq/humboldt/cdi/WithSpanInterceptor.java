@@ -27,6 +27,7 @@ import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
@@ -52,8 +53,12 @@ import java.lang.reflect.Parameter;
  *   <li>Resolves the OTel annotation on the method (then falls back to the class)</li>
  *   <li>Derives the span name — {@code @WithSpan.value()} if non-empty,
  *       otherwise {@code Class.simpleName + "." + methodName}</li>
- *   <li>Creates the span via {@link Tracer#spanBuilder(String)}</li>
- *   <li>{@code try (Scope = span.makeCurrent()) { proceed(); }}</li>
+ *   <li>Creates the span via {@link Tracer#spanBuilder(String)}, with the {@code code.function.name}
+ *       attribute ({@code <binary class name>.<method>}, mandatory since MicroProfile Telemetry 2.2)</li>
+ *   <li>Parent context: {@code Context.current()} by default; {@code Context.root()} when
+ *       {@code @WithSpan(inheritContext = false)} — the span starts a new trace and the call runs
+ *       without the caller's context (no caller baggage either)</li>
+ *   <li>{@code try (Scope = parent.with(span).makeCurrent()) { proceed(); }}</li>
  *   <li>On exception: {@code span.recordException(t)} + ERROR status, rethrow</li>
  *   <li>{@code span.end()} in finally</li>
  * </ol>
@@ -86,13 +91,13 @@ public class WithSpanInterceptor {
         SpanBuilder builder = t.spanBuilder(spanName)
                 .setSpanKind(kind)
                 .setAttribute(CODE_FUNCTION_NAME, method.getDeclaringClass().getName() + "." + method.getName());
-        if (annotation != null && !annotation.inheritContext()) {
-            // instrumentation-annotations 2.30+: start a new root span instead of a child of Context.current()
-            builder.setNoParent();
-        }
-        Span span = builder.startSpan();
+        // instrumentation-annotations 2.30+: inheritContext = false makes Context.root() the parent, so the call
+        // starts a new trace and runs without anything the caller put in its context (baggage included).
+        boolean detached = annotation != null && !annotation.inheritContext();
+        Context parent = detached ? Context.root() : Context.current();
+        Span span = builder.setParent(parent).startSpan();
         applySpanAttributes(span, method, ctx.getParameters());
-        try (Scope ignored = span.makeCurrent()) {
+        try (Scope ignored = parent.with(span).makeCurrent()) {
             return ctx.proceed();
         } catch (Throwable th) {
             span.recordException(th);

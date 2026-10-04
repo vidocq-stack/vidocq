@@ -29,6 +29,8 @@ Behavior of `WithSpanInterceptor`:
 
 * Annotation resolution: method overrides class.
 * Default name (`@WithSpan` without `value`): `Class.method`.
+* Every span carries the `code.function.name` attribute (`<binary class name>.<method>`, for example `com.acme.PaymentService.charge`), mandatory since MicroProfile Telemetry 2.2.
+* Parent: the current context by default. With `@WithSpan(inheritContext = false)` the span uses `Context.root()` as its parent: it starts a new trace, and the method runs without the caller's context (the caller's baggage is not visible inside it).
 * `Tracer` resolved via `GlobalOpenTelemetry.get()` (overridable for tests).
 * On exception: `span.recordException(ex)` + `span.setStatus(ERROR)` then re-throw.
 * Priority: `Interceptor.Priority.APPLICATION + 1`.

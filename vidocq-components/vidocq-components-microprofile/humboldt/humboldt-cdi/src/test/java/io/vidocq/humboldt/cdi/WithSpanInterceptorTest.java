@@ -20,6 +20,7 @@
 package io.vidocq.humboldt.cdi;
 
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.baggage.Baggage;
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
@@ -194,6 +195,32 @@ class WithSpanInterceptorTest {
         assertNull(detached.parentSpanContext(), "SpanData uses null (not an invalid context) for a root span");
         assertEquals(detached.spanContext().getSpanId(), inner.parentSpanContext().getSpanId(),
                 "the detached span must still be current during the call");
+    }
+
+    @Test
+    void inheritContext_false_runs_the_call_in_the_root_context() throws Exception {
+        // instrumentation-annotations: with inheritContext = false the span uses Context.root() as its parent,
+        // so nothing the caller put in its context (here baggage) leaks into the detached call.
+        String[] seen = new String[1];
+        try (var ignored = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
+            interceptor.aroundInvoke(new TestInvocationContext(method("detached"), new Object[0], () -> {
+                seen[0] = Baggage.current().getEntryValue("tenant");
+                return "x";
+            }));
+        }
+        assertNull(seen[0], "the caller's baggage must not be visible inside the detached call");
+    }
+
+    @Test
+    void inherited_context_keeps_the_caller_baggage() throws Exception {
+        String[] seen = new String[1];
+        try (var ignored = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
+            interceptor.aroundInvoke(new TestInvocationContext(method("annotatedDefault"), new Object[]{"v"}, () -> {
+                seen[0] = Baggage.current().getEntryValue("tenant");
+                return "x";
+            }));
+        }
+        assertEquals("acme", seen[0], "the default (inheritContext = true) runs in the caller's context");
     }
 
     // ----- helpers -----
