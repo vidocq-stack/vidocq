@@ -20,6 +20,7 @@
 package io.vidocq.humboldt.sdk.log.bridge;
 
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.logs.LogRecordBuilder;
 import io.opentelemetry.api.logs.Logger;
 import io.opentelemetry.api.logs.LoggerProvider;
 import io.opentelemetry.api.logs.Severity;
@@ -45,6 +46,10 @@ import java.util.logging.LogRecord;
  *   <li>CONFIG  → DEBUG (5)</li>
  *   <li>FINE/FINER/FINEST → DEBUG (5)/DEBUG2 (6)/DEBUG3 (7)</li>
  * </ul>
+ *
+ * <p>The exception attached to the record ({@link LogRecord#getThrown()}) is passed to
+ * {@link LogRecordBuilder#setException(Throwable)}, which derives the {@code exception.type},
+ * {@code exception.message} and {@code exception.stacktrace} attributes.
  *
  * <p>The {@code instrumentation scope} name is the source {@link java.util.logging.Logger}
  * name (for example {@code "jul-logger"}, {@code "my.app"}). {@link Logger} instances are cached by
@@ -77,12 +82,17 @@ public final class HumboldtJulHandler extends Handler {
         Severity severity = mapSeverity(record.getLevel());
         String severityText = severityText(record.getLevel());
 
-        otelLogger.logRecordBuilder()
+        LogRecordBuilder builder = otelLogger.logRecordBuilder()
                 .setBody(message)
                 .setSeverity(severity)
                 .setSeverityText(severityText)
-                .setTimestamp(record.getInstant())
-                .emit();
+                .setTimestamp(record.getInstant());
+        Throwable thrown = record.getThrown();
+        if (thrown != null) {
+            // exception.type / exception.message / exception.stacktrace, derived by the logs SDK
+            builder.setException(thrown);
+        }
+        builder.emit();
     }
 
     @Override
