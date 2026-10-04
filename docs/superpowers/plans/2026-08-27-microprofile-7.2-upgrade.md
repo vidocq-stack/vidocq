@@ -1193,6 +1193,15 @@ Run the official TCK from a clean build at the end of the lane: 367 (364 officia
 - [ ] `humboldt-tck/pom.xml`: `opentelemetry-extension-trace-propagators` to test scope; remove the remaining TCK duplicates of interop logic (`HumboldtAutoConfigurationCustomizer`, the discovery logic re-implemented in `HumboldtDeployableContainer`) when the interop API allows it without widening its exports (otherwise explain).
 `./mvnw -ntp clean install`; official TCK at the end of FC2.
 
+### Task FC4: humboldt — OpenTelemetry OTLP exporters on the module path (runs after FC3, before FC2)
+
+Found by FC3 and logged OPEN in humboldt's `BUG.md`.
+
+- [ ] BUG-20261004-03: `humboldt-otel-api` does not export `io.opentelemetry.api.internal`, so the OpenTelemetry OTLP exporters (and SDK modules) that use it fail with `IllegalAccessError` on the module path. Add a QUALIFIED export of `io.opentelemetry.api.internal` to exactly the OpenTelemetry modules that need it (find them with `jdeps` on the 1.66.0 SDK/exporter jars: their `Automatic-Module-Name`s), in the hand-written ModiTect descriptor, with a comment saying why; module-path test (ModuleLayer like FC1's) reproducing the `IllegalAccessError` first.
+- [ ] BUG-20261004-04: the exporter's `CompressorUtil` loads compressors through `ComponentLoader.forClassLoader(...)` → upstream `ServiceLoaderComponentLoader` (shaded into `humboldt-otel-context`), which calls `ServiceLoader.load` from a named module without the matching `uses` → `ServiceConfigurationError` as soon as compression is configured. Provide a humboldt-owned `io.opentelemetry.common.ServiceLoaderComponentLoader` (same FQN, replacing the shaded upstream class — exclude it from the shade) that adds `uses` for the requested service from inside its own module (`getClass().getModule().addUses(spi)`) before loading; keep upstream behaviour otherwise; module-path test with compression configured.
+- [ ] Log bodies: align with the OpenTelemetry 1.66 SDK — an explicitly set empty string body (`setBody("")` or `setBody(Value.of(""))`) is kept and exported as an empty `stringValue`; only "never set" means no body. Check the Logs TCK line patterns still match; TDD.
+- [ ] Run the `jpms-guardian` check yourself mentally: exports stay qualified and minimal; no `opens`. Close both BUG entries. `./mvnw -ntp clean install`; official TCK at the end of FC2.
+
 ### Task FC2: humboldt — documentation, French text, script
 
 - [ ] TCK script: step 1 `install` also cleans.
