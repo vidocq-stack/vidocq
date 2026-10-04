@@ -14,8 +14,15 @@ time and from inside this module, the exports the descriptor names. humboldt-ote
 each OpenTelemetry provider it discovers; an OpenTelemetry component that the application builds itself, outside
 that discovery, does not get them.
 
-An artifact that is not in the lists (an incubating `-alpha` one, for instance) must be granted the package with
-`--add-exports io.opentelemetry.api/<package>=<module>`. That option applies to the boot layer only.
+An artifact that is not in the lists (an incubating `-alpha` one, for instance) must be granted the packages it uses
+with `--add-exports <module>/<package>=<consumer>`, where `<module>` is the Humboldt module that holds the package:
+`io.opentelemetry.api` for the `io.opentelemetry.api.*` packages, and `io.opentelemetry.context`
+(`humboldt-otel-context`) for `io.opentelemetry.context.internal.shaded` and `io.opentelemetry.common.impl`
+(`opentelemetry-common` is shaded into it). For `opentelemetry-sdk-extension-incubator` and
+`opentelemetry-api-incubator` 1.66.0-alpha that means, besides any `io.opentelemetry.api` package the jar needs:
+`--add-exports io.opentelemetry.context/io.opentelemetry.context.internal.shaded=io.opentelemetry.sdk.extension.incubator`
+and `--add-exports io.opentelemetry.context/io.opentelemetry.common.impl=io.opentelemetry.api.incubator`.
+That option applies to the boot layer only.
 
 ## Quick verification
 

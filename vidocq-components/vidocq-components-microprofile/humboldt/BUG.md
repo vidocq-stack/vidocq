@@ -314,7 +314,12 @@
     it discovers, before instantiating it. On the class path nothing is done. An OpenTelemetry component the
     application builds itself, outside that discovery, in a child layer, does not get the exports.
   - Not covered: an artifact outside the lists (an incubating one) needs
-    `--add-exports io.opentelemetry.api/<package>=<module>`, which works in the boot layer only.
+    `--add-exports <module>/<package>=<consumer>` for each package it uses, which works in the boot layer only.
+    `<module>` is the module that holds the package, read from the built descriptors: `io.opentelemetry.api`
+    for `io.opentelemetry.api.*`, `io.opentelemetry.context` (humboldt-otel-context, where `opentelemetry-common`
+    is shaded in) for `io.opentelemetry.context.internal.shaded` and `io.opentelemetry.common.impl`. On
+    1.66.0-alpha, `opentelemetry-sdk-extension-incubator` references `context.internal.shaded` and
+    `opentelemetry-api-incubator` references `common.impl` (checked in the class files).
 - **Validation**: `OtlpExporterModuleLayerTest` (humboldt-otel-interop; the exporter jars are test-scope
   dependencies of that module only) defines module layers with the Humboldt explicit modules and the
   OpenTelemetry 1.66 SDK, OTLP exporter and JDK sender jars as automatic modules. It exports a span (with a trace
