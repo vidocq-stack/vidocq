@@ -41,4 +41,9 @@ public class AuditedBase {
     String inheritedPackagePrivate() {
         return "A-pp";
     }
+
+    /** Overloaded, not overridden, by {@link AuditedMiddle#overloaded(int)}. */
+    public String overloaded(String s) {
+        return "A-string:" + s;
+    }
 }
