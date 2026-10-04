@@ -82,7 +82,6 @@ final class AnnotationModelMappings {
         }
     }
 
-
     static void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible,
                                 Extension[] extensions) {
         for (Extension extension : extensions) {

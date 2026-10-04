@@ -26,8 +26,6 @@ import org.eclipse.microprofile.openapi.models.media.XML;
 
 import java.math.BigDecimal;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -445,6 +443,7 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
     }
 
     // ── extensions == unknown properties (MP OpenAPI 4.2 #698, base dialect) ──
+    // Every override below uses extraProperties; the inherited AbstractExtensible.extensions field stays unused.
     @Override
     public Map<String, Object> getExtensions() {
         return extraProperties == null ? Map.of() : ModelCollections.immutableMapView(extraProperties);
