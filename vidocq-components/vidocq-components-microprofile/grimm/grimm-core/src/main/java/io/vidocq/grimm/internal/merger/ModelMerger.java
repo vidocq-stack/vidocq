@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.merger;
 
+import io.vidocq.grimm.internal.model.AbstractExtensibleRef;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.Components;
 import org.eclipse.microprofile.openapi.models.Extensible;
@@ -358,7 +359,7 @@ public final class ModelMerger {
 
     private Schema mergeSchema(Schema target, Schema source) {
         if (source.getRef() != null) {
-            target.setRef(source.getRef());
+            AbstractExtensibleRef.setVerbatimRef(target, source.getRef());
         }
         if (source.getFormat() != null) {
             target.setFormat(source.getFormat());
@@ -471,7 +472,7 @@ public final class ModelMerger {
         if (source == null) return target;
 
         if (source.getRef() != null) {
-            target.setRef(source.getRef());
+            AbstractExtensibleRef.setVerbatimRef(target, source.getRef());
         }
         if (source.getPathItems() != null && !source.getPathItems().isEmpty()) {
             Map<String, PathItem> merged = new LinkedHashMap<>();
@@ -587,7 +588,7 @@ public final class ModelMerger {
 
     private void mergeReference(Reference<?> target, Reference<?> source) {
         if (source.getRef() != null) {
-            target.setRef(source.getRef());
+            AbstractExtensibleRef.setVerbatimRef(target, source.getRef());
         }
     }
 

@@ -19,6 +19,8 @@
  */
 package io.vidocq.grimm.internal.serialization;
 
+import io.vidocq.grimm.internal.model.AbstractExtensibleRef;
+import io.vidocq.grimm.internal.model.DiscriminatorImpl;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.Components;
 import org.eclipse.microprofile.openapi.models.ExternalDocumentation;
@@ -28,8 +30,6 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.callbacks.Callback;
 import org.eclipse.microprofile.openapi.models.examples.Example;
-import io.vidocq.grimm.internal.model.AbstractExtensibleRef;
-import io.vidocq.grimm.internal.model.DiscriminatorImpl;
 import org.eclipse.microprofile.openapi.models.headers.Header;
 import org.eclipse.microprofile.openapi.models.info.Info;
 import org.eclipse.microprofile.openapi.models.info.Contact;

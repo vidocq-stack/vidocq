@@ -146,6 +146,29 @@ class ConfigApplierTest {
         assertEquals("c", s.getProperties().get("p").getConstValue());
     }
 
+    @Test
+    void applySchemaOverrides_refAliasExpandsButExplicitRefStaysVerbatim() {
+        SchemaRegistry registry = new SchemaRegistry();
+        String json = "{\"properties\":{\"a\":{\"ref\":\"Pet\"},\"b\":{\"$ref\":\"Pet.yaml\"}}}";
+        ConfigApplier.applySchemaOverrides(registry, GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), json)));
+        Schema s = registry.snapshot().get("Sample");
+        // The alias is only recognised on the schema itself; a nested one is an ordinary keyword.
+        assertEquals("Pet.yaml", s.getProperties().get("b").getRef());
+
+        String top = "{\"ref\":\"Pet\"}";
+        SchemaRegistry other = new SchemaRegistry();
+        ConfigApplier.applySchemaOverrides(other, GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), top)));
+        assertEquals("#/components/schemas/Pet", other.snapshot().get("Sample").getRef());
+
+        String explicit = "{\"$ref\":\"Pet\"}";
+        SchemaRegistry third = new SchemaRegistry();
+        ConfigApplier.applySchemaOverrides(third, GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), explicit)));
+        assertEquals("Pet", third.snapshot().get("Sample").getRef());
+    }
+
     @SuppressWarnings("unused")
     static final class Sample {
         String name;

@@ -449,6 +449,26 @@ class OpenApiModelMapperTest {
     }
 
     @Test
+    void yamlInfinityAndNanStayStrings() {
+        // .inf / -.inf / .nan have no JSON representation in an OpenAPI document: they are not numbers here.
+        String yaml = """
+                openapi: 3.1.0
+                info:
+                  title: t
+                  version: "1"
+                components:
+                  schemas:
+                    S:
+                      examples:
+                        - .inf
+                        - -.inf
+                        - .nan
+                """;
+        assertEquals(List.of(".inf", "-.inf", ".nan"),
+                schema(new YamlDeserializer().deserialize(yaml), "S").getExamples());
+    }
+
+    @Test
     void staticHeaderStyleExplodeAndContentAreMapped() {
         String yaml = """
                 openapi: 3.1.0

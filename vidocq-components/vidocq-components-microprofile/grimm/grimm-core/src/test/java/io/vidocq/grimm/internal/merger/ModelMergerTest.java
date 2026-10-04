@@ -319,6 +319,40 @@ class ModelMergerTest {
         assertEquals("#/components/schemas/Availability", merged.getItems().getRef());
     }
 
+    @Test
+    void merge_verbatimRefSurvivesACollidingMediaTypeSchemaInBothDirections() {
+        // A static-file $ref such as Pet.yaml is a document reference, not a component short name:
+        // copying it while merging must not expand it to #/components/schemas/Pet.yaml.
+        Schema verbatim = OASFactory.createObject(Schema.class);
+        io.vidocq.grimm.internal.model.AbstractExtensibleRef.setVerbatimRef(verbatim, "Pet.yaml");
+        Schema plain = OASFactory.createObject(Schema.class).description("d");
+
+        // static (verbatim ref) under annotations (no ref)
+        assertEquals("Pet.yaml", mergedResponseSchema(
+                new StaticFileSource(withResponseSchema(verbatim)),
+                new AnnotationSource(withResponseSchema(plain))).getRef());
+
+        // annotations (verbatim ref) under a reader source (no ref)
+        Schema verbatim2 = OASFactory.createObject(Schema.class);
+        io.vidocq.grimm.internal.model.AbstractExtensibleRef.setVerbatimRef(verbatim2, "Pet.yaml");
+        assertEquals("Pet.yaml", mergedResponseSchema(
+                new AnnotationSource(withResponseSchema(verbatim2)),
+                new ReaderSource(withResponseSchema(OASFactory.createObject(Schema.class).description("d")))).getRef());
+    }
+
+    private static Schema mergedResponseSchema(ModelSource lower, ModelSource higher) {
+        return new ModelMerger().merge(List.of(lower, higher)).getPaths().getPathItem("/p").getGET()
+                .getResponses().getAPIResponse("200").getContent().getMediaType("application/json").getSchema();
+    }
+
+    private OpenAPI withResponseSchema(Schema schema) {
+        MediaType mediaType = OASFactory.createObject(MediaType.class).schema(schema);
+        Content content = OASFactory.createObject(Content.class).addMediaType("application/json", mediaType);
+        APIResponses responses = OASFactory.createObject(APIResponses.class)
+                .addAPIResponse("200", OASFactory.createObject(APIResponse.class).content(content));
+        return withResponses("/p", responses);
+    }
+
     private OpenAPI withPath(String path, String opId) {
         OpenAPI api = OASFactory.createObject(OpenAPI.class);
         Paths paths = OASFactory.createObject(Paths.class);

@@ -148,10 +148,12 @@ public final class ConfigApplier {
             Object nameField = map.get("name");
             Map<Object, Object> keywords = new LinkedHashMap<>(map);
             keywords.remove("name");
-            if (keywords.containsKey("ref") && !keywords.containsKey("$ref")) {
-                keywords.put("$ref", keywords.remove("ref")); // historical alias of this converter
-            }
+            Object refAlias = keywords.containsKey("$ref") ? null : keywords.remove("ref");
             Schema schema = JsonDeserializer.toSchema(keywords);
+            if (refAlias != null) {
+                // Historical alias: unlike an explicit "$ref", it expands a short name as setRef does.
+                schema.setRef(String.valueOf(refAlias));
+            }
             String preferredName = nameField instanceof String s && !s.isBlank()
                     ? s : clazz.getSimpleName();
             String name = registry.reserve(clazz, preferredName);
