@@ -1170,6 +1170,12 @@ Run the official TCK from a clean build at the end of the lane: 367 (364 officia
 - [ ] `GrimmModelProcessor`: one shared annotation-mirror name check for `rejectMpOpenApiAnnotations` / `rejectBeanValidationAnnotations`; re-wrap the two Javadoc edits.
 `./mvnw -ntp clean install`; official TCK at the end of FB3.
 
+### Task FB5: grimm — BUG-20261004-07, full `@SchemaProperty` and `@Schema.examples()` mapping (runs after FB4, before FB3)
+
+- [ ] `@SchemaProperty` maps only a few attributes: map every attribute it shares with `@Schema` (constraints `minimum`/`maximum`/exclusive bounds, `multipleOf`, lengths, `pattern`, `enumeration`, `defaultValue`, `constValue`, nullability/`type`, `format`, composition `allOf`/`anyOf`/`oneOf`/`not`, `items`-related attributes, `readOnly`/`writeOnly`, `deprecated`, `title`/`description`, `example(s)`, `extensions`, `externalDocs` …) through ONE shared mapping used for both `@Schema` and `@SchemaProperty` (no second copy). Check the MP OpenAPI 4.2 annotation attribute lists with `javap` on the 4.2-RC5 API jar.
+- [ ] Map `@Schema.examples()` (and `@SchemaProperty.examples()`) to the schema `examples`.
+- [ ] TDD; close BUG-20261004-07; `./mvnw -ntp clean install`; official TCK as a safety net: 367/0/0.
+
 ### Task FC1: humboldt — telemetry correctness follow-ups
 
 - [ ] Span `exception.type` uses `getCanonicalName()` like the OpenTelemetry SDK 1.66 `ExceptionAttributeResolver` (fallback to `getName()` when the canonical name is null), consistent with the log side; TDD.
