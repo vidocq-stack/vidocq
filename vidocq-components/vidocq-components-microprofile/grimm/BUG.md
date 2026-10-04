@@ -256,3 +256,35 @@ Track reproducible bugs with:
   the API would be invisible to `OASFilter` and `OASModelReader` code, and would make Grimm's
   model differ from the spec model. The fix belongs upstream: a `summary` (and, for `Callback`,
   `description`) on the Reference-capable model interfaces. Documented in `concepts.adoc`.
+
+### BUG-20261004-11 — Every `@Schema` / `@SchemaProperty` writes `minItems`, `maxItems` and `maxProperties`
+
+- **id**: BUG-20261004-11
+- **date**: 2026-10-04
+- **symptom**: every annotated schema carried `minItems: 2147483647`, `maxItems: -2147483648` and
+  `maxProperties: 0`, and so did the document served at `/openapi`. A validator or client generator
+  read "at most zero properties" for every annotated object. An empty `@Schema()` also counted as
+  content in `JaxRsResourceScanner.hasAnyContent`.
+- **minimal repro**: `@Schema(description = "d") class C {}`, then `getMinItems()` on the generated
+  schema returns `2147483647`.
+- **hypothesis (confirmed)**: the guards in `SchemaGenerator.applyAttributes` and `hasAnyContent`
+  assumed the wrong annotation defaults. The real ones (MP OpenAPI 4.2-RC5 sources): `maxProperties`
+  0, `minItems` `Integer.MAX_VALUE`, `maxItems` `Integer.MIN_VALUE`. The shared `applyAttributes`
+  (BUG-20261004-07) spread the defect to every `@SchemaProperty`. Not visible to the TCK, which only
+  asserts values that are set.
+- **status**: FIXED — 2026-10-04, commit 91159d3. The guards compare with the real defaults; an
+  explicit 0 still maps. Covered by `SchemaPropertyMappingTest` (class, field and `@SchemaProperty`
+  without those attributes; explicit values); official TCK still 367/367.
+
+### BUG-20261004-12 — `examples()` of `@Schema` / `@SchemaProperty` is not parsed as JSON
+
+- **id**: BUG-20261004-12
+- **date**: 2026-10-04
+- **symptom**: `@Schema(type = INTEGER, examples = "1")` gave `examples: ["1"]` (a string on an integer
+  schema); an object example was an escaped JSON string.
+- **minimal repro**: `@SchemaProperty(name = "n", type = INTEGER, examples = {"1", "2"})`.
+- **hypothesis (confirmed)**: the 4.2 Javadoc of `examples()` says the value is a literal string when
+  the schema type is STRING and parsed as JSON otherwise, the same clause as `constValue`. The
+  mapping copied the raw strings. The deprecated `example()` has no such clause and stays raw.
+- **status**: FIXED — 2026-10-04, commit 91159d3. Each entry goes through `constValueOf`. Covered by
+  `SchemaPropertyMappingTest` (STRING literal, INTEGER, OBJECT); official TCK still 367/367.

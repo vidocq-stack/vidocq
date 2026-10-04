@@ -77,6 +77,7 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 * **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
 * **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
 * **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
+* **`summary` next to a `$ref` is dropped** — a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
 
 == Porting checklist
 
