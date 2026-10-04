@@ -22,6 +22,7 @@ package io.vidocq.humboldt.otel.interop;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
@@ -91,6 +92,48 @@ class OtlpExporterModuleLayerTest {
         Object created = createExporter(layer, provider, Map.of());
 
         assertEquals(exporter, created.getClass().getSimpleName());
+        shutdown(created);
+    }
+
+    /**
+     * BUG-20261004-04: any configured compression initialises the exporter's {@code CompressorUtil}, whose static
+     * registry loads the {@code Compressor} services through {@code ComponentLoader.forClassLoader(...)}, the
+     * upstream default that no {@code ConfigProperties} can replace — a {@code ServiceLoader.load} issued from
+     * {@code io.opentelemetry.context}.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"gzip", "none"})
+    void the_otlp_exporter_provider_applies_a_configured_compression_on_the_module_path(String compression) {
+        ModuleLayer layer = defineTheModuleLayer();
+
+        Object created = createExporter(layer, "OtlpSpanExporterProvider",
+                Map.of("otel.exporter.otlp.compression", compression));
+
+        assertEquals("OtlpHttpSpanExporter", created.getClass().getSimpleName());
+        assertTrue(created.toString().contains("compressorEncoding=" + ("none".equals(compression) ? "null" : compression)),
+                created.toString());
+        shutdown(created);
+    }
+
+    /**
+     * An exporter built directly, without {@code setComponentLoader(...)}, loads its sender and its compressor
+     * through the upstream default {@code ComponentLoader.forClassLoader(...)} — the residual of
+     * BUG-20261004-01 that BUG-20261004-04 closes.
+     */
+    @Test
+    void an_otlp_exporter_built_without_a_component_loader_finds_its_sender_and_compressor_on_the_module_path() {
+        ModuleLayer layer = defineTheModuleLayer();
+        ClassLoader loader = layer.findLoader(INTEROP);
+
+        Object created = onTheModulePath("build an exporter with the default component loader", () -> {
+            Object builder = loader.loadClass("io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter")
+                    .getMethod("builder").invoke(null);
+            builder.getClass().getMethod("setCompression", String.class).invoke(builder, "gzip");
+            return builder.getClass().getMethod("build").invoke(builder);
+        });
+
+        assertEquals("OtlpHttpSpanExporter", created.getClass().getSimpleName());
+        assertTrue(created.toString().contains("compressorEncoding=gzip"), created.toString());
         shutdown(created);
     }
 

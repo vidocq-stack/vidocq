@@ -14,10 +14,24 @@
     <name>Humboldt :: OTel Context (Java Modules)</name>
     <description>Repackages io.opentelemetry:opentelemetry-context (+ opentelemetry-common) with an explicit io.opentelemetry.context module-info, for jlink.</description>
 
+    <properties>
+        <!-- src/main/java holds a single package-private class (ServiceLoaderComponentLoader): the javadoc
+             tool of the snapshot/release profiles would find nothing to document and fail. This module
+             ships its own empty javadoc jar (below). -->
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-context</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Already shaded in (a dependency of opentelemetry-context), declared because
+             src/main/java compiles against its ComponentLoader. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-common</artifactId>
             <optional>true</optional>
         </dependency>
 
@@ -51,11 +65,26 @@
                                     <include>io.opentelemetry:opentelemetry-common</include>
                                 </includes>
                             </artifactSet>
+                            <!--
+                                The module's own classes are left out, except Humboldt's
+                                io.opentelemetry.common.ServiceLoaderComponentLoader, which replaces the
+                                upstream class of the same name (the default ComponentLoader, which must add
+                                the `uses` of a service before loading it on the module path —
+                                BUG-20261004-04). The .java pattern covers the shaded sources jar.
+                            -->
                             <filters>
                                 <filter>
                                     <artifact>io.vidocq.humboldt:humboldt-otel-context</artifact>
+                                    <includes>
+                                        <include>io/opentelemetry/common/ServiceLoaderComponentLoader.class</include>
+                                        <include>io/opentelemetry/common/ServiceLoaderComponentLoader.java</include>
+                                    </includes>
+                                </filter>
+                                <filter>
+                                    <artifact>io.opentelemetry:opentelemetry-common</artifact>
                                     <excludes>
-                                        <exclude>**</exclude>
+                                        <exclude>io/opentelemetry/common/ServiceLoaderComponentLoader.class</exclude>
+                                        <exclude>io/opentelemetry/common/ServiceLoaderComponentLoader.java</exclude>
                                     </excludes>
                                 </filter>
                                 <filter>
@@ -91,6 +120,10 @@
                         <configuration>
                             <classifier>javadoc</classifier>
                             <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                            <!-- target/classes now holds ServiceLoaderComponentLoader: keep it out. -->
+                            <excludes>
+                                <exclude>io/**</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                 </executions>
