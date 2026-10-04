@@ -33,7 +33,7 @@
     <packaging>jar</packaging>
 
     <name>Humboldt :: TCK Runner</name>
-    <description>Harness de conformance MicroProfile Telemetry 2.2 — TCK officiel Eclipse (Tracing + Metrics + Logs).</description>
+    <description>MicroProfile Telemetry 2.2 conformance harness — official Eclipse TCK (Tracing + Metrics + Logs).</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -403,11 +403,11 @@
                                 <dependency>org.eclipse.microprofile.telemetry:microprofile-telemetry-logs-tck</dependency>
                             </dependenciesToScan>
                             <systemPropertyVariables>
-                                <!-- SPI de "porting" du TCK MP Telemetry 2.2 —
-                                     JaxRsServerAsyncTestEndpoint fait
-                                     `ConfigurationAccessor.get().getExecutor()` dans
-                                     son constructeur. Sans cette property,
-                                     l'instantiation échoue avec "Cannot find any
+                                <!-- "Porting" SPI of the MP Telemetry 2.2 TCK —
+                                     JaxRsServerAsyncTestEndpoint calls
+                                     `ConfigurationAccessor.get().getExecutor()` in
+                                     its constructor. Without this property,
+                                     instantiation fails with "Cannot find any
                                      implementations of Executor, check that
                                      telemetry.tck.executor is specified". -->
                                 <telemetry.tck.executor>io.vidocq.humboldt.tck.HumboldtTckExecutor</telemetry.tck.executor>
