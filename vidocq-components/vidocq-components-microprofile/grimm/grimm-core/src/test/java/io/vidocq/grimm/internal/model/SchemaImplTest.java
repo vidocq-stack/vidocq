@@ -278,9 +278,11 @@ class SchemaImplTest {
 
     /**
      * Guard: every typed setter of the MP OpenAPI {@code Schema} interface is a property of the
-     * table behind {@code get}/{@code set}/{@code getAll}/{@code setAll}, under its JSON name. A
-     * setter added by a future API version and missing from the table would otherwise make its
-     * value invisible to {@code getAll}, and {@code set} of its JSON name an extension.
+     * table behind {@code get}/{@code set}/{@code getAll}/{@code setAll}, under its JSON name, both
+     * ways: the typed value shows in {@code getAll}, and {@code set} of the JSON name reaches the
+     * typed getter. A setter added by a future API version and missing from the table would
+     * otherwise make its value invisible to {@code getAll}, and {@code set} of its JSON name an
+     * extension.
      */
     @Test
     void everyTypedSetterOfTheSchemaInterfaceIsATableProperty() throws ReflectiveOperationException {
@@ -314,6 +316,12 @@ class SchemaImplTest {
 
             assertEquals(Set.of(jsonName), schema.getAll().keySet(), setter.getName());
             assertTrue(schema.getExtensions().isEmpty(), setter.getName() + " became an extension");
+
+            // And back: set(jsonName, value) lands on the typed field, read by the typed getter.
+            Method getter = Schema.class.getMethod("get" + suffix);
+            Schema copy = new SchemaImpl().set(jsonName, schema.getAll().get(jsonName));
+            assertEquals(getter.invoke(schema), getter.invoke(copy), "set(\"" + jsonName + "\") → " + getter.getName());
+            assertTrue(copy.getExtensions().isEmpty(), "set(\"" + jsonName + "\") became an extension");
             checked++;
         }
         assertEquals(56, checked, "typed setters of Schema 4.2 (both additionalProperties forms and setRef)");
