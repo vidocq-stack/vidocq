@@ -40,8 +40,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class OtlpHttpMetricExporter implements MetricExporter {
 
+    private static final System.Logger LOG = System.getLogger(OtlpHttpMetricExporter.class.getName());
+
     private final OtlpHttpJsonSender sender;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
+    private final AtomicBoolean unencodableBatchLogged = new AtomicBoolean(false);
 
     private OtlpHttpMetricExporter(OtlpHttpJsonSender sender) {
         this.sender = sender;
@@ -51,11 +54,28 @@ public final class OtlpHttpMetricExporter implements MetricExporter {
         return new Builder();
     }
 
+    /**
+     * Encodes and sends {@code metrics}. A batch that cannot be encoded — a metric whose data points do not match
+     * its kind, which {@link OtlpJsonMetricEncoder} rejects — is not sent: the export fails, as an exporter
+     * reports it (a failed result, never an exception), and the first such batch of this exporter is logged at
+     * {@code WARNING}.
+     */
     @Override
     public CompletableResultCode export(Collection<MetricData> metrics) {
         if (stopped.get()) return CompletableResultCode.ofFailure();
         if (metrics.isEmpty()) return CompletableResultCode.ofSuccess();
-        return sender.send(OtlpJsonMetricEncoder.encode(metrics));
+        String body;
+        try {
+            body = OtlpJsonMetricEncoder.encode(metrics);
+        } catch (IllegalArgumentException e) {
+            if (unencodableBatchLogged.compareAndSet(false, true)) {
+                LOG.log(System.Logger.Level.WARNING,
+                        "OTLP metric batch not exported, it cannot be encoded: {0} (logged once per exporter)",
+                        e.getMessage());
+            }
+            return CompletableResultCode.ofFailure();
+        }
+        return sender.send(body);
     }
 
     @Override

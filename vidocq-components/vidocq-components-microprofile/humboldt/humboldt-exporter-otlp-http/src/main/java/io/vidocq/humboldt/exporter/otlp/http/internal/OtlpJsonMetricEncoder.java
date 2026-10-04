@@ -233,8 +233,8 @@ public final class OtlpJsonMetricEncoder {
     /**
      * A data point whose kind does not match its metric — a histogram point in a sum, a number point in a
      * histogram — has no OTLP encoding there. humboldt-sdk-metric never produces one; a {@link MetricData} built
-     * elsewhere may. It is rejected rather than dropped: the export of the batch fails with this message (which
-     * the {@code PeriodicMetricReader} logs) instead of losing data without a trace.
+     * elsewhere may. It is rejected rather than dropped: {@code OtlpHttpMetricExporter} turns the exception into
+     * a failed export and logs its message once, instead of losing data without a trace.
      */
     private static IllegalArgumentException unexpectedPoint(MetricData m, PointData p, String expected) {
         return new IllegalArgumentException("metric '" + m.name() + "' (" + m.instrumentType() + ") carries a "

@@ -24,9 +24,15 @@ import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.DoubleHistogram;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.metric.PeriodicMetricReader;
 import io.vidocq.humboldt.sdk.metric.SdkMeterProvider;
+import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
+import io.vidocq.humboldt.sdk.metric.data.HistogramPointData;
+import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
+import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,11 +41,16 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.text.MessageFormat;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -142,6 +153,53 @@ class OtlpHttpMetricExporterE2ETest {
         assertTrue(body.contains("\"asDouble\":21.5}]}}"), body);
         assertTrue(body.contains("{\"name\":\"queue.size\",\"gauge\":{\"dataPoints\":[{"), body);
         assertTrue(body.contains("\"asInt\":\"3\"}]}}"), body);
+    }
+
+    @Test
+    void a_metric_whose_points_do_not_match_its_kind_fails_the_export_without_throwing_and_is_logged_once() {
+        OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+        MetricData counterWithAHistogramPoint = new MetricData(
+                Resource.empty(), InstrumentationScope.of("io.vidocq.test"), "requests", "", "",
+                InstrumentType.COUNTER, AggregationTemporality.CUMULATIVE, true,
+                List.of(new HistogramPointData(1L, 2L, Attributes.empty(), 3.0, 1L, 3.0, 3.0,
+                        List.of(10.0), List.of(1L, 0L))));
+        Logger logger = Logger.getLogger(OtlpHttpMetricExporter.class.getName());
+        List<LogRecord> logged = new CopyOnWriteArrayList<>();
+        Handler capture = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                logged.add(record);
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        boolean parentHandlers = logger.getUseParentHandlers();
+        logger.addHandler(capture);
+        logger.setUseParentHandlers(false);
+        try {
+            CompletableResultCode first = exporter.export(List.of(counterWithAHistogramPoint));
+            CompletableResultCode second = exporter.export(List.of(counterWithAHistogramPoint));
+
+            assertTrue(first.isDone() && !first.isSuccess(), "a failed export, not an exception");
+            assertTrue(second.isDone() && !second.isSuccess());
+        } finally {
+            logger.removeHandler(capture);
+            logger.setUseParentHandlers(parentHandlers);
+        }
+        assertEquals(0, callCount.get(), "nothing is sent");
+        assertEquals(1, logged.size(), "logged once: " + logged);
+        assertEquals(Level.WARNING, logged.getFirst().getLevel());
+        String message = MessageFormat.format(logged.getFirst().getMessage(), logged.getFirst().getParameters());
+        assertTrue(message.contains("metric 'requests' (COUNTER) carries a HistogramPointData"), message);
     }
 
     private void waitForReceivedBodies(int expected) {
