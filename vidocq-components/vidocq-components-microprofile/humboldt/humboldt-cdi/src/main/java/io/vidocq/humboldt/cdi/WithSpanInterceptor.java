@@ -83,6 +83,10 @@ public class WithSpanInterceptor {
         SpanBuilder builder = t.spanBuilder(spanName)
                 .setSpanKind(kind)
                 .setAttribute(CODE_FUNCTION_NAME, method.getDeclaringClass().getName() + "." + method.getName());
+        if (annotation != null && !annotation.inheritContext()) {
+            // instrumentation-annotations 2.30+: start a new root span instead of a child of Context.current()
+            builder.setNoParent();
+        }
         Span span = builder.startSpan();
         applySpanAttributes(span, method, ctx.getParameters());
         try (Scope ignored = span.makeCurrent()) {

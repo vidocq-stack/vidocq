@@ -43,6 +43,7 @@ import java.lang.reflect.Method;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -173,6 +174,28 @@ class WithSpanInterceptorTest {
         assertTrue(Target.class.getName().contains("$"), "target is a nested class, so '$' form is asserted");
     }
 
+    @Test
+    void inheritContext_false_starts_a_new_trace() throws Exception {
+        Span parent = provider.get("test").spanBuilder("parent").startSpan();
+        try (var ignored = parent.makeCurrent()) {
+            interceptor.aroundInvoke(new TestInvocationContext(method("detached"), new Object[0], () -> {
+                // a span created inside the method must be parented to the detached span
+                provider.get("test").spanBuilder("inner").startSpan().end();
+                return "x";
+            }));
+        } finally {
+            parent.end();
+        }
+        SpanData detached = exporter.getFinishedSpans().stream()
+                .filter(s -> s.name().equals("Target.detached")).findFirst().orElseThrow();
+        SpanData inner = exporter.getFinishedSpans().stream()
+                .filter(s -> s.name().equals("inner")).findFirst().orElseThrow();
+        assertNotEquals(parent.getSpanContext().getTraceId(), detached.spanContext().getTraceId());
+        assertNull(detached.parentSpanContext(), "SpanData uses null (not an invalid context) for a root span");
+        assertEquals(detached.spanContext().getSpanId(), inner.parentSpanContext().getSpanId(),
+                "the detached span must still be current during the call");
+    }
+
     // ----- helpers -----
 
     private InvocationContext invocationFor(String methodName, Object... args) throws Exception {
@@ -196,6 +219,9 @@ class WithSpanInterceptorTest {
 
         @WithSpan(value = "custom.span.name", kind = SpanKind.SERVER)
         public String annotatedNamed(String s) { return s; }
+
+        @WithSpan(inheritContext = false)
+        public String detached() { return "x"; }
 
         @WithSpan
         public String alwaysFail() { return "ne sera jamais atteint"; }
