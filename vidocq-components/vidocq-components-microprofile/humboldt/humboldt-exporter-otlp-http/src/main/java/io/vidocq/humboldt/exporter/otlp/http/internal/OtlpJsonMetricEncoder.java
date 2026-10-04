@@ -52,7 +52,8 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writ
  * observable) as {@code sum}, gauges (synchronous or observable) as {@code gauge} — both with long
  * ({@code asInt}) or double ({@code asDouble}) data points — and histograms with explicit buckets as
  * {@code histogram}. Mapping per the OTLP JSON encoding (int64 fields as strings, enums as integers). The SDK
- * produces no exponential histogram or summary.</p>
+ * produces no exponential histogram or summary. A data point that does not match its metric's kind is rejected
+ * with an {@link IllegalArgumentException}, never skipped.</p>
  */
 public final class OtlpJsonMetricEncoder {
 
@@ -149,7 +150,7 @@ public final class OtlpJsonMetricEncoder {
         sb.append(",\"histogram\":{\"dataPoints\":[");
         boolean first = true;
         for (PointData p : m.points()) {
-            if (!(p instanceof HistogramPointData hp)) continue;
+            if (!(p instanceof HistogramPointData hp)) throw unexpectedPoint(m, p, "HistogramPointData");
             if (!first) sb.append(',');
             first = false;
             writeHistogramDataPoint(sb, hp);
@@ -167,12 +168,14 @@ public final class OtlpJsonMetricEncoder {
     /**
      * Writes the {@code NumberDataPoint}s of a sum or a gauge: a long point as {@code "asInt"} (an int64, so a
      * JSON string), a double point as {@code "asDouble"} (a JSON number, or a string for NaN and the
-     * infinities). Points of another kind are not number points and are skipped.
+     * infinities). A point of another kind is not a number point: see {@link #unexpectedPoint}.
      */
     private static void writeNumberDataPoints(StringBuilder sb, MetricData m) {
         boolean first = true;
         for (PointData p : m.points()) {
-            if (!(p instanceof LongPointData) && !(p instanceof DoublePointData)) continue;
+            if (!(p instanceof LongPointData) && !(p instanceof DoublePointData)) {
+                throw unexpectedPoint(m, p, "LongPointData or DoublePointData");
+            }
             if (!first) sb.append(',');
             first = false;
             writeNumberDataPoint(sb, p);
@@ -225,6 +228,17 @@ public final class OtlpJsonMetricEncoder {
             writeAttributesArray(sb, p.attributes());
         }
         sb.append('}');
+    }
+
+    /**
+     * A data point whose kind does not match its metric — a histogram point in a sum, a number point in a
+     * histogram — has no OTLP encoding there. humboldt-sdk-metric never produces one; a {@link MetricData} built
+     * elsewhere may. It is rejected rather than dropped: the export of the batch fails with this message (which
+     * the {@code PeriodicMetricReader} logs) instead of losing data without a trace.
+     */
+    private static IllegalArgumentException unexpectedPoint(MetricData m, PointData p, String expected) {
+        return new IllegalArgumentException("metric '" + m.name() + "' (" + m.instrumentType() + ") carries a "
+                + p.getClass().getSimpleName() + " data point; its OTLP encoding takes " + expected + " only");
     }
 
     private static int temporalityToInt(AggregationTemporality t) {

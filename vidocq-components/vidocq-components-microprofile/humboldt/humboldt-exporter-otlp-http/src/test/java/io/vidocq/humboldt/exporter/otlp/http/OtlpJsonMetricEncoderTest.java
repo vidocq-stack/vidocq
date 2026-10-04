@@ -32,9 +32,12 @@ import io.vidocq.humboldt.sdk.metric.data.LongPointData;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import io.vidocq.humboldt.sdk.metric.data.PointData;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -114,6 +117,28 @@ class OtlpJsonMetricEncoderTest {
 
         assertTrue(json.contains("\"asDouble\":\"NaN\""), json);
         assertTrue(json.contains("\"asDouble\":\"-Infinity\",\"attributes\":[{\"key\":\"k\""), json);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = InstrumentType.class, names = {"COUNTER", "OBSERVABLE_UP_DOWN_COUNTER", "GAUGE"})
+    void rejects_a_histogram_point_in_a_sum_or_a_gauge_instead_of_dropping_it(InstrumentType type) {
+        HistogramPointData histogramPoint = new HistogramPointData(
+                1L, 2L, Attributes.empty(), 3.0, 1L, 3.0, 3.0, List.of(10.0), List.of(1L, 0L));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> encode(type, true, new LongPointData(1L, 2L, Attributes.empty(), 7L), histogramPoint));
+
+        assertTrue(e.getMessage().contains("'m'") && e.getMessage().contains(type.name())
+                && e.getMessage().contains("HistogramPointData"), e.getMessage());
+    }
+
+    @Test
+    void rejects_a_number_point_in_a_histogram_instead_of_dropping_it() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> encode(InstrumentType.HISTOGRAM, false, new DoublePointData(1L, 2L, Attributes.empty(), 2.5)));
+
+        assertTrue(e.getMessage().contains("'m'") && e.getMessage().contains("HISTOGRAM")
+                && e.getMessage().contains("DoublePointData"), e.getMessage());
     }
 
     private static String encode(InstrumentType type, boolean monotonic, PointData... points) {
