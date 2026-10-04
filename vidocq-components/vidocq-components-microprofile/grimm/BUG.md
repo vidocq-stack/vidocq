@@ -44,3 +44,62 @@ Track reproducible bugs with:
   - `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs its own API exposes, with jakarta.ws.rs-api moved to compile scope to match.
 
   The Cassini plugin then repackages grimm-cdi-vauban instead of splitting its package. Being a named module also exposed a Vauban defect, fixed in Vauban: with an `@Inject` constructor next to a no-arg one, the generated provider only knew the no-arg one. Verified on the reporter's shape, packaged distribution: `/openapi` 200, and the document lists the application's routes.
+
+### BUG-20261004-01 — `Schema.setAll` keeps standard properties and `getAll` returns only unknown ones
+
+- **id**: BUG-20261004-01
+- **date**: 2026-10-04
+- **symptom**: the MP OpenAPI 4.2 `Schema` Javadoc says `setAll` is "equivalent to clearing all
+  properties, including extensions, and then setting each property with `set`", and `getAll` is
+  "equivalent to calling `get` for each property set to a non-null value". In `SchemaImpl`,
+  `setAll` clears only the store of unknown properties (the extensions) and leaves every standard
+  property in place; `getAll` returns that store only, never the standard properties.
+- **minimal repro** (from code review, `SchemaImpl` ~430-445):
+  `Schema s = OASFactory.createSchema().title("t"); s.setAll(Map.of("x-a", "v"));` →
+  `s.getTitle()` is still `"t"` (expected `null`).
+  `OASFactory.createSchema().title("t").getAll()` → `{}` (expected `{title=t}`).
+- **hypothesis**: `getAll`/`setAll` predate the 4.2 extension semantics and were written against
+  the store of unknown properties only. A fix must clear (and list) the typed fields too, and
+  `OpenApiValueMapper` must then stop serializing `getAll()` with `putIfAbsent`, or the standard
+  properties would be written under their Java names. Not covered by the 4.2-RC5 TCK (367/367).
+- **status**: OPEN
+
+### BUG-20261004-02 — `@Schema` extensions: scalar-only value parsing, and no extensions on `externalDocs`
+
+- **id**: BUG-20261004-02
+- **date**: 2026-10-04
+- **symptom**: `SchemaGenerator` has its own extension-value parser (`parseExtensionValue` /
+  `parseScalar`, ~635-655) that only knows booleans and numbers, while the scanners use
+  `AnnotationModelMappings.parseExtensionValue`, which also parses `{…}` objects and `[…]` arrays.
+  So `@Schema(extensions = @Extension(name = "x-obj", value = "{\"a\": 1}", parseValue = true))`
+  yields the string `{"a": 1}` instead of an object. In the same method (~619-626), `@Schema`
+  `externalDocs` is mapped without its `extensions` (`@ExternalDocumentation.extensions()`, since
+  MP OpenAPI 3.1).
+- **minimal repro** (from code review): annotate a model class with the `@Schema` above and with
+  `externalDocs = @ExternalDocumentation(url = "https://example.com",
+  extensions = @Extension(name = "x-e", value = "v"))`; the generated schema has
+  `x-obj: '{"a": 1}'` (a string) and an `externalDocs` without `x-e`.
+- **hypothesis**: duplicated logic — `SchemaGenerator` should reuse
+  `AnnotationModelMappings.parseExtensionValue` and the shared external-documentation mapping
+  instead of its own copies. Not covered by the 4.2-RC5 TCK (367/367).
+- **status**: OPEN
+
+### BUG-20261004-03 — APT-generated model ignores Bean Validation on scalar parameters
+
+- **id**: BUG-20261004-03
+- **date**: 2026-10-04
+- **symptom**: `GrimmModelProcessor` (~216) builds a path/query/header parameter schema from the
+  type alone, while the runtime scanner applies Bean Validation to it (`JaxRsResourceScanner`
+  ~590 and ~594, `BeanValidationMapper.apply`). The processor does not reject a parameter carrying
+  `jakarta.validation` annotations (only MicroProfile OpenAPI annotations hand a class to the runtime
+  scan), so for the same resource the compile-time `$$GrimmModel` fragment and the scanned model
+  differ, and the served document (built from the fragment first) lacks the constraints.
+- **minimal repro** (from code review): a resource without MicroProfile OpenAPI annotations,
+  `@GET @Path("{id}") @Produces("text/plain") String get(@PathParam("id") @Min(1) long id)`;
+  the fragment gives the `id` schema `type: integer, format: int64` with no `minimum`, the runtime
+  scan gives `minimum: 1`.
+- **hypothesis**: the M1 subset of the processor predates Bean Validation support in the scanner.
+  Either apply the same mapping in the processor (from the annotation mirrors) or hand any class
+  with Bean Validation on a parameter to the runtime scan (`SkipGeneration`). The processor's
+  oracle tests, which compare against the runtime scan, do not cover this case.
+- **status**: OPEN
