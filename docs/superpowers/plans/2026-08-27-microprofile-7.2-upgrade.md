@@ -1179,6 +1179,14 @@ Run the official TCK from a clean build at the end of the lane: 367 (364 officia
 - [ ] BUG-20261004-01: `humboldt-otel-interop` provides its own `ComponentLoader` (a loader owned by a module that declares the needed `uses`) through an overridden `getComponentLoader()` of its config properties, so OpenTelemetry components that load services through `ComponentLoader` work on the module path; TDD with a module-path test if the build has one (or explain why it cannot be tested in-repo); close the BUG entry.
 - [ ] `SpanDataMapper` is duplicated in `humboldt-otel-interop` and the humboldt-tck bridge → the TCK bridge reuses the interop one if the dependency direction allows it (otherwise explain).
 
+### Task FC3: humboldt — defects and polish found by the FC1 review (runs before FC2)
+
+- [ ] BUG-20261004-02 (humboldt): the OTLP/JSON metric encoder drops double data points (`writeSum`/`writeGauge` only handle `LongPointData`) and has no `GAUGE` case for synchronous gauges (`SdkLong/DoubleGaugeBuilder`). Encode every metric data type humboldt produces (long/double sums and gauges, histograms) per the OTLP JSON mapping, TDD, close the entry.
+- [ ] Structured log bodies: do not serialize a structured body twice per record (`SdkLogRecordBuilder` ~185 / `LogRecordData` ~73); make `setBody("")` and `setBody(Value.of(""))` behave the same; TDD.
+- [ ] Verify against the OpenTelemetry 1.66 exporter jars (download `opentelemetry-exporter-otlp`/`-common` 1.66.0 from Maven Central into a scratch dir and `javap -c`) that the OTLP exporter providers load their senders through `ConfigProperties.getComponentLoader()`, so the interop `ComponentLoader` (FC1) really covers them; if not, adapt and test.
+- [ ] `humboldt-tck/pom.xml`: `opentelemetry-extension-trace-propagators` to test scope; remove the remaining TCK duplicates of interop logic (`HumboldtAutoConfigurationCustomizer`, the discovery logic re-implemented in `HumboldtDeployableContainer`) when the interop API allows it without widening its exports (otherwise explain).
+`./mvnw -ntp clean install`; official TCK at the end of FC2.
+
 ### Task FC2: humboldt — documentation, French text, script
 
 - [ ] TCK script: step 1 `install` also cleans.
