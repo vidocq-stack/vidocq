@@ -127,11 +127,11 @@
                 </executions>
             </plugin>
             <!--
-                Le pattern `src/main/module-info` separe maintient `target/classes`
-                sans `module-info.class` pendant `test-compile`, ce qui evite que
-                maven-compiler-plugin 4.x ne bascule en mode patch-module et n'exige
-                la resolution Java Modules de specs sans Automatic-Module-Name. On supprime
-                l'artefact `module-info.class` avant chaque `test-compile`.
+                The separate `src/main/module-info` pattern keeps `target/classes`
+                free of `module-info.class` during `test-compile`, so that
+                maven-compiler-plugin 4.x does not switch to patch-module mode and require
+                Java Modules resolution of specs without an Automatic-Module-Name. The
+                `module-info.class` artifact is deleted before each `test-compile`.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

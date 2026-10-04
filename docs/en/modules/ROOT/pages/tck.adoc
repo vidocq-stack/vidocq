@@ -72,7 +72,7 @@ Vidocq Runtime does not re-run Jakarta TCKs: they are validated by the underlyin
 * `champollion-tck` — JSON-P 2.1 + JSON-B 3.0
 * `vauban-tck-runner` — CDI 4.1 Lite (774/774)
 
-`cassini-tck`, `foy-tck` and `champollion-tck` live in the reactor of their own brick, behind the `tck` Maven profile: a plain `mvn install` neither downloads nor runs anything from the official TCK. `vauban-tck-runner` is a regular module of the Vauban reactor. The runners that remain **outside** their brick's reactor (standalone POM `modelVersion 4.0.0`, no `<parent>`) are `grimm-tck`, the Mansart TCKs (`mansart-data-tck`, `mansart-transactions-tck`) and `champollion-protobuf-tck`; this keeps the release cycle of those bricks decoupled from the release cycle of their official TCK.
+`cassini-tck`, `foy-tck` and `champollion-tck` live in the reactor of their own brick, behind the `tck` Maven profile: a plain `mvn install` neither downloads nor runs anything from the official TCK. `vauban-tck-runner` is a regular module of the Vauban reactor. The runners that remain **outside** their brick's reactor (standalone POM `modelVersion 4.0.0`, no `<parent>`) are `grimm-tck` and the Mansart TCKs (`mansart-data-tck`, `mansart-transactions-tck`), which keeps the release cycle of those bricks decoupled from the release cycle of their official TCK, and `champollion-protobuf-tck`, an executable conformance jar rather than an official Jakarta or MicroProfile TCK.
 
 Launch each runner from the root of its own brick, through the dedicated script (recommended) or through Maven:
 
