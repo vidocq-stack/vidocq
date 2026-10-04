@@ -19,14 +19,15 @@
  */
 package io.vidocq.vauban.moduleit.foreign;
 
-import io.vidocq.vauban.moduleit.Labeled;
+import io.vidocq.vauban.moduleit.ReceiverLabeled;
 
 /**
- * Binds {@link Labeled} to the package-private {@link HiddenArgument}, with no shadow: a bean in
- * another package inherits the default {@code label(HiddenArgument)} as its member, a signature its
- * rendered client proxy cannot write (BUG-20261004-02).
+ * Binds {@link ReceiverLabeled} to the package-private {@link HiddenArgument}, with no shadow: a
+ * bean in another package inherits the default {@code label(HiddenArgument)} as its member, a
+ * signature its rendered client proxy cannot write (BUG-20261004-02). The default names the class
+ * of the instance it runs on, which tells a forwarded call from one that is not.
  */
-public class HiddenDefaultBase implements Labeled<HiddenArgument> {
+public class HiddenDefaultBase implements ReceiverLabeled<HiddenArgument> {
 
     /** {@code bean.label(…)} as this package writes it, with an argument only it can make. */
     public static String callLabel(HiddenDefaultBase bean) {
