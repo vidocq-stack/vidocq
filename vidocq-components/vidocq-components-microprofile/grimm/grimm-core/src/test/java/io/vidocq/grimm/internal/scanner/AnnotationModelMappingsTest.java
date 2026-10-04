@@ -23,6 +23,7 @@ import io.vidocq.grimm.internal.config.ScanConfig;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import java.util.List;
+import java.util.Map;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
 import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -63,6 +64,20 @@ class AnnotationModelMappingsTest {
     void mapsExtensions() {
         var docs = AnnotationModelMappings.toModelExternalDocs(Full.class.getAnnotation(ExternalDocumentation.class));
         assertEquals("team-a", docs.getExtensions().get("x-owner"));
+    }
+
+    @Extension(name = "x-nested", value = "{\"a\": [1, 2], \"b\": {\"c\": [true, \"d\"]}, \"e\": [[1, 2], [3]]}",
+            parseValue = true)
+    static class NestedArrays { }
+
+    @Test
+    void parsedValueKeepsArraysNestedInObjectsAndArrays() {
+        // A comma inside [...] does not separate the members of the enclosing object or array.
+        assertEquals(Map.of(
+                        "a", List.of(1L, 2L),
+                        "b", Map.of("c", List.of(true, "d")),
+                        "e", List.of(List.of(1L, 2L), List.of(3L))),
+                AnnotationModelMappings.parseExtensionValue(NestedArrays.class.getAnnotation(Extension.class)));
     }
 
     @Path("/e")

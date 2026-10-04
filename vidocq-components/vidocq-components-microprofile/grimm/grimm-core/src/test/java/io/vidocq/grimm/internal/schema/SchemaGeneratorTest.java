@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -269,6 +270,40 @@ class SchemaGeneratorTest {
         assertEquals("v", code.getExternalDocs().getExtensions().get("x-e"));
     }
 
+    /**
+     * §3.10: {@code constValue} "is parsed as JSON if the schema type is anything other than
+     * STRING" — objects and arrays included, as for extension values.
+     */
+    @Test
+    void generate_parsesConstValueAsJsonUnlessTheTypeIsString() {
+        generator.generate(ConstValues.class);
+        var properties = registry.snapshot().get("ConstValues").getProperties();
+
+        assertAll(
+                () -> assertEquals(Map.of("a", 1L, "b", List.of(1L, 2L)), properties.get("object").getConstValue()),
+                () -> assertEquals(List.of("x", "y"), properties.get("array").getConstValue()),
+                () -> assertEquals(Boolean.TRUE, properties.get("flag").getConstValue()),
+                () -> assertEquals(5L, properties.get("number").getConstValue()),
+                () -> assertEquals("5", properties.get("text").getConstValue(), "a String field is a STRING schema"),
+                () -> assertEquals("true", properties.get("forcedString").getConstValue(), "type = STRING"));
+    }
+
+    /** §3.10: {@code @SchemaProperty} carries {@code constValue} and {@code externalDocs} as {@code @Schema} does. */
+    @Test
+    void generate_mapsSchemaPropertyConstValueAndExternalDocs() {
+        generator.generate(DeclaredProperties.class);
+        var properties = registry.snapshot().get("DeclaredProperties").getProperties();
+
+        assertEquals(Map.of("k", "v"), properties.get("obj").getConstValue());
+        assertEquals("7", properties.get("str").getConstValue());
+        var docs = properties.get("documented").getExternalDocs();
+        assertNotNull(docs);
+        assertEquals("https://example.com/doc", docs.getUrl());
+        assertEquals("doc", docs.getDescription());
+        assertEquals("v", docs.getExtensions().get("x-d"));
+        assertNull(properties.get("obj").getExternalDocs(), "no externalDocs without a url");
+    }
+
     @Test
     void generate_mapsBeanValidationConstraints() {
         generator.generate(BeanValidated.class);
@@ -410,6 +445,41 @@ class SchemaGeneratorTest {
         String field;
 
         String declared;
+    }
+
+    static final class ConstValues {
+        @Schema(constValue = "{\"a\": 1, \"b\": [1, 2]}")
+        Map<String, Object> object;
+
+        @Schema(constValue = "[\"x\", \"y\"]")
+        List<String> array;
+
+        @Schema(constValue = "true")
+        boolean flag;
+
+        @Schema(constValue = "5")
+        int number;
+
+        @Schema(constValue = "5")
+        String text;
+
+        @Schema(type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.STRING, constValue = "true")
+        Object forcedString;
+    }
+
+    @Schema(properties = {
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "obj",
+                    constValue = "{\"k\": \"v\"}"),
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "str",
+                    type = org.eclipse.microprofile.openapi.annotations.enums.SchemaType.STRING, constValue = "7"),
+            @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "documented",
+                    externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                            url = "https://example.com/doc", description = "doc",
+                            extensions = @Extension(name = "x-d", value = "v")))})
+    static final class DeclaredProperties {
+        Map<String, Object> obj;
+        Object str;
+        String documented;
     }
 
     static final class WithExternalDocsExtensions {

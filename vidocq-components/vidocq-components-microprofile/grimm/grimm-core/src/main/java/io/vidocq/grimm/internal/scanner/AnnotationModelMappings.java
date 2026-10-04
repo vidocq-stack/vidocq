@@ -98,10 +98,15 @@ public final class AnnotationModelMappings {
     }
 
     static Object parseExtensionValue(Extension extension) {
-        String rawValue = extension.value();
-        if (!extension.parseValue()) {
-            return rawValue;
-        }
+        return extension.parseValue() ? parseJsonValue(extension.value()) : extension.value();
+    }
+
+    /**
+     * Reads an annotation value written as JSON — an object, an array, a boolean or a number —
+     * as an extension value with {@code parseValue = true} and a {@code constValue} are read; any
+     * other value stays the string as written.
+     */
+    public static Object parseJsonValue(String rawValue) {
         if (rawValue.startsWith("{") && rawValue.endsWith("}")) {
             return parseInlineObject(rawValue);
         }
@@ -194,9 +199,9 @@ public final class AnnotationModelMappings {
             if (inSingle || inDouble) {
                 continue;
             }
-            if (ch == '{') {
+            if (ch == '{' || ch == '[') {
                 depth++;
-            } else if (ch == '}') {
+            } else if (ch == '}' || ch == ']') {
                 depth--;
             } else if (ch == ':' && depth == 0) {
                 return new String[] {entry.substring(0, i), entry.substring(i + 1)};
@@ -224,9 +229,10 @@ public final class AnnotationModelMappings {
             if (inSingle || inDouble) {
                 continue;
             }
-            if (ch == '{') {
+            // Objects and arrays nest: a separator inside either does not split the enclosing value.
+            if (ch == '{' || ch == '[') {
                 depth++;
-            } else if (ch == '}') {
+            } else if (ch == '}' || ch == ']') {
                 depth--;
             } else if (ch == separator && depth == 0) {
                 out.add(value.substring(start, i).trim());

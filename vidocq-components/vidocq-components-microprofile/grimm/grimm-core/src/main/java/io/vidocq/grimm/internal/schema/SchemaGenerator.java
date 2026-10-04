@@ -497,7 +497,7 @@ public final class SchemaGenerator {
         }
         if (!ann.contentEncoding().isEmpty()) base.setContentEncoding(ann.contentEncoding());
         if (!ann.contentMediaType().isEmpty()) base.setContentMediaType(ann.contentMediaType());
-        if (!ann.constValue().isEmpty()) base.setConstValue(parseScalar(ann.constValue()));
+        if (!ann.constValue().isEmpty()) base.setConstValue(constValueOf(base, ann.constValue()));
         if (ann.requiredProperties().length > 0) {
             List<String> mergedRequired = base.getRequired() == null
                     ? new ArrayList<>()
@@ -538,6 +538,12 @@ public final class SchemaGenerator {
                 }
                 if (property.type() != SchemaType.DEFAULT) {
                     propertySchema.setType(new ArrayList<>(List.of(mapAnnotationType(property.type()))));
+                }
+                if (!property.constValue().isEmpty()) {
+                    propertySchema.setConstValue(constValueOf(propertySchema, property.constValue()));
+                }
+                if (!property.externalDocs().url().isEmpty()) {
+                    propertySchema.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(property.externalDocs()));
                 }
                 if (!property.title().isEmpty()) {
                     propertySchema.setTitle(property.title());
@@ -620,18 +626,15 @@ public final class SchemaGenerator {
         return base;
     }
 
-    private static Object parseScalar(String rawValue) {
-        if ("true".equalsIgnoreCase(rawValue) || "false".equalsIgnoreCase(rawValue)) {
-            return Boolean.parseBoolean(rawValue);
-        }
-        try {
-            if (rawValue.contains(".")) {
-                return Double.parseDouble(rawValue);
-            }
-            return Long.parseLong(rawValue);
-        } catch (NumberFormatException ignored) {
-            return rawValue;
-        }
+    /**
+     * §3.10: {@code constValue} "is parsed as JSON if the schema type is anything other than
+     * STRING" — with the parser of extension values, so objects and arrays too.
+     */
+    private static Object constValueOf(Schema schema, String rawValue) {
+        List<Schema.SchemaType> types = schema.getType();
+        return types != null && types.contains(Schema.SchemaType.STRING)
+                ? rawValue
+                : AnnotationModelMappings.parseJsonValue(rawValue);
     }
 
     private static Schema.SchemaType mapAnnotationType(SchemaType t) {
