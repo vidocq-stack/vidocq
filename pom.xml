@@ -59,7 +59,7 @@
             `mvn -pl <module> -Ptck test` for each. These certify the ASSEMBLED runtime.
 
             Five of the ten runners: every MicroProfile TCK they need is on Maven Central, so a
-            clean runner can fetch them. About 45 s together, for 1085 conformance tests.
+            clean runner can fetch them. About 45 s together, for 1105 conformance tests.
 
             The five left out, each for a stated reason rather than by omission:
 
@@ -86,6 +86,10 @@
             from outside and will not say anything new about one pull request.
         -->
         <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
+        <!-- OpenTelemetry versions, defined once: the Humboldt telemetry extension, its integration test and its TCK runner. -->
+        <opentelemetry.version>1.66.0</opentelemetry.version>
+        <opentelemetry.instrumentation.version>2.31.1</opentelemetry.instrumentation.version>
+        <opentelemetry.semconv.version>1.44.0</opentelemetry.semconv.version>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>

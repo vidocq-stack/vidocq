@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/JDK-25-orange" alt="JDK">
-  <img src="https://img.shields.io/badge/Maven-4.0--rc--5-purple" alt="Maven">
+  <img src="https://img.shields.io/badge/Maven-3.9.16-purple" alt="Maven">
   <img src="https://img.shields.io/badge/CDI-4.1_Lite-blue" alt="CDI">
   <img src="https://img.shields.io/badge/JAX--RS-4.0-green" alt="JAX-RS">
   <img src="https://img.shields.io/badge/license-EPL--2.0%20OR%20EUPL--1.2%20OR%20GPL--2.0--or--later-blue.svg" alt="License">
@@ -129,7 +129,7 @@ vidocq/
 │   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport
 │   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
 │   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / pool
-│   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health
+│   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health, Fault Tolerance
 │   └── vidocq-runtime-extensions-module-repackaged/  Third-party Java Modules repackages (H2)
 └── vidocq-runtime-examples/             Examples
     └── vidocq-runtime-cassini-rest-example      Sample REST application
@@ -235,7 +235,7 @@ Metrics 5.1 is a standalone MicroProfile spec, not part of the 7.2 platform; it 
 | Spec | Extension | Status |
 |------|-----------|--------|
 | JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
-| Jakarta Servlet 6.1 | `vidocq-servlet-chappe-extension` | Done (~90% TCK) |
+| Jakarta Servlet 6.1 | Foy (`io.vidocq.foy`, separate repository) | Brick only: no extension in this repository (TCK 921/1714 raw, `api.*` 95.6%) |
 | MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` | Done |
 | MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` | Done |
 | MicroProfile Metrics 5.1 (standalone, not in the 7.2 platform) | `vidocq-runtime-dirac-metrics-extension` | Done |
@@ -247,13 +247,15 @@ Metrics 5.1 is a standalone MicroProfile spec, not part of the 7.2 platform; it 
 
 ## Jakarta Servlet 6.1 TCK
 
-The `vidocq-servlet-chappe-extension` is validated against the **official
-Jakarta Servlet 6.1 TCK** (Eclipse Foundation), with a current pass rate
-of ~90% on the `api.*` packages.
+The Servlet 6.1 implementation lives in **Foy**, a standalone project (`io.vidocq.foy`),
+not in this repository. Foy is validated against the **official Jakarta Servlet 6.1
+TCK** (Eclipse Foundation): the latest run recorded in Foy's `TCK.md` (2026-06-12)
+passes 921/1714 tests raw, with the core `api.*` family at 95.6%.
 
-> ⚠️ The TCK runner module is intentionally **outside the main Maven reactor**:
-> ShrinkWrap Maven Resolver (transitive dependency of the TCK) cannot parse
-> `Model 4.1.0` POMs. Launch it via the dedicated script.
+> The TCK runner (`foy-tck`) is in the Foy reactor, behind the `tck` Maven profile:
+> a plain `mvn install` neither downloads nor runs anything from the TCK. Launch it
+> from the root of the Foy repository, via the dedicated script or
+> `./mvnw -Ptck,tck-official -pl foy-tck test`.
 
 ### Prerequisites
 
@@ -274,7 +276,7 @@ mvn install:install-file \
 
 ### Launch
 
-From the project root:
+From the root of the Foy repository:
 
 ```bash
 ./run-official-tck-servlet6.1.sh                     # smoke test
@@ -282,10 +284,10 @@ From the project root:
 ./run-official-tck-servlet6.1.sh -Dtest=ServletTests # a targeted class
 ```
 
-The script installs Vidocq modules into the local M2, changes to the
-TCK module (ShrinkWrap-compatible cwd), then runs the `tck-official` profile.
+The script installs the Foy modules into the local M2, then runs the `foy-tck`
+module with the `tck-official` profile.
 
-Details in [`vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md`](vidocq-runtime-extensions/vidocq-runtime-servlet-chappe-tck-runner/README.md).
+Details in the `README.md` and `TCK.md` of the Foy repository.
 
 ## License
 

@@ -3,14 +3,16 @@
 This document describes how Vidocq claims compatibility with **Jakarta EE Core
 Profile 11**, the Eclipse Foundation process to follow, the exact TCK binaries
 involved, and the current conformance status. It is the reference for filing the
-compatibility request once Vidocq 0.3.0 is released.
+compatibility request, which was filed for Vidocq 0.3.0.
 
-> Status: **pre-filing.** All seven constituent specification TCKs pass; the
-> profile-level composite TCK is at 10/13 on JDK 25 — every test reachable on
-> JDK 25 passes, the remaining 3 being the documented JDK 25 TCK-helper
-> incompatibility, for which the challenge is now **filed and accepted**
-> (see [Status](#status)). The compatibility request itself is not yet filed —
-> it certifies a *released* product, and 0.3.0 is not cut.
+> Status: **request filed and accepted.** Vidocq 0.3.0 was released on 2026-08-31
+> and the compatibility request
+> ([`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351))
+> was filed the same day; the issue carries the `accepted` label and was closed on
+> 2026-09-09. All seven constituent specification TCKs pass; the profile-level
+> composite TCK is at 10/13 on JDK 25 — every test reachable on JDK 25 passes, the
+> remaining 3 being the documented JDK 25 TCK-helper incompatibility, for which the
+> challenge is **filed and accepted** (see [Status](#status)).
 
 MicroProfile 7.2 (a platform release still under ballot as of 2026-10-04) explicitly allows the Jakarta EE 11 Core Profile as its base, which is the base Vidocq uses.
 
@@ -43,7 +45,7 @@ Open Liberty requests, `jakartaee/platform#978` and `#975`):
 ## 2. Prerequisites
 
 - **Released product.** Certification claims a released, publicly downloadable
-  version. Target: **Vidocq 0.3.0**.
+  version. Claimed version: **Vidocq 0.3.0** (released 2026-08-31).
 - **JDK.** WildFly certified Core Profile 11 on JDK 17 and 21. Vidocq is
   JDK-25-native. See [The JDK 25 signature-walker issue](#the-jdk-25-issue) — it
   affects three composite tests and is a TCK-helper incompatibility, not a Vidocq
@@ -235,8 +237,8 @@ Compatible* logo and be listed as a compatible product.
   `cdi-api-jdk17.sig`) and RESTful WS (`JAXRSSigTestIT` unskipped, EFTL
   resources). No open items remain in this requirement (§5).
 - Certification issue: **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351)
-  (2026-08-31, labeled `certification`). Awaiting approval by lazy consensus
-  (14 days) or majority vote of the specification project (§8).
+  (2026-08-31, labeled `certification`). Labeled `accepted` and closed on
+  2026-09-09 (§8).
 
 ## 9. Public results page
 

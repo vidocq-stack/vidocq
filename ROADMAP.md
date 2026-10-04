@@ -48,7 +48,7 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 | Signature tests (Annotations, JSON-P, JSON-B, REST, CDI) | ✅ all 5 satisfied — Annotations/JSON-P/JSON-B/CDI verified green by direct run (CDI via the new `cdi-sigtest` profile in `vauban-tck-runner`); RESTful WS excluded via a pre-existing documented challenge (`CERTIFICATION.md` §5) |
 | EFTL-signed binaries re-run | ✅ **certifying run done (2026-08-31)** against the released **Vidocq 0.3.0** Maven Central artifacts: all 7 EFTL zips SHA-256 **and GPG** verified, zero unexpected failures, results byte-for-byte identical to the 2026-08-29 dress rehearsal. Details: `CERTIFICATION.md` §7/Status |
 | Public results summary page | ✅ live at [vidocq.dev/certification](https://vidocq.dev/certification/) (`Vidocq/pages` PR #11, merged 2026-08-31) |
-| Certification issue on `jakartaee/platform` | ✅ **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351) (2026-08-31); awaiting lazy-consensus approval (14 days) or majority vote |
+| Certification issue on `jakartaee/platform` | ✅ **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351) (2026-08-31); labeled `accepted` and closed on 2026-09-09 |
 
 ## Jakarta EE Web Profile 11 (planning)
 
@@ -97,11 +97,12 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 ### Long term (quality)
 
 - [ ] MicroProfile 7.2 TCK per implemented spec. See `TCK.md` for tracking
-      (each extension has its out-of-reactor TCK runner, model `champollion-tck`).
+      (each extension has its TCK runner: the `vidocq-runtime-tck-*` runners are in this
+      reactor behind the `tck` profile; the per-brick runners are in their own repositories).
 - [x] Jakarta EE Core Profile 11 certification — see the dedicated section above
       and `CERTIFICATION.md`. All deliverables complete: certifying EFTL
       re-run, public results page, and `jakartaee/platform#1351` filed
-      (2026-08-31). Awaiting specification project approval.
+      (2026-08-31), accepted and closed on 2026-09-09.
 - [ ] End-to-end JMH benchmarks (cold start, cross-extension throughput, memory
       footprint vs Quarkus/Helidon). No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any

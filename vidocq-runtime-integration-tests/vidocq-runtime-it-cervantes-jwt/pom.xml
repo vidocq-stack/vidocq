@@ -18,9 +18,9 @@
         200 with the expected group + visible claims.</description>
 
     <!--
-        Pas de module-info.java (unnamed module) pour eviter les contraintes
-        Java Modules dans les tests. Les resources @Path/beans CDI sont accessibles
-        par cassini et vauban sans opens explicites.
+        No module-info.java (unnamed module), to avoid the Java Modules constraints
+        in the tests. The @Path resources and CDI beans are reachable by Cassini
+        and Vauban without explicit opens.
     -->
 
     <dependencies>
@@ -42,8 +42,8 @@
             <artifactId>vauban-core</artifactId>
         </dependency>
 
-        <!-- Cervantes directs : API SPI + classes @Provider / producteurs a inclure
-             dans le Deployment Arquillian (scoping isole, cf. it-humboldt-cassini). -->
+        <!-- Direct Cervantes dependencies: SPI API + @Provider classes / producers to include
+             in the Arquillian Deployment (isolated scoping, see it-humboldt-cassini). -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-api</artifactId>

@@ -14,11 +14,6 @@
     <name>Vidocq :: Core Extensions :: Telemetry (Humboldt)</name>
     <description>Vidocq Runtime extension that wires Humboldt (MicroProfile Telemetry 2.2 — tracing, metrics, logs) into the Vidocq lifecycle. Auto-configuration via OTEL_* env vars, discovery of the OTel autoconfigure SPIs via humboldt-otel-interop, GlobalOpenTelemetry installation, clean shutdown.</description>
 
-    <properties>
-        <!-- Aligned with the OTel version pinned by humboldt-parent (opentelemetry-bom). -->
-        <opentelemetry.version>1.66.0</opentelemetry.version>
-    </properties>
-
     <dependencies>
         <!-- Humboldt — standalone MicroProfile Telemetry 2.2 implementation -->
         <dependency>
