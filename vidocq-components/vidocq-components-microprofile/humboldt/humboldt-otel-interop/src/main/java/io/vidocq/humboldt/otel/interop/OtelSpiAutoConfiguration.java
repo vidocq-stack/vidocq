@@ -120,7 +120,7 @@ public final class OtelSpiAutoConfiguration {
         String tracesExporterName = props.get("otel.traces.exporter");
         if (tracesExporterName != null && spanExporterProviders.containsKey(tracesExporterName)) {
             ConfigurableSpanExporterProvider p = spanExporterProviders.get(tracesExporterName);
-            var otelExporter = p.createExporter(new MapConfigProperties(props));
+            var otelExporter = p.createExporter(new MapConfigProperties(props, loader));
             extraSpanExporters.add(new OtelSpanExporterBridge(otelExporter));
             LOG.log(Level.INFO, "  -> OTel SpanExporter '{0}' bridged to Humboldt", tracesExporterName);
         }
@@ -210,7 +210,7 @@ public final class OtelSpiAutoConfiguration {
      */
     private static String loadResourceProviderAttrs(ClassLoader loader, Map<String, String> props) {
         StringBuilder attrs = new StringBuilder();
-        MapConfigProperties configProps = new MapConfigProperties(props);
+        MapConfigProperties configProps = new MapConfigProperties(props, loader);
         forEachProvider(ResourceProvider.class, loader, provider -> {
             var otelResource = provider.createResource(configProps);
             if (otelResource == null) return;
@@ -238,7 +238,7 @@ public final class OtelSpiAutoConfiguration {
         String configuredName = props.get("otel.traces.sampler");
         if (configuredName == null) return null;
 
-        MapConfigProperties configProps = new MapConfigProperties(props);
+        MapConfigProperties configProps = new MapConfigProperties(props, loader);
         List<Sampler> match = new ArrayList<>(1);
         forEachProvider(ConfigurableSamplerProvider.class, loader, provider -> {
             if (!match.isEmpty() || !configuredName.equals(provider.getName())) return;
@@ -278,7 +278,7 @@ public final class OtelSpiAutoConfiguration {
 
         // Discover custom propagator providers (such as the TCK's TestPropagator).
         // They may be absent if only builtins are used — the switch below handles that.
-        MapConfigProperties configProps = new MapConfigProperties(props);
+        MapConfigProperties configProps = new MapConfigProperties(props, loader);
         Map<String, TextMapPropagator> byName = new LinkedHashMap<>();
         forEachProvider(ConfigurablePropagatorProvider.class, loader, provider -> {
             var propagator = provider.getPropagator(configProps);
@@ -322,7 +322,7 @@ public final class OtelSpiAutoConfiguration {
         if (configured == null) return List.of();
 
         List<MetricExporter> out = new ArrayList<>();
-        MapConfigProperties cfg = new MapConfigProperties(props);
+        MapConfigProperties cfg = new MapConfigProperties(props, loader);
         forEachProvider(ConfigurableMetricExporterProvider.class, loader, provider -> {
             if (!configured.equals(provider.getName())) return;
             var otelExporter = provider.createExporter(cfg);
@@ -341,7 +341,7 @@ public final class OtelSpiAutoConfiguration {
      * (Resource/Propagator/Properties/Sampler/SpanExporter/TracerProvider).
      */
     private static CollectingAutoConfigurationCustomizer scanAutoConfigCustomizers(ClassLoader loader) {
-        CollectingAutoConfigurationCustomizer customizer = new CollectingAutoConfigurationCustomizer();
+        CollectingAutoConfigurationCustomizer customizer = new CollectingAutoConfigurationCustomizer(loader);
         forEachProvider(AutoConfigurationCustomizerProvider.class, loader, provider -> {
             provider.customize(customizer);
             LOG.log(Level.INFO, "  -> AutoConfigurationCustomizerProvider discovered: {0}",

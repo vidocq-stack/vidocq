@@ -62,6 +62,22 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
     private final List<BiFunction<? super SpanExporter, ConfigProperties, ? extends SpanExporter>> spanExporterCustomizers = new ArrayList<>();
     private final List<BiFunction<SdkTracerProviderBuilder, ConfigProperties, SdkTracerProviderBuilder>> tracerProviderCustomizers = new ArrayList<>();
 
+    /** Class loader searched by the component loader of the {@link ConfigProperties} given to the callbacks. */
+    private final ClassLoader classLoader;
+
+    /**
+     * Customizer whose callbacks receive properties with the default component loader of
+     * {@link MapConfigProperties#MapConfigProperties(Map)}.
+     */
+    public CollectingAutoConfigurationCustomizer() {
+        this(ConfigProperties.class.getClassLoader());
+    }
+
+    /** Customizer whose callbacks receive properties whose component loader searches {@code classLoader}. */
+    CollectingAutoConfigurationCustomizer(ClassLoader classLoader) {
+        this.classLoader = classLoader;
+    }
+
     @Override
     public AutoConfigurationCustomizer addPropagatorCustomizer(
             BiFunction<? super TextMapPropagator, ConfigProperties, ? extends TextMapPropagator> customizer) {
@@ -119,7 +135,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
      */
     Map<String, String> applyPropertyCustomizers(Map<String, String> baseEnvMap) {
         Map<String, String> merged = new LinkedHashMap<>(baseEnvMap);
-        ConfigProperties cfg = new MapConfigProperties(mpFormatFromEnv(merged));
+        ConfigProperties cfg = new MapConfigProperties(mpFormatFromEnv(merged), classLoader);
         for (Supplier<Map<String, String>> s : propertiesSuppliers) {
             Map<String, String> added = s.get();
             if (added != null) added.forEach((k, v) -> merged.put(envFormat(k), v));
@@ -138,7 +154,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
      */
     String applyResourceCustomizersAsAttrs(Map<String, String> props) {
         if (resourceCustomizers.isEmpty()) return "";
-        ConfigProperties cfg = new MapConfigProperties(props);
+        ConfigProperties cfg = new MapConfigProperties(props, classLoader);
         Resource resource = Resource.empty();
         for (var c : resourceCustomizers) {
             resource = c.apply(resource, cfg);
@@ -160,7 +176,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
      */
     TextMapPropagator applyPropagatorCustomizers(TextMapPropagator base, Map<String, String> props) {
         if (propagatorCustomizers.isEmpty()) return base;
-        ConfigProperties cfg = new MapConfigProperties(props);
+        ConfigProperties cfg = new MapConfigProperties(props, classLoader);
         TextMapPropagator current = base;
         for (var c : propagatorCustomizers) {
             current = c.apply(current, cfg);
@@ -176,7 +192,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
      */
     void invokeSamplerCustomizers(Map<String, String> props) {
         if (samplerCustomizers.isEmpty()) return;
-        ConfigProperties cfg = new MapConfigProperties(props);
+        ConfigProperties cfg = new MapConfigProperties(props, classLoader);
         Sampler placeholder = Sampler.alwaysOn();
         for (var c : samplerCustomizers) {
             try { placeholder = c.apply(placeholder, cfg); }
@@ -187,7 +203,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
     /** Same for {@code spanExporterCustomizers}. */
     void invokeSpanExporterCustomizers(Map<String, String> props) {
         if (spanExporterCustomizers.isEmpty()) return;
-        ConfigProperties cfg = new MapConfigProperties(props);
+        ConfigProperties cfg = new MapConfigProperties(props, classLoader);
         SpanExporter placeholder = new NoOpSpanExporter();
         for (var c : spanExporterCustomizers) {
             try { placeholder = c.apply(placeholder, cfg); }
@@ -198,7 +214,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
     /** Same for {@code tracerProviderCustomizers} — invokes them on a dummy OTel builder. */
     void invokeTracerProviderCustomizers(Map<String, String> props) {
         if (tracerProviderCustomizers.isEmpty()) return;
-        ConfigProperties cfg = new MapConfigProperties(props);
+        ConfigProperties cfg = new MapConfigProperties(props, classLoader);
         SdkTracerProviderBuilder builder = io.opentelemetry.sdk.trace.SdkTracerProvider.builder();
         for (var c : tracerProviderCustomizers) {
             try { builder = c.apply(builder, cfg); }

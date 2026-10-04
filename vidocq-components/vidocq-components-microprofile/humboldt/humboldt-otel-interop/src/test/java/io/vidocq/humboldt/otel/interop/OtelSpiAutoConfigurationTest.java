@@ -19,6 +19,9 @@
  */
 package io.vidocq.humboldt.otel.interop;
 
+import io.opentelemetry.common.ComponentLoader;
+import io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizer;
+import io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizerProvider;
 import io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties;
 import io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider;
 import io.opentelemetry.sdk.common.CompletableResultCode;
@@ -32,10 +35,13 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -104,6 +110,77 @@ class OtelSpiAutoConfigurationTest {
             assertNull(result.propagatorsOverride());
             assertTrue(result.extraMetricExporters().isEmpty());
         }
+    }
+
+    /** A service registered only in the discovery ClassLoader of {@link #providersLoadTheirServicesFromTheDiscoveryClassLoader}. */
+    public interface Marker {
+    }
+
+    /** The only {@link Marker} implementation, registered through that ClassLoader's META-INF/services. */
+    public static final class MarkerImpl implements Marker {
+    }
+
+    /** Captures the configuration it receives, to inspect its component loader. */
+    public static final class ConfigCapturingSpanExporterProvider implements ConfigurableSpanExporterProvider {
+        static final AtomicReference<ConfigProperties> CAPTURED = new AtomicReference<>();
+
+        @Override
+        public SpanExporter createExporter(ConfigProperties config) {
+            CAPTURED.set(config);
+            return new NoOpOtelSpanExporter();
+        }
+
+        @Override
+        public String getName() {
+            return "capturing";
+        }
+    }
+
+    /** Captures the configuration its resource customizer receives. */
+    public static final class ConfigCapturingCustomizerProvider implements AutoConfigurationCustomizerProvider {
+        static final AtomicReference<ConfigProperties> CAPTURED = new AtomicReference<>();
+
+        @Override
+        public void customize(AutoConfigurationCustomizer customizer) {
+            customizer.addResourceCustomizer((resource, config) -> {
+                CAPTURED.set(config);
+                return resource;
+            });
+        }
+    }
+
+    @Test
+    void providersLoadTheirServicesFromTheDiscoveryClassLoader(@TempDir Path dir) throws Exception {
+        // Like the OpenTelemetry autoconfigure, the component loader handed to the providers and customizers
+        // searches the ClassLoader they were discovered on.
+        Path services = dir.resolve("META-INF").resolve("services");
+        Files.createDirectories(services);
+        Files.writeString(
+                services.resolve("io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider"),
+                ConfigCapturingSpanExporterProvider.class.getName() + "\n");
+        Files.writeString(
+                services.resolve("io.opentelemetry.sdk.autoconfigure.spi.AutoConfigurationCustomizerProvider"),
+                ConfigCapturingCustomizerProvider.class.getName() + "\n");
+        Files.writeString(services.resolve(Marker.class.getName()), MarkerImpl.class.getName() + "\n");
+
+        try (URLClassLoader loader = new URLClassLoader(
+                new URL[] {dir.toUri().toURL()}, getClass().getClassLoader())) {
+            OtelSpiAutoConfiguration.discover(Map.of("OTEL_TRACES_EXPORTER", "capturing"), loader);
+
+            for (ConfigProperties config : List.of(
+                    capturedBy("span exporter provider", ConfigCapturingSpanExporterProvider.CAPTURED),
+                    capturedBy("resource customizer", ConfigCapturingCustomizerProvider.CAPTURED))) {
+                List<Marker> markers = ComponentLoader.loadList(config.getComponentLoader(), Marker.class);
+                assertEquals(1, markers.size(), "services of the discovery ClassLoader: " + markers);
+                assertTrue(markers.getFirst() instanceof MarkerImpl);
+            }
+        }
+    }
+
+    private static ConfigProperties capturedBy(String who, AtomicReference<ConfigProperties> captured) {
+        ConfigProperties config = captured.get();
+        assertNotNull(config, "the " + who + " must have been called");
+        return config;
     }
 
     @Test

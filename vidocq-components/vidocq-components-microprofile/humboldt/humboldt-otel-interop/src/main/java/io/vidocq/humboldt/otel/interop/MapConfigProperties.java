@@ -19,6 +19,7 @@
  */
 package io.vidocq.humboldt.otel.interop;
 
+import io.opentelemetry.common.ComponentLoader;
 import io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties;
 
 import java.time.Duration;
@@ -36,13 +37,38 @@ import java.util.Map;
  * <p>Sufficient for typical SPI providers (for example the MP Telemetry TCK
  * {@code InMemorySpanExporterProvider}): most only use {@code getString()} or
  * ignore the config entirely.</p>
+ *
+ * <p>{@link #getComponentLoader()} — through which OpenTelemetry components (exporters among them) load
+ * their own services — returns a loader owned by this module, which works on the module path where the
+ * OpenTelemetry default does not (see {@link InteropComponentLoader}).</p>
  */
 public final class MapConfigProperties implements ConfigProperties {
 
     private final Map<String, String> props;
+    private final ComponentLoader componentLoader;
 
+    /**
+     * Properties whose component loader searches the class loader of the OpenTelemetry autoconfigure SPI,
+     * as the {@link ConfigProperties#getComponentLoader()} default does.
+     */
     public MapConfigProperties(Map<String, String> props) {
+        this(props, ConfigProperties.class.getClassLoader());
+    }
+
+    /**
+     * Properties whose component loader searches {@code classLoader} for services.
+     *
+     * @param props       the {@code lower.dot.case} properties
+     * @param classLoader the class loader whose services {@link #getComponentLoader()} loads
+     */
+    public MapConfigProperties(Map<String, String> props, ClassLoader classLoader) {
         this.props = props;
+        this.componentLoader = new InteropComponentLoader(classLoader);
+    }
+
+    @Override
+    public ComponentLoader getComponentLoader() {
+        return componentLoader;
     }
 
     @Override
