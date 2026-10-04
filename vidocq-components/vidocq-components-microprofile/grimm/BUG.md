@@ -114,3 +114,78 @@ Track reproducible bugs with:
   parameter carries a `jakarta.validation.constraints.*` or `javax.validation.constraints.*`
   annotation (matched by name), so the runtime scan documents it, as for the other constructs
   outside the M1 subset. Covered by `GrimmModelProcessorOracleTest`; official TCK still 367/367.
+
+### BUG-20261004-04 — Merged schemas lose most properties of the higher-priority source
+
+- **id**: BUG-20261004-04
+- **date**: 2026-10-04
+- **symptom**: when two sources give a schema at the same position (a media type schema, a
+  property of it, its `items`), `ModelMerger.mergeSchema` copies only `format`, `type`, `title`,
+  `default`, `enum`, `required`, `items`, `properties`, `description`, `additionalProperties`,
+  `$schema`, `$ref` and the extensions of the higher-priority one. Its `minimum`, `maxLength`,
+  `pattern`, `readOnly`, `examples`, `not`, `contentMediaType` and every other property are lost.
+- **minimal repro**: a static file whose response schema is `{type: string}` and an annotation
+  model whose same response schema has `minimum: 1, maxLength: 5`; the merged schema has neither.
+- **hypothesis (confirmed)**: the merge was a hand-written list of properties, older than the
+  4.0 model. A same-named `components.schemas` entry is not concerned: the higher source replaces
+  it whole.
+- **status**: FIXED — 2026-10-04, commit 77ee08e. `mergeSchema` walks `Schema#getAll()`, so it
+  follows the property table of the model (`SchemaImpl`); `items` and `properties` still merge
+  recursively, and an empty list or map does not override the lower source. Covered by
+  `ModelMergerTest`; official TCK still 367/367.
+
+### BUG-20261004-05 — Static file: refs of parameters, request bodies, responses and callbacks lost; parameter fields and the `null` type dropped
+
+- **id**: BUG-20261004-05
+- **date**: 2026-10-04
+- **symptom**: `OpenApiModelMapper` (static file and `mp.openapi.schema.*` reader) drops the `$ref`
+  of a Parameter, a RequestBody and an APIResponse, and reads the `$ref` of a Callback as a callback
+  expression. A parameter loses `style`, `explode`, `allowReserved`, `deprecated`,
+  `allowEmptyValue`, `example`, `examples` and `content`. A schema `type: "null"` (or the `null` of
+  `type: [string, "null"]`) is dropped, and so is a type name that is not a JSON Schema type.
+- **minimal repro**: `paths./p.post: {parameters: [{$ref: Param.yaml}], requestBody: {$ref:
+  Body.yaml}, responses: {200: {$ref: Response.yaml}}, callbacks: {cb: {$ref: Callback.yaml}}}`:
+  the served document has none of the four refs.
+- **hypothesis (confirmed)**: the mapper had no case for these keys (only `x-` keys fall through
+  to the extensions), and `toSchemaType` knew six of the seven JSON Schema types.
+- **status**: FIXED — 2026-10-04, commit 8d4a6fc. The four refs are kept as written, like the
+  other static refs; every Parameter field of the 4.2 model is mapped; `null` is
+  `SchemaType.NULL` and an unknown type is kept as written. Covered by `OpenApiModelMapperTest`;
+  official TCK still 367/367.
+
+### BUG-20261004-06 — `constValue` is not read as JSON; `@SchemaProperty` ignores `constValue` and `externalDocs`
+
+- **id**: BUG-20261004-06
+- **date**: 2026-10-04
+- **symptom**: the 4.2 Javadoc of `@Schema.constValue` / `@SchemaProperty.constValue` says the
+  value "is parsed as JSON if the schema type is anything other than STRING". `SchemaGenerator`
+  reads `@Schema(constValue)` with a scalar-only parser: an object or an array stays a string, and
+  a STRING schema has `"5"` turned into the number 5. `@SchemaProperty` maps neither `constValue`
+  nor `externalDocs`. The parser of extension values (`parseValue = true`) also split an object at
+  a comma nested in `[...]`: `{"a": [1, 2]}` gave `{a=[1, ...}` broken in two.
+- **minimal repro**: `@Schema(constValue = "{\"a\": 1}") Map<String, Object> m;` gives the string
+  `{"a": 1}`; `@Schema(constValue = "5") String s;` gives `5L`.
+- **status**: FIXED — 2026-10-04, commit 7f4eacc. `constValue` goes through the parser of
+  extension values (`AnnotationModelMappings.parseJsonValue`) unless the schema type is STRING;
+  that parser tracks `[...]` nesting; `@SchemaProperty` maps `constValue` and `externalDocs`.
+  Covered by `SchemaGeneratorTest` and `AnnotationModelMappingsTest`; official TCK still 367/367.
+
+### BUG-20261004-07 — `@SchemaProperty` maps a few attributes only; `@Schema.examples` is not mapped
+
+- **id**: BUG-20261004-07
+- **date**: 2026-10-04
+- **symptom**: in `SchemaGenerator.applyAnnotationOverrides`, a `@SchemaProperty` maps only
+  `implementation`, `ref`, `type`, `title`, `description`, `format`, `example`, `comment`,
+  `extensions`, `hidden` (and, since BUG-20261004-06, `constValue` and `externalDocs`). Its
+  `minimum`/`maximum` and their exclusive forms, `multipleOf`, `minLength`/`maxLength`, `pattern`,
+  `minItems`/`maxItems`, `uniqueItems`, `minProperties`/`maxProperties`, `requiredProperties`,
+  `nullable`, `readOnly`, `writeOnly`, `deprecated`, `enumeration`, `defaultValue`, `examples`,
+  `not`/`oneOf`/`anyOf`/`allOf`, `additionalProperties`, the discriminator and the 2020-12
+  keywords (`if`/`then`/`else`, `dependentSchemas`, `contains`, `prefixItems`, …) are ignored.
+  `@Schema.examples()` (4.0, which deprecates `example`) is not mapped either.
+- **minimal repro** (from code review): `@Schema(properties = @SchemaProperty(name = "age",
+  minimum = "0"))` on a class with an `int age` field: the `age` schema has no `minimum`.
+- **hypothesis**: the `@SchemaProperty` mapping was written as a subset of the `@Schema` one; the
+  two annotation types share no interface, so the `@Schema` code cannot be reused as it stands.
+- **status**: OPEN — found while working on BUG-20261004-06, outside its scope. Not covered by
+  the official TCK (367/367).
