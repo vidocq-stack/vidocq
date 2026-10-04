@@ -38,22 +38,48 @@ public final class PemKeys {
 
     private PemKeys() {}
 
-    public static PublicKey fromPem(String pem, SignatureAlgorithm.Family family) throws JwtValidationException {
+    /** Strips the PEM armour and decodes the base64 body. */
+    private static byte[] derOf(String pem) throws JwtValidationException {
         String base64 = pem
                 .replaceAll("-----BEGIN[^-]*-----", "")
                 .replaceAll("-----END[^-]*-----", "")
                 .replaceAll("\\s", "");
         try {
-            byte[] der = Base64.getDecoder().decode(base64);
-            X509EncodedKeySpec spec = new X509EncodedKeySpec(der);
-            String algorithm = switch (family) {
-                case RSA -> "RSA";
-                case EC -> "EC";
-            };
-            return KeyFactory.getInstance(algorithm).generatePublic(spec);
-        } catch (GeneralSecurityException | IllegalArgumentException e) {
+            return Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
             throw new JwtValidationException("invalid PEM public key", e);
         }
+    }
+
+    public static PublicKey fromPem(String pem, SignatureAlgorithm.Family family) throws JwtValidationException {
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem));
+        String algorithm = switch (family) {
+            case RSA -> "RSA";
+            case EC -> "EC";
+        };
+        try {
+            return KeyFactory.getInstance(algorithm).generatePublic(spec);
+        } catch (GeneralSecurityException e) {
+            throw new JwtValidationException("invalid PEM public key", e);
+        }
+    }
+
+    /**
+     * Family-agnostic variant (MP JWT 2.2 "Supported Signature Algorithms": when
+     * {@code mp.jwt.verify.publickey.algorithm} is not set, both RS256 and ES256 must be
+     * accepted). Tries the RSA {@link KeyFactory} first, then EC.
+     */
+    public static PublicKey fromPem(String pem) throws JwtValidationException {
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(derOf(pem));
+        GeneralSecurityException last = null;
+        for (String algorithm : new String[] {"RSA", "EC"}) {
+            try {
+                return KeyFactory.getInstance(algorithm).generatePublic(spec);
+            } catch (GeneralSecurityException e) {
+                last = e;
+            }
+        }
+        throw new JwtValidationException("invalid PEM public key (neither RSA nor EC)", last);
     }
 
     /**
