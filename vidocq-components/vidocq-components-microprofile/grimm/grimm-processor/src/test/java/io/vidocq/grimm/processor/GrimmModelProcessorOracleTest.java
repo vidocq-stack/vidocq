@@ -114,12 +114,18 @@ class GrimmModelProcessorOracleTest {
                 .loadClass(resourceFqn + "$$GrimmModel").getDeclaredConstructor().newInstance();
         assertEquals(resource, contribution.resourceClass());
 
-        var scanner = new AnnotationScanner(GrimmConfig.defaults().scan());
-        String oracle = canonical(OpenApiSerializers.toJson(scanner.scanClasses(List.of(resource))));
+        String oracle = canonical(scanJson(compilation, resourceFqn));
         String fragment = canonical(contribution.openApiJson());
 
         assertEquals(oracle, fragment,
                 "Compile-time fragment diverges from the runtime scan for " + resourceFqn);
+    }
+
+    /** The runtime scan of the compiled class — the oracle — as JSON. */
+    private static String scanJson(Compilation compilation, String resourceFqn) throws Exception {
+        Class<?> resource = compilation.loader().loadClass(resourceFqn);
+        var scanner = new AnnotationScanner(GrimmConfig.defaults().scan());
+        return OpenApiSerializers.toJson(scanner.scanClasses(List.of(resource)));
     }
 
     /**
@@ -309,6 +315,78 @@ class GrimmModelProcessorOracleTest {
                         }
                         """));
         assertSkipped(compilation, "t.Locator");
+    }
+
+    /**
+     * BUG-20261004-03: the runtime scan derives schema facets from Bean Validation on a parameter
+     * ({@code @Min(1)} gives {@code minimum: 1}); the processor does not, so it hands the class to
+     * the scan. The constraint is a fixture of its own: the processor matches it by name.
+     */
+    @Test
+    void valve_beanValidationOnParameter() throws Exception {
+        var compilation = compile(
+                writeSource("jakarta/validation/constraints/Min.java", """
+                        package jakarta.validation.constraints;
+                        import java.lang.annotation.Retention;
+                        import java.lang.annotation.RetentionPolicy;
+
+                        @Retention(RetentionPolicy.RUNTIME)
+                        public @interface Min {
+                            long value();
+                            Class<?>[] groups() default {};
+                        }
+                        """),
+                writeSource("t/Validated.java", """
+                        package t;
+                        import jakarta.validation.constraints.Min;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        import jakarta.ws.rs.PathParam;
+                        import jakarta.ws.rs.Produces;
+
+                        @Path("/validated")
+                        public class Validated {
+                            @GET
+                            @Path("/{id}")
+                            @Produces("text/plain")
+                            public String get(@PathParam("id") @Min(1) long id) { return ""; }
+                        }
+                        """));
+        assertTrue(scanJson(compilation, "t.Validated").contains("\"minimum\":1"),
+                "the runtime scan applies @Min to the parameter schema");
+        assertSkipped(compilation, "t.Validated");
+    }
+
+    /** BUG-20261004-03: the scan honours {@code javax.validation} too ({@code @NotNull}: required). */
+    @Test
+    void valve_javaxBeanValidationOnParameter() throws Exception {
+        var compilation = compile(
+                writeSource("javax/validation/constraints/NotNull.java", """
+                        package javax.validation.constraints;
+                        import java.lang.annotation.Retention;
+                        import java.lang.annotation.RetentionPolicy;
+
+                        @Retention(RetentionPolicy.RUNTIME)
+                        public @interface NotNull {
+                            Class<?>[] groups() default {};
+                        }
+                        """),
+                writeSource("t/LegacyValidated.java", """
+                        package t;
+                        import javax.validation.constraints.NotNull;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        import jakarta.ws.rs.QueryParam;
+
+                        @Path("/legacy")
+                        public class LegacyValidated {
+                            @GET
+                            public void find(@QueryParam("q") @NotNull String q) { }
+                        }
+                        """));
+        assertTrue(scanJson(compilation, "t.LegacyValidated").contains("\"required\":true"),
+                "the runtime scan makes a @NotNull query parameter required");
+        assertSkipped(compilation, "t.LegacyValidated");
     }
 
     @Test

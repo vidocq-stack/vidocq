@@ -70,8 +70,9 @@ import java.util.TreeSet;
  *
  * <p><strong>M1 safety valve</strong>: any construct outside the structural JAX-RS
  * subset (class/method {@code @Path}, HTTP verbs, scalar
- * {@code @PathParam}/{@code @QueryParam}/{@code @HeaderParam}, {@code @Produces},
- * inferred 200 responses) skips the whole class with a compiler NOTE — partial
+ * {@code @PathParam}/{@code @QueryParam}/{@code @HeaderParam} without Bean Validation
+ * constraints, {@code @Produces}, inferred 200 responses) skips the whole class with a
+ * compiler NOTE — partial
  * fragments would silently drop endpoints, so it is all or nothing per class. The
  * runtime {@code AnnotationScanner} remains the behavioural oracle and fallback.</p>
  */
@@ -79,6 +80,8 @@ public final class GrimmModelProcessor extends AbstractProcessor {
 
     private static final String SUFFIX = "$$GrimmModel";
     private static final String MP_OPENAPI_ANNOTATIONS_PREFIX = "org.eclipse.microprofile.openapi.annotations";
+    private static final String JAKARTA_CONSTRAINTS_PREFIX = "jakarta.validation.constraints.";
+    private static final String JAVAX_CONSTRAINTS_PREFIX = "javax.validation.constraints.";
 
     private final Set<String> companionFqns = new TreeSet<>();
     private boolean servicesWritten;
@@ -189,6 +192,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
 
         for (VariableElement param : method.getParameters()) {
             rejectMpOpenApiAnnotations(param);
+            rejectBeanValidationAnnotations(param, method);
             String name;
             Parameter.In in;
             var pathParam = param.getAnnotation(jakarta.ws.rs.PathParam.class);
@@ -310,6 +314,23 @@ public final class GrimmModelProcessor extends AbstractProcessor {
             if (fqn.startsWith(MP_OPENAPI_ANNOTATIONS_PREFIX)) {
                 throw new SkipGeneration("MicroProfile OpenAPI annotation " + fqn
                         + " is outside the M1 subset");
+            }
+        }
+    }
+
+    /**
+     * The runtime scan derives schema facets and {@code required} from Bean Validation constraints
+     * on a parameter ({@code BeanValidationMapper}); the fragment would lack them, so such a class
+     * goes to the runtime scan. Matched by name: grimm has no Bean Validation dependency.
+     */
+    private void rejectBeanValidationAnnotations(VariableElement param, ExecutableElement method)
+            throws SkipGeneration {
+        for (AnnotationMirror mirror : param.getAnnotationMirrors()) {
+            String fqn = ((TypeElement) mirror.getAnnotationType().asElement())
+                    .getQualifiedName().toString();
+            if (fqn.startsWith(JAKARTA_CONSTRAINTS_PREFIX) || fqn.startsWith(JAVAX_CONSTRAINTS_PREFIX)) {
+                throw new SkipGeneration("Bean Validation constraint " + fqn + " on parameter "
+                        + param.getSimpleName() + " of " + method.getSimpleName() + " is outside the M1 subset");
             }
         }
     }

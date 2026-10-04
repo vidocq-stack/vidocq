@@ -29,8 +29,9 @@
  * <p><strong>M1 scope</strong>: structural JAX-RS only — class/method {@code @Path},
  * HTTP verbs, {@code @PathParam}/{@code @QueryParam}/{@code @HeaderParam} of scalar
  * types, {@code @Produces}, inferred 200 responses. Any class using MicroProfile
- * OpenAPI annotations, request bodies, sub-resource locators, non-scalar types or any
- * other construct outside this subset is skipped with a compiler NOTE — the runtime
+ * OpenAPI annotations, Bean Validation constraints on a parameter, request bodies,
+ * sub-resource locators, non-scalar types or any other construct outside this subset
+ * is skipped with a compiler NOTE — the runtime
  * {@code AnnotationScanner} remains the documented fallback and the behavioural
  * reference (oracle of the equivalence tests).</p>
  */
