@@ -34,6 +34,13 @@ The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged i
 
 `ModelMerger` combines the three with the spec priority annotations > static file > reader: the static file overrides the conflicting elements of the reader model, and the annotations override any conflicting element of both. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
 
+=== How the sources combine
+
+The sources are applied in the order above, each one on top of the result of the previous ones: reader, then static file, then annotations. Two rules decide what happens when several sources describe the same element:
+
+* **A named component schema is taken whole.** When two sources define `components/schemas/Pet`, the definition of the higher-priority source replaces the other one entirely. Properties of the lower-priority `Pet` that the winner does not declare are not kept.
+* **Schemas at the same position are merged property by property.** This covers the schema of a media type, the entries of a schema's `properties`, and its `items`. Every keyword the higher-priority source sets wins; keywords it does not set are kept from the lower-priority source. Extensions (`x-*`) are merged the same way. An empty `type`, `enum`, `required` or `properties` does not erase what a lower-priority source says.
+
 [NOTE]
 ====
 OpenAPI 3.1 lets a Reference Object carry `summary` and `description` next to `$ref`. The MicroProfile OpenAPI 4.2 model has no `summary` property on most objects that can be a reference (parameter, request body, response, header, link, security scheme, callback), so a `summary` written next to a `$ref` in a static file is dropped there; a `description` lands on the object's own `description`. A callback reads every key other than `$ref` and `x-*` as a callback expression, so it keeps neither. This is a limitation of the MicroProfile OpenAPI API, not something Grimm can fix on its own.
