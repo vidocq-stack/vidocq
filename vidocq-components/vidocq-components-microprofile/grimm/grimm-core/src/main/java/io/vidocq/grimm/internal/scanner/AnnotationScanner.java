@@ -587,6 +587,7 @@ public final class AnnotationScanner {
         }
     }
 
+    @SuppressWarnings("removal")
     private void addComponentHeaders(OpenAPI openAPI, Header[] headers) {
         if (headers == null || headers.length == 0) {
             return;
@@ -611,6 +612,7 @@ public final class AnnotationScanner {
             header.setRequired(headerAnnotation.required());
             header.setDeprecated(headerAnnotation.deprecated());
             header.setAllowEmptyValue(headerAnnotation.allowEmptyValue());
+            applyHeaderExamples(header, headerAnnotation);
 
             if (headerAnnotation.schema() != null) {
                 header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
@@ -709,23 +711,7 @@ public final class AnnotationScanner {
             if (exampleAnnotation.name().isEmpty()) {
                 continue;
             }
-            var example = OASFactory.createObject(org.eclipse.microprofile.openapi.models.examples.Example.class);
-            if (!exampleAnnotation.summary().isEmpty()) {
-                example.setSummary(exampleAnnotation.summary());
-            }
-            if (!exampleAnnotation.description().isEmpty()) {
-                example.setDescription(exampleAnnotation.description());
-            }
-            if (!exampleAnnotation.value().isEmpty()) {
-                example.setValue(exampleAnnotation.value());
-            }
-            if (!exampleAnnotation.externalValue().isEmpty()) {
-                example.setExternalValue(exampleAnnotation.externalValue());
-            }
-            if (!exampleAnnotation.ref().isEmpty()) {
-                example.setRef(exampleAnnotation.ref());
-            }
-            applyExtensions(example, exampleAnnotation.extensions());
+            var example = toModelExample(exampleAnnotation);
             components.addExample(exampleAnnotation.name(), example);
         }
     }
@@ -1169,6 +1155,40 @@ public final class AnnotationScanner {
             || schema.required());
     }
 
+    private org.eclipse.microprofile.openapi.models.examples.Example toModelExample(ExampleObject exampleAnnotation) {
+        var example = OASFactory.createObject(org.eclipse.microprofile.openapi.models.examples.Example.class);
+        if (!exampleAnnotation.summary().isEmpty()) {
+            example.setSummary(exampleAnnotation.summary());
+        }
+        if (!exampleAnnotation.description().isEmpty()) {
+            example.setDescription(exampleAnnotation.description());
+        }
+        if (!exampleAnnotation.value().isEmpty()) {
+            example.setValue(exampleAnnotation.value());
+        }
+        if (!exampleAnnotation.externalValue().isEmpty()) {
+            example.setExternalValue(exampleAnnotation.externalValue());
+        }
+        if (!exampleAnnotation.ref().isEmpty()) {
+            example.setRef(exampleAnnotation.ref());
+        }
+        applyExtensions(example, exampleAnnotation.extensions());
+        return example;
+    }
+
+    private void applyHeaderExamples(org.eclipse.microprofile.openapi.models.headers.Header header,
+                                     Header headerAnnotation) {
+        if (!headerAnnotation.example().isEmpty()) {
+            header.setExample(headerAnnotation.example());
+        }
+        for (ExampleObject exampleAnnotation : headerAnnotation.examples()) {
+            if (!exampleAnnotation.name().isEmpty()) {
+                header.addExample(exampleAnnotation.name(), toModelExample(exampleAnnotation));
+            }
+        }
+    }
+
+    @SuppressWarnings("removal")
     private org.eclipse.microprofile.openapi.models.headers.Header toModelHeader(Header headerAnnotation) {
         var header = OASFactory.createObject(org.eclipse.microprofile.openapi.models.headers.Header.class);
         if (!headerAnnotation.ref().isEmpty()) {
@@ -1180,6 +1200,7 @@ public final class AnnotationScanner {
         header.setRequired(headerAnnotation.required());
         header.setDeprecated(headerAnnotation.deprecated());
         header.setAllowEmptyValue(headerAnnotation.allowEmptyValue());
+        applyHeaderExamples(header, headerAnnotation);
         if (schemaGenerator != null && hasSchemaContent(headerAnnotation.schema())) {
             header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
         }

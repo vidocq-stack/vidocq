@@ -32,6 +32,7 @@ import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
 import org.eclipse.microprofile.openapi.annotations.headers.Header;
 import org.eclipse.microprofile.openapi.annotations.info.Info;
 import org.eclipse.microprofile.openapi.annotations.info.License;
+import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
@@ -419,6 +420,23 @@ class AnnotationScannerTest {
         public List<Pet> list() { return List.of(); }
         @POST
         public Pet create(Pet pet) { return pet; }
+    }
+
+    @Test
+    void scanClasses_mapsComponentHeaderExampleAndExamples() {
+        // MP OpenAPI 4.2 (#697): @Header.example / @Header.examples on components.
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(DefinitionWithHeaderExamples.class));
+
+        var header = model.getComponents().getHeaders().get("X-Rate");
+        assertEquals("42", header.getExample());
+        assertEquals("7", header.getExamples().get("low").getValue());
+    }
+
+    @OpenAPIDefinition(info = @Info(title = "t", version = "1"),
+            components = @Components(headers = @Header(name = "X-Rate", example = "42",
+                    examples = @ExampleObject(name = "low", value = "7"))))
+    static class DefinitionWithHeaderExamples {
     }
 
     static final class Pet {

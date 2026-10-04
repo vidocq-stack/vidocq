@@ -41,6 +41,8 @@ import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBodySchema;
+import org.eclipse.microprofile.openapi.annotations.headers.Header;
+import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponseSchema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
@@ -675,6 +677,33 @@ class JaxRsResourceScannerTest {
 
     static class Payload {
         public String name;
+    }
+
+    @Test
+    void mapsHeaderExampleAndExamples() {
+        // MP OpenAPI 4.2 (#697): @Header.example / @Header.examples (TCK shape: X-Password-Strength).
+        AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
+        OpenAPI model = scanner.scanClasses(List.of(HeaderExampleResource.class));
+
+        var header = model.getPaths().getPathItem("/hdr").getGET()
+                .getResponses().getAPIResponse("200").getHeaders().get("X-Password-Strength");
+        assertEquals("0", header.getExample());
+        assertEquals("Strong", header.getExamples().get("strong").getSummary());
+        assertEquals("10", header.getExamples().get("strong").getValue());
+        assertEquals("5.1", header.getExamples().get("weak").getValue());
+    }
+
+    @Path("/hdr")
+    static class HeaderExampleResource {
+        @GET
+        @APIResponse(responseCode = "200", description = "ok", headers = @Header(name = "X-Password-Strength",
+                example = "0",
+                examples = {
+                    @ExampleObject(name = "strong", summary = "Strong", value = "10"),
+                    @ExampleObject(name = "weak", value = "5.1")}))
+        public String get() {
+            return "";
+        }
     }
 }
 

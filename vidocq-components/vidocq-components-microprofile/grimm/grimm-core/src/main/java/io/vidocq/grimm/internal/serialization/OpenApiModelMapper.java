@@ -644,6 +644,7 @@ final class OpenApiModelMapper {
         return headers;
     }
 
+    @SuppressWarnings("removal")
     private static Header toHeader(Object raw) {
         if (!(raw instanceof Map<?, ?> map)) {
             return null;
@@ -657,6 +658,8 @@ final class OpenApiModelMapper {
                 case "required" -> header.setRequired(asBoolean(value));
                 case "deprecated" -> header.setDeprecated(asBoolean(value));
                 case "allowEmptyValue" -> header.setAllowEmptyValue(asBoolean(value));
+                case "example" -> header.setExample(value);
+                case "examples" -> header.setExamples(toExamples(value));
                 case "schema" -> header.setSchema(toSchema(value));
                 case "$ref" -> header.setRef(asString(value));
                 default -> {
