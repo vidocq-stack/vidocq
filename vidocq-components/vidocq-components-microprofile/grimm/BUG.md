@@ -288,3 +288,21 @@ Track reproducible bugs with:
   mapping copied the raw strings. The deprecated `example()` has no such clause and stays raw.
 - **status**: FIXED — 2026-10-04, commit 91159d3. Each entry goes through `constValueOf`. Covered by
   `SchemaPropertyMappingTest` (STRING literal, INTEGER, OBJECT); official TCK still 367/367.
+
+### BUG-20261004-13 — A `@Schema` that sets only some attributes is ignored on parameters, bodies, headers and content
+
+- **id**: BUG-20261004-13
+- **date**: 2026-10-04
+- **symptom**: `@QueryParam("n") @Schema(minimum = "0") int n`, or a request body `@Schema(examples = "x")`,
+  gave the inferred schema without the attribute. Same for `oneOf`/`anyOf`/`allOf`/`not`, `readOnly`,
+  `writeOnly`, `nullable`, `deprecated`, `pattern`, `maximum`, `multipleOf`, `uniqueItems`, `defaultValue`,
+  `constValue`, and others.
+- **minimal repro**: `void get(@QueryParam("n") @Schema(minimum = "0") int n)`; the parameter schema has no `minimum`.
+- **hypothesis (confirmed)**: `JaxRsResourceScanner.hasAnyContent` (five call sites: parameter, request body,
+  response header, content, header) tested a hand-picked subset of attributes and chose `generate(type)`
+  over `generate(type, annotation)` when none was set. Pre-existing.
+- **status**: FIXED — 2026-10-04, commit 5e1795c. `SchemaGenerator.hasContent` uses
+  `SchemaAttributes.hasContent()`, which compares every shared attribute with its real default (one list,
+  the one the mapping uses), plus implementation, ref, required and properties. An empty `@Schema()` is
+  unchanged. Covered by `JaxRsResourceScannerTest` (parameter and request body; minimum, examples, oneOf,
+  readOnly; empty schema) and `SchemaPropertyMappingTest`.
