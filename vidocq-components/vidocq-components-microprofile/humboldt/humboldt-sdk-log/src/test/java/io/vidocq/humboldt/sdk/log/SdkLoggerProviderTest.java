@@ -216,6 +216,24 @@ class SdkLoggerProviderTest {
     }
 
     @Test
+    void setException_falls_back_to_the_binary_name_without_a_canonical_name() {
+        // Same rule as Span.recordException: an anonymous class has no canonical name, so exception.type
+        // falls back to the binary name instead of being dropped.
+        RuntimeException anonymous = new RuntimeException("anonymous") {};
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder()
+                    .setException(anonymous)
+                    .emit();
+        }
+        assertNull(anonymous.getClass().getCanonicalName(), "an anonymous class has no canonical name");
+        assertEquals(anonymous.getClass().getName(),
+                exporter.getCollected().getFirst().attributes().get(EXCEPTION_TYPE));
+    }
+
+    @Test
     void setEventName_is_carried_to_the_exported_record() {
         InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()

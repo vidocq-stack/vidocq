@@ -140,18 +140,32 @@ public final class SdkSpan implements Span, ReadableSpan {
         return this;
     }
 
+    /**
+     * Records an {@code exception} event as the OpenTelemetry SDK 1.66 does: {@code exception.type} is the
+     * canonical class name, {@code exception.message} is set only for a non-null message,
+     * {@code exception.stacktrace} is the printed stack trace, and {@code additionalAttributes} are applied
+     * last, so they override the derived values. For a class without a canonical name (an anonymous or local
+     * class) {@code exception.type} falls back to the binary name, where the OpenTelemetry SDK drops the
+     * attribute — the same rule as {@code LogRecordBuilder.setException} on the log side.
+     */
     @Override
     public synchronized Span recordException(Throwable exception, Attributes additionalAttributes) {
         if (ended || exception == null) return this;
-        AttributesBuilder builder = additionalAttributes != null
-                ? additionalAttributes.toBuilder()
-                : Attributes.builder();
-        builder.put(AttributeKey.stringKey("exception.type"), exception.getClass().getName());
+        AttributesBuilder builder = Attributes.builder();
+        builder.put(AttributeKey.stringKey("exception.type"), exceptionType(exception));
         if (exception.getMessage() != null) {
             builder.put(AttributeKey.stringKey("exception.message"), exception.getMessage());
         }
         builder.put(AttributeKey.stringKey("exception.stacktrace"), stackTraceOf(exception));
+        if (additionalAttributes != null) {
+            builder.putAll(additionalAttributes);
+        }
         return addEventInternal("exception", builder.build(), clock.now());
+    }
+
+    private static String exceptionType(Throwable t) {
+        String canonical = t.getClass().getCanonicalName();
+        return canonical != null ? canonical : t.getClass().getName();
     }
 
     private static String stackTraceOf(Throwable t) {

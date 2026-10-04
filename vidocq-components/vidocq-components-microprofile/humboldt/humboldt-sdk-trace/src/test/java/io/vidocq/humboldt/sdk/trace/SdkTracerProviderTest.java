@@ -192,6 +192,52 @@ class SdkTracerProviderTest {
                 ev.attributes().get(AttributeKey.stringKey("exception.message")));
     }
 
+    /** Nested exception type: its canonical name ({@code Outer.Nested}) differs from its binary name. */
+    static final class NestedFailure extends RuntimeException {
+        NestedFailure(String message) {
+            super(message);
+        }
+    }
+
+    @Test
+    void recordException_uses_the_canonical_class_name_like_the_log_side() {
+        Span s = tracer.spanBuilder("nested").startSpan();
+        s.recordException(new NestedFailure("boom"));
+        s.end();
+
+        var ev = exporter.getFinishedSpans().getFirst().events().getFirst();
+        assertEquals("io.vidocq.humboldt.sdk.trace.SdkTracerProviderTest.NestedFailure",
+                ev.attributes().get(AttributeKey.stringKey("exception.type")));
+    }
+
+    @Test
+    void recordException_falls_back_to_the_binary_name_without_a_canonical_name() {
+        RuntimeException anonymous = new RuntimeException("anonymous") {};
+        Span s = tracer.spanBuilder("anonymous").startSpan();
+        s.recordException(anonymous);
+        s.end();
+
+        var ev = exporter.getFinishedSpans().getFirst().events().getFirst();
+        assertNull(anonymous.getClass().getCanonicalName(), "an anonymous class has no canonical name");
+        assertEquals(anonymous.getClass().getName(),
+                ev.attributes().get(AttributeKey.stringKey("exception.type")));
+    }
+
+    @Test
+    void recordException_additional_attributes_override_the_derived_ones() {
+        Span s = tracer.spanBuilder("override").startSpan();
+        s.recordException(new IllegalStateException("derived"), Attributes.of(
+                AttributeKey.stringKey("exception.type"), "custom.Type",
+                AttributeKey.stringKey("exception.message"), "custom message"));
+        s.end();
+
+        var ev = exporter.getFinishedSpans().getFirst().events().getFirst();
+        assertEquals("custom.Type", ev.attributes().get(AttributeKey.stringKey("exception.type")));
+        assertEquals("custom message", ev.attributes().get(AttributeKey.stringKey("exception.message")));
+        assertNotNull(ev.attributes().get(AttributeKey.stringKey("exception.stacktrace")),
+                "the stack trace is still derived from the exception");
+    }
+
     @Test
     void tracer_cache_returns_same_instance_for_same_scope_name() {
         assertSame(provider.get("scope-a"), provider.get("scope-a"));

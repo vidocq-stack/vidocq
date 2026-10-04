@@ -143,16 +143,20 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     }
 
     /**
-     * Derives {@code exception.type} (canonical class name), {@code exception.message} and
-     * {@code exception.stacktrace} from {@code throwable}, as the OpenTelemetry SDK 1.66 does: an attribute
-     * already set on this builder is kept, a {@code null} class name or message adds no attribute, and an
-     * attribute set after this call overrides the derived value.
+     * Derives {@code exception.type}, {@code exception.message} and {@code exception.stacktrace} from
+     * {@code throwable}, as the OpenTelemetry SDK 1.66 does: an attribute already set on this builder is kept,
+     * a {@code null} message adds no attribute, and an attribute set after this call overrides the derived
+     * value. {@code exception.type} is the canonical class name, or the binary name for a class that has
+     * none (an anonymous or local class) — the same rule as {@code Span.recordException}; the OpenTelemetry
+     * SDK drops the attribute in that case.
      */
     @Override
     public LogRecordBuilder setException(Throwable throwable) {
         if (throwable == null) return this;
         Attributes alreadySet = attributes.build();
-        putIfAbsent(alreadySet, EXCEPTION_TYPE, throwable.getClass().getCanonicalName());
+        String canonicalName = throwable.getClass().getCanonicalName();
+        putIfAbsent(alreadySet, EXCEPTION_TYPE,
+                canonicalName != null ? canonicalName : throwable.getClass().getName());
         putIfAbsent(alreadySet, EXCEPTION_MESSAGE, throwable.getMessage());
         putIfAbsent(alreadySet, EXCEPTION_STACKTRACE, stackTraceOf(throwable));
         return this;
