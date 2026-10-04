@@ -124,3 +124,41 @@
     Fixed: version.properties filtered by Maven next to the class, constant loaded at class
     init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
     also protects future consumers from the javac inlining trap.
+
+---
+
+## BUG-20261004-01 — OpenTelemetry ComponentLoader service lookups fail on the module path
+
+- **Date**: 2026-10-04
+- **Status**: OPEN
+- **Component**: humboldt-otel-context (`module io.opentelemetry.context`), humboldt-otel-interop
+- **Affected**: humboldt 0.4.0-SNAPSHOT (OpenTelemetry 1.66 upgrade, branch `pr/ybl/mp-7.2`)
+- **Symptom**: since OpenTelemetry 1.66, `opentelemetry-common` is shaded into humboldt-otel-context, so
+  `io.opentelemetry.common.ServiceLoaderComponentLoader` lives in the explicit module
+  `io.opentelemetry.context`. Its `load(Class)` calls `ServiceLoader.load(spiClass, classLoader)` from that
+  named module, which declares no `uses` for the services OpenTelemetry components look up through it.
+  On the module path any such lookup throws `java.util.ServiceConfigurationError: ... module
+  io.opentelemetry.context does not declare 'uses'`. On the class path (the TCK set-up) everything works,
+  which is why the official TCK stays green. Upstream the class sits in an automatic module, which may use
+  any service, so plain OpenTelemetry does not hit this.
+- **Minimal reproduction** (reported by the final branch review, not run here):
+  1. Put humboldt-otel-interop, humboldt-otel-context and an OpenTelemetry exporter that sends over HTTP
+     (`opentelemetry-exporter-otlp` + `opentelemetry-exporter-sender-jdk`) on the **module path**.
+  2. Let `OtelSpiAutoConfiguration` create the exporter through its `ConfigurableSpanExporterProvider`:
+     it passes a `MapConfigProperties`, whose `getComponentLoader()` is the `ConfigProperties` default
+     `ComponentLoader.forClassLoader(...)`.
+  3. exporter-common looks up its `HttpSenderProvider` through that `ComponentLoader` →
+     `ServiceConfigurationError`.
+- **Cause hypothesis**: the `uses` check of `ServiceLoader.load` applies to the module of the *caller*
+  (`ServiceLoaderComponentLoader`), now an explicit module; the services it is asked to load belong to
+  optional OpenTelemetry modules it cannot declare. The exporter builders also default to
+  `ComponentLoader.forClassLoader(...)` (seen in the exporter-common 1.62 `HttpExporterBuilder` bytecode),
+  so building an OpenTelemetry HTTP exporter directly on the module path is likely affected as well.
+- **Suggested fix**: override `getComponentLoader()` in `MapConfigProperties` (humboldt-otel-interop) to
+  return a `ComponentLoader` implemented in the interop module, which calls
+  `getClass().getModule().addUses(spiClass)` and then `ServiceLoader.load(spiClass, classLoader)` — the
+  `uses` check then applies to the interop module, and `Module.addUses` is allowed there because it is the
+  caller's own module. (`Module.addUses` cannot be called on `io.opentelemetry.context` from outside it.)
+- **Investigations**:
+  - 2026-10-04: found during the final review of the MicroProfile Telemetry 2.2 / OpenTelemetry 1.66
+    branch. Logged only; no fix on that branch.
