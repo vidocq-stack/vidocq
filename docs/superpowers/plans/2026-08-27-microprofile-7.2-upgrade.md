@@ -1160,6 +1160,16 @@ Close the three BUG.md entries.
 - [ ] Stale documentation: the ShrinkWrap / "Model 4.1.0" / "do not reintegrate grimm-tck" rationale (`CLAUDE.md` ~40/92, `tck.adoc` ~71, `grimm-tck/README.md` ~7) — grimm-tck stays OUT of the grimm reactor (standalone, run with `mvn -f grimm-tck/pom.xml`), but the reason is now the deliberate decoupling of the released runtime from the official TCK (see the workspace `CLAUDE.md`), no longer ShrinkWrap / Model 4.1.0 — verify in grimm`s root pom before writing; `CLAUDE.md` ~146 names a non-existent `tck-suite.xml`; `CLAUDE.md` ravel `0.3.0-SNAPSHOT`; `ROADMAP.md` ~334 "TCK non-public artifact" risk and ~379 "official score 349/349" (history: say it counted harness tests). Verify each fact before writing it.
 Run the official TCK from a clean build at the end of the lane: 367 (364 official + 3 local) unless FB1/FB2 change a count — explain any change.
 
+### Task FB4: grimm — model fidelity points found by the FB1/FB2 reviews (runs before FB3)
+
+- [ ] `ModelMerger.mergeSchema` copies only a subset of schema properties (e.g. `minimum`, `pattern`, `maxLength` reportedly not carried over): write a test merging a static-file schema with an annotation-derived one of the same name/position and check the result; if properties are lost, merge every typed property (one place, driven by the same property table `SchemaImpl` now uses), TDD; log/close a `BUG.md` entry.
+- [ ] Merger tests for the verbatim-ref paths not covered yet (Callback and `mergeReference`).
+- [ ] Static mapper gaps: `$ref` on Parameter / RequestBody / APIResponse, `Callback` mapping, Parameter `style` / `explode` / `content`; config ref-alias recursion also into `$defs` / `definitions`. TDD.
+- [ ] `@Schema(constValue)` and `@SchemaProperty` parse values with a scalar-only parser (`SchemaGenerator` ~500, ~623): parse JSON objects/arrays like the extension values (shared helper); map `@SchemaProperty.externalDocs()` (present in the 4.2 API). TDD.
+- [ ] `SchemaImpl`: `setAll` resets `booleanSchema`; `set("type", …)`-style list/map entries validate element types (clear `IllegalArgumentException` instead of a later `ClassCastException`); `additionalProperties` boolean form round-trips through `getAll`/`setAll`; a test-scope guard that every typed setter of the MP `Schema` interface has an entry in the property table (so a future API addition cannot silently become an extension). TDD.
+- [ ] `GrimmModelProcessor`: one shared annotation-mirror name check for `rejectMpOpenApiAnnotations` / `rejectBeanValidationAnnotations`; re-wrap the two Javadoc edits.
+`./mvnw -ntp clean install`; official TCK at the end of FB3.
+
 ### Task FC1: humboldt — telemetry correctness follow-ups
 
 - [ ] Span `exception.type` uses `getCanonicalName()` like the OpenTelemetry SDK 1.66 `ExceptionAttributeResolver` (fallback to `getName()` when the canonical name is null), consistent with the log side; TDD.
