@@ -129,9 +129,9 @@
             <artifactId>humboldt-rest</artifactId>
             <version>${humboldt.version}</version>
         </dependency>
-        <!-- OTel SDK <-> Humboldt bridges (SpanDataMapper, OtelSpanExporterBridge, OtelMetricExporterBridge,
-             OtelSamplerBridge, MapConfigProperties) the Arquillian container uses to plug the exporters,
-             samplers and providers the TCK ships through the OTel autoconfigure SPI. -->
+        <!-- OTel autoconfigure SPI discovery (OtelSpiAutoConfiguration) and the OTel SDK <-> Humboldt
+             bridges it uses: the Arquillian container plugs the exporters, samplers, propagators,
+             resources and customizers each TCK archive declares through it. -->
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-otel-interop</artifactId>
@@ -273,13 +273,14 @@
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Propagateurs B3 (single+multi) et Jaeger — utilisés par B3PropagationTest,
-             B3MultiPropagationTest, JaegerPropagationTest. Disponibles via la
-             dépendance officielle opentelemetry-extension-trace-propagators (BOM
-             OTel l'expose). Câblés comme builtins dans resolveSpiPropagators. -->
+        <!-- B3 (single and multi header) and Jaeger propagators, used by B3PropagationTest,
+             B3MultiPropagationTest and JaegerPropagationTest: humboldt-otel-interop wires them as
+             builtins (OtelSpiAutoConfiguration) and requires them statically, so the runner supplies
+             them. Test scope: the runner has no main code. -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-extension-trace-propagators</artifactId>
+            <scope>test</scope>
         </dependency>
         <!-- TestSpanData.builder() — the concrete io.opentelemetry.sdk.trace.data.SpanData that the
              humboldt-otel-interop SpanDataMapper builds to hand Humboldt spans to the exporters the TCK

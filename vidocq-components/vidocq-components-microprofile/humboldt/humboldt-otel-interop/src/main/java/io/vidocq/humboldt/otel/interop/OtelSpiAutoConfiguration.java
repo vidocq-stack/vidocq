@@ -61,10 +61,9 @@ import java.util.function.Consumer;
  * {@code HumboldtAutoConfigure.configure(EnvConfig, extraSpanExporters,
  * samplerOverride, propagatorsOverride, extraMetricExporters)}.</p>
  *
- * <p>The discovery and environment-adjustment logic is a faithful port of the
- * Arquillian {@code HumboldtDeployableContainer} harness that passes the
- * MP Telemetry 2.1 TCK 85/85, with archive scanning replaced by
- * {@code ServiceLoader.load(spi, loader)}.</p>
+ * <p>The official MicroProfile Telemetry TCK runner (humboldt-tck) deploys each
+ * TCK archive through this class too, with a class loader that exposes the
+ * archive's own {@code META-INF/services} declarations.</p>
  */
 public final class OtelSpiAutoConfiguration {
 
