@@ -4,9 +4,9 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
 
 ## Milestones
 
-- [x] **M0 — Skeleton & green build.** Repo, parent pom (Model 4.1.0, `vidocq-parent:1.0.0`,
-  `<subprojects>`), `cervantes-mp-jwt-api` (repackaging spec MP JWT 2.2), modules
-  `api/core/cdi-vauban/cassini/bench/examples`, CI (`.forgejo/workflows`), docs, `.sdkmanrc`.
+- [x] **M0 — Skeleton & green build.** Repo, parent pom (at the time: Model 4.1.0, `vidocq-parent:1.0.0`,
+  `<subprojects>`; the reactor is now Model 4.0.0 with `<modules>` and `vidocq-parent:0.4.0-SNAPSHOT`), `cervantes-mp-jwt-api` (repackaging spec MP JWT 2.2), modules
+  `api/core/cdi-vauban/cassini/bench/examples` (the JAX-RS module was later named `cervantes-jaxrs`), CI (`.forgejo/workflows`), docs, `.sdkmanrc`.
   Criterion: `./mvnw -ntp install -DskipTests` green.
 - [x] **M1 — Core, signed tokens.** base64url decoding + JSON parsing (Champollion),
   `JwtSignatureVerifier` (RS/ES 256/384/512 ; ECDSA JOSE signature transcoding R‖S ⇄ DER),
@@ -39,7 +39,7 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   `ClassType[boolean]` instead of a `PrimitiveType`, so boxing did not trigger). ⚠️ **M3b therefore
   depends on a Vauban ≥ the SNAPSHOT containing VAU-INJ-PRIM** — push/publish the Vauban fix before
   the Cervantes M3b CI run, otherwise `@Claim boolean` injection fails silently.
-- [x] **M4 — JAX-RS security (`cervantes-cassini`).** `JwtSecurityContext` (backed by the
+- [x] **M4 — JAX-RS security (`cervantes-jaxrs`, first named `cervantes-cassini`).** `JwtSecurityContext` (backed by the
   `JsonWebToken`), `JwtAuthenticationFilter` (`@PreMatching` `@Priority(AUTHENTICATION)` : extracts
   the Bearer token, validates, `setSecurityContext` + sets the `JsonWebTokenContext`; 401 if invalid;
   anonymous if absent), `RolesAllowedDynamicFeature` + `RolesAllowedRequestFilter`
@@ -54,8 +54,8 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
   JWE detection (5 parts) + decryption in `DefaultJwtValidator`, wiring
   `mp.jwt.decrypt.key`/`.location` in `JwtAuthConfigProducer`. **+6 tests.** ℹ️ Content-enc
   `A128CBC-HS256` not yet supported (only `A256GCM`, the spec default) — add it if the TCK requires it.
-- [x] **M6 — Official MP JWT 2.1 TCK: 206/206 PASS.** ✅ `cervantes-tck` module outside the reactor
-  (Model 4.0.0 standalone, heisenberg-tck template), `CervantesJwtDeployableContainer` Arquillian
+- [x] **M6 — Official MP JWT 2.1 TCK: 206/206 PASS.** ✅ `cervantes-tck` module outside the reactor at
+  the time (Model 4.0.0 standalone, heisenberg-tck template; in-reactor behind the `tck` profile since 2026-07-15, see the history below), `CervantesJwtDeployableContainer` Arquillian
   (`Vauban` CDI + Cassini HTTP per deployment: ShrinkWrap archive → bean classes, archive MP-Config →
   system props, rewrite `*.location` `http://localhost:8080` → real ephemeral URL after server
   startup), `run-official-tck-mp-jwt-2.1.sh` (renamed to 2.2 on the MP 7.2 bump). **206 tests, 0 failure, 0 skip**

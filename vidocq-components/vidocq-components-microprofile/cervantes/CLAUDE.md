@@ -34,9 +34,9 @@ sdk env
 > `cervantes-tck` is **in-reactor behind the `tck` Maven profile** (TCK harmonisation,
 > vidocq-runtime-tck-* pattern): a plain `mvn install` never builds nor downloads it.
 > Activate it via the wrapper script or `./mvnw -P"tck,smoke" -pl cervantes-tck test`
-> (`tck-official` instead of `smoke` for the full suite). The historical out-of-reactor
-> constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) is obsolete since the
-> workspace migrated to Maven 3.9.16 / Model 4.0.0.
+> (`tck-official` instead of `smoke` for the full suite). The former out-of-reactor
+> constraint (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0) no longer applies since the
+> workspace moved to Maven 3.9.16 / Model 4.0.0.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ cervantes-core         ← pure engine: JWT parsing, signature verification (RS/
                          claim validation (iss/aud/exp/nbf/iat + clock-skew), key loading (PEM, JWKS).
                          NO cassini, NO CDI — testable without HTTP.
 cervantes-cdi-vauban   ← @RequestScoped JsonWebToken producer, @Claim injection (BCE Vauban)
-cervantes-cassini      ← JAX-RS security: JwtAuthenticationFilter, RolesAllowedDynamicFeature
+cervantes-jaxrs        ← JAX-RS security: JwtAuthenticationFilter, RolesAllowedDynamicFeature
                          (@RolesAllowed/@PermitAll/@DenyAll), SecurityContext backed by JsonWebToken
 cervantes-bench        ← JMH benchmarks (vs SmallRye JWT)
 cervantes-examples     ← examples (@RolesAllowed resource + @Inject @Claim)
@@ -59,9 +59,9 @@ cervantes-tck          ← Arquillian official TCK runner (in-reactor, `tck` Mav
 ```
 
 **Fundamental separation:** `cervantes-core` knows neither HTTP nor CDI (pure validation,
-unit-testable with generated key pairs). `cervantes-cassini` wires in JAX-RS security;
+unit-testable with generated key pairs). `cervantes-jaxrs` wires in JAX-RS security;
 `cervantes-cdi-vauban` wires in CDI injection. A per-request `TokenHolder` (in `cervantes-api`)
-connects the auth filter (cassini) to the CDI producer (cdi-vauban) without direct coupling.
+connects the auth filter (jaxrs) to the CDI producer (cdi-vauban) without direct coupling.
 
 ## Architecture Constraints Not to Violate
 
@@ -74,7 +74,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
    (pinning risk).
 4. **No runtime reflection / no dynamic proxy**: `@Claim` injection and `@RolesAllowed` enforcement
    via BCE Vauban + `MethodHandle`, no `setAccessible(true)` in production.
-5. **`cervantes-tck/pom.xml` stays at Model 4.0.0**, outside `<subprojects>`.
+5. **`cervantes-tck` stays in the reactor only behind the `tck` Maven profile** (root `pom.xml`), so a plain `mvn install` never builds nor downloads the official TCK.
 6. **TCK 100% PASS is a hard contract** — **208/208 PASS (2026-10-04)**. Any structural change must preserve this score.
 
 ## Conventions
@@ -84,8 +84,8 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
   Automatic-Module-Name (see `cervantes-core`, pattern from heisenberg).
 - **Packages**: `io.vidocq.cervantes.api.*` = stable public SPI;
   `io.vidocq.cervantes.internal.*` = internal code; `io.vidocq.cervantes.cdi.*` = CDI integration;
-  `io.vidocq.cervantes.cassini.*` = JAX-RS integration.
-- **Maven groupId**: `io.vidocq.cervantes`. Version: `0.3.0-SNAPSHOT` — the global dev version (parent `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT`).
+  `io.vidocq.cervantes.jaxrs.*` = JAX-RS integration.
+- **Maven groupId**: `io.vidocq.cervantes`. Version: `0.4.0-SNAPSHOT` — the global dev version (parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
 - **Immutable records** for configs (JwtConfig, claims), **sealed interfaces** for validation results.
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
@@ -110,7 +110,7 @@ connects the auth filter (cassini) to the CDI producer (cdi-vauban) without dire
 org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2   (repackaged via cervantes-mp-jwt-api)
 jakarta.json (via io.vidocq.champollion:champollion-api)
 jakarta.enterprise:jakarta.enterprise.cdi-api:4.1            (provided, cdi-vauban)
-jakarta.ws.rs (via io.vidocq.cassini:cassini-api)            (provided, cassini)
+jakarta.ws.rs (via io.vidocq.cassini:cassini-api)            (provided, jaxrs)
 io.vidocq.ravel:ravel-mp-config-api                          (config)
 org.junit:junit-bom                                          (test)
 ```

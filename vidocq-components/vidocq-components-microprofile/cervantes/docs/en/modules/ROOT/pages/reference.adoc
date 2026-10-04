@@ -43,7 +43,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 | Official MP JWT 2.2 TCK runner — in-reactor, but only under the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
 |===
 
-All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT`.
+All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`.
 
 == Java modules
 
@@ -178,6 +178,11 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 [NOTE]
 ====
 The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the clock-skew tolerance applied to `exp` and `nbf` is fixed at 60 seconds (`JwtConfig.DEFAULT_CLOCK_SKEW`). Embedders building a `JwtConfig` directly through `cervantes-api` can pass any `clockSkew` duration.
+====
+
+[NOTE]
+====
+The configuration is validated when the container starts. An unrecognised `mp.jwt.verify.publickey.algorithm` or an unreadable key (`mp.jwt.verify.publickey` or `mp.jwt.verify.publickey.location`) fails the application at container start, with a message naming the property and the offending value. When no key is configured at all, MP JWT stays off and the application starts normally.
 ====
 
 === Token transport

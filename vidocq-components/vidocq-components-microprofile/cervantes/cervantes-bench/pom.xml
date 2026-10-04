@@ -12,10 +12,10 @@
 
     <artifactId>cervantes-bench</artifactId>
     <name>Cervantes :: Bench</name>
-    <description>Benchmarks JMH : débit de validation JWT. Cervantes seul par défaut (zéro-dep) ; comparaison vs SmallRye JWT via le profil opt-in -Pcompare-smallrye. Jamais publié.</description>
+    <description>JMH benchmarks: JWT validation throughput. Cervantes alone by default (zero-dep); comparison vs SmallRye JWT through the opt-in profile -Pcompare-smallrye. Never published.</description>
 
     <properties>
-        <!-- Module de bench : jamais déployé ni javadocé, run on classpath (pas de module-info). -->
+        <!-- Bench module: never deployed nor javadoc'd, runs on the classpath (no module-info). -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>
         <maven.javadoc.skip>true</maven.javadoc.skip>
@@ -35,7 +35,7 @@
             <artifactId>cervantes-core</artifactId>
         </dependency>
 
-        <!-- JSON-P API + impl maison (cervantes-core lit/écrit le JWT via Champollion). -->
+        <!-- JSON-P API + in-house implementation (cervantes-core reads/writes the JWT via Champollion). -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-api</artifactId>

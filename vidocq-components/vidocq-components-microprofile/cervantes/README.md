@@ -44,7 +44,7 @@ sdk env
 | `cervantes-api` | Stable public SPI + spec re-export |
 | `cervantes-core` | Pure validation engine (signature, claims, keys) — no HTTP, no CDI |
 | `cervantes-cdi-vauban` | `JsonWebToken` producer, `@Claim` injection (Vauban BCE) |
-| `cervantes-cassini` | JAX-RS security (`@RolesAllowed`, auth filter, `SecurityContext`) |
+| `cervantes-jaxrs` | JAX-RS security (`@RolesAllowed`, auth filter, `SecurityContext`) |
 | `cervantes-bench` | JMH benchmarks |
 | `cervantes-examples` | Usage examples |
 | `cervantes-tck` | Official TCK runner (in-reactor, built only under the `tck` Maven profile) |

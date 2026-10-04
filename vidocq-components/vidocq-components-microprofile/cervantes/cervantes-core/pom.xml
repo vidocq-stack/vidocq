@@ -12,14 +12,14 @@
 
     <artifactId>cervantes-core</artifactId>
     <name>Cervantes :: Core</name>
-    <description>Moteur pur Java 25 : parsing JWT, vérification de signature (RS/ES 256/384/512 via java.security), validation des claims (iss/aud/exp/nbf/iat + clock-skew), chargement des clés (PEM ; JWKS à partir de M2). Sans CDI, sans JAX-RS.</description>
+    <description>Pure Java 25 engine: JWT parsing, signature verification (RS/ES 256/384/512 via java.security), claim validation (iss/aud/exp/nbf/iat + clock-skew), key loading (PEM, JWKS). No CDI, no JAX-RS.</description>
 
     <dependencies>
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-api</artifactId>
         </dependency>
-        <!-- JSON-P via Champollion : jakarta.json pour décoder header/payload -->
+        <!-- JSON-P via Champollion: jakarta.json to decode header/payload -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-api</artifactId>
@@ -31,7 +31,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-P (JsonProvider) pour les tests (sur le classpath via ServiceLoader) -->
+        <!-- JSON-P implementation (JsonProvider) for the tests (on the classpath via ServiceLoader) -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>
@@ -42,11 +42,11 @@
     <build>
         <plugins>
             <!--
-                Java Modules workaround (cf. heisenberg-core) : module-info.java dans src/main/module-info/
-                pour éviter l'activation Java Modules au testCompile (deps test sans Automatic-Module-Name
-                sur le module-path). 1) clean retire module-info.class avant testCompile ;
-                2) compile recompile module-info.java seul à prepare-package ;
-                3) surefire exécute les tests sur le classpath.
+                Java Modules workaround (see heisenberg-core): module-info.java in src/main/module-info/
+                to avoid activating Java Modules at testCompile (test deps without Automatic-Module-Name
+                on the module-path). 1) clean removes module-info.class before testCompile;
+                2) compile recompiles module-info.java alone at prepare-package;
+                3) surefire runs the tests on the classpath.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -54,11 +54,11 @@
                 <executions>
                     <execution>
                         <!--
-                            Lié à process-sources (AVANT compile), pas seulement avant testCompile :
-                            sur un build incrémental sans `clean`, le module-info.class laissé par
-                            le compile-module-info du build précédent ferait basculer default-compile
-                            en mode module (deps test/classpath introuvables sur le module-path).
-                            prepare-package le recompile ensuite. Sur un build propre, c'est un no-op.
+                            Bound to process-sources (BEFORE compile), not only before testCompile:
+                            in an incremental build without `clean`, the module-info.class left by
+                            the previous build's compile-module-info would flip default-compile
+                            into module mode (test/classpath deps not found on the module-path).
+                            prepare-package recompiles it afterwards. On a clean build this is a no-op.
                         -->
                         <id>remove-stale-module-info</id>
                         <phase>process-sources</phase>

@@ -31,7 +31,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 /**
- * Source d'octets d'un document JWK Set ({@code mp.jwt.verify.publickey.location}). Abstrait
+ * Source of the bytes of a JWK Set document ({@code mp.jwt.verify.publickey.location}). Abstracts
  * the origin (HTTP or file) for {@link JwksKeyResolver}.
  */
 @FunctionalInterface
@@ -86,7 +86,7 @@ interface JwksSource {
                 Duration.ofSeconds(5));
     }
 
-    /** Source HTTP : un GET bloquant sur un virtual thread (pas de pinning). */
+    /** HTTP source: a blocking GET on a virtual thread (no pinning). */
     final class Http implements JwksSource {
         private final URI uri;
         private final HttpClient client;
@@ -120,7 +120,7 @@ interface JwksSource {
         }
     }
 
-    /** Source fichier. */
+    /** File source. */
     final class File implements JwksSource {
         private final Path path;
 

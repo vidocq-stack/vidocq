@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Filtre d'authentification : extraction Bearer, validation, SecurityContext / abort 401. */
+/** Authentication filter: Bearer extraction, validation, SecurityContext / abort 401. */
 class JwtAuthenticationFilterTest {
 
     private final JsonWebToken validToken = CassiniTestDoubles.token("alice", Set.of("admin"));

@@ -188,7 +188,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void issuerNotChecked_whenNotConfigured() throws Exception {
-        //config without leaving: iss du token ignored
+        // config without an issuer: the token's iss is ignored
         DefaultJwtValidator validator = new DefaultJwtValidator(
                 new ConfiguredKeyResolver(RSA.getPublic()),
                 new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false, Optional.empty()),

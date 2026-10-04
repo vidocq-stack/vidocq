@@ -27,7 +27,7 @@
     <packaging>jar</packaging>
 
     <name>Cervantes :: TCK Runner</name>
-    <description>Harness de conformance MicroProfile JWT 2.2 — TCK officiel TestNG/Arquillian</description>
+    <description>MicroProfile JWT 2.2 conformance harness — official TestNG/Arquillian TCK</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -212,8 +212,8 @@
 
     <profiles>
         <!--
-            Profil par défaut : smoke test JUnit — vérifie que les modules Cervantes
-            et la spec MP JWT 2.2 sont bien sur le classpath.
+            Default profile: JUnit smoke test — checks that the Cervantes modules
+            and the MP JWT 2.2 spec are on the classpath.
         -->
         <profile>
             <id>smoke</id>
@@ -246,9 +246,9 @@
         </profile>
 
         <!--
-            Profil TCK officiel : Arquillian TestNG + container Cervantes custom
-            (CervantesJwtDeployableContainer démarrant Chappe+Vauban+Cassini).
-            Cible : 100 % PASS (EJB/JACC optionals exclus).
+            Official TCK profile: Arquillian TestNG + custom Cervantes container
+            (CervantesJwtDeployableContainer starting Chappe+Vauban+Cassini).
+            Target: 100 % PASS (optional EJB/JACC excluded).
         -->
         <profile>
             <id>tck-official</id>

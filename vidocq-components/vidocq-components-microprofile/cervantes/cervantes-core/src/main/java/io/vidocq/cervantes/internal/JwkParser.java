@@ -45,12 +45,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Leaves a JWK Set (RFC 7517) — or a single JWK — in {@link Jwks} public keys,
- * without third-party crypt dependence (reconstruction RSA via {@code n}/{@code e} and EC via
+ * Parses a JWK Set document (RFC 7517) — or a single JWK — into {@link Jwks} public keys,
+ * without any third-party crypto dependency (RSA rebuilt from {@code n}/{@code e} and EC from
  * {@code crv}/{@code x}/{@code y} with the JCA).
  *
  * <p>Encryption keys ({@code use:"enc"}) and unsupported {@code kty} are ignored;
- * an invalid individual key is ignored rather than fail the entire set.ZZPH0ZZ
+ * an invalid individual key is ignored rather than failing the whole set.</p>
  */
 final class JwkParser {
 
@@ -123,7 +123,7 @@ final class JwkParser {
     }
 
     /**
-     * Parse un JWK (single) ou JWKS (set with "keys") JSON document and returns the first RSA
+     * Parses a JWK (single) or JWKS (set with "keys") JSON document and returns the first RSA
      * private key found. Used for {@code mp.jwt.decrypt.key.location} pointing to a JWK file.
      *
      * @param json raw JWK or JWKS JSON bytes

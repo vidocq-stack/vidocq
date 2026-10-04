@@ -33,17 +33,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * {@link KeyResolver} backed by a remote or local JWK Set, with cache and refreshment.
+ * {@link KeyResolver} backed by a remote or local JWK Set, with caching and refresh.
  *
  * <p>Resolution by {@code kid}. The set is cached and refreshed: (1) periodically when
- * the snapshot exceeds {@code refreshInterval}, and (2) on request when an unknown {@code kid} is
- * presented (key rotation) — bounded by {@code minRefreshInterval} to avoid herd effect
- * on non-existent {@code kid}. A refresh failure when a snapshot already exists is
- * tolerated (the old one is preserved); Only the failure of the very first load is spread. </p>
+ * the snapshot is older than {@code refreshInterval}, and (2) on demand when an unknown {@code kid}
+ * is presented (key rotation) — bounded by {@code minRefreshInterval} to avoid a thundering herd
+ * on non-existent {@code kid}s. A refresh failure when a snapshot already exists is
+ * tolerated (the old one is kept); only the failure of the very first load is propagated.</p>
  *
- * <p>Competition: {@link ReentrantLock} (VT-friendly, no pinning unlike
- * {@code synchronized}) around the cooling, with double verification; The snapshot is
- * published atomicly via ZZPH0ZZ.ZZPH1ZZ
+ * <p>Concurrency: {@link ReentrantLock} (virtual-thread friendly, no pinning unlike
+ * {@code synchronized}) around the refresh, with double-checking; the snapshot is
+ * published atomically via {@link AtomicReference}.</p>
  */
 public final class JwksKeyResolver implements KeyResolver {
 

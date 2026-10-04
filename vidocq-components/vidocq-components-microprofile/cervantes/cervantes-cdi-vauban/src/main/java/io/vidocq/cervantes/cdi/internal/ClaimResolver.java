@@ -43,7 +43,7 @@ import java.util.function.Supplier;
 
 /**
  * {@code @Claim} injection site resolution (MicroProfile JWT 2.2 §"Injection of JSON Web
- * Token claims") since the {@link JsonWebToken} of the current query.
+ * Token claims") from the {@link JsonWebToken} of the current request.
  *
  * <p>Shared by the {@code SyntheticBeanCreator} of the Build Compatible Extension. The name of the claim
  * comes from {@link Claim#standard()} (if different from {@link Claims#UNKNOWN}) otherwise from
@@ -51,11 +51,11 @@ import java.util.function.Supplier;
  *
  * <p>Types supported at the injection site:</p>
  * <ul>
- *   <li><b>bruts</b> : {@code String}, {@code Long}/{@code long}, {@code Integer}/{@code int},
- *       {@code Boolean}/{@code boolean}, {@code Double}/{@code double}, {@code Set<String>} ;</li>
- *   <li><b>jakarta.json</b> : {@code JsonValue}, {@code JsonString}, {@code JsonNumber},
- *       {@code JsonObject}, {@code JsonArray} (valeur JSON brute du claim) ;</li>
- *   <li><b>conteneurs</b> : {@code Optional<T>} (eager), {@code ClaimValue<T>},
+ *   <li><b>raw</b>: {@code String}, {@code Long}/{@code long}, {@code Integer}/{@code int},
+ *       {@code Boolean}/{@code boolean}, {@code Double}/{@code double}, {@code Set<String>};</li>
+ *   <li><b>jakarta.json</b>: {@code JsonValue}, {@code JsonString}, {@code JsonNumber},
+ *       {@code JsonObject}, {@code JsonArray} (raw JSON value of the claim);</li>
+ *   <li><b>containers</b>: {@code Optional<T>} (eager), {@code ClaimValue<T>},
  * {@code Provider<T>}, {@code Supplier<T>} (lazy — reread current token at each access,
  * only correct way for beans wider than {@code @RequestScoped}).</li>
  * </ul>
@@ -68,7 +68,7 @@ public final class ClaimResolver {
     /**
      * Resolves the value of the {@code @Claim} injection site.
      *
-     * @param injectionPoint le point d'injection courant fourni par CDI
+     * @param injectionPoint the current injection point supplied by CDI
      * @param context the validated {@link JsonWebToken} query context
      * @return the converted value according to the type reported at the injection site
      */
@@ -97,7 +97,7 @@ public final class ClaimResolver {
         return resolveValue(type, name, currentToken(context));
     }
 
-    /** Nom du claim : {@code standard()} prioritaire sur {@code value()} (spec §"@Claim"). */
+    /** Claim name: {@code standard()} takes precedence over {@code value()} (spec §"@Claim"). */
     static String claimName(Claim claim) {
         Claims standard = claim.standard();
         if (standard != null && standard != Claims.UNKNOWN) {

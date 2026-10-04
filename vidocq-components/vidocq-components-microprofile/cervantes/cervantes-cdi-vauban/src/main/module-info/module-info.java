@@ -18,15 +18,15 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Permanent integration of Cervantes for the Vauban container (MicroProfile JWT 2.2 §CDI).
+ * Cervantes CDI integration for the Vauban container (MicroProfile JWT 2.2 §CDI).
  *
- * <p>Provides the main {@code @RequestScoped JsonWebToken} of the current query (powered)
- * by the {@link io.vidocq.cervantes.cdi.JsonWebTokenContext} context, placed by the filter
- * and produces a {@code JwtValidator} configured from the
- * properties MicroProfile Config {@code mp.jwt.verify.*} (via Ravel).</p>
+ * <p>Provides the {@code @RequestScoped JsonWebToken} principal of the current request (fed
+ * by the {@link io.vidocq.cervantes.cdi.JsonWebTokenContext} context, set by the JAX-RS
+ * authentication filter) and produces a {@code JwtValidator} configured from the
+ * MicroProfile Config properties {@code mp.jwt.verify.*} (via Ravel).</p>
  *
  * <p>Note Java Modules — workaround testCompile: {@code module-info.java} in {@code src/main/module-info/}
- * (vauban-core/level-core are test-scope, absent from the path module). See ZZPH0ZZ.ZZPH1ZZ
+ * (vauban-core/ravel-core are test-scope, absent from the module path). See {@code cervantes-core/pom.xml}.</p>
  */
 module io.vidocq.cervantes.cdi.vauban {
     requires transitive io.vidocq.cervantes.core;

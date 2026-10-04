@@ -18,7 +18,7 @@
     <packaging>pom</packaging>
 
     <name>Cervantes</name>
-    <description>Implémentation MicroProfile JWT 2.2 — zéro librairie tierce, crypto via java.security, JSON via Champollion, config via Ravel, Java Modules strict, virtual threads, CDI via Vauban</description>
+    <description>MicroProfile JWT 2.2 implementation — no third-party library, crypto via java.security, JSON via Champollion, config via Ravel, strict Java Modules, virtual threads, CDI via Vauban</description>
     <url>https://codefloe.com/Vidocq/cervantes</url>
 
     <!--
@@ -54,10 +54,10 @@
 
     <properties>
         <!--
-            MicroProfile JWT 2.2 API. L'artefact officiel n'a NI module-info NI
-            Automatic-Module-Name : il est repackagé en module nommé explicite par
-            cervantes-mp-jwt-api (nom de module : org.eclipse.microprofile.jwt).
-            Dépendances compile de la spec : jakarta.json-api + jakarta.enterprise.cdi-api.
+            MicroProfile JWT 2.2 API. The official artifact has NEITHER a module-info NOR an
+            Automatic-Module-Name: it is repackaged as an explicit named module by
+            cervantes-mp-jwt-api (module name: org.eclipse.microprofile.jwt).
+            Compile dependencies of the spec: jakarta.json-api + jakarta.enterprise.cdi-api.
         -->
         <microprofile.jwt.version>2.2</microprofile.jwt.version>
 
@@ -67,13 +67,13 @@
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
-        <!-- Implémentations Vidocq upstream -->
+        <!-- Upstream Vidocq implementations -->
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>
 
-        <!-- JMH pour cervantes-bench -->
+        <!-- JMH for cervantes-bench -->
         <jmh.version>1.37</jmh.version>
 
         <!--
@@ -130,13 +130,13 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Spec MP JWT 2.2 — repackagée (named module) consommée par les modules Cervantes -->
+            <!-- MP JWT 2.2 spec — repackaged (named module), consumed by the Cervantes modules -->
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- API officielle conservée pour le TCK hors-reactor uniquement -->
+            <!-- Official API, kept for the TCK runner only -->
             <dependency>
                 <groupId>org.eclipse.microprofile.jwt</groupId>
                 <artifactId>microprofile-jwt-auth-api</artifactId>
@@ -165,7 +165,7 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Jakarta CDI / Inject / Annotation (provided dans les modules concernés) -->
+            <!-- Jakarta CDI / Inject / Annotation (provided in the modules that need them) -->
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -211,7 +211,7 @@
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- CDI via Vauban (test scope dans les modules) -->
+            <!-- CDI via Vauban (test scope in the modules) -->
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-api</artifactId>
@@ -228,13 +228,13 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- JAX-RS via Cassini (intégration sécurité M4) -->
+            <!-- JAX-RS via Cassini (security integration, M4) -->
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-api</artifactId>
                 <version>${cassini.version}</version>
             </dependency>
-            <!-- Adaptateur Chappe : fournit un RuntimeDelegate JAX-RS (tests de cervantes-jaxrs) -->
+            <!-- Chappe adapter: provides a JAX-RS RuntimeDelegate (cervantes-jaxrs tests) -->
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-chappe</artifactId>

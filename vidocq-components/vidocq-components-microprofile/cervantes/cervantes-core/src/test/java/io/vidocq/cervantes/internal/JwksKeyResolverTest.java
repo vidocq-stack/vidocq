@@ -150,7 +150,7 @@ class JwksKeyResolverTest {
 
         assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent());
 
-        // la source tombe en panne : on doit conserver l'ancien snapshot
+        // the source goes down: the previous snapshot must be kept
         delegate.set(() -> { throw new JwtValidationException("network down"); });
         assertTrue(resolver.resolve("rsa-a", SignatureAlgorithm.RS256).isPresent(),
                 "a transient fetch failure must fall back to the cached snapshot");

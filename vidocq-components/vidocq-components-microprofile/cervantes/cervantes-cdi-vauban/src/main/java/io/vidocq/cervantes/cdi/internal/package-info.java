@@ -18,8 +18,8 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Beans CDI internes de Cervantes : producteur du principal {@code @RequestScoped JsonWebToken}
- * ({@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}) et production du
+ * Internal CDI beans of Cervantes: producer of the {@code @RequestScoped JsonWebToken} principal
+ * ({@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}) and production of the
  * {@code JwtValidator} configured via MicroProfile Config
  * ({@link io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer}).
  */

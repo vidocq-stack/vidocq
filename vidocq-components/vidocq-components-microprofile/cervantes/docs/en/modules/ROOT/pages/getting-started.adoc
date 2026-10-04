@@ -8,7 +8,7 @@ This page assumes a Jakarta REST 4.0 application already running on xref:cassini
 
 * Java 25 (LTS) — Temurin recommended.
 * Maven 3.9.16 — pinned through `.sdkmanrc` at the root of Cervantes (`cd cervantes && sdk env`).
-* To build Cervantes itself from source: the shared parent POM `io.vidocq:vidocq-parent:0.3.0-SNAPSHOT` must be resolvable — it is declared with an empty `relativePath`, so install it into your local Maven repository first.
+* To build Cervantes itself from source: the shared parent POM `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT` must be resolvable — it is declared with an empty `relativePath`, so install it into your local Maven repository first.
 * A JAX-RS 4.0 application already deployed, with at least an `Application` class and a `@Path` resource.
 * xref:vauban::index.adoc[Vauban] active as the CDI 4.1 Lite container.
 * xref:ravel::index.adoc[Ravel] active as the MicroProfile Config implementation (Cervantes reads `mp.jwt.*` keys through the standard SPI).

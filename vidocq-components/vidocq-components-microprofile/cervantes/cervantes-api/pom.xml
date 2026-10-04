@@ -12,10 +12,10 @@
 
     <artifactId>cervantes-api</artifactId>
     <name>Cervantes :: API</name>
-    <description>Re-exposition contrôlée de la spec MicroProfile JWT 2.2 + SPI Cervantes (JwtValidator, KeyResolver, TokenHolder) — remplie à partir de M1</description>
+    <description>Controlled re-exposure of the MicroProfile JWT 2.2 spec + Cervantes SPI (JwtValidator, KeyResolver, TokenHolder)</description>
 
     <dependencies>
-        <!-- Spec MP JWT 2.2 — version modularisée, re-exposée transitivement -->
+        <!-- MP JWT 2.2 spec — modularised version, re-exposed transitively -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-mp-jwt-api</artifactId>

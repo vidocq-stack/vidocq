@@ -30,9 +30,9 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Public manufacture of {@link KeyResolver} from the JWT MicroProfile configuration
+ * Public factory of {@link KeyResolver} from the MicroProfile JWT configuration
  * ({@code mp.jwt.verify.publickey} / {@code mp.jwt.verify.publickey.location}). Stable facade for integrations
- * (CDI, JAX-RS) : garde {@code JwksSource}/{@code JwkParser} internes au package core.
+ * (CDI, JAX-RS): keeps {@code JwksSource}/{@code JwkParser} internal to the core package.
  */
 public final class KeyResolvers {
 

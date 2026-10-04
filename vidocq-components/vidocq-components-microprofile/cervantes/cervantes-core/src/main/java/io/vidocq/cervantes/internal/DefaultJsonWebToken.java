@@ -53,7 +53,7 @@ public final class DefaultJsonWebToken implements JsonWebToken {
     private static final JsonObject ANONYMOUS_PAYLOAD = JsonValue.EMPTY_JSON_OBJECT;
 
     /**
-     * Principal anonyme (aucun claim, {@code getName() == null}, {@code getClaimNames() == null},
+     * Anonymous principal (no claim, {@code getName() == null}, {@code getClaimNames() == null},
      * {@code getRawToken() == null}) — used by CDI integration when no JWT is
      * present on the current request.
      *
@@ -87,7 +87,7 @@ public final class DefaultJsonWebToken implements JsonWebToken {
     /**
      * Gross (unconverted) JSON value of the claim — {@code @Claim} type injection support
      * {@code jakarta.json} ({@code JsonValue}, {@code JsonString}, {@code JsonNumber},
-     * {@code JsonObject}, {@code JsonArray}) et de la reconstruction d'un {@code Set<String>} depuis
+     * {@code JsonObject}, {@code JsonArray}) and rebuilding a {@code Set<String>} from
      * any array claim (beyond {@code groups}/{@code aud}).
      *
      * @return the payload {@link JsonValue}, or {@link JsonValue#NULL} if the claim is absent.

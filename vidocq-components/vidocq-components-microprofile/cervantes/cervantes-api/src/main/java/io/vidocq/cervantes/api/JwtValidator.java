@@ -22,18 +22,18 @@ package io.vidocq.cervantes.api;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
- * Valide un JWT compact ({@code header.payload.signature}) et en produit un {@link JsonWebToken}.
+ * Validates a compact JWT ({@code header.payload.signature}) and produces a {@link JsonWebToken} from it.
  *
- * <p>Continuous validation: parsing, key resolution ({@link KeyResolver}), verification of
- * signature, then validation of claims according to a {@link JwtConfig}. Any failure shall result in a
- * {@link JwtValidationException} — a valid token never returns ZZPH1ZZ.ZZPH2ZZ
+ * <p>Validation chains parsing, key resolution ({@link KeyResolver}), signature
+ * verification, then claim validation according to a {@link JwtConfig}. Any failure raises a
+ * {@link JwtValidationException} — a valid token never yields {@code null}.</p>
  */
 public interface JwtValidator {
 
     /**
      * @param token compact JWT (without {@code "Bearer "} prefix)
      * @return the {@link JsonWebToken} principal if the token is valid
-     * @throws JwtValidationException if token is poorly formed, not signed correctly, or invalid
+     * @throws JwtValidationException if the token is malformed, not correctly signed, or invalid
      */
     JsonWebToken validate(String token) throws JwtValidationException;
 }

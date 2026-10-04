@@ -62,7 +62,7 @@ The runner uses Arquillian. The Surefire report lands in `cervantes-tck/target/s
 
 [NOTE]
 ====
-The runner was historically detached from the reactor (standalone `modelVersion 4.0.0` POM with no `<parent>`) because ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, could not parse Model 4.1.0 POMs. That constraint is obsolete since the workspace migrated to Maven 3.9.16 / Model 4.0.0, allowing the reintegration behind the `tck` profile.
+The runner was historically detached from the reactor (standalone `modelVersion 4.0.0` POM with no `<parent>`) because ShrinkWrap Maven Resolver 3.3, transitively pulled in by the official TCK, could not parse Model 4.1.0 POMs. That constraint no longer applies since the workspace migrated to Maven 3.9.16 / Model 4.0.0, allowing the reintegration behind the `tck` profile.
 ====
 
 Stack assembled by the runner:

@@ -4,7 +4,7 @@ Demonstrates securing a JAX-RS resource with **MicroProfile JWT 2.2** via Cervan
 the spec in one resource ([`ProtectedResource`](src/main/java/io/vidocq/cervantes/examples/ProtectedResource.java)):
 
 - **Authorization** — `@RolesAllowed` / `@PermitAll` / `@DenyAll`, enforced by Cervantes'
-  `RolesAllowedDynamicFeature` (cervantes-cassini): the verified token's `groups` claim becomes the
+  `RolesAllowedDynamicFeature` (cervantes-jaxrs): the verified token's `groups` claim becomes the
   caller's roles.
 - **Identity** — `@Inject @Claim` pulls typed claims of the current request's token into the
   request-scoped resource (cervantes-cdi-vauban).
@@ -43,7 +43,7 @@ In a Vidocq runtime (or any Cassini + Vauban + Chappe stack), add the Cervantes 
 the issuer / verification key (MP Config, e.g. `mp.jwt.verify.publickey.location`,
 `mp.jwt.verify.issuer`). Cervantes then, per request:
 
-1. `JwtAuthenticationFilter` (cervantes-cassini) extracts the `Authorization: Bearer …` token,
+1. `JwtAuthenticationFilter` (cervantes-jaxrs) extracts the `Authorization: Bearer …` token,
    validates it (`DefaultJwtValidator`: signature + iss/aud/exp), and installs a `SecurityContext`
    backed by the `JsonWebToken`.
 2. `RolesAllowedDynamicFeature` enforces `@RolesAllowed` against the token's `groups`.

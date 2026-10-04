@@ -34,13 +34,13 @@ import java.util.Set;
  * Validates the temporal and matching claims of a JWT according to a {@link JwtConfig}.
  *
  * <ul>
- * <li>{@code exp}: rejected if {@code exp + skew < now}; absence rejected if ZZPH2ZZ.ZZPH4ZZ
- * <li>{@code iat}: rejected if {@code iat > exp} (token after expiry).</li>
- * <li>{@code nbf}: rejected if ZZPH1ZZ.ZZPH3ZZ
- * <li>{@code iss}: If a transmitter is configured, must match exactement.ZZPH2ZZ
- * <li>{@code aud}: If audiences are configured, the intersection with {@code aud} must be no vide.ZZPH3ZZ
+ * <li>{@code exp}: rejected if {@code exp + skew < now}; absence rejected if {@code requireExpiration}.</li>
+ * <li>{@code iat}: rejected if {@code iat > exp} (token issued after its expiry).</li>
+ * <li>{@code nbf}: rejected if {@code nbf - skew > now}.</li>
+ * <li>{@code iss}: if an issuer is configured, it must match exactly.</li>
+ * <li>{@code aud}: if audiences are configured, the intersection with {@code aud} must be non-empty.</li>
  * <li>Token age: if {@code mp.jwt.verify.token.age} is configured, {@code now - iat > tokenAge} is rejected.</li>
- * <li> identity: at least one claim among {@code upn}, {@code preferred_username}, {@code sub} must be present.
+ * <li>Identity: at least one claim among {@code upn}, {@code preferred_username}, {@code sub} must be present.</li>
  * </ul>
  */
 final class JwtClaimsValidator {

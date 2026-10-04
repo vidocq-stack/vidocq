@@ -27,11 +27,11 @@ import jakarta.enterprise.inject.Produces;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
- * Producteur CDI du principal {@code @RequestScoped JsonWebToken} (MicroProfile JWT 2.2).
+ * CDI producer of the {@code @RequestScoped JsonWebToken} principal (MicroProfile JWT 2.2).
  *
- * <p>Expose the validated token of the current request (via {@link JsonWebTokenContext}). In the absence
- * token (anonymous request), produces an anonymous principal without claim rather than {@code null}
- * (forbidden for normal range bean).</p>
+ * <p>Expose the validated token of the current request (via {@link JsonWebTokenContext}). When there is no
+ * token (anonymous request), produces an anonymous principal without claims rather than {@code null}
+ * (not allowed for a normal-scoped bean).</p>
  */
 @ApplicationScoped
 public class JsonWebTokenProducer {

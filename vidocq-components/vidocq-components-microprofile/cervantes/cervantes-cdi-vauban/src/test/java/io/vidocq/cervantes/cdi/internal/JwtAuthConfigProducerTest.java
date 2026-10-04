@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Construction de la config JWT et du KeyResolver depuis MicroProfile Config (mp.jwt.verify.*). */
+/** Building the JWT config and the KeyResolver from MicroProfile Config (mp.jwt.verify.*). */
 class JwtAuthConfigProducerTest {
 
     @Test

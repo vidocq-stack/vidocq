@@ -11,20 +11,20 @@
     </parent>
 
     <artifactId>cervantes-mp-jwt-api</artifactId>
-    <name>Cervantes :: MicroProfile JWT API (modularisé)</name>
+    <name>Cervantes :: MicroProfile JWT API (modularised)</name>
     <description>
-        Re-package de org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2 avec un
-        module-info.class explicite (nom : org.eclipse.microprofile.jwt). L'API officielle ne
-        fournit ni module-info ni Automatic-Module-Name, ce qui empêche son usage avec jlink.
-        Cet artefact est l'unique source de la spec MP JWT 2.2 consommée par les modules
-        Cervantes ; le TCK officiel (hors reactor) continue d'utiliser l'API d'origine.
+        Repackage of org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2 with an
+        explicit module-info.class (name: org.eclipse.microprofile.jwt). The official API
+        provides neither a module-info nor an Automatic-Module-Name, which prevents its use with jlink.
+        This artifact is the single source of the MP JWT 2.2 spec consumed by the
+        Cervantes modules; the official TCK runner keeps using the original API.
     </description>
 
     <dependencies>
         <!--
-            La spec officielle est récupérée en 'provided' uniquement pour permettre l'unpack
-            de ses .class dans target/classes ; elle n'est pas exposée transitivement aux
-            consommateurs, qui reçoivent à la place le jar repackagé avec son module-info explicite.
+            The official spec is fetched as 'provided' only to allow unpacking its .class files
+            into target/classes; it is not exposed transitively to consumers, which receive
+            the repackaged jar with its explicit module-info instead.
         -->
         <dependency>
             <groupId>org.eclipse.microprofile.jwt</groupId>
@@ -60,7 +60,7 @@
 
     <build>
         <plugins>
-            <!-- 1) Décompresse les .class de microprofile-jwt-auth-api dans target/classes -->
+            <!-- 1) Unpack the .class files of microprofile-jwt-auth-api into target/classes -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -87,15 +87,15 @@
                                     <version>${microprofile.jwt.version}</version>
                                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                                     <!--
-                                        On exclut le manifest et les méta d'origine ;
-                                        maven-jar-plugin réécrira un manifest propre pour notre
-                                        artefact (Automatic-Module-Name désormais superflu :
-                                        le module est explicite).
+                                        The original manifest and metadata are excluded;
+                                        maven-jar-plugin writes a clean manifest for our
+                                        artifact (Automatic-Module-Name is now superfluous:
+                                        the module is explicit).
 
-                                        META-INF/LICENSE et META-INF/NOTICE ne sont volontairement
-                                        PAS exclus : les .class dépaquetés restent sous Apache-2.0,
-                                        dont les sections 4(a) et 4(d) imposent de joindre la licence
-                                        et le NOTICE amont à toute redistribution.
+                                        META-INF/LICENSE and META-INF/NOTICE are deliberately
+                                        NOT excluded: the unpacked .class files remain under Apache-2.0,
+                                        whose sections 4(a) and 4(d) require shipping the upstream license
+                                        and NOTICE with any redistribution.
                                     -->
                                     <excludes>META-INF/MANIFEST.MF,META-INF/maven/**,META-INF/versions/**</excludes>
                                 </artifactItem>
@@ -108,11 +108,11 @@
             </plugin>
 
             <!--
-                2) Compile uniquement src/main/java/module-info.java en le patchant dans le module
-                   'org.eclipse.microprofile.jwt' (les .class unpackés plus haut fournissent les
-                   packages exportés que javac valide). Le module-info ne déclare que des exports
-                   (aucun requires) : les consommateurs déclarent eux-mêmes leurs requires
-                   (jakarta.json, jakarta.cdi) — même approche que heisenberg-mp-ft-api.
+                2) Compile only src/main/java/module-info.java, patching it into the module
+                   'org.eclipse.microprofile.jwt' (the .class files unpacked above provide the
+                   exported packages that javac validates). The module-info declares exports only
+                   (no requires): consumers declare their own requires
+                   (jakarta.json, jakarta.cdi) — same approach as heisenberg-mp-ft-api.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

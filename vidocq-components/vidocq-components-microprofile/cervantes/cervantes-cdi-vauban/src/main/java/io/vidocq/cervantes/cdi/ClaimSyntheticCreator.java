@@ -26,12 +26,12 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 
 /**
- * {@link SyntheticBeanCreator} which solves at runtime the value of an injection point
- * {@code @Claim} delegating to {@link ClaimResolver}.
+ * {@link SyntheticBeanCreator} that resolves, at runtime, the value of a {@code @Claim}
+ * injection point by delegating to {@link ClaimResolver}.
  *
- * <p>Classe {@code public} top level manufacturer without argument (contract CDI 4.1)
- * §SyntheticBeanCreater); is not herself a bean. The current {@link InjectionPoint} and the
- * {@link JsonWebTokenContext} query are obtained via the parameter ZZPH1ZZ.ZZPH2ZZ
+ * <p>Top-level {@code public} class with a no-argument constructor (CDI 4.1
+ * §SyntheticBeanCreator contract); it is not a bean itself. The current {@link InjectionPoint} and the
+ * request's {@link JsonWebTokenContext} are obtained through the {@link Instance} parameter.</p>
  */
 public class ClaimSyntheticCreator implements SyntheticBeanCreator<Object> {
 

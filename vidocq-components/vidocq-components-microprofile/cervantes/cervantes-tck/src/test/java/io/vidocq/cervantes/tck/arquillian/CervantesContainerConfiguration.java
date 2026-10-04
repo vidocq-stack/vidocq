@@ -22,7 +22,7 @@ package io.vidocq.cervantes.tck.arquillian;
 import org.jboss.arquillian.container.spi.ConfigurationException;
 import org.jboss.arquillian.container.spi.client.container.ContainerConfiguration;
 
-/** Configuration Arquillian du container Cervantes JWT. */
+/** Arquillian configuration of the Cervantes JWT container. */
 public class CervantesContainerConfiguration implements ContainerConfiguration {
 
     private String host = "127.0.0.1";

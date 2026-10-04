@@ -112,7 +112,7 @@ public final class DefaultJwtValidator implements JwtValidator {
         if (config.encryptionRequired()) {
             throw new JwtValidationException("token must be encrypted (JWE) but received a signed-only token (JWS)");
         }
-        return token; // le parser valide la forme exacte
+        return token; // the parser validates the exact shape
     }
 
     private static String headerString(ParsedJwt jwt, String name) {

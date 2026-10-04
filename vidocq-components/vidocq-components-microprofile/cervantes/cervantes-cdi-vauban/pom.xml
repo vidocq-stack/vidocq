@@ -12,7 +12,7 @@
 
     <artifactId>cervantes-cdi-vauban</artifactId>
     <name>Cervantes :: CDI (Vauban)</name>
-    <description>Intégration CDI : producteur @RequestScoped JsonWebToken, contexte de requête, et production du JwtValidator piloté par MicroProfile Config (Ravel). L'injection @Claim typée est un raffinement ultérieur (voir ROADMAP).</description>
+    <description>CDI integration: @RequestScoped JsonWebToken producer, request context, and JwtValidator production driven by MicroProfile Config (Ravel), with typed @Claim injection.</description>
 
     <dependencies>
         <dependency>
@@ -55,7 +55,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Container CDI Vauban pour les tests d'intégration -->
+        <!-- Vauban CDI container for the integration tests -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
@@ -66,13 +66,13 @@
             <artifactId>vauban-classloader-spi</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation MicroProfile Config pour les tests (Ravel) -->
+        <!-- MicroProfile Config implementation for the tests (Ravel) -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-core</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-P pour les tests (forge de tokens via TestJwts) -->
+        <!-- JSON-P implementation for the tests (token forging via TestJwts) -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>
@@ -83,8 +83,8 @@
     <build>
         <plugins>
             <!--
-                Java Modules workaround (cf. cervantes-core) : module-info.java dans src/main/module-info/.
-                Nettoyage lié à process-sources (avant compile) pour les builds incrémentaux.
+                Java Modules workaround (see cervantes-core): module-info.java in src/main/module-info/.
+                Cleanup bound to process-sources (before compile) for incremental builds.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

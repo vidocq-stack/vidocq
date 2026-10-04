@@ -28,7 +28,7 @@ import java.util.function.Supplier;
  * token of the current query at each call (spec MicroProfile JWT 2.2 — a {@code ClaimValue}
  * injected into a {@code @ApplicationScoped} bean should reflect the active request).
  *
- * @param <T> type de la valeur du claim
+ * @param <T> type of the claim value
  */
 public final class ClaimValueImpl<T> implements ClaimValue<T> {
 

@@ -12,14 +12,14 @@
 
     <artifactId>cervantes-examples</artifactId>
     <name>Cervantes :: Examples</name>
-    <description>Exemples d'utilisation de MicroProfile JWT 2.2 via Cervantes : ressource JAX-RS @RolesAllowed + injection @Inject @Claim, démontrée sous container Vauban embarqué.</description>
+    <description>Examples of MicroProfile JWT 2.2 usage through Cervantes: a JAX-RS @RolesAllowed resource + @Inject @Claim injection, demonstrated under an embedded Vauban container.</description>
 
     <properties>
         <!--
-            Module de démonstration : jamais publié comme dépendance (deploy.skip), et javadoc.skip
-            car un module d'exemples sans API publique fait échouer le canari javadoc au deploy.
-            Pas de module-info : l'exemple tourne en classpath (le test pilote un container Vauban
-            embarqué — même approche que les tests d'intégration de cervantes-cdi-vauban).
+            Demo module: never published as a dependency (deploy.skip), and javadoc.skip
+            because an examples module with no public API makes the javadoc canary fail at deploy.
+            No module-info: the example runs on the classpath (the test drives an embedded Vauban
+            container — same approach as the integration tests of cervantes-cdi-vauban).
         -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>
@@ -58,7 +58,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Test : démonstration end-to-end sous Vauban embarqué (sans serveur HTTP). -->
+        <!-- Test: end-to-end demonstration under an embedded Vauban (no HTTP server). -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-cdi-vauban</artifactId>

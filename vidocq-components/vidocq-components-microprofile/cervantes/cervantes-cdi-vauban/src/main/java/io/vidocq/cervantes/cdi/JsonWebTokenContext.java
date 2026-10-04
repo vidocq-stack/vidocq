@@ -25,12 +25,12 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.util.Optional;
 
 /**
- * Query context with {@link JsonWebToken} validated from the current query.
+ * Request context carrying the validated {@link JsonWebToken} of the current request.
  *
- * <p>Posted by JAX-RS authentication filter (module {@code cervantes-jaxrs}, M4) after
- * validation du bearer token, puis lu par {@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}
- * to produce the main injection. {@code @RequestScoped}: one instance per query, isolated
- * between competing requests by the Vauban.ZZPH0ZZ query context
+ * <p>Set by the JAX-RS authentication filter (module {@code cervantes-jaxrs}) after
+ * validating the bearer token, then read by {@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}
+ * to produce the injectable principal. {@code @RequestScoped}: one instance per request, isolated
+ * between concurrent requests by the Vauban request context.</p>
  */
 @RequestScoped
 public class JsonWebTokenContext {

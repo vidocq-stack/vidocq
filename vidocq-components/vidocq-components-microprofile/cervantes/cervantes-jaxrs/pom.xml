@@ -11,17 +11,17 @@
     </parent>
 
     <artifactId>cervantes-jaxrs</artifactId>
-    <name>Cervantes :: Cassini (JAX-RS security)</name>
-    <description>Sécurité JAX-RS MicroProfile JWT 2.2 : JwtAuthenticationFilter (auth bearer + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). API JAX-RS standard — validé contre Cassini mais impl-agnostique.</description>
+    <name>Cervantes :: JAX-RS (security)</name>
+    <description>MicroProfile JWT 2.2 JAX-RS security: JwtAuthenticationFilter (bearer auth + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). Standard JAX-RS API — validated against Cassini but implementation-agnostic.</description>
 
     <dependencies>
-        <!-- Validateur + principal (cervantes-api) et contexte de requête CDI (cervantes-cdi-vauban) -->
+        <!-- Validator + principal (cervantes-api) and CDI request context (cervantes-cdi-vauban) -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-cdi-vauban</artifactId>
         </dependency>
 
-        <!-- MicroProfile Config API : lecture de mp.jwt.token.header / mp.jwt.token.cookie -->
+        <!-- MicroProfile Config API: reading mp.jwt.token.header / mp.jwt.token.cookie -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-mp-config-api</artifactId>
@@ -63,13 +63,13 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation JSON-P pour forger des tokens de test -->
+        <!-- JSON-P implementation to forge test tokens -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Fournit un jakarta.ws.rs.ext.RuntimeDelegate pour construire des Response dans les tests -->
+        <!-- Provides a jakarta.ws.rs.ext.RuntimeDelegate to build Responses in the tests -->
         <dependency>
             <groupId>io.vidocq.cassini</groupId>
             <artifactId>cassini-chappe</artifactId>
@@ -79,7 +79,7 @@
 
     <build>
         <plugins>
-            <!-- Java Modules workaround (cf. cervantes-core) : nettoyage lié à process-sources. -->
+            <!-- Java Modules workaround (see cervantes-core): cleanup bound to process-sources. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
