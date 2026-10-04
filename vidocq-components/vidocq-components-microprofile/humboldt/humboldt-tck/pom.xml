@@ -252,15 +252,16 @@
         <!--  OTel SDK officiel — utilisé par le TCK pour ses fixtures.   -->
         <!--  Hors-Humboldt-prod : ne pollue pas le runtime applicatif.   -->
         <!-- ============================================================ -->
+        <!-- Compile scope on purpose: the bridge in humboldt-tck/src/main (OtelSpanExporterBridge,
+             SpanDataMapper) imports io.opentelemetry.sdk.*, so the SDK artifacts below cannot be test scope.
+             Only semconv and instrumentation-annotations (unused by src/main) are test scope. -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
-            <scope>test</scope>
         </dependency>
         <!-- Propagateurs B3 (single+multi) et Jaeger — utilisés par B3PropagationTest,
              B3MultiPropagationTest, JaegerPropagationTest. Disponibles via la
@@ -276,7 +277,6 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-testing</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.opentelemetry.semconv</groupId>

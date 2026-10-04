@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
 - The official TCK artifacts are on **public Maven Central** (no manual install needed):
-  `microprofile-telemetry-tracing-tck:2.1`, `microprofile-telemetry-metrics-tck:2.1`, `microprofile-telemetry-logs-tck:2.1`
-- **TCK status: 85/85 PASS (2026-06-24)** — see [`TCK.md`](TCK.md)
+  `microprofile-telemetry-tracing-tck:2.2-RC3`, `microprofile-telemetry-metrics-tck:2.2-RC3`, `microprofile-telemetry-logs-tck:2.2-RC3`
+- **TCK status: 85/85 PASS on TCK 2.2-RC3 (2026-10-04; 2.1: 85/85 on 2026-06-24)** — see [`TCK.md`](TCK.md)
 
 ## Essential commands
 
@@ -38,7 +38,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-Humboldt is a MicroProfile Telemetry 2.1 implementation (tracing + metrics + logs) based on the public OpenTelemetry API, **without bundling `opentelemetry-sdk` or third-party exporters** — the entire SDK is rewritten behind the standard OTel API surface.
+Humboldt is a MicroProfile Telemetry 2.2 implementation (tracing + metrics + logs, OpenTelemetry 1.66) based on the public OpenTelemetry API, **without bundling `opentelemetry-sdk` or third-party exporters** — the entire SDK is rewritten behind the standard OTel API surface.
 
 ```
 humboldt-api                       ← public facade + stable SPI (M0)
@@ -71,7 +71,7 @@ humboldt-tck                       ← official TCK runner, in-reactor behind th
 2. **No Netty / grpc-java / OkHttp / Guava dependency** — any exception must go through the `dependency-gatekeeper` agent.
 3. **`@WithSpan` must work on virtual threads without pinning** — use `ScopedValue<Context>` (JEP 506), never direct `ThreadLocal` on the hot path.
 4. **`humboldt-tck` stays gated behind the `tck` Maven profile** — a plain `mvn install` must never download or run anything TCK-related.
-5. **MicroProfile Telemetry 2.1 conformance**: any patch to the core must preserve the TCK score once achieved.
+5. **MicroProfile Telemetry 2.2 conformance**: any patch to the core must preserve the TCK score once achieved.
 
 ## Conventions
 
