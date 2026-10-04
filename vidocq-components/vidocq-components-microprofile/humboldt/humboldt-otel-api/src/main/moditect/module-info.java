@@ -29,6 +29,36 @@ module io.opentelemetry.api {
     exports io.opentelemetry.api.metrics;
     exports io.opentelemetry.api.trace;
     exports io.opentelemetry.api.trace.propagation;
+
+    // OpenTelemetry's cross-jar implementation package (ConfigUtil, Utils, StringUtils, OtelEncodingUtils...).
+    // Upstream the API jar is an automatic module that exports every package, and the SDK and exporter jars
+    // call into it: without this export they fail on the module path with an IllegalAccessError
+    // (BUG-20261004-03). Qualified, never public API: exactly the OpenTelemetry 1.66 stable artifacts that
+    // reference it (jdeps on every jar of opentelemetry-bom 1.66.0), named by their Automatic-Module-Name:
+    //   opentelemetry-sdk-common                          -> io.opentelemetry.sdk.common
+    //   opentelemetry-sdk-trace                           -> io.opentelemetry.sdk.trace
+    //   opentelemetry-sdk-metrics                         -> io.opentelemetry.sdk.metrics
+    //   opentelemetry-sdk-logs                            -> io.opentelemetry.sdk.logs
+    //   opentelemetry-sdk-extension-autoconfigure-spi     -> io.opentelemetry.sdk.autoconfigure.spi
+    //   opentelemetry-sdk-extension-jaeger-remote-sampler -> io.opentelemetry.sdk.extension.trace.jaeger
+    //   opentelemetry-extension-trace-propagators         -> io.opentelemetry.extension.trace.propagation
+    //   opentelemetry-exporter-common                     -> io.opentelemetry.exporter.internal
+    //   opentelemetry-exporter-otlp-common                -> io.opentelemetry.exporter.internal.otlp
+    //   opentelemetry-exporter-otlp                       -> io.opentelemetry.exporter.otlp
+    // Incubating (-alpha) artifacts are not listed; they need --add-exports. Re-check on each OpenTelemetry
+    // upgrade: a target module that is absent at run time is ignored. (No comment inside the list below:
+    // ModiTect would take it into the module names.)
+    exports io.opentelemetry.api.internal to
+            io.opentelemetry.sdk.common,
+            io.opentelemetry.sdk.trace,
+            io.opentelemetry.sdk.metrics,
+            io.opentelemetry.sdk.logs,
+            io.opentelemetry.sdk.autoconfigure.spi,
+            io.opentelemetry.sdk.extension.trace.jaeger,
+            io.opentelemetry.extension.trace.propagation,
+            io.opentelemetry.exporter.internal,
+            io.opentelemetry.exporter.internal.otlp,
+            io.opentelemetry.exporter.otlp;
 }
 
 
