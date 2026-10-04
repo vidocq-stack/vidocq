@@ -42,7 +42,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * {@code @Claim} injection site resolution (MicroProfile JWT 2.1 §"Injection of JSON Web
+ * {@code @Claim} injection site resolution (MicroProfile JWT 2.2 §"Injection of JSON Web
  * Token claims") since the {@link JsonWebToken} of the current query.
  *
  * <p>Shared by the {@code SyntheticBeanCreator} of the Build Compatible Extension. The name of the claim

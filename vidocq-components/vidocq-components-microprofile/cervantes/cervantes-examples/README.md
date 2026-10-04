@@ -1,6 +1,6 @@
 # Cervantes :: Examples
 
-Demonstrates securing a JAX-RS resource with **MicroProfile JWT 2.1** via Cervantes — both halves of
+Demonstrates securing a JAX-RS resource with **MicroProfile JWT 2.2** via Cervantes — both halves of
 the spec in one resource ([`ProtectedResource`](src/main/java/io/vidocq/cervantes/examples/ProtectedResource.java)):
 
 - **Authorization** — `@RolesAllowed` / `@PermitAll` / `@DenyAll`, enforced by Cervantes'

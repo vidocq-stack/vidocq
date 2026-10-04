@@ -31,7 +31,7 @@ import java.security.PrivateKey;
  *
  * <p>Supports: PEM PKCS#8 ({@code -----BEGIN PRIVATE KEY-----}) and JWK/JWKS JSON (detected)
  * by the first character '{') for {@code mp.jwt.decrypt.key.location} pointing to a
- * RSA private key JWK file (MP JWT 2.1 spec §"JWE Private Key").</p>
+ * RSA private key JWK file (MP JWT 2.2 spec §"JWE Private Key").</p>
  */
 public final class Jwe {
 

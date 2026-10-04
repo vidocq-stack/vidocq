@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Tokens MicroProfile JWT 2.1 (JWE, <em>sign-then-encrypt</em>): RSA-OAEP-256 + A256GCM.
+ * Tokens MicroProfile JWT 2.2 (JWE, <em>sign-then-encrypt</em>): RSA-OAEP-256 + A256GCM.
  */
 class JweDecryptorTest {
 

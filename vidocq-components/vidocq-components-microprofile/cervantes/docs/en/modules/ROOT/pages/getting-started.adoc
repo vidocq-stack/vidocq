@@ -78,7 +78,7 @@ mp.jwt.verify.issuer=https://issuer.example.com
 # Accepted audiences (the "aud" claim) — comma-separated
 mp.jwt.verify.audiences=orders-api
 
-# Optional: expected algorithm (defaults to RS256)
+# Optional: restrict to one algorithm family (unset: RS256 and ES256 are both accepted, MP JWT 2.2)
 mp.jwt.verify.publickey.algorithm=RS256
 ----
 

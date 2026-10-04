@@ -2,7 +2,7 @@
 :description: 208/208 status, runner execution, in-reactor architecture behind the tck profile, the documented exclusion, gaps resolved during the race to 100 %.
 
 [.lead]
-The official MicroProfile JWT 2.2 TCK verifies that an implementation correctly accepts, rejects and exposes a wide range of forged tokens against an Arquillian reference application — inline keys, JWKS, JWE, standard claims, MP claims, `Authorization` and cookie transport, key rotation, falsified signatures, `exp` / `nbf` / `iat` at the boundaries. Cervantes passes it at **208 / 208** on the 2.2 release (October 2026, MicroProfile 7.2). The 2.1 release was passed at 206 / 206 (May 2026, milestone M6); the 2.2 suite adds `RsaAndEcSignatureAlgorithmTest` (2 tests: RS256 and ES256 tokens verified against one mixed RSA+EC JWKS) and drops the EJB, JACC and Servlet container tests.
+The official MicroProfile JWT 2.2 TCK verifies that an implementation correctly accepts, rejects and exposes a wide range of forged tokens against an Arquillian reference application — inline keys, JWKS, JWE, standard claims, MP claims, `Authorization` and cookie transport, key rotation, falsified signatures, `exp` / `nbf` / `iat` at the boundaries. Cervantes passes it at **208 / 208** (MicroProfile JWT Auth 2.2 TCK, run on 2026-10-04). The 2.1 release was passed at 206 / 206 (May 2026, milestone M6); the 2.2 suite adds `RsaAndEcSignatureAlgorithmTest` (2 tests: RS256 and ES256 tokens verified against one mixed RSA+EC JWKS) and drops the EJB, JACC and Servlet container tests.
 
 == Status
 

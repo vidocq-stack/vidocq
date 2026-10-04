@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Cervantes JAX-RS security (MicroProfile JWT 2.1): bearer token authentication and role-based
+ * Cervantes JAX-RS security (MicroProfile JWT 2.2): bearer token authentication and role-based
  * authorization.
  *
  * <ul>

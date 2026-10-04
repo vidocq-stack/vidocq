@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Application of {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} (MicroProfile JWT 2.1 §1.1):
+ * Application of {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} (MicroProfile JWT 2.2 §1.1):
  * method-over-class precedence and 200/401/403 status codes.
  */
 class RolesAllowedEnforcementTest {

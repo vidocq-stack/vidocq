@@ -72,7 +72,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Arquillian adapter that deploys a {@link WebArchive} of TCK MP JWT 2.1
+ * Arquillian adapter that deploys a {@link WebArchive} of TCK MP JWT 2.2
  * on a complete Cervantes stack: Vauban CDI + Cassini JAX-RS + HTTP Chappe.
  *
  * <p>Deployed strategy:</p>

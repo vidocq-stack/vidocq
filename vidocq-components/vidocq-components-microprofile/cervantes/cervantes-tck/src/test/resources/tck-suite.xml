@@ -1,10 +1,10 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
 <!--
-    TestNG suite for the MP JWT 2.1 base TCK.
+    TestNG suite for the MP JWT 2.2 base TCK.
     Groups: jwt, utils, jaxrs, cdi, cdi-json, cdi-provider, config
     Excludes: ejb-optional, jacc-optional (not applicable for a JAX-RS-only implementation)
 -->
-<suite name="MP JWT 2.1 TCK" verbose="2">
+<suite name="MP JWT 2.2 TCK" verbose="2">
     <test name="MP JWT Base Tests">
         <groups>
             <run>

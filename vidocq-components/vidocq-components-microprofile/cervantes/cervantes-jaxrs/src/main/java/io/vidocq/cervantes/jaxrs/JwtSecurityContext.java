@@ -26,7 +26,7 @@ import java.security.Principal;
 import java.util.Set;
 
 /**
- * JAX-RS {@link SecurityContext} backed by a validated {@link JsonWebToken} (MicroProfile JWT 2.1 §7).
+ * JAX-RS {@link SecurityContext} backed by a validated {@link JsonWebToken} (MicroProfile JWT 2.2 §7).
  *
  * <ul>
  *   <li>{@link #getUserPrincipal()} → the {@code JsonWebToken} itself (which is a {@link Principal}).</li>

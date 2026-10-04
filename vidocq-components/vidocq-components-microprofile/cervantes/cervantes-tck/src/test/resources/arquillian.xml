@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Configuration Arquillian pour la suite TCK MicroProfile JWT 2.1.
+    Configuration Arquillian pour la suite TCK MicroProfile JWT 2.2.
     Le qualifier "cervantes-jwt" est sélectionné par la propriété système
     arquillian.launch=cervantes-jwt (voir cervantes-tck/pom.xml profil tck-official).
 -->

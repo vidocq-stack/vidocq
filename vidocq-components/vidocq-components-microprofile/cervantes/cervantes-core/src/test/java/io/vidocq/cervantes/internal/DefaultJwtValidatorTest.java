@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Validation engine tests (MicroProfile JWT 2.1 §2; RFC 7515/7519).
+ * Validation engine tests (MicroProfile JWT 2.2 §2; RFC 7515/7519).
  * Fixed clock to make {@code exp}/{@code nbf} deterministic.
  */
 class DefaultJwtValidatorTest {

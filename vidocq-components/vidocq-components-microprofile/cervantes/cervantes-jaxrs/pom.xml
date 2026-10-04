@@ -12,7 +12,7 @@
 
     <artifactId>cervantes-jaxrs</artifactId>
     <name>Cervantes :: Cassini (JAX-RS security)</name>
-    <description>Sécurité JAX-RS MicroProfile JWT 2.1 : JwtAuthenticationFilter (auth bearer + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). API JAX-RS standard — validé contre Cassini mais impl-agnostique.</description>
+    <description>Sécurité JAX-RS MicroProfile JWT 2.2 : JwtAuthenticationFilter (auth bearer + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). API JAX-RS standard — validé contre Cassini mais impl-agnostique.</description>
 
     <dependencies>
         <!-- Validateur + principal (cervantes-api) et contexte de requête CDI (cervantes-cdi-vauban) -->

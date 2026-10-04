@@ -41,7 +41,7 @@ import java.util.Base64;
 import java.util.Objects;
 
 /**
- * Decrypt an encrypted JWT (JWE compact, 5 parts) in its nested JWS (MicroProfile JWT 2.1:
+ * Decrypt an encrypted JWT (JWE compact, 5 parts) in its nested JWS (MicroProfile JWT 2.2:
  * <em>sign-then-encrypt</em>). Zero third-party cryptic dependency — {@code javax.crypto} only.
  *
  * <p>Key Management: {@code RSA-OAEP} (SHA-1) and {@code RSA-OAEP-256} (SHA-256). Content encryption:

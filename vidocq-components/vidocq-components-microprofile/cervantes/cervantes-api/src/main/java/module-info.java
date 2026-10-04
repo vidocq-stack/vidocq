@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Stable public SPI of Cervantes and re-exposure of the spec MicroProfile JWT 2.1.
+ * Stable public SPI of Cervantes and re-exposure of the spec MicroProfile JWT 2.2.
  *
  * <p>Export {@code io.vidocq.cervantes.api}: the transport-agnostic SPI shared by the core,
  * CDI integration and JAX-RS integration ({@code JwtValidator}, {@code KeyResolver},

@@ -44,7 +44,7 @@ import java.util.Set;
 
 /**
  * Build Compatible Extension synthesizing one bean per type encountered at a {@code @Claim}
- * injection point (MicroProfile JWT 2.1). The {@code value}/{@code standard} members of
+ * injection point (MicroProfile JWT 2.2). The {@code value}/{@code standard} members of
  * {@code @Claim} being {@code @Nonbinding}, one {@code SyntheticBean} qualified {@code @Claim}
  * per type covers all sites — the actual claim name is resolved at runtime by
  * {@link ClaimSyntheticCreator} from the {@code InjectionPoint}.

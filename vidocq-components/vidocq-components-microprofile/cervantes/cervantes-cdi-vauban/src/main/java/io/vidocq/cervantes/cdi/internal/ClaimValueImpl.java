@@ -25,7 +25,7 @@ import java.util.function.Supplier;
 
 /**
  * Lazy implementation of {@link ClaimValue}: {@link #getValue()} rereads the claim from the
- * token of the current query at each call (spec MicroProfile JWT 2.1 — a {@code ClaimValue}
+ * token of the current query at each call (spec MicroProfile JWT 2.2 — a {@code ClaimValue}
  * injected into a {@code @ApplicationScoped} bean should reflect the active request).
  *
  * @param <T> type de la valeur du claim

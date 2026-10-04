@@ -18,9 +18,9 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Explicit module descriptor for the MicroProfile JWT 2.1 spec.
+ * Explicit module descriptor for the MicroProfile JWT 2.2 spec.
  *
- * <p>The official artifact {@code org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.1}
+ * <p>The official artifact {@code org.eclipse.microprofile.jwt:microprofile-jwt-auth-api:2.2}
  * published by the Eclipse Foundation provides NEITHER a {@code module-info.class} NOR an
  * {@code Automatic-Module-Name}; jlink refuses such a module when composing a runtime image.
  * This module-info promotes it to an explicit module without modifying the spec code.

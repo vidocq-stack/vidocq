@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * JWKS key resolution tests (MicroProfile JWT 2.1 §9; RFC 7517): validation
+ * JWKS key resolution tests (MicroProfile JWT 2.2 §9; RFC 7517): validation
  * end-to-end, cache, rotation by {@code kid}, unknown kid, EC key.
  */
 class JwksKeyResolverTest {

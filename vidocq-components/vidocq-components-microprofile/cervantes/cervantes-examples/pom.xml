@@ -12,7 +12,7 @@
 
     <artifactId>cervantes-examples</artifactId>
     <name>Cervantes :: Examples</name>
-    <description>Exemples d'utilisation de MicroProfile JWT 2.1 via Cervantes : ressource JAX-RS @RolesAllowed + injection @Inject @Claim, démontrée sous container Vauban embarqué.</description>
+    <description>Exemples d'utilisation de MicroProfile JWT 2.2 via Cervantes : ressource JAX-RS @RolesAllowed + injection @Inject @Claim, démontrée sous container Vauban embarqué.</description>
 
     <properties>
         <!--
@@ -29,7 +29,7 @@
     </properties>
 
     <dependencies>
-        <!-- API MicroProfile JWT 2.1 : @Claim, Claims, ClaimValue, JsonWebToken. -->
+        <!-- API MicroProfile JWT 2.2 : @Claim, Claims, ClaimValue, JsonWebToken. -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-mp-jwt-api</artifactId>

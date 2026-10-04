@@ -35,7 +35,7 @@ import org.eclipse.microprofile.jwt.Claims;
 import java.util.Set;
 
 /**
- * Example MicroProfile JWT 2.1 resource secured by Cervantes.
+ * Example MicroProfile JWT 2.2 resource secured by Cervantes.
  *
  * <p>Demonstrates the two halves of MP JWT in a JAX-RS resource:</p>
  * <ul>

@@ -22,7 +22,7 @@ package io.vidocq.cervantes.api;
 import java.util.Optional;
 
 /**
- * JWS signature algorithms supported by JWT 2.1 MicroProfile.
+ * JWS signature algorithms supported by JWT 2.2 MicroProfile.
  *
  * <p>Each value combines the name JOSE ({@code "RS256"},...) with its JCA algorithm name
  * ({@code java.security.Signature}) and the expected key family. For EC algorithms,

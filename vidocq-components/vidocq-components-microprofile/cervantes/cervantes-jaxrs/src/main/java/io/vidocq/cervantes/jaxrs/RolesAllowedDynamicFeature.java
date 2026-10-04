@@ -33,7 +33,7 @@ import java.util.Set;
 
 /**
  * Applies JSR-250 authorization annotations on JAX-RS resource methods
- * (MicroProfile JWT 2.1 §1.1). For each method, registers a {@link RolesAllowedRequestFilter}
+ * (MicroProfile JWT 2.2 §1.1). For each method, registers a {@link RolesAllowedRequestFilter}
  * according to the effective annotation.
  *
  * <p>Precedence: annotations at <em>method</em> level override those at <em>class</em> level.

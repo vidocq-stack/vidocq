@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Permanent integration of Cervantes for the Vauban container (MicroProfile JWT 2.1 §CDI).
+ * Permanent integration of Cervantes for the Vauban container (MicroProfile JWT 2.2 §CDI).
  *
  * <p>Provides the main {@code @RequestScoped JsonWebToken} of the current query (powered)
  * by the {@link io.vidocq.cervantes.cdi.JsonWebTokenContext} context, placed by the filter

@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Cervantes JAX-RS security for MicroProfile JWT 2.1.
+ * Cervantes JAX-RS security for MicroProfile JWT 2.2.
  *
  * <p>Standard JAX-RS API only (filters, {@code DynamicFeature}, {@code SecurityContext}):
  * the authentication filter validates the bearer token and sets a {@code SecurityContext} backed by
