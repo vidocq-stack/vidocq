@@ -62,7 +62,10 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
     private Context context;
     private Severity severity = Severity.UNDEFINED_SEVERITY_NUMBER;
     private String severityText = "";
-    /** The body as set — a string body is kept as {@code Value.of(string)}; {@code null} when there is none. */
+    /**
+     * The body as set — a string body is kept as {@code Value.of(string)}; {@code null} when none was set.
+     * {@link LogRecordData} renders its string form and treats an empty string as no body.
+     */
     private Value<?> body;
     private AttributesBuilder attributes = Attributes.builder();
     private String eventName = "";
@@ -126,7 +129,7 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
 
     @Override
     public LogRecordBuilder setBody(String body) {
-        if (body != null) this.body = body.isEmpty() ? null : Value.of(body);
+        if (body != null) this.body = Value.of(body);
         return this;
     }
 
@@ -180,9 +183,10 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
         long ts = timestampEpochNanos > 0 ? timestampEpochNanos : observed;
         Context ctx = context != null ? context : Context.current();
         SpanContext sc = Span.fromContext(ctx).getSpanContext();
+        // The record derives the string form from the body value (once); no string body is passed here.
         LogRecordData record = new LogRecordData(
                 resource, scope, ts, observed, sc,
-                severity, severityText, body != null ? body.asString() : "", attributes.build(), eventName, body);
+                severity, severityText, null, attributes.build(), eventName, body);
         for (LogRecordProcessor p : processors) {
             p.onEmit(record);
         }

@@ -23,6 +23,7 @@ import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.common.KeyValue;
 import io.opentelemetry.api.common.Value;
+import io.opentelemetry.api.common.ValueType;
 import io.opentelemetry.api.logs.Logger;
 import io.opentelemetry.api.logs.Severity;
 import io.opentelemetry.api.trace.Span;
@@ -269,6 +270,64 @@ class SdkLoggerProviderTest {
         assertNull(records.get(1).bodyValue(), "no body set: no body value");
         assertEquals("", records.get(1).body());
         assertEquals(Value.of("last wins"), records.get(2).bodyValue());
+    }
+
+    @Test
+    void an_empty_string_body_is_no_body_whether_set_as_a_string_or_as_a_value() {
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder().setBody("").emit();
+            p.get("x").logRecordBuilder().setBody(Value.of("")).emit();
+            p.get("x").logRecordBuilder().setBody("earlier").setBody(Value.of("")).emit();
+        }
+        for (LogRecordData r : exporter.getCollected()) {
+            assertNull(r.bodyValue(), "an empty string body is no body");
+            assertEquals("", r.body());
+        }
+        LogRecordData direct = new LogRecordData(null, null, 0L, 0L, SpanContext.getInvalid(),
+                null, null, "", null, "", Value.of(""));
+        assertNull(direct.bodyValue(), "the record applies the same rule when built directly");
+    }
+
+    @Test
+    void a_structured_body_is_rendered_as_a_string_once_per_record() {
+        CountingValue body = new CountingValue(Value.of(KeyValue.of("user", Value.of("alice"))));
+        InMemoryLogRecordExporter exporter = InMemoryLogRecordExporter.create();
+        try (SdkLoggerProvider p = SdkLoggerProvider.builder()
+                .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
+                .build()) {
+            p.get("x").logRecordBuilder().setBody(body).emit();
+        }
+        assertEquals("{\"user\":\"alice\"}", exporter.getCollected().getFirst().body());
+        assertEquals(1, body.asStringCalls, "Value.asString() calls for one emitted record");
+    }
+
+    /** A structured body that counts how many times its string form is computed. */
+    private static final class CountingValue implements Value<List<KeyValue>> {
+        private final Value<List<KeyValue>> delegate;
+        private int asStringCalls;
+
+        CountingValue(Value<List<KeyValue>> delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public ValueType getType() {
+            return delegate.getType();
+        }
+
+        @Override
+        public List<KeyValue> getValue() {
+            return delegate.getValue();
+        }
+
+        @Override
+        public String asString() {
+            asStringCalls++;
+            return delegate.asString();
+        }
     }
 
     @Test

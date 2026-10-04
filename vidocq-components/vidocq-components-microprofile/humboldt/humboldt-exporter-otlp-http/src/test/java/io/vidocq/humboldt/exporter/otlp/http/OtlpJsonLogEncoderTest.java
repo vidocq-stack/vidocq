@@ -103,6 +103,18 @@ class OtlpJsonLogEncoderTest {
         assertTrue(json.contains("\"body\":{\"stringValue\":\"done\"}"), json);
     }
 
+    @Test
+    void writes_no_body_for_an_empty_string_body_value() {
+        LogRecordData emptyBody = new LogRecordData(
+                Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
+                1_000L, 2_000L, SpanContext.getInvalid(),
+                Severity.INFO, "INFO", null, Attributes.empty(), "", Value.of(""));
+
+        String json = OtlpJsonLogEncoder.encode(List.of(emptyBody));
+
+        assertFalse(json.contains("\"body\""), json);
+    }
+
     static LogRecordData record(String eventName, Attributes attributes) {
         return new LogRecordData(
                 Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
