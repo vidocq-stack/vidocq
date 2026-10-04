@@ -29,7 +29,7 @@ import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 
 /**
- * Checks the signature of a JWT via the JCA ({@code java.security.Signature}) — zero third-party cryptic dependency.
+ * Checks the signature of a JWT via the JCA ({@code java.security.Signature}) — zero third-party cryptography dependency.
  *
  * <p>RSA ({@code RS256/384/512}): direct verification. EC ({@code ES256/384/512}): the signature
  * {@code R‖S} is transcoded to DER ({@link EcdsaSignatures}) before {@code verify}.

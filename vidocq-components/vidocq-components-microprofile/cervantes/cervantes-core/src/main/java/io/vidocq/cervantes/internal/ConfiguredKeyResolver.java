@@ -28,7 +28,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * {@link KeyResolver} single key (M1): {@code mp.jwt.verify.publickey} / {@code.location}
+ * {@link KeyResolver} single key (M1): {@code mp.jwt.verify.publickey} / {@code mp.jwt.verify.publickey.location}
  * pointing to a single public key. {@code kid} is ignored (resolution by {@code kid} via
  * JWKS reaches M2 The match key family 
  * {@link JwtSignatureVerifier}.

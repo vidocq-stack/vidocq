@@ -108,7 +108,7 @@ public class JwtAuthConfigProducer {
     }
 
     /**
-     * Optional JWE decryption: {@code mp.jwt.decrypt.key} (inline) or {@code.location}.
+     * Optional JWE decryption: {@code mp.jwt.decrypt.key} (inline) or {@code mp.jwt.decrypt.key.location}.
      * {@code null} if absent. Optionally reads {@code mp.jwt.decrypt.key.algorithm} to
      * validate that the algorithm in the JWE corresponds to that configured.
      */
@@ -140,7 +140,7 @@ public class JwtAuthConfigProducer {
     }
 
     /**
-     * Reads {@code mp.jwt.verify.publickey.algorithm}. Unset means "RS256 and ES256 both accepted";
+     * Reads {@code mp.jwt.verify.publickey.algorithm}. Unset means every RS256/384/512 and ES256/384/512 algorithm is accepted;
      * a value that is set but is not an exact JOSE name (RFC 7518, case-sensitive: {@code RS256},
      * not {@code rs256}) fails at startup instead of silently widening what is accepted.
      */
