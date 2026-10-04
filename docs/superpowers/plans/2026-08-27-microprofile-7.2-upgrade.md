@@ -1,20 +1,27 @@
-# MicroProfile 7.2 Upgrade — Implementation Plan (Vidocq 0.3.0-SNAPSHOT)
+# MicroProfile 7.2 Upgrade — Implementation Plan (Vidocq 0.4.0-SNAPSHOT)
 
-> **STATUS: ON HOLD (decision 2026-08-27).** Vidocq targets *certification*, not early adoption. This plan is **not to be executed** until MicroProfile 7.2 is actually released: Eclipse release review done, `org.eclipse.microprofile:microprofile:7.2` on Maven Central, OpenAPI `4.2` final and Telemetry `2.2` TCKs published. As of 2026-08-27 only the Eclipse *planning* record exists (dated 2026-07-21, no release review) — JWT 2.2 is final, OpenAPI is at 4.2-RC2, Telemetry 2.2 has no artifact. Re-check with `node ~/.claude/jobs/7e5f64ca/tmp/central.mjs` (or the Central metadata URLs in §0.2) before reopening.
+> **STATUS: ACTIVE (refreshed 2026-10-04).** The plan was on hold from 2026-08-27 ("we target certification, no migration before final artifacts"). On 2026-09-30 the component finals were tagged — OpenAPI `4.2`, Telemetry `2.2`, JWT `2.2.1` — and their jars are on the **Eclipse staging repositories** for the specification ballot (`https://repo.eclipse.org/repository/microprofile-{open-api,telemetry,jwt-auth}-maven2-staging/`), not yet on Maven Central. The platform PR `microprofile/microprofile#520` (opened 2026-10-01) pins jwt 2.2.1 / openapi 4.2 / telemetry 2.2; the BOM `microprofile:7.2` is not staged yet. **The release candidates on Central are byte-identical to the staged finals** (compared jar by jar on 2026-10-04: only `MANIFEST.MF`, `pom.properties`, the module version string in `module-info.class` and the LICENSE/NOTICE files of the OpenAPI TCK jar differ). Decision (maintainer, 2026-10-04): implement and run the TCKs against the RCs on Central now; switching to the finals is a version-string bump (Phase E). The public "MicroProfile 7.2 compatible" claim and any certification request still wait for the finals on Central.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the Vidocq 0.3.0-SNAPSHOT line from MicroProfile 7.1 to MicroProfile 7.2 — implement the three updated component specs (JWT Auth 2.2, OpenAPI 4.2, Telemetry 2.2) in their bricks (cervantes, grimm, humboldt), re-run every official TCK on the assembled runtime, and sweep the documentation.
+**Goal:** Move the Vidocq 0.4.0-SNAPSHOT line from MicroProfile 7.1 to MicroProfile 7.2 — implement the three updated component specs (JWT Auth 2.2, OpenAPI 4.2, Telemetry 2.2) in their bricks (cervantes, grimm, humboldt), re-run every official TCK on the assembled runtime, and sweep the documentation.
 
-**Architecture:** MicroProfile 7.2 (Eclipse *planning* record dated 2026-07-21 — not yet ratified) changes exactly three components; the other five (Config 3.1, Fault Tolerance 4.1, Health 4.0, Rest Client 4.0, Jakarta EE Core Profile) are unchanged, so ravel/heisenberg/knock/cyrano/vauban/cassini/champollion need **no code change**. Each affected brick gets a small, TDD-driven behavioural change plus a TCK-version bump; the vidocq runtime then bumps its in-reactor `-Ptck` runners and its docs. The upgrade is **staged by artifact availability**: JWT 2.2 is final on Central, OpenAPI 4.2 is only at RC2, Telemetry 2.2 has no published TCK yet — the plan ships everything that can be verified now and leaves two explicit follow-up bumps.
+**Architecture:** MicroProfile 7.2 changes exactly three components; the other five (Config 3.1, Fault Tolerance 4.1, Health 4.0, Rest Client 4.0, Jakarta EE Core Profile) are unchanged, so ravel/heisenberg/knock/cyrano/vauban/cassini/champollion need **no code change**. Each affected brick gets a small, TDD-driven behavioural change plus a TCK-version bump; the vidocq runtime then bumps its in-reactor `-Ptck` runners and its docs. Everything is built against what Maven Central serves today — JWT `2.2` (final), OpenAPI `4.2-RC5`, Telemetry TCK `2.2-RC3` — which is the exact content of the finals under ballot (see STATUS); Phase E swaps the version strings once the finals reach Central.
 
-**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, JPMS strict, Arquillian/TestNG TCK harnesses, OpenTelemetry Java API 1.64.0 (shaded into `humboldt-otel-api` via maven-shade + ModiTect), MicroProfile APIs from Maven Central.
+**Tech Stack:** Java 25 (Temurin), Maven 3.9.16, JPMS strict, Arquillian/TestNG TCK harnesses, OpenTelemetry Java API 1.66.0 (shaded into `humboldt-otel-api` via maven-shade + ModiTect), MicroProfile APIs from Maven Central.
 
-**Spec:** this document is self-contained — the facts section below *is* the spec (verified against Eclipse/Maven Central/GitHub on 2026-08-27). Upstream references: MP 7.2 release record `https://projects.eclipse.org/projects/technology.microprofile/releases/microprofile-7.2`; OpenAPI 4.2 spec `https://download.eclipse.org/microprofile/microprofile-open-api-4.2-RC2/microprofile-openapi-spec-4.2-RC2.html` (§8.1 release notes); JWT 2.2 tag `microprofile/microprofile-jwt-auth@2.2` (`spec/src/main/asciidoc/configuration.asciidoc`); Telemetry 2.2 milestone 3 (`microprofile/microprofile-telemetry` issues #318, #321, PR #319).
+**Spec:** this document is self-contained — the facts section below *is* the spec (verified against Eclipse/Maven Central/GitHub on 2026-08-27, refreshed 2026-10-04). Upstream references: MP 7.2 release record `https://projects.eclipse.org/projects/technology.microprofile/releases/microprofile-7.2`; OpenAPI 4.2 spec `https://download.eclipse.org/microprofile/microprofile-open-api-4.2-RC5/microprofile-openapi-spec-4.2-RC5.html` (§8.1 release notes); JWT 2.2 tag `microprofile/microprofile-jwt-auth@2.2` (`spec/src/main/asciidoc/configuration.asciidoc`); Telemetry 2.2 tag `microprofile/microprofile-telemetry@2.2` (`spec/src/main/asciidoc/{tracing,release-notes}.adoc`; issues #318, #321, PR #319).
 
 ---
 
-## 0. Verified facts (2026-08-27) — the release train had NOT left yet
+## 0. Verified facts (2026-08-27, refreshed 2026-10-04)
+
+### 0.0 What changed between 2026-08-27 and 2026-10-04
+
+- Finals tagged 2026-09-30 and staged for the ballot (see STATUS). RC → final diffs are release-plugin commits only: OpenAPI `4.2-RC5..4.2` and Telemetry `2.2-RC3..2.2` touch nothing but `pom.xml` versions; JWT `2.2..2.2.1` only adds the staging-repository configuration to the poms. OpenAPI `4.2-RC2..4.2-RC5` changed no API, SPI or TCK source (dependency bumps, parent pom, staging repository).
+- **Telemetry 2.2 final pins OpenTelemetry 1.66.0, instrumentation-annotations 2.31.1, semconv 1.44.0** (not 1.64.0 / 2.30.0 / 1.43.0 as written on 2026-08-27). The public API of `opentelemetry-api` and `opentelemetry-context` is identical between 1.64.0 and 1.66.0 (`javap -public` on all 149 + 32 non-internal classes, 2026-10-04). `@WithSpan` in 2.31.1 has `value()`, `kind()`, `inheritContext()` — same as 2.30.0.
+- The Telemetry 2.2 TCK adds no new test class: the tracing suite gains one assertion in `RestClientSpanTest.spanChild` (`code.function.name` = `org.eclipse.microprofile.telemetry.tracing.tck.rest.RestClientSpanTest$SpanBean.spanChild`) and swaps `assertEquals` argument order / case-insensitive header checks elsewhere.
+- The workspace moved to **0.4.0-SNAPSHOT**. cervantes and humboldt now gate their PRs on the official TCK (`ci.tck.command` in the root pom, profile `tck,tck-official`) — the TCK version comes from the pom, so bumping the property is enough for CI. The vidocq OpenAPI runner was fixed to TCK 4.1.1 (346) on 2026-08-27; the runtime total is 1868.
 
 ### 0.1 What MicroProfile 7.2 contains
 
@@ -26,50 +33,53 @@
 | JWT Auth (RBAC) | 2.1 | **2.2** | when `mp.jwt.verify.publickey.algorithm` is **not** set, **both RS256 and ES256 MUST be accepted** (spec §configuration). API jar is binary-identical to 2.1 (0 class diff). TCK adds `RsaAndEcSignatureAlgorithmTest` (`testRS256Token`, `testES256Token`) backed by `META-INF/microprofile-config-rsa-ec.properties` (`mp.jwt.verify.publickey.location=/rs256es256.jwk`, no algorithm) and a JWKS holding one RSA key (`kid=rskey`) and one EC key (`kid=eckey`). TCK **removes** the `container/ejb`, `container/jacc`, `container/servlet` packages. |
 | OpenAPI | 4.1 | **4.2** | API: `@Header` gains `example()` and `examples()`; `Schema` now overrides all `Extensible` methods (`getExtensions/setExtensions/addExtension/removeExtension/hasExtension/getExtension`) with schema-specific semantics — "for the base OAS 3.1 dialect, Schema instances consider all unknown properties to be extensions"; `@Header.allowEmptyValue` is `@Deprecated`; `@ExternalDocumentation` on `TYPE` is deprecated (annotation still targets METHOD+TYPE). Spec: Bean Validation `@Digits` must be processed. TCK adds `ExternalDocumentationAnnotationTest` (1 test: method-level `@ExternalDocumentation` → `paths.'/a'.get.externalDocs`) and `SchemaExtensionPropertyTest` (6 pure-model tests), and extends `AirlinesAppTest` (header `example`/`examples`) and `beanvalidation.BeanValidationTest` (`@Digits`). |
 | Rest Client | 4.0 | 4.0 | none |
-| Telemetry | 2.1 | **2.2** | "Adopt the latest OpenTelemetry" (issue #318: spec repo pins `opentelemetry.java.version=1.64.0`, `opentelemetry.java.instrumentation.version=2.30.0`, `version.otel.semconv-java=1.43.0`) and **`code.function.name` MUST be present on `@WithSpan` spans** (issue #321 / PR #319). TCK assertion (`RestClientSpanTest.spanChild`): attribute value = `org.eclipse.microprofile.telemetry.tracing.tck.rest.RestClientSpanTest$SpanBean.spanChild`, i.e. **`Class.getName()` (binary name, `$` for nested) + "." + method name**. Instrumentation-annotations 2.30 adds `WithSpan.inheritContext()` (default `true`). |
+| Telemetry | 2.1 | **2.2** | "Adopt the latest OpenTelemetry" (issue #318: the 2.2 tag pins `opentelemetry.java.version=1.66.0`, `opentelemetry.java.instrumentation.version=2.31.1`, `opentelemetry.semconv.version=1.44.0`) and **`code.function.name` MUST be present on `@WithSpan` spans** (issue #321 / PR #319). TCK assertion (`RestClientSpanTest.spanChild`): attribute value = `org.eclipse.microprofile.telemetry.tracing.tck.rest.RestClientSpanTest$SpanBean.spanChild`, i.e. **`Class.getName()` (binary name, `$` for nested) + "." + method name**. Instrumentation-annotations 2.30 adds `WithSpan.inheritContext()` (default `true`). |
 | Jakarta EE Core Profile | 10 min. | 10 min., **11 explicitly allowed** | Vidocq already targets Core Profile 11 (CDI 4.1 Lite, REST 4.0, Annotations 3.0, Interceptors 2.2) — now spec-endorsed. |
 
 Out of scope: MicroProfile GraphQL 2.1 (released 2026-08-07, standalone, not part of the platform).
 
-### 0.2 Artifact availability on Maven Central (2026-08-27)
+### 0.2 Artifact availability (2026-10-04)
 
-| Artifact | Latest on Central | Status for this plan |
-|---|---|---|
-| `org.eclipse.microprofile.jwt:microprofile-jwt-auth-api` / `-tck` | **2.2** (2026-06-24) | final — bump now |
-| `org.eclipse.microprofile.openapi:microprofile-openapi-api` / `-tck` | **4.2-RC2** (2026-06-30) — no 4.2 final yet | bump to RC2 now, follow-up to 4.2 |
-| `org.eclipse.microprofile.telemetry:microprofile-telemetry-{tracing,metrics,logs}-tck` | **2.1** — no 2.2, no 2.2-RC, no git tag | implement now, TCK bump blocked (see Task C4) |
-| `org.eclipse.microprofile:microprofile` (platform BOM) | 7.1 | 7.2 not published; Vidocq does not import the BOM — no action |
-| `io.opentelemetry:opentelemetry-bom` | 1.65.0 | align on **1.64.0** (the version the Telemetry 2.2 TCK pins) |
-| `io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations` | 2.31.1 | align on **2.30.0** |
-| `io.opentelemetry.semconv:opentelemetry-semconv` | 1.43.0 | **1.43.0** (stable artifact, replaces `1.27.0-alpha`; TCK-only) |
-| Config 3.1.1, FT 4.1.2, Health 4.0.1, Rest Client 4.0 | — | unchanged (FT api 4.1.2 is an optional CVE-only bump, not required) |
+| Artifact | Maven Central | Eclipse staging (ballot) | Version used by this plan |
+|---|---|---|---|
+| `org.eclipse.microprofile.jwt:microprofile-jwt-auth-api` / `-tck` | **2.2** (final) | 2.2.1 (same content) | **2.2** |
+| `org.eclipse.microprofile.openapi:microprofile-openapi-api` / `-tck` | **4.2-RC5** (2026-09-30) | 4.2 | **4.2-RC5** → 4.2 in Task E1 |
+| `org.eclipse.microprofile.telemetry:microprofile-telemetry-{tracing,metrics,logs}-tck` | **2.2-RC3** (2026-09-17) | 2.2 | **2.2-RC3** → 2.2 in Task E1 |
+| `org.eclipse.microprofile:microprofile` (platform BOM) | 7.1 | 7.2 not staged | Vidocq does not import the BOM — no action |
+| `io.opentelemetry:opentelemetry-bom` | 1.66.0 | — | **1.66.0** (the version the Telemetry 2.2 TCK pins) |
+| `io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations` | 2.32.0 | — | **2.31.1** (pinned by the TCK) |
+| `io.opentelemetry.semconv:opentelemetry-semconv` | 1.44.0 | — | **1.44.0** (stable artifact, replaces `1.27.0-alpha`; TCK-only) |
+| Config 3.1.2, FT 4.1.2, Health 4.0.2, Rest Client 4.0 | — | — | unchanged components; the platform still names Config 3.1 / Health 4.0.1 — no bump in this plan |
 
-### 0.3 OpenTelemetry API 1.39.0 → 1.64.0 impact on humboldt (verified with `javap`)
+Never commit the staging repositories into a pom: they disappear once the ballot closes.
 
-- **Zero abstract methods added** on the 27 API interfaces humboldt implements (`Tracer`, `TracerProvider`, `Span`, `SpanBuilder`, `Meter`, `MeterProvider`, all `*Counter/*Histogram/*Gauge(+Builder)`, `Observable*Measurement`, `Logger`, `LoggerProvider`, `LogRecordBuilder`) nor on `io.opentelemetry.context.{Scope,ContextStorage,ContextStorageProvider}`. The bump is source-compatible.
+### 0.3 OpenTelemetry API 1.39.0 → 1.66.0 impact on humboldt (verified with `javap`)
+
+- 1.64.0 → 1.66.0: public API identical (2026-10-04). 1.39.0 → 1.64.0 (2026-08-27): **zero abstract methods added** on the 27 API interfaces humboldt implements (`Tracer`, `TracerProvider`, `Span`, `SpanBuilder`, `Meter`, `MeterProvider`, all `*Counter/*Histogram/*Gauge(+Builder)`, `Observable*Measurement`, `Logger`, `LoggerProvider`, `LogRecordBuilder`) nor on `io.opentelemetry.context.{Scope,ContextStorage,ContextStorageProvider}`. The bump is source-compatible.
 - Only new package in `opentelemetry-api` is internal (`io.opentelemetry.api.impl`) — the ModiTect `module-info.java` of `humboldt-otel-api` needs no new `exports`.
-- `opentelemetry-semconv` 1.43.0 provides `io.opentelemetry.semconv.CodeAttributes.CODE_FUNCTION_NAME` (`code.function.name`) — humboldt does **not** depend on semconv at runtime (plain `AttributeKey` constants), keep it that way.
+- `opentelemetry-semconv` (1.43.0 and later) provides `io.opentelemetry.semconv.CodeAttributes.CODE_FUNCTION_NAME` (`code.function.name`) — humboldt does **not** depend on semconv at runtime (plain `AttributeKey` constants), keep it that way.
 
-### 0.4 Current state of the workspace (all on `main`, clean except 2 untracked files in `vidocq/`)
+### 0.4 Current state of the workspace (2026-10-04, `origin/main` of each repo)
 
 | Repo | Pinned today | Target |
 |---|---|---|
 | `cervantes` | `microprofile.jwt.version=2.1` (root pom l.62, `cervantes-tck/pom.xml` l.36), script `run-official-tck-mp-jwt-2.1.sh`, TCK 206/206 | 2.2, 208 expected |
-| `grimm` | `version.mp.openapi=4.1` (root pom l.72), `grimm-tck/pom.xml` `microprofile.openapi.version=4.1` (l.21), script `run-official-tck-mp-openapi-4.1.sh`, TCK 349/349 | 4.2-RC2 → 4.2, 356 expected (349 + 1 + 6) |
-| `humboldt` | `microprofile.telemetry.version=2.1`, `opentelemetry.version=1.39.0`, `opentelemetry.instrumentation.version=2.7.0`, `opentelemetry.semconv.version=1.27.0-alpha` (root pom l.64-67, `humboldt-tck/pom.xml` l.47-52), script `run-official-tck-telemetry-2.1.sh`, TCK 85/85 | OTel 1.64.0 / 2.30.0 / 1.43.0 now; Telemetry TCK 2.2 when published |
-| `vidocq` | runners: `vidocq-runtime-tck-cervantes-jwt` (jwt tck 2.1), `vidocq-runtime-tck-grimm-openapi` (openapi tck **4.0.2** — stale even for 7.1, comment says "MP 7.1 pins OpenAPI 4.0" which is wrong), `vidocq-runtime-tck-humboldt-telemetry` (telemetry 2.1, OTel 1.39.0/2.7.0/1.27.0-alpha); `TCK.md` table titled "MicroProfile 7.1", 1837 green | 2.2 / 4.2-RC2 / 2.1+OTel 1.64; docs say 7.2 |
+| `grimm` | `version.mp.openapi=4.1` (root pom l.72), `grimm-tck/pom.xml` `microprofile.openapi.version=4.1` (l.21), script `run-official-tck-mp-openapi-4.1.sh`, TCK 349/349 | 4.2-RC5 → 4.2, 356 expected (349 + 1 + 6) |
+| `humboldt` | `microprofile.telemetry.version=2.1`, `opentelemetry.version=1.39.0`, `opentelemetry.instrumentation.version=2.7.0`, `opentelemetry.semconv.version=1.27.0-alpha` (root pom l.64-67, `humboldt-tck/pom.xml` l.47-52), script `run-official-tck-telemetry-2.1.sh`, TCK 85/85 | OTel 1.66.0 / 2.31.1 / 1.44.0, Telemetry TCK 2.2-RC3 → 2.2 |
+| `vidocq` | runners: `vidocq-runtime-tck-cervantes-jwt` (jwt tck 2.1, port 18086), `vidocq-runtime-tck-grimm-openapi` (openapi tck 4.1.1, 346, port 18085), `vidocq-runtime-tck-humboldt-telemetry` (telemetry 2.1, OTel 1.39.0/2.7.0/1.27.0-alpha); `TCK.md` table titled "MicroProfile 7.1", 1868 green; five runners gate PRs via `ci.tck.modules` (root pom l.88) | 2.2 / 4.2-RC5 / 2.2-RC3 + OTel 1.66; docs say 7.2 |
 
 ---
 
 ## Global Constraints
 
-- **Toolchain:** JDK 25 (Temurin) + Maven 3.9.16, pinned via `.sdkmanrc` in each sub-project — run `sdk env` in the sub-project before building (`sdk env` breaks under `set -u`; invoke `mvn`/`./mvnw` directly inside scripts). All POMs `modelVersion 4.0.0`; every artifact is `0.3.0-SNAPSHOT`.
-- **Build hygiene:** always `./mvnw clean install` / `clean test`, never bare `install` or an isolated `test` — codegen modules give false failures on stale `target/`. Never `-U`; `-o` only when you know the local M2 is complete. Bricks must be `clean install`ed into the local M2 **before** the vidocq runtime is built (it resolves `cervantes/grimm/humboldt:0.3.0-SNAPSHOT` from M2).
+- **Working copies:** each repo is worked in a dedicated git worktree already on branch `pr/ybl/mp-7.2` (cut from `origin/main` on 2026-10-04): `/Users/yblazart/projects/perso/vidocq/.worktrees/{cervantes,grimm,humboldt,vidocq}-mp-7.2`. Paths written below as `cervantes/…`, `grimm/…`, `humboldt/…`, `vidocq/…` mean these worktrees — never the main checkouts under `/Users/yblazart/projects/perso/vidocq/<repo>` (they sit on other branches). Do not run `git checkout -b`: the branch exists.
+- **Toolchain:** JDK 25 (Temurin) + Maven 3.9.16, pinned via `.sdkmanrc` in each sub-project — run `sdk env` in the sub-project before building (`sdk env` breaks under `set -u`; invoke `mvn`/`./mvnw` directly inside scripts). All POMs `modelVersion 4.0.0`; every artifact is `0.4.0-SNAPSHOT`.
+- **Build hygiene:** always `./mvnw clean install` / `clean test`, never bare `install` or an isolated `test` — codegen modules give false failures on stale `target/`. Never `-U`; `-o` only when you know the local M2 is complete. Bricks must be `clean install`ed into the local M2 **before** the vidocq runtime is built (it resolves `cervantes/grimm/humboldt:0.4.0-SNAPSHOT` from M2).
 - **JPMS strict:** every production module keeps its `module-info.java`; TCK runner modules carry no `module-info.java` (unnamed). No new `opens`. No new runtime dependency — the only dependency changes in this plan are version bumps of already-present Jakarta/MicroProfile/OpenTelemetry artifacts (`dependency-gatekeeper` agent must review every `pom.xml` diff anyway).
-- **TDD:** each behavioural change starts with a failing unit test in the brick, then the official TCK is the integration gate. Run every TCK **yourself** and read the surefire/TestNG summary — never trust an agent's "green" report (known false positives in both directions). Keep raw logs under `/Users/yblazart/.claude/jobs/7e5f64ca/tmp/`.
+- **TDD:** each behavioural change starts with a failing unit test in the brick, then the official TCK is the integration gate. Run every TCK **yourself** and read the surefire/TestNG summary — never trust an agent's "green" report (known false positives in both directions). Keep raw logs under `/private/tmp/claude-501/-Users-yblazart-projects-perso-vidocq/8bdf9adf-d8d0-4142-ab77-673fd306687e/scratchpad/mp72-logs/` (written `$LOGS` below).
 - **Language:** all code, comments, Javadoc, test names, commit messages, `.md`/`.adoc` files in **English**. Chat with the maintainer in French.
-- **Commits:** Conventional Commits, GPG-signed, DCO `Signed-off-by` (`git commit -S --signoff`), and — per the workspace `CLAUDE.md` AI-policy — the provenance trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` plus `Claude-Session: https://claude.ai/code/session_01EryQo9ghKqzz48nq5yKzbe`. Author/committer stay the human maintainer.
-- **Branches / merge order:** branch `pr/ybl/mp-7.2` in `cervantes`, `grimm`, `humboldt` (independent, can be worked in parallel), then `pr/ybl/mp-7.2` in `vidocq` (depends on the three bricks being merged and published as SNAPSHOT, or installed locally). Docs PR in `vidocq-docs` last. PRs on Codefloe (`https://codefloe.com/Vidocq/<repo>`); the `governance-checks` gate needs the CLA handle `@yblazart`, GPG and sign-off.
+- **Commits:** Conventional Commits, GPG-signed, DCO `Signed-off-by` (`git commit -S --signoff`), and — per the workspace `CLAUDE.md` AI-policy — the provenance trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` as the last line of the message. Author/committer stay the human maintainer. Check with `git log -1 --format='%G? %(trailers)'` → `G` + `Signed-off-by` + `Co-Authored-By`.
+- **Branches / merge order:** branch `pr/ybl/mp-7.2` in `cervantes`, `grimm`, `humboldt` (independent, worked in parallel), then `pr/ybl/mp-7.2` in `vidocq` (depends on the three bricks being installed locally, later merged and published as SNAPSHOT). **Tasks never push and never open PRs** — pushing (`ssh -4`, Codefloe IPv6 hangs) and the PRs on Codefloe (`https://codefloe.com/Vidocq/<repo>`, `tea pr create`) are done by the controller after the final review, once the maintainer agrees; the `governance-checks` gate needs the CLA handle `@yblazart`, GPG and sign-off.
 - **Traceability:** any TCK failure that turns out to be a real Vidocq bug goes to the brick's `BUG.md` (`/log-bug`); no performance claims in this plan.
 - **Deprecations are not errors:** no `-Werror`/`failOnWarning` is configured in vidocq-parent, grimm, humboldt or cervantes — `@Header.allowEmptyValue` (deprecated in 4.2) keeps being mapped; add `@SuppressWarnings("deprecation")` only on the four call sites listed in Task B3 to keep the build log clean.
 
@@ -245,7 +255,7 @@ Expected: `Tests run: 4, Failures: 0`.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd cervantes && git checkout -b pr/ybl/mp-7.2
+cd cervantes
 git add cervantes-core/src/main/java/io/vidocq/cervantes/internal/PemKeys.java cervantes-core/src/test/java/io/vidocq/cervantes/internal/PemKeysTest.java
 git commit -S --signoff -m "feat(core): auto-detect RSA/EC family when parsing PEM public keys (MP JWT 2.2)"
 ```
@@ -434,7 +444,7 @@ git commit -S --signoff -m "feat: accept RS256 and ES256 when mp.jwt.verify.publ
 
 - [ ] **Step 2: Drop the obsolete exclusions**
 
-In `cervantes-tck/pom.xml` around l.293-300 remove the three `<exclude>org/eclipse/microprofile/jwt/tck/container/{ejb,jacc,servlet}/**</exclude>` lines (those packages no longer exist in the 2.2 `tests` jar) and reword the comment to "MP JWT 2.2 dropped the EJB/JACC/Servlet container tests". Keep `<excludedGroups>ee-security-optional</excludedGroups>` — verify it is still referenced: `unzip -p ~/.m2/repository/org/eclipse/microprofile/jwt/microprofile-jwt-auth-tck/2.2/microprofile-jwt-auth-tck-2.2-tests.jar META-INF/MANIFEST.MF >/dev/null && cd /Users/yblazart/.claude/jobs/7e5f64ca/tmp/jwt22 && grep -rl "ee-security-optional" . | head` (the jar is already unpacked there); if nothing references it, remove the `excludedGroups` too.
+In `cervantes-tck/pom.xml` around l.293-300 remove the three `<exclude>org/eclipse/microprofile/jwt/tck/container/{ejb,jacc,servlet}/**</exclude>` lines (those packages no longer exist in the 2.2 `tests` jar) and reword the comment to "MP JWT 2.2 dropped the EJB/JACC/Servlet container tests". Keep `<excludedGroups>ee-security-optional</excludedGroups>` — verify it is still referenced: `mkdir -p $LOGS/jwt22 && cd $LOGS/jwt22 && unzip -qo ~/.m2/repository/org/eclipse/microprofile/jwt/microprofile-jwt-auth-tck/2.2/microprofile-jwt-auth-tck-2.2-tests.jar && grep -rl "ee-security-optional" . | head` (resolve the jar first with a build if it is not in the M2 yet); if nothing references it, remove the `excludedGroups` too.
 
 - [ ] **Step 3: Rename the script and fix its internals**
 
@@ -442,7 +452,7 @@ In `cervantes-tck/pom.xml` around l.293-300 remove the three `<exclude>org/eclip
 
 - [ ] **Step 4: Run the official TCK**
 
-Run: `cd cervantes && ./mvnw -ntp clean install -DskipTests && ./run-official-tck-mp-jwt-2.2.sh 2>&1 | tee /Users/yblazart/.claude/jobs/7e5f64ca/tmp/cervantes-tck-2.2.log`
+Run: `cd cervantes && ./mvnw -ntp clean install -DskipTests && ./run-official-tck-mp-jwt-2.2.sh 2>&1 | tee $LOGS/cervantes-tck-2.2.log` (read the script first: if it takes a mode argument, use the full-suite mode, never a smoke subset)
 Expected: `Tests run: 208, Failures: 0, Errors: 0` (206 from 2.1 + `RsaAndEcSignatureAlgorithmTest.testRS256Token` + `.testES256Token`). If `RsaAndEcSignatureAlgorithmTest` fails, the JWKS path is the suspect: `JwksKeyResolver.lookup` resolves by `kid` (`rskey`/`eckey`) and `JwkParser` supports `kty=EC` — check the `alg`/`use` filtering in `JwkParser` does not drop one of the two keys. Log any real defect in `cervantes/BUG.md`.
 
 - [ ] **Step 5: Update the docs**
@@ -453,39 +463,38 @@ Expected: `Tests run: 208, Failures: 0, Errors: 0` (206 from 2.1 + `RsaAndEcSign
 - `concepts.adoc:97` and `migration.adoc:34`: same nuance (one sentence each).
 - `index.adoc` / any `2.1` mention: `grep -rn "JWT 2\.1" docs README.md` → 2.2.
 
-- [ ] **Step 6: Commit and open the PR**
+- [ ] **Step 6: Commit** (no push — see Global Constraints)
 
 ```bash
 git add -A
 git commit -S --signoff -m "build(tck): run the official MicroProfile JWT 2.2 TCK (208/208) and document the 2.2 behaviour"
-git push -4 -u origin pr/ybl/mp-7.2   # ssh -4: Codefloe/Codeberg IPv6 hangs
 ```
-Open the PR on Codefloe (`Vidocq/cervantes`), title `feat: MicroProfile JWT Auth 2.2 (MicroProfile 7.2)`; confirm `governance-checks` and the build job are green.
+The controller later opens the PR on Codefloe (`Vidocq/cervantes`), title `feat: MicroProfile JWT Auth 2.2 (MicroProfile 7.2)`.
 
 ---
 
 ## Phase B — Grimm: MicroProfile OpenAPI 4.2
 
-### Task B1: bump the API to 4.2-RC2 and confirm the build
+### Task B1: bump the API to 4.2-RC5 and confirm the build
 
 **Files:**
-- Modify: `grimm/pom.xml:72` (`<version.mp.openapi>4.1` → `4.2-RC2`)
-- Modify: `grimm/grimm-tck/pom.xml:21` (`<microprofile.openapi.version>4.1` → `4.2-RC2`)
+- Modify: `grimm/pom.xml:72` (`<version.mp.openapi>4.1` → `4.2-RC5`)
+- Modify: `grimm/grimm-tck/pom.xml:21` (`<microprofile.openapi.version>4.1` → `4.2-RC5`)
 
 - [ ] **Step 1: Bump and build**
 
-Run: `cd grimm && git checkout -b pr/ybl/mp-7.2 && sed -i '' 's#<version.mp.openapi>4.1</version.mp.openapi>#<version.mp.openapi>4.2-RC2</version.mp.openapi>#' pom.xml && sed -i '' 's#<microprofile.openapi.version>4.1</microprofile.openapi.version>#<microprofile.openapi.version>4.2-RC2</microprofile.openapi.version>#' grimm-tck/pom.xml && ./mvnw clean install`
+Run: `cd grimm && sed -i '' 's#<version.mp.openapi>4.1</version.mp.openapi>#<version.mp.openapi>4.2-RC5</version.mp.openapi>#' pom.xml && sed -i '' 's#<microprofile.openapi.version>4.1</microprofile.openapi.version>#<microprofile.openapi.version>4.2-RC5</microprofile.openapi.version>#' grimm-tck/pom.xml && ./mvnw clean install`
 Expected: BUILD SUCCESS — the 4.2 API is purely additive (verified: 0 class-level diff, only new methods on `Schema`/`@Header`). `SchemaImpl` already inherits the `Extensible` implementations from `AbstractExtensibleRef`, so the new abstract overrides on `Schema` are satisfied.
 
 - [ ] **Step 2: Check the JPMS view of the new API jar**
 
-Run: `jar --describe-module --file ~/.m2/repository/org/eclipse/microprofile/openapi/microprofile-openapi-api/4.2-RC2/microprofile-openapi-api-4.2-RC2.jar | head -3`
+Run: `jar --describe-module --file ~/.m2/repository/org/eclipse/microprofile/openapi/microprofile-openapi-api/4.2-RC5/microprofile-openapi-api-4.2-RC5.jar | head -3`
 Expected: the same module name grimm's `module-info.java` files `requires` today (`grep -rh "requires.*openapi" grimm-*/src/main/java/module-info.java`). If it changed, update the `requires` lines.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git commit -S --signoff -am "build: target MicroProfile OpenAPI API 4.2-RC2 (MicroProfile 7.2)"
+git commit -S --signoff -am "build: target MicroProfile OpenAPI API 4.2-RC5 (MicroProfile 7.2)"
 ```
 
 ### Task B2: `Schema` extension semantics (issue #698, `SchemaExtensionPropertyTest`)
@@ -878,7 +887,7 @@ class BeanValidationMapperTest {
 
 - [ ] **Step 4: Run module tests, expect PASS**; **Step 5: Commit** `feat(schema): derive multipleOf/pattern from Bean Validation @Digits (MP OpenAPI 4.2 #717)`.
 
-### Task B6: run the official OpenAPI 4.2-RC2 TCK, docs
+### Task B6: run the official OpenAPI 4.2-RC5 TCK, docs
 
 **Files:**
 - Rename: `grimm/run-official-tck-mp-openapi-4.1.sh` → `run-official-tck-mp-openapi-4.2.sh` (fix internal `4.1` strings)
@@ -886,51 +895,57 @@ class BeanValidationMapperTest {
 
 - [ ] **Step 1: Full TCK**
 
-Run: `cd grimm && ./mvnw -ntp clean install -DskipTests && ./run-official-tck-mp-openapi-4.2.sh all 2>&1 | tee /Users/yblazart/.claude/jobs/7e5f64ca/tmp/grimm-tck-4.2-RC2.log`
+Run: `cd grimm && ./mvnw -ntp clean install -DskipTests && ./run-official-tck-mp-openapi-4.2.sh all 2>&1 | tee $LOGS/grimm-tck-4.2-RC5.log`
 Expected: `Tests run: 356, Failures: 0` (349 + `ExternalDocumentationAnnotationTest` ×1 + `SchemaExtensionPropertyTest` ×6). Watch specifically `AirlinesAppTest` (new header-example and `tags.find{…}.description` assertions) and `BeanValidationTest`. Any red test → fix in the relevant task above (B2–B5), re-run. Never use the `smoke` mode as evidence (memory: smoke is broken, always `all`).
 
-- [ ] **Step 2: Docs + commit + PR**
+- [ ] **Step 2: Docs + commit** (no push — see Global Constraints)
 
-Update README ("MicroProfile OpenAPI 4.2", "356/356", script name), `TCK.md`, Antora pages. Note in `TCK.md`: "run against `4.2-RC2`; re-run on the 4.2 final (Task E1)".
+Update README ("MicroProfile OpenAPI 4.2", "356/356", script name), `TCK.md`, Antora pages. Note in `TCK.md`: "run against `4.2-RC5` (byte-identical to the 4.2 final under ballot); re-run on the 4.2 final (Task E1)".
 
 ```bash
-git add -A && git commit -S --signoff -m "build(tck): run the official MicroProfile OpenAPI 4.2-RC2 TCK (356/356)"
-git push -4 -u origin pr/ybl/mp-7.2
+git add -A && git commit -S --signoff -m "build(tck): run the official MicroProfile OpenAPI 4.2-RC5 TCK (356/356)"
 ```
-PR `Vidocq/grimm`: `feat: MicroProfile OpenAPI 4.2 (MicroProfile 7.2)`.
+The controller later opens the PR `Vidocq/grimm`: `feat: MicroProfile OpenAPI 4.2 (MicroProfile 7.2)`.
 
 ---
 
 ## Phase C — Humboldt: MicroProfile Telemetry 2.2
 
-### Task C1: adopt OpenTelemetry 1.64.0 / instrumentation-annotations 2.30.0 / semconv 1.43.0
+### Task C1: adopt OpenTelemetry 1.66.0 / instrumentation-annotations 2.31.1 / semconv 1.44.0 and the Telemetry 2.2-RC3 TCK
 
 **Files:**
-- Modify: `humboldt/pom.xml:65-67`, `humboldt/humboldt-tck/pom.xml:50-52`
+- Modify: `humboldt/pom.xml:64-67`, `humboldt/humboldt-tck/pom.xml:47-52`
+- Rename: `humboldt/run-official-tck-telemetry-2.1.sh` → `run-official-tck-telemetry-2.2.sh` (fix every internal `2.1` label/coordinate)
+
+The 2.2-RC3 TCK compiles against the versions it pins (OTel 1.66.0 / 2.31.1 / semconv 1.44.0), so the OTel bump and the TCK bump land together. Until Tasks C2 and C3 are done, exactly one TCK assertion is expected to fail: `RestClientSpanTest.spanChild` (`code.function.name`).
 
 - [ ] **Step 1: Bump**
 
 ```bash
-cd humboldt && git checkout -b pr/ybl/mp-7.2
-sed -i '' -e 's#<opentelemetry.version>1.39.0<#<opentelemetry.version>1.64.0<#' \
-          -e 's#<opentelemetry.semconv.version>1.27.0-alpha<#<opentelemetry.semconv.version>1.43.0<#' \
-          -e 's#<opentelemetry.instrumentation.version>2.7.0<#<opentelemetry.instrumentation.version>2.30.0<#' \
+cd humboldt
+sed -i '' -e 's#<opentelemetry.version>1.39.0<#<opentelemetry.version>1.66.0<#' \
+          -e 's#<opentelemetry.semconv.version>1.27.0-alpha<#<opentelemetry.semconv.version>1.44.0<#' \
+          -e 's#<opentelemetry.instrumentation.version>2.7.0<#<opentelemetry.instrumentation.version>2.31.1<#' \
+          -e 's#<microprofile.telemetry.version>2.1<#<microprofile.telemetry.version>2.2-RC3<#' \
           pom.xml humboldt-tck/pom.xml
-git diff --stat   # expect 2 files, 6 lines
+git diff --stat   # expect 2 files, 8 lines
+git mv run-official-tck-telemetry-2.1.sh run-official-tck-telemetry-2.2.sh
+grep -n "2\.1" run-official-tck-telemetry-2.2.sh   # update every hard-coded 2.1
 ```
+Also `grep -rn "telemetry-2\.1\|run-official-tck-telemetry" --include=pom.xml --include=*.yml --include=*.md .` and update any reference to the old script name (keep historical entries in `TCK.md`/`PLAN.md` as they are).
 
 - [ ] **Step 2: Clean build, then inspect the shaded JPMS modules**
 
 Run: `./mvnw clean install`
-Expected: BUILD SUCCESS (0.3 verified: no new abstract method on any implemented interface). If `humboldt-tck` fails to compile on a semconv symbol that moved to the incubating artifact, add `io.opentelemetry.semconv:opentelemetry-semconv-incubating:1.43.0-alpha` **test scope in `humboldt-tck` only**.
-Then: `jar --describe-module --file humboldt-otel-api/target/humboldt-otel-api-0.3.0-SNAPSHOT.jar` and the same for `humboldt-otel-context` and `humboldt-otel-instrumentation-annotations` — module names and `exports` must be identical to `main` (the ModiTect descriptors are hand-written; `io.opentelemetry.api.impl` is internal and must **not** be exported).
+Expected: BUILD SUCCESS (§0.3: no new abstract method on any implemented interface). If `humboldt-tck` fails to compile on a semconv symbol that moved to the incubating artifact, add `io.opentelemetry.semconv:opentelemetry-semconv-incubating:1.44.0-alpha` **test scope in `humboldt-tck` only**.
+Then: `jar --describe-module --file humboldt-otel-api/target/humboldt-otel-api-0.4.0-SNAPSHOT.jar` and the same for `humboldt-otel-context` and `humboldt-otel-instrumentation-annotations` — compare with the same command on the `origin/main` build (build it in a scratch clone or read the hand-written ModiTect descriptors in the poms): module names and `exports` must be identical (`io.opentelemetry.api.impl` is internal and must **not** be exported).
 
-- [ ] **Step 3: Keep the 2.1 TCK green on the new OTel**
+- [ ] **Step 3: Run the 2.2-RC3 TCK and record the baseline**
 
-Run: `./run-official-tck-telemetry-2.1.sh 2>&1 | tee /Users/yblazart/.claude/jobs/7e5f64ca/tmp/humboldt-tck-2.1-otel164.log`
-Expected: 85/85 unchanged.
+Run: `./run-official-tck-telemetry-2.2.sh 2>&1 | tee $LOGS/humboldt-tck-2.2-RC3-c1.log` (read the script first; use its full-suite mode).
+Expected: every test green except `RestClientSpanTest.spanChild` (missing `code.function.name`, fixed in C2). Record the exact `Tests run` figure in the task report — any other red test is a regression of the OTel bump and must be fixed here (or logged in `humboldt/BUG.md` with `/log-bug` if it is a pre-existing defect).
 
-- [ ] **Step 4: Commit** `build: adopt OpenTelemetry 1.64.0, instrumentation-annotations 2.30.0, semconv 1.43.0 (MP Telemetry 2.2)`.
+- [ ] **Step 4: Commit** `build: adopt OpenTelemetry 1.66.0 and the MicroProfile Telemetry 2.2-RC3 TCK`.
 
 ### Task C2: mandatory `code.function.name` on `@WithSpan` spans (issue #321)
 
@@ -1007,26 +1022,24 @@ Add to `Target`: `@WithSpan(inheritContext = false) String detached() { return "
 
 - [ ] **Step 4: Run, expect PASS**; **Step 5: Commit** `feat(cdi): support @WithSpan(inheritContext = false)`.
 
-### Task C4: Telemetry 2.2 TCK — gated on artifact publication
+### Task C4: official Telemetry 2.2-RC3 TCK green, docs
 
-No `microprofile-telemetry-*-tck:2.2` (nor RC) exists on Maven Central or as a git tag as of 2026-08-27, although the Eclipse release record is dated 2026-07-21.
+**Files:**
+- Modify: `humboldt/TCK.md`, `humboldt/README.md` (l.5, l.11), `humboldt/docs/en/modules/ROOT/pages/{index,concepts,getting-started,internals,tck}.adoc` (whichever mention the spec/OTel/TCK versions — `grep -rn "2\.1\|1\.39" README.md docs`)
 
-- [ ] **Step 1: Ahead-of-publication run from source (optional but recommended)**
+- [ ] **Step 1: Full TCK**
+
+Run: `cd humboldt && ./mvnw -ntp clean install -DskipTests && ./run-official-tck-telemetry-2.2.sh 2>&1 | tee $LOGS/humboldt-tck-2.2-RC3.log`
+Expected: same `Tests run` figure as the C1 baseline, **0 failures, 0 errors** — `RestClientSpanTest.spanChild` now green.
+
+- [ ] **Step 2: Docs + commit** (no push — see Global Constraints)
+
+`TCK.md`: new section "MicroProfile Telemetry 2.2 (TCK 2.2-RC3, byte-identical to the 2.2 final under ballot; re-run on the final in Task E1)" with the date and the figure; keep the 2.1 history. README and Antora pages: "MicroProfile Telemetry 2.2 (OpenTelemetry 1.66)", TCK figure, new script name.
 
 ```bash
-cd /Users/yblazart/.claude/jobs/7e5f64ca/tmp && git clone --depth 1 https://github.com/microprofile/microprofile-telemetry.git
-cd microprofile-telemetry && mvn -q -DskipTests install      # installs 2.2-SNAPSHOT TCK jars in ~/.m2
-cd /Users/yblazart/projects/perso/vidocq/humboldt && ./run-official-tck-telemetry-2.1.sh -Dmicroprofile.telemetry.version=2.2-SNAPSHOT 2>&1 | tee /Users/yblazart/.claude/jobs/7e5f64ca/tmp/humboldt-tck-2.2-SNAPSHOT.log
+git add -A && git commit -S --signoff -m "build(tck): run the official MicroProfile Telemetry 2.2-RC3 TCK and document 2.2"
 ```
-(If the script does not forward `-D` args to Maven, run the underlying `mvn -f humboldt-tck/pom.xml -Ptck-official test -Dmicroprofile.telemetry.version=2.2-SNAPSHOT` directly.) Expected: 85/85 + the new `code.function.name` assertion in `RestClientSpanTest.spanChild` green. Record the result in `humboldt/TCK.md` under a clearly labelled "2.2-SNAPSHOT (built from source, commit <sha>)" entry — it is evidence, not certification.
-
-- [ ] **Step 2: Watch for publication**
-
-`node /Users/yblazart/.claude/jobs/7e5f64ca/tmp/central.mjs` prints the latest versions; when `microprofile-telemetry-tracing-tck` shows `2.2`, execute Task E2.
-
-- [ ] **Step 3: Docs + commit + PR**
-
-Update `README.md` (l.5, l.11), `docs/en/modules/ROOT/pages/{index,concepts,getting-started,internals}.adoc` to "MicroProfile Telemetry 2.2 (OpenTelemetry 1.64)"; keep the TCK badge at "2.1: 85/85, 2.2 pending TCK publication". Commit `docs: MicroProfile Telemetry 2.2 status`, push `-4`, PR `Vidocq/humboldt`: `feat: MicroProfile Telemetry 2.2 — OTel 1.64, code.function.name, inheritContext`.
+The controller later opens the PR `Vidocq/humboldt`: `feat: MicroProfile Telemetry 2.2 — OTel 1.66, code.function.name, inheritContext`.
 
 ---
 
@@ -1035,75 +1048,73 @@ Update `README.md` (l.5, l.11), `docs/en/modules/ROOT/pages/{index,concepts,gett
 ### Task D1: bump the in-reactor TCK runners and re-run them on the assembled runtime
 
 **Files:**
-- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt/pom.xml:16,28,35` (description, exclusion comment, `microprofile.jwt.tck.version` 2.1 → 2.2; drop the ejb/jacc/servlet excludes in its surefire/testng config — `grep -n "container/" pom.xml`)
-- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi/pom.xml:31-32` (comment → "MicroProfile 7.2 pins OpenAPI 4.2 — RC2 until the final is published", `4.0.2` → `4.2-RC2`)
-- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry/pom.xml:31-38` (comment, `opentelemetry.version` 1.64.0, `opentelemetry.instrumentation.version` 2.30.0, `opentelemetry.semconv.version` 1.43.0; `microprofile.telemetry.version` stays 2.1 until Task E2)
-- Modify: `vidocq/vidocq-runtime-integration-tests/TCK.md:48-60`
+- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt/pom.xml` (description/scope comment around l.16-28, `<!-- MicroProfile 7.1 pins JWT 2.1 -->` + `microprofile.jwt.tck.version` 2.1 → 2.2 at l.34-35; drop the `container/{ejb,jacc,servlet}` excludes at l.215-222 and reword their comment)
+- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi/pom.xml:31-33` (comment → "MicroProfile 7.2 pins OpenAPI 4.2 — 4.2-RC5 until the final reaches Maven Central (byte-identical)", `4.1.1` → `4.2-RC5`)
+- Modify: `vidocq/vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry/pom.xml:31-38` (comment, `microprofile.telemetry.version` 2.1 → 2.2-RC3, `opentelemetry.version` 1.66.0, `opentelemetry.instrumentation.version` 2.31.1, `opentelemetry.semconv.version` 1.44.0)
+- Modify: `vidocq/vidocq-runtime-integration-tests/TCK.md` (results table + audit notes)
 
-Prerequisite: the three bricks are `clean install`ed locally (or merged and available as `0.3.0-SNAPSHOT` from the snapshots repo). `git status` shows 2 untracked files in `vidocq/` — leave them alone (not part of this work) and branch from `main`: `git checkout -b pr/ybl/mp-7.2`.
+Prerequisite: the three bricks are `clean install`ed from their `pr/ybl/mp-7.2` worktrees into the local M2 (Phases A–C done) — the runtime resolves `cervantes/grimm/humboldt:0.4.0-SNAPSHOT` from there.
 
-- [ ] **Step 1: Edit the three POMs** as listed (use `sed`/editor, then `git diff` — expect ~10 changed lines).
+- [ ] **Step 1: Edit the three POMs** as listed, then `git diff` (expect ~15 changed lines).
 
 - [ ] **Step 2: Run each runner and read the summary yourself**
 
 ```bash
 cd vidocq && ./mvnw -ntp clean install -DskipTests
 for m in cervantes-jwt grimm-openapi humboldt-telemetry; do
-  ./mvnw -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-$m clean test 2>&1 | tee /Users/yblazart/.claude/jobs/7e5f64ca/tmp/vidocq-tck-$m.log | grep -E "Tests run:|BUILD"
+  ./mvnw -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-$m clean test 2>&1 | tee $LOGS/vidocq-tck-$m.log | grep -E "Tests run:|BUILD"
 done
 ```
-Expected: JWT `208` (0 failures); OpenAPI: the runner reported `344` at 4.0.2 — at 4.2-RC2 expect `344 + 7 = 351` unless 4.1/4.2 also added tests the old pin never ran (record the **actual** figure, and explain the delta vs grimm's own 356 in `TCK.md` — grimm-tck and the runtime runner have historically counted differently); Telemetry `85` unchanged. A "Failed to bind" error is a port flake — re-run once before investigating.
+Expected: JWT `208` (206 + `RsaAndEcSignatureAlgorithmTest` ×2), 0 failures; OpenAPI `346 + 7 = 353` (record the **actual** figure and explain any delta vs grimm's own 356 in `TCK.md` — the two harnesses have historically counted differently: 346 vs 349 at 4.1); Telemetry `85` or the figure the brick harness gave in C1/C4, 0 failures. A "Failed to bind" error is a port flake — re-run once before investigating.
 
 - [ ] **Step 3: Update `TCK.md`**
 
-Table header "Spec (MicroProfile 7.2)", rows: `JWT Auth 2.2 | 208`, `OpenAPI 4.2 (RC2) | <actual>`, `Telemetry 2.1 (2.2 TCK not yet published; OTel 1.64) | 85`, new total, date. Rewrite the JWT paragraph: the ejb/jacc/servlet exclusion no longer exists in 2.2 (only `ee-security-optional` if still needed).
+Table header "Spec (MicroProfile 7.2)", rows `JWT Auth 2.2 | 208`, `OpenAPI 4.2 (TCK 4.2-RC5) | <actual>`, `Telemetry 2.2 (TCK 2.2-RC3) | <actual>`, new total, date 2026-10-xx; one sentence explaining the RC = final relationship and that Task E1 re-runs on the finals. Rewrite the JWT paragraph: the ejb/jacc/servlet packages no longer exist in 2.2 (only `ee-security-optional` stays excluded if the runner still needs it).
 
-- [ ] **Step 4: Commit** `build(tck): MicroProfile 7.2 runners — JWT 2.2, OpenAPI 4.2-RC2, OTel 1.64 for Telemetry`.
+- [ ] **Step 4: Commit** `build(tck): MicroProfile 7.2 runners — JWT 2.2, OpenAPI 4.2-RC5, Telemetry 2.2-RC3`.
 
-### Task D2: documentation sweep "MicroProfile 7.1" → "7.2"
+### Task D2: documentation sweep "MicroProfile 7.1" → "7.2" (vidocq repository)
 
-**Files (verified list):** `vidocq/README.md:9,24,231`, `vidocq/ROADMAP.md:3,10,74`, `vidocq/CLAUDE.md:7`, `vidocq/AGENTS.md:7`, `vidocq/CERTIFICATION.md` (add: "MicroProfile 7.2 explicitly allows Jakarta EE 11 Core Profile as the base"), `vidocq/docs/en/modules/ROOT/pages/whats-new.adoc:10`, `vidocq/docs/en/modules/ROOT/pages/tck.adoc:97`; `vidocq-docs/content/home/modules/ROOT/pages/index.adoc:184`, `roadmap.adoc:109`; `vidocq-workspace/CLAUDE.md` (TCK section: "certification MicroProfile 7.1" → 7.2); `knock/CONTRIBUTING.md` (one mention).
+**Files (verified 2026-10-04):** `vidocq/README.md`, `vidocq/ROADMAP.md`, `vidocq/CLAUDE.md` (project overview line and the codename table: Cervantes "JWT Auth 2.1", Humboldt "Telemetry 2.1"), `vidocq/AGENTS.md` (same), `vidocq/CERTIFICATION.md` (add: "MicroProfile 7.2 explicitly allows Jakarta EE 11 Core Profile as the base"), `vidocq/docs/en/modules/ROOT/pages/whats-new.adoc`, `vidocq/docs/en/modules/ROOT/pages/tck.adoc`, the six runner `pom.xml` comments still saying "MicroProfile 7.1" (ravel-config, knock-health, cyrano-restclient…). Leave historical statements alone: `vidocq-runtime-cli/src/test/java/io/vidocq/runtime/cli/ext/KnownExtensionsTest.java:51` ("wired by the MicroProfile 7.1 certification PR #19") and dated plans/specs under `docs/superpowers/`.
 
-- [ ] **Step 1: Find every occurrence** — `grep -rnE "MicroProfile 7\.1|MP 7\.1" vidocq vidocq-docs vidocq-workspace knock --include='*.md' --include='*.adoc' | grep -v target` (expect ~20 hits; the six runner `pom.xml` comments were handled in D1).
+- [ ] **Step 1: Find every occurrence** — `grep -rnE "MicroProfile 7\.1|MP 7\.1|JWT (Auth )?2\.1|Telemetry 2\.1|OpenAPI 4\.1" --include='*.md' --include='*.adoc' --include='pom.xml' . | grep -v /target/ | grep -v docs/superpowers/`
 
 - [ ] **Step 2: Edit with the honest nuance**
 
 - Product statements ("modular Java SE MicroProfile 7.2 runtime") → 7.2.
-- TCK claims (`tck.adoc`, `whats-new.adoc`, `vidocq-docs index/roadmap`): "MicroProfile 7.2 component TCKs: JWT 2.2 and OpenAPI 4.2 (RC2 — re-run on final) green; Telemetry 2.2 implemented, its TCK not yet published (2.1 suite green on OpenTelemetry 1.64)". Add a `[.tag-new]#NEW#` bullet in `whats-new.adoc` (badges are stripped at release time by `cut-docs-release.js`).
-- `README.md:231` section title "MicroProfile 7.2 Extensions"; update the per-extension spec versions in that table (JWT 2.2, OpenAPI 4.2, Telemetry 2.2).
+- TCK claims (`tck.adoc`, `whats-new.adoc`, `TCK.md`): "MicroProfile 7.2 component TCKs green on the assembled runtime: JWT 2.2, OpenAPI 4.2 and Telemetry 2.2 — run against the release candidates on Maven Central, byte-identical to the finals under ballot; re-run on the finals once published". No "certified"/"compatible" claim. Add a `[.tag-new]#NEW#` bullet in `whats-new.adoc` (badges are stripped at release time by `cut-docs-release.js`).
+- `README.md` "MicroProfile 7.x Extensions" section: title → 7.2, per-extension spec versions (JWT 2.2, OpenAPI 4.2, Telemetry 2.2).
 
-- [ ] **Step 3: Build the docs locally when the repo has an Antora/Roq build** (`vidocq-docs`: follow its README; kroki failures are silent — check the rendered page count) and commit:
+- [ ] **Step 3: Validate the AsciiDoc you touched** (render to HTML with `asciidoctor -o - <file>` and check the structure — zsh does not split `$VAR`, quote paths explicitly) and commit:
 
 ```bash
 git commit -S --signoff -am "docs: MicroProfile 7.2 — spec versions, TCK status, Core Profile 11 endorsement"
 ```
-Push `-4`, PRs on `Vidocq/vidocq`, `Vidocq/vidocq-docs`, `Vidocq/vidocq-workspace`, `Vidocq/knock` (the last two are one-line docs changes).
 
 ---
 
-## Phase E — Follow-ups (blocked on upstream publication) and bookkeeping
+## Phase E — Follow-ups and bookkeeping
 
-### Task E1: OpenAPI 4.2 final
+### Task E1: switch to the finals once they reach Maven Central
 
-Trigger: `microprofile-openapi-api` `<release>` on Central becomes `4.2` (check with `central.mjs`).
-- [ ] `grimm/pom.xml`, `grimm/grimm-tck/pom.xml`, `vidocq/.../vidocq-runtime-tck-grimm-openapi/pom.xml`: `4.2-RC2` → `4.2`; re-run Task B6 step 1 and D1 step 2 (OpenAPI only); update `TCK.md`s ("4.2 final"); one commit per repo `build: MicroProfile OpenAPI 4.2 final`.
+Trigger: `node ~/.claude/jobs/7e5f64ca/tmp/central.mjs` shows `microprofile-openapi-api` release `4.2` and `microprofile-telemetry-tracing-tck` release `2.2` (and the platform BOM `microprofile:7.2`).
+- [ ] grimm (`pom.xml`, `grimm-tck/pom.xml`), humboldt (`pom.xml`, `humboldt-tck/pom.xml`), vidocq (`vidocq-runtime-tck-grimm-openapi`, `vidocq-runtime-tck-humboldt-telemetry`): `4.2-RC5` → `4.2`, `2.2-RC3` → `2.2`; optionally JWT `2.2` → `2.2.1` everywhere (same content, matches the platform BOM). Re-run B6/C4/D1 step 2; update the `TCK.md`s ("finals"); one commit per repo `build: MicroProfile 7.2 final TCKs`.
+- [ ] Only then: "MicroProfile 7.2 compatible" on the website, and the certification request.
 
-### Task E2: Telemetry 2.2 TCK
+### Task E2: documentation outside the four repositories
 
-Trigger: `microprofile-telemetry-tracing-tck` `2.2` on Central.
-- [ ] `humboldt/pom.xml:64`, `humboldt/humboldt-tck/pom.xml:47`, `vidocq/.../vidocq-runtime-tck-humboldt-telemetry/pom.xml:32`: `2.1` → `2.2`; `git mv run-official-tck-telemetry-2.1.sh run-official-tck-telemetry-2.2.sh`; run both TCK harnesses (expected 85 + any new test, 0 failures); update `humboldt/TCK.md`, `README.md`, `vidocq/.../TCK.md`, `tck.adoc`; commits `build(tck): official MicroProfile Telemetry 2.2 TCK`.
+After the four PRs are merged: `vidocq-docs/content/home/modules/ROOT/pages/{index,roadmap}.adoc`, `vidocq-workspace/CLAUDE.md` (TCK section: "certification MicroProfile 7.1" → 7.2), workspace `CLAUDE.md`, `knock/CONTRIBUTING.md` (one mention), `governance/*` mentions if they state the target platform — one small docs PR per repository.
 
-### Task E3: memory + release note
+### Task E3: memory + roadmap
 
-- [ ] Update the memory file `project_tck_assembled_runtime_campaign.md` (or create `project_mp72_upgrade.md`) with: MP 7.2 = JWT 2.2 / OpenAPI 4.2 / Telemetry 2.2 only; artifact-availability pitfalls (Telemetry 2.2 TCK unpublished, OpenAPI RC2, BOM 7.2 absent); the `code.function.name` binary-name rule; the `SchemaImpl` single-store decision; and the new TCK counts. Add the `MEMORY.md` index line.
-- [ ] `vidocq/ROADMAP.md`: tick "MicroProfile 7.2 TCK per implemented spec" once E1/E2 are done; the "MicroProfile 7.2 compatible" claim on the website waits for E1 **and** E2.
+- [ ] Update the memory file `project_mp72_upgrade.md` with the new TCK counts, the `code.function.name` binary-name rule and the `SchemaImpl` single-store decision; `vidocq/ROADMAP.md`: tick "MicroProfile 7.2 TCK per implemented spec" once E1 is done.
 
 ---
 
 ## Self-review
 
-**Spec coverage.** JWT 2.2 (both algorithms when unset, TCK 2.2, removed packages) → A1–A3. OpenAPI 4.2 (`@Header` example/examples → B3; `Schema` extension semantics → B2; `@Digits` → B5; method-level `@ExternalDocumentation` TCK → B4; `allowEmptyValue`/TYPE deprecations → B3 note + B4 note; TCK 4.2-RC2 → B6; final → E1). Telemetry 2.2 (OTel 1.64 → C1; `code.function.name` → C2; `inheritContext` → C3; TCK gating → C4/E2). Unchanged components and Core Profile 11 endorsement → §0.1, D2. Runtime runners + docs → D1/D2. Memory → E3.
+**Spec coverage.** JWT 2.2 (both algorithms when unset, TCK 2.2, removed packages) → A1–A3. OpenAPI 4.2 (`@Header` example/examples → B3; `Schema` extension semantics → B2; `@Digits` → B5; method-level `@ExternalDocumentation` TCK → B4; `allowEmptyValue`/TYPE deprecations → B3 note + B4 note; TCK 4.2-RC5 → B6; final → E1). Telemetry 2.2 (OTel 1.66 + TCK 2.2-RC3 → C1; `code.function.name` → C2; `inheritContext` → C3; TCK green + docs → C4; final → E1). Unchanged components and Core Profile 11 endorsement → §0.1, D2. Runtime runners + docs → D1/D2. Outside docs → E2. Memory → E3.
 
-**Placeholder scan.** Every code step carries the actual code; the only "verify first" items are deliberate (where `apply` is called in `SchemaGenerator`, whether `ee-security-optional` still exists in the 2.2 jar, how `SpanData` exposes attributes) and each says exactly what to grep.
+**Placeholder scan.** Every code step carries the actual code; the only "verify first" items are deliberate (where `apply` is called in `SchemaGenerator`, whether `ee-security-optional` still exists in the 2.2 jar, how `SpanData` exposes attributes, the TCK scripts' argument conventions) and each says exactly what to grep.
 
 **Type consistency.** `JwtConfig` 7th component `Optional<SignatureAlgorithm> requiredAlgorithm` is used with that name in A2 tests, validator and producer. `KeyResolvers.fromInlinePem/fromLocation` take `Optional<SignatureAlgorithm.Family>` everywhere. `PemKeys.fromPem(String)` (A1) is what `KeyResolvers.parsePem` (A2) calls. `toModelExample(ExampleObject)` (B3) is private per scanner. `CODE_FUNCTION_NAME` (C2) is a `AttributeKey<String>`.
