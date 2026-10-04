@@ -22,6 +22,7 @@ package io.vidocq.humboldt.exporter.otlp.http.internal;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
+import io.vidocq.humboldt.sdk.metric.data.DoublePointData;
 import io.vidocq.humboldt.sdk.metric.data.HistogramPointData;
 import io.vidocq.humboldt.sdk.metric.data.LongPointData;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
@@ -47,8 +48,11 @@ import static io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonCommon.writ
  * shared via {@link OtlpJsonCommon} (escaping, array-aware AnyValue,
  * Attributes, Resource, Scope).</p>
  *
- * <p>M4 MVP: only Counter (sum/asInt) and Histogram (explicit buckets) are
- * supported. Gauge / ExponentialHistogram = M4b.</p>
+ * <p>Covers every kind of data humboldt-sdk-metric produces: counters and up-down counters (synchronous or
+ * observable) as {@code sum}, gauges (synchronous or observable) as {@code gauge} — both with long
+ * ({@code asInt}) or double ({@code asDouble}) data points — and histograms with explicit buckets as
+ * {@code histogram}. Mapping per the OTLP JSON encoding (int64 fields as strings, enums as integers). The SDK
+ * produces no exponential histogram or summary.</p>
  */
 public final class OtlpJsonMetricEncoder {
 
@@ -128,20 +132,14 @@ public final class OtlpJsonMetricEncoder {
             case COUNTER, UP_DOWN_COUNTER, OBSERVABLE_COUNTER, OBSERVABLE_UP_DOWN_COUNTER ->
                     writeSum(sb, m);
             case HISTOGRAM -> writeHistogram(sb, m);
-            case OBSERVABLE_GAUGE -> writeGauge(sb, m);
+            case GAUGE, OBSERVABLE_GAUGE -> writeGauge(sb, m);
         }
         sb.append('}');
     }
 
     private static void writeSum(StringBuilder sb, MetricData m) {
         sb.append(",\"sum\":{\"dataPoints\":[");
-        boolean first = true;
-        for (PointData p : m.points()) {
-            if (!(p instanceof LongPointData lp)) continue;
-            if (!first) sb.append(',');
-            first = false;
-            writeLongDataPoint(sb, lp);
-        }
+        writeNumberDataPoints(sb, m);
         sb.append("],\"aggregationTemporality\":")
                 .append(temporalityToInt(m.temporality()))
                 .append(",\"isMonotonic\":").append(m.monotonic()).append('}');
@@ -162,20 +160,34 @@ public final class OtlpJsonMetricEncoder {
 
     private static void writeGauge(StringBuilder sb, MetricData m) {
         sb.append(",\"gauge\":{\"dataPoints\":[");
-        boolean first = true;
-        for (PointData p : m.points()) {
-            if (!(p instanceof LongPointData lp)) continue;
-            if (!first) sb.append(',');
-            first = false;
-            writeLongDataPoint(sb, lp);
-        }
+        writeNumberDataPoints(sb, m);
         sb.append("]}");
     }
 
-    private static void writeLongDataPoint(StringBuilder sb, LongPointData p) {
+    /**
+     * Writes the {@code NumberDataPoint}s of a sum or a gauge: a long point as {@code "asInt"} (an int64, so a
+     * JSON string), a double point as {@code "asDouble"} (a JSON number, or a string for NaN and the
+     * infinities). Points of another kind are not number points and are skipped.
+     */
+    private static void writeNumberDataPoints(StringBuilder sb, MetricData m) {
+        boolean first = true;
+        for (PointData p : m.points()) {
+            if (!(p instanceof LongPointData) && !(p instanceof DoublePointData)) continue;
+            if (!first) sb.append(',');
+            first = false;
+            writeNumberDataPoint(sb, p);
+        }
+    }
+
+    private static void writeNumberDataPoint(StringBuilder sb, PointData p) {
         sb.append("{\"startTimeUnixNano\":\"").append(p.startEpochNanos()).append('"');
         sb.append(",\"timeUnixNano\":\"").append(p.epochNanos()).append('"');
-        sb.append(",\"asInt\":\"").append(p.value()).append('"');
+        if (p instanceof LongPointData lp) {
+            sb.append(",\"asInt\":\"").append(lp.value()).append('"');
+        } else if (p instanceof DoublePointData dp) {
+            sb.append(",\"asDouble\":");
+            appendDouble(sb, dp.value());
+        }
         if (!p.attributes().isEmpty()) {
             sb.append(",\"attributes\":");
             writeAttributesArray(sb, p.attributes());

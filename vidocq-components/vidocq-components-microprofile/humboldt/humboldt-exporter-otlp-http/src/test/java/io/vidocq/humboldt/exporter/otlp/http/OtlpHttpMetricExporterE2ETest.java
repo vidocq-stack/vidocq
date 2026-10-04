@@ -113,6 +113,37 @@ class OtlpHttpMetricExporterE2ETest {
         assertTrue(body.contains("\"service.name\""));
     }
 
+    @Test
+    void e2e_double_counter_and_synchronous_gauges_export_their_data_points() {
+        // BUG-20261004-02: double points were dropped and synchronous gauges had no data field.
+        OtlpHttpMetricExporter exporter = OtlpHttpMetricExporter.builder()
+                .setEndpoint(endpoint())
+                .setRequestTimeout(Duration.ofSeconds(5))
+                .build();
+
+        try (SdkMeterProvider p = SdkMeterProvider.builder()
+                .registerMetricReader(PeriodicMetricReader.builder(exporter)
+                        .setInterval(Duration.ofSeconds(60)).build())
+                .build()) {
+            var meter = p.get("io.vidocq.test");
+            meter.counterBuilder("bytes").ofDoubles().build().add(1.5);
+            meter.gaugeBuilder("temperature").build().set(21.5);
+            meter.gaugeBuilder("queue.size").ofLongs().build().set(3L);
+
+            p.flush().join(3, TimeUnit.SECONDS);
+            waitForReceivedBodies(1);
+        }
+
+        assertTrue(receivedBodies.size() >= 1, "at least one POST expected");
+        String body = receivedBodies.getFirst();
+        assertTrue(body.contains("{\"name\":\"bytes\",\"sum\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asDouble\":1.5}],\"aggregationTemporality\":2,\"isMonotonic\":true}"), body);
+        assertTrue(body.contains("{\"name\":\"temperature\",\"gauge\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asDouble\":21.5}]}}"), body);
+        assertTrue(body.contains("{\"name\":\"queue.size\",\"gauge\":{\"dataPoints\":[{"), body);
+        assertTrue(body.contains("\"asInt\":\"3\"}]}}"), body);
+    }
+
     private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline && receivedBodies.size() < expected) {

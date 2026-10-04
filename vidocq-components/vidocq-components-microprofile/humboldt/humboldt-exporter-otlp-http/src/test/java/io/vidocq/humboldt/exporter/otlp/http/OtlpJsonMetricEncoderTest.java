@@ -19,21 +19,109 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http;
 
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonMetricEncoder;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
+import io.vidocq.humboldt.sdk.metric.data.DoublePointData;
 import io.vidocq.humboldt.sdk.metric.data.HistogramPointData;
 import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
+import io.vidocq.humboldt.sdk.metric.data.LongPointData;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
+import io.vidocq.humboldt.sdk.metric.data.PointData;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * OTLP/JSON mapping of the metric data humboldt-sdk-metric produces, checked against the OpenTelemetry proto
+ * JSON encoding (and the OpenTelemetry Java 1.66 JSON marshalers): sums and gauges carry {@code NumberDataPoint}s
+ * whose value is {@code "asInt"} (an int64, hence a JSON string) or {@code "asDouble"} (a JSON number, or
+ * {@code "NaN"}/{@code "Infinity"}/{@code "-Infinity"}); a sum adds {@code aggregationTemporality} (enum as an
+ * integer) and {@code isMonotonic}; a gauge has its data points only (BUG-20261004-02).
+ */
 class OtlpJsonMetricEncoderTest {
+
+    private static final String POINT_TIMES = "\"startTimeUnixNano\":\"1\",\"timeUnixNano\":\"2\"";
+
+    @Test
+    void encodes_long_sum_points_as_asInt_strings() {
+        String json = encode(InstrumentType.COUNTER, true, new LongPointData(1L, 2L, Attributes.empty(), 7L));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"sum\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asInt\":\"7\"}],"
+                + "\"aggregationTemporality\":2,\"isMonotonic\":true}}"), json);
+    }
+
+    @Test
+    void encodes_double_counter_points_as_asDouble() {
+        String json = encode(InstrumentType.COUNTER, true, new DoublePointData(1L, 2L, Attributes.empty(), 2.5));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"sum\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":2.5}],"
+                + "\"aggregationTemporality\":2,\"isMonotonic\":true}}"), json);
+    }
+
+    @Test
+    void encodes_double_up_down_counter_points_as_a_non_monotonic_sum() {
+        String json = encode(InstrumentType.UP_DOWN_COUNTER, false,
+                new DoublePointData(1L, 2L, Attributes.empty(), -1.25));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"sum\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":-1.25}],"
+                + "\"aggregationTemporality\":2,\"isMonotonic\":false}}"), json);
+    }
+
+    @Test
+    void encodes_observable_double_sum_points() {
+        String json = encode(InstrumentType.OBSERVABLE_COUNTER, true,
+                new DoublePointData(1L, 2L, Attributes.empty(), 3.0));
+
+        assertTrue(json.contains("\"sum\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":3.0}]"), json);
+    }
+
+    @Test
+    void encodes_a_synchronous_long_gauge_as_a_gauge() {
+        String json = encode(InstrumentType.GAUGE, false, new LongPointData(1L, 2L, Attributes.empty(), 42L));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asInt\":\"42\"}]}}"),
+                json);
+    }
+
+    @Test
+    void encodes_a_synchronous_double_gauge_as_a_gauge() {
+        String json = encode(InstrumentType.GAUGE, false, new DoublePointData(1L, 2L, Attributes.empty(), 0.75));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":0.75}]}}"),
+                json);
+    }
+
+    @Test
+    void encodes_observable_double_gauge_points() {
+        String json = encode(InstrumentType.OBSERVABLE_GAUGE, false,
+                new DoublePointData(1L, 2L, Attributes.empty(), 21.5));
+
+        assertTrue(json.contains("{\"name\":\"m\",\"gauge\":{\"dataPoints\":[{" + POINT_TIMES + ",\"asDouble\":21.5}]}}"),
+                json);
+    }
+
+    @Test
+    void encodes_non_finite_double_points_as_json_strings() {
+        String json = encode(InstrumentType.GAUGE, false,
+                new DoublePointData(1L, 2L, Attributes.empty(), Double.NaN),
+                new DoublePointData(1L, 2L, Attributes.of(AttributeKey.stringKey("k"), "v"), Double.NEGATIVE_INFINITY));
+
+        assertTrue(json.contains("\"asDouble\":\"NaN\""), json);
+        assertTrue(json.contains("\"asDouble\":\"-Infinity\",\"attributes\":[{\"key\":\"k\""), json);
+    }
+
+    private static String encode(InstrumentType type, boolean monotonic, PointData... points) {
+        MetricData metric = new MetricData(
+                Resource.empty(), InstrumentationScope.of("x"), "m", "", "",
+                type, AggregationTemporality.CUMULATIVE, monotonic, List.of(points));
+        return OtlpJsonMetricEncoder.encode(List.of(metric));
+    }
 
     @Test
     void encodes_non_finite_histogram_doubles_as_json_strings() {
