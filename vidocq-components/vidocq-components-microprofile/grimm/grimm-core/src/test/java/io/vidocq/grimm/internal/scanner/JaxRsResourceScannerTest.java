@@ -485,7 +485,121 @@ class JaxRsResourceScannerTest {
         assertEquals(1, schema.getAll().size());
     }
 
+    private static OpenAPI scanSchemaSites() {
+        return new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(SchemaSitesResource.class));
+    }
+
+    private static org.eclipse.microprofile.openapi.models.media.Schema responseHeaderSchema(String path) {
+        return scanSchemaSites().getPaths().getPathItem(path).getGET().getResponses().getAPIResponse("200")
+                .getHeaders().get("X").getSchema();
+    }
+
+    private static org.eclipse.microprofile.openapi.models.media.Schema responseContentSchema(String path) {
+        return scanSchemaSites().getPaths().getPathItem(path).getGET().getResponses().getAPIResponse("200")
+                .getContent().getMediaType("application/json").getSchema();
+    }
+
+    private static org.eclipse.microprofile.openapi.models.headers.Header encodingHeader(String path) {
+        return scanSchemaSites().getPaths().getPathItem(path).getPOST().getRequestBody().getContent()
+                .getMediaType("multipart/form-data").getEncoding().get("f").getHeaders().get("X");
+    }
+
+    @Test
+    void responseHeaderSchemaWithOnlyMinimumIsMapped() {
+        assertEquals(0, responseHeaderSchema("/sites/header-min").getMinimum().intValue());
+    }
+
+    @Test
+    void responseHeaderSchemaWithOnlyExamplesIsMapped() {
+        assertEquals(List.of("x"), responseHeaderSchema("/sites/header-examples").getExamples());
+    }
+
+    @Test
+    void emptyResponseHeaderSchemaIsTheSameAsNone() {
+        assertNull(responseHeaderSchema("/sites/header-empty"));
+    }
+
+    @Test
+    void contentSchemaWithOnlyMinimumIsMapped() {
+        assertEquals(0, responseContentSchema("/sites/content-min").getMinimum().intValue());
+    }
+
+    @Test
+    void contentSchemaWithOnlyExamplesIsMapped() {
+        assertEquals(List.of("x"), responseContentSchema("/sites/content-examples").getExamples());
+    }
+
+    @Test
+    void emptyContentSchemaIsTheSameAsNone() {
+        var empty = responseContentSchema("/sites/content-empty");
+        var none = responseContentSchema("/sites/content-none");
+
+        assertEquals(none == null ? null : none.getAll(), empty == null ? null : empty.getAll());
+    }
+
+    @Test
+    void encodingHeaderSchemaWithOnlyMinimumIsMapped() {
+        assertEquals(0, encodingHeader("/sites/enc-min").getSchema().getMinimum().intValue());
+    }
+
+    @Test
+    void encodingHeaderSchemaWithOnlyExamplesIsMapped() {
+        assertEquals(List.of("x"), encodingHeader("/sites/enc-examples").getSchema().getExamples());
+    }
+
+    @Test
+    void emptyEncodingHeaderSchemaIsTheSameAsNone() {
+        assertNull(encodingHeader("/sites/enc-empty").getSchema());
+    }
+
     // ---------- Fixtures ----------
+
+
+    @Path("/sites")
+    static class SchemaSitesResource {
+        @GET @Path("/header-min")
+        @APIResponse(responseCode = "200", headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "0")))
+        public String headerMin() { return null; }
+
+        @GET @Path("/header-examples")
+        @APIResponse(responseCode = "200", headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x")))
+        public String headerExamples() { return null; }
+
+        @GET @Path("/header-empty")
+        @APIResponse(responseCode = "200", headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema))
+        public String headerEmpty() { return null; }
+
+        @GET @Path("/content-min") @Produces("application/json")
+        @APIResponse(responseCode = "200", content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "application/json", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "0")))
+        public String contentMin() { return null; }
+
+        @GET @Path("/content-examples") @Produces("application/json")
+        @APIResponse(responseCode = "200", content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "application/json", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x")))
+        public String contentExamples() { return null; }
+
+        @GET @Path("/content-empty") @Produces("application/json")
+        @APIResponse(responseCode = "200", content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "application/json", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema))
+        public String contentEmpty() { return null; }
+
+        @GET @Path("/content-none") @Produces("application/json")
+        @APIResponse(responseCode = "200", content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "application/json"))
+        public String contentNone() { return null; }
+
+        @POST @Path("/enc-min") @Consumes("multipart/form-data")
+        @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
+                headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "0")))))
+        public void encMin(String body) { }
+
+        @POST @Path("/enc-examples") @Consumes("multipart/form-data")
+        @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
+                headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x")))))
+        public void encExamples(String body) { }
+
+        @POST @Path("/enc-empty") @Consumes("multipart/form-data")
+        @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
+                headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema))))
+        public void encEmpty(String body) { }
+    }
 
     @Path("/schema-only")
     static class SchemaOnlyResource {
