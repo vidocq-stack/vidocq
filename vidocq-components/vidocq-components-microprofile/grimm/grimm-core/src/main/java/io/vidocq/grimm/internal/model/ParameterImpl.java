@@ -24,7 +24,6 @@ import org.eclipse.microprofile.openapi.models.media.Content;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.parameters.Parameter;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ParameterImpl extends AbstractExtensibleRef<Parameter> implements Parameter {

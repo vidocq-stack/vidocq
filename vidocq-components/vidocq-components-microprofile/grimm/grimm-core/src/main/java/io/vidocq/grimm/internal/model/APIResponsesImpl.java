@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 import org.eclipse.microprofile.openapi.models.responses.APIResponses;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class APIResponsesImpl extends AbstractExtensible<APIResponses> implements APIResponses {

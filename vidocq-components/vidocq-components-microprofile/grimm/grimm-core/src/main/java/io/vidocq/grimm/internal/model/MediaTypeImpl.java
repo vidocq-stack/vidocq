@@ -24,7 +24,6 @@ import org.eclipse.microprofile.openapi.models.media.Encoding;
 import org.eclipse.microprofile.openapi.models.media.MediaType;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class MediaTypeImpl extends AbstractExtensible<MediaType> implements MediaType {

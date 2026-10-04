@@ -21,7 +21,6 @@ package io.vidocq.grimm.internal.model;
 
 import org.eclipse.microprofile.openapi.models.security.OAuthFlow;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class OAuthFlowImpl extends AbstractExtensible<OAuthFlow> implements OAuthFlow {

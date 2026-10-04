@@ -31,7 +31,6 @@ import org.eclipse.microprofile.openapi.models.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 import org.eclipse.microprofile.openapi.models.security.SecurityScheme;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ComponentsImpl extends AbstractExtensible<Components> implements Components {

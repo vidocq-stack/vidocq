@@ -318,6 +318,7 @@ class AnnotationScannerTest {
     static class DefinitionWithLicenseAndContact {
     }
 
+    @SuppressWarnings("removal") // @Header.allowEmptyValue is deprecated for removal in 4.2 but still mapped
     @OpenAPIDefinition(
         info = @Info(title = "Filter API", version = "1.0.0"),
         servers = @Server(

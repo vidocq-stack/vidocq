@@ -342,9 +342,9 @@ final class JaxRsResourceScanner {
         }
 
         if (opAnn != null) {
-            applyExtensions(op, opAnn.extensions());
+            AnnotationModelMappings.applyExtensions(op, opAnn.extensions());
         }
-        applyExtensions(op, collectStandaloneExtensions(method));
+        AnnotationModelMappings.applyExtensions(op, collectStandaloneExtensions(method));
 
         // MP OpenAPI 4.2: @ExternalDocumentation on a resource method documents the operation.
         ExternalDocumentation extDocs = method.getAnnotation(ExternalDocumentation.class);
@@ -556,7 +556,7 @@ final class JaxRsResourceScanner {
             if (!explicit.example().isEmpty()) {
                 p.setExample(explicit.example());
             }
-            applyExtensions(p, explicit.extensions());
+            AnnotationModelMappings.applyExtensions(p, explicit.extensions());
             if (hasExplicitContent) {
                 var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
                 for (Content c : explicit.content()) {
@@ -720,7 +720,7 @@ final class JaxRsResourceScanner {
             if (!explicit.ref().isEmpty()) {
                 modelBody.setRef(explicit.ref());
             }
-            applyExtensions(modelBody, explicit.extensions());
+            AnnotationModelMappings.applyExtensions(modelBody, explicit.extensions());
             if (explicit.content().length > 0) {
                 var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
                 Type bodyType = requestBodySchemaType != null
@@ -852,13 +852,13 @@ final class JaxRsResourceScanner {
                 }
                 applyResponseHeaders(r, modelResp);
                 applyResponseLinks(r, modelResp);
-                applyExtensions(modelResp, r.extensions());
+                AnnotationModelMappings.applyExtensions(modelResp, r.extensions());
                 responses.addAPIResponse(code, modelResp);
             }
         }
 
         if (aggregate != null) {
-            applyExtensions(responses, aggregate.extensions());
+            AnnotationModelMappings.applyExtensions(responses, aggregate.extensions());
         }
         applyExceptionMapperResponses(method, responses, produces);
         processResponseSchemas(method, responses, produces);
@@ -929,7 +929,7 @@ final class JaxRsResourceScanner {
         }
         applyResponseHeaders(mapperResponse, modelResp);
         applyResponseLinks(mapperResponse, modelResp);
-        applyExtensions(modelResp, mapperResponse.extensions());
+        AnnotationModelMappings.applyExtensions(modelResp, mapperResponse.extensions());
         responses.addAPIResponse(code, modelResp);
     }
 
@@ -957,7 +957,7 @@ final class JaxRsResourceScanner {
             if (schemaGenerator != null && hasAnyContent(headerAnnotation.schema())) {
                 header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
             }
-            applyExtensions(header, headerAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());
             modelResponse.addHeader(name, header);
         }
     }
@@ -998,10 +998,10 @@ final class JaxRsResourceScanner {
                 if (!linkAnnotation.server().description().isEmpty()) {
                     server.setDescription(linkAnnotation.server().description());
                 }
-                applyExtensions(server, linkAnnotation.server().extensions());
+                AnnotationModelMappings.applyExtensions(server, linkAnnotation.server().extensions());
                 link.setServer(server);
             }
-            applyExtensions(link, linkAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
             modelResponse.addLink(name, link);
         }
     }
@@ -1087,7 +1087,7 @@ final class JaxRsResourceScanner {
             if (!cb.ref().isEmpty()) {
                 modelCb.setRef(cb.ref());
             }
-            applyExtensions(modelCb, cb.extensions());
+            AnnotationModelMappings.applyExtensions(modelCb, cb.extensions());
             String urlExpr = cb.callbackUrlExpression();
             if (!urlExpr.isEmpty() && cb.operations().length > 0) {
                 var pathItem = OASFactory.createObject(PathItem.class);
@@ -1099,7 +1099,7 @@ final class JaxRsResourceScanner {
                     if (!co.description().isEmpty()) {
                         inner.setDescription(co.description());
                     }
-                    applyExtensions(inner, co.extensions());
+                    AnnotationModelMappings.applyExtensions(inner, co.extensions());
                     for (SecurityRequirement requirement : co.security()) {
                         addSecurityRequirement(inner, requirement);
                     }
@@ -1240,7 +1240,7 @@ final class JaxRsResourceScanner {
             if (flows != null) {
                 scheme.setFlows(flows);
             }
-            applyExtensions(scheme, schemeAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
             components.addSecurityScheme(name, scheme);
         }
     }
@@ -1352,7 +1352,7 @@ final class JaxRsResourceScanner {
         if (authorizationCode != null) {
             flows.setAuthorizationCode(authorizationCode);
         }
-        applyExtensions(flows, flowsAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(flows, flowsAnnotation.extensions());
         return flows;
     }
 
@@ -1382,12 +1382,8 @@ final class JaxRsResourceScanner {
                 flow.addScope(scope.name(), scope.description());
             }
         }
-        applyExtensions(flow, flowAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(flow, flowAnnotation.extensions());
         return flow;
-    }
-
-    private void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible, Extension[] extensions) {
-        AnnotationModelMappings.applyExtensions(extensible, extensions);
     }
 
     private void applyContentAnnotation(Content contentAnnotation,
@@ -1438,10 +1434,10 @@ final class JaxRsResourceScanner {
                 }
                 encoding.addHeader(headerName, toModelHeader(headerAnnotation));
             }
-            applyExtensions(encoding, encodingAnnotation.extensions());
+            AnnotationModelMappings.applyExtensions(encoding, encodingAnnotation.extensions());
             mediaType.addEncoding(encodingAnnotation.name(), encoding);
         }
-        applyExtensions(mediaType, contentAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(mediaType, contentAnnotation.extensions());
     }
 
     @SuppressWarnings("removal")
@@ -1460,7 +1456,7 @@ final class JaxRsResourceScanner {
         if (schemaGenerator != null && hasAnyContent(headerAnnotation.schema())) {
             header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
         }
-        applyExtensions(header, headerAnnotation.extensions());
+        AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());
         return header;
     }
 

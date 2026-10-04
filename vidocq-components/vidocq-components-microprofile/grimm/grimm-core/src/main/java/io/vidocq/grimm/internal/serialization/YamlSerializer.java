@@ -115,7 +115,7 @@ public final class YamlSerializer {
             return "null";
         }
         if (value instanceof BigDecimal decimal) {
-            // Plain notation: YAML 1.1 parsers read 1E-10 as a string.
+            // Plain notation, as in JsonSerializer (which explains why).
             return decimal.toPlainString();
         }
         if (value instanceof Number || value instanceof Boolean) {

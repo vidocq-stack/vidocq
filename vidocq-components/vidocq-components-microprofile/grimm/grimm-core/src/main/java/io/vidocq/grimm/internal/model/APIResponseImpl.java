@@ -24,7 +24,6 @@ import org.eclipse.microprofile.openapi.models.links.Link;
 import org.eclipse.microprofile.openapi.models.media.Content;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class APIResponseImpl extends AbstractExtensibleRef<APIResponse> implements APIResponse {

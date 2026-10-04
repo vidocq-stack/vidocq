@@ -24,7 +24,6 @@ import org.eclipse.microprofile.openapi.models.headers.Header;
 import org.eclipse.microprofile.openapi.models.media.Content;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class HeaderImpl extends AbstractExtensibleRef<Header> implements Header {

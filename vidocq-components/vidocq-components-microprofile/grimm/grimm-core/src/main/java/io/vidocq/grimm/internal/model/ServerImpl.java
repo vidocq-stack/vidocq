@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 import org.eclipse.microprofile.openapi.models.servers.ServerVariable;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ServerImpl extends AbstractExtensible<Server> implements Server {

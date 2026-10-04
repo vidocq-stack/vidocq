@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.callbacks.Callback;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class CallbackImpl extends AbstractExtensibleRef<Callback> implements Callback {

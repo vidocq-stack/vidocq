@@ -34,7 +34,7 @@
     <dependency>
       <groupId>jakarta.validation</groupId>
       <artifactId>jakarta.validation-api</artifactId>
-      <version>3.1.1</version>
+      <version>${version.jakarta.validation}</version>
       <scope>test</scope>
     </dependency>
     <dependency>

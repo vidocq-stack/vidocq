@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class PathsImpl extends AbstractExtensible<Paths> implements Paths {

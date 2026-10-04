@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.media.Content;
 import org.eclipse.microprofile.openapi.models.media.MediaType;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ContentImpl implements Content {

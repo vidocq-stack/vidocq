@@ -160,4 +160,16 @@ class BeanValidationMapperTest {
             assertFalse(p.matcher(ko).matches(), ko);
         }
     }
+
+    @Test
+    void digitsIsMappedEndToEndThroughSchemaGenerator() {
+        SchemaRegistry registry = new SchemaRegistry();
+        new SchemaGenerator(registry).generate(Holder.class);
+        var properties = registry.snapshot().get("Holder").getProperties();
+
+        assertMultipleOf("0.001", properties.get("digitsFloat32"));
+        assertMultipleOf("0.0000000001", properties.get("digitsDecimal"));
+        assertTrue(Pattern.compile(properties.get("digitsString").getPattern()).matcher("12.5").matches());
+        assertNull(properties.get("digitsInt32").getMultipleOf());
+    }
 }

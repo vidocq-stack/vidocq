@@ -21,7 +21,6 @@ package io.vidocq.grimm.internal.model;
 
 import org.eclipse.microprofile.openapi.models.servers.ServerVariable;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class ServerVariableImpl extends AbstractExtensible<ServerVariable> implements ServerVariable {

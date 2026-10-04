@@ -20,7 +20,6 @@
 package io.vidocq.grimm.internal.invoker;
 
 import io.vidocq.grimm.internal.config.FilterConfig;
-import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.OASModelReader;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 

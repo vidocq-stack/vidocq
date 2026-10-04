@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.links.Link;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class LinkImpl extends AbstractExtensibleRef<Link> implements Link {

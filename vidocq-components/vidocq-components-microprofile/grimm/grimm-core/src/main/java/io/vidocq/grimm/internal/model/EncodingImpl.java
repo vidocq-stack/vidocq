@@ -22,7 +22,6 @@ package io.vidocq.grimm.internal.model;
 import org.eclipse.microprofile.openapi.models.headers.Header;
 import org.eclipse.microprofile.openapi.models.media.Encoding;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class EncodingImpl extends AbstractExtensible<Encoding> implements Encoding {
