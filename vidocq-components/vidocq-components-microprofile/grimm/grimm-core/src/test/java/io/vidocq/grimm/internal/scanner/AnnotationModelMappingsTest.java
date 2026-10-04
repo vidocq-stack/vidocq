@@ -88,7 +88,8 @@ class AnnotationModelMappingsTest {
         withEscapedQuote.put("a", "x\"y");
         withEscapedQuote.put("b", 1L);
         assertAll(
-                () -> assertEquals(withEscapedQuote, AnnotationModelMappings.parseJsonValue("{\"a\": \"x\\\"y\", \"b\": 1}")),
+                () -> assertEquals(withEscapedQuote,
+                        AnnotationModelMappings.parseJsonValue("{\"a\": \"x\\\"y\", \"b\": 1}")),
                 () -> assertNull(AnnotationModelMappings.parseJsonValue("null")),
                 () -> assertEquals(1000.0, AnnotationModelMappings.parseJsonValue("1e3")),
                 () -> assertEquals("abc", AnnotationModelMappings.parseJsonValue("\"abc\"")),

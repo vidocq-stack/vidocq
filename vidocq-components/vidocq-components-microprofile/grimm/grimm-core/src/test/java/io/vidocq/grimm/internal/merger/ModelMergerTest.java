@@ -38,6 +38,7 @@ import org.eclipse.microprofile.openapi.models.responses.APIResponses;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.List;
 
@@ -117,13 +118,15 @@ class ModelMergerTest {
                 new ReaderSource(readerModel), new StaticFileSource(staticModel)));
         assertAll(
                 () -> assertEquals("static", readerAndStatic.getPaths().getPathItem("/shared").getSummary()),
-                () -> assertEquals("staticOp", readerAndStatic.getPaths().getPathItem("/shared").getGET().getOperationId()),
+                () -> assertEquals("staticOp",
+                        readerAndStatic.getPaths().getPathItem("/shared").getGET().getOperationId()),
                 () -> assertEquals("reader", readerAndStatic.getPaths().getPathItem("/reader-only").getSummary()),
                 () -> assertEquals("static", readerAndStatic.getComponents().getSchemas().get("Pet").getDescription()),
                 () -> assertEquals("static", readerAndStatic.getTags().get(0).getDescription()));
 
         OpenAPI all = new ModelMerger().merge(List.of(
-                new AnnotationSource(annotationModel), new StaticFileSource(staticModel), new ReaderSource(readerModel)));
+                new AnnotationSource(annotationModel), new StaticFileSource(staticModel),
+                new ReaderSource(readerModel)));
         assertEquals("annotationOp", all.getPaths().getPathItem("/shared").getGET().getOperationId());
     }
 
@@ -447,7 +450,7 @@ class ModelMergerTest {
                 .minLength(1)
                 .required(List.of("kept"));
         Schema fromAnnotations = OASFactory.createObject(Schema.class)
-                .minimum(java.math.BigDecimal.ONE)
+                .minimum(BigDecimal.ONE)
                 .maxLength(5)
                 .pattern("[a-z]+")
                 .readOnly(Boolean.TRUE)
@@ -466,7 +469,7 @@ class ModelMergerTest {
         assertEquals("static", merged.getDescription());
         assertEquals(1, merged.getMinLength());
         assertEquals(List.of("kept"), merged.getRequired(), "an empty list does not wipe the lower source's");
-        assertEquals(java.math.BigDecimal.ONE, merged.getMinimum());
+        assertEquals(BigDecimal.ONE, merged.getMinimum());
         assertEquals(5, merged.getMaxLength());
         assertEquals("[a-z]+", merged.getPattern());
         assertEquals(Boolean.TRUE, merged.getReadOnly());
@@ -508,8 +511,8 @@ class ModelMergerTest {
                 .addProperty("a", OASFactory.createObject(Schema.class).type(List.of(Schema.SchemaType.INTEGER)))
                 .items(OASFactory.createObject(Schema.class).format("int32"));
         Schema fromAnnotations = OASFactory.createObject(Schema.class)
-                .addProperty("a", OASFactory.createObject(Schema.class).minimum(java.math.BigDecimal.TEN))
-                .items(OASFactory.createObject(Schema.class).maximum(java.math.BigDecimal.TEN));
+                .addProperty("a", OASFactory.createObject(Schema.class).minimum(BigDecimal.TEN))
+                .items(OASFactory.createObject(Schema.class).maximum(BigDecimal.TEN));
 
         Schema merged = mergedResponseSchema(
                 new StaticFileSource(withResponseSchema(fromStaticFile)),
@@ -517,9 +520,9 @@ class ModelMergerTest {
 
         Schema a = merged.getProperties().get("a");
         assertEquals(List.of(Schema.SchemaType.INTEGER), a.getType());
-        assertEquals(java.math.BigDecimal.TEN, a.getMinimum());
+        assertEquals(BigDecimal.TEN, a.getMinimum());
         assertEquals("int32", merged.getItems().getFormat());
-        assertEquals(java.math.BigDecimal.TEN, merged.getItems().getMaximum());
+        assertEquals(BigDecimal.TEN, merged.getItems().getMaximum());
     }
 
     private static Schema mergedResponseSchema(ModelSource lower, ModelSource higher) {

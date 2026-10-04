@@ -320,7 +320,8 @@ class SchemaImplTest {
             // And back: set(jsonName, value) lands on the typed field, read by the typed getter.
             Method getter = Schema.class.getMethod("get" + suffix);
             Schema copy = new SchemaImpl().set(jsonName, schema.getAll().get(jsonName));
-            assertEquals(getter.invoke(schema), getter.invoke(copy), "set(\"" + jsonName + "\") → " + getter.getName());
+            assertEquals(getter.invoke(schema), getter.invoke(copy),
+                    "set(\"" + jsonName + "\") → " + getter.getName());
             assertTrue(copy.getExtensions().isEmpty(), "set(\"" + jsonName + "\") became an extension");
             checked++;
         }

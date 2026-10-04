@@ -543,7 +543,8 @@ public final class SchemaGenerator {
                     propertySchema.setConstValue(constValueOf(propertySchema, property.constValue()));
                 }
                 if (!property.externalDocs().url().isEmpty()) {
-                    propertySchema.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(property.externalDocs()));
+                    propertySchema.setExternalDocs(
+                            AnnotationModelMappings.toModelExternalDocs(property.externalDocs()));
                 }
                 if (!property.title().isEmpty()) {
                     propertySchema.setTitle(property.title());
