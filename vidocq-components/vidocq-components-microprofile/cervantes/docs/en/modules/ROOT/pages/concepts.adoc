@@ -94,7 +94,7 @@ Cervantes supports the families covered by MP JWT 2.2 and by the JDK, with no ex
 | `SignatureAlgorithm.fromJoseName` resolves only the six RS/ES values above; any other `alg` — including `none` — fails validation with `unsupported or missing 'alg' header`.
 |===
 
-`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm. If the token header announces a different `alg`, validation fails. When the property is unset, both RS256 and ES256 are accepted (MP JWT 2.2), and a JWK Set mixing RSA and EC keys is resolved by `kid`. Defence in depth against `alg=none` downgrade — and because the HMAC family is not implemented at all, the classic RS256→HS256 key-confusion attack is structurally impossible.
+`mp.jwt.verify.publickey.algorithm` enforces an expected algorithm _family_ (RSA or EC). If the token header announces an `alg` from a different family, validation fails; within the same family any size is accepted (with `RS256` set, an `RS512` token passes, an `ES256` token does not). A value that is not one of the six supported names, spelled exactly (`RS256`, not `rs256`), is rejected at startup. When the property is unset, all RS256/384/512 and ES256/384/512 tokens are accepted (the MP JWT 2.2 minimum being RS256 and ES256), and a JWK Set mixing RSA and EC keys is resolved by `kid`. Defence in depth against `alg=none` downgrade — and because the HMAC family is not implemented at all, the classic RS256→HS256 key-confusion attack is structurally impossible.
 
 == JWK Set — distributing public keys
 
