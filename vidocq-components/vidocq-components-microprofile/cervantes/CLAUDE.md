@@ -10,8 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
-- The official TCK `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` must be installed
-  in the local M2 (non-public artifact — see `cervantes-tck/README.md`)
+- The official TCK `org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2` is published on
+  Maven Central and downloaded automatically; run it with `./run-official-tck-mp-jwt-2.2.sh all`
 
 ## Essential Commands
 

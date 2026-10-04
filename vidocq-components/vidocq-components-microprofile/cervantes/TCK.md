@@ -7,13 +7,13 @@ MP FT TCK which is TestNG-only). The container starts the full Vidocq stack
 (chappe + cassini + vauban + cervantes) to serve protected endpoints and present them
 with forged tokens.
 
-Official (non-public) artifact to install in the local M2:
+Official artifact (published on Maven Central, downloaded automatically when the `tck` profile runs):
 
 ```
 org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck:2.2
 ```
 
-Detailed installation procedure in `cervantes-tck/README.md` (to be created at milestone M6).
+Run it with `./run-official-tck-mp-jwt-2.2.sh all` (see below).
 
 ## Launch
 

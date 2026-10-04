@@ -33,7 +33,7 @@ via [Vauban](https://codefloe.com/Vidocq/vauban), JAX-RS security via
 sdk env
 ./mvnw -ntp install -DskipTests   # full build
 ./mvnw test                        # unit tests
-./run-official-tck-mp-jwt-2.2.sh   # official TCK (non-public artifact must be installed — see cervantes-tck/README.md)
+./run-official-tck-mp-jwt-2.2.sh   # official TCK (microprofile-jwt-auth-tck:2.2 from Maven Central; `all` runs the full suite)
 ```
 
 ## Modules
