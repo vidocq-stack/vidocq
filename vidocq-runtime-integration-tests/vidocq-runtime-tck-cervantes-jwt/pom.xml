@@ -11,9 +11,9 @@
     </parent>
 
     <artifactId>vidocq-runtime-tck-cervantes-jwt</artifactId>
-    <name>Vidocq :: TCK :: MicroProfile JWT 2.1 (Cervantes)</name>
+    <name>Vidocq :: TCK :: MicroProfile JWT 2.2 (Cervantes)</name>
     <description>
-        Runs the official MicroProfile JWT 2.1 TCK (org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck)
+        Runs the official MicroProfile JWT 2.2 TCK (org.eclipse.microprofile.jwt:microprofile-jwt-auth-tck)
         against the assembled Vidocq runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
         vidocq-runtime-cervantes-jwt-extension (which pulls Cassini/Chappe for the HTTP endpoints and
         Ravel for MP Config) through the ServiceLoader SPI, and the shared vidocq-runtime-arquillian
@@ -25,14 +25,14 @@
         self-referential URLs hardcoded to http://localhost:8080/ (JWKS endpoints, key locations),
         rewritten to the pinned container port before deployment — vendor-side plumbing the TCK expects.
 
-        Scope: the ejb/jacc/servlet packages and the ee-security-optional group are excluded (Jakarta
-        EE full-profile integrations out of the MicroProfile runtime scope) — same documented subset as
-        cervantes' own cervantes-tck.
+        Scope: the ee-security-optional group is excluded (Jakarta EE full-profile integration out of
+        the MicroProfile runtime scope) — same documented subset as cervantes' own cervantes-tck. The
+        ejb/jacc/servlet packages no longer exist in the 2.2 tests jar.
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins JWT 2.1 -->
-        <microprofile.jwt.tck.version>2.1</microprofile.jwt.tck.version>
+        <!-- MicroProfile 7.2 pins JWT 2.2 -->
+        <microprofile.jwt.tck.version>2.2</microprofile.jwt.tck.version>
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25. -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>
         <jose4j.version>0.9.4</jose4j.version>
@@ -70,7 +70,7 @@
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>
         <!--
-            Cervantes = MicroProfile JWT 2.1 implementation, wired into the runtime
+            Cervantes = MicroProfile JWT 2.2 implementation, wired into the runtime
             the same way an application would: the extension wrapper pulls
             cervantes-*, Cassini/Chappe (HTTP) and Ravel (MP Config) transitively;
             the CDI wiring self-registers at boot.
@@ -211,16 +211,6 @@
                         <include>**/*Test.class</include>
                         <include>**/*Tests.class</include>
                     </includes>
-                    <excludes>
-                        <!--
-                            Jakarta EE full-profile integrations (EJB, JACC, Servlet)
-                            outside the MicroProfile runtime scope — same documented
-                            subset as cervantes' own cervantes-tck.
-                        -->
-                        <exclude>org/eclipse/microprofile/jwt/tck/container/ejb/**</exclude>
-                        <exclude>org/eclipse/microprofile/jwt/tck/container/jacc/**</exclude>
-                        <exclude>org/eclipse/microprofile/jwt/tck/container/servlet/**</exclude>
-                    </excludes>
                     <excludedGroups>ee-security-optional</excludedGroups>
                     <systemPropertyVariables>
                         <!--

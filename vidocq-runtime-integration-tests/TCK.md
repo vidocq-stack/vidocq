@@ -45,19 +45,28 @@ neither downloads nor runs anything TCK-related.
 ./mvnw -Ptck -pl vidocq-runtime-integration-tests -amd test
 ```
 
-## Results (2026-08-27 — full re-run on the assembled runtime)
+## Results (2026-10-04 — full re-run on the assembled runtime, MicroProfile 7.2 release candidates)
 
-| Runner | Spec (MicroProfile 7.1) | Tests | Container |
+| Runner | Spec (MicroProfile 7.2) | Tests | Container |
 |---|---|---:|---|
 | `vidocq-runtime-tck-knock-health` | Health 4.0 | 28 | Vidocq embedded |
 | `vidocq-runtime-tck-dirac-metrics` | Metrics 5.1 | 127 | Vidocq embedded |
 | `vidocq-runtime-tck-cyrano-restclient` | Rest Client 4.0 | 235 | Vidocq embedded |
 | `vidocq-runtime-tck-heisenberg-faulttolerance` | Fault Tolerance 4.1 | 463 | Vidocq embedded |
-| `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.1 (TCK 4.1.1) | 346 | Vidocq embedded |
-| `vidocq-runtime-tck-cervantes-jwt` | JWT Auth 2.1 | 206 | Vidocq embedded |
-| `vidocq-runtime-tck-humboldt-telemetry` | Telemetry 2.1 | 85 | Vidocq embedded |
+| `vidocq-runtime-tck-grimm-openapi` | OpenAPI 4.2 (TCK 4.2-RC5) | 364 | Vidocq embedded |
+| `vidocq-runtime-tck-cervantes-jwt` | JWT Auth 2.2 | 208 | Vidocq embedded |
+| `vidocq-runtime-tck-humboldt-telemetry` | Telemetry 2.2 (TCK 2.2-RC3) | 85 | Vidocq embedded |
 | `vidocq-runtime-tck-ravel-config` | Config 3.1 | 378 | Vidocq embedded |
-| **Total** | | **1868** | |
+| **Total** | | **1888** | |
+
+The OpenAPI 4.2 and Telemetry 2.2 runners use the release-candidate TCKs of
+MicroProfile 7.2 (OpenAPI 4.2-RC5, Telemetry 2.2-RC3). A release candidate is expected to be
+byte-identical to the final, but this table is a pre-release run: Task E1 re-runs the
+bumped runners against the final artifacts once they reach Maven Central. This is not a
+certification claim. Compared with the 2026-08-27 run: JWT +2
+(`RsaAndEcSignatureAlgorithmTest`), OpenAPI +18 (346 to 364, the same delta as grimm's own
+harness, whose 367 additionally counts 3 grimm-local tests: `GrimmTckSmokeTest` and
+`DotNameCompatibilityTest`), Telemetry unchanged, the five other runners unchanged.
 
 ### 2026-08-27 audit — two counting errors corrected
 
@@ -87,9 +96,11 @@ SSL options and SSE Publisher return types, and the full 235-test suite passes (
 `untested_*`/optional self-skips, not exclusions). One runner keeps a documented,
 deliberate exclusion:
 
-- **JWT** — the `ejb`/`jacc`/`servlet` packages and the `ee-security-optional`
-  TestNG group are excluded: Jakarta EE full-profile integrations outside the
-  MicroProfile runtime scope, per the MP JWT TCK's own documentation.
+- **JWT** — the `ee-security-optional` TestNG group is excluded: Jakarta EE
+  full-profile integration outside the MicroProfile runtime scope, per the MP JWT
+  TCK's own documentation. The `ejb`/`jacc`/`servlet` packages that earlier runs
+  excluded no longer exist in the JWT 2.2 tests jar, so there is no package exclusion
+  any more.
 
 (Bookkeeping note: earlier revisions of this file stated a 1780 total — an
 addition error; the per-runner numbers were correct and summed to 1770.)

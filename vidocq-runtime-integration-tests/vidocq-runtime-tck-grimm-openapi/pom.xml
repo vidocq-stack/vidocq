@@ -11,9 +11,9 @@
     </parent>
 
     <artifactId>vidocq-runtime-tck-grimm-openapi</artifactId>
-    <name>Vidocq :: TCK :: MicroProfile OpenAPI 4.0 (Grimm)</name>
+    <name>Vidocq :: TCK :: MicroProfile OpenAPI 4.2 (Grimm)</name>
     <description>
-        Runs the official MicroProfile OpenAPI 4.0 TCK (org.eclipse.microprofile.openapi:microprofile-openapi-tck)
+        Runs the official MicroProfile OpenAPI 4.2 TCK (org.eclipse.microprofile.openapi:microprofile-openapi-tck)
         against the assembled Vidocq runtime: vidocq-runtime-core boots via VidocqBootstrap, discovers
         vidocq-runtime-grimm-openapi-extension (and ravel-config for the mp.openapi.* deployment
         configuration) through the ServiceLoader SPI, and the shared vidocq-runtime-arquillian embedded
@@ -28,9 +28,8 @@
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins OpenAPI 4.1 (4.1.1 = TCK fixes only). The runner was stuck on
-             4.0.2 until 2026-08-27; 4.1.1 adds 2 tests (346 vs 344). -->
-        <microprofile.openapi.tck.version>4.1.1</microprofile.openapi.tck.version>
+        <!-- MicroProfile 7.2 pins OpenAPI 4.2 — 4.2-RC5 until the final reaches Maven Central (byte-identical). -->
+        <microprofile.openapi.tck.version>4.2-RC5</microprofile.openapi.tck.version>
         <!-- Fixed port mirrored in the test.url system property (AppTestBase). -->
         <grimm.tck.port>18085</grimm.tck.port>
     </properties>
