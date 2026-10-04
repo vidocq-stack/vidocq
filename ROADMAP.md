@@ -98,7 +98,9 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 
 - [ ] MicroProfile 7.2 TCK per implemented spec. See `TCK.md` for tracking
       (each extension has its TCK runner: the `vidocq-runtime-tck-*` runners are in this
-      reactor behind the `tck` profile; the per-brick runners are in their own repositories).
+      reactor behind the `tck` profile; the per-brick runners are in their own repositories, mostly in-reactor behind
+      the same `tck` profile; `grimm-tck`, `mansart-data-tck`, `mansart-transactions-tck` and
+      `champollion-protobuf-tck` stay outside their brick's reactor).
 - [x] Jakarta EE Core Profile 11 certification — see the dedicated section above
       and `CERTIFICATION.md`. All deliverables complete: certifying EFTL
       re-run, public results page, and `jakartaee/platform#1351` filed

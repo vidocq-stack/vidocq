@@ -37,17 +37,16 @@
     </build>
 
     <!--
-        vidocq-runtime-cassini-rest-extension (Jersey 4 + Jetty 12) est décommissionné,
-        remplacé par vidocq-runtime-cassini-rest-extension (runtime JAX-RS 4.0 natif
-        sur Chappe).
+        The former Jersey 4 + Jetty 12 REST extension is gone: vidocq-runtime-cassini-rest-extension
+        now wraps Cassini, the native Jakarta REST 4.0 runtime on top of Chappe.
 
-        L'implémentation Servlet 6.1 a été extraite en avril 2026 vers le
-        projet standalone Foy : https://forge.vidocq.dev/vidocq/foy
-        (groupId io.vidocq.foy ; modules foy-api, foy-core, foy-cdi-vauban,
-        foy-chappe, foy-tck).
+        The Jakarta Servlet 6.1 implementation was extracted in April 2026 into the standalone
+        Foy project: https://codefloe.com/Vidocq/foy (groupId io.vidocq.foy; modules foy-api,
+        foy-core, foy-cdi-vauban, foy-chappe, foy-tck).
 
-        Le module TCK runner Cassini est volontairement EN DEHORS du reactor
-        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0). Lancement :
+        The Cassini TCK runner (cassini-tck) lives in the Cassini repository, not here. It joins
+        the Cassini reactor only under the `tck` Maven profile. From the Cassini root:
           ./run-official-tck-restful-4.0.sh
+        or ./mvnw -Ptck,tck-official -pl cassini-tck verify
     -->
 </project>

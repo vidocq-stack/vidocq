@@ -101,8 +101,8 @@ Claude maintains `~/.claude/projects/.../memory/MEMORY.md` which stores:
 - **user**: my profile (Java 25 / CDI expert, rigorous about the spec).
 - **feedback**: corrections applied once (e.g. "never mock the
   ServletContext, use real Chappe"), reused afterwards.
-- **project**: why Chappe exists, why the TCK runner is out-of-reactor
-  (ShrinkWrap + Maven 4.1 incompatible), architecture decisions.
+- **project**: why Chappe exists, why the TCK runners sit behind the `tck`
+  Maven profile (a plain install must not download the TCK), architecture decisions.
 - **reference**: path to the TCK JAR, launch script, etc.
 
 Practical result: three days later I start a new session and Claude already

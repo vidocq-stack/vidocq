@@ -265,9 +265,10 @@ here):
   retain classes from the old layer → classloader leak. Must be audited before any B PoC.
 - **APT/javac cost on every reload**: the project portion goes through `javac` (APT); measure that cost
   (M1) and consider fine-grained incremental compilation (only modified sources).
-- **Out-of-reactor TCK runners**: `cassini-tck`, `foy-tck`, etc. are intentionally detached (standalone
-  Model 4.0.0, ShrinkWrap/Model 4.1 incompatibility). Dev mode **must not** interfere with those
-  runners or assume a unified reactor.
+- **TCK runners and the reactor**: there is no unified reactor across the workspace. `cassini-tck`, `foy-tck`
+  and `champollion-tck` sit in their brick's reactor behind the `tck` profile, while `grimm-tck`, the Mansart
+  TCKs and `champollion-protobuf-tck` stay outside it. Dev mode **must not** interfere with those runners or
+  assume a unified reactor.
 - **AOT impact (critical)**: all dev-mode code (watcher, Mojo, dev SPI, Dev Console) must stay **out of
   the prod/native path** — compiled in separate modules/scopes, gated by the dev profile, and verified
   as eliminated in native compilation. No dev dependency must bloat the AOT image. *(M4 satisfies this by

@@ -198,15 +198,14 @@ Compatible* logo and be listed as a compatible product.
   0.3.0 Maven Central artifacts.** Vidocq 0.3.0 was published to Central on
   2026-08-31 (all 16 repos, topological release waves). The certifying TCK run
   was executed on `v0.3.0` tags of vauban, champollion, cassini and vidocq
-  (Temurin 25.0.4+7-LTS / macOS 27.0 / Apple M5), with the two genuinely
-  out-of-reactor TCK runners (`champollion-tck`, `cassini-tck` — deliberately
-  decoupled from their repo's own release lifecycle, so they default to
-  `-SNAPSHOT` dependency versions) explicitly overridden to consume the
+  (Temurin 25.0.4+7-LTS / macOS 27.0 / Apple M5), with the two TCK runners
+  `champollion-tck` and `cassini-tck` (in their repo's reactor behind the `tck`
+  profile; they default to `-SNAPSHOT` dependency versions) explicitly overridden to consume the
   **released** `0.3.0` coordinates from Central
   (`-Dchampollion.version=0.3.0`, `-Dcassini.version=0.3.0 -Dchappe.version=0.3.0`),
   confirmed live via the `X-Chappe-Build: Chappe/0.3.0+e1c8685e` response header
   (no `-SNAPSHOT` suffix). `vauban-tck-runner`/`vidocq-runtime-tck-*` are
-  in-reactor at their respective repos and were already aligned by the release
+  in-reactor as well, at their respective repos and were already aligned by the release
   tag itself. All 7 EFTL zips SHA-256-verified 7/7 beforehand (§3), and GPG
   signature-verified 7/7: 2 (Core Profile 11, REST 4.0.1) against the current
   Jakarta EE Specification Committee key (`4C0C9898D7A2A593`), 5 (Annotations,
