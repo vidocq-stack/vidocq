@@ -420,6 +420,10 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
                 // Fall through to extension-style storage for unknown properties.
             }
         }
+        if (value == null) {
+            removeExtension(propertyName);
+            return this;
+        }
         extraProperties = ModelCollections.copyOnWriteMap(extraProperties);
         extraProperties.put(propertyName, value);
         return this;
@@ -432,11 +436,51 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
 
     @Override
     public void setAll(Map<String, ?> allProperties) {
-        if (allProperties == null) {
-            extraProperties = null;
-        } else {
-            extraProperties = new LinkedHashMap<>(allProperties);
+        extraProperties = null; // clears extensions (TCK testSetAllClearsExtensions)
+        if (allProperties != null) {
+            for (Map.Entry<String, ?> entry : allProperties.entrySet()) {
+                set(entry.getKey(), entry.getValue()); // standard keys go through their setter
+            }
         }
+    }
+
+    // ── extensions == unknown properties (MP OpenAPI 4.2 #698, base dialect) ──
+    @Override
+    public Map<String, Object> getExtensions() {
+        return extraProperties == null ? Map.of() : ModelCollections.immutableMapView(extraProperties);
+    }
+
+    @Override
+    public void setExtensions(Map<String, Object> extensions) {
+        extraProperties = extensions == null ? null : new LinkedHashMap<>(extensions);
+    }
+
+    @Override
+    public Schema addExtension(String name, Object value) {
+        if (name == null || value == null) {
+            return this;
+        }
+        extraProperties = ModelCollections.copyOnWriteMap(extraProperties);
+        extraProperties.put(name, value);
+        return this;
+    }
+
+    @Override
+    public void removeExtension(String name) {
+        if (extraProperties != null) {
+            extraProperties = ModelCollections.copyOnWriteMap(extraProperties);
+            extraProperties.remove(name);
+        }
+    }
+
+    @Override
+    public boolean hasExtension(String name) {
+        return extraProperties != null && extraProperties.containsKey(name);
+    }
+
+    @Override
+    public Object getExtension(String name) {
+        return extraProperties == null ? null : extraProperties.get(name);
     }
 
     private Method resolveGetter(String propertyName) {
