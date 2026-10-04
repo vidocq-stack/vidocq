@@ -1,6 +1,6 @@
 # MicroProfile 7.2 Upgrade — Implementation Plan (Vidocq 0.4.0-SNAPSHOT)
 
-> **STATUS: phases A–D done on 2026-10-04 (branches `pr/ybl/mp-7.2` in cervantes, grimm, humboldt, vidocq); Phase E (finals, outside docs) open.** Refreshed 2026-10-04. The plan was on hold from 2026-08-27 ("we target certification, no migration before final artifacts"). On 2026-09-30 the component finals were tagged — OpenAPI `4.2`, Telemetry `2.2`, JWT `2.2.1` — and their jars are on the **Eclipse staging repositories** for the specification ballot (`https://repo.eclipse.org/repository/microprofile-{open-api,telemetry,jwt-auth}-maven2-staging/`), not yet on Maven Central. The platform PR `microprofile/microprofile#520` (opened 2026-10-01) pins jwt 2.2.1 / openapi 4.2 / telemetry 2.2; the BOM `microprofile:7.2` is not staged yet. **The release candidates on Central are byte-identical to the staged finals** (compared jar by jar on 2026-10-04: only `MANIFEST.MF`, `pom.properties`, the module version string in `module-info.class` and the LICENSE/NOTICE files of the OpenAPI TCK jar differ). Decision (maintainer, 2026-10-04): implement and run the TCKs against the RCs on Central now; switching to the finals is a version-string bump (Phase E). The public "MicroProfile 7.2 compatible" claim and any certification request still wait for the finals on Central.
+> **STATUS: phases A–D done on 2026-10-04 (branches `pr/ybl/mp-7.2` in cervantes, grimm, humboldt, vidocq); Phase E (finals, outside docs) open; Phase F (review follow-ups) added and started on 2026-10-04.** Refreshed 2026-10-04. The plan was on hold from 2026-08-27 ("we target certification, no migration before final artifacts"). On 2026-09-30 the component finals were tagged — OpenAPI `4.2`, Telemetry `2.2`, JWT `2.2.1` — and their jars are on the **Eclipse staging repositories** for the specification ballot (`https://repo.eclipse.org/repository/microprofile-{open-api,telemetry,jwt-auth}-maven2-staging/`), not yet on Maven Central. The platform PR `microprofile/microprofile#520` (opened 2026-10-01) pins jwt 2.2.1 / openapi 4.2 / telemetry 2.2; the BOM `microprofile:7.2` is not staged yet. **The release candidates on Central are byte-identical to the staged finals** (compared jar by jar on 2026-10-04: only `MANIFEST.MF`, `pom.properties`, the module version string in `module-info.class` and the LICENSE/NOTICE files of the OpenAPI TCK jar differ). Decision (maintainer, 2026-10-04): implement and run the TCKs against the RCs on Central now; switching to the finals is a version-string bump (Phase E). The public "MicroProfile 7.2 compatible" claim and any certification request still wait for the finals on Central.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1108,6 +1108,86 @@ After the four PRs are merged: `vidocq-docs/content/home/modules/ROOT/pages/{ind
 ### Task E3: memory + roadmap
 
 - [ ] Update the memory file `project_mp72_upgrade.md` with the new TCK counts, the `code.function.name` binary-name rule and the `SchemaImpl` single-store decision; `vidocq/ROADMAP.md`: tick "MicroProfile 7.2 TCK per implemented spec" once E1 is done.
+
+---
+
+## Phase F — Review follow-ups (decided by the maintainer on 2026-10-04)
+
+The final whole-branch reviews of phases A–D found points that were parked (no second fix wave) plus pre-existing defects logged in `BUG.md`. The maintainer asked to fix all of them: the review follow-ups, the pre-existing defects found during the review, the Vauban inherited-method suspicion, and the stale pre-existing documentation. Same rules as the rest of the plan (Global Constraints): TDD for every behaviour change, official TCK re-run from a clean build in every brick touched, English only, no "certified"/"MicroProfile 7.2 compatible" wording, signed commits with the `Co-Authored-By` trailer, no push.
+
+Working copies: the four `pr/ybl/mp-7.2` worktrees, plus Vauban in `/Users/yblazart/projects/perso/vidocq/.worktrees/vauban-inherited-method` on branch `pr/ybl/inherited-interceptor-method` (cut from `origin/main` 7384ac1). Vauban is a dependency of every brick: the Vauban lane never runs `install` until the controller says so (use `verify`), so the other lanes keep building against the Vauban already in `~/.m2`.
+
+Every bug fixed here that has a `BUG.md` entry gets its entry closed (status, fix commit, date); every new defect found while working gets a new entry.
+
+### Task FA1: cervantes — fail fast and the parked cervantes points
+
+**Files:** `cervantes-cdi-vauban` (producer and a startup observer if needed), `cervantes-api/.../JwtConfig.java`, `cervantes-core/.../PemKeys.java`, `cervantes-core` tests, `cervantes-cdi-vauban` tests.
+
+- [ ] An invalid MP JWT configuration (unrecognised `mp.jwt.verify.publickey.algorithm`, unreadable key, …) must fail when the application starts, not at the first injection of the validator (today the `@Dependent` producer fails lazily). Check what the runtime offers (CDI 4.1 Lite `jakarta.enterprise.event.Startup` observer in an application-scoped bean, or an eager check in the existing producer path) and make the failure happen at container start with the same clear message (property name, bad value, supported values). Keep "MP-JWT off" (no key configured) silent. TDD: a test that the container start (or the startup observer) fails with that message.
+- [ ] `JwtConfig` six-argument compatibility constructor Javadoc: "RS256 and ES256 families are both accepted" → all RS256/384/512 and ES256/384/512 algorithms are accepted.
+- [ ] `PemKeys.fromPem(String)`: keep the RSA failure too (`addSuppressed` on the thrown exception); add the missing test for invalid base64 (the `derOf` `IllegalArgumentException` path); make `privateKeyFromPem` use `derOf` instead of its own armour stripping.
+- [ ] Producer-level test: an EC PEM with `mp.jwt.verify.publickey.algorithm=RS256` is rejected.
+- [ ] Rewrite the garbled Javadoc of `JwtAuthConfigProducer` ("lues via Ravel", misplaced `</li> URL`, …) in proper English.
+
+Commit per concern. Full `./mvnw -ntp clean install`, then the official TCK from a clean TCK module (`./mvnw -ntp -Ptck -pl cervantes-tck clean` then `./run-official-tck-mp-jwt-2.2.sh all`): 208/208.
+
+### Task FA2: cervantes — stale pre-existing documentation and French text
+
+- [ ] Translate every remaining French `<description>`/comment in the cervantes poms and resources to English.
+- [ ] `CLAUDE.md`: stale `0.3.0-SNAPSHOT`, "outside `<subprojects>`" and any other statement contradicted by the current build; `ROADMAP.md` M0/M6 "Model 4.1.0" / "outside the reactor" statements (rewrite as dated history where they are history, fix where they claim the present); `docs/en/modules/ROOT/pages/reference.adoc` `0.3.0-SNAPSHOT`. Verify each fact against the current poms before writing it.
+
+### Task FB1: grimm — static-file model fidelity
+
+**Files:** `grimm-core` static mapper (`OpenApiModelMapper`), `DiscriminatorImpl`, `OpenApiValueMapper`, `YamlDeserializer`, `ConfigApplier`, header mapping; tests.
+
+- [ ] `x-` keys inside a static `discriminator` must survive (the MP OpenAPI 4.2 `Discriminator` is not `Extensible`): keep them in a package-private side store on `DiscriminatorImpl` that the serializer writes back; TDD round-trip test (JSON and YAML).
+- [ ] `$ref` values read from static files are kept verbatim in every schema position (no short-name expansion: `Pet.yaml` stays `Pet.yaml`); short-name expansion stays where the MP OpenAPI API asks for it (programmatic `setRef`/`ref`, annotations). Check first whether any TCK static document relies on expansion (`grep` the TCK jar resources); TDD.
+- [ ] `YamlDeserializer` reads YAML 1.2 core-schema numbers (`1e3`, `.5`, `+1`, `-.5e-2`, …) as numbers; TDD.
+- [ ] `ConfigApplier` (schemas from `mp.openapi.schema.*` config) builds schemas through the same typed static mapper instead of its minimal converter, so unknown non-`x-` keys and standard keywords are kept; TDD.
+- [ ] Static-file `Header` mapping reads `style`, `explode` and `content`; TDD.
+
+### Task FB2: grimm — the three defects logged in BUG.md on 2026-10-04
+
+- [ ] `SchemaImpl.setAll` / `getAll` must follow the MP OpenAPI 4.2 `Schema` Javadoc: `getAll()` returns every non-null property (standard keywords and others), `setAll(map)` replaces all of them (standard keywords included). Read the 4.2 Javadoc (API sources jar or javap + the spec) and the TCK's `ModelConstructionTest`/`SchemaExtensionPropertyTest` before changing anything; keep the reflective setter dispatch from treating the names `extensions`/`all` as properties. TDD; the official TCK must stay 367.
+- [ ] `SchemaGenerator`'s own scalar-only extension parser → use the shared `AnnotationModelMappings` extension logic (so `@Schema(extensions = @Extension(value = "{…}", parseValue = true))` yields an object), and map `externalDocs` extensions there too; TDD.
+- [ ] APT path: `GrimmModelProcessor` ignores Bean Validation on scalar parameters while the runtime scanner applies it. Restore parity — simplest safe rule: a class whose operation parameters carry Bean Validation annotations is skipped by the processor (falls back to the scanner), consistent with the existing "all or nothing per class" safety valve; TDD in `grimm-processor`.
+Close the three BUG.md entries.
+
+### Task FB3: grimm — remaining review minors and stale documentation
+
+- [ ] Replace the private `applyExtensions` pass-throughs in both scanners by direct calls to `AnnotationModelMappings`; de-duplicate the `toPlainString` rationale comment (one place, referenced from the other); manage the `jakarta.validation-api` test version in one property; add one end-to-end test through `SchemaGenerator` for `@Digits`; fix the test-source removal warning in `AnnotationScannerTest` (~339) with a narrow `@SuppressWarnings("removal")` or by testing through the non-deprecated path.
+- [ ] TCK script: use `./mvnw` (not `mvn`) for the grimm-tck run.
+- [ ] Stale documentation: the ShrinkWrap / "Model 4.1.0" / "do not reintegrate grimm-tck" rationale (`CLAUDE.md` ~40/92, `tck.adoc` ~71, `grimm-tck/README.md` ~7) — grimm-tck is an in-reactor module behind `-Ptck` now; `CLAUDE.md` ~146 names a non-existent `tck-suite.xml`; `CLAUDE.md` ravel `0.3.0-SNAPSHOT`; `ROADMAP.md` ~334 "TCK non-public artifact" risk and ~379 "official score 349/349" (history: say it counted harness tests). Verify each fact before writing it.
+Run the official TCK from a clean build at the end of the lane: 367 (364 official + 3 local) unless FB1/FB2 change a count — explain any change.
+
+### Task FC1: humboldt — telemetry correctness follow-ups
+
+- [ ] Span `exception.type` uses `getCanonicalName()` like the OpenTelemetry SDK 1.66 `ExceptionAttributeResolver` (fallback to `getName()` when the canonical name is null), consistent with the log side; TDD.
+- [ ] OTLP JSON: non-finite doubles (`NaN`, `Infinity`, `-Infinity`) are written as JSON strings like OpenTelemetry's `JsonEncoding` (plain and nested `Value`); TDD.
+- [ ] `SdkLogRecordBuilder.setBody(Value<?>)`: keep the structured body (no `asString()` flattening) and export it as an OTLP `AnyValue`; the logging exporter prints a readable form; check the Logs TCK line patterns still match; TDD.
+- [ ] The JUL bridge passes `LogRecord.getThrown()` to `setException`; TDD.
+- [ ] BUG-20261004-01: `humboldt-otel-interop` provides its own `ComponentLoader` (a loader owned by a module that declares the needed `uses`) through an overridden `getComponentLoader()` of its config properties, so OpenTelemetry components that load services through `ComponentLoader` work on the module path; TDD with a module-path test if the build has one (or explain why it cannot be tested in-repo); close the BUG entry.
+- [ ] `SpanDataMapper` is duplicated in `humboldt-otel-interop` and the humboldt-tck bridge → the TCK bridge reuses the interop one if the dependency direction allows it (otherwise explain).
+
+### Task FC2: humboldt — documentation, French text, script
+
+- [ ] TCK script: step 1 `install` also cleans.
+- [ ] `humboldt-tck/README.md` "STANDALONE … OUTSIDE the reactor" → in-reactor behind `-Ptck`; remaining French comments (humboldt-tck pom ~416, `humboldt-cdi/pom.xml` ~36, `tck-suite.xml` ~3 which also says 2.1) → English and 2.2.
+- [ ] Javadoc citations "MP Telemetry 2.1 §…" (~20, e.g. `HumboldtAutoConfigure`, `HumboldtTelemetryProducers`): cite the 2.2 specification where the section exists unchanged (check against the 2.2 spec asciidoc), keep 2.1 only where a 2.1-specific behaviour is described.
+Run the official TCK from a clean build at the end of the lane: 85/85.
+
+### Task FV1: Vauban — intercepted method inherited from a grandparent
+
+- [ ] Write a test first: a bean `C extends B extends A` where an intercepted business method is declared on `A` (not overridden), intercepted through the generated subclass; assert that `InvocationContext.getMethod()` returns the method declared on `A` (declaring class `A`, original name), not the `$$super$…` bridge. Cover also a method declared on `B`, and a private/package-private edge if Vauban supports intercepting them.
+- [ ] If the test fails, fix `VaubanInvocationContext.getMethod()` (~95-106) so it resolves the original method along the whole superclass chain (or, better, from information captured at generation time so no runtime search is needed — compile-time over reflection), and log/close a `BUG.md` entry. If the test passes, keep the test as a regression guard and record in the report why the suspicion was wrong.
+- [ ] Run vauban's build with tests (`./mvnw -ntp clean verify`) and the CDI Lite TCK (`-Ptck`, read the surefire reports yourself: 774/774 expected per the Core Profile campaign) — never `install` until the controller says so.
+
+### Task FD1: vidocq — shared OpenTelemetry versions, counts and stale documentation
+
+- [ ] One definition of the OpenTelemetry versions (`opentelemetry.version`, `opentelemetry.instrumentation.version`, `opentelemetry.semconv.version`) in the vidocq root pom, used by `vidocq-runtime-humboldt-telemetry-extension`, `vidocq-runtime-it-humboldt-cassini` and `vidocq-runtime-tck-humboldt-telemetry` (remove the local definitions).
+- [ ] Root `pom.xml` ~62 `ci.tck.modules` comment "1085" → 1105; README directory-tree comment (~132) lists Fault Tolerance; the French comment in `vidocq-runtime-it-cervantes-jwt/pom.xml` (~586) → English.
+- [ ] Stale pre-existing documentation: README Servlet TCK paragraph ("Model 4.1.0", out-of-reactor runner), README Maven `4.0-rc-5` badge (the workspace uses Maven 3.9.16), `CERTIFICATION.md` "once 0.3.0 is released", `tck.adoc` (~99) "challenge drafted" (jakartaee/platform-tck#2730 was filed on 2026-07-14 and accepted), `ROADMAP.md` "out-of-reactor … champollion-tck" line. Verify each fact before writing it.
+- [ ] After the brick lanes are done (bricks installed by the controller), run `./mvnw -ntp clean install` and the three changed runners again: JWT 208, OpenAPI 364, Telemetry 85.
 
 ---
 
