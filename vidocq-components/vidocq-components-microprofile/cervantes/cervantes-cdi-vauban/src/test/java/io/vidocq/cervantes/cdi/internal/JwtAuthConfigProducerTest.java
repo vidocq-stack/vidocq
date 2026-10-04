@@ -33,6 +33,8 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.Test;
 
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
@@ -48,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class JwtAuthConfigProducerTest {
 
     @Test
-    void buildsJwtConfigFromMpProperties() {
+    void buildsJwtConfigFromMpProperties() throws Exception {
         Config config = CdiTestSupport.config(Map.of(
                 "mp.jwt.verify.issuer", "https://issuer.vidocq.dev",
                 "mp.jwt.verify.audiences", "svc-a, svc-b"));
@@ -97,7 +99,7 @@ class JwtAuthConfigProducerTest {
     }
 
     @Test
-    void noAudiences_yieldsEmptySet() {
+    void noAudiences_yieldsEmptySet() throws Exception {
         JwtConfig jwtConfig = JwtAuthConfigProducer.buildConfig(CdiTestSupport.config(Map.of()));
         assertTrue(jwtConfig.audiences().isEmpty());
         assertTrue(jwtConfig.issuer().isEmpty());
@@ -105,8 +107,8 @@ class JwtAuthConfigProducerTest {
 
     @Test
     void noAlgorithmMeansBothFamiliesAccepted() throws Exception {
-        java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance("EC");
-        g.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        KeyPairGenerator g = KeyPairGenerator.getInstance("EC");
+        g.initialize(new ECGenParameterSpec("secp256r1"));
         String ecPem = "-----BEGIN PUBLIC KEY-----\n"
                 + Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(g.generateKeyPair().getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
@@ -119,9 +121,43 @@ class JwtAuthConfigProducerTest {
     }
 
     @Test
-    void configuredAlgorithmIsExposedOnJwtConfig() {
+    void configuredAlgorithmIsExposedOnJwtConfig() throws Exception {
         Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", "ES256"));
         assertEquals(SignatureAlgorithm.ES256,
                 JwtAuthConfigProducer.buildConfig(config).requiredAlgorithm().orElseThrow());
+    }
+
+    @Test
+    void unrecognisedAlgorithmFailsInBuildConfig() throws Exception {
+        for (String bad : new String[] {"es256", "ES-256", "PS256", "HS256"}) {
+            Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", bad));
+            JwtValidationException ex = assertThrows(JwtValidationException.class,
+                    () -> JwtAuthConfigProducer.buildConfig(config), bad);
+            assertTrue(ex.getMessage().contains("mp.jwt.verify.publickey.algorithm"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("'" + bad + "'"), ex.getMessage());
+            assertTrue(ex.getMessage().contains("RS256") && ex.getMessage().contains("ES512"), ex.getMessage());
+        }
+    }
+
+    @Test
+    void unrecognisedAlgorithmFailsInBuildKeyResolver() throws Exception {
+        KeyPair rsa = CdiTestSupport.rsaKeyPair();
+        Config config = CdiTestSupport.config(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(rsa.getPublic()),
+                "mp.jwt.verify.publickey.algorithm", "es256"));
+        assertThrows(JwtValidationException.class, () -> JwtAuthConfigProducer.buildKeyResolver(config));
+    }
+
+    @Test
+    void recognisedAlgorithmsStillAccepted() throws Exception {
+        for (SignatureAlgorithm alg : SignatureAlgorithm.values()) {
+            Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", alg.name()));
+            assertEquals(alg, JwtAuthConfigProducer.buildConfig(config).requiredAlgorithm().orElseThrow());
+        }
+        KeyPair rsa = CdiTestSupport.rsaKeyPair();
+        Config config = CdiTestSupport.config(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(rsa.getPublic()),
+                "mp.jwt.verify.publickey.algorithm", "RS256"));
+        assertNotNull(JwtAuthConfigProducer.buildKeyResolver(config));
     }
 }

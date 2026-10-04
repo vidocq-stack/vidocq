@@ -106,7 +106,7 @@ public class JwtAuthConfigProducer {
         return null;
     }
 
-    static JwtConfig buildConfig(Config config) {
+    static JwtConfig buildConfig(Config config) throws JwtValidationException {
         Optional<String> issuer = config.getOptionalValue("mp.jwt.verify.issuer", String.class);
         Set<String> audiences = config.getOptionalValue("mp.jwt.verify.audiences", String.class)
                 .map(JwtAuthConfigProducer::splitCsv)
@@ -119,9 +119,23 @@ public class JwtAuthConfigProducer {
                 encryptionRequired, configuredAlgorithm(config));
     }
 
-    private static Optional<SignatureAlgorithm> configuredAlgorithm(Config config) {
-        return config.getOptionalValue("mp.jwt.verify.publickey.algorithm", String.class)
-                .flatMap(SignatureAlgorithm::fromJoseName);
+    /**
+     * Reads {@code mp.jwt.verify.publickey.algorithm}. Unset means "RS256 and ES256 both accepted";
+     * a value that is set but is not an exact JOSE name (RFC 7518, case-sensitive: {@code RS256},
+     * not {@code rs256}) fails at startup instead of silently widening what is accepted.
+     */
+    private static Optional<SignatureAlgorithm> configuredAlgorithm(Config config) throws JwtValidationException {
+        Optional<String> raw = config.getOptionalValue("mp.jwt.verify.publickey.algorithm", String.class);
+        if (raw.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<SignatureAlgorithm> algorithm = SignatureAlgorithm.fromJoseName(raw.get());
+        if (algorithm.isEmpty()) {
+            throw new JwtValidationException("unsupported mp.jwt.verify.publickey.algorithm '" + raw.get()
+                    + "': supported values are " + Arrays.stream(SignatureAlgorithm.values())
+                            .map(Enum::name).collect(Collectors.joining(", ")));
+        }
+        return algorithm;
     }
 
     static KeyResolver buildKeyResolver(Config config) throws JwtValidationException {
