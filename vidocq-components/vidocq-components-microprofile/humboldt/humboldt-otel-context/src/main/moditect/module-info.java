@@ -33,6 +33,9 @@ module io.opentelemetry.context {
     // that references the package (jdeps over opentelemetry-bom 1.66.0); see humboldt-otel-api's descriptor for
     // the layer rule.
     exports io.opentelemetry.context.internal.shaded to io.opentelemetry.exporter.internal.otlp;
+    // Humboldt's own package (src/main/java): extends the qualified exports above to OpenTelemetry modules of a
+    // child module layer, which no descriptor export reaches. Called by humboldt-otel-interop only.
+    exports io.vidocq.humboldt.otel.context.layer to io.vidocq.humboldt.otel.interop;
 
     uses io.opentelemetry.context.ContextStorageProvider;
 }

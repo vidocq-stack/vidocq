@@ -353,9 +353,13 @@ public final class OtelSpiAutoConfiguration {
      * Iterates {@code ServiceLoader.load(spi, loader)}, tolerating individual
      * provider failures (mirrors the per-line tolerance of the original
      * archive-scanning harness: a broken provider is logged and skipped).
+     *
+     * <p>Before a provider is instantiated, the Humboldt OpenTelemetry modules extend their
+     * qualified exports to the module layer that defines it ({@link OtelLayerExports}): an
+     * exporter in a child layer of Humboldt's modules could not use them otherwise.</p>
      */
     private static <S> void forEachProvider(Class<S> spi, ClassLoader loader, Consumer<S> action) {
-        Iterator<S> it = ServiceLoader.load(spi, loader).iterator();
+        Iterator<ServiceLoader.Provider<S>> it = ServiceLoader.load(spi, loader).stream().iterator();
         while (true) {
             boolean hasNext;
             try {
@@ -366,7 +370,9 @@ public final class OtelSpiAutoConfiguration {
             }
             if (!hasNext) return;
             try {
-                action.accept(it.next());
+                ServiceLoader.Provider<S> provider = it.next();
+                OtelLayerExports.extendTo(provider.type());
+                action.accept(provider.get());
             } catch (Throwable t) {
                 LOG.log(Level.WARNING, "  Provider ignored ({0}): {1}", spi.getSimpleName(), t.toString());
             }

@@ -76,6 +76,10 @@ module io.opentelemetry.api {
             io.opentelemetry.exporter.sender.okhttp.internal;
     exports io.opentelemetry.api.trace.propagation.internal to
             io.opentelemetry.exporter.internal.otlp;
+
+    // Humboldt's own package (src/main/java): extends the qualified exports above to OpenTelemetry modules of a
+    // child module layer, which no descriptor export reaches. Called by humboldt-otel-interop only.
+    exports io.vidocq.humboldt.otel.api.layer to io.vidocq.humboldt.otel.interop;
 }
 
 

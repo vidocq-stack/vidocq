@@ -14,6 +14,13 @@
 	<name>Humboldt :: OTel API (Java Modules)</name>
 	<description>Repackage io.opentelemetry:opentelemetry-api avec module-info explicite io.opentelemetry.api pour jlink.</description>
 
+	<properties>
+		<!-- This module ships its own empty javadoc jar (below), as a repackaging of upstream code. Its
+		     src/main/java holds Humboldt's internals only (no API to document), so the javadoc tool of the
+		     snapshot/release profiles is skipped: it would attach a second javadoc jar. -->
+		<maven.javadoc.skip>true</maven.javadoc.skip>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>io.vidocq.humboldt</groupId>
@@ -55,12 +62,17 @@
 									<include>io.opentelemetry:opentelemetry-api</include>
 								</includes>
 							</artifactSet>
+							<!--
+								The module's own jar contributes Humboldt's classes only (not its build-info):
+								io.vidocq.humboldt.otel.api.layer, which extends the qualified exports to a child
+								module layer (BUG-20261004-03). The pattern covers the shaded sources jar too.
+							-->
 							<filters>
 								<filter>
 									<artifact>io.vidocq.humboldt:humboldt-otel-api</artifact>
-									<excludes>
-										<exclude>**</exclude>
-									</excludes>
+									<includes>
+										<include>io/vidocq/humboldt/otel/api/layer/**</include>
+									</includes>
 								</filter>
 								<filter>
 									<artifact>*:*</artifact>
@@ -95,6 +107,10 @@
 						<configuration>
 							<classifier>javadoc</classifier>
 							<classesDirectory>${project.build.outputDirectory}</classesDirectory>
+							<!-- target/classes now holds Humboldt's classes: keep them out. -->
+							<excludes>
+								<exclude>io/**</exclude>
+							</excludes>
 						</configuration>
 					</execution>
 				</executions>

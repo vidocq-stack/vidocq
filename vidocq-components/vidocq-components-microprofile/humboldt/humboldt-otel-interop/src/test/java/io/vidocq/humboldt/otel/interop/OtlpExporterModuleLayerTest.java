@@ -149,6 +149,34 @@ class OtlpExporterModuleLayerTest {
     }
 
     /**
+     * A qualified export reaches only target modules of the same layer or of a parent layer: an OTLP exporter
+     * that an application brings in a child layer of the Humboldt modules gets none of them from the
+     * descriptors. When humboldt-otel-interop discovers the OpenTelemetry providers of that layer, the owning
+     * Humboldt modules extend their qualified exports to it.
+     */
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(Signal.class)
+    void interop_discovery_extends_the_qualified_exports_to_an_otlp_exporter_in_a_child_layer(Signal signal)
+            throws IOException {
+        Layer humboldt = Layer.of(HUMBOLDT, OTEL_SDK);
+        Layer application = humboldt.child(OTEL_EXPORTER);
+        Module api = humboldt.module("io.opentelemetry.api");
+        Module context = humboldt.module("io.opentelemetry.context");
+        Module otlpCommon = application.module("io.opentelemetry.exporter.internal.otlp");
+        assertFalse(api.isExported("io.opentelemetry.api.internal", otlpCommon),
+                "the descriptor's qualified export does not reach a child layer");
+        assertFalse(context.isExported("io.opentelemetry.context.internal.shaded", otlpCommon));
+
+        humboldt.callStatic(INTEROP + ".OtelSpiAutoConfiguration", "discover", Map.of(), application.loader());
+
+        assertTrue(api.isExported("io.opentelemetry.api.internal", otlpCommon));
+        assertTrue(context.isExported("io.opentelemetry.context.internal.shaded", otlpCommon));
+        assertFalse(api.isExported("io.opentelemetry.api.internal", humboldt.module(INTEROP)),
+                "only the modules the descriptor names");
+        assertTheExportFailsOnTheConnectionOnly(humboldt, application, signal);
+    }
+
+    /**
      * BUG-20261004-04: any configured compression initialises the exporter's {@code CompressorUtil}, whose static
      * registry loads the {@code Compressor} services through {@code ComponentLoader.forClassLoader(...)}, the
      * upstream default that no {@code ConfigProperties} can replace — a {@code ServiceLoader.load} issued from
