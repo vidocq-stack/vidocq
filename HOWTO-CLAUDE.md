@@ -3,6 +3,10 @@
 > A feedback post on collaborating with **Claude Code (Opus 4.7 / 1M)**
 > to build `vidocq-servlet-chappe-extension` and go from **0 → 99.2 %
 > of the official Jakarta Servlet 6.1 TCK** (608/613) in ~60 commits.
+>
+> Note: the figures in this post are those of the `api.*` subset run in
+> spring 2026, before the extraction to Foy. They are not current results; see
+> `README.md` for the latest Servlet figures (921/1714 raw, `api.*` 95.6 %).
 
 ---
 
@@ -153,7 +157,7 @@ knows **where the TCK stands**, **which Vauban bugs are known** (cf.
 ## 8. Measured outcome
 
 - **63 commits** on `main`, all signed and dated.
-- **0 → 99.2 % of the official Servlet 6.1 TCK** (608/613).
+- **0 → 99.2 % of the official Servlet 6.1 TCK** (608/613, `api.*` subset, spring 2026, before the extraction to Foy).
 - **6 Vauban bugs** identified, documented with bytecode evidence, fixed
   upstream (cf. `VAUBAN-BUGS.md`).
 - **~48 ms** startup for the servlet example with 3 servlets + filter +
