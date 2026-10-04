@@ -139,3 +139,35 @@ reading those modules does not give *this* module the read edge.
 
 Verified: Arago `docker-compose.localdev.yml` — `GET /api/oidc/me` with a Keycloak Bearer returns
 **200**. MP-JWT 2.1 TCK still 206/206 (class-path unaffected).
+
+---
+
+## CERV-004 — Unrecognised `mp.jwt.decrypt.key.algorithm` fails every encrypted token at request time
+
+- **Opening date**: 2026-10-04
+- **Status**: ✅ FIXED 2026-10-04 (commit c8b4b6c)
+
+### Symptom
+
+With `mp.jwt.decrypt.key.algorithm` set to a value Cervantes does not recognise (for instance
+`rsa-oaep`, `RSA-OAEP-512` or `A128KW`), the application started normally, then rejected every
+encrypted (JWE) token at request time. No error at startup; the misconfiguration only showed up as
+401 responses.
+
+### Minimal repro
+
+Configure a valid `mp.jwt.decrypt.key.location` and `mp.jwt.decrypt.key.algorithm=rsa-oaep`, start
+the application, send any JWE bearer token. Found while reviewing the English documentation (FA2).
+
+### Cause
+
+The configured value was compared to the token's `alg` header at each decryption, but never
+validated against the supported algorithms (`RSA-OAEP`, `RSA-OAEP-256`) when the validator was built.
+
+### Fix
+
+`JwtAuthConfigProducer.configuredDecryptAlgorithm` checks the value against
+`JweDecryptor.SUPPORTED_ALGORITHMS` (exact, case-sensitive names) when the validator is built, and
+`CervantesClaimExtension` builds the validator in its `@Validation` phase, so the container fails to
+start with a message naming the property, the bad value and the supported list. Covered by
+`FailFastStartupTest`.

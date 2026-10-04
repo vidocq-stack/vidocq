@@ -168,7 +168,7 @@ When the issuer encrypts the token (to hide claims from intermediate logs):
 # Decryption private key — inline PKCS#8 PEM, or pointed to by .location
 mp.jwt.decrypt.key.location=classpath:/META-INF/keys/decrypt-private.pem
 
-# Expected key-wrapping algorithm (RSA-OAEP by default, also accepts RSA-OAEP-256)
+# Expected key-wrapping algorithm: RSA-OAEP or RSA-OAEP-256 (exact names). Unset = both are accepted.
 mp.jwt.decrypt.key.algorithm=RSA-OAEP-256
 ----
 

@@ -70,6 +70,8 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 * **`mp.jwt.verify.publickey.location`** — PEM-vs-JWKS auto-detection is based on the format of the content, not on the file extension. A URL returning a valid JWK Set is treated as JWKS, whether it ends with `.json`, `.jwks`, or nothing.
 * **JWKS — lazy refresh** — Cervantes does not fetch the JWK Set at startup. The first unknown `kid` triggers the fetch. Upside: fast startup, no fail-fast if the issuer is temporarily down. Downside: the first request may be slightly slower.
 
+* **`JwtConfig` record** — it gained a seventh component, `requiredAlgorithm`. The six-argument constructor is kept, so code that builds a `JwtConfig` still compiles; source code that uses record deconstruction patterns on `JwtConfig` must add the new component.
+
 == Classpath footprint compared
 
 [cols="1,2"]
