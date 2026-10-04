@@ -153,7 +153,6 @@ class ConfigApplierTest {
         ConfigApplier.applySchemaOverrides(registry, GrimmConfig.fromMap(Map.of(
                 "mp.openapi.schema." + Sample.class.getName(), json)));
         Schema s = registry.snapshot().get("Sample");
-        // The alias is only recognised on the schema itself; a nested one is an ordinary keyword.
         assertEquals("Pet.yaml", s.getProperties().get("b").getRef());
 
         String top = "{\"ref\":\"Pet\"}";
@@ -167,6 +166,25 @@ class ConfigApplierTest {
         ConfigApplier.applySchemaOverrides(third, GrimmConfig.fromMap(Map.of(
                 "mp.openapi.schema." + Sample.class.getName(), explicit)));
         assertEquals("Pet", third.snapshot().get("Sample").getRef());
+    }
+
+    @Test
+    void applySchemaOverrides_refAliasIsAcceptedAtEveryLevel() {
+        SchemaRegistry registry = new SchemaRegistry();
+        String json = "{\"properties\":{\"a\":{\"ref\":\"Pet\"},\"b\":{\"$ref\":\"Pet.yaml\",\"ref\":\"Ignored\"},"
+                + "\"ref\":{\"type\":\"string\"}},"
+                + "\"items\":{\"ref\":\"Item\"},"
+                + "\"allOf\":[{\"ref\":\"Base\"}],"
+                + "\"additionalProperties\":{\"ref\":\"Extra\"}}";
+        ConfigApplier.applySchemaOverrides(registry, GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), json)));
+        Schema s = registry.snapshot().get("Sample");
+        assertEquals("#/components/schemas/Pet", s.getProperties().get("a").getRef());
+        assertEquals("Pet.yaml", s.getProperties().get("b").getRef());
+        assertEquals(Schema.SchemaType.STRING, s.getProperties().get("ref").getType().get(0));
+        assertEquals("#/components/schemas/Item", s.getItems().getRef());
+        assertEquals("#/components/schemas/Base", s.getAllOf().get(0).getRef());
+        assertEquals("#/components/schemas/Extra", s.getAdditionalPropertiesSchema().getRef());
     }
 
     @SuppressWarnings("unused")

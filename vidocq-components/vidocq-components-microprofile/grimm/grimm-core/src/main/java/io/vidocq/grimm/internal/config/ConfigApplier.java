@@ -148,12 +148,7 @@ public final class ConfigApplier {
             Object nameField = map.get("name");
             Map<Object, Object> keywords = new LinkedHashMap<>(map);
             keywords.remove("name");
-            Object refAlias = keywords.containsKey("$ref") ? null : keywords.remove("ref");
-            Schema schema = JsonDeserializer.toSchema(keywords);
-            if (refAlias != null) {
-                // Historical alias: unlike an explicit "$ref", it expands a short name as setRef does.
-                schema.setRef(String.valueOf(refAlias));
-            }
+            Schema schema = JsonDeserializer.toSchema(expandRefAliases(keywords));
             String preferredName = nameField instanceof String s && !s.isBlank()
                     ? s : clazz.getSimpleName();
             String name = registry.reserve(clazz, preferredName);
@@ -161,6 +156,48 @@ public final class ConfigApplier {
             result.put(fqcn, name);
         }
         return result;
+    }
+
+    private static final List<String> SCHEMA_KEYS = List.of("items", "additionalProperties", "not", "if", "then",
+            "else", "contains", "propertyNames", "unevaluatedItems", "unevaluatedProperties", "contentSchema");
+    private static final List<String> SCHEMA_LIST_KEYS = List.of("allOf", "anyOf", "oneOf", "prefixItems");
+    private static final List<String> SCHEMA_MAP_KEYS = List.of("properties", "patternProperties", "dependentSchemas");
+
+    /**
+     * Historical alias of {@code mp.openapi.schema.*} values: a {@code ref} key, at any schema level
+     * that has no {@code $ref}, is a reference whose short name expands to
+     * {@code #/components/schemas/<name>} as {@link Schema#setRef} does. An explicit {@code $ref}
+     * is left verbatim, like in a static file.
+     */
+    private static Map<Object, Object> expandRefAliases(Map<?, ?> schema) {
+        Map<Object, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : schema.entrySet()) {
+            String key = String.valueOf(e.getKey());
+            Object value = e.getValue();
+            if (SCHEMA_KEYS.contains(key) && value instanceof Map<?, ?> m) {
+                value = expandRefAliases(m);
+            } else if (SCHEMA_LIST_KEYS.contains(key) && value instanceof List<?> list) {
+                List<Object> items = new ArrayList<>();
+                for (Object item : list) {
+                    items.add(item instanceof Map<?, ?> m ? expandRefAliases(m) : item);
+                }
+                value = items;
+            } else if (SCHEMA_MAP_KEYS.contains(key) && value instanceof Map<?, ?> m) {
+                Map<Object, Object> named = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> p : m.entrySet()) {
+                    named.put(p.getKey(), p.getValue() instanceof Map<?, ?> pm ? expandRefAliases(pm) : p.getValue());
+                }
+                value = named;
+            }
+            out.put(e.getKey(), value);
+        }
+        if (out.get("ref") instanceof String alias) {
+            out.remove("ref"); // an explicit $ref wins; the alias must not reach Schema#set either
+            if (!out.containsKey("$ref")) {
+                out.put("$ref", alias.contains("/") ? alias : "#/components/schemas/" + alias);
+            }
+        }
+        return out;
     }
 
     private static Class<?> tryLoad(String fqcn) {
