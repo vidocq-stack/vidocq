@@ -208,18 +208,25 @@ class OtlpExporterModuleLayerTest {
             @Override public void close() {}
         };
         boolean useParentHandlers = logger.getUseParentHandlers();
+        Level loggerLevel = logger.getLevel();
         logger.setUseParentHandlers(false);
+        logger.setLevel(Level.FINE);
+        capture.setLevel(Level.ALL);
         logger.addHandler(capture);
         try {
             application.callStatic(INTEROP + ".OtelSpiAutoConfiguration", "discover", Map.of(), application.loader());
         } finally {
             logger.removeHandler(capture);
+            logger.setLevel(loggerLevel);
             logger.setUseParentHandlers(useParentHandlers);
         }
 
         assertTrue(messages.stream().anyMatch(m -> m.contains("SpanExporterProvider discovered")
                         && m.contains("OtlpSpanExporterProvider")),
                 "the OTLP span exporter provider must still be discovered, got: " + messages);
+        assertTrue(messages.stream().anyMatch(m -> m.contains("Qualified exports not extended")
+                        && m.contains("OtlpSpanExporterProvider")),
+                "the failed extension of the exports must be logged at FINE, got: " + messages);
     }
 
     /**

@@ -315,6 +315,13 @@
     application builds itself, outside that discovery, in a child layer, does not get the exports.
   - Not covered: an artifact outside the lists (an incubating one) needs
     `--add-exports <module>/<package>=<consumer>` for each package it uses, which works in the boot layer only.
+  - Remaining limitation (FC2 review): when humboldt-otel-interop sits in a child layer of
+    `io.opentelemetry.api`/`io.opentelemetry.context`, it cannot call `ApiLayerExports`/`ContextLayerExports`
+    (their packages are exported to the interop module by name, which reaches only the same layer or a parent
+    layer). The provider is kept (the call is guarded and logged at FINE), but its layer's exports are not
+    extended, so the exporter can later fail with `IllegalAccessError`. Workaround: keep interop in the same
+    layer as the two API modules (as the Vidocq runtime does) or add the `--add-exports`. Not fixed on purpose:
+    exporting the layer packages unqualified would let any module request the internal exports.
     `<module>` is the module that holds the package, read from the built descriptors: `io.opentelemetry.api`
     for `io.opentelemetry.api.*`, `io.opentelemetry.context` (humboldt-otel-context, where `opentelemetry-common`
     is shaded in) for `io.opentelemetry.context.internal.shaded` and `io.opentelemetry.common.impl`. On

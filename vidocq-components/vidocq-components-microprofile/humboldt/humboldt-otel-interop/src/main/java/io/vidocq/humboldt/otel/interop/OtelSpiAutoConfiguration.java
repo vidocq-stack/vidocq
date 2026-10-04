@@ -381,9 +381,10 @@ public final class OtelSpiAutoConfiguration {
 
     /**
      * Extends the qualified exports to the layer of {@code type}, without ever dropping the provider: when this
-     * module cannot read the Humboldt layer helpers (it is on the class path, or in a child layer of the
-     * OpenTelemetry API modules), the call fails with an {@link IllegalAccessError} and the provider is kept as
-     * it was before the exports were extended.
+     * module sits in a child layer of the OpenTelemetry API modules, it cannot read the Humboldt layer helpers
+     * (their packages are exported to it by name, which reaches only the same layer or a parent layer): the call
+     * fails with an {@link IllegalAccessError}, the provider is kept, and the exports of its layer stay as the
+     * descriptors left them.
      */
     private static void extendExports(Class<?> type) {
         try {

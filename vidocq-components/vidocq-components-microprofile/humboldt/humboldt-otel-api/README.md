@@ -14,6 +14,8 @@ time and from inside this module, the exports the descriptor names. humboldt-ote
 each OpenTelemetry provider it discovers; an OpenTelemetry component that the application builds itself, outside
 that discovery, does not get them.
 
+Limitation: when `humboldt-otel-interop` itself sits in a child layer of `io.opentelemetry.api` / `io.opentelemetry.context`, it cannot call the layer helper (its package is exported to the interop module by name, which reaches only the same layer or a parent layer). The provider is still kept, but its layer's exports are not extended, so the exporter can later fail with an `IllegalAccessError`. Keep interop in the same layer as the two API modules (as the Vidocq runtime does), or add the `--add-exports` by hand.
+
 An artifact that is not in the lists (an incubating `-alpha` one, for instance) must be granted the packages it uses
 with `--add-exports <module>/<package>=<consumer>`, where `<module>` is the Humboldt module that holds the package:
 `io.opentelemetry.api` for the `io.opentelemetry.api.*` packages, and `io.opentelemetry.context`
