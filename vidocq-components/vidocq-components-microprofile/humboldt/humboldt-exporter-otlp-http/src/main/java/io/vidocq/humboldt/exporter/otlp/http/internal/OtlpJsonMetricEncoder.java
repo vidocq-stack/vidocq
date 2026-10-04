@@ -134,6 +134,10 @@ public final class OtlpJsonMetricEncoder {
                     writeSum(sb, m);
             case HISTOGRAM -> writeHistogram(sb, m);
             case GAUGE, OBSERVABLE_GAUGE -> writeGauge(sb, m);
+            // Unreachable while every InstrumentType is listed above. A future one must not silently yield a metric
+            // with no data field: like a mismatched point, it fails the batch (reported once by the exporter).
+            default -> throw new IllegalArgumentException("metric '" + m.name() + "' has the instrument type "
+                    + m.instrumentType() + ", which has no OTLP encoding");
         }
         sb.append('}');
     }
