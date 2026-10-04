@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Vidocq Runtime Telemetry extension — Humboldt branch (MicroProfile Telemetry 2.1)
+ * Vidocq Runtime Telemetry extension — Humboldt branch (MicroProfile Telemetry 2.2)
  * on the Vidocq life cycle.
  *
  * <p>Auto-config via env vars {@code OTEL_*} and system properties {@code otel.*},

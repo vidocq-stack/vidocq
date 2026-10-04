@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * Vidocq Runtime wrapper that activates Cervantes (MicroProfile JWT 2.1)
+ * Vidocq Runtime wrapper that activates Cervantes (MicroProfile JWT 2.2)
  * via its standard SPIs (BCE CDI 4.1 + @Provider JAX-RS beans).
  *
  * <p>Transitively re-exports Cervantes modules (api, core, cdi.vauban,
@@ -32,7 +32,7 @@ module io.vidocq.runtime.extensions.microprofile.cervantes {
     requires transitive io.vidocq.cervantes.cdi.vauban;
     requires transitive io.vidocq.cervantes.jaxrs;
 
-    // MP JWT 2.1 §6.1 — the spec requires reading mp.jwt.verify.* keys via
+    // MP JWT 2.2 §6.1 — the spec requires reading mp.jwt.verify.* keys via
     // MicroProfile Config. Cervantes-core uses @ConfigProperty for this, so
     // we transitively draw the Ravel extension (which brings ravel-cdi-vauban +
     // the RavelConfigSourceProvider).

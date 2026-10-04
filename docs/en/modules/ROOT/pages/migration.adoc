@@ -204,7 +204,7 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 | Delivered
 | `vidocq-runtime-dirac-metrics-extension`
 
-| MP OpenAPI 4.x
+| MP OpenAPI 4.2
 | Delivered
 | `vidocq-runtime-grimm-openapi-extension` (+ `vidocq-runtime-grimm-openapi-ui-extension`)
 
@@ -212,11 +212,11 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 | Delivered
 | `vidocq-runtime-cyrano-rest-client-extension`
 
-| MP JWT Auth 2.1
+| MP JWT Auth 2.2
 | Delivered
 | `vidocq-runtime-cervantes-jwt-extension`
 
-| MP Telemetry 2.1
+| MP Telemetry 2.2
 | Delivered
 | `vidocq-runtime-humboldt-telemetry-extension`
 

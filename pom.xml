@@ -477,7 +477,7 @@
                 <version>${cyrano.version}</version>
             </dependency>
 
-            <!-- Cervantes — MicroProfile JWT 2.1 implementation -->
+            <!-- Cervantes — MicroProfile JWT 2.2 implementation -->
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>
@@ -504,7 +504,7 @@
                 <version>${cervantes.version}</version>
             </dependency>
 
-            <!-- Humboldt — MicroProfile Telemetry 2.1 (tracing, metrics, logs) -->
+            <!-- Humboldt — MicroProfile Telemetry 2.2 (tracing, metrics, logs) -->
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-runtime</artifactId>

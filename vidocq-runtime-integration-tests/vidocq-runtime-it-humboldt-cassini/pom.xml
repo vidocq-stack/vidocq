@@ -131,7 +131,7 @@
                         MUST be set before surefire forks the JVM, otherwise
                         HumboldtExtension.configure() misses them.
 
-                        OTEL_SDK_DISABLED=false is mandatory: per MP Telemetry 2.1 the
+                        OTEL_SDK_DISABLED=false is mandatory: per MP Telemetry 2.2 the
                         SDK is disabled by default (HumboldtAutoConfigure reads
                         OTEL_SDK_DISABLED with default true), so without it the SDK boots
                         as a no-op and inMemorySpanExporter() stays null — SpansResource

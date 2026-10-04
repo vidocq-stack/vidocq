@@ -30,7 +30,7 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 /**
- * JAX-RS test resource for MicroProfile JWT 2.1 security (Cervantes) in Vidocq.
+ * JAX-RS test resource for MicroProfile JWT 2.2 security (Cervantes) in Vidocq.
  *
  * <ul>
  *   <li>{@code GET /secured/admin} — {@code @RolesAllowed("admin")}: 401 without token,

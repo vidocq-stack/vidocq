@@ -20,7 +20,7 @@
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins Health 4.0.1 -->
+        <!-- MicroProfile 7.2 pins Health 4.0.1 -->
         <microprofile.health.tck.version>4.0.1</microprofile.health.tck.version>
     </properties>
 

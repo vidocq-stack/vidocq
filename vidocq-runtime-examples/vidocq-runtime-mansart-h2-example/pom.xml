@@ -39,7 +39,7 @@
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
         </dependency>
 
-        <!-- OpenAPI document (Grimm, MicroProfile OpenAPI 4.1) served at /openapi,
+        <!-- OpenAPI document (Grimm, MicroProfile OpenAPI 4.2) served at /openapi,
              plus Swagger UI served at /openapi/ui. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>

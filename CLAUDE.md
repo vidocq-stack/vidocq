@@ -4,7 +4,7 @@ Contributor guidance for agents working on this repository. See also the compani
 
 ## Project overview
 
-Vidocq is a **modular Java SE MicroProfile 7.1 runtime** built on **Vauban** (CDI 4.1
+Vidocq is a **modular Java SE MicroProfile 7.2 runtime** built on **Vauban** (CDI 4.1
 Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** discovered via
 `ServiceLoader` (Quarkus-inspired). Non-negotiable constraints:
 
@@ -65,11 +65,11 @@ Each extension is named after a **codename** mapping to its spec — keep this m
 | Cassini | JAX-RS 4.0 (transport via Chappe) | `vidocq-runtime-cassini-rest-extension` |
 | Ravel | MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` |
 | Cyrano | MicroProfile Rest Client 4.0 | `vidocq-runtime-cyrano-rest-client-extension` |
-| Cervantes | MicroProfile JWT Auth 2.1 | `vidocq-runtime-cervantes-jwt-extension` |
-| Humboldt | MicroProfile Telemetry 2.1 | `vidocq-runtime-humboldt-telemetry-extension` |
+| Cervantes | MicroProfile JWT Auth 2.2 | `vidocq-runtime-cervantes-jwt-extension` |
+| Humboldt | MicroProfile Telemetry 2.2 | `vidocq-runtime-humboldt-telemetry-extension` |
 | Knock | MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` |
 | Dirac | MicroProfile Metrics 5.1 | `vidocq-runtime-dirac-metrics-extension` |
-| Grimm | MicroProfile OpenAPI 4.x (+ Swagger UI) | `vidocq-runtime-grimm-openapi-extension` |
+| Grimm | MicroProfile OpenAPI 4.2 (+ Swagger UI) | `vidocq-runtime-grimm-openapi-extension` |
 | Mansart | Jakarta Data 1.0 / Pool / JTA | `vidocq-runtime-mansart-{data,pool,transactions}-extension` |
 
 ### Codegen (APT) wiring — required pattern for apps/examples

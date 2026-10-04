@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Modular Java SE MicroProfile Runtime</strong><br>
-  <a href="https://microprofile.io/">MicroProfile 7.1</a> | <a href="https://codefloe.com/Vidocq/vauban">Vauban CDI Lite</a> | JDK 25 | Java Modules
+  <a href="https://microprofile.io/">MicroProfile 7.2</a> | <a href="https://codefloe.com/Vidocq/vauban">Vauban CDI Lite</a> | JDK 25 | Java Modules
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 
 ## What is Vidocq?
 
-Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.1 specifications via a lightweight extension system inspired by Quarkus.
+Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.2 specifications via a lightweight extension system inspired by Quarkus.
 
 ### Why Vidocq?
 
@@ -228,7 +228,7 @@ myapp-1.0/
   lib/*.jar       Application + dependencies
 ```
 
-## MicroProfile 7.1 Extensions
+## MicroProfile 7.2 Extensions
 
 | Spec | Extension | Status |
 |------|-----------|--------|

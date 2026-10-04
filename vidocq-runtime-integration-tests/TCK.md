@@ -89,7 +89,7 @@ optional groups Vidocq keeps.
 
 Seven of the eight suites run with **zero test exclusions**. Notably, the OpenAPI
 suite previously passed 307 tests with 2 excluded classes under the old ad hoc
-harness (the assembled runtime passes the full 344), and the Rest Client suite ran
+harness (the assembled runtime passed the full 344 of the 4.1 suite at the time; 364 with the 4.2 suite), and the Rest Client suite ran
 without its `ssl/**`/`sse/**` packages until 2026-07-13 — Cyrano now implements the
 SSL options and SSE Publisher return types, and the full 235-test suite passes (the
 9 TestNG skips are the Reactive Streams `PublisherVerification` harness's own

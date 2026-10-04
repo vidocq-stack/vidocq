@@ -39,7 +39,7 @@
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins Rest Client 4.0 -->
+        <!-- MicroProfile 7.2 pins Rest Client 4.0 -->
         <microprofile.rest.client.tck.version>4.0</microprofile.rest.client.tck.version>
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25 (see cyrano-tck). -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>

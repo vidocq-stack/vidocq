@@ -1,22 +1,22 @@
 # Vidocq Runtime — Roadmap
 
-Modular Java SE MicroProfile 7.1 runtime built on Vauban (CDI 4.1 Lite).
+Modular Java SE MicroProfile 7.2 runtime built on Vauban (CDI 4.1 Lite).
 Each MicroProfile spec is delivered as an independent extension loaded via
 ServiceLoader (Quarkus-inspired model). The runtime itself remains minimal:
 SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 > Product view: see [`README.md`](README.md). User documentation: `docs/`.
 
-## Status of MicroProfile 7.1 specs
+## Status of MicroProfile 7.2 specs
 
 | MicroProfile spec | Implementation | Vidocq extension | Status |
 |---|---|---|---|
 | **Rest Client 4.0** | [cyrano](../cyrano) | `vidocq-runtime-cyrano-rest-client-extension` | ✅ delivered |
-| **Telemetry 2.1** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ delivered (M7 TCK in progress) |
+| **Telemetry 2.2** | [humboldt](../humboldt) | `vidocq-runtime-humboldt-telemetry-extension` | ✅ delivered (M7 TCK in progress) |
 | **Health 4.0** | [knock](../knock) | `vidocq-runtime-knock-health-extension` | ✅ delivered |
 | **Config 3.1** | _smallrye config_ | — | ❌ to package as an extension |
 | **Fault Tolerance 4.1** | _smallrye fault tolerance_ | — | ❌ to package as an extension |
-| **JWT Auth 2.1** | — | — | ❌ TODO (heisenberg?) |
+| **JWT Auth 2.2** | — | — | ❌ TODO (heisenberg?) |
 | **OpenAPI 4.0** | — | — | ❌ TODO |
 | **Metrics 5.1** | — | — | ❌ TODO (often merged with Telemetry) |
 
@@ -35,7 +35,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 
 ## Jakarta EE Core Profile 11 certification
 
-Beyond MicroProfile 7.1, Vidocq targets **Jakarta EE Core Profile 11**
+Beyond MicroProfile 7.2, Vidocq targets **Jakarta EE Core Profile 11**
 certification for the assembled runtime. Full process, TCK binaries, and
 detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 [`TCK.md`](vidocq-runtime-integration-tests/TCK.md).
@@ -80,9 +80,9 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
       `@CircuitBreaker`. Virtual-thread compatibility: avoid ThreadLocal pinning,
       prefer `ScopedValue`. SmallRye wrapper possible.
 - [ ] **`vidocq-runtime-jwt-extension`** — Bearer JWT gating auth. Implementation
-      likely in a new repo (placeholder `heisenberg`?). MP JWT Auth 2.1.
+      likely in a new repo (placeholder `heisenberg`?). MP JWT Auth 2.2.
 - [ ] **`vidocq-runtime-openapi-extension`** — OpenAPI 3.1 generation from Cassini
-      JAX-RS resources. MP OpenAPI 4.0.
+      JAX-RS resources. MP OpenAPI 4.2.
 - [ ] **`vidocq-runtime-metrics-extension`** — either separate or merged into humboldt.
       Decision: to be settled based on the evolution of MP Metrics 5.1 vs Telemetry.
 
@@ -97,7 +97,7 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
 
 ### Long term (quality)
 
-- [ ] MicroProfile 7.1 TCK per implemented spec. See `TCK.md` for tracking
+- [ ] MicroProfile 7.2 TCK per implemented spec. See `TCK.md` for tracking
       (each extension has its out-of-reactor TCK runner, model `champollion-tck`).
 - [x] Jakarta EE Core Profile 11 certification — see the dedicated section above
       and `CERTIFICATION.md`. All deliverables complete: certifying EFTL

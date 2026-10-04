@@ -37,7 +37,7 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import io.vidocq.vauban.core.container.VaubanContainer;
 
 /**
- * Vidocq extension that serves the Grimm (MicroProfile OpenAPI 4.1) document at {@code /openapi}.
+ * Vidocq extension that serves the Grimm (MicroProfile OpenAPI 4.2) document at {@code /openapi}.
  *
  * <p>The OpenAPI model is assembled at startup by grimm-cdi-vauban's CDI BuildCompatibleExtension and
  * cached in {@code GrimmModelCache}. This extension looks up grimm's {@link OpenApiResource} bean and

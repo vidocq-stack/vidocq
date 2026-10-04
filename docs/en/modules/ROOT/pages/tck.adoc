@@ -31,7 +31,7 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 | via xref:vauban::tck.adoc[Vauban]
 
 | MicroProfile Config 3.1
-| 349 green
+| 378 green
 | in-reactor runner on the assembled runtime
 
 | MicroProfile Health 4.0
@@ -46,20 +46,20 @@ Vidocq Runtime inherits TCK passes from its foundational bricks and exposes its 
 | 463 green
 | in-reactor runner on the assembled runtime
 
-| MicroProfile JWT Auth 2.1
-| 206 green
+| MicroProfile JWT Auth 2.2
+| 208 green
 | in-reactor runner (documented `ejb`/`jacc`/`servlet` exclusions)
 
 | MicroProfile Rest Client 4.0
 | 235 green
 | in-reactor runner on the assembled runtime
 
-| MicroProfile Telemetry 2.1
+| MicroProfile Telemetry 2.2
 | 85 green
 | in-reactor runner on the assembled runtime
 
-| MicroProfile OpenAPI 4.x
-| 344 green
+| MicroProfile OpenAPI 4.2
+| 364 green
 | in-reactor runner on the assembled runtime
 |===
 
@@ -94,7 +94,7 @@ Unlike the Jakarta suites above (run per brick), the MicroProfile TCKs are run *
 ./mvnw -Ptck -pl vidocq-runtime-integration-tests -amd test
 ----
 
-Status: **1868 official TCK tests green** (re-run 2026-08-27) across all eight MicroProfile 7.1 component specs (Config 3.1: 378, Fault Tolerance 4.1: 463, OpenAPI 4.1: 346, Rest Client 4.0: 235, JWT Auth 2.1: 206, Metrics 5.1: 127, Telemetry 2.1: 85, Health 4.0: 28), with no suite exclusion except the documented `ejb`/`jacc`/`servlet` categories of the JWT suite. Run details and per-module reports: `vidocq-runtime-integration-tests/TCK.md` in the repo.
+Status: **1888 official TCK tests green** (re-run 2026-10-04) across all eight MicroProfile 7.2 component specs (Config 3.1: 378, Fault Tolerance 4.1: 463, OpenAPI 4.2: 364, Rest Client 4.0: 235, JWT Auth 2.2: 208, Metrics 5.1: 127, Telemetry 2.2: 85, Health 4.0: 28), with no suite exclusion except the documented `ejb`/`jacc`/`servlet` categories of the JWT suite. The OpenAPI 4.2 (TCK 4.2-RC5) and Telemetry 2.2 (TCK 2.2-RC3) runs use release candidates published on Maven Central, byte-identical to the finals: the MicroProfile 7.2 platform release is still under ballot, and the runs will be repeated on the final artifacts once they are published. Run details and per-module reports: `vidocq-runtime-integration-tests/TCK.md` in the repo.
 
 Two additional runners are not MicroProfile: Jakarta Annotations 3.0 (signature test, 1/1) and the **Jakarta Core Profile 11 composite TCK** (10/13 on JDK 25 — the 3 others hit a TCK-helper defect on JDK 25, challenge drafted in `CERTIFICATION.md` §6). All seven constituent Core Profile spec TCKs pass, including their API signature tests (Annotations, CDI 4.1, JSON-P, JSON-B, REST); the profile-level certification request is *pre-filing* — it certifies a released product, and will be filed with the next release.
 

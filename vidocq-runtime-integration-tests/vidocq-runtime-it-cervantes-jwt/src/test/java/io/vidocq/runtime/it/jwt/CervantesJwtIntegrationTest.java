@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * E2E tests that validate the full Cervantes integration (MicroProfile JWT 2.1) in Vidocq:
+ * E2E tests that validate the full Cervantes integration (MicroProfile JWT 2.2) in Vidocq:
  * <ol>
  *   <li><b>JAX-RS Authentication + Authorization</b> — {@code @RolesAllowed("admin")} via
  *       {@code RolesAllowedDynamicFeature} + {@code JwtAuthenticationFilter} (cervantes-jaxrs,

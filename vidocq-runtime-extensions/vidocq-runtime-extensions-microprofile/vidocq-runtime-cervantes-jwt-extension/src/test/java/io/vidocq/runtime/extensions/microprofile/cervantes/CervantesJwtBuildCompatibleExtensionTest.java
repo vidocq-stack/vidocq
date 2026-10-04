@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * M8 non-regression test — the wrapper {@code vidocq-runtime-cervantes-jwt-extension}
- * must republish the ECB Cervantes (MicroProfile JWT 2.1) so that it remains
+ * must republish the ECB Cervantes (MicroProfile JWT 2.2) so that it remains
  * discovered via {@code ServiceLoader} and {@code provides ... with} Java Modules.
  *
  * <p>Objective: to confirm that the Cervantes integration in vidocq did not break the

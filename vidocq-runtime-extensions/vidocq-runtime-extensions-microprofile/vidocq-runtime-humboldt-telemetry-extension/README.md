@@ -1,6 +1,6 @@
 # vidocq-runtime-humboldt-telemetry-extension
 
-Vidocq Runtime extension that wires **Humboldt** (MicroProfile Telemetry 2.1 —
+Vidocq Runtime extension that wires **Humboldt** (MicroProfile Telemetry 2.2 —
 tracing, metrics, logs) into the Vidocq lifecycle.
 
 ## What the extension does
@@ -47,7 +47,7 @@ The extension automatically activates:
 - **`@WithSpan`** on any CDI method (via `humboldt-cdi` +
   `BuildCompatibleExtension` Humboldt — the
   `io.opentelemetry.instrumentation.annotations.WithSpan` annotation is intercepted
-  without any code configuration; this is the MicroProfile Telemetry 2.1 standard).
+  without any code configuration; this is the MicroProfile Telemetry 2.2 standard).
 - **JAX-RS server filters** (via `humboldt-rest`) — a `ContainerRequestFilter`
   that extracts `traceparent` W3C, starts a SERVER span, sets
   `http.request.method`/`url.path`/`url.scheme`, and a `ContainerResponseFilter`
@@ -67,4 +67,4 @@ from the auto-configuration.
 
 - [humboldt/](https://forge.vidocq.dev/vidocq/humboldt) — Humboldt implementation
 - [humboldt/PLAN.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/PLAN.md) — detailed architecture
-- [humboldt/TCK.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.1 TCK status
+- [humboldt/TCK.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.2 TCK status

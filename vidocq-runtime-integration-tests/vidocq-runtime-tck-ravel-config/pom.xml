@@ -24,7 +24,7 @@
     </description>
 
     <properties>
-        <!-- MicroProfile 7.1 pins Config 3.1; TCK/API published as 3.1.1. -->
+        <!-- MicroProfile 7.2 pins Config 3.1; TCK/API published as 3.1.1. -->
         <microprofile.config.tck.version>${microprofile.config.version}</microprofile.config.tck.version>
         <!-- Arquillian 1.10.1 avoids MalformedParameterizedTypeException under JDK 25. -->
         <arquillian.tck.version>1.10.1.Final</arquillian.tck.version>

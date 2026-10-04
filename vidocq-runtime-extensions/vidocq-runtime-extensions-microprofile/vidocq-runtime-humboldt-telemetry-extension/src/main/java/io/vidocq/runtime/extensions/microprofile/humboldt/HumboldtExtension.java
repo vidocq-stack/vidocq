@@ -37,7 +37,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Vidocq Runtime extension which connects Humboldt (MicroProfile Telemetry 2.1) to the
+ * Vidocq Runtime extension which connects Humboldt (MicroProfile Telemetry 2.2) to the
  * Vidocq life cycle.
  *
  * <p>Priority <b>100</b> — starts BEFORE application extensions (cassini=500,
@@ -257,7 +257,7 @@ public final class HumboldtExtension implements VidocqExtension {
             "MP_TELEMETRY_SDK_DISABLED",
             // OTEL_SDK_DISABLED gates the whole SDK in HumboldtAutoConfigure
             // (env.getBoolean("OTEL_SDK_DISABLED", true) — disabled by default per
-            // MP Telemetry 2.1). Without bridging it, the SDK could never be enabled
+            // MP Telemetry 2.2). Without bridging it, the SDK could never be enabled
             // through VidocqConfiguration and always booted as a no-op.
             "OTEL_SDK_DISABLED",
     };

@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
     <name>Vidocq :: Core Extensions :: OpenAPI (Grimm)</name>
-    <description>Activates Grimm (MicroProfile OpenAPI 4.1) in a vidocq deployment and serves the
+    <description>Activates Grimm (MicroProfile OpenAPI 4.2) in a vidocq deployment and serves the
         assembled document at /openapi over the Chappe engine. The model is built by grimm-cdi-vauban's
         CDI BCE at startup; this extension looks up the OpenApiResource bean and renders it through a
         Chappe handler (so the document is served on the same engine/origin as the Swagger UI).</description>
@@ -48,7 +48,7 @@
             <artifactId>vauban-core</artifactId>
         </dependency>
         <!--
-            Grimm — MicroProfile OpenAPI 4.1 implementation (zero third-party libs).
+            Grimm — MicroProfile OpenAPI 4.2 implementation (zero third-party libs).
             grimm-cdi-vauban carries the BCE that builds the model at startup plus OpenApiResource
             (which exposes render(format, accept)); it pulls grimm-core + microprofile-openapi-api.
         -->

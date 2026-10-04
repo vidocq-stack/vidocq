@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
     <name>Vidocq :: Core Extensions :: JWT (Cervantes)</name>
-    <description>Wrapper Maven/Java Modules qui active Cervantes (MicroProfile JWT 2.1) dans un deploiement vidocq.</description>
+    <description>Wrapper Maven/Java Modules qui active Cervantes (MicroProfile JWT 2.2) dans un deploiement vidocq.</description>
 
     <dependencies>
         <dependency>
@@ -32,13 +32,13 @@
             <artifactId>cervantes-jaxrs</artifactId>
         </dependency>
 
-        <!-- Repackaged MicroProfile JWT 2.1 spec (module org.eclipse.microprofile.jwt). -->
+        <!-- Repackaged MicroProfile JWT 2.2 spec (module org.eclipse.microprofile.jwt). -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
             <artifactId>cervantes-mp-jwt-api</artifactId>
         </dependency>
 
-        <!-- MP JWT 2.1 §6.1 mandates that the runtime exposes configuration via
+        <!-- MP JWT 2.2 §6.1 mandates that the runtime exposes configuration via
              MicroProfile Config (mp.jwt.verify.publickey, mp.jwt.verify.issuer,
              mp.jwt.token.header, etc.). Cervantes-core reads them via
              @ConfigProperty, so we must opt-in to vidocq-runtime-ravel-config-extension
