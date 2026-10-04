@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.serialization;
 
+import io.vidocq.grimm.internal.model.DiscriminatorImpl;
 import org.eclipse.microprofile.openapi.models.Extensible;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.callbacks.Callback;
@@ -112,7 +113,11 @@ final class OpenApiValueMapper {
             return result;
         }
 
-        return toSerializableBean(value);
+        Map<String, Object> bean = toSerializableBean(value);
+        if (value instanceof DiscriminatorImpl discriminator) {
+            discriminator.staticExtensions().forEach((name, extension) -> bean.put(name, toSerializable(extension)));
+        }
+        return bean;
     }
 
     private static Object mergeWithExtensions(Object base, Extensible<?> extensible) {

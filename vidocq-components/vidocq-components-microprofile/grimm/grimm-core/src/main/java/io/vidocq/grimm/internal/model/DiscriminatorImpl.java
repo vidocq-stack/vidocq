@@ -28,6 +28,21 @@ public class DiscriminatorImpl implements Discriminator {
 
     private String propertyName;
     private Map<String, String> mapping;
+    /** {@code x-} keys read from a static file; {@link Discriminator} is not {@code Extensible}. */
+    private Map<String, Object> staticExtensions;
+
+    /** Keeps an {@code x-} key of a static-file discriminator so the serializer can write it back. */
+    public void putStaticExtension(String name, Object value) {
+        if (staticExtensions == null) {
+            staticExtensions = new LinkedHashMap<>();
+        }
+        staticExtensions.put(name, value);
+    }
+
+    /** The {@code x-} keys kept by {@link #putStaticExtension}, never {@code null}. */
+    public Map<String, Object> staticExtensions() {
+        return staticExtensions == null ? Map.of() : java.util.Collections.unmodifiableMap(staticExtensions);
+    }
 
     @Override public String getPropertyName() { return propertyName; }
     @Override public void setPropertyName(String propertyName) { this.propertyName = propertyName; }

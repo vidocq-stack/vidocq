@@ -26,6 +26,7 @@ import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -117,6 +118,32 @@ class ConfigApplierTest {
         Schema tags = s.getProperties().get("tags");
         assertEquals(Schema.SchemaType.ARRAY, tags.getType().get(0));
         assertEquals(Schema.SchemaType.STRING, tags.getItems().getType().get(0));
+    }
+
+    @Test
+    void applySchemaOverrides_usesTheTypedStaticMapper() {
+        // Same mapping as a static file: standard keywords are typed, unknown keywords are kept,
+        // $ref is verbatim, and the Vidocq-only "name" key is not part of the schema.
+        SchemaRegistry registry = new SchemaRegistry();
+        String json = "{\"name\":\"Renamed\",\"type\":\"object\",\"exclusiveMinimum\":0,"
+                + "\"oneOf\":[{\"$ref\":\"Pet.yaml\"},{\"type\":\"null\"}],"
+                + "\"discriminator\":{\"propertyName\":\"kind\"},"
+                + "\"custom-keyword\":{\"a\":1},\"x-vendor\":\"v\","
+                + "\"properties\":{\"p\":{\"minItems\":2,\"const\":\"c\"}}}";
+        GrimmConfig cfg = GrimmConfig.fromMap(Map.of(
+                "mp.openapi.schema." + Sample.class.getName(), json));
+
+        var assigned = ConfigApplier.applySchemaOverrides(registry, cfg);
+        assertEquals("Renamed", assigned.get(Sample.class.getName()));
+        Schema s = registry.snapshot().get("Renamed");
+        assertEquals(new BigDecimal("0"), s.getExclusiveMinimum());
+        assertEquals("Pet.yaml", s.getOneOf().get(0).getRef());
+        assertEquals("kind", s.getDiscriminator().getPropertyName());
+        assertEquals(Map.of("a", 1L), s.get("custom-keyword"));
+        assertEquals("v", s.getExtensions().get("x-vendor"));
+        assertNull(s.get("name"));
+        assertEquals(2, s.getProperties().get("p").getMinItems());
+        assertEquals("c", s.getProperties().get("p").getConstValue());
     }
 
     @SuppressWarnings("unused")

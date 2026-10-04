@@ -20,6 +20,7 @@
 package io.vidocq.grimm.internal.serialization;
 
 import org.eclipse.microprofile.openapi.models.OpenAPI;
+import org.eclipse.microprofile.openapi.models.media.Schema;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,6 +47,15 @@ public final class JsonDeserializer {
             throw new NullPointerException("json must not be null");
         }
         return new Parser(json).parse();
+    }
+
+    /**
+     * Maps a raw schema tree (as returned by {@link #parseRaw}) onto a {@link Schema} through the
+     * same typed mapper as a static file, so a schema from configuration is read exactly like one
+     * from {@code openapi.yaml}.
+     */
+    public static Schema toSchema(Object rawSchema) {
+        return OpenApiModelMapper.toStaticSchema(rawSchema);
     }
 
     private static final class Parser {

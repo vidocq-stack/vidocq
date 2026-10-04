@@ -48,6 +48,19 @@ public abstract class AbstractExtensibleRef<T extends Extensible<T> & Reference<
     }
 
     /**
+     * Sets a {@code $ref} exactly as written, without the short-name expansion of
+     * {@link #setRef(String)}. Used for values read from a static file, where {@code Pet.yaml}
+     * is a relative document reference and not the name of a component.
+     */
+    public static void setVerbatimRef(Reference<?> target, String ref) {
+        if (target instanceof AbstractExtensibleRef<?> impl) {
+            impl.ref = ref;
+        } else {
+            target.setRef(ref);
+        }
+    }
+
+    /**
      * Returns the component prefix for short-name expansion.
      * Sub-classes override to return the correct prefix
      * (e.g. {@code "#/components/schemas/"}).

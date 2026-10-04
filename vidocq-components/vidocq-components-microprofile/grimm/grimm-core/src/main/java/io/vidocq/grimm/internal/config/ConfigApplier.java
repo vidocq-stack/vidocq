@@ -28,7 +28,6 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -125,7 +124,7 @@ public final class ConfigApplier {
      * {@code $ref} to the override.
      *
      * <p>The value of each property is parsed as a JSON object via {@link JsonDeserializer}
-     * and converted into a {@link Schema}.</p>
+     * and converted into a {@link Schema} by the typed mapper of the static-file reader.</p>
      *
      * @return a map FQCN → registered schema name (for diagnostic purposes)
      */
@@ -145,8 +144,14 @@ public final class ConfigApplier {
             if (!(parsed instanceof Map<?, ?> map)) {
                 continue; // not a JSON object — skip
             }
-            Schema schema = toSchema(map);
+            // "name" only chooses the registry name: it is not a schema keyword.
             Object nameField = map.get("name");
+            Map<Object, Object> keywords = new LinkedHashMap<>(map);
+            keywords.remove("name");
+            if (keywords.containsKey("ref") && !keywords.containsKey("$ref")) {
+                keywords.put("$ref", keywords.remove("ref")); // historical alias of this converter
+            }
+            Schema schema = JsonDeserializer.toSchema(keywords);
             String preferredName = nameField instanceof String s && !s.isBlank()
                     ? s : clazz.getSimpleName();
             String name = registry.reserve(clazz, preferredName);
@@ -167,105 +172,4 @@ public final class ConfigApplier {
             }
         }
     }
-
-    /** Minimal JSON-tree → {@link Schema} converter — covers the common Schema fields. */
-    @SuppressWarnings("unchecked")
-    static Schema toSchema(Map<?, ?> map) {
-        Schema schema = OASFactory.createObject(Schema.class);
-        for (Map.Entry<?, ?> e : map.entrySet()) {
-            String key = String.valueOf(e.getKey());
-            Object value = e.getValue();
-            switch (key) {
-                case "type" -> setType(schema, value);
-                case "format" -> schema.setFormat(asString(value));
-                case "title" -> schema.setTitle(asString(value));
-                case "description" -> schema.setDescription(asString(value));
-                case "pattern" -> schema.setPattern(asString(value));
-                case "$ref", "ref" -> schema.setRef(asString(value));
-                case "minLength" -> schema.setMinLength(asInt(value));
-                case "maxLength" -> schema.setMaxLength(asInt(value));
-                case "minimum" -> schema.setMinimum(asDecimal(value));
-                case "maximum" -> schema.setMaximum(asDecimal(value));
-                case "multipleOf" -> schema.setMultipleOf(asDecimal(value));
-                case "default" -> schema.setDefaultValue(value);
-                case "deprecated" -> schema.setDeprecated(asBool(value));
-                case "readOnly" -> schema.setReadOnly(asBool(value));
-                case "writeOnly" -> schema.setWriteOnly(asBool(value));
-                case "required" -> {
-                    if (value instanceof List<?> list) {
-                        List<String> req = new ArrayList<>();
-                        for (Object o : list) req.add(String.valueOf(o));
-                        schema.setRequired(req);
-                    }
-                }
-                case "enum" -> {
-                    if (value instanceof List<?> list) {
-                        schema.setEnumeration(new ArrayList<>((List<Object>) list));
-                    }
-                }
-                case "items" -> {
-                    if (value instanceof Map<?, ?> m) schema.setItems(toSchema(m));
-                }
-                case "properties" -> {
-                    if (value instanceof Map<?, ?> m) {
-                        Map<String, Schema> props = new LinkedHashMap<>();
-                        for (Map.Entry<?, ?> p : m.entrySet()) {
-                            if (p.getValue() instanceof Map<?, ?> pm) {
-                                props.put(String.valueOf(p.getKey()), toSchema(pm));
-                            }
-                        }
-                        schema.setProperties(props);
-                    }
-                }
-                case "additionalProperties" -> {
-                    if (value instanceof Map<?, ?> m) {
-                        schema.setAdditionalPropertiesSchema(toSchema(m));
-                    } else if (value instanceof Boolean b) {
-                        schema.setAdditionalPropertiesBoolean(b);
-                    }
-                }
-                default -> {
-                    if (key.startsWith("x-")) schema.addExtension(key, value);
-                }
-            }
-        }
-        return schema;
-    }
-
-    private static void setType(Schema schema, Object value) {
-        if (value instanceof String s) {
-            schema.addType(parseType(s));
-        } else if (value instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof String s) schema.addType(parseType(s));
-            }
-        }
-    }
-
-    private static Schema.SchemaType parseType(String s) {
-        return switch (s.toLowerCase()) {
-            case "integer" -> Schema.SchemaType.INTEGER;
-            case "number" -> Schema.SchemaType.NUMBER;
-            case "boolean" -> Schema.SchemaType.BOOLEAN;
-            case "string" -> Schema.SchemaType.STRING;
-            case "array" -> Schema.SchemaType.ARRAY;
-            case "null" -> Schema.SchemaType.NULL;
-            default -> Schema.SchemaType.OBJECT;
-        };
-    }
-
-    private static String asString(Object o) { return o == null ? null : String.valueOf(o); }
-    private static Boolean asBool(Object o) { return o instanceof Boolean b ? b : Boolean.valueOf(String.valueOf(o)); }
-    private static Integer asInt(Object o) {
-        if (o instanceof Number n) return n.intValue();
-        if (o == null) return null;
-        return Integer.valueOf(o.toString());
-    }
-    private static BigDecimal asDecimal(Object o) {
-        if (o == null) return null;
-        if (o instanceof BigDecimal bd) return bd;
-        if (o instanceof Number n) return new BigDecimal(n.toString());
-        return new BigDecimal(o.toString());
-    }
 }
-

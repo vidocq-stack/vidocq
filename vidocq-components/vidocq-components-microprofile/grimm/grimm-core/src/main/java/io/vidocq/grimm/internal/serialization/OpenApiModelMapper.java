@@ -28,6 +28,8 @@ import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.callbacks.Callback;
 import org.eclipse.microprofile.openapi.models.examples.Example;
+import io.vidocq.grimm.internal.model.AbstractExtensibleRef;
+import io.vidocq.grimm.internal.model.DiscriminatorImpl;
 import org.eclipse.microprofile.openapi.models.headers.Header;
 import org.eclipse.microprofile.openapi.models.info.Info;
 import org.eclipse.microprofile.openapi.models.info.Contact;
@@ -332,7 +334,7 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "summary" -> pathItem.setSummary(asString(value));
                 case "description" -> pathItem.setDescription(asString(value));
-                case "$ref" -> pathItem.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(pathItem, asString(value));
                 case "servers" -> pathItem.setServers(toServers(value));
                 case "parameters" -> pathItem.setParameters(toParameters(value));
                 case "get" -> pathItem.setGET(toOperation(value));
@@ -663,10 +665,13 @@ final class OpenApiModelMapper {
                 case "required" -> header.setRequired(asBoolean(value));
                 case "deprecated" -> header.setDeprecated(asBoolean(value));
                 case "allowEmptyValue" -> header.setAllowEmptyValue(asBoolean(value));
+                case "style" -> header.setStyle(toHeaderStyle(asString(value)));
+                case "explode" -> header.setExplode(asBoolean(value));
+                case "content" -> header.setContent(toContent(value));
                 case "example" -> header.setExample(value);
                 case "examples" -> header.setExamples(toExamples(value));
                 case "schema" -> header.setSchema(toSchema(value));
-                case "$ref" -> header.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(header, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         header.addExtension(key, value);
@@ -675,6 +680,11 @@ final class OpenApiModelMapper {
             }
         }
         return header;
+    }
+
+    private static Header.Style toHeaderStyle(String raw) {
+        // "simple" is the only style a header allows.
+        return "simple".equals(raw) ? Header.Style.SIMPLE : null;
     }
 
     private static Map<String, Parameter> toParametersMap(Object raw) {
@@ -746,7 +756,7 @@ final class OpenApiModelMapper {
                 case "description" -> example.setDescription(asString(value));
                 case "value" -> example.setValue(value);
                 case "externalValue" -> example.setExternalValue(asString(value));
-                case "$ref" -> example.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(example, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         example.addExtension(key, value);
@@ -818,7 +828,7 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "$ref" -> link.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(link, asString(value));
                 case "operationRef" -> link.setOperationRef(asString(value));
                 case "operationId" -> link.setOperationId(asString(value));
                 case "requestBody" -> link.setRequestBody(asString(value));
@@ -873,7 +883,7 @@ final class OpenApiModelMapper {
                 case "scheme" -> scheme.setScheme(asString(value));
                 case "bearerFormat" -> scheme.setBearerFormat(asString(value));
                 case "openIdConnectUrl" -> scheme.setOpenIdConnectUrl(asString(value));
-                case "$ref" -> scheme.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(scheme, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         scheme.addExtension(key, value);
@@ -935,6 +945,11 @@ final class OpenApiModelMapper {
             }
         }
         return schemas;
+    }
+
+    /** Maps a raw (already parsed) JSON/YAML schema onto the model; see {@link #toSchema(Object)}. */
+    static Schema toStaticSchema(Object raw) {
+        return toSchema(raw);
     }
 
     /**
@@ -1009,7 +1024,7 @@ final class OpenApiModelMapper {
                         value instanceof String s ? s : null, schema::setContentMediaType);
                 case "const" -> schema.setConstValue(value);
                 case "example" -> schema.setExample(value);
-                case "$ref" -> schema.setRef(asString(value));
+                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(schema, asString(value));
                 case "$schema" -> schema.setSchemaDialect(asString(value));
                 case "$comment" -> schema.setComment(asString(value));
                 case "title" -> schema.setTitle(asString(value));
@@ -1123,7 +1138,8 @@ final class OpenApiModelMapper {
         if (!(raw instanceof Map<?, ?> map)) {
             return null;
         }
-        // Discriminator is not Extensible in MP OpenAPI 4.2: keys other than these two are dropped.
+        // Discriminator is not Extensible in MP OpenAPI 4.2: its x- keys go to a side store of the
+        // implementation, which the serializer writes back.
         Discriminator discriminator = OASFactory.createObject(Discriminator.class);
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String key = String.valueOf(entry.getKey());
@@ -1138,7 +1154,9 @@ final class OpenApiModelMapper {
                     }
                 }
                 default -> {
-                    // not representable in the model
+                    if (key.startsWith("x-") && discriminator instanceof DiscriminatorImpl impl) {
+                        impl.putStaticExtension(key, value);
+                    }
                 }
             }
         }

@@ -28,6 +28,12 @@ import java.util.Map;
 
 public final class YamlDeserializer {
 
+    private static final java.util.regex.Pattern INTEGER = java.util.regex.Pattern.compile("[-+]?[0-9]+");
+    private static final java.util.regex.Pattern OCTAL = java.util.regex.Pattern.compile("0o[0-7]+");
+    private static final java.util.regex.Pattern HEXADECIMAL = java.util.regex.Pattern.compile("0x[0-9a-fA-F]+");
+    private static final java.util.regex.Pattern FLOAT = java.util.regex.Pattern.compile(
+            "[-+]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][-+]?[0-9]+)?");
+
     public OpenAPI deserialize(String yaml) {
         if (yaml == null) {
             throw new NullPointerException("yaml must not be null");
@@ -168,13 +174,37 @@ public final class YamlDeserializer {
                 return raw.substring(1, raw.length() - 1).replace("''", "'");
             }
 
-            if (raw.matches("-?\\d+")) {
-                return Long.parseLong(raw);
-            }
-            if (raw.matches("-?\\d+\\.\\d+")) {
-                return Double.parseDouble(raw);
-            }
+            return parseNumber(raw);
+        }
 
+        /**
+         * Reads a plain scalar as a number following the YAML 1.2 core schema: {@code [-+]?[0-9]+}
+         * (integer), {@code 0o} octal, {@code 0x} hexadecimal and
+         * {@code [-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?} (float). Anything else is
+         * returned unchanged as a string.
+         */
+        private Object parseNumber(String raw) {
+            try {
+                if (INTEGER.matcher(raw).matches()) {
+                    String digits = raw.startsWith("+") ? raw.substring(1) : raw;
+                    try {
+                        return Long.parseLong(digits);
+                    } catch (NumberFormatException tooBig) {
+                        return new java.math.BigInteger(digits);
+                    }
+                }
+                if (OCTAL.matcher(raw).matches()) {
+                    return Long.parseLong(raw.substring(2), 8);
+                }
+                if (HEXADECIMAL.matcher(raw).matches()) {
+                    return Long.parseLong(raw.substring(2), 16);
+                }
+                if (FLOAT.matcher(raw).matches()) {
+                    return Double.parseDouble(raw);
+                }
+            } catch (NumberFormatException outOfRange) {
+                // an octal or hexadecimal literal beyond a long stays a string
+            }
             return raw;
         }
 
