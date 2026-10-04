@@ -132,7 +132,9 @@ Track reproducible bugs with:
 - **status**: FIXED — 2026-10-04, commit 77ee08e. `mergeSchema` walks `Schema#getAll()`, so it
   follows the property table of the model (`SchemaImpl`); `items` and `properties` still merge
   recursively, and an empty list or map does not override the lower source. Covered by
-  `ModelMergerTest`; official TCK still 367/367.
+  `ModelMergerTest`; official TCK still 367/367. Follow-up 2e13a1c (review): only an empty
+  `type`, `enum`, `required` or `properties` leaves the lower value in place; any other empty
+  value (`default: []`, `const: {}`, an extension `x-tags: []`) is copied, as before 77ee08e.
 
 ### BUG-20261004-05 — Static file: refs of parameters, request bodies, responses and callbacks lost; parameter fields and the `null` type dropped
 
@@ -169,6 +171,7 @@ Track reproducible bugs with:
   extension values (`AnnotationModelMappings.parseJsonValue`) unless the schema type is STRING;
   that parser tracks `[...]` nesting; `@SchemaProperty` maps `constValue` and `externalDocs`.
   Covered by `SchemaGeneratorTest` and `AnnotationModelMappingsTest`; official TCK still 367/367.
+  The hand-rolled parser itself was then replaced by grimm's JSON reader (BUG-20261004-09).
 
 ### BUG-20261004-07 — `@SchemaProperty` maps a few attributes only; `@Schema.examples` is not mapped
 
@@ -189,6 +192,43 @@ Track reproducible bugs with:
   two annotation types share no interface, so the `@Schema` code cannot be reused as it stands.
 - **status**: OPEN — found while working on BUG-20261004-06, outside its scope. Not covered by
   the official TCK (367/367).
+
+### BUG-20261004-08 — The `OASModelReader` model overrides the static file (spec order reversed)
+
+- **id**: BUG-20261004-08
+- **date**: 2026-10-04
+- **symptom**: the "Processing rules" of the MP OpenAPI 4.2 spec order the sources as
+  `OASModelReader` (the starting model), then the static file, "where conflicting elements from
+  the static file will override the values from the original model", then the annotations,
+  "further overriding any conflicting elements". `ModelMerger` merged static file, reader,
+  annotations, so on a conflict the reader won over the static file. The docs (concepts,
+  getting-started, internals), AGENTS.md, CLAUDE.md and ROADMAP.md stated the same reversed order.
+- **minimal repro**: an `OASModelReader` returning `info.title: Reader` and a static file with
+  `info.title: Static`; `/openapi` served `Reader` (spec: `Static`).
+- **hypothesis (confirmed)**: the order was taken from the reading order of the pipeline (static
+  file read first) rather than from the processing rules; the official TCK has no app that gives
+  the reader and the static file a conflicting element, so it did not catch it.
+- **status**: FIXED — 2026-10-04, commit 3224795. The merger merges reader, static file,
+  annotations; `ModelBuilder` invokes the reader before reading the static file; the two unit
+  tests that asserted the reverse priority are inverted; docs updated. Covered by
+  `ModelMergerTest`; official TCK still 367/367.
+
+### BUG-20261004-09 — Annotation JSON values (`parseValue`, `constValue`) read by a lossy hand-rolled parser
+
+- **id**: BUG-20261004-09
+- **date**: 2026-10-04
+- **symptom**: extension values with `parseValue = true` (and, since BUG-20261004-06,
+  `constValue`) went through a hand-rolled splitter: an escaped quote broke an object
+  (`{"a": "x\"y", "b": 1}`), `null` gave the string `"null"`, `1e3` stayed a string, a top-level
+  `"abc"` kept its quotes, a leading space made the whole value a raw string, and `1.0` was a
+  `Double` at the top level but a `Long` inside an array.
+- **minimal repro**: `@Extension(name = "x-e", value = "{\"a\": \"x\\\"y\", \"b\": 1}", parseValue = true)`
+  gives `{a="x\"y", "b": 1}` (one broken entry) instead of `{a=x"y, b=1}`.
+- **status**: FIXED — 2026-10-04, commit 85bc4f4. `AnnotationModelMappings.parseJsonValue`
+  delegates to `JsonDeserializer.parseRaw`, the reader of static files, so grimm has one JSON
+  reader; a value that is not JSON stays the string as written. A JSON `null` extension adds
+  nothing (the model keeps no null extension). Covered by `AnnotationModelMappingsTest`; official
+  TCK still 367/367.
 
 ### BUG-20261004-10 — `summary` next to a `$ref` is lost (MP OpenAPI model limitation)
 
