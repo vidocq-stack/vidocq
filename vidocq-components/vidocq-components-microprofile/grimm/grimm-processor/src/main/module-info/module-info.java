@@ -31,9 +31,8 @@
  * types, {@code @Produces}, inferred 200 responses. Any class using MicroProfile
  * OpenAPI annotations, Bean Validation constraints on a parameter, request bodies,
  * sub-resource locators, non-scalar types or any other construct outside this subset
- * is skipped with a compiler NOTE — the runtime
- * {@code AnnotationScanner} remains the documented fallback and the behavioural
- * reference (oracle of the equivalence tests).</p>
+ * is skipped with a compiler NOTE — the runtime {@code AnnotationScanner} remains the
+ * documented fallback and the behavioural reference (oracle of the equivalence tests).</p>
  */
 module io.vidocq.grimm.processor {
     requires java.compiler;

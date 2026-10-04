@@ -72,9 +72,9 @@ import java.util.TreeSet;
  * subset (class/method {@code @Path}, HTTP verbs, scalar
  * {@code @PathParam}/{@code @QueryParam}/{@code @HeaderParam} without Bean Validation
  * constraints, {@code @Produces}, inferred 200 responses) skips the whole class with a
- * compiler NOTE — partial
- * fragments would silently drop endpoints, so it is all or nothing per class. The
- * runtime {@code AnnotationScanner} remains the behavioural oracle and fallback.</p>
+ * compiler NOTE — partial fragments would silently drop endpoints, so it is all or
+ * nothing per class. The runtime {@code AnnotationScanner} remains the behavioural
+ * oracle and fallback.</p>
  */
 public final class GrimmModelProcessor extends AbstractProcessor {
 
@@ -308,13 +308,9 @@ public final class GrimmModelProcessor extends AbstractProcessor {
 
     /** M1: the presence of any MP OpenAPI annotation hands the class to the runtime scan. */
     private void rejectMpOpenApiAnnotations(Element element) throws SkipGeneration {
-        for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
-            String fqn = ((TypeElement) mirror.getAnnotationType().asElement())
-                    .getQualifiedName().toString();
-            if (fqn.startsWith(MP_OPENAPI_ANNOTATIONS_PREFIX)) {
-                throw new SkipGeneration("MicroProfile OpenAPI annotation " + fqn
-                        + " is outside the M1 subset");
-            }
+        String fqn = firstAnnotationNamed(element, MP_OPENAPI_ANNOTATIONS_PREFIX);
+        if (fqn != null) {
+            throw new SkipGeneration("MicroProfile OpenAPI annotation " + fqn + " is outside the M1 subset");
         }
     }
 
@@ -325,14 +321,28 @@ public final class GrimmModelProcessor extends AbstractProcessor {
      */
     private void rejectBeanValidationAnnotations(VariableElement param, ExecutableElement method)
             throws SkipGeneration {
-        for (AnnotationMirror mirror : param.getAnnotationMirrors()) {
-            String fqn = ((TypeElement) mirror.getAnnotationType().asElement())
-                    .getQualifiedName().toString();
-            if (fqn.startsWith(JAKARTA_CONSTRAINTS_PREFIX) || fqn.startsWith(JAVAX_CONSTRAINTS_PREFIX)) {
-                throw new SkipGeneration("Bean Validation constraint " + fqn + " on parameter "
-                        + param.getSimpleName() + " of " + method.getSimpleName() + " is outside the M1 subset");
+        String fqn = firstAnnotationNamed(param, JAKARTA_CONSTRAINTS_PREFIX, JAVAX_CONSTRAINTS_PREFIX);
+        if (fqn != null) {
+            throw new SkipGeneration("Bean Validation constraint " + fqn + " on parameter "
+                    + param.getSimpleName() + " of " + method.getSimpleName() + " is outside the M1 subset");
+        }
+    }
+
+    /**
+     * The qualified name of the first annotation of {@code element} whose name starts with one of
+     * {@code prefixes}, or {@code null}: the annotation types are read from their mirrors, so they
+     * need not be on the processor's path.
+     */
+    private static String firstAnnotationNamed(Element element, String... prefixes) {
+        for (AnnotationMirror mirror : element.getAnnotationMirrors()) {
+            String fqn = ((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName().toString();
+            for (String prefix : prefixes) {
+                if (fqn.startsWith(prefix)) {
+                    return fqn;
+                }
             }
         }
+        return null;
     }
 
     private static String pathValue(Element element) {
