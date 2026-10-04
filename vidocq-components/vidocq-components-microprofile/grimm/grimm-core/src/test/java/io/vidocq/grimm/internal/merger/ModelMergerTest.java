@@ -19,7 +19,10 @@
  */
 package io.vidocq.grimm.internal.merger;
 
+import io.vidocq.grimm.internal.model.AbstractExtensibleRef;
 import org.eclipse.microprofile.openapi.OASFactory;
+import org.eclipse.microprofile.openapi.models.callbacks.Callback;
+import org.eclipse.microprofile.openapi.models.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.Operation;
 import org.eclipse.microprofile.openapi.models.PathItem;
@@ -338,6 +341,59 @@ class ModelMergerTest {
         assertEquals("Pet.yaml", mergedResponseSchema(
                 new AnnotationSource(withResponseSchema(verbatim2)),
                 new ReaderSource(withResponseSchema(OASFactory.createObject(Schema.class).description("d")))).getRef());
+    }
+
+    @Test
+    void merge_verbatimRefSurvivesACollidingComponentCallback() {
+        // callbacks.yaml is a document reference: copying it must not expand it to
+        // #/components/callbacks/callbacks.yaml.
+        Callback fromStaticFile = OASFactory.createObject(Callback.class)
+                .addPathItem("{$request.body#/url}", OASFactory.createObject(PathItem.class)
+                        .POST(OASFactory.createObject(Operation.class).operationId("notify")));
+        Callback fromReader = OASFactory.createObject(Callback.class);
+        AbstractExtensibleRef.setVerbatimRef(fromReader, "callbacks.yaml");
+
+        OpenAPI result = new ModelMerger().merge(List.of(
+                new StaticFileSource(OASFactory.createObject(OpenAPI.class).components(
+                        OASFactory.createObject(Components.class).callbacks(Map.of("cb", fromStaticFile)))),
+                new ReaderSource(OASFactory.createObject(OpenAPI.class).components(
+                        OASFactory.createObject(Components.class).callbacks(Map.of("cb", fromReader))))));
+
+        Callback merged = result.getComponents().getCallbacks().get("cb");
+        assertEquals("callbacks.yaml", merged.getRef());
+        assertNotNull(merged.getPathItem("{$request.body#/url}"));
+    }
+
+    @Test
+    void merge_verbatimRefSurvivesACollidingPathItemRequestBodyAndResponse() {
+        OpenAPI lower = OASFactory.createObject(OpenAPI.class).paths(OASFactory.createObject(Paths.class)
+                .addPathItem("/p", OASFactory.createObject(PathItem.class).summary("static")
+                        .GET(OASFactory.createObject(Operation.class)
+                                .requestBody(OASFactory.createObject(RequestBody.class).description("static"))
+                                .responses(OASFactory.createObject(APIResponses.class).addAPIResponse("200",
+                                        OASFactory.createObject(APIResponse.class).description("static"))))));
+
+        PathItem item = OASFactory.createObject(PathItem.class);
+        AbstractExtensibleRef.setVerbatimRef(item, "item.yaml");
+        RequestBody body = OASFactory.createObject(RequestBody.class);
+        AbstractExtensibleRef.setVerbatimRef(body, "body.yaml");
+        APIResponse response = OASFactory.createObject(APIResponse.class);
+        AbstractExtensibleRef.setVerbatimRef(response, "response.yaml");
+        item.setGET(OASFactory.createObject(Operation.class).requestBody(body)
+                .responses(OASFactory.createObject(APIResponses.class).addAPIResponse("200", response)));
+        OpenAPI higher = OASFactory.createObject(OpenAPI.class)
+                .paths(OASFactory.createObject(Paths.class).addPathItem("/p", item));
+
+        PathItem merged = new ModelMerger().merge(List.of(new StaticFileSource(lower), new AnnotationSource(higher)))
+                .getPaths().getPathItem("/p");
+
+        assertAll(
+                () -> assertEquals("item.yaml", merged.getRef()),
+                () -> assertEquals("body.yaml", merged.getGET().getRequestBody().getRef()),
+                () -> assertEquals("response.yaml", merged.getGET().getResponses().getAPIResponse("200").getRef()),
+                () -> assertEquals("static", merged.getSummary(), "the merge path, not a replacement"),
+                () -> assertEquals("static", merged.getGET().getRequestBody().getDescription()),
+                () -> assertEquals("static", merged.getGET().getResponses().getAPIResponse("200").getDescription()));
     }
 
     @Test
