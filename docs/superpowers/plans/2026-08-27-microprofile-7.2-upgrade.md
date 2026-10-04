@@ -1182,6 +1182,15 @@ Run the official TCK from a clean build at the end of the lane: 85/85.
 - [ ] If the test fails, fix `VaubanInvocationContext.getMethod()` (~95-106) so it resolves the original method along the whole superclass chain (or, better, from information captured at generation time so no runtime search is needed — compile-time over reflection), and log/close a `BUG.md` entry. If the test passes, keep the test as a regression guard and record in the report why the suspicion was wrong.
 - [ ] Run vauban's build with tests (`./mvnw -ntp clean verify`) and the CDI Lite TCK (`-Ptck`, read the surefire reports yourself: 774/774 expected per the Core Profile campaign) — never `install` until the controller says so.
 
+### Task FV2: Vauban — the two interception defects found during FV1
+
+Found while fixing FV1 and logged in Vauban's `BUG.md` on 2026-10-04 (the maintainer asked to fix every defect found in this phase).
+
+- [ ] BUG-20261004-02: client proxies skip interface default methods, so interceptors bound to a default method never fire when the bean is reached through a client proxy. TDD (both the run-time and the APT code generators), close the entry.
+- [ ] BUG-20261004-03: the run-time generated subclass does not intercept inherited `protected` or package-private business methods, while the APT one does. Align the run-time generator on the APT behaviour (CDI 4.1: business methods are non-private, non-static methods), TDD, close the entry.
+- [ ] `run-tck.sh`: run the TCK with `-am` so a run before `install` tests the working tree, not the `vauban-core` in `~/.m2`.
+- [ ] Never `install` (the controller installs Vauban at the end of Phase F). Full `./mvnw -ntp clean verify` (also with reverse test order: `-Dsurefire.runOrder=reversealphabetical`) and the CDI Lite TCK + AtInject TCK with `-am`: 774/774 and green.
+
 ### Task FD1: vidocq — shared OpenTelemetry versions, counts and stale documentation
 
 - [ ] One definition of the OpenTelemetry versions (`opentelemetry.version`, `opentelemetry.instrumentation.version`, `opentelemetry.semconv.version`) in the vidocq root pom, used by `vidocq-runtime-humboldt-telemetry-extension`, `vidocq-runtime-it-humboldt-cassini` and `vidocq-runtime-tck-humboldt-telemetry` (remove the local definitions).
