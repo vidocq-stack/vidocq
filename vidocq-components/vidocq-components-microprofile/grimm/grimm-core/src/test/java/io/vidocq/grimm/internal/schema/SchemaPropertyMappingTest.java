@@ -164,6 +164,21 @@ class SchemaPropertyMappingTest {
                 () -> assertEquals(1, ((Number) ((java.util.Map<?, ?>) objects.get(0)).get("k")).intValue()));
     }
 
+    static final class InvalidJsonExamples {
+        @Schema(type = SchemaType.INTEGER, examples = {"not json", "{a: 1}"}, constValue = "not json")
+        Object value;
+    }
+
+    @Test
+    void examplesThatAreNotJsonOnANonStringTypeStayAsWrittenLikeConstValue() {
+        generator.generate(InvalidJsonExamples.class);
+        var value = registry.snapshot().get("InvalidJsonExamples").getProperties().get("value");
+
+        assertAll(
+                () -> assertEquals(List.of("not json", "{a: 1}"), value.getExamples()),
+                () -> assertEquals("not json", value.getConstValue()));
+    }
+
     @Schema(description = "only a description")
     static final class OnlyDescription {
         @Schema(description = "field description")

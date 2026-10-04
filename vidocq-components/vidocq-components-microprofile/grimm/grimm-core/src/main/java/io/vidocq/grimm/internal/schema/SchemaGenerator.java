@@ -85,6 +85,21 @@ public final class SchemaGenerator {
         return generateInternal(type, siteAnnotation);
     }
 
+    /**
+     * Whether a site-level {@code @Schema} says anything: the decision between
+     * {@link #generate(Type, org.eclipse.microprofile.openapi.annotations.media.Schema)} and
+     * {@link #generate(Type)}. An empty {@code @Schema()} says nothing and gives the inferred
+     * schema. The attributes shared with {@code @SchemaProperty} are checked by
+     * {@link SchemaAttributes#hasContent()}, so this has no second list of them.
+     */
+    public static boolean hasContent(org.eclipse.microprofile.openapi.annotations.media.Schema annotation) {
+        return annotation.implementation() != Void.class
+                || !annotation.ref().isEmpty()
+                || annotation.required()
+                || annotation.properties().length > 0
+                || SchemaAttributes.of(annotation).hasContent();
+    }
+
     // ------------------------------------------------------------------
 
     private Schema generateInternal(Type type,

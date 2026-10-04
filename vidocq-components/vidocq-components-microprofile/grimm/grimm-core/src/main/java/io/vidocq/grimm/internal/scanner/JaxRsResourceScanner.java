@@ -584,7 +584,7 @@ final class JaxRsResourceScanner {
                 siteAnn = sourceSchema;
             }
             // The annotation's default name is empty — treat a zero-content @Schema as absent.
-            if (siteAnn != null && hasAnyContent(siteAnn)) {
+            if (siteAnn != null && SchemaGenerator.hasContent(siteAnn)) {
                 Type targetType = sourceType != null ? sourceType : Object.class;
                 var schema = schemaGenerator.generate(targetType, siteAnn);
                 BeanValidationMapper.apply(schema, sourceAnnotations);
@@ -596,25 +596,6 @@ final class JaxRsResourceScanner {
             }
         }
         return p;
-    }
-
-    private static boolean hasAnyContent(org.eclipse.microprofile.openapi.annotations.media.Schema s) {
-        return s.implementation() != Void.class
-                || !s.ref().isEmpty()
-                || s.type() != org.eclipse.microprofile.openapi.annotations.enums.SchemaType.DEFAULT
-                || !s.format().isEmpty()
-                || !s.description().isEmpty()
-                || !s.title().isEmpty()
-                || !s.example().isEmpty()
-                || s.maxProperties() != 0
-                || s.minProperties() != 0
-                || s.maxItems() != Integer.MIN_VALUE
-                || s.minItems() != Integer.MAX_VALUE
-                || s.maxLength() != Integer.MAX_VALUE
-                || s.minLength() != 0
-                || s.properties().length > 0
-                || s.required()
-                || s.enumeration().length > 0;
     }
 
     private static boolean isContextOrFormParameter(Annotation[] annotations) {
@@ -750,7 +731,7 @@ final class JaxRsResourceScanner {
                 } else if (schemaGenerator != null && entityType != null) {
                     if (entitySchemaAnnotation != null && entitySchemaAnnotation.hidden()) {
                         // @Schema(hidden=true) on entity parameter suppresses requestBody schema publication.
-                    } else if (entitySchemaAnnotation != null && hasAnyContent(entitySchemaAnnotation)) {
+                    } else if (entitySchemaAnnotation != null && SchemaGenerator.hasContent(entitySchemaAnnotation)) {
                         mediaType.setSchema(schemaGenerator.generate(entityType, entitySchemaAnnotation));
                     } else {
                         mediaType.setSchema(schemaGenerator.generate(entityType));
@@ -954,7 +935,7 @@ final class JaxRsResourceScanner {
             header.setDeprecated(headerAnnotation.deprecated());
             header.setAllowEmptyValue(headerAnnotation.allowEmptyValue());
             AnnotationModelMappings.applyHeaderExamples(header, headerAnnotation);
-            if (schemaGenerator != null && hasAnyContent(headerAnnotation.schema())) {
+            if (schemaGenerator != null && SchemaGenerator.hasContent(headerAnnotation.schema())) {
                 header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
             }
             AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());
@@ -1390,7 +1371,7 @@ final class JaxRsResourceScanner {
                                         MediaType mediaType,
                                         Type schemaType,
                                         boolean inferSchemaWhenAbsent) {
-        if (schemaGenerator != null && hasAnyContent(contentAnnotation.schema())) {
+        if (schemaGenerator != null && SchemaGenerator.hasContent(contentAnnotation.schema())) {
             mediaType.setSchema(schemaGenerator.generate(schemaType, contentAnnotation.schema()));
         } else if (schemaGenerator != null && inferSchemaWhenAbsent && schemaType != null) {
             mediaType.setSchema(schemaGenerator.generate(schemaType));
@@ -1453,7 +1434,7 @@ final class JaxRsResourceScanner {
         header.setDeprecated(headerAnnotation.deprecated());
         header.setAllowEmptyValue(headerAnnotation.allowEmptyValue());
         AnnotationModelMappings.applyHeaderExamples(header, headerAnnotation);
-        if (schemaGenerator != null && hasAnyContent(headerAnnotation.schema())) {
+        if (schemaGenerator != null && SchemaGenerator.hasContent(headerAnnotation.schema())) {
             header.setSchema(schemaGenerator.generate(Object.class, headerAnnotation.schema()));
         }
         AnnotationModelMappings.applyExtensions(header, headerAnnotation.extensions());

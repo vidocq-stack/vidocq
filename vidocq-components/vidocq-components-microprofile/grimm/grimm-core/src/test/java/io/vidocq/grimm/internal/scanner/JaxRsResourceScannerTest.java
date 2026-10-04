@@ -410,7 +410,122 @@ class JaxRsResourceScannerTest {
         assertEquals(Boolean.TRUE, parameter.getRequired());
     }
 
+    // A @Schema that sets one attribute only must reach the generated schema, whichever attribute.
+
+    private static org.eclipse.microprofile.openapi.models.parameters.Parameter schemaOnlyParameter(String path,
+                                                                                                      String name) {
+        OpenAPI model = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(SchemaOnlyResource.class));
+        return model.getPaths().getPathItem(path).getGET().getParameters().stream()
+                .filter(p -> name.equals(p.getName())).findFirst().orElseThrow();
+    }
+
+    @Test
+    void parameterSchemaWithOnlyMinimumIsMapped() {
+        var schema = schemaOnlyParameter("/schema-only/min", "n").getSchema();
+
+        assertNotNull(schema.getMinimum());
+        assertEquals(0, schema.getMinimum().intValue());
+    }
+
+    @Test
+    void parameterSchemaWithOnlyExamplesIsMapped() {
+        var schema = schemaOnlyParameter("/schema-only/examples", "q").getSchema();
+
+        assertEquals(List.of("x"), schema.getExamples());
+    }
+
+    @Test
+    void parameterSchemaWithOnlyOneOfIsMapped() {
+        var schema = schemaOnlyParameter("/schema-only/one-of", "o").getSchema();
+
+        assertNotNull(schema.getOneOf());
+        assertEquals(1, schema.getOneOf().size());
+    }
+
+    @Test
+    void parameterSchemaWithOnlyReadOnlyIsMapped() {
+        var schema = schemaOnlyParameter("/schema-only/read-only", "r").getSchema();
+
+        assertEquals(Boolean.TRUE, schema.getReadOnly());
+    }
+
+    @Test
+    void emptyParameterSchemaGivesTheInferredSchemaOnly() {
+        var schema = schemaOnlyParameter("/schema-only/empty", "z").getSchema();
+
+        assertEquals(1, schema.getAll().size());
+        assertEquals(List.of(org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.STRING), schema.getType());
+    }
+
+    @Test
+    void requestBodySchemaWithOnlyMinimumIsMapped() {
+        OpenAPI model = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(SchemaOnlyResource.class));
+        var schema = model.getPaths().getPathItem("/schema-only/body").getPOST().getRequestBody().getContent()
+                .getMediaType("application/json").getSchema();
+
+        assertNotNull(schema.getMinimum());
+        assertEquals(1, schema.getMinimum().intValue());
+    }
+
+    @Test
+    void requestBodySchemaWithOnlyExamplesIsMapped() {
+        OpenAPI model = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(SchemaOnlyResource.class));
+        var schema = model.getPaths().getPathItem("/schema-only/body-examples").getPOST().getRequestBody().getContent()
+                .getMediaType("application/json").getSchema();
+
+        assertEquals(List.of("x"), schema.getExamples());
+    }
+
+    @Test
+    void emptyRequestBodySchemaGivesTheInferredSchemaOnly() {
+        OpenAPI model = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(SchemaOnlyResource.class));
+        var schema = model.getPaths().getPathItem("/schema-only/body-empty").getPOST().getRequestBody().getContent()
+                .getMediaType("application/json").getSchema();
+
+        assertEquals(1, schema.getAll().size());
+    }
+
     // ---------- Fixtures ----------
+
+    @Path("/schema-only")
+    static class SchemaOnlyResource {
+        @GET @Path("/min")
+        public String min(@QueryParam("n") @org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "0") int n) {
+            return null;
+        }
+
+        @GET @Path("/examples")
+        public String examples(@QueryParam("q") @org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x") String q) {
+            return null;
+        }
+
+        @GET @Path("/one-of")
+        public String oneOf(@QueryParam("o") @org.eclipse.microprofile.openapi.annotations.media.Schema(oneOf = String.class) Object o) {
+            return null;
+        }
+
+        @GET @Path("/read-only")
+        public String readOnly(@QueryParam("r") @org.eclipse.microprofile.openapi.annotations.media.Schema(readOnly = true) String r) {
+            return null;
+        }
+
+        @GET @Path("/empty")
+        public String empty(@QueryParam("z") @org.eclipse.microprofile.openapi.annotations.media.Schema String z) {
+            return null;
+        }
+
+        @POST @Path("/body") @Consumes("application/json")
+        public void body(@org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "1") int body) {
+        }
+
+        @POST @Path("/body-examples") @Consumes("application/json")
+        public void bodyExamples(@org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x") String body) {
+        }
+
+        @POST @Path("/body-empty") @Consumes("application/json")
+        public void bodyEmpty(@org.eclipse.microprofile.openapi.annotations.media.Schema String body) {
+        }
+    }
 
     @Path("/pets")
     static class SimpleResource {

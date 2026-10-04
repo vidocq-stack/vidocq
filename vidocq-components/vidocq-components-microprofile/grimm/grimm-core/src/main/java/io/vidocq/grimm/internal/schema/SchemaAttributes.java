@@ -86,6 +86,33 @@ record SchemaAttributes(
         PatternProperty[] patternProperties,
         Class<?> propertyNames) {
 
+    /**
+     * Whether any attribute differs from its default in the MP OpenAPI 4.2 annotation. Defaults
+     * that are not the type's zero value: {@code maxLength} and {@code maxContains}
+     * {@code Integer.MAX_VALUE}, {@code minItems} {@code Integer.MAX_VALUE}, {@code maxItems}
+     * {@code Integer.MIN_VALUE}; {@code additionalProperties} defaults to {@code Void}.
+     */
+    boolean hasContent() {
+        return type != SchemaType.DEFAULT
+                || !format.isEmpty() || !title.isEmpty() || !description.isEmpty() || !comment.isEmpty()
+                || !pattern.isEmpty() || !example.isEmpty() || examples.length > 0 || !defaultValue.isEmpty()
+                || minLength != 0 || maxLength != Integer.MAX_VALUE
+                || minProperties != 0 || maxProperties != 0
+                || minItems != Integer.MAX_VALUE || maxItems != Integer.MIN_VALUE
+                || uniqueItems || !minimum.isEmpty() || !maximum.isEmpty()
+                || exclusiveMinimum || exclusiveMaximum || multipleOf != 0d
+                || deprecated || readOnly || writeOnly || nullable
+                || !contentEncoding.isEmpty() || !contentMediaType.isEmpty() || contentSchema != Void.class
+                || !constValue.isEmpty() || requiredProperties.length > 0 || enumeration.length > 0
+                || dependentRequired.length > 0 || dependentSchemas.length > 0
+                || additionalProperties != Void.class || !externalDocs.url().isEmpty()
+                || extensions.length > 0 || allOf.length > 0 || anyOf.length > 0 || oneOf.length > 0
+                || not != Void.class || !discriminatorProperty.isEmpty() || discriminatorMapping.length > 0
+                || ifSchema != Void.class || thenSchema != Void.class || elseSchema != Void.class
+                || contains != Void.class || minContains != 0 || maxContains != Integer.MAX_VALUE
+                || prefixItems.length > 0 || patternProperties.length > 0 || propertyNames != Void.class;
+    }
+
     static SchemaAttributes of(Schema a) {
         return new SchemaAttributes(a.type(), a.format(), a.title(), a.description(), a.comment(), a.pattern(),
                 a.example(), a.examples(), a.defaultValue(), a.minLength(), a.maxLength(), a.minProperties(),
