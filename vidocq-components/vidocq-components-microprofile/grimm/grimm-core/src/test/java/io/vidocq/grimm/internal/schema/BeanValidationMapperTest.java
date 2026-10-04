@@ -53,6 +53,8 @@ class BeanValidationMapperTest {
         @Digits(integer = 20, fraction = 0) BigDecimal digitsDecimalAsInteger;
         @Digits(integer = 20, fraction = 0) BigInteger digitsInteger;
         @Digits(integer = 10, fraction = 5) String digitsString;
+        @Digits(integer = 0, fraction = 3) String digitsNoIntegerPart;
+        @Digits(integer = 0, fraction = 0) String digitsNothing;
     }
 
     private static Annotation[] annotationsOf(String field) throws NoSuchFieldException {
@@ -132,5 +134,30 @@ class BeanValidationMapperTest {
         Schema s = typed(Schema.SchemaType.STRING).pattern("^custom$");
         BeanValidationMapper.apply(s, annotationsOf("digitsString"));
         assertEquals("^custom$", s.getPattern());
+    }
+
+    @Test
+    void digitsWithZeroIntegerOnStringYieldsValidPattern() throws Exception {
+        Schema s = typed(Schema.SchemaType.STRING);
+        BeanValidationMapper.apply(s, annotationsOf("digitsNoIntegerPart"));
+        Pattern p = Pattern.compile(s.getPattern());
+        for (String ok : List.of("0", ".5", "0.5", "-0.123", "-.12")) {
+            assertTrue(p.matcher(ok).matches(), ok);
+        }
+        for (String ko : List.of("1", "1.5", "0.1234", "abc", "0.")) {
+            assertFalse(p.matcher(ko).matches(), ko);
+        }
+    }
+
+    @Test
+    void digitsWithZeroIntegerAndZeroFractionOnStringAcceptsOnlyZero() throws Exception {
+        Schema s = typed(Schema.SchemaType.STRING);
+        BeanValidationMapper.apply(s, annotationsOf("digitsNothing"));
+        Pattern p = Pattern.compile(s.getPattern());
+        assertTrue(p.matcher("0").matches());
+        assertTrue(p.matcher("-0").matches());
+        for (String ko : List.of("1", "0.1", "", "abc")) {
+            assertFalse(p.matcher(ko).matches(), ko);
+        }
     }
 }

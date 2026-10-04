@@ -209,13 +209,28 @@ public final class BeanValidationMapper {
         }
         if (types.contains(Schema.SchemaType.STRING)) {
             if (schema.getPattern() == null || schema.getPattern().isBlank()) {
-                schema.setPattern(fraction > 0
-                        ? "^-?\\d{1," + integer + "}(\\.\\d{1," + fraction + "})?$"
-                        : "^-?\\d{1," + integer + "}$");
+                schema.setPattern(digitsPattern(integer, fraction));
             }
         } else if (types.contains(Schema.SchemaType.NUMBER) && schema.getMultipleOf() == null) {
             schema.setMultipleOf(BigDecimal.ONE.movePointLeft(fraction));
         }
+    }
+
+    /**
+     * Builds the {@code @Digits} string pattern. {@code integer = 0} is legal in Bean Validation (a value
+     * such as {@code 0.5} has no integer digits), so {@code \d{1,0}} must never be emitted: the integer
+     * part is then the single digit {@code 0}, optional when a fraction follows ({@code .5} and
+     * {@code 0.5} both match), and a bare {@code 0} is always accepted.
+     */
+    private static String digitsPattern(int integer, int fraction) {
+        if (integer > 0) {
+            return fraction > 0
+                    ? "^-?\\d{1," + integer + "}(\\.\\d{1," + fraction + "})?$"
+                    : "^-?\\d{1," + integer + "}$";
+        }
+        return fraction > 0
+                ? "^-?(0|0?\\.\\d{1," + fraction + "})$"
+                : "^-?0$";
     }
 
     private static void setMinLengthAtLeast(Schema schema, int value) {
