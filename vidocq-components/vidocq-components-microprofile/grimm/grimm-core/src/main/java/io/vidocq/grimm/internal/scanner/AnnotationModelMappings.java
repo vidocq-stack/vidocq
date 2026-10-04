@@ -28,16 +28,17 @@ import org.eclipse.microprofile.openapi.annotations.headers.Header;
 import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
 
 /**
- * Annotation-to-model mappings shared by {@link AnnotationScanner} and {@link JaxRsResourceScanner}, so
- * that both scanners produce the same model and cannot drift apart.
+ * Annotation-to-model mappings shared by {@link AnnotationScanner}, {@link JaxRsResourceScanner} and
+ * {@code SchemaGenerator}, so that they produce the same model and cannot drift apart. Public for
+ * {@code SchemaGenerator} only: the package is not exported.
  */
-final class AnnotationModelMappings {
+public final class AnnotationModelMappings {
 
     private AnnotationModelMappings() {
     }
 
     /** Maps {@code @ExternalDocumentation} to the model; the caller guards against an empty URL. */
-    static org.eclipse.microprofile.openapi.models.ExternalDocumentation toModelExternalDocs(
+    public static org.eclipse.microprofile.openapi.models.ExternalDocumentation toModelExternalDocs(
             ExternalDocumentation annotation) {
         var externalDocs = OASFactory.createObject(
                 org.eclipse.microprofile.openapi.models.ExternalDocumentation.class);
@@ -82,8 +83,12 @@ final class AnnotationModelMappings {
         }
     }
 
-    static void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible,
-                                Extension[] extensions) {
+    /**
+     * Adds each named {@code @Extension}; with {@code parseValue = true} the value becomes a boolean,
+     * a number, an object or an array, as written.
+     */
+    public static void applyExtensions(org.eclipse.microprofile.openapi.models.Extensible<?> extensible,
+                                       Extension[] extensions) {
         for (Extension extension : extensions) {
             if (extension.name().isEmpty()) {
                 continue;

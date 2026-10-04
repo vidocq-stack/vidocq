@@ -244,6 +244,31 @@ class SchemaGeneratorTest {
         assertEquals("field-ext", typed.getExtensions().get("x-field"));
     }
 
+    /**
+     * §3.10 / BUG-20261004-02: {@code @Extension(parseValue = true)} parses objects and arrays too,
+     * as the scanners do, on {@code @Schema} (class and field) and {@code @SchemaProperty}.
+     */
+    @Test
+    void generate_parsesObjectAndArrayExtensionValues() {
+        generator.generate(ParsedExtensions.class);
+        var body = registry.snapshot().get("ParsedExtensions");
+
+        assertEquals(Map.of("a", 1L), body.getExtensions().get("x-obj"));
+        assertEquals(List.of(1L, 2L), body.getProperties().get("field").getExtensions().get("x-arr"));
+        assertEquals(Map.of("b", true), body.getProperties().get("declared").getExtensions().get("x-prop"));
+        assertEquals("{\"c\": 1}", body.getProperties().get("field").getExtensions().get("x-raw"));
+    }
+
+    /** §3.10 / BUG-20261004-02: {@code @Schema(externalDocs)} keeps its extensions (MP OpenAPI 3.1+). */
+    @Test
+    void generate_mapsSchemaExternalDocsExtensions() {
+        generator.generate(WithExternalDocsExtensions.class);
+        var code = registry.snapshot().get("WithExternalDocsExtensions").getProperties().get("code");
+
+        assertEquals("https://example.com", code.getExternalDocs().getUrl());
+        assertEquals("v", code.getExternalDocs().getExtensions().get("x-e"));
+    }
+
     @Test
     void generate_mapsBeanValidationConstraints() {
         generator.generate(BeanValidated.class);
@@ -372,6 +397,25 @@ class SchemaGeneratorTest {
                 description = "Pet Types",
                 url = "http://example.com/pettypes"
         ))
+        String code;
+    }
+
+    @Schema(extensions = @Extension(name = "x-obj", value = "{\"a\": 1}", parseValue = true),
+            properties = @org.eclipse.microprofile.openapi.annotations.media.SchemaProperty(name = "declared",
+                    extensions = @Extension(name = "x-prop", value = "{\"b\": true}", parseValue = true)))
+    static final class ParsedExtensions {
+        @Schema(extensions = {
+                @Extension(name = "x-arr", value = "[1, 2]", parseValue = true),
+                @Extension(name = "x-raw", value = "{\"c\": 1}")})
+        String field;
+
+        String declared;
+    }
+
+    static final class WithExternalDocsExtensions {
+        @Schema(externalDocs = @org.eclipse.microprofile.openapi.annotations.ExternalDocumentation(
+                url = "https://example.com",
+                extensions = @Extension(name = "x-e", value = "v")))
         String code;
     }
 

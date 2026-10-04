@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.schema;
 
+import io.vidocq.grimm.internal.scanner.AnnotationModelMappings;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.models.media.Schema;
@@ -554,11 +555,7 @@ public final class SchemaGenerator {
                 if (!property.comment().isEmpty()) {
                     propertySchema.setComment(property.comment());
                 }
-                for (org.eclipse.microprofile.openapi.annotations.extensions.Extension extension : property.extensions()) {
-                    if (!extension.name().isEmpty()) {
-                        propertySchema.addExtension(extension.name(), parseExtensionValue(extension));
-                    }
-                }
+                AnnotationModelMappings.applyExtensions(propertySchema, property.extensions());
                 mergedProperties.put(propertyName, propertySchema);
             }
             if (!mergedProperties.isEmpty()) {
@@ -617,27 +614,10 @@ public final class SchemaGenerator {
             base.setAdditionalPropertiesSchema(generate(additionalProperties));
         }
         if (!ann.externalDocs().url().isEmpty()) {
-            var externalDocs = OASFactory.createObject(org.eclipse.microprofile.openapi.models.ExternalDocumentation.class);
-            externalDocs.setUrl(ann.externalDocs().url());
-            if (!ann.externalDocs().description().isEmpty()) {
-                externalDocs.setDescription(ann.externalDocs().description());
-            }
-            base.setExternalDocs(externalDocs);
+            base.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(ann.externalDocs()));
         }
-        for (org.eclipse.microprofile.openapi.annotations.extensions.Extension extension : ann.extensions()) {
-            if (!extension.name().isEmpty()) {
-                base.addExtension(extension.name(), parseExtensionValue(extension));
-            }
-        }
+        AnnotationModelMappings.applyExtensions(base, ann.extensions());
         return base;
-    }
-
-    private static Object parseExtensionValue(org.eclipse.microprofile.openapi.annotations.extensions.Extension extension) {
-        String rawValue = extension.value();
-        if (!extension.parseValue()) {
-            return rawValue;
-        }
-        return parseScalar(rawValue);
     }
 
     private static Object parseScalar(String rawValue) {
