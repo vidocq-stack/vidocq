@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Injection {@code @Claim} typed under Vauban container (MicroProfile JWT 2.2 §"Injection of JSON
  * Web Token claims"). {@link CervantesClaimExtension} synthesizes a bean by type encountered;
  * {@link io.vidocq.cervantes.cdi.internal.ClaimResolver} reads the {@link DefaultJsonWebToken} of the
- * current query on {@link JsonWebTokenContext}.
+ * current request on {@link JsonWebTokenContext}.
  */
 class CervantesClaimInjectionTest {
 

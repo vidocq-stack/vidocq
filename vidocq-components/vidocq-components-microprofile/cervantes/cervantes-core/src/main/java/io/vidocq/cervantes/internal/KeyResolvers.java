@@ -46,7 +46,7 @@ public final class KeyResolvers {
     public static KeyResolver fromInlinePem(String value, Optional<SignatureAlgorithm.Family> family) throws JwtValidationException {
         String trimmed = value.trim();
         if (trimmed.startsWith("{")) {
-            //JWK or JWKS JSON inline — route to JwksKeyResolver with a static byte begging
+            //JWK or JWKS JSON inline — route to JwksKeyResolver with a static byte supplier
             byte[] bytes = trimmed.getBytes(StandardCharsets.UTF_8);
             return new JwksKeyResolver(() -> bytes);
         }
@@ -67,13 +67,13 @@ public final class KeyResolvers {
     }
 
     /**
-     * From {@code mp.jwt.verify.publickey.location}: HTTP(S) URL → Remote JWKS or PEM (lazy,
-     * first access format detection); JSON file ({}) → local JWKS; Or PEM.
+     * From {@code mp.jwt.verify.publickey.location}: HTTP(S) URL → remote JWKS or PEM (lazy,
+     * format detected at first access); JSON file ({}) → local JWKS; otherwise PEM.
      *
      * <p>For HTTP(S) URLs, loading is <em>lazy</em> so that the CDI producer
      * can be built before the server exposing the key is ready. The format (JWKS JSON
-     * or PEM) is detected at the first key resolution. URL is reread since beg
-     * at the time of detection to capture rewrites performed by the TCK harness after
+     * or PEM) is detected at the first key resolution. The URL is re-read at
+     * detection time to capture rewrites performed by the TCK harness after
      * server startup ({@code mp.jwt.verify.publickey.location} can be updated in
      * system properties between the construction of the solver and the first request).</p>
      */
@@ -93,9 +93,9 @@ public final class KeyResolvers {
 
     /**
      * Lazy solver for HTTP(S) URLs: self-detect JWKS JSON or PEM at first access.
-     * Memorizes delegated solver after detection to avoid re-fetchering.
+     * Memoizes the delegate resolver after detection to avoid fetching again.
      *
-     * <p>The rental is reread via the property system at each new detection (i.e. when the
+     * <p>The location is re-read through the property system at each new detection (i.e. when the
      * delegate is null) to capture rewrites performed by the harness after boot.</p>
      */
     private static final class LazyHttpKeyResolver implements KeyResolver {

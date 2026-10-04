@@ -60,7 +60,7 @@ public final class JweDecryptor {
     private final PrivateKey decryptionKey;
     /**
      * If non-null, only JWE tokens whose header {@code alg} exactly matches this value are
-     * Accepted. Strengths {@code mp.jwt.decrypt.key.algorithm} (MP JWT spec §9.2.4).
+     * accepted. Enforces {@code mp.jwt.decrypt.key.algorithm} (MP JWT spec §9.2.4).
      */
     private final String requiredAlgorithm;
 
@@ -131,7 +131,7 @@ public final class JweDecryptor {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(cek, "AES"), new GCMParameterSpec(GCM_TAG_BITS, iv));
             cipher.updateAAD(aad);
-            //The JCA is waiting for concatenated ciphertext. JWE separates them.
+            //The JCA expects the ciphertext followed by the tag; JWE transports them separately.
             byte[] combined = Arrays.copyOf(ciphertext, ciphertext.length + tag.length);
             System.arraycopy(tag, 0, combined, ciphertext.length, tag.length);
             return cipher.doFinal(combined);

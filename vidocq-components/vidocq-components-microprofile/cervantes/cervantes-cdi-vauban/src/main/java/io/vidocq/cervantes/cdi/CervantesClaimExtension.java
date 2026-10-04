@@ -56,8 +56,8 @@ import java.util.Set;
  * {@link ClaimSyntheticCreator} from the {@code InjectionPoint}.
  *
  * <p> Implemented in {@code @Registration(types = Object.class)} (not {@code @Validation}) because
- * CDI Lite 4.1 prohibits {@code BeanInfo} as a parameter of {@code @Validation} methods. Layer
- * {@code io.vidocq.ravel.cdi.ConfigCdiExtension} (released by Vauban VAU-BCE-001).</p>
+ * CDI Lite 4.1 prohibits {@code BeanInfo} as a parameter of {@code @Validation} methods. Modelled
+ * on {@code io.vidocq.ravel.cdi.ConfigCdiExtension} (made possible by Vauban VAU-BCE-001).</p>
  */
 public class CervantesClaimExtension implements BuildCompatibleExtension {
 
@@ -122,10 +122,10 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
 
     @Synthesis
     public void synthesizeClaimBeans(SyntheticComponents components, Types types) {
-        //First pass: solve Provider<T>/Forum<T> wrappers → collect the effective types to
+        //First pass: unwrap Provider<T>/Instance<T> → collect the effective types to
         // register. CDI/Vauban strips Provider<T> and Instance<T> wrappers and looks up a bean of
         //type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
-        //Provider<T>/Forum<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT hit —
+        //Provider<T>/Instance<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT hit —
         // ClaimSyntheticCreator inspects the full InjectionPoint type and handles the wrapping.
         Map<String, Type> effectiveTypes = new LinkedHashMap<>();
         for (Type type : claimTypes.values()) {
@@ -172,8 +172,8 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
         if (runtimeClass != null) {
             addClaimBean(components, runtimeClass);
         } else {
-            //Parametric types (ClaimValue<T>, Optional<T>, Set<String>,...): on
-            //retains the Type lang-model, otherwise the generic parameter is lost.
+            //Parametric types (ClaimValue<T>, Optional<T>, Set<String>,...): keep
+            //the Type lang-model, otherwise the generic parameter is lost.
             components.addBean(Object.class)
                     .type(type)
                     .qualifier(Claim.class)

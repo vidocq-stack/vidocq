@@ -25,7 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 
 /**
- * Public manufacture of {@link JweDecryptor} from the JWT MicroProfile configuration
+ * Public factory for {@link JweDecryptor} from the JWT MicroProfile configuration
  * ({@code mp.jwt.decrypt.key} / {@code mp.jwt.decrypt.key.location}). Stable facade for
  * integrations: keep {@code JwksSource} (file/URL reading) internal to the core package.
  *
@@ -49,6 +49,7 @@ public final class Jwe {
     }
 
     /** @deprecated Use {@link #decryptorFromInlinePem(String, String)} */
+    @Deprecated
     public static JweDecryptor decryptorFromInlinePem(String value) throws JwtValidationException {
         return decryptorFromInlinePem(value, null);
     }
@@ -66,6 +67,7 @@ public final class Jwe {
     }
 
     /** @deprecated Use {@link #decryptorFromLocation(String, String)} */
+    @Deprecated
     public static JweDecryptor decryptorFromLocation(String location) throws JwtValidationException {
         return decryptorFromLocation(location, null);
     }

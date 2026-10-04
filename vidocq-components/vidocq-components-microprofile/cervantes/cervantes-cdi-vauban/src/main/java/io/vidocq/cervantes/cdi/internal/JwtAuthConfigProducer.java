@@ -54,9 +54,8 @@ import java.util.stream.Collectors;
  * </ul>
  *
  * <p>The producer and its product are {@code @Dependent}, following the Ravel
- * {@code RavelConfigProducer} pattern: a normal-scoped product currently triggers a bad proxy
- * resolution on the Vauban side, so {@code @ApplicationScoped} is deferred until that defect is
- * corrected. The JAX-RS authentication filter injects the validator to check each bearer
+ * {@code RavelConfigProducer} pattern (the validator is immutable, so a normal-scoped proxy
+ * is not needed). The JAX-RS authentication filter injects the validator to check each bearer
  * token.</p>
  *
  * <p>Because the product is {@code @Dependent}, it is built lazily, at its first injection. To
