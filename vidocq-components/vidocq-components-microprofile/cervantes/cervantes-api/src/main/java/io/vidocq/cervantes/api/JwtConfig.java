@@ -67,6 +67,15 @@ public record JwtConfig(
         audiences = audiences == null ? Set.of() : Set.copyOf(audiences);
     }
 
+    /**
+     * Pre-0.4 constructor without {@code requiredAlgorithm} (kept for source and binary compatibility):
+     * no algorithm is required, so RS256 and ES256 families are both accepted.
+     */
+    public JwtConfig(Optional<String> issuer, Set<String> audiences, Duration clockSkew,
+            boolean requireExpiration, Optional<Long> tokenAge, boolean encryptionRequired) {
+        this(issuer, audiences, clockSkew, requireExpiration, tokenAge, encryptionRequired, Optional.empty());
+    }
+
     /** Configuration requiring only an issuer (free audiences, default skew, expiration required). */
     public static JwtConfig forIssuer(String issuer) {
         return new JwtConfig(Optional.ofNullable(issuer), Set.of(), DEFAULT_CLOCK_SKEW, true,
