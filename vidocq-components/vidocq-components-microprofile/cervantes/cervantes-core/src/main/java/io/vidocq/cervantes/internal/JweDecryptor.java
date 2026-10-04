@@ -38,6 +38,7 @@ import java.security.PrivateKey;
 import java.security.spec.MGF1ParameterSpec;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -54,7 +55,7 @@ public final class JweDecryptor {
     private static final int GCM_TAG_BITS = 128;
 
     /** The JWE key-management algorithms this decryptor can unwrap (exact, case-sensitive JOSE names). */
-    public static final java.util.List<String> SUPPORTED_ALGORITHMS = java.util.List.of("RSA-OAEP", "RSA-OAEP-256");
+    public static final List<String> SUPPORTED_ALGORITHMS = List.of("RSA-OAEP", "RSA-OAEP-256");
 
     private final PrivateKey decryptionKey;
     /**
@@ -103,6 +104,7 @@ public final class JweDecryptor {
     }
 
     private byte[] unwrapContentKey(byte[] encryptedKey, String alg) throws JwtValidationException {
+        // Keep the cases in sync with SUPPORTED_ALGORITHMS.
         OAEPParameterSpec oaep = switch (alg) {
             case "RSA-OAEP" ->
                     new OAEPParameterSpec("SHA-1", "MGF1", MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT);
