@@ -190,7 +190,7 @@
 ## BUG-20261004-02 — the OTLP/JSON metric encoder drops double data points and synchronous gauges
 
 - **Date**: 2026-10-04
-- **Status**: OPEN
+- **Status**: FIXED (commit 5b03d5b on branch `pr/ybl/mp-7.2`, 2026-10-04)
 - **Component**: humboldt-exporter-otlp-http (`OtlpJsonMetricEncoder`)
 - **Affected**: humboldt 0.4.0-SNAPSHOT (and earlier)
 - **Symptom**: `writeSum` and `writeGauge` only encode `LongPointData` (`if (!(p instanceof LongPointData lp))
@@ -207,3 +207,102 @@
   non-finite values stay valid JSON) in `writeSum`/`writeGauge`, and route `GAUGE` to `writeGauge`.
 - **Investigations**:
   - 2026-10-04: logged during Task FC1 of the MicroProfile 7.2 upgrade (out of its scope); no fix yet.
+  - 2026-10-04 (Task FC3): reproduced end to end by `OtlpHttpMetricExporterE2ETest`
+    `e2e_double_counter_and_synchronous_gauges_export_their_data_points` (a double counter, a synchronous double
+    gauge and a synchronous long gauge of an `SdkMeterProvider` exporting through `OtlpHttpMetricExporter`). The
+    body received before the fix: `{"name":"bytes","sum":{"dataPoints":[],...}},{"name":"temperature"},
+    {"name":"queue.size"}`. Mapping checked against the OTLP JSON encoding and the OpenTelemetry Java 1.66
+    marshalers (`NumberDataPointMarshaler`: `startTimeUnixNano`/`timeUnixNano` fixed64 and `asInt` sfixed64 as
+    JSON strings, `asDouble` as a JSON number; `SumMarshaler`: `dataPoints`, `aggregationTemporality` as an
+    integer, `isMonotonic`; `GaugeMarshaler`: `dataPoints` only; `MetricMarshaler`: long and double gauges as
+    `gauge`, long and double sums as `sum`).
+- **Fix**: the suggested one. `writeSum` and `writeGauge` share `writeNumberDataPoints`, which writes a
+  `LongPointData` as `"asInt"` and a `DoublePointData` as `"asDouble"` (through `OtlpJsonCommon.appendDouble`);
+  `writeMetric` routes `GAUGE` and `OBSERVABLE_GAUGE` to `writeGauge`. Every kind of data humboldt-sdk-metric
+  produces is now encoded: long/double sums (synchronous and observable counters and up-down counters),
+  long/double gauges (synchronous and observable) and explicit-bucket histograms.
+- **Validation**: `OtlpJsonMetricEncoderTest` 9/9 (8 new: long sum, double counter, double up-down counter,
+  observable double sum, synchronous long gauge, synchronous double gauge, observable double gauge, non-finite
+  double points; RED before the fix: 7 failures, the long sum test guards the existing mapping) and the E2E test
+  above (RED before the fix); full reactor `./mvnw -ntp clean install` green.
+
+---
+
+## BUG-20261004-03 — OpenTelemetry SDK components cannot use `io.opentelemetry.api.internal` on the module path
+
+- **Date**: 2026-10-04
+- **Status**: OPEN
+- **Component**: humboldt-otel-api (`module io.opentelemetry.api`, `src/main/moditect/module-info.java`)
+- **Affected**: humboldt 0.4.0-SNAPSHOT (and earlier); any OpenTelemetry SDK artifact used next to it on the
+  module path, e.g. through humboldt-otel-interop in the Vidocq runtime
+- **Symptom**: humboldt-otel-api repackages `opentelemetry-api` as the explicit module `io.opentelemetry.api`,
+  which does not export `io.opentelemetry.api.internal`. Upstream the API jar is an automatic module and exports
+  every package, and the OpenTelemetry SDK artifacts use that package across jars (`ConfigUtil`, `Utils`, ...).
+  On the module path the first such access fails: `java.lang.IllegalAccessError: class
+  io.opentelemetry.sdk.autoconfigure.spi.ConfigProperties (in module io.opentelemetry.sdk.autoconfigure.spi)
+  cannot access class io.opentelemetry.api.internal.ConfigUtil (in module io.opentelemetry.api) because module
+  io.opentelemetry.api does not export io.opentelemetry.api.internal to module
+  io.opentelemetry.sdk.autoconfigure.spi` — raised by the `ConfigProperties` default methods
+  (`getString(name, default)`, ...) that every OpenTelemetry exporter provider calls. The OTLP exporter provider
+  of `opentelemetry-exporter-otlp` therefore cannot create an exporter on the module path. The class path (the
+  official TCK set-up) is not affected.
+- **Minimal reproduction** (scratch harness, not in the repository): a `ModuleLayer` with the humboldt
+  explicit modules (`io.opentelemetry.context`, `io.opentelemetry.api`, humboldt-otel-interop and the Humboldt
+  SDK modules) and, as automatic modules, `opentelemetry-sdk`, `-sdk-common`, `-sdk-trace`, `-sdk-metrics`,
+  `-sdk-logs`, `-sdk-extension-autoconfigure-spi`, `-extension-trace-propagators`, `-exporter-otlp`,
+  `-exporter-common`, `-exporter-otlp-common` and `-exporter-sender-jdk` 1.66.0; inside it,
+  `new OtlpSpanExporterProvider().createExporter(new MapConfigProperties(Map.of("otel.exporter.otlp.protocol",
+  "http/protobuf"), layerLoader))` → the `IllegalAccessError` above. With
+  `Controller.addExports(io.opentelemetry.api, "io.opentelemetry.api.internal", <every module>)` the same call
+  returns an `OtlpHttpSpanExporter`.
+- **Cause hypothesis**: the module descriptor lists the public API packages only; `internal` packages are
+  OpenTelemetry's cross-artifact implementation surface, which the SDK jars rely on.
+- **Suggested fix** (needs a decision: it widens the exports of a Humboldt module): `exports
+  io.opentelemetry.api.internal;` in `humboldt-otel-api/src/main/moditect/module-info.java`, which restores the
+  upstream visibility (a qualified export cannot list every OpenTelemetry artifact that may use it). Workaround
+  for an application: `--add-exports io.opentelemetry.api/io.opentelemetry.api.internal=<module>` for each
+  OpenTelemetry module that needs it.
+- **Investigations**:
+  - 2026-10-04: found during Task FC3 of the MicroProfile 7.2 upgrade while checking, on the module path, that
+    the OpenTelemetry 1.66 OTLP exporter providers load their senders through the humboldt-otel-interop
+    `ComponentLoader` (BUG-20261004-01). Logged, not fixed (module design decision).
+
+---
+
+## BUG-20261004-04 — the OTLP exporter's compressor registry still uses the default ComponentLoader on the module path
+
+- **Date**: 2026-10-04
+- **Status**: OPEN
+- **Component**: humboldt-otel-context (`module io.opentelemetry.context`, which holds
+  `io.opentelemetry.common.ServiceLoaderComponentLoader`); seen with `opentelemetry-exporter-otlp` 1.66
+- **Affected**: humboldt 0.4.0-SNAPSHOT (OpenTelemetry 1.66 upgrade, branch `pr/ybl/mp-7.2`)
+- **Symptom**: the OpenTelemetry 1.66 OTLP exporter providers hand `ConfigProperties.getComponentLoader()` to
+  their builders before anything else (`OtlpConfigUtil.configureOtlpExporterBuilder`), and the builders resolve
+  their `HttpSenderProvider`/`GrpcSenderProvider` (`SenderUtil`) and a configured compressor
+  (`CompressorUtil.validateAndResolveCompressor(name, componentLoader)`) through it — so the humboldt-otel-interop
+  loader of BUG-20261004-01 covers them. But the static initializer of `CompressorUtil` first builds a default
+  registry with `ComponentLoader.forClassLoader(CompressorUtil.class.getClassLoader()).load(Compressor.class)`,
+  i.e. through `ServiceLoaderComponentLoader` in the explicit module `io.opentelemetry.context`, which declares no
+  `uses io.opentelemetry.sdk.common.export.Compressor`. On the module path, setting
+  `otel.exporter.otlp.compression` (or the per-signal key) to any value — even `none` — fails:
+  `ServiceConfigurationError: io.opentelemetry.sdk.common.export.Compressor: module io.opentelemetry.context does
+  not declare 'uses'`, then `NoClassDefFoundError: Could not initialize class ...CompressorUtil` for every later
+  exporter.
+- **Minimal reproduction**: the scratch harness of BUG-20261004-03, with `io.opentelemetry.api.internal`
+  exported through the layer controller: no compression → the exporter is created (sender found through the
+  interop loader); `otel.exporter.otlp.compression=gzip` → the `ServiceConfigurationError` above;
+  `...=none` → `NoClassDefFoundError`. For comparison, a `ConfigProperties` keeping the upstream default loader
+  fails on the sender lookup (`HttpSenderProvider: module io.opentelemetry.context does not declare 'uses'`).
+- **Cause hypothesis**: same root cause as BUG-20261004-01 — a `ServiceLoader.load` issued from
+  `io.opentelemetry.context` — reached through a static default that no `ConfigProperties` can override.
+  `Module.addUses` can only be called from inside `io.opentelemetry.context`, and a static
+  `uses ... Compressor` there would need `io.opentelemetry.sdk.common` at resolution time.
+- **Suggested fix** (needs a decision: it replaces a class of the repackaged upstream code): ship, in
+  humboldt-otel-context, a `io.opentelemetry.common.ServiceLoaderComponentLoader` whose `load` calls
+  `ServiceLoaderComponentLoader.class.getModule().addUses(spiClass)` before `ServiceLoader.load` (excluding the
+  upstream class from the shaded jar). That also covers OpenTelemetry components built directly on the module
+  path without `setComponentLoader(...)` — the residual noted in BUG-20261004-01. Only useful together with
+  BUG-20261004-03, without which the exporter fails earlier.
+- **Investigations**:
+  - 2026-10-04: found during Task FC3 of the MicroProfile 7.2 upgrade (`javap -c` of
+    `opentelemetry-exporter-otlp`/`-exporter-common` 1.66.0 and the scratch harness above). Logged, not fixed.
