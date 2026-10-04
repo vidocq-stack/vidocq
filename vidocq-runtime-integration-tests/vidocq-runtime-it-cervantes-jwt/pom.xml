@@ -12,10 +12,10 @@
 
     <artifactId>vidocq-runtime-it-cervantes-jwt</artifactId>
     <name>Vidocq :: Integration Tests :: JWT (Cervantes)</name>
-    <description>Arquillian E2E tests : valide la securite MicroProfile JWT 2.2 (Cervantes) dans
-        Vidocq — @RolesAllowed / @PermitAll + @Inject JsonWebToken sur une stack
-        Chappe + Cassini + Vauban + cervantes-jwt-extension. 401 sans token, 403 sans le role,
-        200 avec le groupe attendu + claims visibles.</description>
+    <description>Arquillian E2E tests: validate MicroProfile JWT 2.2 (Cervantes) security in
+        Vidocq — @RolesAllowed / @PermitAll + @Inject JsonWebToken on a
+        Chappe + Cassini + Vauban + cervantes-jwt-extension stack. 401 without a token, 403 without the role,
+        200 with the expected group + visible claims.</description>
 
     <!--
         Pas de module-info.java (unnamed module) pour eviter les contraintes

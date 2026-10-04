@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Arquillian configuration for the MicroProfile Telemetry 2.1 TCK suites.
+    Arquillian configuration for the MicroProfile Telemetry 2.2 TCK suites.
     Single embedded Vidocq container (vidocq-runtime-arquillian), used by default.
 -->
 <arquillian xmlns="http://jboss.org/schema/arquillian"

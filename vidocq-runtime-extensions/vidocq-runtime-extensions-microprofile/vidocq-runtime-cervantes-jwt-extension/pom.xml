@@ -12,7 +12,7 @@
 
     <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
     <name>Vidocq :: Core Extensions :: JWT (Cervantes)</name>
-    <description>Wrapper Maven/Java Modules qui active Cervantes (MicroProfile JWT 2.2) dans un deploiement vidocq.</description>
+    <description>Maven/Java Modules wrapper that activates Cervantes (MicroProfile JWT 2.2) in a vidocq deployment.</description>
 
     <dependencies>
         <dependency>

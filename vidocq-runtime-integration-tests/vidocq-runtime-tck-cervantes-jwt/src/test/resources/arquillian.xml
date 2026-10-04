@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Arquillian configuration for the MicroProfile JWT 2.1 TCK suite.
+    Arquillian configuration for the MicroProfile JWT 2.2 TCK suite.
     Single embedded Vidocq container (vidocq-runtime-arquillian). The port is
     pinned because the TCK generates deployment configs with self-referential
     URLs (rewritten to this host/port by JwtTckArchiveProcessor).

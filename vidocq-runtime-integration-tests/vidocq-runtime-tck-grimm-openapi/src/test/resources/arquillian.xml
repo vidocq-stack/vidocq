@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Arquillian configuration for the MicroProfile OpenAPI 4.0 TCK suite.
+    Arquillian configuration for the MicroProfile OpenAPI 4.2 TCK suite.
     Single embedded Vidocq container (vidocq-runtime-arquillian). The port is
     pinned because the TCK's AppTestBase drives /openapi from the static
     `test.url` system property (mirrored in the surefire configuration).

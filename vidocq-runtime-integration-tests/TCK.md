@@ -61,8 +61,8 @@ neither downloads nor runs anything TCK-related.
 
 The OpenAPI 4.2 and Telemetry 2.2 runners use the release-candidate TCKs of
 MicroProfile 7.2 (OpenAPI 4.2-RC5, Telemetry 2.2-RC3). A release candidate is expected to be
-byte-identical to the final, but this table is a pre-release run: Task E1 re-runs the
-bumped runners against the final artifacts once they reach Maven Central. This is not a
+byte-identical to the final, but this table is a pre-release run: once the finals reach Maven Central, the
+runners are re-run on them. This is not a
 certification claim. Compared with the 2026-08-27 run: JWT +2
 (`RsaAndEcSignatureAlgorithmTest`), OpenAPI +18 (346 to 364, the same delta as grimm's own
 harness, whose 367 additionally counts 3 grimm-local tests: `GrimmTckSmokeTest` and
@@ -89,7 +89,7 @@ optional groups Vidocq keeps.
 
 Seven of the eight suites run with **zero test exclusions**. Notably, the OpenAPI
 suite previously passed 307 tests with 2 excluded classes under the old ad hoc
-harness (the assembled runtime passed the full 344 of the 4.1 suite at the time; 364 with the 4.2 suite), and the Rest Client suite ran
+harness (the assembled runtime passed the full 344 of the 4.0.2 suite at the time; 346 with 4.1.1, 364 with the 4.2 suite), and the Rest Client suite ran
 without its `ssl/**`/`sse/**` packages until 2026-07-13 — Cyrano now implements the
 SSL options and SSE Publisher return types, and the full 235-test suite passes (the
 9 TestNG skips are the Reactive Streams `PublisherVerification` harness's own

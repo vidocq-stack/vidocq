@@ -1,7 +1,7 @@
 # The full TCK of the assembled runtime, nightly.
 #
 # Pull requests are gated on the five quick runners (see `ci.tck.modules` in pom.xml,
-# about 45 s for 1085 conformance tests). This job runs those AND the three that are
+# about 45 s for 1105 conformance tests). This job runs those AND the three that are
 # too slow to sit on a pull request — eight in all, about twelve minutes, which is
 # nothing once a night and is the only thing that checks `main`: `ci.yml` runs no TCK.
 #
