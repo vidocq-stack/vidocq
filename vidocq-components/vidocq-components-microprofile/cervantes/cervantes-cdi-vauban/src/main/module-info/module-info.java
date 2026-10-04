@@ -39,6 +39,9 @@ module io.vidocq.cervantes.cdi.vauban {
     // Absent under Weld — the provides below is then inert (nobody `uses` it).
     requires static io.vidocq.vauban.api;
 
+    // Looked up to tell "no MicroProfile Config implementation" from a Config that fails to boot.
+    uses org.eclipse.microprofile.config.spi.ConfigProviderResolver;
+
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.cervantes.cdi.CervantesClaimExtension;
 

@@ -32,7 +32,7 @@ import java.util.Base64;
 
 /**
  * Load a public key from a {@code SubjectPublicKeyInfo} PEM ({@code -----BEGIN PUBLIC KEY-----})
- * via the JCA — without third-party cryptic dependence. RSA and EC cover (X.509 {@link X509EncodedKeySpec}).
+ * via the JCA — without any third-party cryptography dependency. RSA and EC are covered (X.509 {@link X509EncodedKeySpec}).
  */
 public final class PemKeys {
 
@@ -60,7 +60,7 @@ public final class PemKeys {
         try {
             return KeyFactory.getInstance(algorithm).generatePublic(spec);
         } catch (GeneralSecurityException e) {
-            throw new JwtValidationException("invalid PEM public key", e);
+            throw new JwtValidationException("invalid PEM public key: not a valid " + algorithm + " key", e);
         }
     }
 
@@ -89,7 +89,7 @@ public final class PemKeys {
 
     /**
      * Loads RSA private key from PKCS#8 PEM ({@code -----BEGIN PRIVATE KEY-----}) — key to
-     * JWE decryption ({@code mp.jwt.decrypt.key} / {@code.location}).
+     * JWE decryption ({@code mp.jwt.decrypt.key} / {@code mp.jwt.decrypt.key.location}).
      */
     public static PrivateKey privateKeyFromPem(String pem) throws JwtValidationException {
         byte[] der = derOf(pem, "private");

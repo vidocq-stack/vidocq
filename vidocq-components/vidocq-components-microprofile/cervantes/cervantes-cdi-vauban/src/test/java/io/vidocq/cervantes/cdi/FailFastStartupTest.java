@@ -21,13 +21,20 @@ package io.vidocq.cervantes.cdi;
 
 import io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import io.vidocq.vauban.api.ExtensionPhase;
+import jakarta.enterprise.inject.build.compatible.spi.Messages;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.security.KeyPair;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,7 +63,7 @@ class FailFastStartupTest {
                 "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(rsa.getPublic()),
                 "mp.jwt.verify.publickey.algorithm", "rs256"));
 
-        RuntimeException ex = assertThrows(RuntimeException.class, FailFastStartupTest::start);
+        DeploymentException ex = assertThrows(DeploymentException.class, FailFastStartupTest::start);
 
         String message = fullMessage(ex);
         assertTrue(message.contains("mp.jwt.verify.publickey.algorithm"), message);
@@ -69,7 +76,7 @@ class FailFastStartupTest {
         CdiTestSupport.registerGlobalConfig(Map.of(
                 "mp.jwt.verify.publickey", "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----"));
 
-        RuntimeException ex = assertThrows(RuntimeException.class, FailFastStartupTest::start);
+        DeploymentException ex = assertThrows(DeploymentException.class, FailFastStartupTest::start);
 
         assertTrue(fullMessage(ex).contains("invalid PEM public key"), fullMessage(ex));
     }
@@ -80,7 +87,40 @@ class FailFastStartupTest {
                 "mp.jwt.verify.publickey", CdiTestSupport.ecPublicKeyPem(),
                 "mp.jwt.verify.publickey.algorithm", "RS256"));
 
-        assertThrows(RuntimeException.class, FailFastStartupTest::start);
+        DeploymentException ex = assertThrows(DeploymentException.class, FailFastStartupTest::start);
+
+        assertTrue(fullMessage(ex).contains("not a valid RSA key"), fullMessage(ex));
+    }
+
+    @Test
+    void validationIsLeftToContainerStartAtBuildTime() throws Exception {
+        CdiTestSupport.registerGlobalConfig(Map.of(
+                "mp.jwt.verify.publickey", CdiTestSupport.publicKeyBase64(CdiTestSupport.rsaKeyPair().getPublic()),
+                "mp.jwt.verify.publickey.algorithm", "rs256"));
+        List<String> errors = new ArrayList<>();
+        Messages messages = recordingMessages(errors);
+        CervantesClaimExtension extension = new CervantesClaimExtension();
+
+        ExtensionPhase.atBuildTime(() -> {
+            extension.validateJwtConfiguration(messages);
+            return null;
+        });
+        assertTrue(errors.isEmpty(), "build time: the build machine's configuration is not checked");
+
+        extension.validateJwtConfiguration(messages);
+        assertEquals(1, errors.size(), "container start: the check reports the error");
+        assertTrue(errors.get(0).contains("'rs256'"), errors.get(0));
+    }
+
+    /** A {@link Messages} that records the text of every error. */
+    private static Messages recordingMessages(List<String> errors) {
+        return (Messages) Proxy.newProxyInstance(Messages.class.getClassLoader(), new Class<?>[] {Messages.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("error") && args != null && args.length > 0) {
+                        errors.add(String.valueOf(args[0] instanceof Throwable t ? fullMessage(t) : args[0]));
+                    }
+                    return null;
+                });
     }
 
     @Test
