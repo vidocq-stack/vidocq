@@ -57,10 +57,16 @@ public record ExtensionCoordinate(String groupId, String artifactId) {
      * additional four-space step. No trailing newline.
      */
     public String dependencyXml(String indent) {
+        return dependencyXml(indent, null);
+    }
+
+    /** {@link #dependencyXml(String)} with a {@code <version>}, omitted when {@code null}. */
+    public String dependencyXml(String indent, String version) {
         String child = indent + "    ";
         return indent + "<dependency>\n"
                 + child + "<groupId>" + groupId + "</groupId>\n"
                 + child + "<artifactId>" + artifactId + "</artifactId>\n"
+                + (version == null ? "" : child + "<version>" + version + "</version>\n")
                 + indent + "</dependency>";
     }
 

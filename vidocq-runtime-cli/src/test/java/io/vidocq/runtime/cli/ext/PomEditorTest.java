@@ -143,4 +143,13 @@ class PomEditorTest {
         String removed = PomEditor.remove(added, KNOCK).pom();
         assertEquals(POM_WITH_DEPS, removed);
     }
+
+    @Test
+    void addPinsTheGivenVersion() {
+        PomEditor.Result r = PomEditor.add(POM_WITH_DEPS, KNOCK, "0.4.0");
+
+        String added = r.pom().substring(r.pom().indexOf("vidocq-runtime-knock-health-extension"));
+        assertTrue(added.substring(0, added.indexOf("</dependency>")).contains("<version>0.4.0</version>"),
+                "pom was:\n" + r.pom());
+    }
 }

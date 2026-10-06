@@ -39,6 +39,7 @@ import io.vidocq.runtime.cli.ext.ExtensionCoordinate;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
 import io.vidocq.runtime.cli.ext.KnownExtensions;
+import io.vidocq.runtime.cli.ext.PomDependencies;
 import io.vidocq.runtime.cli.ext.PomEditor;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
 import io.vidocq.runtime.cli.ext.RegistryEntry;
@@ -641,6 +642,15 @@ public final class CommandRunner {
             return 1;
         }
 
+        // Pin the runtime version: the parent manages Vidocq artifacts at ${project.version},
+        // which is the application's own version as soon as it declares one.
+        String runtimeVersion;
+        try {
+            runtimeVersion = PomDependencies.runtimeVersion(pom).orElse(Version.runtime());
+        } catch (IllegalArgumentException e) {
+            CliOutput.error(e.getMessage());
+            return 1;
+        }
         boolean anyChange = false;
         for (String id : ids) {
             ExtensionCoordinate coord;
@@ -650,20 +660,23 @@ public final class CommandRunner {
                 CliOutput.error("Invalid extension id '" + id + "': " + e.getMessage());
                 return 1;
             }
-            PomEditor.Result result = add ? PomEditor.add(pom, coord) : PomEditor.remove(pom, coord);
+            PomEditor.Result result = add
+                    ? PomEditor.add(pom, coord, runtimeVersion)
+                    : PomEditor.remove(pom, coord);
             pom = result.pom();
-            if (add) {
-                // Extensions shipping an APT codegen bundle need it on the compiler's
-                // annotationProcessorPaths, or vidocq:checkpom fails the next build.
-                var codegen = KnownExtensions.codegenBundle(id);
-                if (codegen.isPresent()) {
-                    PomEditor.Result apt = PomEditor.addAnnotationProcessorPath(pom, codegen.get());
-                    pom = apt.pom();
-                    if (apt.changed()) {
-                        anyChange = true;
-                        CliOutput.success("Wired " + codegen.get().artifactId()
-                                + CliOutput.dim("  (annotationProcessorPaths)"));
-                    }
+            // Extensions shipping an APT codegen bundle need it on the compiler's
+            // annotationProcessorPaths, or vidocq:checkpom fails the next build; removing
+            // the extension removes it too.
+            var codegen = KnownExtensions.codegenBundle(id);
+            if (codegen.isPresent()) {
+                PomEditor.Result apt = add
+                        ? PomEditor.addAnnotationProcessorPath(pom, codegen.get(), runtimeVersion)
+                        : PomEditor.removeAnnotationProcessorPath(pom, codegen.get());
+                pom = apt.pom();
+                if (apt.changed()) {
+                    anyChange = true;
+                    CliOutput.success((add ? "Wired " : "Unwired ") + codegen.get().artifactId()
+                            + CliOutput.dim("  (annotationProcessorPaths)"));
                 }
             }
             if (result.changed()) {

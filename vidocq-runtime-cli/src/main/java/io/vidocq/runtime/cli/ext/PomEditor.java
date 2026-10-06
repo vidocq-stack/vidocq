@@ -49,6 +49,16 @@ public final class PomEditor {
      * has no {@code <dependencies>} element, one is created before {@code </project>}.
      */
     public static Result add(String pom, ExtensionCoordinate coordinate) {
+        return add(pom, coordinate, null);
+    }
+
+    /**
+     * {@link #add(String, ExtensionCoordinate)} pinning {@code version} (none when
+     * {@code null}). The runtime parent manages Vidocq artifacts at {@code ${project.version}},
+     * which Maven resolves to the application's own version, so an added extension must
+     * name the runtime version itself.
+     */
+    public static Result add(String pom, ExtensionCoordinate coordinate, String version) {
         if (PomDependencies.contains(pom, coordinate)) {
             return new Result(pom, false);
         }
@@ -57,7 +67,7 @@ public final class PomEditor {
             int lineStart = pom.lastIndexOf('\n', close) + 1;
             String baseIndent = pom.substring(lineStart, close);
             String childIndent = isBlank(baseIndent) ? baseIndent + "    " : "        ";
-            String block = coordinate.dependencyXml(childIndent) + "\n";
+            String block = coordinate.dependencyXml(childIndent, version) + "\n";
             return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
         }
         // No <dependencies> element — create one before </project>.
@@ -69,7 +79,7 @@ public final class PomEditor {
         String projIndent = pom.substring(lineStart, proj);
         String depsIndent = isBlank(projIndent) ? projIndent + "    " : "    ";
         String block = depsIndent + "<dependencies>\n"
-                + coordinate.dependencyXml(depsIndent + "    ") + "\n"
+                + coordinate.dependencyXml(depsIndent + "    ", version) + "\n"
                 + depsIndent + "</dependencies>\n";
         return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
     }
@@ -118,10 +128,11 @@ public final class PomEditor {
      * Wires an extension's APT codegen bundle into the compiler plugin's
      * {@code annotationProcessorPaths} — {@code vidocq:checkpom} fails the build
      * when the matching extension is on the dependencies without it. Idempotent.
-     * The version uses {@code ${project.version}} like the canonical example pom
-     * (Vidocq apps inherit their version from the released runtime parent).
+     * The path pins {@code version}, the runtime version: {@code ${project.version}}
+     * would be the application's own.
      */
-    public static Result addAnnotationProcessorPath(String pom, ExtensionCoordinate codegen) {
+    public static Result addAnnotationProcessorPath(String pom, ExtensionCoordinate codegen,
+                                                    String version) {
         int aptOpen = pom.indexOf("<annotationProcessorPaths");
         if (aptOpen >= 0) {
             int aptClose = pom.indexOf("</annotationProcessorPaths>", aptOpen);
@@ -137,7 +148,7 @@ public final class PomEditor {
             String closeIndent = pom.substring(lineStart, aptClose);
             String indent = isBlank(closeIndent) ? closeIndent + "    " : "                    ";
             return new Result(
-                    pom.substring(0, lineStart) + pathXml(codegen, indent) + pom.substring(lineStart),
+                    pom.substring(0, lineStart) + pathXml(codegen, version, indent) + pom.substring(lineStart),
                     true);
         }
 
@@ -147,7 +158,8 @@ public final class PomEditor {
             String closeIndent = pom.substring(lineStart, pluginsClose);
             String indent = isBlank(closeIndent) ? closeIndent + "    " : "        ";
             return new Result(
-                    pom.substring(0, lineStart) + compilerPluginXml(codegen, indent) + pom.substring(lineStart),
+                    pom.substring(0, lineStart) + compilerPluginXml(codegen, version, indent)
+                            + pom.substring(lineStart),
                     true);
         }
 
@@ -160,28 +172,90 @@ public final class PomEditor {
         String base = isBlank(projIndent) ? projIndent + "    " : "    ";
         String block = base + "<build>\n"
                 + base + "    <plugins>\n"
-                + compilerPluginXml(codegen, base + "        ")
+                + compilerPluginXml(codegen, version, base + "        ")
                 + base + "    </plugins>\n"
                 + base + "</build>\n";
         return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
     }
 
-    private static String pathXml(ExtensionCoordinate codegen, String indent) {
+    /**
+     * Removes the {@code <path>} of {@code codegen} from {@code annotationProcessorPaths},
+     * the reverse of {@link #addAnnotationProcessorPath}. Unchanged when absent.
+     */
+    public static Result removeAnnotationProcessorPath(String pom, ExtensionCoordinate codegen) {
+        int aptOpen = pom.indexOf("<annotationProcessorPaths");
+        int aptClose = aptOpen < 0 ? -1 : pom.indexOf("</annotationProcessorPaths>", aptOpen);
+        String marker = "<artifactId>" + codegen.artifactId() + "</artifactId>";
+        int from = aptOpen;
+        while (aptClose >= 0) {
+            int open = pom.indexOf("<path>", from);
+            if (open < 0 || open > aptClose) {
+                break;
+            }
+            int close = pom.indexOf("</path>", open);
+            if (close < 0) {
+                break;
+            }
+            int end = close + "</path>".length();
+            if (pom.substring(open, end).contains(marker)) {
+                int start = pom.lastIndexOf('\n', open) + 1;
+                if (end < pom.length() && pom.charAt(end) == '\n') {
+                    end++;
+                }
+                return new Result(withoutEmptyCompilerPlugin(pom.substring(0, start) + pom.substring(end)), true);
+            }
+            from = end;
+        }
+        return new Result(pom, false);
+    }
+
+    /**
+     * Drops a compiler plugin block left with nothing but an empty
+     * {@code annotationProcessorPaths} — the shape {@link #addAnnotationProcessorPath} creates —
+     * so that removing an extension undoes adding it. Any other configuration keeps the block.
+     */
+    private static String withoutEmptyCompilerPlugin(String pom) {
+        int artifact = pom.indexOf("<artifactId>maven-compiler-plugin</artifactId>");
+        if (artifact < 0) {
+            return pom;
+        }
+        int open = pom.lastIndexOf("<plugin>", artifact);
+        int close = pom.indexOf("</plugin>", artifact);
+        if (open < 0 || close < 0) {
+            return pom;
+        }
+        String block = pom.substring(open, close + "</plugin>".length()).replaceAll("\\s+", "");
+        String empty = "<plugin><groupId>org.apache.maven.plugins</groupId>"
+                + "<artifactId>maven-compiler-plugin</artifactId><configuration>"
+                + "<annotationProcessorPaths combine.children=\"append\"></annotationProcessorPaths>"
+                + "</configuration></plugin>";
+        if (!block.equals(empty.replaceAll("\\s+", ""))) {
+            return pom;
+        }
+        int start = pom.lastIndexOf('\n', open) + 1;
+        int end = close + "</plugin>".length();
+        if (end < pom.length() && pom.charAt(end) == '\n') {
+            end++;
+        }
+        return pom.substring(0, start) + pom.substring(end);
+    }
+
+    private static String pathXml(ExtensionCoordinate codegen, String version, String indent) {
         return indent + "<path>\n"
                 + indent + "    <groupId>" + codegen.groupId() + "</groupId>\n"
                 + indent + "    <artifactId>" + codegen.artifactId() + "</artifactId>\n"
-                + indent + "    <version>${project.version}</version>\n"
+                + indent + "    <version>" + version + "</version>\n"
                 + indent + "    <type>pom</type>\n"
                 + indent + "</path>\n";
     }
 
-    private static String compilerPluginXml(ExtensionCoordinate codegen, String indent) {
+    private static String compilerPluginXml(ExtensionCoordinate codegen, String version, String indent) {
         return indent + "<plugin>\n"
                 + indent + "    <groupId>org.apache.maven.plugins</groupId>\n"
                 + indent + "    <artifactId>maven-compiler-plugin</artifactId>\n"
                 + indent + "    <configuration>\n"
                 + indent + "        <annotationProcessorPaths combine.children=\"append\">\n"
-                + pathXml(codegen, indent + "            ")
+                + pathXml(codegen, version, indent + "            ")
                 + indent + "        </annotationProcessorPaths>\n"
                 + indent + "    </configuration>\n"
                 + indent + "</plugin>\n";

@@ -21,6 +21,7 @@ package io.vidocq.runtime.cli.ext;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,19 +89,20 @@ class PomEditorAptTest {
 
     @Test
     void appendsPathToExistingAnnotationProcessorPaths() {
-        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN);
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN, "0.4.0");
 
         assertTrue(r.changed());
         assertTrue(r.pom().contains(PATH_XML), "path must be appended, pom was:\n" + r.pom());
         assertTrue(r.pom().indexOf(PATH_XML) < r.pom().indexOf("</annotationProcessorPaths>"),
                 "path must sit inside annotationProcessorPaths, pom was:\n" + r.pom());
-        assertTrue(r.pom().contains("<version>${project.version}</version>"),
-                "APT paths use ${project.version} like the canonical example pom");
+        assertTrue(r.pom().contains("<version>0.4.0</version>"),
+                "the path pins the runtime version: ${project.version} is the application's own");
+        assertFalse(r.pom().contains("${project.version}"));
     }
 
     @Test
     void createsCompilerPluginBlockWhenAbsent() {
-        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_BUILD, CASSINI_CODEGEN);
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_BUILD, CASSINI_CODEGEN, "0.4.0");
 
         assertTrue(r.changed());
         assertTrue(r.pom().contains("<artifactId>maven-compiler-plugin</artifactId>"),
@@ -114,7 +116,7 @@ class PomEditorAptTest {
 
     @Test
     void createsBuildSectionWhenAbsent() {
-        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_MINIMAL, CASSINI_CODEGEN);
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_MINIMAL, CASSINI_CODEGEN, "0.4.0");
 
         assertTrue(r.changed());
         assertTrue(r.pom().contains("<build>"), "a build section must be created, pom was:\n" + r.pom());
@@ -123,9 +125,50 @@ class PomEditorAptTest {
 
     @Test
     void isIdempotentWhenPathAlreadyPresent() {
-        String once = PomEditor.addAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN).pom();
-        PomEditor.Result again = PomEditor.addAnnotationProcessorPath(once, CASSINI_CODEGEN);
+        String once = PomEditor.addAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN, "0.4.0").pom();
+        PomEditor.Result again = PomEditor.addAnnotationProcessorPath(once, CASSINI_CODEGEN, "0.4.0");
 
         assertFalse(again.changed(), "adding the same codegen path twice must be a no-op");
+    }
+
+    @Test
+    void removesOnlyThePathOfTheGivenCodegen() {
+        String both = PomEditor.addAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN, "0.4.0").pom();
+
+        PomEditor.Result r = PomEditor.removeAnnotationProcessorPath(both, CASSINI_CODEGEN);
+
+        assertTrue(r.changed());
+        assertFalse(r.pom().contains(PATH_XML), "cassini's path must be gone, pom was:\n" + r.pom());
+        assertTrue(r.pom().contains("vidocq-runtime-mansart-data-extension-codegen"),
+                "the other codegen path must stay, pom was:\n" + r.pom());
+        assertEquals(POM_WITH_APT, r.pom(), "removing restores the pom as it was before adding");
+    }
+
+    @Test
+    void removingAnAbsentPathIsANoOp() {
+        PomEditor.Result r = PomEditor.removeAnnotationProcessorPath(POM_WITH_APT, CASSINI_CODEGEN);
+
+        assertFalse(r.changed());
+        assertEquals(POM_WITH_APT, r.pom());
+    }
+
+    @Test
+    void removingTheLastPathDropsTheCompilerPluginBlockAddCreated() {
+        String added = PomEditor.addAnnotationProcessorPath(POM_WITH_BUILD, CASSINI_CODEGEN, "0.4.0").pom();
+
+        assertEquals(POM_WITH_BUILD, PomEditor.removeAnnotationProcessorPath(added, CASSINI_CODEGEN).pom());
+    }
+
+    @Test
+    void removingTheLastPathKeepsACompilerPluginThatConfiguresMore() {
+        String pom = POM_WITH_APT.replace("<configuration>", "<configuration>\n<release>25</release>");
+        String added = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0").pom();
+        String withoutMansart = PomEditor.removeAnnotationProcessorPath(added, new ExtensionCoordinate(
+                "io.vidocq.runtime.extensions.jakartaee.web", "vidocq-runtime-mansart-data-extension-codegen")).pom();
+
+        String removed = PomEditor.removeAnnotationProcessorPath(withoutMansart, CASSINI_CODEGEN).pom();
+
+        assertTrue(removed.contains("<release>25</release>"), "pom was:\n" + removed);
+        assertTrue(removed.contains("maven-compiler-plugin"), "pom was:\n" + removed);
     }
 }

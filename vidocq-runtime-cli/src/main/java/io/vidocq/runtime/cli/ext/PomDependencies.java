@@ -164,6 +164,17 @@ public final class PomDependencies {
                 : Optional.of(new Parent(groupId, artifactId, version));
     }
 
+    /**
+     * The Vidocq runtime version a project builds against: its
+     * {@code io.vidocq.runtime:vidocq-runtime-parent} version. Empty for another parent.
+     */
+    public static Optional<String> runtimeVersion(String pomXml) {
+        return parent(pomXml)
+                .filter(p -> p.groupId().equals("io.vidocq.runtime")
+                        && p.artifactId().equals("vidocq-runtime-parent"))
+                .map(Parent::version);
+    }
+
     /** True when {@code id} appears in the project's dependency list. */
     public static boolean contains(String pomXml, ExtensionCoordinate coordinate) {
         return parse(pomXml).contains(coordinate);

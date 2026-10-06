@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261006-02 — an application with its own version resolves every Vidocq artifact at that version
+
+- **Date** : 2026-10-06
+- **Statut** : OPEN for the runtime parent; worked around in vidocq-runtime-cli (`feat/cli-update`)
+- **Module touché** : vidocq-runtime-parent (root pom), vidocq-runtime-cli
+- **Symptôme** : an application that declares `<version>1.0.0</version>` under
+  `vidocq-runtime-parent` cannot build: Maven looks for `vidocq-runtime-maven-plugin:1.0.0`, and
+  for `vidocq-runtime-cassini-rest-extension:1.0.0` when the dependency carries no version.
+  `vidocq extension add` wrote dependencies without a version and the codegen path with
+  `${project.version}`, so it hit the same wall; `extension remove` left the codegen path behind.
+- **Reproduction minimale** : `vidocq create --name app`, add `<version>1.0.0</version>`, then
+  `mvn help:effective-pom` — every managed `io.vidocq.*` artifact, and the plugin, is at `1.0.0`.
+- **Hypothèse de cause** : the parent's `dependencyManagement` and `pluginManagement` declare
+  Vidocq artifacts at `${project.version}`, which Maven interpolates in the child: the deployed
+  parent pom still carries the expression, so it becomes the application's own version.
+- **Correction** : CLI side, `extension add` pins the parent's version on the dependency and on
+  the codegen path, and `extension remove` unwires the codegen path (and the compiler plugin block
+  `add` created). Parent side, still open: the deployed parent must name a literal version (a
+  property set at release time, or a flattened pom).
+
 ## BUG-20261006-01 — `extension list`, `info` and `doctor` never see the project's extensions
 
 - **Date** : 2026-10-06

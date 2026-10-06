@@ -342,8 +342,8 @@ formatting; idempotent thanks to a StAX dependency scan).
 | Sub-command | Description
 
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both.
-| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`.
-| `remove <id…>` | Remove the matching project-level `<dependency>`.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, and the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one.
+| `remove <id…>` | Remove the matching project-level `<dependency>` and its codegen path — undoing `add`.
 |===
 
 An id may be a known short name (e.g. `cassini-rest`), an explicit `groupId:artifactId`, or

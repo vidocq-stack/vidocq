@@ -111,4 +111,23 @@ class PomDependenciesTest {
                 PomDependencies.parent(pom));
         assertTrue(PomDependencies.parent(POM).isEmpty());
     }
+
+    @Test
+    void runtimeVersionIsTheVidocqParentVersion() {
+        String vidocqParent = """
+                <project>
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>0.3.0</version>
+                    </parent>
+                    <version>1.0.0</version>
+                </project>
+                """;
+        String otherParent = vidocqParent.replace("io.vidocq.runtime", "com.acme");
+
+        assertEquals(java.util.Optional.of("0.3.0"), PomDependencies.runtimeVersion(vidocqParent));
+        assertTrue(PomDependencies.runtimeVersion(otherParent).isEmpty());
+        assertTrue(PomDependencies.runtimeVersion(POM).isEmpty());
+    }
 }
