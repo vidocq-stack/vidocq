@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -133,5 +134,45 @@ class KnownExtensionsTest {
         Set<String> missing = new TreeSet<>(published);
         missing.removeAll(catalog);
         assertTrue(missing.isEmpty(), "published extensions missing from KnownExtensions: " + missing);
+    }
+
+    @Test
+    void everyCatalogEntryNamesItsModule() {
+        for (RegistryEntry e : KnownExtensions.catalog()) {
+            assertTrue(KnownExtensions.moduleName(e.id()).isPresent(), e.id() + " has no module name");
+        }
+    }
+
+    @Test
+    void cassiniRestNeedsWhatItsResourcesUseAndOpensTheApplicationPackage() {
+        List<String> directives = KnownExtensions.moduleDirectives("cassini-rest", "com.acme.todo");
+
+        assertTrue(directives.containsAll(List.of("requires static java.compiler", "requires jakarta.ws.rs",
+                "requires jakarta.json.bind", "requires io.vidocq.cassini.api",
+                "requires io.vidocq.runtime.extensions.jakartaee.core.cassini", "opens com.acme.todo")));
+        assertFalse(KnownExtensions.moduleDirectives("cassini-rest", null).stream().anyMatch(d -> d.startsWith("opens")),
+                "no package to open, no opens");
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.microprofile.knock"),
+                KnownExtensions.moduleDirectives("knock-health", "com.acme.todo"));
+        assertEquals(List.of(), KnownExtensions.moduleDirectives("com.acme:unknown", "com.acme.todo"));
+    }
+
+    @Test
+    void moduleNamesMatchTheReactorModuleInfos() throws IOException {
+        Path extensions = Path.of("..", "vidocq-runtime-extensions");
+        for (RegistryEntry e : KnownExtensions.catalog()) {
+            String artifact = e.coordinate().artifactId();
+            Path found;
+            try (var walk = Files.walk(extensions, 2)) {
+                found = walk.filter(p -> p.getFileName().toString().equals(artifact)).findFirst().orElseThrow();
+            }
+            Path moduleInfo;
+            try (var walk = Files.walk(found.resolve("src/main"))) {
+                moduleInfo = walk.filter(p -> p.getFileName().toString().equals("module-info.java")).findFirst().orElseThrow();
+            }
+            String src = Files.readString(moduleInfo);
+            assertTrue(src.matches("(?s).*\\bmodule\\s+" + KnownExtensions.moduleName(e.id()).orElseThrow().replace(".", "\\.") + "\\s*\\{.*"),
+                    e.id() + ": module name differs from " + moduleInfo);
+        }
     }
 }

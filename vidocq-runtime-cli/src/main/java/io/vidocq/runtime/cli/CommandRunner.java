@@ -39,6 +39,7 @@ import io.vidocq.runtime.cli.ext.ExtensionCoordinate;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
 import io.vidocq.runtime.cli.ext.KnownExtensions;
+import io.vidocq.runtime.cli.ext.ModuleInfoEditor;
 import io.vidocq.runtime.cli.ext.PomDependencies;
 import io.vidocq.runtime.cli.ext.PomEditor;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
@@ -59,6 +60,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Pattern;
 /**
  * Dispatches a parsed {@link Command} to its implementation.
  * Uses pattern-matching switch so the compiler enforces exhaustiveness
@@ -762,6 +764,50 @@ public final class CommandRunner {
         return editPom(remove.ids(), false);
     }
 
+    /**
+     * Adds (or removes) the {@code module-info.java} directives of {@code ids}, when the
+     * project has one — the module path needs them as much as the pom needs the dependency.
+     *
+     * @return whether the file changed
+     */
+    private static boolean updateModuleInfo(Path projectDir, List<String> ids, boolean add) {
+        Path file = projectDir.resolve("src").resolve("main").resolve("java").resolve("module-info.java");
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try {
+            String source = Files.readString(file);
+            String pkg = applicationPackage(source, file.getParent());
+            String updated = source;
+            for (String id : ids) {
+                updated = (add
+                        ? ModuleInfoEditor.add(updated, id, KnownExtensions.moduleDirectives(id, pkg))
+                        : ModuleInfoEditor.remove(updated, id, KnownExtensions.moduleName(id).orElse(null)))
+                        .source();
+            }
+            if (updated.equals(source)) {
+                return false;
+            }
+            Files.writeString(file, updated);
+            CliOutput.success("module-info.java updated"
+                    + CliOutput.dim("  (" + (add ? "requires/opens for " : "dropped ") + String.join(", ", ids) + ")"));
+            return true;
+        } catch (IOException | IllegalArgumentException e) {
+            CliOutput.warning("Could not update module-info.java: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** The module's name when it is also a package of the sources (the scaffold's layout), else null. */
+    private static String applicationPackage(String moduleInfo, Path javaRoot) {
+        var m = Pattern.compile("\\bmodule\\s+([A-Za-z0-9_.]+)\\s*\\{").matcher(moduleInfo);
+        if (!m.find()) {
+            return null;
+        }
+        String name = m.group(1);
+        return Files.isDirectory(javaRoot.resolve(name.replace('.', '/'))) ? name : null;
+    }
+
     private static int editPom(List<String> ids, boolean add) {
         Path pomPath = Path.of("").toAbsolutePath().resolve("pom.xml");
         if (!Files.isRegularFile(pomPath)) {
@@ -828,9 +874,10 @@ public final class CommandRunner {
             }
         }
 
+        boolean moduleInfoChanged = updateModuleInfo(pomPath.getParent(), ids, add);
         if (!anyChange) {
             CliOutput.println();
-            CliOutput.info("No changes — pom.xml left untouched.");
+            CliOutput.info(moduleInfoChanged ? "pom.xml left untouched." : "No changes — pom.xml left untouched.");
             return 0;
         }
         try {

@@ -23,10 +23,13 @@ import io.vidocq.runtime.cli.CliOutput;
 import io.vidocq.runtime.cli.Command;
 import io.vidocq.runtime.cli.Version;
 import io.vidocq.runtime.cli.ext.KnownExtensions;
+import io.vidocq.runtime.cli.ext.ModuleInfoEditor;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -231,33 +234,28 @@ public final class ProjectScaffolder {
         return sb.toString();
     }
 
+    /**
+     * The core requirement, then each selected extension's directives in catalog order —
+     * the same {@link ModuleInfoEditor} edit {@code vidocq extension add} makes, so a
+     * scaffolded extension and an added one end up declared alike.
+     */
     private static String buildModuleInfo(Command.Create c) {
-        String moduleName = moduleName(c);
-        if (c.extensions().contains("cassini-rest")) {
-            return """
-                    module %s {
-                        // APT-generated $$CassiniAdapter classes import @Generated (SOURCE retention).
-                        requires static java.compiler;
-
-                        requires jakarta.cdi;
-                        requires jakarta.inject;
-                        requires jakarta.ws.rs;
-                        requires jakarta.json.bind;
-
-                        requires io.vidocq.runtime.core;
-                        requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
-                        requires io.vidocq.cassini.api;
-
-                        // JAX-RS and JSON-B reflect on resource classes and payload types.
-                        opens %s;
-                    }
-                    """.formatted(moduleName, c.pkg());
-        }
-        return """
+        String source = """
                 module %s {
                     requires io.vidocq.runtime.core;
                 }
-                """.formatted(moduleName);
+                """.formatted(moduleName(c));
+        List<String> ordered = new ArrayList<>();
+        KnownExtensions.catalog().forEach(e -> {
+            if (c.extensions().contains(e.id())) {
+                ordered.add(e.id());
+            }
+        });
+        c.extensions().stream().filter(id -> !ordered.contains(id)).sorted().forEach(ordered::add);
+        for (String id : ordered) {
+            source = ModuleInfoEditor.add(source, id, KnownExtensions.moduleDirectives(id, c.pkg())).source();
+        }
+        return source;
     }
 
     private static String moduleName(Command.Create c) {

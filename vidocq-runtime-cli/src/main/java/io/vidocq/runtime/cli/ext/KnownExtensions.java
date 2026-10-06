@@ -19,7 +19,9 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -170,5 +172,65 @@ public final class KnownExtensions {
                     "vidocq-runtime-ravel-config-extension-codegen"));
             default -> Optional.empty();
         };
+    }
+
+    /** The JPMS module each catalog extension ships, which an application {@code requires}. */
+    private static final Map<String, String> MODULES = Map.ofEntries(
+            Map.entry("chappe-webserver", "io.vidocq.runtime.extensions.essentials.chappe"),
+            Map.entry("ravel-config", "io.vidocq.runtime.extensions.microprofile.ravel"),
+            Map.entry("cassini-rest", "io.vidocq.runtime.extensions.jakartaee.core.cassini"),
+            Map.entry("grimm-openapi", "io.vidocq.runtime.extensions.microprofile.grimm.openapi"),
+            Map.entry("grimm-openapi-ui", "io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui"),
+            Map.entry("cyrano-rest-client", "io.vidocq.runtime.extensions.microprofile.cyrano"),
+            Map.entry("cervantes-jwt", "io.vidocq.runtime.extensions.microprofile.cervantes"),
+            Map.entry("humboldt-telemetry", "io.vidocq.runtime.extensions.microprofile.humboldt"),
+            Map.entry("knock-health", "io.vidocq.runtime.extensions.microprofile.knock"),
+            Map.entry("dirac-metrics", "io.vidocq.runtime.extensions.microprofile.dirac"),
+            Map.entry("heisenberg-fault-tolerance", "io.vidocq.runtime.extensions.microprofile.heisenberg"),
+            Map.entry("mansart-data", "io.vidocq.runtime.extensions.jakartaee.web.mansart.data"),
+            Map.entry("mansart-pool", "io.vidocq.runtime.extensions.jakartaee.web.mansart.pool"),
+            Map.entry("migration", "io.vidocq.runtime.extensions.essentials.migration"),
+            Map.entry("flyway-migration", "io.vidocq.runtime.extensions.essentials.migration.flyway"),
+            Map.entry("liquibase-migration", "io.vidocq.runtime.extensions.essentials.migration.liquibase"),
+            Map.entry("mansart-transactions", "io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions"));
+
+    /** The module a catalog extension ships; empty for an id outside the catalog. */
+    public static Optional<String> moduleName(String id) {
+        return Optional.ofNullable(id == null ? null : MODULES.get(id.trim().toLowerCase()));
+    }
+
+    /**
+     * The {@code module-info.java} directives (without the trailing {@code ;}) an application
+     * needs to use {@code id}: its module, which re-exports most extension APIs transitively,
+     * plus what the extension leaves to the application — Cassini does not re-export
+     * Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
+     * {@code opens} is added only for an existing {@code applicationPackage}, which JAX-RS,
+     * JSON-B and Jakarta Persistence reflect on. Empty for an id outside the catalog.
+     */
+    public static List<String> moduleDirectives(String id, String applicationPackage) {
+        Optional<String> module = moduleName(id);
+        if (module.isEmpty()) {
+            return List.of();
+        }
+        List<String> directives = new ArrayList<>();
+        boolean opens = false;
+        switch (id.trim().toLowerCase()) {
+            case "cassini-rest" -> {
+                directives.addAll(List.of("requires static java.compiler", "requires jakarta.cdi",
+                        "requires jakarta.inject", "requires jakarta.ws.rs", "requires jakarta.json.bind",
+                        "requires " + module.get(),
+                        "requires io.vidocq.cassini.api"));
+                opens = true;
+            }
+            case "mansart-data" -> {
+                directives.addAll(List.of("requires static java.compiler", "requires " + module.get()));
+                opens = true;
+            }
+            default -> directives.add("requires " + module.get());
+        }
+        if (opens && applicationPackage != null && !applicationPackage.isBlank()) {
+            directives.add("opens " + applicationPackage);
+        }
+        return List.copyOf(directives);
     }
 }

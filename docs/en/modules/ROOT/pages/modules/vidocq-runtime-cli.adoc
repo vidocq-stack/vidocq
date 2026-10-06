@@ -345,12 +345,21 @@ formatting; idempotent thanks to a StAX dependency scan).
 | Sub-command | Description
 
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both.
-| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, and the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one.
-| `remove <id…>` | Remove the matching project-level `<dependency>` and its codegen path — undoing `add`.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`.
+| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`.
 |===
 
 An id may be a known short name (e.g. `cassini-rest`), an explicit `groupId:artifactId`, or
 any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).
+
+In `module-info.java`, `add` declares `requires` on the extension's module, which re-exports most
+extension APIs (MicroProfile Health through `knock-health`, Fault Tolerance through
+`heisenberg-fault-tolerance`, …). `cassini-rest` also needs Jakarta REST, JSON-B, CDI and the Cassini
+API, `requires static java.compiler` for its generated adapters, and `opens` the application
+package its resources live in; `mansart-data` needs the same `requires static` and `opens`. Each
+added line ends with `// vidocq:<id>`, which is what `remove` takes back — never a line written by
+hand, except a `requires` of the removed extension's own module, which no longer resolves.
+`vidocq create -x` writes the same directives.
 
 `list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
 with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
