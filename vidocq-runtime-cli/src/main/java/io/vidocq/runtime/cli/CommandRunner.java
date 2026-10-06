@@ -32,24 +32,23 @@ import io.vidocq.runtime.cli.dev.SourceWatcher;
 import io.vidocq.runtime.cli.doctor.Diagnostic;
 import io.vidocq.runtime.cli.doctor.Diagnostics;
 import io.vidocq.runtime.cli.doctor.DoctorContext;
+import io.vidocq.runtime.cli.ext.ExtensionCache;
 import io.vidocq.runtime.cli.ext.ExtensionCoordinate;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
 import io.vidocq.runtime.cli.ext.KnownExtensions;
 import io.vidocq.runtime.cli.ext.PomEditor;
+import io.vidocq.runtime.cli.ext.ProjectExtensions;
 import io.vidocq.runtime.cli.ext.RegistryEntry;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.core.VidocqBootstrap;
-import io.vidocq.runtime.spi.VidocqExtension;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -108,22 +107,50 @@ public final class CommandRunner {
         System.out.printf("  %-24s %s%n", "OS:",
                 System.getProperty("os.name") + " " + System.getProperty("os.arch"));
         CliOutput.println();
-        CliOutput.println(CliOutput.bold("Extensions on classpath:"));
-        var extensions = ServiceLoader.load(VidocqExtension.class)
-                .stream()
-                .map(ServiceLoader.Provider::get)
-                .sorted(Comparator.comparingInt(VidocqExtension::priority))
-                .toList();
-        if (extensions.isEmpty()) {
-            CliOutput.println(CliOutput.dim("  (none — add extension JARs to the classpath)"));
-        } else {
-            extensions.forEach(ext ->
-                    System.out.printf("  %s %-40s %s%n",
-                            CliOutput.green("✔"),
-                            ext.name(),
-                            CliOutput.dim("priority=" + ext.priority())));
-        }
+        printProjectExtensions("Project extensions:", false);
         return 0;
+    }
+
+    /**
+     * Prints the extensions on the runtime classpath of the project in the working
+     * directory, transitive ones included. Resolving it runs Maven, hence slow.
+     *
+     * @return {@code 0}, or {@code 1} when there is no project or Maven failed
+     */
+    private static int printProjectExtensions(String title, boolean refresh) {
+        CliOutput.println(CliOutput.bold(title));
+        Path cwd = Path.of("").toAbsolutePath();
+        if (!Files.isRegularFile(cwd.resolve("pom.xml"))) {
+            CliOutput.println(CliOutput.dim("  (no pom.xml in the current directory)"));
+            return 1;
+        }
+        var resolution = resolveProjectExtensions(cwd, refresh);
+        return switch (resolution) {
+            case ProjectExtensions.Resolution.Failed f -> {
+                CliOutput.error("Could not resolve the project's dependencies: " + f.reason());
+                if (!f.mavenOutput().isBlank()) {
+                    System.err.println(f.mavenOutput());
+                }
+                yield 1;
+            }
+            case ProjectExtensions.Resolution.Resolved r -> {
+                if (r.extensions().isEmpty()) {
+                    CliOutput.println(CliOutput.dim(
+                            "  (none — add one with 'vidocq extension add <id>')"));
+                }
+                r.extensions().forEach(ext ->
+                        System.out.printf("  %s %-26s %s%s%n",
+                                CliOutput.green("✔"),
+                                ext.id(),
+                                CliOutput.dim(ext.artifact().toString()),
+                                ext.direct() ? "" : CliOutput.dim("  (transitive)")));
+                if (r.cached()) {
+                    CliOutput.println(CliOutput.dim(
+                            "  (cached — 'vidocq extension list --refresh' resolves again)"));
+                }
+                yield 0;
+            }
+        };
     }
 
     private static int runHelp(Command.Help h) {
@@ -302,6 +329,15 @@ public final class CommandRunner {
         Path config = ConfigFile.locate(cwd, Files::isRegularFile).orElse(null);
         boolean configPresent = config != null;
         List<String> configKeys = configPresent ? readConfigKeys(config) : List.of();
+        boolean vidocqProject = pomPresent && pomReferencesVidocq(pom);
+        int extensionCount = 0;
+        String extensionsError = null;
+        if (vidocqProject) {
+            switch (resolveProjectExtensions(cwd, false)) {
+                case ProjectExtensions.Resolution.Resolved r -> extensionCount = r.extensions().size();
+                case ProjectExtensions.Resolution.Failed f   -> extensionsError = f.reason();
+            }
+        }
         return new DoctorContext(
                 Runtime.version().feature(),
                 System.getProperty("java.version"),
@@ -310,10 +346,11 @@ public final class CommandRunner {
                 javaHomeDir,
                 hasMavenWrapper(cwd),
                 pomPresent,
-                pomPresent && pomReferencesVidocq(pom),
-                extensionCount(),
+                vidocqProject,
+                extensionCount,
                 configPresent,
-                configKeys);
+                configKeys,
+                extensionsError);
     }
 
     private static List<String> readConfigKeys(Path config) {
@@ -340,10 +377,6 @@ public final class CommandRunner {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    private static int extensionCount() {
-        return (int) ServiceLoader.load(VidocqExtension.class).stream().count();
     }
 
     private static int runCreate(Command.Create create) {
@@ -487,22 +520,9 @@ public final class CommandRunner {
     }
 
     private static int runExtensionList(Command.Extension.Listing listing) {
+        int exit = 0;
         if (listing.installed()) {
-            CliOutput.println(CliOutput.bold("Installed extensions:"));
-            var extensions = ServiceLoader.load(VidocqExtension.class)
-                    .stream()
-                    .map(ServiceLoader.Provider::get)
-                    .sorted(Comparator.comparingInt(VidocqExtension::priority))
-                    .toList();
-            if (extensions.isEmpty()) {
-                CliOutput.println(CliOutput.dim("  (none found on classpath)"));
-            } else {
-                extensions.forEach(ext ->
-                        System.out.printf("  %s %-44s %s%n",
-                                CliOutput.green("✔"),
-                                ext.name(),
-                                CliOutput.dim("priority=" + ext.priority())));
-            }
+            exit = printProjectExtensions("Installed extensions:", listing.refresh());
         }
         if (listing.available()) {
             if (listing.installed()) {
@@ -524,7 +544,7 @@ public final class CommandRunner {
             CliOutput.println(CliOutput.dim("  source: " + originLabel(result.origin())
                     + " — add with 'vidocq extension add <id>'"));
         }
-        return 0;
+        return exit;
     }
 
     private static String originLabel(ExtensionRegistry.Origin origin) {
@@ -533,6 +553,20 @@ public final class CommandRunner {
             case CACHE   -> "local cache";
             case CATALOG -> "built-in catalog (offline)";
         };
+    }
+
+    /** Answers from the on-disk cache when it holds, otherwise runs (and announces) Maven. */
+    private static ProjectExtensions.Resolution resolveProjectExtensions(Path cwd, boolean refresh) {
+        Path cacheFile = ExtensionCache.fileFor(Path.of(System.getProperty("user.home", "."))
+                .resolve(".vidocq").resolve("cache").resolve("project-extensions"), cwd);
+        if (!refresh) {
+            var cached = ProjectExtensions.fromCache(cwd, cacheFile);
+            if (cached.isPresent()) {
+                return new ProjectExtensions.Resolution.Resolved(cached.get(), true);
+            }
+        }
+        CliOutput.println(CliOutput.dim("  resolving the project's runtime dependencies with Maven…"));
+        return ProjectExtensions.resolveAndCache(cwd, MavenLauncher.resolveExecutable(cwd), cacheFile);
     }
 
     private static Path registryCacheFile() {

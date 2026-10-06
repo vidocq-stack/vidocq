@@ -79,7 +79,7 @@ vidocq doctor
 ----
 
 `doctor` verifies the Java version, `JAVA_HOME`, the Maven wrapper, the project layout, the
-extensions on the classpath, and your `vidocq.properties` keys. Fix any ✘ before continuing;
+extensions in the project's runtime dependencies, and your `vidocq.properties` keys. Fix any ✘ before continuing;
 ⚠ warnings are safe to ignore for now.
 
 === 2. Scaffold the project
@@ -187,7 +187,7 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | Print the CLI and runtime version string.
 
 | `vidocq info`
-| Display the CLI/Java version and the extensions discovered on the classpath.
+| Display the CLI/Java version and the extensions of the project in the current directory.
 
 | `vidocq doctor [--verbose]`
 | Run environment & project health checks (see <<doctor>>).
@@ -338,13 +338,27 @@ formatting; idempotent thanks to a StAX dependency scan).
 |===
 | Sub-command | Description
 
-| `list [--installed\|--available\|--all]` | List extensions. `--installed` (default) scans the classpath; `--available` queries the registry; `--all` shows both.
+| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`.
 | `remove <id…>` | Remove the matching project-level `<dependency>`.
 |===
 
 An id may be a known short name (e.g. `cassini-rest`), an explicit `groupId:artifactId`, or
 any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).
+
+`list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
+with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
+JAR whose module provides `io.vidocq.runtime.spi.VidocqExtension`. An extension pulled in by
+another one — `chappe-webserver` under `cassini-rest` — is listed and marked `(transitive)`.
+Resolving takes as long as a Maven run, and may download artifacts on first use, so the answer
+is cached in `~/.vidocq/cache/project-extensions/`, one file per project:
+
+* the entry is keyed by the content of `pom.xml` — any edit resolves again;
+* when nothing resolved is a SNAPSHOT, the entry is final: a release never changes;
+* otherwise it records the size and modification time of every SNAPSHOT JAR and POM in the local
+  repository (and of a SNAPSHOT parent POM), and resolves again as soon as one of them was
+  re-downloaded. A newer SNAPSHOT still sitting in the remote repository is not seen until
+  something fetches it: `vidocq extension list --refresh` forces a resolution.
 
 [source,bash]
 ----
@@ -398,7 +412,7 @@ non-zero when a blocking issue is found, so it doubles as a CI pre-flight gate
 | **JAVA_HOME** | ✔ set and a directory; ⚠ unset / not a directory.
 | **Maven wrapper** | ✔ `mvnw` in the cwd or an ancestor; ⚠ none found.
 | **Vidocq project** | ✔ `pom.xml` references `io.vidocq.runtime`; ⚠ no pom / not a Vidocq pom.
-| **Extensions** | ✔ ≥ 1 provider on the classpath; ⚠ none found.
+| **Extensions** | ✔ ≥ 1 extension in the project's runtime dependencies; ⚠ none found, or Maven could not resolve them.
 | **Config** | ✔ no `vidocq.properties` or all keys recognised; ⚠ unknown `vidocq.*` key(s).
 |===
 

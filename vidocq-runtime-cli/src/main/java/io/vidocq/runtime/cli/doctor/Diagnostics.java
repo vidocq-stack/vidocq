@@ -156,15 +156,21 @@ public final class Diagnostics {
     }
 
     private static Diagnostic checkExtensions(DoctorContext ctx) {
+        if (ctx.extensionsError() != null) {
+            return Diagnostic.warn(
+                    "Extensions",
+                    "could not resolve the project's dependencies — " + ctx.extensionsError(),
+                    "Run 'mvn dependency:tree' in the project to see what Maven cannot resolve.");
+        }
         int count = ctx.extensionCount();
         if (count > 0) {
             return Diagnostic.ok(
                     "Extensions",
-                    count + " extension" + (count == 1 ? "" : "s") + " on the classpath");
+                    count + " extension" + (count == 1 ? "" : "s") + " in the runtime dependencies");
         }
         return Diagnostic.warn(
                 "Extensions",
-                "no extensions on the classpath",
-                "Add extension JARs (e.g. 'vidocq extension add rest') to enable features.");
+                "no extension in the runtime dependencies",
+                "Add one to enable features (e.g. 'vidocq extension add cassini-rest').");
     }
 }

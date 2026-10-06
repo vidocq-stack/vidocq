@@ -80,8 +80,9 @@ public sealed interface Command {
     ) implements Command {}
 
     sealed interface Extension extends Command {
-        record Listing(boolean installed, boolean available) implements Extension {
-            static Listing defaults() { return new Listing(true, false); }
+        /** {@code refresh} bypasses the on-disk cache of the installed extensions. */
+        record Listing(boolean installed, boolean available, boolean refresh) implements Extension {
+            static Listing defaults() { return new Listing(true, false, false); }
         }
         record Add(java.util.List<String> ids) implements Extension {}
         record Remove(java.util.List<String> ids) implements Extension {}

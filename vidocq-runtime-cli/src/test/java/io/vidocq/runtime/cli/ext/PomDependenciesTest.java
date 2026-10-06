@@ -90,4 +90,25 @@ class PomDependenciesTest {
         String pom = "<project><artifactId>x</artifactId></project>";
         assertTrue(PomDependencies.parse(pom).isEmpty());
     }
+
+    @Test
+    void readsTheParentCoordinates() {
+        String pom = """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>0.4.0-SNAPSHOT</version>
+                        <relativePath/>
+                    </parent>
+                    <artifactId>app</artifactId>
+                    <version>1.0</version>
+                </project>
+                """;
+
+        assertEquals(java.util.Optional.of(new PomDependencies.Parent(
+                "io.vidocq.runtime", "vidocq-runtime-parent", "0.4.0-SNAPSHOT")),
+                PomDependencies.parent(pom));
+        assertTrue(PomDependencies.parent(POM).isEmpty());
+    }
 }

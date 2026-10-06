@@ -55,6 +55,15 @@ class CliParserExtensionTest {
     }
 
     @Test
+    void listRefreshForcesANewResolution() {
+        var listing = assertInstanceOf(Command.Extension.Listing.class,
+                CliParser.parse(new String[]{"extension", "list", "--refresh"}));
+        assertTrue(listing.installed());
+        assertTrue(listing.refresh());
+        assertTrue(!Command.Extension.Listing.defaults().refresh());
+    }
+
+    @Test
     void addCollectsIds() {
         Command c = CliParser.parse(new String[]{"extension", "add", "cassini-rest", "knock-health"});
         var add = assertInstanceOf(Command.Extension.Add.class, c);

@@ -23,7 +23,7 @@ import java.util.List;
 
 /**
  * Pure inputs for {@link Diagnostics}. Every value is gathered by the (impure)
- * caller — JVM properties, environment, filesystem probes, ServiceLoader scan —
+ * caller — JVM properties, environment, filesystem probes, Maven dependency resolution —
  * so that the diagnostics engine itself stays deterministic and unit-testable.
  *
  * @param javaFeatureVersion  running JVM feature version, e.g. {@code 25}
@@ -34,9 +34,12 @@ import java.util.List;
  * @param mavenWrapperPresent whether an {@code mvnw}/{@code mvnw.cmd} was found
  * @param pomPresent          whether a {@code pom.xml} exists in the working directory
  * @param vidocqProject       whether that {@code pom.xml} references the Vidocq runtime
- * @param extensionCount      number of {@code VidocqExtension} providers on the classpath
+ * @param extensionCount      number of {@code VidocqExtension} providers on the project's
+ *                            runtime classpath, transitive ones included
  * @param configPresent       whether a {@code vidocq.properties} file was found
  * @param configKeys          the keys declared in that file (empty when absent)
+ * @param extensionsError     why the project's dependencies could not be resolved, or
+ *                            {@code null} when they were (or there is no project)
  */
 public record DoctorContext(
         int javaFeatureVersion,
@@ -49,10 +52,29 @@ public record DoctorContext(
         boolean vidocqProject,
         int extensionCount,
         boolean configPresent,
-        List<String> configKeys
+        List<String> configKeys,
+        String extensionsError
 ) {
     public DoctorContext {
         configKeys = configKeys == null ? List.of() : List.copyOf(configKeys);
+    }
+
+    /** Backward-compatible constructor for callers whose resolution cannot fail. */
+    public DoctorContext(
+            int javaFeatureVersion,
+            String javaVersionString,
+            int minimumJavaVersion,
+            String javaHome,
+            boolean javaHomeIsDirectory,
+            boolean mavenWrapperPresent,
+            boolean pomPresent,
+            boolean vidocqProject,
+            int extensionCount,
+            boolean configPresent,
+            List<String> configKeys) {
+        this(javaFeatureVersion, javaVersionString, minimumJavaVersion, javaHome,
+                javaHomeIsDirectory, mavenWrapperPresent, pomPresent, vidocqProject,
+                extensionCount, configPresent, configKeys, null);
     }
 
     /**
@@ -71,7 +93,7 @@ public record DoctorContext(
             int extensionCount) {
         this(javaFeatureVersion, javaVersionString, minimumJavaVersion, javaHome,
                 javaHomeIsDirectory, mavenWrapperPresent, pomPresent, vidocqProject,
-                extensionCount, false, List.of());
+                extensionCount, false, List.of(), null);
     }
 
     public boolean javaHomeSet() {

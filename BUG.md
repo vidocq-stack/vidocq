@@ -5,6 +5,29 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261006-01 — `extension list`, `info` and `doctor` never see the project's extensions
+
+- **Date** : 2026-10-06
+- **Statut** : FIXED (`fix/cli-installed-extensions`)
+- **Module touché** : vidocq-runtime-cli, docs
+- **Symptôme** : in a project scaffolded with `vidocq create --name todo -g com.acme -x cassini-rest`,
+  whose `pom.xml` declares `vidocq-runtime-cassini-rest-extension` and whose distribution ships
+  Cassini and Chappe, `vidocq extension list` prints `(none found on classpath)`, `vidocq info`
+  `(none — add extension JARs to the classpath)` and `vidocq doctor` warns "no extensions on the
+  classpath" — the user concludes the scaffold dropped the extension. The doctor hint also
+  suggested `vidocq extension add rest`, an id that does not exist.
+- **Reproduction minimale** : `vidocq create --name todo -x cassini-rest && cd todo && vidocq extension list`.
+- **Hypothèse de cause** : the three commands ran `ServiceLoader.load(VidocqExtension.class)` in the
+  CLI's own JVM. The CLI ships no extension and the project's dependencies are not on its module
+  path, so the answer was always empty.
+- **Correction** : `ProjectExtensions` resolves the project's runtime classpath with
+  `maven-dependency-plugin:list` (transitive) and keeps the JARs whose module provides the
+  extension SPI (`ModuleFinder`, explicit or automatic module). Direct dependencies are told apart
+  from transitive ones (`chappe-webserver` under `cassini-rest`); a Maven failure is reported, not
+  hidden as "no extension". The hint now names `cassini-rest`. The answer is cached per project
+  (`ExtensionCache`): final for a release-only resolution, re-checked against the local SNAPSHOT
+  files otherwise, bypassed by `vidocq extension list --refresh`.
+
 ## BUG-20261001-01 — `@Inject @ConfigProperty` fails the compilation of a Vidocq application (ravel#21)
 
 - **Date** : 2026-10-01

@@ -212,16 +212,17 @@ public final class CliParser {
     }
 
     private static Command.Extension.Listing parseExtensionList(String[] args, int from) {
-        boolean installed = true, available = false;
+        boolean installed = true, available = false, refresh = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case "--installed" -> installed = true;
+                case "--refresh"   -> refresh = true;
                 case "--available" -> { available = true; installed = false; }
                 case "--all"       -> { installed = true; available = true; }
                 default            -> unknownOpt(args[i], "extension list");
             }
         }
-        return new Command.Extension.Listing(installed, available);
+        return new Command.Extension.Listing(installed, available, refresh);
     }
 
     private static Command parseExtensionIds(String[] args, int from, boolean add) {
@@ -349,7 +350,7 @@ public final class CliParser {
                 CliOutput.println(CliOutput.bold("vidocq extension") + " — Manage extensions");
                 CliOutput.println();
                 CliOutput.println("Sub-commands:");
-                cmd("list [--installed|--available|--all]", "List extensions");
+                cmd("list [--installed|--available|--all] [--refresh]", "List extensions");
                 cmd("add <id...>",                          "Add extensions to the project's pom.xml");
                 cmd("remove <id...>",                       "Remove extensions from the project's pom.xml");
                 CliOutput.println();

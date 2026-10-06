@@ -28,6 +28,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Reads the {@code groupId:artifactId} of every dependency declared directly under
@@ -101,6 +102,66 @@ public final class PomDependencies {
             }
         }
         return result;
+    }
+
+    /** The {@code <project>/<parent>} coordinates, when the POM declares a parent. */
+    public record Parent(String groupId, String artifactId, String version) {}
+
+    /**
+     * Reads the {@code <project>/<parent>} coordinates.
+     *
+     * @throws IllegalArgumentException if the XML cannot be parsed
+     */
+    public static Optional<Parent> parent(String pomXml) {
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+
+        XMLStreamReader reader = null;
+        String groupId = null;
+        String artifactId = null;
+        String version = null;
+        try {
+            reader = factory.createXMLStreamReader(new StringReader(pomXml));
+            Deque<String> path = new ArrayDeque<>();
+            StringBuilder text = new StringBuilder();
+            while (reader.hasNext()) {
+                switch (reader.next()) {
+                    case XMLStreamConstants.START_ELEMENT -> {
+                        path.addLast(reader.getLocalName());
+                        text.setLength(0);
+                    }
+                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA ->
+                            text.append(reader.getText());
+                    case XMLStreamConstants.END_ELEMENT -> {
+                        if (path.size() == 3 && "parent".equals(path.toArray()[1])) {
+                            switch (reader.getLocalName()) {
+                                case "groupId"    -> groupId = text.toString().trim();
+                                case "artifactId" -> artifactId = text.toString().trim();
+                                case "version"    -> version = text.toString().trim();
+                                default -> { /* relativePath */ }
+                            }
+                        }
+                        path.removeLast();
+                        text.setLength(0);
+                    }
+                    default -> { /* ignore */ }
+                }
+            }
+        } catch (XMLStreamException e) {
+            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (XMLStreamException ignored) {
+                    // best effort
+                }
+            }
+        }
+        return groupId == null || artifactId == null || version == null
+                ? Optional.empty()
+                : Optional.of(new Parent(groupId, artifactId, version));
     }
 
     /** True when {@code id} appears in the project's dependency list. */

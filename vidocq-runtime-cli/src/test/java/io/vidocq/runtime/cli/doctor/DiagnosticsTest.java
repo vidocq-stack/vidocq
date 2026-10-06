@@ -141,10 +141,32 @@ class DiagnosticsTest {
         Map<String, Diagnostic> single = byName(Diagnostics.run(new DoctorContext(
                 Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
                 "/opt/jdk", true, true, true, true, 1)));
-        assertTrue(single.get("Extensions").detail().contains("1 extension on"));
+        assertTrue(single.get("Extensions").detail().contains("1 extension in"));
 
         Map<String, Diagnostic> many = byName(Diagnostics.run(healthy()));
-        assertTrue(many.get("Extensions").detail().contains("3 extensions on"));
+        assertTrue(many.get("Extensions").detail().contains("3 extensions in"));
+    }
+
+    @Test
+    void zeroExtensionsHintNamesARealCatalogId() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, true, true, true, 0);
+
+        assertTrue(byName(Diagnostics.run(ctx)).get("Extensions").hint()
+                .contains("vidocq extension add cassini-rest"));
+    }
+
+    @Test
+    void failedDependencyResolutionWarnsWithTheReason() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, true, true, true, 0, false, List.of(),
+                "Maven exited with code 1");
+
+        Diagnostic extensions = byName(Diagnostics.run(ctx)).get("Extensions");
+        assertEquals(Diagnostic.Status.WARN, extensions.status());
+        assertTrue(extensions.detail().contains("Maven exited with code 1"));
     }
 
     @Test
