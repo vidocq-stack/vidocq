@@ -134,6 +134,13 @@ public final class CompletionScripts {
         cases(sh, CompletionSpec.ARGUMENTS, "");
         sh.append("    esac\n");
         sh.append("}\n");
+        sh.append("_vidocq_addable() {\n");
+        sh.append("    local taken id\n");
+        sh.append("    taken=\" $(_vidocq_dynamic @pom-extensions | tr '\\n' ' ') $* \"\n");
+        sh.append("    for id in ").append(join(CompletionSpec.extensionIds())).append("; do\n");
+        sh.append("        case \"$taken\" in *\" $id \"*) ;; *) echo \"$id\" ;; esac\n");
+        sh.append("    done\n");
+        sh.append("}\n");
         sh.append("""
                 _vidocq_dynamic() {
                     case "$1" in
@@ -156,9 +163,15 @@ public final class CompletionScripts {
     }
 
     private static void cases(StringBuilder sh, Map<String, List<String>> map, String after) {
-        map.forEach((key, words) ->
-                sh.append("        \"").append(key).append("\") echo \"").append(join(words)).append("\"")
-                        .append(after).append(" ;;\n"));
+        map.forEach((key, words) -> {
+            sh.append("        \"").append(key).append("\") ");
+            if (words.equals(List.of(CompletionSpec.ADDABLE_EXTENSIONS))) {
+                sh.append("_vidocq_addable \"$@\"");
+            } else {
+                sh.append("echo \"").append(join(words)).append("\"");
+            }
+            sh.append(after).append(" ;;\n");
+        });
     }
 
     private static String join(List<String> words) {

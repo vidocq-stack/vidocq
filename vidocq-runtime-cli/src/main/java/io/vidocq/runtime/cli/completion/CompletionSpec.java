@@ -49,6 +49,11 @@ public final class CompletionSpec {
     public static final String CONFIG_KEYS = "@config-keys";
     /** Extension ids the project's {@code pom.xml} declares. */
     public static final String POM_EXTENSIONS = "@pom-extensions";
+    /**
+     * Catalog ids not yet in the project: neither declared by {@code pom.xml} nor already
+     * typed on the line. Expanded inside {@code _vidocq_spec}, which has the typed words.
+     */
+    public static final String ADDABLE_EXTENSIONS = "@addable-extensions";
 
     static final Map<String, String> COMMAND_ALIASES = Map.of("ext", "extension");
     static final Map<String, String> SUBCOMMAND_ALIASES = Map.of("ls", "list", "rm", "remove");
@@ -78,7 +83,7 @@ public final class CompletionSpec {
             "clean", List.of("--offline", "--dry-run"),
             "update", List.of("--check"),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
-            "extension add", extensionIds(),
+            "extension add", List.of(ADDABLE_EXTENSIONS),
             "extension remove", List.of(POM_EXTENSIONS));
 
     /** Values offered right after an option, keyed {@code "<context> <option>"}. */
@@ -148,7 +153,7 @@ public final class CompletionSpec {
         return contexts;
     }
 
-    private static List<String> extensionIds() {
+    static List<String> extensionIds() {
         return KnownExtensions.catalog().stream().map(RegistryEntry::id).toList();
     }
 

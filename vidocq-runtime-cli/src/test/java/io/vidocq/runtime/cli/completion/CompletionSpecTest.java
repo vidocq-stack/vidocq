@@ -57,9 +57,8 @@ class CompletionSpecTest {
 
     @Test
     void extensionAddOffersTheCatalogAndRemoveWhatThePomDeclares() {
-        List<String> ids = KnownExtensions.catalog().stream().map(RegistryEntry::id).toList();
-        assertEquals(ids, after("extension", "add"));
-        assertEquals(ids, after("extension", "add", "cassini-rest"));
+        assertEquals(List.of(CompletionSpec.ADDABLE_EXTENSIONS), after("extension", "add"));
+        assertEquals(List.of(CompletionSpec.ADDABLE_EXTENSIONS), after("extension", "add", "cassini-rest"));
         assertEquals(List.of(CompletionSpec.POM_EXTENSIONS), after("ext", "rm"));
     }
 
