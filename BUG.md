@@ -26,6 +26,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   version literally, which versions:set (run by the release) rewrites; the core codegen processor
   path has no version and takes it from dependencyManagement. An application at 1.0.0 packages.
 
+## BUG-20261006-04 — `vidocq dev` and `vidocq start` ran an empty runtime
+
+- **Date** : 2026-10-06
+- **Statut** : FIXED (`fix/cli-dev`)
+- **Module touché** : vidocq-runtime-cli, docs
+- **Symptôme** : in a project where `mvn vidocq:dev` serves its endpoints, `vidocq dev` logged
+  "No Vidocq extensions discovered" and "no application layer", and nothing answered on the port;
+  `vidocq start` likewise.
+- **Reproduction minimale** : `vidocq create --name todo -x cassini-rest`, add a resource, then
+  `vidocq dev` and `curl localhost:8080/<path>`.
+- **Hypothèse de cause** : both commands booted `VidocqBootstrap` inside the CLI's own JVM, whose
+  module path holds neither the project's classes nor its dependencies and extensions.
+- **Correction** : `vidocq dev` runs `mvn process-classes vidocq:dev` and `vidocq start` runs
+  `mvn vidocq:run` (`./mvnw` when present), passing `--port` as the canonical listener key,
+  `--profile`, `--config` and `--debug` to the goals. The CLI waits for Maven on Ctrl+C. The
+  in-JVM watcher, spinner and profile layering (`io.vidocq.runtime.cli.dev`) are gone.
+
 ## BUG-20261006-03 — the CLI's HTTP clients never ran a request
 
 - **Date** : 2026-10-06

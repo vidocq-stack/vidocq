@@ -21,16 +21,13 @@ package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.MavenInvocation;
 import io.vidocq.runtime.cli.build.MavenLauncher;
+import io.vidocq.runtime.cli.build.RunGoals;
 import io.vidocq.runtime.cli.completion.CommandCatalog;
 import io.vidocq.runtime.cli.completion.CompletionScripts;
 import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.completion.ShellSetup;
 import io.vidocq.runtime.cli.config.ConfigFile;
 import io.vidocq.runtime.cli.config.PropertiesText;
-import io.vidocq.runtime.cli.dev.BootSpinner;
-import io.vidocq.runtime.cli.dev.DebugOptions;
-import io.vidocq.runtime.cli.dev.Profiles;
-import io.vidocq.runtime.cli.dev.SourceWatcher;
 import io.vidocq.runtime.cli.doctor.Diagnostic;
 import io.vidocq.runtime.cli.doctor.Diagnostics;
 import io.vidocq.runtime.cli.doctor.DoctorContext;
@@ -50,16 +47,12 @@ import io.vidocq.runtime.cli.update.CliInstaller;
 import io.vidocq.runtime.cli.update.HttpDownloads;
 import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
-import io.vidocq.runtime.core.VidocqBootstrap;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
 /**
  * Dispatches a parsed {@link Command} to its implementation.
@@ -169,129 +162,17 @@ public final class CommandRunner {
         return 0;
     }
 
-    /**
-     * The canonical key of the {@code default} Chappe listener. The CLI publishes this one rather
-     * than the {@code vidocq.http.port} alias so an explicit {@code --port} outranks any value the
-     * project set for itself — the alias is resolved only when the listener key is absent.
-     */
-    private static final String DEFAULT_LISTENER_PORT_KEY = "vidocq.chappe.listener.default.port";
-
     private static int runStart(Command.Start start) {
-        if (start.portExplicit()) {
-            System.setProperty(DEFAULT_LISTENER_PORT_KEY, String.valueOf(start.port()));
-        }
-        if (start.configFile() != null) {
-            System.setProperty("vidocq.config.file", start.configFile().toAbsolutePath().toString());
-        }
-        if (start.debug()) {
-            CliOutput.warning("Debug mode active — attach your debugger to port 5005 before the server binds.");
-        }
-        CliOutput.info("Starting Vidocq on port " + start.port() + "…");
-        VidocqBootstrap.create().configure().start().awaitShutdown();
-        return 0;
+        Path config = start.configFile() == null ? null : start.configFile().toAbsolutePath();
+        return runMaven(RunGoals.start(start.portExplicit(), start.port(), config, start.debug()),
+                MavenInvocation.Options.none(), false,
+                "Starting the application" + (start.portExplicit() ? " on port " + start.port() : "") + "…");
     }
 
     private static int runDev(Command.Dev dev) {
-        Path projectDir = Path.of("").toAbsolutePath();
-        CliOutput.info("Starting Vidocq in " + CliOutput.bold("dev mode")
-                + " on port " + dev.port() + " (profile: " + dev.profile() + ")…");
-        if (dev.portExplicit()) {
-            System.setProperty(DEFAULT_LISTENER_PORT_KEY, String.valueOf(dev.port()));
-        }
-        applyProfile(dev.profile(), projectDir);
-
-        if (dev.debug()) {
-            DebugOptions debug = DebugOptions.defaults();
-            CliOutput.warning(debug.hint());
-            CliOutput.println(CliOutput.dim("  " + debug.agentArgument()));
-        }
-
-        var current = new AtomicReference<VidocqBootstrap>();
-        bootRuntime(current);
-
-        var reloadLock = new ReentrantLock();
-        SourceWatcher watcher = new SourceWatcher(
-                watchRoots(projectDir),
-                () -> reload(current, dev, projectDir, reloadLock));
-        watcher.start();
-        if (watcher.watchableRoots().isEmpty()) {
-            CliOutput.warning("No source directories to watch — running without live reload.");
-        } else {
-            CliOutput.info("Watching " + watcher.watchableRoots().size()
-                    + " path(s) for changes. Press Ctrl+C to stop.");
-        }
-
-        var done = new CountDownLatch(1);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            watcher.close();
-            done.countDown();
-        }, "vidocq-dev-stop"));
-        try {
-            done.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        return 0;
-    }
-
-    private static void bootRuntime(AtomicReference<VidocqBootstrap> ref) {
-        // configure() prints the startup banner: the spinner starts after it, or the banner's
-        // first line would stick to a spinner frame.
-        VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
-        BootSpinner spinner = new BootSpinner("Booting Vidocq…");
-        spinner.start();
-        try {
-            ref.set(bootstrap.start());
-        } finally {
-            spinner.stop();
-        }
-    }
-
-    private static void reload(AtomicReference<VidocqBootstrap> ref,
-                               Command.Dev dev, Path projectDir, ReentrantLock lock) {
-        lock.lock();
-        try {
-            CliOutput.println();
-            CliOutput.info("Change detected — reloading runtime…");
-            VidocqBootstrap previous = ref.getAndSet(null);
-            if (previous != null) {
-                try {
-                    previous.shutdown();
-                } catch (Exception e) {
-                    CliOutput.warning("Reload: error during shutdown — " + e.getMessage());
-                }
-            }
-            applyProfile(dev.profile(), projectDir);
-            bootRuntime(ref);
-            CliOutput.success("Reloaded.");
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    private static List<Path> watchRoots(Path projectDir) {
-        return List.of(
-                projectDir.resolve("src"),
-                projectDir.resolve("target").resolve("classes"));
-    }
-
-    private static void applyProfile(String profile, Path projectDir) {
-        if (profile == null || profile.isBlank()) {
-            return;
-        }
-        System.setProperty("vidocq.profile", profile);
-        var files = Profiles.sourceFiles(projectDir, profile);
-        if (files.isEmpty()) {
-            return;
-        }
-        // System properties are Vidocq's highest-precedence config source, so layering the
-        // profile there makes its values win without overriding an explicit -D set by the user.
-        Profiles.load(files).forEach((key, value) -> {
-            if (System.getProperty(key) == null) {
-                System.setProperty(key, value);
-            }
-        });
-        CliOutput.info("Profile '" + profile + "' — layered " + files.size() + " config file(s).");
+        return runMaven(RunGoals.dev(dev.profile(), dev.portExplicit(), dev.port(), dev.debug()),
+                MavenInvocation.Options.none(), false,
+                "Starting " + CliOutput.bold("dev mode") + " (profile: " + dev.profile() + ")…");
     }
 
     private static int runDoctor(Command.Doctor doctor) {

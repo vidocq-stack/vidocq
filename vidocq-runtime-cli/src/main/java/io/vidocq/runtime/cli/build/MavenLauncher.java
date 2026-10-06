@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Thin, impure bridge between the pure {@link MavenInvocation} command list and
@@ -78,7 +79,26 @@ public final class MavenLauncher {
             pb.directory(workingDir.toFile());
         }
         try {
-            return pb.start().waitFor();
+            Process process = pb.start();
+            // Ctrl+C reaches Maven and this JVM together: without this hook the CLI would exit,
+            // and give the prompt back, while Maven is still stopping what it started.
+            Thread waitForMaven = new Thread(() -> {
+                try {
+                    process.waitFor(30, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, "vidocq-wait-for-maven");
+            Runtime.getRuntime().addShutdownHook(waitForMaven);
+            try {
+                return process.waitFor();
+            } finally {
+                try {
+                    Runtime.getRuntime().removeShutdownHook(waitForMaven);
+                } catch (IllegalStateException shuttingDown) {
+                    // the hook is already running
+                }
+            }
         } catch (IOException e) {
             System.err.println("Failed to launch Maven (" + command.get(0) + "): " + e.getMessage());
             return 1;

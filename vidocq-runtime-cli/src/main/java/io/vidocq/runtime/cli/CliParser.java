@@ -270,8 +270,8 @@ public final class CliParser {
         CliOutput.println(CliOutput.bold("Commands:"));
         cmd("version",          "Print the CLI and runtime version.");
         cmd("info",             "Display runtime, JVM, and extension information.");
-        cmd("start",            "Start the Vidocq runtime.");
-        cmd("dev",              "Start in development mode (watch sources, live config reload).");
+        cmd("start",            "Build and run the project's application (mvn vidocq:run).");
+        cmd("dev",              "Run the project in dev mode with live reload (mvn vidocq:dev).");
         cmd("doctor",           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
@@ -292,24 +292,27 @@ public final class CliParser {
     private static void printTopicHelp(String topic) {
         switch (topic) {
             case "start" -> {
-                CliOutput.println(CliOutput.bold("vidocq start") + " — Start the Vidocq runtime");
+                CliOutput.println(CliOutput.bold("vidocq start") + " — Build and run the application");
+                CliOutput.println();
+                CliOutput.println("Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and");
+                CliOutput.println("starts it with its dependencies and extensions on the module path.");
                 CliOutput.println();
                 CliOutput.println("Options:");
-                opt("--port, -p <n>",     "HTTP listening port (default: 8080)");
+                opt("--port, -p <n>",     "HTTP listening port, over the project's own setting");
                 opt("--config, -c <file>","Path to an external vidocq.properties file");
-                opt("--debug",            "Print debug info; attach a remote debugger on port 5005");
+                opt("--debug",            "Open a debug agent on port 5005");
             }
             case "dev" -> {
                 CliOutput.println(CliOutput.bold("vidocq dev") + " — Development mode");
                 CliOutput.println();
-                CliOutput.println("Starts the runtime and watches your sources; a reload-worthy change");
-                CliOutput.println("(.java/.class/.properties/.xml/.yml) restarts the runtime context so");
-                CliOutput.println("configuration and resources are re-applied without leaving the CLI.");
+                CliOutput.println("Runs 'mvn process-classes vidocq:dev' in the project (./mvnw when present):");
+                CliOutput.println("the application starts with its dependencies and extensions, the dev console");
+                CliOutput.println("and the debug agent (port 5005), and restarts on every source change.");
                 CliOutput.println();
                 CliOutput.println("Options:");
-                opt("--port, -p <n>",      "HTTP listening port (default: 8080)");
-                opt("--profile, -P <name>","Config profile to layer (default: dev)");
-                opt("--debug",             "Print JDWP connection hint for port 5005");
+                opt("--port, -p <n>",      "HTTP listening port, over the project's own setting");
+                opt("--profile, -P <name>","Config profile to activate (default: dev)");
+                opt("--debug",             "Force the debug agent on (it is on by default in dev)");
             }
             case "doctor" -> {
                 CliOutput.println(CliOutput.bold("vidocq doctor") + " — Environment & project health checks");

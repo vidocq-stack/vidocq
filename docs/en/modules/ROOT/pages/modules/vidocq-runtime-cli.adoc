@@ -196,10 +196,10 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | Scaffold a new Vidocq Maven application (see <<create>>).
 
 | `vidocq dev [--port] [--profile] [--debug]`
-| Start in development mode with source watching and live config reload (see <<dev>>).
+| Run the project in dev mode with live reload, `mvn vidocq:dev` (see <<dev>>).
 
 | `vidocq start [--port] [--config] [--debug]`
-| Start the Vidocq runtime in the foreground (see <<start>>).
+| Build and run the project's application, `mvn vidocq:run` (see <<start>>).
 
 | `vidocq build [type] …`
 | Build/package the project, wrapping the Maven plugin goals (see <<build>>).
@@ -263,39 +263,36 @@ A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-sta
 [#dev]
 === `vidocq dev`
 
-Boots the runtime and watches your sources, restarting the runtime context on a
-reload-worthy change so configuration and resources are re-applied without leaving the CLI.
-The runtime prints its xref:modules/vidocq-runtime-core.adoc#startup-banner[startup banner]
-first; the boot spinner then runs until the runtime has started. A reload prints no second banner.
+Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when there is one: the
+application starts with its dependencies and extensions on the module path, the dev console and
+a debug agent on port `5005`, and restarts on every source change — exactly as
+`mvn vidocq:dev` does, see xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin] for
+its settings (continuous testing, dev services, …).
 
 [cols="1,2"]
 |===
 | Option | Description
 
-| `--port, -p <n>` | HTTP listening port (default `8080`).
-| `--profile, -P <name>` | Config profile to layer over `vidocq.properties` (default `dev`); merges `vidocq-<profile>.properties` on top.
-| `--debug` | Print a JDWP connection hint (`address=127.0.0.1:5005`, `suspend=n`) so a debugger can attach. [.tag-new]#NEW# The printed agent listens on this machine only: whoever reaches a JDWP agent can run any code in the JVM. Edit the host (`*` for every interface) only on a network you trust.
+| `--port, -p <n>` | HTTP listening port, passed as `vidocq.chappe.listener.default.port` so it outranks the project's own `vidocq.http.port`.
+| `--profile, -P <name>` | Config profile to activate (`-Dvidocq.profile`, default `dev`).
+| `--debug` | Force the debug agent on (`-Dvidocq.dev.debug=true`); dev mode opens it by default, on this machine only.
 |===
 
-[NOTE]
-====
-Dev reload re-applies config/resources and re-runs the boot lifecycle in the *same*
-classloader — it does not hot-swap changed `.class` bytes. Recompile-and-reclassload is a
-future enhancement.
-====
+Ctrl+C stops Maven and the application; the CLI returns once both are down.
 
 [#start]
 === `vidocq start`
 
-Starts the runtime in the foreground via `VidocqBootstrap`.
+Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
+project and starts the application with its dependencies and extensions on the module path.
 
 [cols="1,2"]
 |===
 | Option | Description
 
-| `--port, -p <n>` | HTTP listening port (default `8080`).
+| `--port, -p <n>` | HTTP listening port, over the project's own setting.
 | `--config, -c <file>` | Path to an external `vidocq.properties` file.
-| `--debug` | Print debug info and accept a remote debugger on port `5005`.
+| `--debug` | Open a debug agent on port `5005` (`-Dvidocq.run.debug=true`).
 |===
 
 [#build]
