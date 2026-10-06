@@ -76,6 +76,7 @@ public final class CompletionSpec {
             "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
+            "update", List.of("--check"),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
             "extension add", extensionIds(),
             "extension remove", List.of(POM_EXTENSIONS));

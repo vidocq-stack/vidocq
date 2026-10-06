@@ -52,6 +52,7 @@ public final class CliParser {
             case "extension", "ext"           -> parseExtension(args, 1);
             case "config"                     -> parseConfig(args, 1);
             case "completion"                 -> parseCompletion(args, 1);
+            case "update"                     -> parseUpdate(args, 1);
             default -> new Command.Plugin(args[0], rest(args, 1));
         };
     }
@@ -188,6 +189,17 @@ public final class CliParser {
         };
     }
 
+    private static Command.Update parseUpdate(String[] args, int from) {
+        boolean check = false;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--check" -> check = true;
+                default        -> unknownOpt(args[i], "update");
+            }
+        }
+        return new Command.Update(check);
+    }
+
     private static Command parseCompletion(String[] args, int from) {
         if (from >= args.length) {
             throw new CliException("'completion' requires a shell: "
@@ -268,6 +280,7 @@ public final class CliParser {
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
         cmd("config get|set|list", "Read or write keys in vidocq.properties.");
+        cmd("update [--check]",    "Update the CLI: latest release, or latest SNAPSHOT build.");
         cmd("completion bash|zsh", "Print a shell completion script.");
         cmd("completion install",  "Enable completion in your shell's rc file (uninstall to undo).");
         cmd("help [command]",   "Show detailed help for a specific command.");
@@ -384,6 +397,21 @@ public final class CliParser {
                 CliOutput.println("Examples:");
                 CliOutput.println("  " + CliOutput.cyan("vidocq config get vidocq.http.port"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq config set vidocq.http.port 9090"));
+            }
+            case "update" -> {
+                CliOutput.println(CliOutput.bold("vidocq update") + " — Update the CLI itself");
+                CliOutput.println();
+                CliOutput.println("A release CLI moves to the latest release on Maven Central (0.3.0 → 0.4.0).");
+                CliOutput.println("A SNAPSHOT CLI moves to the latest build of the highest SNAPSHOT line in the");
+                CliOutput.println("Central snapshot repository. The new version is installed next to the others");
+                CliOutput.println("in ~/.vidocq/cli, the 'vidocq' launcher is pointed at it, and an installed");
+                CliOutput.println("completion script is regenerated.");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                CliOutput.println("  --check    Only report whether an update is available");
+                CliOutput.println();
+                CliOutput.println("Environment: VIDOCQ_CENTRAL, VIDOCQ_SNAPSHOTS (repository mirrors),");
+                CliOutput.println("             VIDOCQ_BIN (launcher directory, default ~/.local/bin)");
             }
             case "completion" -> {
                 CliOutput.println(CliOutput.bold("vidocq completion") + " — Shell completion scripts");

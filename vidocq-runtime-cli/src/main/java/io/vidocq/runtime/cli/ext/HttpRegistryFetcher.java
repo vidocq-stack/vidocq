@@ -55,7 +55,9 @@ public final class HttpRegistryFetcher implements ExtensionRegistry.Fetcher {
     public Optional<String> fetch() {
         try (HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(timeout)
-                .executor(Thread.ofVirtual().factory()::newThread)
+                // A started virtual thread per task: ThreadFactory::newThread never starts it,
+                // which timed every request out.
+                .executor(task -> Thread.ofVirtual().start(task))
                 .build()) {
             HttpRequest request = HttpRequest.newBuilder(endpoint)
                     .timeout(timeout)

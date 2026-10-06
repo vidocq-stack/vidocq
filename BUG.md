@@ -25,6 +25,18 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   `add` created). Parent side, still open: the deployed parent must name a literal version (a
   property set at release time, or a flattened pom).
 
+## BUG-20261006-03 — the CLI's HTTP clients never ran a request
+
+- **Date** : 2026-10-06
+- **Statut** : FIXED (`feat/cli-update`)
+- **Module touché** : vidocq-runtime-cli
+- **Symptôme** : every request of `HttpRegistryFetcher` timed out, so `extension list --available`
+  always fell back to the built-in catalog — unnoticed while the remote registry does not exist.
+- **Hypothèse de cause** : `.executor(Thread.ofVirtual().factory()::newThread)` creates a thread
+  per task but never starts it.
+- **Correction** : `.executor(task -> Thread.ofVirtual().start(task))`, covered by a test against a
+  local `HttpServer` (`HttpDownloadsTest`).
+
 ## BUG-20261006-01 — `extension list`, `info` and `doctor` never see the project's extensions
 
 - **Date** : 2026-10-06

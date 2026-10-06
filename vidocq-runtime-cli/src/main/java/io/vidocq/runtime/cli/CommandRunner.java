@@ -45,6 +45,9 @@ import io.vidocq.runtime.cli.ext.ProjectExtensions;
 import io.vidocq.runtime.cli.ext.RegistryEntry;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.cli.spi.CliPlugins;
+import io.vidocq.runtime.cli.update.CliInstaller;
+import io.vidocq.runtime.cli.update.HttpDownloads;
+import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.core.VidocqBootstrap;
 
@@ -52,6 +55,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -82,6 +86,7 @@ public final class CommandRunner {
             };
             case Command.Completion comp       -> runCompletion(comp);
             case Command.CompletionSetup setup -> runCompletionSetup(setup);
+            case Command.Update u              -> runUpdate(u);
             case Command.Plugin p              -> runPlugin(p);
             case Command.Extension e           -> switch (e) {
                 case Command.Extension.Listing l -> runExtensionList(l);
@@ -507,6 +512,118 @@ public final class CommandRunner {
             CliOutput.error("Cannot read " + file + ": " + e.getMessage());
             return null;
         }
+    }
+
+    private static final String CLI_PATH = "/io/vidocq/runtime/vidocq-runtime-cli";
+
+    private static int runUpdate(Command.Update update) {
+        Path installed = installedCliDirectory();
+        if (installed == null) {
+            CliOutput.error("This CLI was not installed by install.sh or 'vidocq update' (no bin/vidocq"
+                    + " next to its modules) — nothing to update.");
+            return 1;
+        }
+        String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
+        String snapshots = env("VIDOCQ_SNAPSHOTS",
+                "https://central.sonatype.com/repository/maven-snapshots") + CLI_PATH;
+        CliOutput.info("Current: " + Version.cliDisplay()
+                + CliInstaller.installedBuild(installed).map(b -> " — build " + b).orElse(""));
+        try (HttpDownloads http = new HttpDownloads()) {
+            var decision = UpdatePlan.plan(Version.cli(), CliInstaller.installedBuild(installed),
+                    Version.buildTimestamp(), http::fetch, central, snapshots);
+            switch (decision) {
+                case UpdatePlan.UpToDate u -> {
+                    CliOutput.success("Already up to date: " + u.current());
+                    return 0;
+                }
+                case UpdatePlan.Unavailable u -> {
+                    CliOutput.error("Could not check for updates: " + u.reason());
+                    return 1;
+                }
+                case UpdatePlan.Update u -> {
+                    String label = u.version() + u.build().map(b -> " (build " + b + ")").orElse("");
+                    if (update.checkOnly()) {
+                        CliOutput.info("Update available: " + label + " — run 'vidocq update'.");
+                        return 0;
+                    }
+                    CliOutput.info("Downloading " + u.zipUrl());
+                    Path zip = Files.createTempFile("vidocq-cli", ".zip");
+                    Path target;
+                    try {
+                        http.download(u.zipUrl(), zip);
+                        target = CliInstaller.install(zip, installed.getParent(), u.version(), u.build());
+                    } finally {
+                        Files.deleteIfExists(zip);
+                    }
+                    CliOutput.success("Installed " + label + " in " + target);
+                    if (!target.equals(installed)) {
+                        retargetLauncher(target);
+                    }
+                    refreshCompletion(target);
+                    return 0;
+                }
+            }
+        } catch (IOException e) {
+            CliOutput.error("Update failed: " + e.getMessage());
+            return 1;
+        }
+    }
+
+    /** {@code <root>/<version>} holding this CLI's {@code modules/} and {@code bin/vidocq}, or {@code null}. */
+    private static Path installedCliDirectory() {
+        try {
+            Path jar = Path.of(CommandRunner.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            Path modules = jar.getParent();
+            Path dir = modules == null ? null : modules.getParent();
+            return dir != null && "modules".equals(String.valueOf(modules.getFileName()))
+                    && Files.isRegularFile(dir.resolve("bin").resolve("vidocq")) ? dir : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static void retargetLauncher(Path target) throws IOException {
+        Path bin = Path.of(env("VIDOCQ_BIN", Path.of(System.getProperty("user.home", "."))
+                .resolve(".local").resolve("bin").toString()));
+        Path launcher = bin.resolve("vidocq");
+        var retargeted = Files.isRegularFile(launcher)
+                ? CliInstaller.retargetLauncher(Files.readString(launcher), target)
+                : Optional.<String>empty();
+        if (retargeted.isPresent()) {
+            Files.writeString(launcher, retargeted.get());
+            CliOutput.success("Launcher " + launcher + " now runs " + target.getFileName());
+        } else {
+            CliOutput.warning("Could not update a launcher at " + launcher + " — run "
+                    + target.resolve("bin").resolve("vidocq") + " or point your PATH at it.");
+        }
+    }
+
+    private static void refreshCompletion(Path target) {
+        Path home = Path.of(System.getProperty("user.home", "."));
+        for (Shell shell : Shell.values()) {
+            if (!Files.isRegularFile(ShellSetup.scriptFile(shell, home))) {
+                continue;
+            }
+            try {
+                Process p = new ProcessBuilder(target.resolve("bin").resolve("vidocq").toString(),
+                        "completion", "install", shell.token())
+                        .redirectErrorStream(true)
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                        .start();
+                if (p.waitFor() == 0) {
+                    CliOutput.success("Completion script refreshed for " + shell.token());
+                }
+            } catch (IOException e) {
+                CliOutput.warning("Could not refresh the " + shell.token() + " completion: " + e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private static String env(String name, String fallback) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private static int runCompletionSetup(Command.CompletionSetup setup) {

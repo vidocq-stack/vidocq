@@ -41,6 +41,7 @@ public final class CommandCatalog {
             "extension",
             "config",
             "completion",
+            "update",
             "help");
 
     private CommandCatalog() {}

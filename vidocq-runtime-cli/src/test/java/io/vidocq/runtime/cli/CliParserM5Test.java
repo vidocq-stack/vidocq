@@ -73,6 +73,14 @@ class CliParserM5Test {
     }
 
     @Test
+    void updateInstallsByDefaultAndChecksOnDemand() {
+        assertEquals(false, assertInstanceOf(Command.Update.class,
+                CliParser.parse(new String[]{"update"})).checkOnly());
+        assertEquals(true, assertInstanceOf(Command.Update.class,
+                CliParser.parse(new String[]{"update", "--check"})).checkOnly());
+    }
+
+    @Test
     void completionBash() {
         Command.Completion c = assertInstanceOf(Command.Completion.class,
                 CliParser.parse(new String[]{"completion", "bash"}));

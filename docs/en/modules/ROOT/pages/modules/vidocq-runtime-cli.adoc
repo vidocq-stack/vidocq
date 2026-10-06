@@ -219,6 +219,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq completion install\|uninstall [bash\|zsh]`
 | Set up (or remove) completion in your shell's rc file (see <<completion>>).
 
+| `vidocq update [--check]`
+| Update the CLI itself to the latest release, or the latest SNAPSHOT build (see <<update>>).
+
 | `vidocq help [command]`
 | Show the command list or detailed help for one command.
 |===
@@ -449,6 +452,30 @@ after upgrading the CLI. `vidocq completion uninstall` removes the block and the
 
 NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_profile`, not
 `~/.bashrc`. Source `~/.bashrc` from `~/.bash_profile` if it does not already.
+
+[#update]
+=== `vidocq update`
+
+Updates the CLI itself, from the same repositories as `install.sh`:
+
+* a release CLI moves to the latest release on Maven Central (`0.3.0` → `0.4.0`);
+* a SNAPSHOT CLI moves to the latest build of the highest SNAPSHOT line in the Central snapshot
+  repository. It records the build it installed, so the next run knows whether a newer one was
+  published. A SNAPSHOT CLI without that record — installed by `install.sh`, or built locally —
+  takes the published build only when it was deployed after the running CLI was built: a local
+  build of newer sources is never downgraded.
+
+The new version is unpacked next to the others in `~/.vidocq/cli` and swapped in by renaming
+the directory, the `vidocq` launcher in `~/.local/bin` (or `$VIDOCQ_BIN`) is pointed at it, and
+an installed completion script is regenerated. Earlier versions stay where they are.
+
+[source,bash]
+----
+vidocq update --check   # only report
+vidocq update
+----
+
+`VIDOCQ_CENTRAL` and `VIDOCQ_SNAPSHOTS` point it at repository mirrors, as for `install.sh`.
 
 == Configuration & profiles
 
