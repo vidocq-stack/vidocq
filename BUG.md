@@ -8,7 +8,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261006-02 — an application with its own version resolves every Vidocq artifact at that version
 
 - **Date** : 2026-10-06
-- **Statut** : OPEN for the runtime parent; worked around in vidocq-runtime-cli (`feat/cli-update`)
+- **Statut** : FIXED (`fix/parent-literal-versions` for the parent, `feat/cli-update` for the CLI)
 - **Module touché** : vidocq-runtime-parent (root pom), vidocq-runtime-cli
 - **Symptôme** : an application that declares `<version>1.0.0</version>` under
   `vidocq-runtime-parent` cannot build: Maven looks for `vidocq-runtime-maven-plugin:1.0.0`, and
@@ -22,8 +22,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   parent pom still carries the expression, so it becomes the application's own version.
 - **Correction** : CLI side, `extension add` pins the parent's version on the dependency and on
   the codegen path, and `extension remove` unwires the codegen path (and the compiler plugin block
-  `add` created). Parent side, still open: the deployed parent must name a literal version (a
-  property set at release time, or a flattened pom).
+  `add` created). Parent side, the 48 dependencyManagement and pluginManagement entries name the
+  version literally, which versions:set (run by the release) rewrites; the core codegen processor
+  path has no version and takes it from dependencyManagement. An application at 1.0.0 packages.
 
 ## BUG-20261006-03 — the CLI's HTTP clients never ran a request
 
