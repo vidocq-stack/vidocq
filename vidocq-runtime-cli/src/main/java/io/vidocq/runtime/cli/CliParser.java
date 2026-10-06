@@ -244,7 +244,7 @@ public final class CliParser {
     static void printHelp(String topic) {
         if (topic != null) { printTopicHelp(topic); return; }
 
-        CliOutput.println(CliOutput.bold("Vidocq CLI " + Version.cli()));
+        CliOutput.println(CliOutput.bold("Vidocq CLI " + Version.cliDisplay()));
         CliOutput.println();
         CliOutput.println("Usage: " + CliOutput.cyan("vidocq") + " <command> [options]");
         CliOutput.println();

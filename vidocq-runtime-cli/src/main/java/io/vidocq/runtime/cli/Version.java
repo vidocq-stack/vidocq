@@ -31,6 +31,9 @@ import java.util.Properties;
  * {@link #runtime()} is the version of the released {@code vidocq-runtime-parent} the CLI
  * inherits from ({@code project.parent.version}) — the version scaffolded projects must
  * reference so their parent resolves from Maven Central.</p>
+ *
+ * <p>A SNAPSHOT is rebuilt under the same version, so {@link #cliDisplay()} adds the
+ * build timestamp to tell two of them apart.</p>
  */
 public final class Version {
 
@@ -64,5 +67,22 @@ public final class Version {
     /** Version of the released runtime parent that scaffolded projects inherit from. */
     public static String runtime() {
         return Holder.PROPS.getProperty("runtimeVersion", "unknown");
+    }
+
+    /** UTC instant the CLI was built ({@code yyyy-MM-dd'T'HH:mm:ss'Z'}), empty if unknown. */
+    public static String buildTimestamp() {
+        return Holder.PROPS.getProperty("buildTimestamp", "");
+    }
+
+    /** {@link #cli()} for display: a SNAPSHOT carries its build timestamp. */
+    public static String cliDisplay() {
+        return display(cli(), buildTimestamp());
+    }
+
+    static String display(String version, String timestamp) {
+        if (version.endsWith("-SNAPSHOT") && !timestamp.isBlank() && !timestamp.contains("${")) {
+            return version + " (built " + timestamp + ")";
+        }
+        return version;
     }
 }

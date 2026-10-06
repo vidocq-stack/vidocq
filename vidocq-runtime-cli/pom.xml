@@ -27,6 +27,13 @@
         </dependency>
     </dependencies>
 
+    <properties>
+        <!-- Shown next to a SNAPSHOT version by 'vidocq version'. maven.build.timestamp is
+             not reliably interpolated by resource filtering, hence the indirection. -->
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+        <vidocq.cli.buildTimestamp>${maven.build.timestamp}</vidocq.cli.buildTimestamp>
+    </properties>
+
     <build>
         <resources>
             <resource>

@@ -21,6 +21,7 @@ package io.vidocq.runtime.cli;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,5 +46,30 @@ class CliVersionTest {
         assertFalse(v.isBlank());
         assertFalse(v.contains("${"), "runtime version must be filtered by the build, got: " + v);
         assertTrue(v.matches(SEMVER), "runtime version must be semver, got: " + v);
+    }
+
+    @Test
+    void buildTimestampIsResolvedFromBuild() {
+        String ts = Version.buildTimestamp();
+        assertFalse(ts.contains("${"), "build timestamp must be filtered by the build, got: " + ts);
+        assertTrue(ts.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z"),
+                "build timestamp must be ISO-8601 UTC, got: " + ts);
+    }
+
+    @Test
+    void snapshotDisplaysItsBuildTimestamp() {
+        assertEquals("0.4.0-SNAPSHOT (built 2026-10-06T12:34:56Z)",
+                Version.display("0.4.0-SNAPSHOT", "2026-10-06T12:34:56Z"));
+    }
+
+    @Test
+    void releaseDisplaysTheVersionAlone() {
+        assertEquals("0.4.0", Version.display("0.4.0", "2026-10-06T12:34:56Z"));
+    }
+
+    @Test
+    void snapshotWithoutAResolvedTimestampDisplaysTheVersionAlone() {
+        assertEquals("0.4.0-SNAPSHOT", Version.display("0.4.0-SNAPSHOT", ""));
+        assertEquals("0.4.0-SNAPSHOT", Version.display("0.4.0-SNAPSHOT", "${build.timestamp}"));
     }
 }

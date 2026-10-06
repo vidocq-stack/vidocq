@@ -92,14 +92,14 @@ public final class CommandRunner {
     // -------------------------------------------------------------------------
 
     private static int runVersion() {
-        System.out.println(CliOutput.bold("Vidocq CLI ") + Version.cli());
+        System.out.println(CliOutput.bold("Vidocq CLI ") + Version.cliDisplay());
         return 0;
     }
 
     private static int runInfo() {
         CliOutput.println(CliOutput.bold("Vidocq Runtime — System Information"));
         CliOutput.println();
-        System.out.printf("  %-24s %s%n", "CLI version:",  Version.cli());
+        System.out.printf("  %-24s %s%n", "CLI version:",  Version.cliDisplay());
         System.out.printf("  %-24s %s%n", "Runtime version:", Version.runtime());
         System.out.printf("  %-24s %s%n", "Java version:", System.getProperty("java.version"));
         System.out.printf("  %-24s %s%n", "JVM:",
