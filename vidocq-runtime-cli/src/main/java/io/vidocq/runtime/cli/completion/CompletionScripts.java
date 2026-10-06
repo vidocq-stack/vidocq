@@ -37,17 +37,21 @@ public final class CompletionScripts {
 
     private CompletionScripts() {}
 
-    /** Emit the completion script for {@code shell}; {@code commands} are the top-level ones. */
-    public static String script(Shell shell, List<String> commands) {
+    /**
+     * Emit the completion script for {@code shell}; {@code commands} are the top-level ones
+     * and {@code stamp} identifies the CLI writing it (see {@link ShellSetup#stampOf}).
+     */
+    public static String script(Shell shell, List<String> commands, String stamp) {
         return switch (shell) {
-            case BASH -> bash(commands);
-            case ZSH -> zsh(commands);
+            case BASH -> bash(commands, stamp);
+            case ZSH -> zsh(commands, stamp);
         };
     }
 
-    static String bash(List<String> commands) {
+    static String bash(List<String> commands, String stamp) {
         return """
                 # vidocq bash completion
+                %s
                 # Install: vidocq completion install bash
                 #      or: source <(vidocq completion bash)
                 %s
@@ -64,12 +68,13 @@ public final class CompletionScripts {
                     return 0
                 }
                 complete -F _vidocq vidocq
-                """.formatted(shared(commands));
+                """.formatted(ShellSetup.stampLine(stamp), shared(commands));
     }
 
-    static String zsh(List<String> commands) {
+    static String zsh(List<String> commands, String stamp) {
         return """
                 #compdef vidocq
+                %s
                 # vidocq zsh completion
                 # Install: vidocq completion install zsh
                 #      or: source <(vidocq completion zsh)
@@ -88,7 +93,7 @@ public final class CompletionScripts {
                 }
                 (( $+functions[compdef] )) || { autoload -Uz compinit && compinit; }
                 compdef _vidocq vidocq
-                """.formatted(shared(commands));
+                """.formatted(ShellSetup.stampLine(stamp), shared(commands));
     }
 
     /** The POSIX functions both scripts share. */

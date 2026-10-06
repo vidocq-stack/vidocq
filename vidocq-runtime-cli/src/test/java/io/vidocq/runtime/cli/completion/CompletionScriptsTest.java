@@ -33,7 +33,7 @@ class CompletionScriptsTest {
 
     @Test
     void bashRegistersCompletionFunction() {
-        String script = CompletionScripts.script(Shell.BASH, CMDS);
+        String script = CompletionScripts.script(Shell.BASH, CMDS, "0.4.0 t1");
         assertTrue(script.contains("complete -F _vidocq vidocq"));
         assertTrue(script.contains("compgen -W"));
         assertTrue(script.contains("version info build"));
@@ -41,7 +41,7 @@ class CompletionScriptsTest {
 
     @Test
     void zshHasCompdefHeaderAndCommands() {
-        String script = CompletionScripts.script(Shell.ZSH, CMDS);
+        String script = CompletionScripts.script(Shell.ZSH, CMDS, "0.4.0 t1");
         assertTrue(script.startsWith("#compdef vidocq"));
         assertTrue(script.contains("compdef _vidocq vidocq"));
         assertTrue(script.contains("(( $+functions[compdef] )) || { autoload -Uz compinit && compinit; }"),
@@ -52,7 +52,7 @@ class CompletionScriptsTest {
     @Test
     void bothScriptsShareTheSpecFunction() {
         for (Shell shell : Shell.values()) {
-            String script = CompletionScripts.script(shell, CMDS);
+            String script = CompletionScripts.script(shell, CMDS, "0.4.0 t1");
             assertTrue(script.contains("_vidocq_spec() {"), shell + " lacks _vidocq_spec");
             assertTrue(script.contains("extension) echo \"list add remove\" ;;"), shell + " lacks sub-commands");
             assertTrue(script.contains("\"extension list\") echo \"--installed --available --all --refresh\" ;;"));
@@ -62,6 +62,16 @@ class CompletionScriptsTest {
                     shell + " must filter what extension add offers");
             assertTrue(script.contains("for id in chappe-webserver "), shell + " lacks the catalog to filter");
         }
+    }
+
+    @Test
+    void scriptsCarryTheStampOfTheCliThatWroteThem() {
+        for (Shell shell : Shell.values()) {
+            String script = CompletionScripts.script(shell, CMDS, "0.4.0-SNAPSHOT 2026-10-06T11:00:00Z");
+            assertEquals(java.util.Optional.of("0.4.0-SNAPSHOT 2026-10-06T11:00:00Z"), ShellSetup.stampOf(script));
+        }
+        assertTrue(CompletionScripts.script(Shell.ZSH, CMDS, "s").startsWith("#compdef vidocq\n"),
+                "zsh needs #compdef on the first line");
     }
 
     @Test

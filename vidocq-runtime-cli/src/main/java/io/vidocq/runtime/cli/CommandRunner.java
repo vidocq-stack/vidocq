@@ -626,6 +626,21 @@ public final class CommandRunner {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /** Identifies this CLI build in the completion scripts it writes. */
+    static String completionStamp() {
+        return Version.cli() + " " + Version.buildTimestamp();
+    }
+
+    /**
+     * Rewrites the installed completion scripts another CLI build wrote: a CLI replaced
+     * without 'vidocq update' (a manual install, a local build) still completes its own
+     * commands. Cheap: at most one small file read per shell.
+     */
+    static void refreshStaleCompletion() {
+        ShellSetup.refreshStale(Path.of(System.getProperty("user.home", ".")), completionStamp(),
+                shell -> CompletionScripts.script(shell, CommandCatalog.COMMANDS, completionStamp()));
+    }
+
     private static int runCompletionSetup(Command.CompletionSetup setup) {
         Shell shell;
         try {
@@ -641,7 +656,8 @@ public final class CommandRunner {
             String before = Files.isRegularFile(rc) ? Files.readString(rc) : "";
             if (setup.install()) {
                 Files.createDirectories(script.getParent());
-                Files.writeString(script, CompletionScripts.script(shell, CommandCatalog.COMMANDS));
+                Files.writeString(script, CompletionScripts.script(shell, CommandCatalog.COMMANDS,
+                        completionStamp()));
                 String after = ShellSetup.withBlock(before, script);
                 if (!after.equals(before)) {
                     Files.writeString(rc, after);
@@ -669,7 +685,8 @@ public final class CommandRunner {
     }
 
     private static int runCompletion(Command.Completion completion) {
-        System.out.print(CompletionScripts.script(completion.shell(), CommandCatalog.COMMANDS));
+        System.out.print(CompletionScripts.script(completion.shell(), CommandCatalog.COMMANDS,
+                completionStamp()));
         return 0;
     }
 

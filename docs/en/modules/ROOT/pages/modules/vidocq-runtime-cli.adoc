@@ -447,8 +447,10 @@ vidocq completion zsh > "${fpath[1]}/_vidocq"
 `vidocq completion install` does it for you: it writes the script to
 `~/.vidocq/completion/vidocq.<shell>` and adds a marked block sourcing it to `~/.zshrc` or
 `~/.bashrc`. The shell comes from `$SHELL` unless named (`vidocq completion install bash`).
-Running it again replaces the block instead of adding another, and refreshes the script — do so
-after upgrading the CLI. `vidocq completion uninstall` removes the block and the script.
+Running it again replaces the block instead of adding another. The script records which CLI
+build wrote it, and every `vidocq` run rewrites an installed script another build wrote, so the
+completion follows the CLI however it was replaced. `vidocq completion uninstall` removes the
+block and the script.
 
 NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_profile`, not
 `~/.bashrc`. Source `~/.bashrc` from `~/.bash_profile` if it does not already.

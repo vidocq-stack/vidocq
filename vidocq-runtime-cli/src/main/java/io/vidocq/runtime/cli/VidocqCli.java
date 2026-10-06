@@ -31,6 +31,7 @@ public final class VidocqCli {
     private VidocqCli() {}
 
     public static void main(String[] args) {
+        CommandRunner.refreshStaleCompletion();
         if (args.length == 0) {
             CliParser.printHelp(null);
             System.exit(0);

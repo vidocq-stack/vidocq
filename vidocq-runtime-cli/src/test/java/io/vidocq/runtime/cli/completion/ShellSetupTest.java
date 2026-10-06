@@ -20,8 +20,13 @@
 package io.vidocq.runtime.cli.completion;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -93,5 +98,26 @@ class ShellSetupTest {
 
         assertEquals("a\nb\n", ShellSetup.withoutBlock(rc));
         assertEquals("a\n", ShellSetup.withoutBlock("a\n"));
+    }
+
+    @Test
+    void stampIsReadFromItsMarkedLine() {
+        assertEquals(Optional.of("0.4.0 t1"), ShellSetup.stampOf("#compdef vidocq\n# vidocq-cli: 0.4.0 t1\n_x() {}\n"));
+        assertEquals(Optional.empty(), ShellSetup.stampOf("#compdef vidocq\n_x() {}\n"));
+    }
+
+    @Test
+    void refreshesOnlyInstalledScriptsWrittenByAnotherCli(@TempDir Path home) throws IOException {
+        Path zsh = ShellSetup.scriptFile(Shell.ZSH, home);
+        Files.createDirectories(zsh.getParent());
+        Files.writeString(zsh, "#compdef vidocq\n# vidocq-cli: 0.3.0 old\n");
+
+        List<Shell> refreshed = ShellSetup.refreshStale(home, "0.4.0 new",
+                shell -> "#compdef vidocq\n# vidocq-cli: 0.4.0 new\n" + shell.token());
+
+        assertEquals(List.of(Shell.ZSH), refreshed);
+        assertEquals("#compdef vidocq\n# vidocq-cli: 0.4.0 new\nzsh", Files.readString(zsh));
+        assertFalse(Files.exists(ShellSetup.scriptFile(Shell.BASH, home)), "a shell never set up stays so");
+        assertEquals(List.of(), ShellSetup.refreshStale(home, "0.4.0 new", shell -> "unused"));
     }
 }

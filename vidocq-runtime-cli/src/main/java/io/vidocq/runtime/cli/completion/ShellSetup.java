@@ -19,7 +19,13 @@
  */
 package io.vidocq.runtime.cli.completion;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * Pure logic behind {@code vidocq completion install|uninstall}: which shell, which
@@ -31,6 +37,7 @@ public final class ShellSetup {
 
     static final String BEGIN = "# >>> vidocq completion >>>";
     static final String END = "# <<< vidocq completion <<<";
+    private static final String STAMP = "# vidocq-cli: ";
 
     private ShellSetup() {}
 
@@ -59,6 +66,43 @@ public final class ShellSetup {
     /** Where the completion script is written. */
     public static Path scriptFile(Shell shell, Path home) {
         return home.resolve(".vidocq").resolve("completion").resolve("vidocq." + shell.token());
+    }
+
+    /** The script line recording which CLI wrote it. */
+    static String stampLine(String stamp) {
+        return STAMP + stamp;
+    }
+
+    /** The stamp of the CLI that wrote {@code script}, empty for a script without one. */
+    public static Optional<String> stampOf(String script) {
+        return script.lines()
+                .filter(line -> line.startsWith(STAMP))
+                .map(line -> line.substring(STAMP.length()).strip())
+                .findFirst();
+    }
+
+    /**
+     * Rewrites, with {@code generator}, every installed completion script that another CLI
+     * wrote — so the completion follows the CLI however it was replaced. A shell whose script
+     * is not installed is left alone; failures are ignored, the next run tries again.
+     *
+     * @return the shells refreshed
+     */
+    public static List<Shell> refreshStale(Path home, String stamp, Function<Shell, String> generator) {
+        List<Shell> refreshed = new ArrayList<>();
+        for (Shell shell : Shell.values()) {
+            Path script = scriptFile(shell, home);
+            try {
+                if (Files.isRegularFile(script)
+                        && !stampOf(Files.readString(script)).equals(Optional.of(stamp))) {
+                    Files.writeString(script, generator.apply(shell));
+                    refreshed.add(shell);
+                }
+            } catch (IOException | RuntimeException e) {
+                // best effort: a stale completion is not worth failing the command
+            }
+        }
+        return refreshed;
     }
 
     /** {@code rc} with the block sourcing {@code script}, replacing a previous block. */
