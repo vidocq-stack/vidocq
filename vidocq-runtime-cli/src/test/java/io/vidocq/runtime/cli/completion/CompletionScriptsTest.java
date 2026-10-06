@@ -44,7 +44,21 @@ class CompletionScriptsTest {
         String script = CompletionScripts.script(Shell.ZSH, CMDS);
         assertTrue(script.startsWith("#compdef vidocq"));
         assertTrue(script.contains("compdef _vidocq vidocq"));
+        assertTrue(script.contains("(( $+functions[compdef] )) || { autoload -Uz compinit && compinit; }"),
+                "sourcing the script before compinit must not fail on 'compdef'");
         assertTrue(script.contains("version info build"));
+    }
+
+    @Test
+    void bothScriptsShareTheSpecFunction() {
+        for (Shell shell : Shell.values()) {
+            String script = CompletionScripts.script(shell, CMDS);
+            assertTrue(script.contains("_vidocq_spec() {"), shell + " lacks _vidocq_spec");
+            assertTrue(script.contains("extension) echo \"list add remove\" ;;"), shell + " lacks sub-commands");
+            assertTrue(script.contains("\"extension list\") echo \"--installed --available --all --refresh\" ;;"));
+            assertTrue(script.contains("\"create -x\") echo \"chappe-webserver "), shell + " lacks extension ids");
+            assertTrue(script.contains("@pom-extensions)"), shell + " lacks the pom.xml lookup");
+        }
     }
 
     @Test

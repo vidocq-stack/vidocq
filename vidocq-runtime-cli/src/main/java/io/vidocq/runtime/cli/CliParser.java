@@ -188,12 +188,19 @@ public final class CliParser {
         };
     }
 
-    private static Command.Completion parseCompletion(String[] args, int from) {
+    private static Command parseCompletion(String[] args, int from) {
         if (from >= args.length) {
             throw new CliException("'completion' requires a shell: "
-                    + String.join(", ", Shell.tokens()) + ".");
+                    + String.join(", ", Shell.tokens()) + ", or install / uninstall.");
         }
         try {
+            if (args[from].equals("install") || args[from].equals("uninstall")) {
+                if (from + 2 < args.length) {
+                    unknownOpt(args[from + 2], "completion " + args[from]);
+                }
+                Shell shell = from + 1 < args.length ? Shell.fromToken(args[from + 1]) : null;
+                return new Command.CompletionSetup(shell, args[from].equals("install"));
+            }
             return new Command.Completion(Shell.fromToken(args[from]));
         } catch (IllegalArgumentException e) {
             throw new CliException(e.getMessage());
@@ -262,6 +269,7 @@ public final class CliParser {
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
         cmd("config get|set|list", "Read or write keys in vidocq.properties.");
         cmd("completion bash|zsh", "Print a shell completion script.");
+        cmd("completion install",  "Enable completion in your shell's rc file (uninstall to undo).");
         cmd("help [command]",   "Show detailed help for a specific command.");
         printPluginCommands();
         CliOutput.println();
@@ -380,11 +388,16 @@ public final class CliParser {
             case "completion" -> {
                 CliOutput.println(CliOutput.bold("vidocq completion") + " — Shell completion scripts");
                 CliOutput.println();
-                CliOutput.println("Prints a completion script to stdout for the given shell.");
+                CliOutput.println("Prints a completion script to stdout for the given shell, or");
+                CliOutput.println("sets it up for you: 'install' writes it to ~/.vidocq/completion/ and");
+                CliOutput.println("sources it from ~/.zshrc or ~/.bashrc (shell taken from $SHELL when");
+                CliOutput.println("omitted); 'uninstall' removes both. Re-run 'install' after an upgrade.");
                 CliOutput.println();
                 CliOutput.println("Shells: " + String.join(", ", Shell.tokens()));
                 CliOutput.println();
                 CliOutput.println("Examples:");
+                CliOutput.println("  " + CliOutput.cyan("vidocq completion install"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq completion uninstall zsh"));
                 CliOutput.println("  " + CliOutput.cyan("source <(vidocq completion bash)"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq completion zsh > \"${fpath[1]}/_vidocq\""));
             }

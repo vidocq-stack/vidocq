@@ -87,6 +87,22 @@ class CliParserM5Test {
     }
 
     @Test
+    void completionInstallDetectsTheShellWhenOmitted() {
+        Command.CompletionSetup c = assertInstanceOf(Command.CompletionSetup.class,
+                CliParser.parse(new String[]{"completion", "install"}));
+        assertEquals(null, c.shell());
+        assertEquals(true, c.install());
+    }
+
+    @Test
+    void completionUninstallTakesAnExplicitShell() {
+        Command.CompletionSetup c = assertInstanceOf(Command.CompletionSetup.class,
+                CliParser.parse(new String[]{"completion", "uninstall", "bash"}));
+        assertEquals(Shell.BASH, c.shell());
+        assertEquals(false, c.install());
+    }
+
+    @Test
     void completionRequiresShell() {
         assertThrows(CliException.class, () -> CliParser.parse(new String[]{"completion"}));
     }

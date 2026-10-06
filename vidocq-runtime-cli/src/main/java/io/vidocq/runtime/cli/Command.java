@@ -96,6 +96,9 @@ public sealed interface Command {
 
     record Completion(Shell shell) implements Command {}
 
+    /** {@code completion install|uninstall [shell]}; a {@code null} shell is read from {@code $SHELL}. */
+    record CompletionSetup(Shell shell, boolean install) implements Command {}
+
     /** A command token that is not a built-in; dispatched to a CLI plugin. */
     record Plugin(String name, List<String> args) implements Command {}
 }

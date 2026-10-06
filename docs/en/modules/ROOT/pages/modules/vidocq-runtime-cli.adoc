@@ -62,7 +62,7 @@ java -m io.vidocq.runtime.cli/io.vidocq.runtime.cli.VidocqCli <command> [options
 
 [TIP]
 ====
-Enable tab-completion with `source <(vidocq completion bash)` — see <<completion>>.
+Enable tab-completion with `vidocq completion install` — see <<completion>>.
 ====
 
 [#getting-started]
@@ -215,6 +215,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 
 | `vidocq completion <bash\|zsh>`
 | Print a shell-completion script (see <<completion>>).
+
+| `vidocq completion install\|uninstall [bash\|zsh]`
+| Set up (or remove) completion in your shell's rc file (see <<completion>>).
 
 | `vidocq help [command]`
 | Show the command list or detailed help for one command.
@@ -422,8 +425,12 @@ never fail the command; only ✘ checks set a non-zero exit code.
 [#completion]
 === `vidocq completion`
 
-Prints a self-contained completion script to stdout. The first argument completes against
-the command catalogue; everything else defers to default file completion.
+Prints a self-contained completion script to stdout. It completes commands, sub-commands
+(`extension list|add|remove`, `config get|set|list`, …), each command's options, build types,
+and values: the catalog's extension ids after `extension add` and `create -x`, the extensions
+the current `pom.xml` declares after `extension remove`, the keys of the project's
+`vidocq.properties` after `config get|set`. These values are read by the script itself, so
+pressing TAB never starts a JVM.
 
 [source,bash]
 ----
@@ -433,6 +440,15 @@ source <(vidocq completion bash)
 # zsh — install into the completion path
 vidocq completion zsh > "${fpath[1]}/_vidocq"
 ----
+
+`vidocq completion install` does it for you: it writes the script to
+`~/.vidocq/completion/vidocq.<shell>` and adds a marked block sourcing it to `~/.zshrc` or
+`~/.bashrc`. The shell comes from `$SHELL` unless named (`vidocq completion install bash`).
+Running it again replaces the block instead of adding another, and refreshes the script — do so
+after upgrading the CLI. `vidocq completion uninstall` removes the block and the script.
+
+NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_profile`, not
+`~/.bashrc`. Source `~/.bashrc` from `~/.bash_profile` if it does not already.
 
 == Configuration & profiles
 

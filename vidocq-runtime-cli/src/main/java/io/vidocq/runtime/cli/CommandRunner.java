@@ -23,6 +23,8 @@ import io.vidocq.runtime.cli.build.MavenInvocation;
 import io.vidocq.runtime.cli.build.MavenLauncher;
 import io.vidocq.runtime.cli.completion.CommandCatalog;
 import io.vidocq.runtime.cli.completion.CompletionScripts;
+import io.vidocq.runtime.cli.completion.Shell;
+import io.vidocq.runtime.cli.completion.ShellSetup;
 import io.vidocq.runtime.cli.config.ConfigFile;
 import io.vidocq.runtime.cli.config.PropertiesText;
 import io.vidocq.runtime.cli.dev.BootSpinner;
@@ -78,6 +80,7 @@ public final class CommandRunner {
                 case Command.Config.Listing l   -> runConfigList(l);
             };
             case Command.Completion comp       -> runCompletion(comp);
+            case Command.CompletionSetup setup -> runCompletionSetup(setup);
             case Command.Plugin p              -> runPlugin(p);
             case Command.Extension e           -> switch (e) {
                 case Command.Extension.Listing l -> runExtensionList(l);
@@ -502,6 +505,48 @@ public final class CommandRunner {
         } catch (IOException e) {
             CliOutput.error("Cannot read " + file + ": " + e.getMessage());
             return null;
+        }
+    }
+
+    private static int runCompletionSetup(Command.CompletionSetup setup) {
+        Shell shell;
+        try {
+            shell = setup.shell() != null ? setup.shell() : ShellSetup.detect(System.getenv("SHELL"));
+        } catch (IllegalArgumentException e) {
+            CliOutput.error(e.getMessage());
+            return 1;
+        }
+        Path home = Path.of(System.getProperty("user.home", "."));
+        Path rc = ShellSetup.rcFile(shell, home);
+        Path script = ShellSetup.scriptFile(shell, home);
+        try {
+            String before = Files.isRegularFile(rc) ? Files.readString(rc) : "";
+            if (setup.install()) {
+                Files.createDirectories(script.getParent());
+                Files.writeString(script, CompletionScripts.script(shell, CommandCatalog.COMMANDS));
+                String after = ShellSetup.withBlock(before, script);
+                if (!after.equals(before)) {
+                    Files.writeString(rc, after);
+                }
+                CliOutput.success("Completion script written to " + script);
+                CliOutput.success((after.equals(before) ? "Already sourced from " : "Sourced from ") + rc);
+                CliOutput.println(CliOutput.dim("  open a new terminal, or run: source " + rc));
+            } else {
+                String after = ShellSetup.withoutBlock(before);
+                if (!after.equals(before)) {
+                    Files.writeString(rc, after);
+                    CliOutput.success("Removed the completion block from " + rc);
+                } else {
+                    CliOutput.info("No completion block in " + rc);
+                }
+                if (Files.deleteIfExists(script)) {
+                    CliOutput.success("Deleted " + script);
+                }
+            }
+            return 0;
+        } catch (IOException e) {
+            CliOutput.error("Could not set up completion: " + e.getMessage());
+            return 1;
         }
     }
 
