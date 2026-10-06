@@ -27,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +107,7 @@ class TestRunnerTest {
 
         launched.cancel();
 
-        assertTrue(gone(child), "the forked test JVM");
+        assertTrue(goneWithin(child, Duration.ofSeconds(5)), "the forked test JVM");
         assertNotEquals(0, launched.waitFor());
     }
 
@@ -148,6 +149,21 @@ class TestRunnerTest {
      * ProcessHandle#isAlive} still reports alive: in a container without an init process, the orphaned grandchild
      * is re-parented to a PID 1 that never reaps it. A zombie runs nothing and holds nothing: it counts as gone.
      */
+    /**
+     * {@link #gone} once the process had time to die: a signal is delivered, and acted on, after
+     * {@code destroy} returns, so a check made right after the cancel races the kernel on a busy runner.
+     */
+    private static boolean goneWithin(long pid, Duration timeout) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (!gone(pid)) {
+            if (System.nanoTime() > deadline) {
+                return false;
+            }
+            Thread.sleep(20);
+        }
+        return true;
+    }
+
     private static boolean gone(long pid) throws Exception {
         Optional<ProcessHandle> handle = ProcessHandle.of(pid);
         if (handle.isEmpty() || !handle.get().isAlive()) {
