@@ -21,6 +21,12 @@ package io.vidocq.runtime.cli.ext;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Set;
+import java.util.TreeSet;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -90,5 +96,42 @@ class KnownExtensionsTest {
     @Test
     void rejectsBlankId() {
         assertThrows(IllegalArgumentException.class, () -> KnownExtensions.resolve("  "));
+    }
+
+    /** Extensions only {@code vidocq:dev} adds: never something to declare in a pom. */
+    private static final Set<String> DEV_ONLY = Set.of("vidocq-runtime-devconsole-extension");
+
+    @Test
+    void catalogCoversEveryPublishedExtensionOfTheReactor() throws IOException {
+        Path extensions = Path.of("..", "vidocq-runtime-extensions");
+        Set<String> published = new TreeSet<>();
+        try (var groups = Files.list(extensions)) {
+            for (var group : groups.filter(Files::isDirectory).toList()) {
+                Path groupPom = group.resolve("pom.xml");
+                if (!Files.isRegularFile(groupPom)) {
+                    continue;
+                }
+                String modules = Files.readString(groupPom);
+                try (var children = Files.list(group)) {
+                    for (var module : children.toList()) {
+                        String name = module.getFileName().toString();
+                        Path pom = module.resolve("pom.xml");
+                        if (name.endsWith("-extension") && modules.contains("<module>" + name + "</module>")
+                                && Files.isRegularFile(pom)
+                                && !Files.readString(pom).contains("<maven.deploy.skip>true")
+                                && !DEV_ONLY.contains(name)) {
+                            published.add(name);
+                        }
+                    }
+                }
+            }
+        }
+        Set<String> catalog = new TreeSet<>();
+        KnownExtensions.catalog().forEach(e -> catalog.add(e.coordinate().artifactId()));
+
+        assertFalse(published.isEmpty(), "no extension module found under " + extensions.toAbsolutePath());
+        Set<String> missing = new TreeSet<>(published);
+        missing.removeAll(catalog);
+        assertTrue(missing.isEmpty(), "published extensions missing from KnownExtensions: " + missing);
     }
 }
