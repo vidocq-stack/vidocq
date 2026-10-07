@@ -38,10 +38,10 @@ module io.vidocq.humboldt.rest {
     requires static jakarta.cdi;  // @Dependent on the server filters (runtime brings CDI)
     requires static io.vidocq.vauban.api;  // generated _VaubanComponents provider (runtime brings Vauban)
     requires java.logging;
-    // M7c.12 — MicroProfile Rest Client: optional. HumboldtMpRestClientListener
-    // is only invoked if MP Rest Client is on the runtime classpath (typically
-    // via cyrano-core). `requires static` = compile-time only, not a runtime dep.
-    requires static microprofile.rest.client.api;
+    // MicroProfile Rest Client: optional. HumboldtMpRestClientListener only runs when a Rest
+    // Client is present at run time (cyrano-core brings it); read through the module Vidocq
+    // ships, cyrano's repackaged API (humboldt#18). `requires static` = compile time only.
+    requires static io.vidocq.cyrano.mp.rest.client.api;
 
     exports io.vidocq.humboldt.rest;
 
