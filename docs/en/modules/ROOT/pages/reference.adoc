@@ -26,7 +26,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console [.tag-new]#NEW# is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
 | `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}` [.tag-new]#NEW#
-| langchain4j-cdi MCP server extension. Built in the reactor, not published while langchain4j-cdi is a SNAPSHOT: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
+| langchain4j-cdi MCP server extension, on langchain4j-cdi `1.5.0`: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)

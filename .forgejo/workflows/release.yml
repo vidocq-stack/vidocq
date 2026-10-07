@@ -133,7 +133,6 @@ jobs:
             vidocq-runtime-integration-tests
             vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-examples
-            vidocq-runtime-langchain4j-cdi-mcp-extension
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}

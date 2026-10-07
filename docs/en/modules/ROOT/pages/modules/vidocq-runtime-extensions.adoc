@@ -712,10 +712,7 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
 
 `vidocq-runtime-langchain4j-cdi-mcp-extension` hosts a langchain4j-cdi MCP server on Vidocq: the `@Tool`, `@Prompt`, `@Resource` and `@ResourceTemplate` methods of the application's CDI beans are served over the Model Context Protocol at `/mcp`, in its `2026-07-28` and `2025-03-26` revisions. One dependency brings everything the server needs.
 
-[IMPORTANT]
-====
-The extension is not on Maven Central yet. It depends on langchain4j-cdi `1.4.0-SNAPSHOT`, the version that carries the MCP `2026-07-28` work and declares `provides org.mcpjava.server.spi.McpServerSPI` in its module descriptor. Until langchain4j-cdi releases it, the extension is built in the Vidocq reactor and left out of Vidocq releases: build Vidocq with `mvn install` to use it.
-====
+The extension builds on langchain4j-cdi `1.5.0`, the first release that carries the MCP `2026-07-28` work and declares `provides org.mcpjava.server.spi.McpServerSPI` in its module descriptor.
 
 [source,xml,subs=attributes+]
 ----
