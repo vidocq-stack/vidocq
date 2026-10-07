@@ -183,7 +183,7 @@ public class VidocqPackageMojo extends AbstractMojo {
         return jvmArgs == null || jvmArgs.isBlank() ? "" : " " + jvmArgs.strip();
     }
 
-    void generateShScript(Path binDir) throws IOException {
+    void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode && trampolineRef() != null) {
@@ -220,7 +220,7 @@ public class VidocqPackageMojo extends AbstractMojo {
                       --module-path "$BASEDIR/lib" \\
                       --module %s \\
                       "$@"
-                    """.formatted(jvmArgsLine, mainClass);
+                    """.formatted(jvmArgsLine, legacyModuleRef());
         }
 
         Path shFile = binDir.resolve(scriptName + ".sh");
@@ -228,7 +228,7 @@ public class VidocqPackageMojo extends AbstractMojo {
         shFile.toFile().setExecutable(true);
     }
 
-    void generateCmdScript(Path binDir) throws IOException {
+    void generateCmdScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode && trampolineRef() != null) {
@@ -262,10 +262,32 @@ public class VidocqPackageMojo extends AbstractMojo {
                       --module-path "%%BASEDIR%%\\lib" ^
                       --module %s ^
                       %%*
-                    """.formatted(jvmArgsLine, mainClass);
+                    """.formatted(jvmArgsLine, legacyModuleRef());
         }
 
         Files.writeString(binDir.resolve(scriptName + ".cmd"), script);
+    }
+
+    /**
+     * The {@code module/class} the legacy layout ({@code vidocq.package.layer=false}) hands to
+     * {@code --module}, which takes a module name, never a bare class (BUG-20260710-02, #198): the
+     * runtime's own main by default, {@code <mainModule>/<mainClass>} for an application main class,
+     * and a value already written {@code module/class} as is.
+     */
+    private String legacyModuleRef() throws MojoExecutionException {
+        if (mainClass == null || mainClass.isBlank()
+                || ApplicationMainClass.RUNTIME_MAIN_CLASS.equals(mainClass)) {
+            return "io.vidocq.runtime.core/" + ApplicationMainClass.RUNTIME_MAIN_CLASS;
+        }
+        if (mainClass.contains("/")) {
+            return mainClass;
+        }
+        if (mainModule == null || mainModule.isBlank()) {
+            throw new MojoExecutionException("vidocq:package with vidocq.package.layer=false launches the main class "
+                    + "through --module, which needs its module: set vidocq.mainModule (the module of "
+                    + mainClass + "), or write vidocq.mainClass as <module>/" + mainClass + ".");
+        }
+        return mainModule + "/" + mainClass;
     }
 
     /**

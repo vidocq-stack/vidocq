@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.plugin.MojoExecutionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -28,6 +29,7 @@ import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -106,6 +108,43 @@ class VidocqPackageMojoTest {
         mojo.generateShScript(binDir);
         assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.main="),
                 "the runtime's own main class must not be passed as the application main class");
+    }
+
+    /** The legacy layout (vidocq.package.layer=false) launches {@code <module>/<class>} (BUG-20260710-02, #198). */
+    @Test
+    void legacyLaunchers_runTheRuntimeMainThroughItsModuleByDefault(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "mainClass", "io.vidocq.runtime.core.Vidocq");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh"))
+                .contains("--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd"))
+                .contains("--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^"));
+    }
+
+    @Test
+    void legacyLaunchers_prefixAPlainMainClassWithTheMainModule(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "mainClass", "io.repro.app.Main");
+        set(mojo, "mainModule", "io.repro.app");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("--module io.repro.app/io.repro.app.Main \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("--module io.repro.app/io.repro.app.Main ^"));
+    }
+
+    @Test
+    void legacyLaunchers_refuseAPlainMainClassWithoutAModule(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "mainClass", "io.repro.app.Main");
+
+        var failure = assertThrows(MojoExecutionException.class, () -> mojo.generateShScript(binDir));
+        assertTrue(failure.getMessage().contains("vidocq.mainModule"), failure.getMessage());
     }
 
     private static VidocqPackageMojo mojoWith(String jvmArgs) throws Exception {
