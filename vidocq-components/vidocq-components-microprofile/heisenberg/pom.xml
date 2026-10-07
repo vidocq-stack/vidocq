@@ -53,7 +53,6 @@
     </scm>
 
     <properties>
-        <vidocq.javamodules.excludes>microprofile-fault-tolerance-api,microprofile-config-api,microprofile-metrics-api</vidocq.javamodules.excludes>
         <!--
             MicroProfile Fault Tolerance 4.1 API.
             ATTENTION : microprofile-fault-tolerance-api:4.1 peut ne pas avoir d'Automatic-Module-Name
@@ -233,40 +232,6 @@
         </dependencies>
     </dependencyManagement>
 
-    <build>
-        <!--
-            Java Modules workaround : microprofile-fault-tolerance-api:4.1 peut ne pas avoir
-            d'Automatic-Module-Name dans son MANIFEST.MF (à vérifier à l'install).
-
-            Solution : maven-dependency-plugin copie tous les JARs compile-scope dans
-            target/javamodules/ en phase initialize. Le maven-compiler-plugin reçoit
-            l'argument module-path pointant vers target/javamodules ; javac dérive alors
-            le nom du module depuis le nom de fichier.
-
-            Si une version avec Automatic-Module-Name est publiée, ce workaround peut être
-            supprimé (les JARs avec AMBN sont résolus normalement par Maven Compiler Plugin).
-        -->
-        <plugins>
-            <!-- copy-compile-deps-to-module-path: managed by vidocq-parent (declaring the
-                 plugin activates it). The MicroProfile originals replaced by the modular
-                 repackages (heisenberg-mp-ft-api, ravel-mp-config-api, dirac-mp-metrics-api)
-                 are excluded via the vidocq.javamodules.excludes property below. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <compilerArgs>
-                        <arg>--module-path</arg>
-                        <arg>${project.build.directory}/javamodules</arg>
-                    </compilerArgs>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
     <profiles>
         <!--

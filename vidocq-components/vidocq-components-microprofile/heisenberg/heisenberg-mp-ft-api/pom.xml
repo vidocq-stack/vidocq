@@ -43,6 +43,10 @@
                 <version>3.8.1</version>
                 <executions>
                     <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
                         <id>unpack-microprofile-ft-api</id>
                         <phase>generate-resources</phase>
                         <goals>
