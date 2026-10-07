@@ -405,3 +405,24 @@
   `ServiceLoaderComponentLoaderTest` (humboldt-otel-context, class path) guards the upstream contract.
   `-Psnapshot package` of the module checked: the published sources jar holds Humboldt's source, javadoc
   skipped. Full reactor `./mvnw -ntp clean install` green.
+
+## BUG-20261007-01 — On a pull request, the CI TCK run tested `main`'s CDI, REST and runtime modules
+
+- **Date**: 2026-10-07
+- **Status**: FIXED (branch `pr/ybl/mp-7.2`, 2026-10-07)
+- **Component**: humboldt-tck (`pom.xml`)
+- **Affected**: every pull request since the TCK runner came back in the reactor
+- **Symptom**: humboldt#17 CI failed one Telemetry 2.2-RC3 test, `RestClientSpanTest.spanChild`
+  (`code.function.name` expected `...RestClientSpanTest$SpanBean.spanChild`, found `null`), while the same
+  commit passes 85/85 locally.
+- **Minimal reproduction**: in a copy of the repository, `./mvnw versions:set -DnewVersion=0.4.0-SIMCI
+  -DprocessAllModules=true`, `./mvnw install -DskipTests`, then `./mvnw -P tck,tck-official -pl humboldt-tck
+  dependency:list -DincludeGroupIds=io.vidocq.humboldt`: `humboldt-cdi`, `-rest`, `-runtime` and `-otel-interop`
+  resolve at `0.4.0-SNAPSHOT`, the rest at `0.4.0-SIMCI`.
+- **Cause**: the pull-request CI renames the reactor version before installing it, then runs
+  `mvn -P tck,tck-official -pl humboldt-tck test`. `humboldt-tck/pom.xml` pinned
+  `<humboldt.version>0.4.0-SNAPSHOT</humboldt.version>`, which `versions:set` does not rewrite, so the four
+  modules declared with it came from the snapshot published from `main` — whose `WithSpanInterceptor` predates
+  `code.function.name`. A passing TCK on a pull request therefore proved nothing about those modules.
+- **Fix**: `<humboldt.version>${project.version}</humboldt.version>`. Same reproduction: every Humboldt
+  artifact resolves at `0.4.0-SIMCI`. A local build is unchanged (`0.4.0-SNAPSHOT`).
