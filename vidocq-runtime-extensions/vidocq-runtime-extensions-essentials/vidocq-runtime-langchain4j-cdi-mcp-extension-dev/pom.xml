@@ -34,25 +34,10 @@
     <description>The live mcp panel of the dev console, and its MCP inspector. Only vidocq:dev adds it; no binary
         contains it (Vidocq/vidocq#143).</description>
 
-    <properties>
-        <!--
-            Same reason as vidocq-runtime-langchain4j-cdi-mcp-extension's own properties: not released while
-            langchain4j-cdi is a SNAPSHOT (Vidocq/vidocq#94, decision 4). Remove all five once that module's do.
-        -->
-        <maven.deploy.skip>true</maven.deploy.skip>
-        <maven.javadoc.skip>true</maven.javadoc.skip>
-        <maven.source.skip>true</maven.source.skip>
-        <gpg.skip>true</gpg.skip>
-        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
-    </properties>
-
     <dependencies>
-        <!-- Not in the root pom's dependencyManagement: neither is the runtime extension itself (Vidocq/vidocq#94,
-             decision 4, both left out while langchain4j-cdi is a SNAPSHOT), so the version is stated here. -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.essentials</groupId>
             <artifactId>vidocq-runtime-langchain4j-cdi-mcp-extension</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
