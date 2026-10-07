@@ -66,6 +66,7 @@
         <module>mansart-transactions</module>
         <module>mansart-jakarta-data</module>
         <module>mansart-persistence</module>
+        <module>mansart-validation</module>
     </modules>
 
     <properties>
