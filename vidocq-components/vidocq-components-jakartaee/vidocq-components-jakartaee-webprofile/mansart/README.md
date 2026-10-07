@@ -16,6 +16,7 @@ the persistence layer in the stack.
 | --- | --- |
 | `mansart-jakarta-data` | **Jakarta Data 1.0** implementation (repositories, pagination, query methods). Direct JDBC backend, pluggable dialects. |
 | `mansart-persistence`  | **Jakarta Persistence 3.2** (JPA) implementation, reused by `mansart-jakarta-data` for entity-typed repositories when the app already provides an `EntityManager`. |
+| `mansart-validation`   | **Jakarta Validation 3.1** (Bean Validation) implementation, planned. Standalone; also consumed by `mansart-persistence` (spec §3.7). |
 | `mansart-pool`         | **Virtual-thread-native** JDBC connection pool, post-Loom, zero dependencies, optional and standalone. Usable outside Mansart. |
 
 ## Philosophy (inherited from Vidocq)
