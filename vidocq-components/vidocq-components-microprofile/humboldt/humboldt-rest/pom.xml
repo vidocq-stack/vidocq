@@ -139,26 +139,6 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <!-- Copies all dependencies (incl. provided microprofile-rest-client-api)
-                         into target/javamodules so that javac can derive the module name
-                         from the file name. Phase initialize: available
-                         at default-compile (Java Modules dependencies force module-path mode)
-                         and at compile-module-info in prepare-package. -->
-                    <execution>
-                        <id>copy-deps-to-module-path</id>
-                        <phase>initialize</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
-                            <includeScope>test</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <!-- -p javamodules applied to all executions unless overridden.
@@ -167,8 +147,6 @@
                          must then be told where to find microprofile-rest-client-api
                          (JAR without Automatic-Module-Name, copied by the dependency plugin). -->
                     <compilerArgs>
-                        <arg>-p</arg>
-                        <arg>${project.build.directory}/javamodules</arg>
                         <!-- Library module: cross-module beans are validated at the
                              Vidocq runtime assembly, not here (pattern knock-jaxrs). -->
                         <arg>-Avauban.validation=false</arg>
@@ -193,10 +171,6 @@
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
-                            <compilerArgs>
-                                <arg>-p</arg>
-                                <arg>${project.build.directory}/javamodules</arg>
-                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>
