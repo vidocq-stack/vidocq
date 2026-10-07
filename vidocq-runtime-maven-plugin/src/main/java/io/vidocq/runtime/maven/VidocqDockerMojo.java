@@ -97,6 +97,20 @@ public class VidocqDockerMojo extends AbstractMojo {
                             + ". Run vidocq:jlink first (or point runtimeImage to an existing image).");
         }
 
+        // jlink links against the build host's JDK: an image made on macOS or Windows cannot start in
+        // the Linux container this goal describes (BUG-20260711-02, #199).
+        String platform = nonLinuxPlatform(runtimeImage.toPath());
+        if (platform != null) {
+            String problem = "The runtime image " + runtimeImage + " was linked for " + platform
+                    + ", not Linux: the container would fail at start (exec format error). jlink links "
+                    + "against the JDK of the machine that runs it, so build the image on Linux, in CI "
+                    + "for instance, before wrapping it.";
+            if (build) {
+                throw new MojoExecutionException(problem);
+            }
+            getLog().warn(problem + " The Dockerfile is generated anyway.");
+        }
+
         Path target = buildDir.toPath();
         Path dockerfile = target.resolve("Dockerfile");
 
@@ -131,6 +145,33 @@ public class VidocqDockerMojo extends AbstractMojo {
         if (build) {
             runDockerBuild(dockerfile, target);
         }
+    }
+
+    /**
+     * The platform the image's {@code bin/java} was built for, read from its executable header, when it
+     * is not Linux (ELF): {@code "macOS (Mach-O executable)"} or {@code "Windows (PE executable)"};
+     * {@code null} for ELF, or when the launcher cannot be read or recognised.
+     */
+    static String nonLinuxPlatform(Path image) {
+        for (String name : new String[] {"java", "java.exe"}) {
+            Path java = image.resolve("bin").resolve(name);
+            if (!Files.isRegularFile(java)) continue;
+            byte[] head = new byte[4];
+            try (var in = Files.newInputStream(java)) {
+                if (in.readNBytes(head, 0, 4) < 2) return null;
+            } catch (IOException e) {
+                return null;
+            }
+            int magic = ((head[0] & 0xFF) << 24) | ((head[1] & 0xFF) << 16) | ((head[2] & 0xFF) << 8) | (head[3] & 0xFF);
+            if (magic == 0x7F454C46) return null; // ELF
+            if (magic == 0xFEEDFACE || magic == 0xFEEDFACF || magic == 0xCEFAEDFE || magic == 0xCFFAEDFE
+                    || magic == 0xCAFEBABE) {
+                return "macOS (Mach-O executable)";
+            }
+            if (head[0] == 'M' && head[1] == 'Z') return "Windows (PE executable)";
+            return null;
+        }
+        return null;
     }
 
     private void runDockerBuild(Path dockerfile, Path context) throws MojoExecutionException {

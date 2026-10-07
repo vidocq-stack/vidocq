@@ -189,7 +189,7 @@ where this whole bug class is invisible.
 ## BUG-20260612-01 — Invalid 0.2.0-SNAPSHOT pom of vidocq-runtime-cassini-rest-extension on central-snapshots
 
 - **Date**: 2026-06-12
-- **Status**: OPEN
+- **Status**: CLOSED 2026-10-07 — obsolete
 - **Affected module**: vidocq-runtime-cassini-rest-extension (published snapshot, timestamp 0.2.0-20260608.152249-5)
 - **Symptom**: any out-of-reactor consumer resolving the published snapshot gets
   "The POM ... is invalid, transitive dependencies (if any) will not be available:
@@ -210,6 +210,10 @@ where this whole bug class is invisible.
   - 2026-06-12 : root-caused while re-validating grimm-tck on 0.2.0 jars (frozen-runner trap, CG-06).
     Contained workaround committed in grimm-tck/pom.xml (lost transitives declared explicitly) —
     remove it once a valid snapshot is republished.
+  - 2026-10-07 : replayed with a throw-away consumer and an empty local repository (`-Dmaven.repo.local`) against
+    central-snapshots: `vidocq-runtime-cassini-rest-extension` 0.4.0-SNAPSHOT (`0.4.0-20261007.171041-82`) resolves
+    with no "POM is invalid" warning, and its four cassini jars come transitively. The grimm-tck workaround (cassini
+    jars declared by hand) can go; done in grimm.
 
 ## BUG-20260704-01 — Released CLI 0.2.0 reports "Vidocq CLI 0.2.0-SNAPSHOT" for --version
 
@@ -274,7 +278,7 @@ where this whole bug class is invisible.
 ## BUG-20260710-02 — vidocq:package 0.2.0 launcher uses --module <mainClass> without the module name
 
 - **Date**: 2026-07-10
-- **Status**: OPEN
+- **Status**: FIXED (vidocq#198, branch `pr/ybl/packaging-launchers`)
 - **Affected module**: vidocq-runtime-maven-plugin / VidocqPackageMojo
 - **Symptom**: the generated `bin/<app>.sh` launcher runs
   `java --module-path lib --module <mainClass>` — with the default or a plain class name
@@ -292,6 +296,14 @@ where this whole bug class is invisible.
   - 2026-07-10 : found together with BUG-20260710-01. Workaround baked into the scaffold:
     `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` on the package
     execution. Align the mojo with vidocq:dev/jlink (separate mainModule parameter) on main.
+  - 2026-10-07 : narrowed. The default layout (`vidocq.package.layer=true`) launches the runtime with
+    `-Dvidocq.app.path`, or the `@VidocqMain` trampoline as `<mainModule>/<mainClass>`, and is correct. The legacy
+    layout (`vidocq.package.layer=false`) still wrote `--module <mainClass>`, which failed even with the default
+    main class (`--module io.vidocq.runtime.core.Vidocq`).
+- **Fix**: `VidocqPackageMojo#legacyModuleRef` gives the legacy launchers `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`
+  by default, `<mainModule>/<mainClass>` for an application main class, keeps a `module/class` value as is, and fails
+  the build, naming `vidocq.mainModule`, for a plain class without it. `VidocqPackageMojoTest` (three tests, failing
+  first).
 
 ## BUG-20260711-01 — extension add does not wire the codegen bundle, next build fails checkpom
 
@@ -320,7 +332,7 @@ where this whole bug class is invisible.
 ## BUG-20260711-02 — vidocq:docker wraps the host-platform jlink image (broken container on macOS)
 
 - **Date**: 2026-07-11
-- **Status**: OPEN
+- **Status**: FIXED (vidocq#199, branch `pr/ybl/packaging-launchers`): detected and reported; cross-linking is not supported
 - **Affected module**: vidocq-runtime-maven-plugin / VidocqDockerMojo
 - **Symptom**: on macOS, `vidocq build jlink` produces a Mach-O arm64 runtime; `vidocq build
   docker` then generates a Dockerfile that COPYs that dist into a Linux base image — the
@@ -338,11 +350,19 @@ where this whole bug class is invisible.
 - **Investigations**:
   - 2026-07-11 : found while replaying the published tutorials end to end. Options: warn on
     non-linux hosts, document the CI-only expectation, or support --jmods cross-linking.
+  - 2026-10-07 : the misleading "Building Docker image…" log was already gone (the goal says "Dockerfile generated").
+    The platform problem remained: on macOS the cassini example's `target/dist/bin/java` is `Mach-O 64-bit
+    executable arm64`, and the goal wrapped it without a word.
+- **Fix**: `VidocqDockerMojo#nonLinuxPlatform` reads the header of the image's `bin/java` (`java.exe`): ELF passes;
+  Mach-O or PE gets a WARNING that names the platform and says the container will not start, and the Dockerfile is
+  still generated (failing would break `mvn install` on macOS for every project with the `dist` profile); with
+  `vidocq.docker.build=true` the goal fails before running `docker build`. Documented in the plugin page.
+  `VidocqDockerMojoTest` (failing first). Linking against Linux jmods from another OS stays out of scope.
 
 ## BUG-20260815-01 — jlink launcher requires an explicit `exports … to io.vidocq.runtime.core`
 
 - **Date**: 2026-08-15
-- **Status**: OPEN
+- **Status**: CLOSED 2026-10-07 — no longer reproduces on the default launch; residual noted below
 - **Affected module**: vidocq-runtime-core / `Vidocq.instantiateInLayer` + `VidocqAppLayer.exportToRuntime`
 - **Symptom**: an application packaged with `vidocq:jlink` and started through the generated
   launcher fails at boot unless its main package is exported to the runtime by hand. The same
@@ -373,3 +393,13 @@ where this whole bug class is invisible.
     likely affected too. Proper fix: make the boot-layer case explicit — either grant the access
     without the re-layering guard (`addExports` on the boot-layer module) or have `vidocq:jlink`
     fail loudly with the required directive rather than at run time.
+  - 2026-10-07 : replayed on main `b3dfc30a` with `vidocq-runtime-cassini-rest-example`, whose `module-info` exports
+    only its `model` package (no `exports … to io.vidocq.runtime.core`): the jlink image (`-m
+    io.vidocq.runtime.examples.rest/…RestExampleApp`) logs `Application layer ready … (boot-layer detection from
+    io.vidocq.runtime.examples.rest)`, starts in 121 ms and answers `GET /api/todos` with 200. `Vidocq.run()` now
+    re-layers the application from the boot layer, also inside a jlink image (vauban BUG-20260912-02), so
+    `exportToRuntime`'s guard holds and the export is granted.
+  - Residual: when no application module is found (`VidocqAppLayer` returns before `installLayer`, e.g. an empty
+    `applicationPaths`), the application stays in the boot layer and the same `IllegalAccessException` comes back,
+    with no hint. Not seen on any launch path we ship; worth a clear message if it shows up.
+

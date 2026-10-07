@@ -228,6 +228,11 @@ docker run --rm -p 8080:8080 \
     example/my-app:1.0.0
 ----
 
+The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
+or Windows the image holds a Mach-O or PE `bin/java` that a Linux container cannot start. The goal reads that
+header: when the image is not Linux it logs a warning and still writes the `Dockerfile`, and with
+`-Dvidocq.docker.build=true` it fails before running `docker build`. Build the image on Linux, in CI for instance.
+
 [#run]
 == `vidocq:run` goal [.tag-new]#NEW#
 
