@@ -105,16 +105,8 @@
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <compilerArgs>
-                        <arg>--module-path</arg>
-                        <arg>${project.build.directory}/javamodules</arg>
-                    </compilerArgs>
                 </configuration>
                 <executions>
                     <execution>
@@ -125,10 +117,6 @@
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
-                            <compilerArgs>
-                                <arg>--module-path</arg>
-                                <arg>${project.build.directory}/javamodules</arg>
-                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>

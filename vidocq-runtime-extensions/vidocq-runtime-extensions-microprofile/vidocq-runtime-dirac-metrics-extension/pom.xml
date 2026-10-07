@@ -107,28 +107,8 @@
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <!-- copy-compile-deps-to-module-path: managed by vidocq-parent. -->
-                    <execution>
-                        <id>copy-test-deps-to-module-path</id>
-                        <phase>generate-test-sources</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
-                            <includeScope>test</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <compilerArgs>
-                        <arg>--module-path</arg>
-                        <arg>${project.build.directory}/javamodules</arg>
-                    </compilerArgs>
                     <annotationProcessorPaths combine.children="append">
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
@@ -147,10 +127,6 @@
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
-                            <compilerArgs>
-                                <arg>--module-path</arg>
-                                <arg>${project.build.directory}/javamodules</arg>
-                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>

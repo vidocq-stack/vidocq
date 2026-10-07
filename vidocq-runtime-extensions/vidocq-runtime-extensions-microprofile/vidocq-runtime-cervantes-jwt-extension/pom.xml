@@ -72,22 +72,6 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <!-- copy-compile-deps-to-module-path: managed by vidocq-parent. -->
-                    <execution>
-                        <id>copy-test-deps-to-module-path</id>
-                        <phase>generate-test-sources</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/javamodules</outputDirectory>
-                            <includeScope>test</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <!-- One codegen bundle per declared extension (checkpom contract). -->
@@ -102,15 +86,6 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <id>default-compile</id>
-                        <configuration>
-                            <compilerArgs>
-                                <arg>--module-path</arg>
-                                <arg>${project.build.directory}/javamodules</arg>
-                            </compilerArgs>
-                        </configuration>
-                    </execution>
-                    <execution>
                         <id>compile-module-info</id>
                         <phase>prepare-package</phase>
                         <goals><goal>compile</goal></goals>
@@ -118,10 +93,6 @@
                             <compileSourceRoots>
                                 <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
                             </compileSourceRoots>
-                            <compilerArgs>
-                                <arg>--module-path</arg>
-                                <arg>${project.build.directory}/javamodules</arg>
-                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>
