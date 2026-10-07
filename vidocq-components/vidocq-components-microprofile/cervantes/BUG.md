@@ -171,3 +171,34 @@ validated against the supported algorithms (`RSA-OAEP`, `RSA-OAEP-256`) when the
 `CervantesClaimExtension` builds the validator in its `@Validation` phase, so the container fails to
 start with a message naming the property, the bad value and the supported list. Covered by
 `FailFastStartupTest`.
+
+## CERV-005 — On a pull request, the CI TCK run tested `main`, not the pull request
+
+- **Opening date**: 2026-10-07
+- **Status**: ✅ FIXED 2026-10-07
+
+### Symptom
+
+The pull-request CI renames the reactor version (`versions:set` to `0.4.0-PR<n>.<sha>`), installs
+it, then runs `mvn -P tck,tck-official -pl cervantes-tck test`. The TCK passed, but against the
+Cervantes `0.4.0-SNAPSHOT` jars published from `main`, not against the pull request.
+
+### Minimal repro
+
+In a copy of the repository: `./mvnw versions:set -DnewVersion=0.4.0-SIMCI -DprocessAllModules=true`,
+`./mvnw install -DskipTests`, then
+`./mvnw -P tck,tck-official -pl cervantes-tck dependency:list -DincludeGroupIds=io.vidocq.cervantes`:
+every Cervantes artifact resolves at `0.4.0-SNAPSHOT`.
+
+### Cause
+
+`cervantes-tck/pom.xml` pinned `<cervantes.version>0.4.0-SNAPSHOT</cervantes.version>`.
+`versions:set` only rewrites the project and parent versions, never a property, so the TCK kept
+resolving the snapshot. Found because the same pin in humboldt-tck made the humboldt pull-request
+CI fail a Telemetry 2.2 test that only the pull request passes.
+
+### Fix
+
+`<cervantes.version>${project.version}</cervantes.version>`: the TCK now resolves the reactor's own
+version (same repro gives `0.4.0-SIMCI` everywhere). Unchanged for a local build, where it still
+resolves `0.4.0-SNAPSHOT`.
