@@ -37,17 +37,6 @@
 
     <properties>
         <!--
-            Not released while langchain4j-cdi is a SNAPSHOT (Vidocq/vidocq#94, decision 4): built in the reactor,
-            left out of the release. maven.deploy.skip in this module's own <properties> is what Vidocq/ci's
-            bootstrap-workflows.sh reads to list the module in release.yml's excluded-modules (the deploy step's
-            -pl !:<artifactId>); central-publishing ignores maven.deploy.skip, hence skipPublishing below. Remove all
-            five once langchain4j-cdi publishes a release carrying the MCP 2026-07-28 work.
-        -->
-        <maven.deploy.skip>true</maven.deploy.skip>
-        <maven.javadoc.skip>true</maven.javadoc.skip>
-        <maven.source.skip>true</maven.source.skip>
-        <gpg.skip>true</gpg.skip>
-        <!--
             checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
             The Cassini extension is aggregated here for the applications' run time only, and this module runs no
             annotation processor (-proc:none): there is nothing for its codegen to generate.
@@ -187,13 +176,6 @@
                             <Vidocq-Scan-Dependencies>dev.langchain4j.cdi.mcp:*</Vidocq-Scan-Dependencies>
                         </manifestEntries>
                     </archive>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.sonatype.central</groupId>
-                <artifactId>central-publishing-maven-plugin</artifactId>
-                <configuration>
-                    <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
         </plugins>
