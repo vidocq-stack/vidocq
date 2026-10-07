@@ -108,7 +108,7 @@ Total: 1m06s. The `deploy needs: [build, tck-mp-health]` gate is enforced.
 ## BUG-002 — Java Modules workaround via manual copy of compile-scope JARs
 
 - **Opened**: 2026-05-25
-- **Status**: ⚠️ OPEN — active workaround
+- **Status**: ✅ FIXED 2026-10-07 — workaround removed (Vidocq/vidocq-parent#13)
 
 ### Symptom
 
@@ -143,6 +143,13 @@ incremental builds.
 Check module by module which ones have an explicit Java Modules descriptor and which ones
 only have an `Automatic-Module-Name` — then remove the corresponding entries from the
 workaround as upstream modules are fixed.
+
+### Resolution (2026-10-07)
+The failure no longer reproduces on main: with the `target/javamodules` copy and the `--module-path` arguments
+removed, `clean verify` passes with the same tests (59) and every produced jar (5) keeps the same module
+descriptor. Most likely the failure dated from the Maven 4 RC / compiler-plugin 4.0.0-beta era (it does not come
+back with compiler plugin 3.13 either). Workaround removed; the shared execution in vidocq-parent goes next
+(Vidocq/vidocq-parent#13).
 
 ## BUG-20260712-01 — hardcoded implementation version constant in the published api artifact
 
