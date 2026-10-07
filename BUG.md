@@ -401,5 +401,8 @@ where this whole bug class is invisible.
     `exportToRuntime`'s guard holds and the export is granted.
   - Residual: when no application module is found (`VidocqAppLayer` returns before `installLayer`, e.g. an empty
     `applicationPaths`), the application stays in the boot layer and the same `IllegalAccessException` comes back,
-    with no hint. Not seen on any launch path we ship; worth a clear message if it shows up.
+    with no hint. Not seen on any launch path we ship.
+  - 2026-10-07 : the residual now fails with a message that names the class, the package and both ways out (an
+    `exports … to io.vidocq.runtime.core;` or a CDI bean): `Vidocq.inaccessibleApplicationClass`, vidocq#201,
+    `BootLayerAccessTest`.
 

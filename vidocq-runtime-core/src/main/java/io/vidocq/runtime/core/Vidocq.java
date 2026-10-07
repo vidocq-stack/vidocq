@@ -212,6 +212,30 @@ public final class Vidocq {
         // …otherwise through its public no-arg constructor (package exported to us
         // through the layer controller — the JDK-launcher technique).
         VidocqAppLayer.exportToRuntime(layerClass);
+        var problem = inaccessibleApplicationClass(layerClass, Vidocq.class.getModule());
+        if (problem != null) {
+            throw new IllegalStateException(problem);
+        }
         return (VidocqApp) layerClass.getDeclaredConstructor().newInstance();
+    }
+
+    /**
+     * Why the runtime cannot instantiate {@code appClass}, or {@code null} when it can: its package must be
+     * exported to the runtime, which {@link VidocqAppLayer#exportToRuntime} grants only to a class re-layered
+     * into the application layer. An application left in the boot layer (no application module found) gets
+     * this message instead of a bare {@code IllegalAccessException} (vidocq#201, BUG-20260815-01).
+     */
+    static String inaccessibleApplicationClass(Class<?> appClass, Module runtime) {
+        var module = appClass.getModule();
+        var pkg = appClass.getPackageName();
+        if (!module.isNamed() || module.isExported(pkg, runtime)) {
+            return null;
+        }
+        return "Vidocq cannot instantiate " + appClass.getName() + ": module " + module.getName()
+                + " does not export " + pkg + " to io.vidocq.runtime.core, and the application was not moved into"
+                + " the Vauban application layer, where that export is granted automatically. Add"
+                + " `exports " + pkg + " to io.vidocq.runtime.core;` to " + module.getName()
+                + "'s module-info.java, or make " + appClass.getSimpleName() + " a CDI bean"
+                + " (an @ApplicationScoped or @Dependent class), which the container instantiates itself.";
     }
 }
