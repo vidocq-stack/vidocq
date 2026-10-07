@@ -12,7 +12,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 | `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
 | `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
-| `mansart-persistence` | Jakarta Persistence 3.2 (JPA) | ⏸️ **M7 suspended** — mansart-data does the job for current runtime needs |
+| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — skeleton, see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 
 ## Delivered phases
@@ -70,18 +70,18 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
       depending on an EntityManager will be explicitly excluded while M7 is
       suspended)
 
-### M7 — Mansart Persistence (JPA 3.2) ⏸️ SUSPENDED
+### M7 — Mansart Persistence (JPA 3.2) 🚧 RESTARTED
 
-**Status**: not started, suspended until a concrete need arises on the Vidocq runtime side
-(`vidocq-runtime-mansart-h2-example` currently works with `mansart-data`
-alone). The prioritization decision will be revisited if an MP extension or an
-external consumer requests it.
+**Status**: restarted on 2026-10-07 as `mansart-persistence/` (Maven parent `mansart-jpa`).
+The detailed plan — milestones P0 (TCK instrument) to P12 (certification) — lives in
+[`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md); the summary below is kept
+for the overview.
 
-Planned scope when we start:
+Scope:
 - [ ] `EntityManager`, `EntityManagerFactory`, JPQL, Criteria API
 - [ ] Lifecycle (`@PrePersist`, `@PostLoad`, etc.)
 - [ ] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations, lazy/eager fetch
-- [ ] Optional L2 cache (integration with Caffeine or homegrown implementation)
+- [ ] Optional L2 cache (homegrown, opt-in — no external cache library)
 - [ ] Jakarta Persistence 3.2 TCK outside the reactor
 
 ### M8 — Performance & footprint (TBD)
