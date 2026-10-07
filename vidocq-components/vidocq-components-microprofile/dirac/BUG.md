@@ -9,7 +9,7 @@ minimal repro, cause hypothesis, status.
 ## DRC-001 — Java Modules bypassed via manual copy of compile-scope JARs
 
 - **Opening date**: 2026-05-25
-- **Status**: ⚠️ OPEN — active workaround
+- **Status**: ✅ FIXED 2026-10-07 — workaround removed (Vidocq/vidocq-parent#13)
 
 ### Symptom
 
@@ -51,6 +51,13 @@ resolve them as automatic modules by deriving their name from the JAR file name.
    the missing `module-info.class` — pattern already used for `ravel-mp-config-api`.
 
 ---
+
+### Resolution (2026-10-07)
+The failure no longer reproduces on main: with the `target/javamodules` copy and the `--module-path` arguments
+removed, `clean verify` passes with the same tests (105) and every produced jar (10) keeps the same module
+descriptor. Most likely the failure dated from the Maven 4 RC / compiler-plugin 4.0.0-beta era (it does not come
+back with compiler plugin 3.13 either). Workaround removed; the shared execution in vidocq-parent goes next
+(Vidocq/vidocq-parent#13).
 
 ## DRC-002 — @Gauge resolution + BASE registry fail on the module path (strict Java Modules)
 

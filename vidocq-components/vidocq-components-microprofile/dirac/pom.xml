@@ -208,33 +208,6 @@
         </dependencies>
     </dependencyManagement>
 
-    <build>
-        <!--
-            Java Modules workaround: microprofile-metrics-api:5.1.1 may not have
-            Automatic-Module-Name in its MANIFEST.MF (to be verified on install).
-
-            Solution: maven-dependency-plugin copies all compile-scope JARs to
-            target/javamodules/ in the initialize phase. The maven-compiler-plugin receives
-            the module-path argument pointing to target/javamodules; javac then derives
-            the module name from the file name.
-        -->
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <compilerArgs>
-                        <arg>--module-path</arg>
-                        <arg>${project.build.directory}/javamodules</arg>
-                    </compilerArgs>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
 
     <profiles>
         <!--

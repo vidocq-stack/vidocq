@@ -33,6 +33,10 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
+                        <id>copy-compile-deps-to-module-path</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
                         <id>unpack-mp-metrics-api-classes</id>
                         <phase>process-resources</phase>
                         <goals><goal>unpack</goal></goals>
