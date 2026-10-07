@@ -19,6 +19,7 @@
  */
 package io.vidocq.mansart.data.core;
 
+import io.vidocq.mansart.data.dialect.Attribute;
 import io.vidocq.mansart.data.dialect.Dialect;
 import io.vidocq.mansart.data.dialect.Where;
 
@@ -36,20 +37,20 @@ final class WhereBinder {
     static int bind(Dialect dialect, PreparedStatement ps, Where where,
                     Object[] args, int psIdx, int[] argCursor) throws SQLException {
         switch (where) {
-            case Where.Eq w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.NotEq w     -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.Lt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.Lte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.Gt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.Gte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-            case Where.Like w      -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
+            case Where.Eq w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.NotEq w     -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Lt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Lte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Gt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Gte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Like w      -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
             case Where.Between w   -> {
-                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
-                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
+                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
             }
             case Where.In w -> {
                 for (int i = 0; i < w.arity(); i++) {
-                    psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr().javaType());
+                    psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
                 }
             }
             case Where.IsNull ignored1 -> { /* no bind */ }
@@ -75,6 +76,14 @@ final class WhereBinder {
         return psIdx;
     }
 
+    private static int bindOne(Dialect dialect, PreparedStatement ps, int psIdx,
+                               Object[] args, int[] cursor, Attribute<?, ?> attr) throws SQLException {
+        Object value = args[cursor[0]++];
+        dialect.bind(ps, psIdx, ColumnValues.toColumn(attr, value), ColumnValues.columnType(attr));
+        return psIdx + 1;
+    }
+
+    /** Binds the next argument as {@code type}, for a function whose result type is not the column's ({@code LENGTH}). */
     private static int bindOne(Dialect dialect, PreparedStatement ps, int psIdx,
                                Object[] args, int[] cursor, Class<?> type) throws SQLException {
         Object value = args[cursor[0]++];

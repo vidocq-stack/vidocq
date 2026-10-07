@@ -54,8 +54,7 @@ final class RowMapper {
             // M8-3 — ReferenceAttribute columns hold the FK id, not the target entity. Read as
             // Long (most common id type) — fully materialising the related entity would require
             // an eager fetch (out of scope here; stays a M3a stub).
-            Class<?> readType = (a instanceof ReferenceAttribute<?, ?>) ? Long.class : a.javaType();
-            Object value = dialect.extract(rs, idx++, readType);
+            Object value = ColumnValues.fromColumn(a, dialect.extract(rs, idx++, ColumnValues.columnType(a)));
             if (value == null) continue;
             if (a instanceof ReferenceAttribute<?, ?>) {
                 // The FK id is in `value` but we do not materialize a stub yet.

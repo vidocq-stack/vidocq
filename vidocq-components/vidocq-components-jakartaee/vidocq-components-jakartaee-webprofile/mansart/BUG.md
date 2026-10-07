@@ -319,7 +319,7 @@ converted `OffsetDateTime → Instant`, so only writes were affected. Regression
 ## MANSART-003 — `@Enumerated` is parsed but ignored; `EnumStorage.ORDINAL` is dead config
 
 - **Date**: 2026-06-01 (surfaced by the Arago app — room `status`/`mode` enums)
-- **Status**: OPEN, low severity (no functional impact today — see below)
+- **Status**: FIXED 2026-10-07 (mansart#26, branch `pr/ybl/enumerated-storage`)
 - **Severity**: low (every current entity wants STRING storage, which is what they get)
 
 ### Symptom
@@ -344,3 +344,16 @@ Two aligned changes: (1) `MansartMetamodelWriter` should read `@Enumerated` and 
 `EnumStorage`; (2) the dialects' `bind`/`extract` should honor `EnumAttribute.storage` — `name()`/
 `valueOf` for STRING, `ordinal()`/`values()[i]` for ORDINAL. Add a regression entity with an
 `@Enumerated(ORDINAL)` column. Not urgent: no current Vidocq entity needs ORDINAL.
+
+### Fix (2026-10-07)
+- `@Enumerated` is read by the processor (`EntityScanner`, with annotation defaults, so a bare `@Enumerated` is
+  ORDINAL) and by `RuntimeEntityModelBuilder`; the metamodel writer emits the matching `EnumStorage`.
+- No `@Enumerated` keeps storing the name (maintainer decision: existing tables hold names), unlike the JPA
+  default. Documented in `reference.adoc`.
+- The storage is honoured where the core knows the attribute — insert/update, row mapping, projections, WHERE
+  bindings, bulk updates by attribute, `ensureTable` DDL — through one helper, `ColumnValues` (an ORDINAL enum is
+  an `Integer` index); the dialects still bind by Java type. Not covered: a raw `SET` clause (`executeUpdateRaw`)
+  and aggregates (`scalarSelect`), which carry no attribute.
+- `EnumStorageTest` (processor, runtime builder, H2 column contents, derived query on an ORDINAL column), failing
+  first. Reactor 312 tests; Jakarta Data TCK 73/73, the same as main.
+

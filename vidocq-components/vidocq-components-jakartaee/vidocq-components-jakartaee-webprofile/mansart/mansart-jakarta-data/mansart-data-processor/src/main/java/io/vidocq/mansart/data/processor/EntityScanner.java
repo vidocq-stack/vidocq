@@ -159,8 +159,16 @@ final class EntityScanner {
             if (!rc.isEmpty()) referencedColumn = rc;
         }
 
+        boolean ordinalEnum = false;
+        if (kind == AttributeKind.ENUM) {
+            Map<String, ? extends AnnotationValue> enumerated =
+                    annotationValues(field, "jakarta.persistence.Enumerated");
+            ordinalEnum = enumerated != null && enumerated.containsKey("value")
+                    && "ORDINAL".equals(enumerated.get("value").getValue().toString());
+        }
+
         return new AttributeDescriptor(field, name, columnName, javaTypeFqn, kind,
-                nullable, unique, length, generated, referencedColumn);
+                nullable, unique, length, generated, referencedColumn, ordinalEnum);
     }
 
     /* ----- helpers ---- */
@@ -270,7 +278,10 @@ final class EntityScanner {
             int length,
             boolean generated,
             // M8-3 — for REFERENCE attributes only: PK column on the target entity (defaults "id").
-            String referencedColumn
+            String referencedColumn,
+            // MANSART-003 — for ENUM attributes only: @Enumerated(ORDINAL) stores the index; no
+            // @Enumerated, or STRING, stores the name (Mansart's default, where JPA would store the index).
+            boolean ordinalEnum
     ) {}
 
     record EntityDescriptor(

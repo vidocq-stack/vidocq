@@ -224,10 +224,14 @@ public final class RuntimeEntityModelBuilder {
                     nullable, unique, false, referencedCol, getter, setter);
         }
         if (type.isEnum()) {
+            // MANSART-003 — @Enumerated(ORDINAL) (and a bare @Enumerated) stores the index; no
+            // @Enumerated, or STRING, stores the name: Mansart's default, where JPA would store the index.
+            Enum<?> enumType = readAnnoMember(field, "jakarta.persistence.Enumerated", "value", Enum.class, null);
+            var storage = enumType != null && "ORDINAL".equals(enumType.name())
+                    ? io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL
+                    : io.vidocq.mansart.data.dialect.attribute.EnumStorage.STRING;
             return new EnumAttribute(name, columnName, type, entityClass,
-                    nullable, unique,
-                    io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL,
-                    getter, setter);
+                    nullable, unique, storage, getter, setter);
         }
         if (type == String.class) {
             return new TextAttribute<>(name, columnName, entityClass, nullable, unique, length, getter, setter);

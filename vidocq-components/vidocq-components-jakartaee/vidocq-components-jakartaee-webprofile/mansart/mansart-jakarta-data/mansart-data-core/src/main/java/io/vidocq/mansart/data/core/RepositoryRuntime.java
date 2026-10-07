@@ -90,7 +90,7 @@ public final class RepositoryRuntime {
         for (Attribute<E, ?> a : model.attributes()) {
             if (!first) sb.append(", ");
             sb.append('"').append(a.columnName()).append("\" ")
-              .append(sqlDdlType(a.javaType()));
+              .append(sqlDdlType(ColumnValues.ddlType(a)));
             if (a == model.id()) sb.append(" PRIMARY KEY");
             first = false;
         }
@@ -312,7 +312,12 @@ public final class RepositoryRuntime {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
                     java.util.List<T> out = new ArrayList<>();
-                    while (rs.next()) out.add(dialect.extract(rs, 1, resultType));
+                    Class<?> readType = attr.javaType() == resultType ? ColumnValues.columnType(attr) : resultType;
+                    while (rs.next()) {
+                        @SuppressWarnings("unchecked")
+                        T value = (T) ColumnValues.fromColumn(attr, dialect.extract(rs, 1, readType));
+                        out.add(value);
+                    }
                     return out;
                 }
             }
@@ -349,7 +354,8 @@ public final class RepositoryRuntime {
                     while (rs.next()) {
                         Object[] row = new Object[attrs.size()];
                         for (int i = 0; i < attrs.size(); i++) {
-                            row[i] = dialect.extract(rs, i + 1, attrs.get(i).javaType());
+                            Attribute<?, ?> a = attrs.get(i);
+                            row[i] = ColumnValues.fromColumn(a, dialect.extract(rs, i + 1, ColumnValues.columnType(a)));
                         }
                         out.add(row);
                     }
@@ -586,7 +592,8 @@ public final class RepositoryRuntime {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 int idx = 1;
                 for (int i = 0; i < attributes.size(); i++) {
-                    dialect.bind(ps, idx++, args[i], attributes.get(i).javaType());
+                    Attribute<?, ?> a = attributes.get(i);
+                    dialect.bind(ps, idx++, ColumnValues.toColumn(a, args[i]), ColumnValues.columnType(a));
                 }
                 Object[] whereArgs;
                 if (args.length > attributes.size()) {
@@ -773,12 +780,11 @@ public final class RepositoryRuntime {
             throw new MansartDataException("Reference attribute binding lands in M3b. Use only "
                     + "scalar attributes for now (attribute: " + a.name() + ").");
         }
-        return value;
+        return ColumnValues.toColumn(a, value);
     }
 
     private Class<?> bindType(Attribute<?, ?> a) {
-        if (a instanceof ReferenceAttribute<?, ?>) return Long.class; // FK fallback type — M3b refines.
-        return a.javaType();
+        return ColumnValues.columnType(a); // a reference binds its FK id as Long — M3b refines.
     }
 
     private String qualifiedTable(EntityModel<?> model) {

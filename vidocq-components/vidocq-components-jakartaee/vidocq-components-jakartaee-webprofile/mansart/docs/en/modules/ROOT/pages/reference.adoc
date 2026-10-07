@@ -72,6 +72,8 @@ All modules are strict Java Modules — minimal `exports`, no unjustified `opens
 
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
+An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
+
 **Out of scope v1**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Deferred to `mansart-persistence` (M7).
 
 == Repository annotations

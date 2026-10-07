@@ -142,7 +142,8 @@ final class MansartMetamodelWriter {
                     + "    public static final EnumAttribute " + a.name() + " = new EnumAttribute(\""
                     + a.name() + "\", \"" + a.columnName() + "\", " + boxed + ".class, "
                     + entityRef + ".class, " + a.nullable() + ", " + a.unique()
-                    + ", io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL, "
+                    + ", io.vidocq.mansart.data.dialect.attribute.EnumStorage."
+                    + (a.ordinalEnum() ? "ORDINAL" : "STRING") + ", "
                     + getterMh + ", " + setterMh + ");");
         }
         w.println();
