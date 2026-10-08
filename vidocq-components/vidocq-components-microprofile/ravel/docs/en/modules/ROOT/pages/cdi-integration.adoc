@@ -169,7 +169,8 @@ Exception in thread "main" jakarta.enterprise.inject.spi.DeploymentException:
 
 Use `defaultValue` or `Optional<T>` to make injection optional.
 
-=== When the extension runs in the compiler
+[#extension-in-the-compiler]
+=== When the extension runs in the compiler [.tag-new]#NEW#
 
 Vauban can also run the extension while the application compiles: put `ravel-cdi-vauban` on the
 annotation processor path (on Vidocq, the `vidocq-runtime-ravel-config-extension-codegen` bundle does it).
