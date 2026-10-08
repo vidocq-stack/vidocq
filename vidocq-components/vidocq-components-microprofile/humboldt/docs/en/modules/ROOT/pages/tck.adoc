@@ -12,7 +12,7 @@ Humboldt implements **MicroProfile Telemetry 2.2** and passes the official TCK *
 * `microprofile-telemetry-metrics-tck:2.2-RC3`
 * `microprofile-telemetry-logs-tck:2.2-RC3`
 
-TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
+The three 2.2-RC3 artifacts are resolved from Maven Central; no manual install is needed. The 2.2 final TCK is not published yet: the suite is to be re-run on it once it is (see `TCK.md`).
 
 == TCK stack
 

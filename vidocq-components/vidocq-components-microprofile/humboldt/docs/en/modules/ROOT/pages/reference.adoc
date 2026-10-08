@@ -91,7 +91,7 @@ All versions are `{project-version}`.
 | `Resource`, `Clock`, `IdGenerator` (Random128).
 
 | `io.vidocq.humboldt.context`
-| `HumboldtContextStorageProvider`, `HumboldtContextStorage` (MVP `ThreadLocal`, `ScopedValue` planned in M8).
+| `HumboldtContextStorageProvider`, `HumboldtContextStorage`: the current `Context` is held in a `ThreadLocal<Context>`. A `ScopedValue` storage is a post-MVP option, not implemented (see xref:internals.adoc#_context_storage_threadlocal_vs_scopedvalue[Context storage]).
 
 | `io.vidocq.humboldt.sdk.trace`
 | `SdkTracerProvider`, `SdkSpan`, `Sampler` (AlwaysOn/Off, TraceIdRatioBased, ParentBased), `SpanProcessor` (Simple, Batch).
@@ -255,7 +255,7 @@ The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `
 
 == Applied semantic conventions
 
-OTel HTTP conventions 1.27+ are applied automatically by `humboldt-rest` on the server side:
+`humboldt-rest` applies the OpenTelemetry HTTP semantic conventions automatically on the server side. It does not depend on `opentelemetry-semconv`: the attribute names are written in its code, against conventions 1.27. The REST tests of the official MicroProfile Telemetry 2.2-RC3 TCK check them, with `opentelemetry-semconv` 1.44.0 in the runner, and pass:
 
 [cols="2,3"]
 |===

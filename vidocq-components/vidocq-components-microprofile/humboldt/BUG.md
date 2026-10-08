@@ -84,8 +84,15 @@
 
 - **Date** : 2026-05-25
 - **Component**: humboldt-rest/pom.xml
-- **Status**: ⚠️ OPEN — workaround active
-- **Affected**: humboldt 0.1.0-SNAPSHOT
+- **Status**: FIXED (commits cdd8901 and a2a7b55, 2026-10-07)
+- **Affected**: humboldt 0.1.0-SNAPSHOT → 0.3.0
+- **Fix**: cdd8901 removed the `maven-dependency-plugin` copy into `target/javamodules/` and the manual
+  `--module-path` compiler arguments (Maven resolves the module path natively). a2a7b55 replaced the
+  non-modular `microprofile-rest-client-api` (automatic module `microprofile.rest.client.api`, the reason
+  for the late module-info compilation) with cyrano's `io.vidocq.cyrano.mp.rest.client.api`, and moved
+  `module-info.java` back to `src/main/java` (humboldt#18).
+- **Evidence**: `grep -n "javamodules\|module-path" humboldt-rest/pom.xml` finds nothing, and with the
+  descriptor in `src/main/java` and no `useModulePath` override, the `humboldt-rest` tests run on the module path.
 - **Symptom**: `humboldt-rest/pom.xml` uses `maven-dependency-plugin` (phase `initialize`)
   to copy compile-scope JARs (`humboldt-propagator-w3c`, `humboldt-otel-api`,
   `humboldt-otel-context`) into `target/javamodules/`, then passes
