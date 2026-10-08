@@ -12,7 +12,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-validation` — Jakarta Validation 3.1 (Bean Validation), needed by `mansart-persistence` (spec §3.7) and usable standalone. **Stopgap — V0 to V2 delivered** (bootstrap, `validation.xml`, the validation engine, the built-in constraints, the metadata API; official TCK used as a test bed, 308 of 981 pass), V3 to V6 not planned; it exists so `mansart-persistence` can run its TCK and is to be replaced by the implementation another team member is writing. See `mansart-validation/ROADMAP.md`. TCK runs out of the Vidocq reactor (`mansart-validation-tck`) and in it (`vidocq-runtime-tck-validation`, `tck` profile).
 - `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0, P1 and P2 delivered (TCK 220 / 2135, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
 
-`mansart-jakarta-data` and `mansart-persistence` share the same SQL dialect SPI and the same static metamodel. `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
+`mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; `mansart-persistence` through its own SQL AST and dialects (`mansart-jpa-dialect-*`, decision D4 in `mansart-persistence/ROADMAP.md`). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
 ## Prerequisites
 
