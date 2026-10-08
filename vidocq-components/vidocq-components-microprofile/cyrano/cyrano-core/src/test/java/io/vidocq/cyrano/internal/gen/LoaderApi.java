@@ -22,7 +22,7 @@ package io.vidocq.cyrano.internal.gen;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 
-/** Fixture resolved through the ServiceLoader tier (factory registered in META-INF/services). */
+/** Fixture resolved through the ServiceLoader tier (factory provided by the module the fixture is packed into). */
 @Path("/loader")
 public interface LoaderApi {
 
