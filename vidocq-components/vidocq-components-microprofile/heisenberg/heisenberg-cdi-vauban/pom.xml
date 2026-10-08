@@ -71,11 +71,12 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Vauban CDI container for the integration tests -->
+        <!-- Vauban CDI container: compile-only for ModuleLookups (requires static, optional at
+             runtime — the container brings it), and the container of the integration tests. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
-            <scope>test</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
@@ -128,21 +129,19 @@
             <!--
                 Tests run on the module path, test classes patched into io.vidocq.heisenberg.cdi.vauban.
                 Test-only grants, which no production module needs:
-                - add-reads to io.vidocq.vauban.core: vauban-core is a test-scope dependency that the
-                  module does not require, yet one test builds a VaubanContainer directly;
                 - opens of the test package to io.vidocq.vauban.core: the test beans have no generated
                   provider, so Vauban reaches them reflectively;
-                - read edge from io.vidocq.heisenberg.core to this module, and opens of the test
-                  package to it: FallbackResolver resolves the test beans' fallback methods through
-                  MethodHandles.privateLookupIn, which needs both.
+                - opens of the test package to io.vidocq.heisenberg.core: most tests call the
+                  interceptor with no container, so no module lookup is available and
+                  FallbackResolver falls back to its own private lookup. That keeps the "opens alone
+                  is enough" path covered: the read edge it also needs is added by FallbackResolver
+                  itself (BUG-003), hence no add-reads.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>
-                        --add-reads io.vidocq.heisenberg.cdi.vauban=io.vidocq.vauban.core
-                        --add-reads io.vidocq.heisenberg.core=io.vidocq.heisenberg.cdi.vauban
                         --add-opens io.vidocq.heisenberg.cdi.vauban/io.vidocq.heisenberg.cdi.internal=io.vidocq.heisenberg.core,io.vidocq.vauban.core
                     </argLine>
                 </configuration>

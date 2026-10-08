@@ -92,6 +92,10 @@
   module path (test classes patched into the module under test). Test-only `--add-reads` /
   `--add-opens` live in the Surefire `argLine` of the module that needs them, each one
   explained in a comment there; no production `module-info` opens anything for tests.
+- A `@Fallback(fallbackMethod = ...)` in a named application module needs no `opens`: under
+  Vauban, `FallbackResolver` takes its private lookup from Vauban's `ModuleLookups`, supplied by
+  the generated `_VaubanComponents` of the bean's package (BUG-003). Without it, an
+  `opens <package> to io.vidocq.heisenberg.core` is enough; the core adds the read edge itself.
 - The compilation module-path is built through `maven-dependency-plugin` during the
   `initialize` phase, which copies required JARs into `target/javamodules/`. Any dependency added
   to the module-path must be referenced in that copy step.

@@ -55,6 +55,11 @@ import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefiniti
  */
 public class HeisenbergExtension implements BuildCompatibleExtension {
 
+    static {
+        // Fallback methods of application modules are resolved through Vauban's module lookups.
+        VaubanLookupSource.install();
+    }
+
 	private final FallbackResolver fallbackResolver = new FallbackResolver();
 	private final Set<String> bindingEnhancedClasses = ConcurrentHashMap.newKeySet();
 

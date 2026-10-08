@@ -30,12 +30,32 @@ import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.lang.reflect.GenericArrayType;
 import java.util.Arrays;
+import java.util.Objects;
+import java.util.Optional;
 import org.eclipse.microprofile.faulttolerance.ExecutionContext;
 import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.FallbackHandler;
 import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException;
 
 public final class FallbackResolver {
+
+    /**
+     * Supplies, from the CDI container, a full-privilege lookup on a bean class, taken in the
+     * bean's own module. Heisenberg's core stays container-agnostic: the container integration
+     * installs it (heisenberg-cdi-vauban asks Vauban's {@code ModuleLookups}).
+     */
+    @FunctionalInterface
+    public interface LookupSource {
+        /** The lookup on {@code beanClass}, or empty when the container has none. */
+        Optional<MethodHandles.Lookup> lookupFor(Class<?> beanClass);
+    }
+
+    private static volatile LookupSource lookupSource = beanClass -> Optional.empty();
+
+    /** Installs the container's lookup source, used for every fallback method resolved from now on. */
+    public static void useLookupSource(LookupSource source) {
+        lookupSource = Objects.requireNonNull(source, "source");
+    }
 
     public Object resolve(Fallback fallback, Object target, Method guardedMethod, Object[] parameters, Throwable failure)
             throws Exception {
@@ -129,7 +149,7 @@ public final class FallbackResolver {
         try {
             Class<?> owner = fallbackMethod.getDeclaringClass();
             MethodType methodType = MethodType.methodType(fallbackMethod.getReturnType(), fallbackMethod.getParameterTypes());
-            MethodHandles.Lookup privateLookup = MethodHandles.privateLookupIn(owner, MethodHandles.lookup());
+            MethodHandles.Lookup privateLookup = privateLookupIn(owner, beanClass);
             if ((fallbackMethod.getModifiers() & java.lang.reflect.Modifier.PRIVATE) != 0) {
                 return privateLookup.findSpecial(owner, fallbackMethodName, methodType, owner);
             }
@@ -139,6 +159,45 @@ public final class FallbackResolver {
                     "Invalid fallbackMethod '" + fallbackMethodName + "' for " + guardedMethod,
                     failure
             );
+        }
+    }
+
+    /**
+     * Private lookup on the class declaring the fallback method (MP FT 4.1 §6 allows any access
+     * modifier).
+     *
+     * <p>On the class path (unnamed module), or within this module, Heisenberg's own lookup is
+     * enough. For a named application module, the container's lookup on the bean class comes
+     * first: taken in the bean's module, it reaches any class of that module without a read edge
+     * or an {@code opens}. Without one, the package must be open to {@code io.vidocq.heisenberg.core};
+     * the read edge {@code privateLookupIn} also needs is added here, so the {@code opens} alone is
+     * enough.</p>
+     */
+    private static MethodHandles.Lookup privateLookupIn(Class<?> owner, Class<?> beanClass) throws IllegalAccessException {
+        Module module = owner.getModule();
+        Module self = FallbackResolver.class.getModule();
+        if (!module.isNamed() || module == self) {
+            return MethodHandles.privateLookupIn(owner, MethodHandles.lookup());
+        }
+        Optional<MethodHandles.Lookup> granted;
+        try {
+            granted = lookupSource.lookupFor(beanClass);
+        } catch (RuntimeException | LinkageError unavailable) {
+            granted = Optional.empty();
+        }
+        if (granted.isPresent() && granted.get().lookupClass().getModule() == module) {
+            return MethodHandles.privateLookupIn(owner, granted.get());
+        }
+        self.addReads(module);
+        try {
+            return MethodHandles.privateLookupIn(owner, MethodHandles.lookup());
+        } catch (IllegalAccessException noAccess) {
+            IllegalAccessException explained = new IllegalAccessException(noAccess.getMessage()
+                    + ". The container supplied no lookup for " + beanClass.getName()
+                    + " (with Vauban: its package needs the generated _VaubanComponents)"
+                    + "; otherwise open package " + owner.getPackageName() + " to " + self.getName());
+            explained.initCause(noAccess);
+            throw explained;
         }
     }
 

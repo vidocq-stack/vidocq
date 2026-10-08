@@ -55,6 +55,11 @@ import jakarta.interceptor.InvocationContext;
 @FaultToleranceBinding
 public class FaultToleranceInterceptor {
 
+    static {
+        // Fallback methods of application modules are resolved through Vauban's module lookups.
+        VaubanLookupSource.install();
+    }
+
     public static final int BASE_PRIORITY = 4010;
     static final int TCK_PRIORITY_3850 = 3850;
 

@@ -42,6 +42,8 @@ module io.vidocq.heisenberg.cdi.vauban {
     requires static io.opentelemetry.api;
     // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
     requires static io.vidocq.vauban.api;
+    // Compile-only (optional at runtime): ModuleLookups, the bean module's lookup for fallback methods.
+    requires static io.vidocq.vauban.core;
 
     exports io.vidocq.heisenberg.cdi.internal;
 
