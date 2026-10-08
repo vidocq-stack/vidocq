@@ -10,7 +10,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-transactions` — Jakarta Transactions 2.0 (virtual-thread-native TM, `@Transactional`, `@TransactionScoped`). **Delivered — TCK smoke 5/5 PASS.**
 - `mansart-pool` — virtual-thread-native JDBC pool, zero-dep, optional. **Delivered.**
 - `mansart-validation` — Jakarta Validation 3.1 (Bean Validation), needed by `mansart-persistence` (spec §3.7) and usable standalone. **Stopgap — V0 to V2 delivered** (bootstrap, `validation.xml`, the validation engine, the built-in constraints, the metadata API; official TCK used as a test bed, 308 of 981 pass), V3 to V6 not planned; it exists so `mansart-persistence` can run its TCK and is to be replaced by the implementation another team member is writing. See `mansart-validation/ROADMAP.md`. TCK runs out of the Vidocq reactor (`mansart-validation-tck`) and in it (`vidocq-runtime-tck-validation`, `tck` profile).
-- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0, P1 and P2a delivered (TCK 220 / 2135, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
+- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0, P1 and P2 delivered (TCK 220 / 2135, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
 
 `mansart-jakarta-data` and `mansart-persistence` share the same SQL dialect SPI and the same static metamodel. `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
@@ -72,7 +72,7 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 - **T1–T7** ✅ — Full Jakarta Transactions 2.0: local TM (ScopedValue, no ThreadLocal pinning), synchronizations, suspend/resume, 2PC + recovery log, CDI `@Transactional` (6 propagation variants), `@TransactionScoped`; TCK smoke **5/5 PASS**.
 
 ### mansart-persistence
-- 🚧 **Restarted (2026-10-07)** — empty aggregator registered in the reactor; milestones P0 (TCK instrument) → P12 (certification) in `mansart-persistence/ROADMAP.md`. Design decisions kept: shared dialect SPI, generated entity access (APT / Class-File API), no runtime bytecode library.
+- 🚧 **Restarted (2026-10-07)** — milestones P0 (TCK instrument) → P12 (certification) in `mansart-persistence/ROADMAP.md`. Delivered: P0 (TCK runner), P1 (bootstrap, provider SPI, resource-local transactions), P2a (entity model read with the Class-File API, accessors generated as hidden classes, JDBC binders, mapping at bootstrap). Design decisions kept: shared dialect SPI, generated entity access (APT / Class-File API), no runtime bytecode library.
 
 ## Documentation (Antora) conventions
 

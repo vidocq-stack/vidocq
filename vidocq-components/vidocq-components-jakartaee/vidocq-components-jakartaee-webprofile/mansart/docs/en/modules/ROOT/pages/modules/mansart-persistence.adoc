@@ -1,8 +1,8 @@
 = mansart-persistence
-:description: Jakarta Persistence 3.2 (JPA) implementation — restarted, skeleton only; mansart-jakarta-data covers everyday needs.
+:description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation, under the Maven parent `mansart-jpa`: `EntityManager`, persistence context, JPQL, Criteria API, lifecycle callbacks, the standard metamodel. **Status: restarted, skeleton only** — the module is in the reactor, but nothing in it can be used yet.
+`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — bootstrap, resource-local transactions and the entity model are delivered; entity operations come next (see the roadmap below).
 
 [NOTE]
 ====
@@ -16,74 +16,90 @@ Jakarta Data 1.0 and Jakarta Persistence 3.2 do not serve the same purpose:
 * **Jakarta Data** — typed declarative repositories, stateless, no L1 cache, direct ResultSet mapping. Covers 80% of common application needs. Delivered.
 * **Jakarta Persistence** — imperative `EntityManager`, persistence context (managed/detached), L1 cache, listeners (`@PrePersist`, `@PostLoad`), rich JPQL, Criteria API. Required for: complex entity graphs, long transactions with batches of modifications, applications ported from Hibernate that rely on the persistence context.
 
-Both modules render their SQL through the same dialect SPI (`mansart-data-dialect-spi`). No SQL duplication.
+Both modules will share the same dialect SPI (`mansart-data-dialect-spi`) and the same static metamodel. No SQL duplication.
 
-[#status]
 == Status
 
-[.tag-new]#NEW# 🚧 **Restarted, skeleton only** — `mansart-persistence` (Maven parent `mansart-jpa`) is back in the Mansart reactor as an empty aggregator: no implementation module, nothing an application can depend on yet. The work follows a milestone plan that starts from the official Jakarta Persistence 3.2 TCK (P0, the TCK instrument, before any implementation) and ends with certification (P12); see link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md]. Until it delivers, `mansart-jakarta-data` is the answer for persistence in Vidocq.
+🚧 **In progress** — milestones P0 (TCK instrument) to P12 (certification) in link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md]; measured score in link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[mansart-persistence/TCK.md].
 
-Milestones, none started yet:
+Delivered:
 
-[cols="1,4"]
-|===
-| Milestone | Scope
+* P0 — the official Jakarta Persistence 3.2.1 TCK runner (PostgreSQL 17, out of the reactor).
+* P1 — `PersistenceProvider`, `persistence.xml` 1.0 to 3.2 and `PersistenceConfiguration` bootstrap, `EntityManagerFactory` / `EntityManager` life cycle, resource-local `EntityTransaction`.
+* P2a — the entity model (access types, hierarchies, embeddables and records, identifiers, converters, enums, temporal types), entity accesses without reflection, JDBC binders; every TCK entity maps at bootstrap.
+* P2b — `mansart-jpa-processor`: entity accesses generated at build time (see below).
 
-| P0 | The TCK instrument: the official TCK runs and yields a counter, before any implementation.
-| P1 | Bootstrap, provider SPI, resource-local transactions.
-| P2 | Entity model and generated access.
-| P3 | Persistence context and flush engine.
-| P4 | Entity operations, callbacks, locking.
-| P5 | Relationships and collections.
-| P6 | Inheritance.
-| P7 | Jakarta Persistence Query Language and native queries.
-| P8 | Metamodel API, Criteria API, entity graphs.
-| P9 | Container contracts, JTA, schema generation.
-| P10 | XML mapping descriptors.
-| P11 | Second-level cache and Bean Validation.
-| P12 | Certification, performance, ecosystem.
-|===
+Next: the persistence context and flush engine (P3), then entity operations (P4).
 
-== Principles
+== Configuring an application
 
-* **TCK first** — no implementation milestone starts before the official TCK runs (P0); every later milestone is closed by a TCK delta, not by a green build.
-* **Zero implementation library** — only `jakarta.persistence-api` (plus the CDI, inject and transaction APIs in the integration module). The JPQL parser is hand-written, XML is read with StAX.
-* **No runtime reflection on entities** — entity access, instantiation and metamodel are generated: APT for sources, a Maven plugin for jars, the Class-File API at bootstrap for opaque archives.
-* **No proxy or bytecode library, no `ClassTransformer`** — lazy to-one through generated subclasses, lazy collections through Mansart's own wrappers, dirty checking through snapshots.
-* **Shared Mansart bricks** — SQL through `mansart-data-dialect-spi` (H2, PostgreSQL), JTA through `mansart-transactions`, any `DataSource` (for instance `mansart-pool`).
-* **Virtual threads** — JDBC on virtual threads, no `synchronized` around I/O, `ScopedValue` instead of `ThreadLocal`.
-* **Strict Java Modules** — one `module-info.java` per module, the provider published through `provides`, internals not exported.
-* **Certification on PostgreSQL** — the database of the official TCK; H2 is for unit tests only.
+Mansart reaches entity state without reflection, through an *access* per managed class. There are two ways to get one:
+
+* **Compile the entities with `mansart-jpa-processor`** (recommended). It generates the accesses as ordinary classes of the entity packages, so nothing is defined at run time and no package has to be opened:
++
+[source,xml]
+----
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-compiler-plugin</artifactId>
+  <configuration>
+    <annotationProcessorPaths>
+      <path>
+        <groupId>io.vidocq.mansart</groupId>
+        <artifactId>mansart-jpa-processor</artifactId>
+        <version>${mansart.version}</version>
+      </path>
+    </annotationProcessorPaths>
+  </configuration>
+</plugin>
+----
++
+On the module path, the application module reads the provider and declares the accesses generated for each entity package (the processor prints the exact line, and fails the build if the `requires` is missing):
++
+[source,java]
+----
+module com.acme.shop {
+    requires jakarta.persistence;
+    requires io.vidocq.mansart.jpa.core;
+
+    provides io.vidocq.mansart.jpa.core.spi.ManagedAccessProvider
+        with com.acme.shop.model._MansartJpaAccess;
+}
+----
++
+On the class path, the processor registers the accesses in `META-INF/services`; nothing else is needed.
+
+* **Let the provider generate the accesses at bootstrap**, for entities compiled without the processor (a third-party jar, for instance). It defines hidden classes reaching the entities through a private lookup, so a named module must open the entity packages to the provider: `opens com.acme.shop.model to io.vidocq.mansart.jpa.core;`. This path is not available to GraalVM native images.
+
+An access generated at build time is used only if it still matches the entity class; a class changed since it was compiled falls back to the bootstrap path, with a warning.
+
+== Principles (already fixed)
+
+* **Zero reflection on entities** — entity state is reached through generated accesses (method handles, direct access where the language allows it). No runtime `EntityManagerProxy`.
+* **No bytecode library** — no Hibernate-style enhancement, no ASM, no Byte Buddy; dirty checking by state snapshots, lazy loading designed with the persistence context (P3/P5).
+* **Native virtual threads** — every JDBC execution under Loom. No `synchronized` block wrapping a blocking I/O.
+* **Strict Java Modules** — `module io.vidocq.mansart.jpa.core`: the provider is found through `ServiceLoader`; the only exported package is the SPI the generated accesses implement.
 
 [#target-modules]
 == Target modules
 
-[cols="2,2,4"]
-|===
-| Module | Java module | Role
-
-| `mansart-jpa-core` | `io.vidocq.mansart.jpa.core` | Bootstrap (`persistence.xml`, `PersistenceConfiguration`), `EntityManagerFactory`, `EntityManager`, persistence context, flush engine, JDBC executor, schema generation; `provides jakarta.persistence.spi.PersistenceProvider`.
-| `mansart-jpa-query` | `io.vidocq.mansart.jpa.query` | JPQL lexer and parser, Criteria API, SQL lowering.
-| `mansart-jpa-processor` | `io.vidocq.mansart.jpa.processor` | APT: `_Entity` static metamodel, entity accessors and instantiators for application sources.
-| `mansart-jpa-maven-plugin` | — | The same generation for entities in dependency jars.
-| `mansart-jpa-cdi` | `io.vidocq.mansart.jpa.cdi` | `@PersistenceContext` / `@PersistenceUnit`, JTA-bound contexts.
-| `mansart-jpa-tck` | — | Official TCK runner, out of the reactor.
-|===
-
-Out of scope: runtime bytecode enhancement, Java agents, dynamic proxies; reactive / R2DBC; multi-tenancy and NoSQL mappings; dialects other than H2 and PostgreSQL until the SPI is stable.
+* L1 cache strategy (HashMap per EM? virtual-thread-compatible?).
+* Persistence context handling across transaction `suspend/resume`.
+* Cascade `PERSIST` / `MERGE` / `REMOVE` on entity graphs.
+* Lazy loading without bytecode enhancement.
+* `mansart-jakarta-data` ↔ `mansart-persistence` co-existence in the same application (same `Book` consumed by both).
 
 == Meanwhile
 
 For JPA needs in Vidocq today:
 
 * If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
-* If advanced JPQL not covered by JDQL is needed → native SQL via `Connection.prepareStatement(...)` (`@Query` takes JDQL, not SQL).
+* If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
 * If JPA listeners are needed → application-level workaround (CDI interceptors, `@Transactional` + explicit before/after save).
-* If a persistence context is needed → wait for `mansart-persistence`.
+* If a persistence context is needed → wait for P3/P4 (persistence context, entity operations).
 
 == See also
 
-* link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md] — milestones, decisions, what the official TCK asks for.
 * xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data] — delivered solution for everyday needs.
 * xref:concepts.adoc[Concepts] — Jakarta Data vs JPA differences.
 * xref:migration.adoc[Migration] — paths from Hibernate / EclipseLink.
