@@ -206,7 +206,7 @@ resolves `0.4.0-SNAPSHOT`.
 ## CERV-006 — `cervantes-cdi-vauban` uses `jakarta.json` without reading it (cervantes#21)
 
 - **Opening date**: 2026-10-08
-- **Status**: 🔴 OPEN
+- **Status**: ✅ FIXED 2026-10-08 (89d1d5c)
 
 ### Symptom
 
@@ -227,3 +227,17 @@ javac compiles the module's code against its descriptor and rejects every `jakar
 The late module-info workaround compiled `module-info.java` alone at `prepare-package`, after the
 code was compiled on the class path, so javac never checked the code against the descriptor and the
 missing read edge went unnoticed.
+
+### Fix
+
+- `89d1d5c` — `cervantes-cdi-vauban/module-info`: `requires jakarta.json;`, and the module-info
+  moves back to `src/main/java` so javac checks the code against it. `ModuleDescriptorTest` reads
+  `target/classes/module-info.class` and asserts the edge; run on `main`'s late-compiled
+  descriptor it fails with `must require jakarta.json, requires = [... no jakarta.json ...]`.
+- `82bbd31` — the late module-info workaround is removed from `cervantes-core` and
+  `cervantes-jaxrs` too (test-only `--add-exports`/`--add-reads` for the `cervantes-jaxrs` test
+  doubles), so a missing read edge now fails the build.
+
+Verified: `clean verify` gives the same test counts as `main` per module (cervantes-cdi-vauban
++1, the new test); `jar --describe-module` is identical for every jar except
+cervantes-cdi-vauban gaining `requires jakarta.json`; MP JWT 2.2 TCK 208/208 PASS.
