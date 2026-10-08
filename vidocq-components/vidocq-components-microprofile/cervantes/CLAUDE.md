@@ -79,9 +79,11 @@ connects the auth filter (jaxrs) to the CDI producer (cdi-vauban) without direct
 
 ## Conventions
 
-- **Explicit Java modules**: `src/main/java/module-info.java`, or `src/main/module-info/` +
-  clean/compile/surefire workaround for modules with test dependencies lacking
-  Automatic-Module-Name (see `cervantes-core`, pattern from heisenberg).
+- **Explicit Java modules**: `src/main/java/module-info.java`, compiled with the code so javac
+  checks every read edge; unit tests run on the module path. Any extra edge a test needs
+  (`--add-reads`/`--add-exports`/`--add-opens`) stays test-only in the module's `pom.xml`, with a
+  comment (see `cervantes-jaxrs`, `cervantes-cdi-vauban`). The former `src/main/module-info/`
+  late-compile workaround is gone: it hid a missing `requires jakarta.json` (CERV-006).
 - **Packages**: `io.vidocq.cervantes.api.*` = stable public SPI;
   `io.vidocq.cervantes.internal.*` = internal code; `io.vidocq.cervantes.cdi.*` = CDI integration;
   `io.vidocq.cervantes.jaxrs.*` = JAX-RS integration.

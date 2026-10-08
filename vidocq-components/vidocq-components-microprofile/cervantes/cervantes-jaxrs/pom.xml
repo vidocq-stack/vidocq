@@ -79,29 +79,6 @@
 
     <build>
         <plugins>
-            <!-- Java Modules workaround (see cervantes-core): cleanup bound to process-sources. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>remove-stale-module-info</id>
-                        <phase>process-sources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -137,27 +114,29 @@
                         <id>default-testCompile</id>
                         <configuration>
                             <proc>none</proc>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <!-- No annotation processing on the separate module-info compile. -->
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
+                            <!-- Test-only: the test doubles build a DefaultJsonWebToken, an internal
+                                 type that cervantes-core exports only to cervantes-cdi-vauban. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.cervantes.core/io.vidocq.cervantes.internal=io.vidocq.cervantes.jaxrs</arg>
+                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
+            <!--
+                Test-only: the tests run on the module path and their doubles build a DefaultJsonWebToken
+                (internal to cervantes-core) from JSON-P values, which this module does not read itself.
+                Production needs neither edge.
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-exports io.vidocq.cervantes.core/io.vidocq.cervantes.internal=io.vidocq.cervantes.jaxrs
+                        --add-reads io.vidocq.cervantes.jaxrs=jakarta.json
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>

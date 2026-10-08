@@ -97,6 +97,8 @@ Source of truth for milestones and TCK score. TDD at each step (Red → Green �
 - **2026-05-26** — `cervantes-core` Java Modules trick: cleaning `module-info.class` is tied to
   `process-sources` (and not `generate-test-sources` as in heisenberg) so incremental builds
   without `clean` do not flip `default-compile` into module mode. No-op on a clean build.
+  *(Superseded 2026-10-08: the workaround is removed, every module-info is back in `src/main/java`
+  — see CERV-006.)*
 - **2026-05-26** — Current Vauban defect: a `@Produces` bean whose PRODUCER is normal-scoped
   (`@ApplicationScoped`) is resolved incorrectly (the producer proxy is cast to the product type →
   `ClassCastException`). Workaround: both producer AND product are `@Dependent` (the

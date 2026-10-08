@@ -20,13 +20,6 @@
 /**
  * Pure JWT validation engine (no CDI, no JAX-RS).
  *
- * <p>Note Java Modules — workaround testCompile: this {@code module-info.java} is in
- * {@code src/main/module-info/} (not {@code src/main/java/}) so Maven Compiler Plugin
- * does not detect Java Modules during {@code testCompile} (test dependencies — champollion-jsonp, junit —
- * run on the classpath, {@code useModulePath=false}). {@code maven-clean-plugin} removes
- * {@code module-info.class} before {@code testCompile}, then a {@code prepare-package} run
- * recompiles {@code module-info.java} alone. Java Modules wiring is validated by TCK (M6).</p>
- *
  * <p>{@code io.vidocq.cervantes.internal} is exported in a qualified way to
  * {@code io.vidocq.cervantes.cdi.vauban} and {@code io.vidocq.cervantes.jaxrs}.</p>
  */

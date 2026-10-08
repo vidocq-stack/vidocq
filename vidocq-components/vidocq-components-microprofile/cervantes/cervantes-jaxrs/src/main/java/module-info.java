@@ -26,9 +26,6 @@
  * applies {@code @RolesAllowed}/{@code @PermitAll}/{@code @DenyAll} per method. Impl-agnostic
  * (validated against Cassini). Filters are CDI {@code @Provider} beans discovered by the
  * Cassini {@code BeanProvider}.</p>
- *
- * <p>Java Modules note — testCompile workaround: {@code module-info.java} placed in {@code src/main/module-info/}.
- * See {@code cervantes-core/pom.xml}.</p>
  */
 module io.vidocq.cervantes.jaxrs {
     requires transitive io.vidocq.cervantes.api;
