@@ -67,7 +67,7 @@ flowchart LR
 | Fair `Semaphore` with `value` permits. Async mode: a second fair `Semaphore` bounds the waiting queue to `waitingTaskQueue` permits.
 
 | `FallbackResolver`
-| `MethodHandle` resolved once at construction (via `MethodHandles.privateLookupIn`). No `Proxy.newProxyInstance`.
+| `MethodHandle` resolved once at construction (via `MethodHandles.privateLookupIn`, from a lookup taken in the bean's own module when the container supplies one — see xref:#fallback-lookup[how a fallback method is reached]). No `Proxy.newProxyInstance`.
 
 | `PolicyComposer`
 | Builds the chain inside out by nesting `Invocation` lambdas (`@Bulkhead` first, `@Fallback` / `@Asynchronous` last), from the annotation snapshot read by `AnnotationReader`.
@@ -112,7 +112,7 @@ The repo `CLAUDE.md` mandates strictly, and the engines follow through:
 
 * no `synchronized` — `ReentrantLock` with `tryLock` when a lock is unavoidable (so far, none has been);
 * no `ThreadLocal` — invocation state travels through explicit parameters and captured lambdas;
-* no `setAccessible(true)` — `MethodHandles.privateLookupIn` for private fallbacks;
+* no `setAccessible(true)` — `MethodHandles.privateLookupIn` for private fallbacks, from the bean module's own lookup when the container supplies one (xref:#fallback-lookup[how a fallback method is reached]);
 * no `java.lang.reflect.Proxy` — direct `MethodHandle`.
 
 This discipline guarantees that virtual threads are never _pinned_ to their carrier thread — otherwise the memory cost of `@Asynchronous` explodes under load.
@@ -146,6 +146,18 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
 ----
 
 Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
+
+[#fallback-lookup]
+== How a fallback method is reached [.tag-new]#NEW#
+
+`FallbackResolver` turns a `fallbackMethod` into a `MethodHandle` with `MethodHandles.privateLookupIn(owner, lookup)`. On a strict module path, a private lookup taken from `io.vidocq.heisenberg.core` needs two things the application does not give: a read edge from the core to the application module, and the bean's package opened to the core. The official TCK runs on the class path, where both always hold, so it never saw that a bean with a `fallbackMethod` in a module that opens nothing failed deployment with `Invalid fallbackMethod` (BUG-003, heisenberg#22).
+
+`heisenberg-core` stays container-agnostic. `FallbackResolver` asks a hook, `FallbackResolver.LookupSource`, for a lookup on the bean class, and resolves in this order:
+
+. **A lookup from the container.** `heisenberg-cdi-vauban` installs the hook (`VaubanLookupSource`) with Vauban's xref:vauban::internals.adoc#module-lookups[`ModuleLookups`]: its lookup is supplied by the generated `_VaubanComponents` of the bean's package — written by the annotation processor for the application, or by the Vauban Maven plugin for a scanned dependency. That lookup lives in the bean's own module, so the private lookup derived from it needs no read edge and no `opens`. `io.vidocq.vauban.core` exports `ModuleLookups` to the trusted extension modules only, and `heisenberg-cdi-vauban` reaches it through `requires static io.vidocq.vauban.core` (Maven scope `provided`): under another container the hook answers nothing.
+. **No lookup** — no Vauban provider for that package (for instance an archive compiled by an older processor), another container, or the engines used without a container. The core adds the read edge to the bean's module itself (`Module.addReads`), so an `opens <pkg> to io.vidocq.heisenberg.core` in the application is the only thing left to declare.
+
+Either way, no `setAccessible(true)` and no `--add-reads` on the command line. `heisenberg-cdi-vauban-module-it` (`FallbackMethodModulePathTest`) covers private and package-private fallback methods on the module path with an application that opens nothing; the `heisenberg-cdi-vauban` unit tests, which call the interceptor without a container, keep the `opens`-only path covered.
 
 == Optional observability
 

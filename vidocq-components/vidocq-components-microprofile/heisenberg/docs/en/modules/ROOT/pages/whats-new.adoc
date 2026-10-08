@@ -1,0 +1,14 @@
+= What's new
+:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== Fallback methods on the module path
+
+`@Fallback(fallbackMethod = ...)` on a strict module path, with no `opens` (heisenberg#22):
+
+* **No `opens`, no `--add-reads`** — a bean in a named module that opens nothing used to fail deployment with `FaultToleranceDefinitionException: Invalid fallbackMethod`, whatever the method's access modifier; the official TCK runs on the class path and never saw it. Under Vauban, the fallback method is now resolved through a lookup taken in the bean's own module, supplied by the `_VaubanComponents` generated for its package — by the annotation processor for your application, by the Vauban Maven plugin for a scanned dependency. Nothing to add to your `module-info.java` or to your pom. xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path], xref:reference.adoc#fallback-parameters[`@Fallback` parameters].
+* **Without a Vauban provider, `opens` alone is enough** — when the bean's package has no generated `_VaubanComponents` (for instance an archive compiled by an older processor), `opens <pkg> to io.vidocq.heisenberg.core` is the only thing to declare: Heisenberg adds the read edge to your module itself. If you worked around the bug with `--add-reads io.vidocq.heisenberg.core=<your module>`, you can drop that flag. xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path].
+* **How it works** — `FallbackResolver` stays container-agnostic and asks a hook for a lookup on the bean class; `heisenberg-cdi-vauban` answers it with Vauban's `ModuleLookups`. xref:internals.adoc#fallback-lookup[How a fallback method is reached].
+* **`io.vidocq.heisenberg.cdi.vauban` now declares `requires static io.vidocq.vauban.core`** — `vauban-core` is a `provided` dependency of `heisenberg-cdi-vauban`, brought at runtime by the container; it needs a Vauban `{project-version}` that ships `ModuleLookups`. xref:reference.adoc#java-modules[Java modules].

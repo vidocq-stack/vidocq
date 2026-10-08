@@ -76,6 +76,26 @@ public class CatalogClient {
 
 The `FallbackHandler` is instantiated by CDI — it can therefore inject its own dependencies (`@Inject CacheManager cache;`).
 
+[#fallback-method-module-path]
+== Fallback methods on the module path [.tag-new]#NEW#
+
+A `fallbackMethod` is usually `private`, like `catalogFromCache` above. On a strict module path, Heisenberg reaches it **without any `opens`** in your `module-info.java` and without any `--add-reads` on the command line, whatever its access modifier (`private`, package-private, `protected` or `public`):
+
+* under Vauban, the lookup on the bean class comes from the `_VaubanComponents` generated for the bean's package — by the annotation processor for your application, or by the Vauban Maven plugin for a scanned dependency. The fallback method is resolved from inside the bean's own module; nothing to declare, nothing to add to the pom;
+* when no such lookup exists — no Vauban provider for that package, for instance an archive compiled by an older processor — one line in the bean's module is enough:
++
+[source,java]
+----
+module com.acme.catalog {
+    // only needed when the package has no generated _VaubanComponents
+    opens com.acme.catalog to io.vidocq.heisenberg.core;
+}
+----
++
+Heisenberg adds the read edge from `io.vidocq.heisenberg.core` to your module itself.
+
+Before this, a bean with a `fallbackMethod` in a named module that opens nothing failed deployment with `FaultToleranceDefinitionException: Invalid fallbackMethod`. On the class path nothing changes. How the lookup is obtained: xref:internals.adoc#fallback-lookup[Internals — how a fallback method is reached].
+
 == Synchronous bulkhead: limit concurrency
 
 `@Bulkhead(N)` bounds the number of concurrent invocations. Useful to protect an undersized connection pool.
