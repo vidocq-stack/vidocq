@@ -11,7 +11,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM (Model 4.0.0)
+| Parent POM (Model 4.0.0). [[parent-pom-versions]]It manages every Vidocq artifact and the `vidocq-runtime-maven-plugin` at the runtime version written out literally, so an application that declares a `<version>` of its own resolves them at the runtime's version, not its own [.tag-new]#NEW#.
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors [.tag-new]#NEW#)

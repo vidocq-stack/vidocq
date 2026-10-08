@@ -22,7 +22,7 @@
 | Generates the CDI bean index (`META-INF/vauban-beans.list`) and the code of the dependency jars it scans — their `_VaubanComponents`, client proxies and intercepted subclasses — into an enriched copy of each jar that every launch uses. See <<generate,the `vidocq:generate` goal>> [.tag-new]#NEW#. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
 
 | `vidocq:package`
-| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
+| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. `-Dvidocq.package.layer=false` gives the legacy layout, launched through the main class's module: see <<package-layout>> [.tag-new]#NEW#. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
 
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing]. It also adds the dev tools — the dev console and, per extension, its `-dev` panel module — to the child's module path only: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
@@ -34,7 +34,7 @@
 | Continuous testing without the application: runs the tests, then again on every change of the main or test sources, with a summary and keys in the terminal. See <<test,the `vidocq:test` goal>>.
 
 | `vidocq:checkpom`
-| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. A missing codegen bundle is reported with the `<path>` to paste into the compiler's `annotationProcessorPaths`, its group and version included [.tag-new]#NEW#; a `-dev` companion module is never asked for one. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
 
 | `vidocq:analyze-deps` [.tag-new]#NEW#
 | Explains which dependencies `vidocq:generate` scans, why, and what it does with each; prints the `<scanDependencies>` block that makes the detection explicit. See <<analyze-deps>>.
@@ -120,8 +120,29 @@ The dev console's CDI panel shows the result: a scanned jar's beans read `Class-
 
 `mvn vidocq:analyze-deps` prints, for each bean archive and each named dependency, what it is — its discovery mode, an explicit or automatic module, signed or not — what selects or excludes it, and what `vidocq:generate` does with it: an enriched copy, an open module synthesized first, or nothing and why. It ends with the `<scanDependencies>` block that makes the detected bean archives explicit, to paste in the pom. It reads the same `scanDependencies`, `scanExcludes` and `autoScan` as `vidocq:generate`: configure them at plugin level so both goals see them. It changes nothing.
 
+[#package-layout]
+== `vidocq:package` layouts
+
+By default the application jar lands in `app/`, apart from the module-path closure in `lib/`, and the
+`bin/` launchers boot the runtime with `-Dvidocq.app.path="$BASEDIR/app"`: the application resolves into the
+module layer the Vauban class loader defines, as it does under `vidocq:dev` and `vidocq:run`.
+
+[#package-legacy-layout]
+=== The legacy layout [.tag-new]#NEW#
+
+`-Dvidocq.package.layer=false` puts everything in `lib/` and the launchers start the JVM with `--module`,
+which takes a module, then a class:
+
+* with no application main class, the runtime's own main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`;
+* with an application main class, `<vidocq.mainModule>/<vidocq.mainClass>`;
+* a `vidocq.mainClass` already written `<module>/<class>` is used as it is.
+
+A plain `vidocq.mainClass` without `vidocq.mainModule` fails the build, with a message asking for one or the
+other. The launchers used to pass the class name alone to `--module`, and the JVM stopped on a
+`FindException` before `main` (Vidocq/vidocq#198).
+
 [#modularize]
-== `modularize` moved to the Vauban plugin
+== `modularize` moved to the Vauban plugin [.tag-new]#NEW#
 
 The `vidocq:modularize` goal no longer exists. It is now **`vauban:modularize`**, in
 `io.vidocq.vauban:vauban-maven-plugin` — Vauban owns the class loader and the module machinery, so
@@ -228,7 +249,8 @@ docker run --rm -p 8080:8080 \
     example/my-app:1.0.0
 ----
 
-The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
+[#docker-linux-image]
+[.tag-new]#NEW# The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
 or Windows the image holds a Mach-O or PE `bin/java` that a Linux container cannot start. The goal reads that
 header: when the image is not Linux it logs a warning and still writes the `Dockerfile`, and with
 `-Dvidocq.docker.build=true` it fails before running `docker build`. Build the image on Linux, in CI for instance.
@@ -500,8 +522,9 @@ ships in a binary whenever an extension that keeps the all-in-one `DevConsolePan
 
 **What `vidocq:dev` adds, and when.** After building the child's module path as it always has, the goal:
 
-. resolves the dev console and its SPI itself, through Maven's own resolver (Aether), at this plugin's own
-  version — the console and the plugin are released in lockstep — the moment the application already has
+. resolves the dev console and its SPI itself, through Maven's own resolver (Aether), at the Vidocq version
+  of the application's `vidocq-runtime-chappe-webserver-extension`, with a warning when that is not
+  the plugin's own version, and looks in the plugin repositories as well as the project's (Vidocq/vidocq#148), the moment the application already has
   `vidocq-runtime-chappe-webserver-extension`: the console serves its page through Chappe, so without it there
   is nothing to serve the page, and nothing is added;
 . for every runtime extension the project resolves, reads its `META-INF/vidocq/dev-module` descriptor, if it has

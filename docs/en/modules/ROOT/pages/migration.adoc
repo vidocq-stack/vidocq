@@ -233,7 +233,7 @@ Seven extensions run the TCKs of their MicroProfile 7.2 specifications and the M
 Before, an application declared `vidocq-runtime-devconsole-extension` itself to get the
 xref:dev-console.adoc[dev console], and that dependency shipped in every binary `vidocq:package`, `jlink`,
 `jpackage` and `docker` produced — off by default, but its code was there. `mvn vidocq:dev` now adds the
-console itself, from the plugin's own release, the moment the application already has
+console itself, at the Vidocq version of the application's Chappe extension, the moment the application already has
 `vidocq-runtime-chappe-webserver-extension`; no application ever needs to declare it, and no binary ever
 contains it (Vidocq/vidocq#143).
 
@@ -253,6 +253,44 @@ contains it (Vidocq/vidocq#143).
 
 See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries] for the whole picture,
 including the six `-dev` panel modules this repository's own extensions now ship.
+
+[#config-rest-client-codegen]
+== Config and Rest Client need their codegen bundle [.tag-new]#NEW#
+
+Two extensions now ship a `-codegen` bundle, as the others already did, and `vidocq:checkpom` fails the build
+of an application that declares the extension without it:
+
+* `vidocq-runtime-ravel-config-extension` → `vidocq-runtime-ravel-config-extension-codegen` (Vidocq/ravel#21).
+  Without it, `@Inject @ConfigProperty` was reported unsatisfied at compile time, and the only way out was
+  `-Avauban.validation=false`.
+* `vidocq-runtime-cyrano-rest-client-extension` → `vidocq-runtime-cyrano-rest-client-extension-codegen`
+  (Vidocq/vidocq#207). Without it, `@Inject @RestClient` was unsatisfied at boot.
+
+Add each one to the compiler's `annotationProcessorPaths`, next to the inherited indexer
+(`combine.children="append"`). `checkpom` prints the `<path>` to paste:
+
+[source,xml,subs=attributes+]
+----
+<path>
+    <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+    <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
+    <version>{project-version}</version>
+    <type>pom</type>
+</path>
+----
+
+`vidocq extension add ravel-config` and `vidocq extension add cyrano-rest-client` write it for you. See
+xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config extension] and
+xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
+
+[#modularize-moved]
+== `vidocq:modularize` is now `vauban:modularize` [.tag-new]#NEW#
+
+The goal moved to `io.vidocq.vauban:vauban-maven-plugin`. A pom that runs `vidocq:modularize` declares the
+Vauban plugin instead, renames the `vidocq.modularize.*` properties to `vauban.modularize.*`, and drops
+`<release>`; the copies are written to `target/vauban-modularized/`, where `vidocq:dev`, `vidocq:jlink` and
+`vidocq:package` read them. See xref:modules/vidocq-runtime-maven-plugin.adoc#modularize[`modularize` moved to
+the Vauban plugin].
 
 == Next steps
 

@@ -55,6 +55,16 @@ Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with
 moves. CDI-agnostic libraries move too, so Vauban places the client proxies that must live in
 their packages, with zero `opens`. Override with `-Dvidocq.app.modules=<name,name>` or an
 explicit `-Dvidocq.app.path=<archives>`.
+
+[#app-in-boot-layer]
+[.tag-new]#NEW# When the selection finds no application module to move, the application stays in the boot
+layer, and there Vidocq cannot give itself access to the `VidocqApp` class it has to instantiate. The boot
+now fails with a message that names the class, its package and the two fixes, instead of a bare
+`IllegalAccessException`: add `exports <package> to io.vidocq.runtime.core;` to the application's
+`module-info.java`, or make the class a CDI bean (`@ApplicationScoped` or `@Dependent`), which the
+container creates itself (Vidocq/vidocq#201). In the application layer, the usual case, Vidocq adds that
+export by itself.
+
 A legacy main that boots the runtime directly still works — unwoven beans are then
 covered by the load-time weaving agent (with the JDK's dynamic-agent warning) and the
 log suggests migrating to the trampoline.

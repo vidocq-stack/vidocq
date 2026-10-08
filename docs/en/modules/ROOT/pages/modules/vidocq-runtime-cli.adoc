@@ -184,7 +184,7 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | Command | Description
 
 | `vidocq version`
-| Print the CLI and runtime version string.
+| Print the CLI and runtime version string. A SNAPSHOT CLI adds its build time, `0.4.0-SNAPSHOT (built 2026-10-06T09:13:13Z)`, as the help header and `vidocq info` do [.tag-new]#NEW#.
 
 | `vidocq info`
 | Display the CLI/Java version and the extensions of the project in the current directory.
@@ -263,7 +263,7 @@ A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-sta
 [#dev]
 === `vidocq dev`
 
-Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when there is one: the
+[.tag-new]#NEW# Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when there is one: the
 application starts with its dependencies and extensions on the module path, the dev console and
 a debug agent on port `5005`, and restarts on every source change — exactly as
 `mvn vidocq:dev` does, see xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin] for
@@ -278,12 +278,14 @@ its settings (continuous testing, dev services, …).
 | `--debug` | Force the debug agent on (`-Dvidocq.dev.debug=true`); dev mode opens it by default, on this machine only.
 |===
 
-Ctrl+C stops Maven and the application; the CLI returns once both are down.
+Ctrl+C stops Maven and the application; the CLI returns once both are down. `vidocq dev` and `vidocq start`
+used to boot the runtime inside the CLI's own JVM, which holds neither the project's classes nor its
+extensions: the runtime came up empty, with nothing listening.
 
 [#start]
 === `vidocq start`
 
-Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
+[.tag-new]#NEW# Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
 project and starts the application with its dependencies and extensions on the module path.
 
 [cols="1,2"]
@@ -342,11 +344,12 @@ formatting; idempotent thanks to a StAX dependency scan).
 | Sub-command | Description
 
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both.
-| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`.
-| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java` [.tag-new]#NEW#. The dependency and the codegen path carry the parent's version, written out [.tag-new]#NEW#.
+| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add` [.tag-new]#NEW#.
 |===
 
-An id may be a known short name (e.g. `cassini-rest`), an explicit `groupId:artifactId`, or
+An id may be a known short name (e.g. `cassini-rest`; the catalog now has `grimm-openapi`, `grimm-openapi-ui`,
+`migration`, `flyway-migration` and `liquibase-migration` too [.tag-new]#NEW#), an explicit `groupId:artifactId`, or
 any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).
 
 In `module-info.java`, `add` declares `requires` on the extension's module, which re-exports most
@@ -358,7 +361,7 @@ added line ends with `// vidocq:<id>`, which is what `remove` takes back — nev
 hand, except a `requires` of the removed extension's own module, which no longer resolves.
 `vidocq create -x` writes the same directives.
 
-`list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
+[.tag-new]#NEW# `list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
 with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
 JAR whose module provides `io.vidocq.runtime.spi.VidocqExtension`. An extension pulled in by
 another one — `chappe-webserver` under `cassini-rest` — is listed and marked `(transitive)`.
@@ -434,9 +437,9 @@ never fail the command; only ✘ checks set a non-zero exit code.
 [#completion]
 === `vidocq completion`
 
-Prints a self-contained completion script to stdout. It completes commands, sub-commands
+Prints a self-contained completion script to stdout. It completes [.tag-new]#NEW# commands, sub-commands
 (`extension list|add|remove`, `config get|set|list`, …), each command's options, build types,
-and values: the catalog's extension ids after `extension add` and `create -x`, the extensions
+and values: the catalog's extension ids after `extension add` and `create -x`, less those the `pom.xml` already declares, the extensions
 the current `pom.xml` declares after `extension remove`, the keys of the project's
 `vidocq.properties` after `config get|set`. These values are read by the script itself, so
 pressing TAB never starts a JVM.
@@ -450,7 +453,7 @@ source <(vidocq completion bash)
 vidocq completion zsh > "${fpath[1]}/_vidocq"
 ----
 
-`vidocq completion install` does it for you: it writes the script to
+`vidocq completion install` [.tag-new]#NEW# does it for you: it writes the script to
 `~/.vidocq/completion/vidocq.<shell>` and adds a marked block sourcing it to `~/.zshrc` or
 `~/.bashrc`. The shell comes from `$SHELL` unless named (`vidocq completion install bash`).
 Running it again replaces the block instead of adding another. The script records which CLI
@@ -462,7 +465,7 @@ NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_prof
 `~/.bashrc`. Source `~/.bashrc` from `~/.bash_profile` if it does not already.
 
 [#update]
-=== `vidocq update`
+=== `vidocq update` [.tag-new]#NEW#
 
 Updates the CLI itself, from the same repositories as `install.sh`:
 

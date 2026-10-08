@@ -30,6 +30,9 @@
 | `vidocq-runtime-knock-health-example`
 | MicroProfile Health via `vidocq-runtime-knock-health-extension` — custom `@Liveness`/`@Readiness` checks exposed on `/health`.
 
+| [[cyrano-rest-client-example]]`vidocq-runtime-cyrano-rest-client-example` [.tag-new]#NEW#
+| MicroProfile Rest Client via `vidocq-runtime-cyrano-rest-client-extension` and its `-codegen` bundle — `/api/relay` calls the application's own `/api/greeting` through an `@Inject @RestClient` interface. Every build links it with `vidocq:jlink`.
+
 | `vidocq-runtime-petstore-example`
 | The largest example — Cassini + Mansart + Champollion + H2 petstore combining REST, persistence and JSON binding.
 

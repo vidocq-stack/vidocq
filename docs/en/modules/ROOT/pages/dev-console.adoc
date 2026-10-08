@@ -7,7 +7,7 @@ The dev console is a page that the application serves to your browser while you 
 [#getting-it]
 == Getting it [.tag-new]#NEW#
 
-Nothing to declare. `mvn vidocq:dev` adds the console itself, from the plugin's own release, the moment the
+Nothing to declare. `mvn vidocq:dev` adds the console itself, at the Vidocq version of the application's Chappe extension — with a warning when the plugin is another version (Vidocq/vidocq#148) — the moment the
 application already has `vidocq-runtime-chappe-webserver-extension`: the console serves its page through
 Chappe, on a listener of its own, so without Chappe there is nothing to serve it and nothing is added. It also
 adds, for every runtime extension that has one, that extension's `-dev` panel module

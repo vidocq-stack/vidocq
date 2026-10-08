@@ -60,7 +60,7 @@
 
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
-| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
+| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
 
 | `vidocq-runtime-knock-health-extension`
 | `microprofile`
@@ -72,7 +72,7 @@
 
 | `vidocq-runtime-grimm-openapi-extension`
 | `microprofile`
-| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI [.tag-new]#NEW#; the `rest` panel of the dev console shows the same buttons.
+| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI [.tag-new]#NEW#; the `rest` panel of the dev console shows the same buttons. [[grimm-named-module]]The extension requires Grimm's named module, `io.vidocq.grimm.cdi.vauban` [.tag-new]#NEW#: with the automatic module it used to require, a packaged application whose `cassini:generate` sealed its modules lost every Grimm bean, and `/openapi` answered 404 (Vidocq/grimm#15).
 
 | `vidocq-runtime-cervantes-jwt-extension`
 | `microprofile`
@@ -80,7 +80,7 @@
 
 | `vidocq-runtime-cyrano-rest-client-extension`
 | `microprofile`
-| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. Companion `-codegen` artefact: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it.
+| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. [[cyrano-rest-client-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it. An application with a Rest Client now links with `vidocq:jlink`: `org.reactivestreams`, an automatic module, is no longer required (Vidocq/cyrano#30). `vidocq-runtime-cyrano-rest-client-example` calls one of its own resources through an injected client.
 
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
