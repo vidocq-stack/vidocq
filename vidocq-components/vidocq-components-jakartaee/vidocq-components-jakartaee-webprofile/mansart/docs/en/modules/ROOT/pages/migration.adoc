@@ -63,11 +63,11 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Hibernate | Mansart | Note
 
 | `SessionFactory` / `EntityManagerFactory`
-| `MansartManagerFactory` *(M7 pending)*
+| `EntityManagerFactory` from `mansart-persistence` *(not implemented yet)*
 | For everyday needs, switch to `mansart-jakarta-data` directly.
 
 | HQL
-| JPQL (M7) or JDQL (delivered)
+| JPQL (`mansart-persistence`, not implemented yet) or JDQL (delivered)
 | Mansart targets the spec, not proprietary HQL extensions.
 
 | `@Entity`, `@Id`, `@GeneratedValue`, `@Column`
@@ -76,7 +76,7 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 
 | `@OneToMany`, `@ManyToMany`, inheritance
 | Out of scope v1
-| Deferred to `mansart-persistence` (M7).
+| Deferred to `mansart-persistence`.
 
 | Hibernate Reactive
 | `mansart-jakarta-data` + virtual threads
@@ -84,11 +84,11 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 
 | JPA listeners (`@PrePersist`, `@PostLoad`)
 | Out of scope v1
-| Covered by M7.
+| Planned in `mansart-persistence`.
 
 | Criteria API
 | Out of scope v1
-| Covered by M7.
+| Planned in `mansart-persistence`.
 
 | Schema generation (`hibernate.hbm2ddl`)
 | External (Flyway / Liquibase recommended)
@@ -97,7 +97,7 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 
 == From EclipseLink / OpenJPA
 
-Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `mansart-persistence` (M7).
+Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `mansart-persistence`.
 
 // TODO@user: document an EclipseLink → Mansart real-world experience once a case shows up.
 

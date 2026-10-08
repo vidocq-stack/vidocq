@@ -23,7 +23,7 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Data 1.0 — `PersistenceTests`
 | —
 | —
-| ⏳ Out of scope v1 — depends on `mansart-persistence` (M7 pending).
+| ⏳ Out of scope v1 — depends on `mansart-persistence` (restarted, not implemented yet).
 
 | Jakarta Data 1.0 — `NoSQLTests`
 | —
@@ -103,7 +103,7 @@ xdg-open ../dist/index.html
 | Test | Reason
 
 | `PersistenceTests.*` (Jakarta Data)
-| Depends on `mansart-persistence` (JPA 3.2) — M7 pending. Jakarta Data NoSQL out of scope v1.
+| Depends on `mansart-persistence` (JPA 3.2) — restarted, not implemented yet. Jakarta Data NoSQL out of scope v1.
 
 | `NoSQLTests.*` (Jakarta Data)
 | Mansart targets SQL/JDBC exclusively in v1.

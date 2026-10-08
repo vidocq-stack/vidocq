@@ -94,7 +94,7 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 * `@Convert` / `AttributeConverter`.
 * NoSQL (Jakarta Data NoSQL is an extension out of scope for Mansart v1).
 
-Deferred to `mansart-persistence` (M7) or v1.1.
+Deferred to `mansart-persistence` or v1.1.
 
 == Runtime architecture
 

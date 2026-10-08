@@ -43,8 +43,8 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 | `io.vidocq.mansart:mansart-transactions-{api,core,cdi,jdbc}`
 | `mansart-transactions` itself is a POM aggregator — depend on `-cdi` (`@Transactional` interceptor, `@TransactionScoped`, Vauban BCE; pulls `-core`'s `MansartTransactionManager`/`UserTransaction`) and `-jdbc` for the connection bridge.
 
-| `io.vidocq.mansart:mansart-persistence` *(M7 pending)*
-| Jakarta Persistence 3.2 implementation.
+| `io.vidocq.mansart:mansart-jpa` *(restarted, skeleton only)*
+| Jakarta Persistence 3.2 implementation — for now an empty POM aggregator; the target `mansart-jpa-*` modules are listed in xref:modules/mansart-persistence.adoc#target-modules[mansart-persistence].
 |===
 
 == Java modules
@@ -62,8 +62,8 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 | `io.vidocq.mansart.transactions.api` / `.core` / `.cdi` / `.jdbc`
 | `…transactions.api` (re-exports `jakarta.transaction`) / `…transactions.core` (`MansartTransactionManager`) / CDI interceptor + BCE / JDBC enlistment bridge.
 
-| `io.vidocq.mansart.persistence` *(M7 pending)*
-| TBD.
+| `io.vidocq.mansart.jpa.*` *(planned)*
+| No module yet; see xref:modules/mansart-persistence.adoc#target-modules[the target modules].
 |===
 
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
@@ -77,7 +77,7 @@ Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Ta
 
 The storage applies wherever Mansart knows which attribute a value belongs to: inserts and updates, row mapping, projections, `WHERE` bindings, bulk updates by attribute, and the table DDL Mansart generates (an integer column for `ORDINAL`). Two paths do not know it yet and still bind a value by its Java type: an aggregate (`SELECT MAX(…)`, …) over an `ORDINAL` enum, and a JDQL `UPDATE … SET` that Mansart runs at run time rather than compiling it (a `SET` with an arithmetic expression, or a statement passed to `JdqlExecutor.run`). Before 0.4, `@Enumerated` was ignored and every enum was stored by its name; see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0] for existing `ORDINAL` columns.
 
-**Out of scope v1**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Deferred to `mansart-persistence` (M7).
+**Out of scope v1**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Deferred to `mansart-persistence`.
 
 == Repository annotations
 
@@ -179,7 +179,7 @@ Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the enti
 == Compatibility
 
 * Java 25 (LTS), Maven 3.9.16.
-* {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (M7 pending), Jakarta Transactions 2.0.
+* {spec-data-1}[Jakarta Data 1.0] (delivered), {spec-jpa-3-2}[Jakarta Persistence 3.2] (restarted, skeleton only), Jakarta Transactions 2.0.
 * {spec-cdi-4-1}[CDI 4.1 Lite] via xref:vauban::index.adoc[Vauban].
 * Virtual Threads for any JDBC execution.
 
