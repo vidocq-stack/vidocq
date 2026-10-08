@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Lance la suite TCK officielle MicroProfile Config 3.1
+# Runs the official MicroProfile Config 3.1 TCK
 # (org.eclipse.microprofile.config:microprofile-config-tck:3.1.1)
-# contre l'implémentation Ravel.
+# against the Ravel implementation.
 #
-# Modes :
-#   ./run-official-tck-mp-config-3.1.sh                 # smoke test (sans Arquillian)
-#   ./run-official-tck-mp-config-3.1.sh all             # suite complète (Arquillian + Weld)
-#   ./run-official-tck-mp-config-3.1.sh -Dtest=Foo      # test ciblé via le profil tck-official
+# Modes:
+#   ./run-official-tck-mp-config-3.1.sh                 # smoke test (default, no Arquillian)
+#   ./run-official-tck-mp-config-3.1.sh all             # full suite (Arquillian + Weld)
+#   ./run-official-tck-mp-config-3.1.sh -Dtest=Foo      # targeted test, tck-official profile
 #
-# Comportement :
-#   1. Installe en local (mvn install -DskipTests) ravel-api/ravel-core/ravel-cdi-vauban
-#   2. Invoque mvn -f ravel-tck/pom.xml -P<profile> test [args...]
-#   3. Génère target/tck-report.txt avec le résumé PASS/FAIL/SKIP
+# Behaviour:
+#   1. Installs ravel-api/ravel-core/ravel-cdi-vauban locally (mvn install -DskipTests)
+#   2. Runs mvn -P"tck,<profile>" -pl ravel-tck test [args...]
+#   3. Writes ravel-tck/target/tck-report.txt with the test counts and PASS/FAIL
 #
 set -euo pipefail
 
@@ -27,32 +27,32 @@ shift || true
 case "${mode}" in
     smoke)
         profile="smoke"
-        echo "==> Mode : SMOKE (RavelTckSmokeTest, hors Arquillian)"
+        echo "==> Mode: SMOKE (RavelTckSmokeTest, no Arquillian)"
         ;;
     all)
         profile="tck-official"
-        echo "==> Mode : ALL (suite officielle MicroProfile Config 3.1.1 — TestNG/Arquillian/Weld)"
+        echo "==> Mode: ALL (official MicroProfile Config 3.1.1 suite — TestNG/Arquillian/Weld)"
         ;;
     -Dtest=*)
         profile="tck-official"
-        # On replace l'argument shifté pour que mvn le reçoive.
+        # Put the shifted argument back so that mvn receives it.
         set -- "${mode}" "$@"
-        echo "==> Mode : ciblé (${mode}) avec profil tck-official"
+        echo "==> Mode: targeted (${mode}) with the tck-official profile"
         ;;
     *)
-        echo "Usage : $0 [smoke|all|-Dtest=NomDuTest]" >&2
+        echo "Usage: $0 [smoke|all|-Dtest=TestName]" >&2
         exit 64
         ;;
 esac
 
-echo "==> Étape 1/2 : install local des artefacts Ravel (mvn install -DskipTests)"
+echo "==> Step 1/2: local install of the Ravel artifacts (mvn install -DskipTests)"
 ( cd "${ROOT_DIR}" && mvn -ntp -pl ravel-api,ravel-core,ravel-cdi-vauban -am install -DskipTests )
 
-echo "==> Étape 2/2 : exécution Maven sur ravel-tck in-reactor (profils=tck,${profile})"
+echo "==> Step 2/2: Maven run on the in-reactor ravel-tck (profiles=tck,${profile})"
 mkdir -p "${TCK_DIR}/target"
 
-# ravel-tck est in-reactor, activé par le profil Maven `tck` (harmonisation TCK,
-# même pattern que les runners vidocq-runtime-tck-*, cf. CLAUDE.md).
+# ravel-tck is in the reactor, enabled by the `tck` Maven profile (TCK harmonisation,
+# same pattern as the vidocq-runtime-tck-* runners, see CLAUDE.md).
 
 set +e
 ( cd "${ROOT_DIR}" && mvn -ntp -P"tck,${profile}" -pl ravel-tck test "$@" ) \
@@ -60,11 +60,11 @@ set +e
 status=$?
 set -e
 
-# Résumé : extraire les lignes "Tests run:" finales par module
-echo "==> Génération du rapport : ${REPORT_FILE}"
+# Summary: extract the final "Tests run:" lines per module
+echo "==> Writing the report: ${REPORT_FILE}"
 {
     echo "# Ravel TCK report"
-    echo "# Généré le $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "# Generated $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "# Profile : ${profile}"
     echo "# Args    : $*"
     echo
