@@ -62,11 +62,11 @@
 |===
 
 [NOTE]
-.Scanned dependencies and Java Modules — new in 0.3.0
+.Scanned dependencies and Java Modules
 ====
 When `vidocq:generate` scans a dependency, the classes it produces for it belong to *that
 dependency's* packages. The plugin keeps the module path split-package-free end to end: `generate`
-parks those classes in `target/vidocq-patches/<artifactId>/`, then writes an *enriched* copy of the
+parks those classes in `target/vidocq-patches/<artifactId>/`, then [.tag-new]#NEW# writes an *enriched* copy of the
 jar that carries them and declares its providers (<<generate>>); `dev`, `run`, `package` and `jlink`
 use that copy in place of the original. Only a jar that cannot be given a module descriptor keeps
 its original, its classes attached with `--patch-module`. Zero configuration. See

@@ -1,8 +1,8 @@
-= Continuous testing
+= Continuous testing [.tag-new]#NEW#
 :description: Run the application's tests on every change, beside vidocq:dev or on their own with vidocq:test.
 
 [.lead]
-[.tag-new]#NEW# Vidocq runs the application's tests while you code: `vidocq:dev` runs them in the background after
+Vidocq runs the application's tests while you code: `vidocq:dev` runs them in the background after
 every reload and shows the result in the xref:dev-console.adoc#tests-panel[dev console], and `vidocq:test` runs them
 on their own, without the application, with a summary in the terminal.
 
