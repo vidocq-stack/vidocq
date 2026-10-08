@@ -45,6 +45,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`.
 
+[#java-modules]
 == Java modules
 
 [cols="2,3"]
@@ -61,7 +62,7 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 | No unqualified export — the only export is qualified: `exports io.vidocq.cervantes.internal to io.vidocq.cervantes.cdi.vauban`. The stable SPI reaches consumers through `requires transitive io.vidocq.cervantes.api`.
 
 | `io.vidocq.cervantes.cdi.vauban`
-| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`.
+| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver` [.tag-new]#NEW#.
 
 | `io.vidocq.cervantes.jaxrs`
 | `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`.
@@ -150,6 +151,7 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 
 All keys are read through `ConfigProvider.getConfig()` — provided by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
 
+[#signature-verification]
 === Signature verification
 
 [cols="2,3"]
@@ -157,13 +159,13 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 | Key | Effect
 
 | `mp.jwt.verify.publickey`
-| Inline public key. Accepts X.509 PEM (`-----BEGIN PUBLIC KEY-----`) or raw base64.
+| Inline public key. Accepts X.509 PEM (`-----BEGIN PUBLIC KEY-----`) or raw base64. A PEM key may be RSA or EC [.tag-new]#NEW#: with `mp.jwt.verify.publickey.algorithm` unset, the key type is detected from the key itself (RSA is tried first, then EC); when the property is set, the key must belong to that family, or loading fails with `not a valid RSA key` / `not a valid EC key`.
 
 | `mp.jwt.verify.publickey.location`
 | Public-key location: `classpath:/…`, `file:/…`, `http://…`, `https://…`. PEM-vs-JWKS auto-detection (format regex).
 
 | `mp.jwt.verify.publickey.algorithm`
-| Expected algorithm family (`RS256`, `ES256`, …). **Unset: both RS256 and ES256 are accepted (MP JWT 2.2).** When set, tokens announcing another family are rejected.
+| Expected algorithm family (`RS256`, `ES256`, …). **Unset: both RS256 and ES256 are accepted (MP JWT 2.2)** [.tag-new]#NEW#. When set, tokens announcing another family are rejected.
 
 | `mp.jwt.verify.issuer`
 | Expected issuer — string. Strictly compared to the token's `iss` claim.
@@ -180,9 +182,10 @@ All keys are read through `ConfigProvider.getConfig()` — provided by xref:rave
 The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the clock-skew tolerance applied to `exp` and `nbf` is fixed at 60 seconds (`JwtConfig.DEFAULT_CLOCK_SKEW`). Embedders building a `JwtConfig` directly through `cervantes-api` can pass any `clockSkew` duration.
 ====
 
+[#config-validated-at-start]
 [NOTE]
 ====
-The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable inline verification key (`mp.jwt.verify.publickey`), an unreadable file or classpath verification key location (`mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`, always read eagerly) fails the application at container start, with a message naming the property and the offending value. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. An `http://` or `https://` verification key location is fetched lazily, at the first validation (see xref:migration.adoc[Migration]). A valid value only rejects JWE tokens that announce another algorithm.
+[.tag-new]#NEW# The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable inline verification key (`mp.jwt.verify.publickey`), an unreadable file or classpath verification key location (`mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`, always read eagerly) fails the application at container start with a `jakarta.enterprise.inject.spi.DeploymentException` whose message names the property, the offending value and, for an algorithm, the supported values. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. An `http://` or `https://` verification key location is fetched lazily, at the first validation (see xref:migration.adoc[Migration]). A valid value only rejects JWE tokens that announce another algorithm.
 ====
 
 === Token transport

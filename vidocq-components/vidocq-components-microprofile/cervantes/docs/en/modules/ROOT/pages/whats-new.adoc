@@ -1,0 +1,26 @@
+= What's new
+:description: Everything that changed in Cervantes since the {release-version} release — MicroProfile JWT 2.2, RSA and EC keys side by side, a configuration checked at container start, and a module descriptor that reads JSON-P.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== MicroProfile JWT 2.2
+
+Cervantes moves from MicroProfile JWT 2.1 to 2.2 (cervantes#19):
+
+* **RS256 and ES256 both accepted by default** — when `mp.jwt.verify.publickey.algorithm` is unset, tokens signed with any of `RS256/384/512` and `ES256/384/512` are accepted, and a JWK Set mixing RSA and EC keys is resolved by `kid`. `{release-version}` defaulted to `RS256`. To keep refusing EC-signed tokens, set `mp.jwt.verify.publickey.algorithm=RS256`. xref:concepts.adoc#supported-algorithms[Supported algorithms], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from {release-version}].
+* **The configured algorithm is a family check** — when `mp.jwt.verify.publickey.algorithm` is set, the token's `alg` header must belong to the same family (RSA or EC), checked before any key is looked up: with `RS256`, an `RS512` token passes and an `ES256` token is rejected. xref:concepts.adoc#supported-algorithms[Supported algorithms], xref:internals.adoc#validation-pipeline[Validation pipeline].
+* **RSA or EC PEM keys, detected from the key** — an inline (`mp.jwt.verify.publickey`) or file/classpath (`mp.jwt.verify.publickey.location`) PEM public key may be RSA or EC. With the algorithm unset, its type is read from the key itself; with it set, the key must belong to that family, or loading fails with `not a valid RSA key` / `not a valid EC key`. `{release-version}` read every PEM key as RSA unless the property named an EC algorithm. xref:reference.adoc#signature-verification[Signature verification keys].
+* **MicroProfile JWT 2.2 TCK: 208 / 208** — the official 2.2 suite passes in full; it adds `RsaAndEcSignatureAlgorithmTest` (RS256 and ES256 tokens against one mixed RSA+EC JWK Set) and no longer ships the EJB, JACC and Servlet container tests. The runner script is now `run-official-tck-mp-jwt-2.2.sh`. xref:tck.adoc#status[TCK status].
+
+== Configuration checked at container start
+
+* **A bad `mp.jwt.*` value stops the start** — an unrecognised `mp.jwt.verify.publickey.algorithm` or `mp.jwt.decrypt.key.algorithm` (exact, case-sensitive names: `RS256` not `rs256`, `RSA-OAEP` not `rsa-oaep`), or an unreadable verification or decryption key, now fails the container start with a `DeploymentException` naming the property, the value and the supported values. `{release-version}` started anyway: it read an unrecognised verification algorithm as RSA, rejected every encrypted token at request time for an unrecognised decryption algorithm (CERV-004), and reported an unreadable key only at the validator's first injection. This is a **behaviour change**: values that used to be tolerated must be corrected. With no verification key configured, MP JWT stays off and the application starts as before; an `http://` or `https://` key location is still fetched at the first validation. xref:reference.adoc#config-validated-at-start[When the configuration is validated], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from {release-version}].
+
+== API
+
+* **`JwtConfig` gains a seventh component** — `requiredAlgorithm` (`Optional<SignatureAlgorithm>`), which carries `mp.jwt.verify.publickey.algorithm` for embedders who build a `JwtConfig` through `cervantes-api`. The six-argument constructor of `{release-version}` is kept, so code that builds a `JwtConfig` still compiles; a record deconstruction pattern on `JwtConfig` must add the new component. xref:migration.adoc#upgrading-from-0-3-0[Upgrading from {release-version}].
+
+== Java modules
+
+* **`io.vidocq.cervantes.cdi.vauban` reads `jakarta.json`** — the `cervantes-cdi-vauban` descriptor now declares `requires jakarta.json` (CERV-006, cervantes#21): the `@Claim` resolver maps claims to JSON-P values, and `{release-version}` relied on another module to supply that read edge. It also declares `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver`, for the start-time configuration check. Every Cervantes module-info is now compiled together with its code, so a missing edge of this kind fails the Cervantes build instead of reaching the published jar. xref:reference.adoc#java-modules[Java modules].

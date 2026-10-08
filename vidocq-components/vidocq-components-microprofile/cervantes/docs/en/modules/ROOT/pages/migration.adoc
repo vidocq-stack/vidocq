@@ -9,6 +9,16 @@ Cervantes is at `{project-version}`. The MicroProfile JWT 2.2 spec is fully cove
 [.lead]
 On the application code side, migration is trivial: Cervantes strictly consumes the standard `org.eclipse.microprofile.jwt.*` and `jakarta.annotation.security.*` annotations. No proprietary import to replace. The gaps lie in transport/JWE configuration and in the dependency footprint.
 
+[#upgrading-from-0-3-0]
+== Upgrading from Cervantes {release-version} [.tag-new]#NEW#
+
+Cervantes now follows MicroProfile JWT 2.2. Application code does not change, but four things behave differently from `{release-version}`:
+
+* **An unset `mp.jwt.verify.publickey.algorithm` accepts RS256 and ES256** — `{release-version}` defaulted to `RS256`. If the application relied on that default to refuse EC-signed tokens, set `mp.jwt.verify.publickey.algorithm=RS256` explicitly. When the property is set, it is now enforced as a family on every token: with `RS256`, an `RS512` token passes and an `ES256` token is rejected. See xref:concepts.adoc#supported-algorithms[supported algorithms].
+* **An EC public key in PEM needs no extra setting** — with the property unset, an inline or file/classpath PEM key is read as RSA or EC from the key itself; `{release-version}` read it as RSA unless the property named an EC algorithm. See xref:reference.adoc#signature-verification[signature verification keys].
+* **A bad configuration now stops the container start** — an unrecognised `mp.jwt.verify.publickey.algorithm` or `mp.jwt.decrypt.key.algorithm` (exact, case-sensitive names), or an unreadable verification or decryption key, fails the start with a `DeploymentException` naming the property and the value. `{release-version}` started anyway: it read an unrecognised verification algorithm as RSA, rejected every encrypted token for an unrecognised decryption algorithm (CERV-004), and reported an unreadable key only when the validator was first injected. Check `mp.jwt.*` values that used to be tolerated, such as `rs256` or `rsa-oaep`. See xref:reference.adoc#config-validated-at-start[when the configuration is validated].
+* **`JwtConfig` record** — it gained a seventh component, `requiredAlgorithm`. The six-argument constructor is kept, so code that builds a `JwtConfig` still compiles; source code that uses record deconstruction patterns on `JwtConfig` must add the new component.
+
 == From SmallRye JWT
 
 SmallRye JWT is the reference implementation in Quarkus and in several Jakarta EE servers. Migration is direct — Cervantes targets strict conformance to the same spec.
@@ -69,8 +79,6 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 * **No `setAccessible(true)`** — any business class that must receive a `@Claim` injection must be normally visible to CDI (`@Dependent`, `@RequestScoped`, …). If SmallRye opened runtime packages, Cervantes does not — open explicitly in `module-info.java`.
 * **`mp.jwt.verify.publickey.location`** — PEM-vs-JWKS auto-detection is based on the format of the content, not on the file extension. A URL returning a valid JWK Set is treated as JWKS, whether it ends with `.json`, `.jwks`, or nothing.
 * **JWKS — lazy refresh** — Cervantes does not fetch the JWK Set at startup. The first unknown `kid` triggers the fetch. Upside: fast startup, no fail-fast if the issuer is temporarily down. Downside: the first request may be slightly slower.
-
-* **`JwtConfig` record** — it gained a seventh component, `requiredAlgorithm`. The six-argument constructor is kept, so code that builds a `JwtConfig` still compiles; source code that uses record deconstruction patterns on `JwtConfig` must add the new component.
 
 == Classpath footprint compared
 

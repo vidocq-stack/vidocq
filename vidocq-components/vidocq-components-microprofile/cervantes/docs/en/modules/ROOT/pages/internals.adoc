@@ -12,6 +12,7 @@ Cervantes strictly separates the validation engine (`cervantes-core`, pure Java,
 
 `cervantes-jaxrs` wires the engine into JAX-RS: an auth `ContainerRequestFilter`, a `DynamicFeature` for `@RolesAllowed`, a `SecurityContext` backed by the validated token. **No Cassini modification was required** — Cervantes uses the standard JAX-RS API (`setSecurityContext`, `@PreMatching`, `@Priority(AUTHENTICATION)`, `DynamicFeature`).
 
+[#validation-pipeline]
 == Validation pipeline (`cervantes-core`)
 
 `DefaultJwtValidator.validate(String rawToken)` runs the following sequence:
@@ -44,7 +45,7 @@ flowchart LR
 . **Detection** — a JWT has 3 dot-separated segments, a JWE has 5. Dispatch to the matching branch.
 . **Decryption (JWE only)** — `JweDecryptor` unwraps the ephemeral symmetric key (`RSA-OAEP[-256]`), decrypts the content (`A256GCM`), checks the authentication tag, checks the `cty` header (must be `JWT` for a nested token), and produces a JWS that re-enters the normal pipeline.
 . **Parsing** — `JwtParser` decodes the three segments through `Base64.getUrlDecoder()`, parses the header and payload JSON through Champollion → `ParsedJwt(JsonObject header, JsonObject claims, byte[] signingInput, byte[] signature, String rawToken)`.
-. **Algorithm family check** — when `mp.jwt.verify.publickey.algorithm` is configured (`JwtConfig.requiredAlgorithm()`), the header's `alg` must belong to the same family (RSA or EC) as the configured algorithm; otherwise validation fails before any key is looked up. Unset means every supported RS/ES algorithm passes this step.
+. **Algorithm family check** [.tag-new]#NEW# — when `mp.jwt.verify.publickey.algorithm` is configured (`JwtConfig.requiredAlgorithm()`), the header's `alg` must belong to the same family (RSA or EC) as the configured algorithm; otherwise validation fails before any key is looked up. Unset means every supported RS/ES algorithm passes this step.
 . **Key selection** — `KeyResolver.resolve(String kid, SignatureAlgorithm algorithm)` returns an `Optional<PublicKey>` (empty when the `kid` cannot be resolved). Three implementations: `KeyResolvers.fromInlinePem`, `KeyResolvers.fromLocation` (PEM-vs-JWKS auto-detection), and `JwksKeyResolver` for multi-key JWKS URLs/files.
 . **Signature verification** — `JwtSignatureVerifier` instantiates a `java.security.Signature` according to the header's `alg`, verifies `signingInput` against `signature`. For ECDSA, R‖S → DER transcoding through `EcdsaSignatures` (the JDK requires DER).
 . **Claim validation** — `JwtClaimsValidator` checks `iss` (strict equality with `JwtConfig.issuer()`), `aud` (non-empty intersection with `JwtConfig.audiences()`), `exp` (rejected once `exp + skew < now`), `nbf` (rejected while `nbf - skew > now`), and `iat` (rejected if later than `exp`; maximum age via `token.age`, applied only when the claim is present).
