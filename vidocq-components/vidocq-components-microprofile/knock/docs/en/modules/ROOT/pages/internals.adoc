@@ -57,6 +57,7 @@ sequenceDiagram
 . `KnockAggregator.aggregate(HealthCheckRegistry, ProbeType)` pulls the checks for the requested probe via `HealthCheckRegistry.getChecks(ProbeType)`.
 . Each `HealthCheck.call()` runs on its own virtual thread; the responses are reduced to a `HealthSnapshot` (spec §3.2 rules).
 . `KnockJsonSerializer.serialize(HealthSnapshot)` renders the snapshot to a JSON `String` through Jakarta JSON-P; `httpStatus(HealthSnapshot)` maps UP/DOWN to 200/503.
+. [.tag-new]#NEW# After the run, `KnockAggregator` records each answer in the registry as a `CheckResult`, under the probe the check is registered for (a `/health` request records each check under its own probe), timestamped by an injectable `Clock`. Recording reuses the answer: no check is called twice. See xref:concepts.adoc#last-results[Last results].
 . `KnockHealthService.report(ProbeType)` wraps both in a `HealthReport(int httpStatus, String json)` record.
 
 == Core classes
@@ -116,7 +117,7 @@ All check execution goes through `Executors.newVirtualThreadPerTaskExecutor()` (
 
 == Java Modules workaround (ADR-001)
 
-The upstream MicroProfile Health API jar ships **without** a `module-info.class`, which breaks strict Java Modules and `jlink`. Knock forks it as `knock-mp-health-api` and rebuilds it with a proper module descriptor. To keep the descriptor from interfering with annotation processing, the `module-info.java` lives in `src/main/module-info/` and is compiled in a dedicated phase at `prepare-package`. The SPI is registered twice — through Java Modules `provides` and `META-INF/services` — so the implementation resolves on both the module path and the classpath. Full rationale: `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md`.
+The upstream MicroProfile Health API jar ships **without** a `module-info.class`, which breaks strict Java Modules and `jlink`. Knock forks it as `knock-mp-health-api` and rebuilds it with a proper module descriptor. Every Knock module keeps its `module-info.java` in `src/main/java` and its tests run on the module path; the earlier build workaround (a separate `src/main/module-info/` source root compiled at `prepare-package`) is gone, with the same module descriptors. The SPI is registered twice — through Java Modules `provides` and `META-INF/services` — so the implementation resolves on both the module path and the classpath. Full rationale: `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md`.
 
 == AOT compatibility
 

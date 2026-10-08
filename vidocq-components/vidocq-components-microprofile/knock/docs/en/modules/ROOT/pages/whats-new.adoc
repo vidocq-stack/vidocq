@@ -1,0 +1,11 @@
+= What's new
+:description: Everything that changed in Knock since the {release-version} release — the registry now remembers the last result of each check.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== Last result of each check
+
+* **The registry remembers the last answer of each check** — each time a probe endpoint runs a check, Knock records the answer in the `HealthCheckRegistry`, one entry per check per probe, so a tool can show the state of the checks without calling one (a health check is application code and may do I/O). The Vidocq dev console's health view reads it (Vidocq/vidocq#114). A check no request has run yet has no entry, and unregistering a check forgets its results. xref:concepts.adoc#last-results[Last results], xref:internals.adoc#runtime-flow[Runtime flow].
+* **`CheckResult`, a new SPI record** — exported from `io.vidocq.knock.spi` in `knock-api`: the probe (never `ALL`), the registration name, the name the response carries, the status, the observation time and the response data with values as strings. It holds no application object. xref:reference.adoc#public-spi-knock-api[Public SPI].
+* **New `HealthCheckRegistry` methods** — `getNamedChecks(ProbeType)` and `getCheckNames(ProbeType)` list the registered checks without calling them; `recordResult(CheckResult)` and `getLastResults()` store and read the last answers. They are default methods: a registry of your own still compiles and keeps working, and remembers nothing until it overrides them. xref:reference.adoc#public-spi-knock-api[Public SPI].

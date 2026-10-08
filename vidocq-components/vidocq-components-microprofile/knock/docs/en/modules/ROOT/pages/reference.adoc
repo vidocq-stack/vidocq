@@ -45,7 +45,7 @@ All artefacts share the version `{project-version}` under the `io.vidocq.knock` 
 | Module | Exported packages
 
 | `knock-api`
-| `io.vidocq.knock.spi` (`ProbeType`, `HealthCheckRegistry`, `Knock`)
+| `io.vidocq.knock.spi` (`ProbeType`, `HealthCheckRegistry`, `CheckResult`, `Knock`)
 
 | `knock-core`
 | `io.vidocq.knock.runtime` (`HealthCheckRegistries`, `KnockHealthService`, `HealthReport`)
@@ -66,7 +66,10 @@ Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) a
 | `LIVENESS`, `READINESS`, `STARTUP`, `ALL` — selects the checks to report.
 
 | `HealthCheckRegistry` (interface)
-| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`.
+| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`. [.tag-new]#NEW# List the checks without calling them: `getNamedChecks(ProbeType type)` (registration name to check, concrete probe only), `getCheckNames(ProbeType type)`; store and read the last answers: `recordResult(CheckResult result)`, `getLastResults()`. All four are default methods, so a third-party registry still compiles; its defaults remember nothing. See xref:concepts.adoc#last-results[Last results].
+
+| `CheckResult` (record) [.tag-new]#NEW#
+| The last answer of one check: `probe` (never `ALL`), `name`, `responseName` (may be `null`), `status`, `observedAt`, `data` (values as strings). Plain values only.
 
 | `Knock` (class)
 | Module metadata constants.

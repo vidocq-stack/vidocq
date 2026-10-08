@@ -33,6 +33,13 @@ A _probe_ is a category of checks answering a specific operational question. Kno
 
 The _registry_ holds the registered checks and returns them filtered by probe type. The contract is the `HealthCheckRegistry` interface (in `knock-api`): `register(ProbeType, String, HealthCheck)`, `unregister(String)`, `getChecks(ProbeType)`. Instances are created through the exported factory `HealthCheckRegistries.newRegistry()` (in `knock-core`); the implementation, `KnockHealthCheckRegistry`, lives in the unexported `io.vidocq.knock.internal` package. It is virtual-thread friendly: state lives in a `ConcurrentHashMap`, never guarded by `synchronized`.
 
+[#last-results]
+== Last results [.tag-new]#NEW#
+
+The registry also remembers the last answer of each check, one entry per check per probe, as the probe requests recorded it: each time a probe endpoint runs a check, Knock stores that answer as a `CheckResult` (in `knock-api`) — the probe, the registration name, the name the response carries, the status, when it was observed, and the response data with its values as strings. A `CheckResult` holds plain values only, never the check, its bean or its class.
+
+This lets a tool show the state of the checks without ever calling one — a health check is application code and may do I/O. `getLastResults()` returns what is in memory; `getCheckNames(ProbeType)` and `getNamedChecks(ProbeType)` list the registered checks without calling them. A check no probe request has run yet has no result, and unregistering a check forgets its results, so the memory stays bounded by the registered checks. The Vidocq dev console reads its health view from here.
+
 == Aggregation
 
 _Aggregation_ reduces a set of individual responses to a single status. The rule (spec §3.2): the group is `DOWN` if at least one check is `DOWN`; an empty group is `UP`; an exception is folded into a `DOWN` check rather than being propagated. `KnockAggregator` implements this and produces a `HealthSnapshot`.
