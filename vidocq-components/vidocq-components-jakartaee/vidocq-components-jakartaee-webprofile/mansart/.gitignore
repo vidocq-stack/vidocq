@@ -11,3 +11,6 @@ mansart-transactions/.tck-cache/
 
 # Claude Code / tooling local
 .claude/
+
+# Jakarta Persistence TCK bundle, unpacked by mansart-persistence/mansart-jpa-tck/install-tck.sh
+mansart-persistence/.tck-cache/
