@@ -30,7 +30,9 @@ Delivered:
 * P2b — `mansart-jpa-processor`: entity accesses generated at build time (see below).
 * P3 — the persistence context (one instance per identity, snapshot-based dirty checking without enhancement) and the flush engine (ordered, batched statements, optimistic locking), with Mansart JPA's own SQL AST and dialects for H2 and PostgreSQL.
 
-Next: entity operations (`persist`, `find`, `merge`, `remove`, callbacks, locking — P4).
+* P4 — the entity operations (`find`, `getReference`, `persist`, `merge`, `remove`, `refresh`, `detach`) with their cascades, identifier generation (`IDENTITY`, pooled `SEQUENCE` and `TABLE` without a lock held across the round trip, `UUID`, `AUTO`), lifecycle callbacks and entity listeners, optimistic and pessimistic locks with lock timeouts, the exception contract, secondary tables and native `executeUpdate`. TCK: 609 / 2135, no failure left that P4 owns.
+
+Next: relationships and collections (P5).
 
 An application adds the dialect of its database at run time: `io.vidocq.mansart:mansart-jpa-dialect-postgresql` or `mansart-jpa-dialect-h2`. The dialect is detected from the JDBC metadata; the property `io.vidocq.mansart.jpa.dialect` names it explicitly.
 
@@ -100,8 +102,7 @@ For JPA needs in Vidocq today:
 
 * If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
 * If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
-* If JPA listeners are needed → application-level workaround (CDI interceptors, `@Transactional` + explicit before/after save).
-* If a persistence context is needed → wait for P3/P4 (persistence context, entity operations).
+* Entities without relationships, with listeners and locks, work with the `EntityManager` since P4; relationships come with P5, queries with P7.
 
 == See also
 
