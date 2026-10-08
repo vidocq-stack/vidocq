@@ -31,4 +31,9 @@ public class MethodBoundService implements Service {
     public String write(String text) {
         return "wrote " + text;
     }
+
+    /** Reached only through the lookup the container hands an extension (ModuleLookups). */
+    private String secret(String name) {
+        return "secret of " + name;
+    }
 }
