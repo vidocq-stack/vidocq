@@ -75,40 +75,7 @@
                 package (in-module instantiation / field-injection / producer invocation, no
                 `opens … to io.vidocq.vauban.core`). Build-time only: adds no compile/runtime
                 dependency on Vauban, and the output stays inert for a standard CDI container (Weld).
-
-                The module-info lives in src/main/module-info/ and is compiled in a separate step
-                (vauban is not on this module's runtime path; keeping module-info.class out of
-                target/classes during testCompile prevents Maven from activating Java Modules and failing
-                to resolve the test modules — same workaround as ravel-cdi-vauban / knock-cdi-vauban).
             -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <!-- Runs before default-compile (process-resources is the phase right before
-                         compile): removes any module-info.class left in target/classes by a prior
-                         build's compile-module-info (prepare-package) step. Without this, a no-clean
-                         `mvn install` (as the TCK runner does) would let javac detect the stale
-                         module descriptor and switch default-compile to module mode, failing to
-                         resolve the dependency modules. -->
-                    <execution>
-                        <id>remove-stale-module-info</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -132,27 +99,7 @@
                             <proc>none</proc>
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <!-- No annotation processing on the separate module-info compile
-                                 (the beans were already processed in the main compile). -->
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
                 </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <useModulePath>false</useModulePath>
-                </configuration>
             </plugin>
         </plugins>
     </build>
