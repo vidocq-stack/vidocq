@@ -320,5 +320,8 @@ Track reproducible bugs with:
 - **hypothesis (confirmed)**: the descriptor was compiled alone, late, so javac never checked the
   processor's code against grimm-core's exports. The shipped jar is a named module that would fail
   to resolve `OpenApiSerializers` at run time as soon as javac loads it from the module path.
-- **status**: OPEN — grimm-core exports `io.vidocq.grimm.internal` and
-  `io.vidocq.grimm.internal.schema` to `io.vidocq.grimm.processor` too (still qualified).
+- **status**: FIXED — 2026-10-08, commit f6918c7. grimm-core exports `io.vidocq.grimm.internal`
+  and `io.vidocq.grimm.internal.schema` to `io.vidocq.grimm.processor` too (still qualified).
+  Covered by `GrimmCoreExportsTest` (grimm-processor). Commit 8081a87 then compiles the
+  descriptors in `src/main/java`, so the processor is built as a module; reactor tests unchanged
+  (282 / 11 / 14), official TCK 367/367.
