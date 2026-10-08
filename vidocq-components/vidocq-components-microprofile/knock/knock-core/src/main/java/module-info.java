@@ -34,13 +34,6 @@
  *   {@code provides ... with} here (Java Modules ServiceLoader) and in
  *   {@code META-INF/services/} (ClassLoader ServiceLoader — mandatory because this is the
  *   mechanism used by {@code HealthCheckResponse}).</li>
- *
- *   <li><em>Three-step Maven build.</em> {@code module-info.java} is placed in
- *   {@code src/main/module-info/} (not {@code src/main/java/}) so that Maven Compiler
- *   Plugin does not detect Java Modules during {@code testCompile}. {@code maven-clean-plugin}
- *   purges {@code module-info.class} before {@code testCompile} (incremental builds).
- *   A {@code prepare-package} run recompiles only {@code module-info.java} before
- *   assembling the JAR. Tests run on the classpath ({@code useModulePath=false}).</li>
  * </ol>
  *
  * <p>The fork {@code io.vidocq.knock:knock-mp-health-api} includes a

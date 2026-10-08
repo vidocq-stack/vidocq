@@ -44,52 +44,10 @@
             </resource>
         </resources>
         <plugins>
-            <!-- Same Java Modules workaround as knock-core (ADR-001): module-info lives in
-                 src/main/module-info so testCompile stays on the class path; it is
-                 compiled into target/classes at prepare-package for the final JAR. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>remove-module-info-before-testcompile</id>
-                        <phase>generate-test-sources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
                     <systemPropertyVariables>
                         <project.version>${project.version}</project.version>
                     </systemPropertyVariables>

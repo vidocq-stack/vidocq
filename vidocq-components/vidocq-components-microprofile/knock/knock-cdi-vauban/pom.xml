@@ -83,39 +83,6 @@
                 Build-time only: adds no compile/runtime dependency on Vauban, and the output stays
                 inert for a standard CDI container (Weld).
             -->
-            <!--
-                Java Modules workaround for knock-cdi-vauban: same issue as knock-core.
-                vauban-core is test-scope, absent from target/javamodules/; if
-                module-info.class is in target/classes, Maven enables Java Modules for
-                testCompile and cannot resolve test modules on the module path.
-                Same three-step solution (see ADR-001 and knock-core/pom.xml).
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <!-- process-resources (just before `compile`), NOT generate-test-sources:
-                             removes a stale module-info.class left in target/classes by a prior
-                             prepare-package `compile-module-info`, so a non-clean install/deploy
-                             (e.g. CI cache) doesn't trip default-compile into module mode. -->
-                        <id>remove-stale-module-info-before-compile</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -129,27 +96,16 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <!-- No annotation processing on the separate module-info compile
-                                 (the beans were already processed in the main compile). -->
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
+            <!-- Tests run on the module path: the test builds a VaubanContainer (test-scope module) directly and hands it bean classes reflectively. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-reads io.vidocq.knock.cdi.vauban=io.vidocq.vauban.core
+                    --add-opens io.vidocq.knock.cdi.vauban/io.vidocq.knock.cdi.internal=io.vidocq.vauban.core
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>

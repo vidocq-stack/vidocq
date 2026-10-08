@@ -32,7 +32,7 @@
   on each `HealthCheck` → aggregation (DOWN if ≥ 1 DOWN) → `HealthSnapshot` (status + list).
 - The MP Health builder is already wired via SPI ServiceLoader:
   `KnockHealthCheckResponseProvider` + `META-INF/services` + Java Modules `provides` in
-  `knock-core/src/main/module-info/module-info.java`.
+  `knock-core/src/main/java/module-info.java`.
 - **Exported runtime SPI**: `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService,
   HealthReport}` in `knock-core` — single entry point for adapters
   (`knock-cdi-vauban`, `knock-cassini`). Never depend on `io.vidocq.knock.internal.*`
@@ -54,10 +54,10 @@
 - `knock-core` depends on `org.eclipse.microprofile.health` + `jakarta.json` (JSON-P spec API)
   at compile scope; champollion is provided at runtime. CDI and Jakarta REST stay in their
   dedicated modules. `jakarta.annotation` is allowed **in test scope only**.
-- Preserve the Java Modules workaround in `knock-core`: `module-info.java` stays in
-  `knock-core/src/main/module-info/` (not in `src/main/java`) with dedicated recompilation in
-  `prepare-package` + cleanup of `module-info.class` before `testCompile`. Same workaround
-  applied to `knock-cdi-vauban` and `knock-cassini` (test-scope dependencies outside module-path).
+- Every module keeps its `module-info.java` in `src/main/java` and its tests run on the module path.
+  A test that registers bean classes directly with the container gets its `--add-reads`/`--add-opens`
+  to `io.vidocq.vauban.core` from surefire, test-only (the old `src/main/module-info/` workaround was
+  removed on 2026-10-08, Vidocq/vidocq-parent#15).
 - `knock-cassini` depends on `knock-core` + `jakarta.ws.rs` (Jakarta REST spec); Cassini is
   the provided runtime implementation. Do not import internal Cassini classes from
   `knock-cassini` — limit to the standard JAX-RS API.

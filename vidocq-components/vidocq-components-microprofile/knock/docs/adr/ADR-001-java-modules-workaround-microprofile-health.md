@@ -1,7 +1,9 @@
 # ADR-001 — Java Modules Fork for `knock-mp-health-api` (explicit jlink module)
 
 **Date:** 2026-05-10  
-**Status:** Accepted  
+**Status:** Accepted — build workaround part superseded (2026-10-08): `module-info.java` is back in
+`src/main/java`, `target/javamodules/` and the `prepare-package` recompilation are gone, and tests run on the
+module path (Vidocq/vidocq-parent#13, #15). The `knock-mp-health-api` fork itself stands.  
 **Deciders:** Vidocq Team
 
 ---

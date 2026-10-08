@@ -96,8 +96,8 @@ Knock ships a modular fork `io.vidocq.knock:knock-mp-health-api` documented
 in `docs/adr/ADR-001-java-modules-workaround-microprofile-health.md` — summary:
 `module-info.java` adds the explicit `microprofile.health.api` module, the OSGi `@Version`
 annotations were removed from `package-info.java` to avoid an automatic module, and the
-`src/main/module-info/` workaround remains in place for `knock-core` to avoid Java Modules detection
-in `testCompile`. `target/javamodules/` continues to be used to align javac and jlink —
+`src/main/module-info/` and `target/javamodules/` workarounds of that time were removed in 2026-10 (module-info
+back in `src/main/java`, tests on the module path) —
 **jlink compatibility is guaranteed without automatic modules** (see ADR-001).
 
 **Deliverable:** `mvn -ntp install -DskipTests` succeeds on the reactor (`knock-api`, `knock-core`,
@@ -152,8 +152,7 @@ correct aggregation; JSON serialization compliant with §3.1.
   implementing `HealthCheckRegistry` — the Vauban proxy then implements the interface and the cast is clean.
 - BCE validation only (`@Registration`) — registration is delegated to `HealthCheckRegistrar`
   via standard CDI injection (clearer than `@Synthesis`).
-- `module-info.java` in `src/main/module-info/`: same workaround as `knock-core` (vauban-core
-  test scope, absent from `target/javamodules/`).
+- `module-info.java` in `src/main/java/` (the `src/main/module-info/` workaround was removed in 2026-10).
 
 **Deliverable:** an automatically discovered, registered, and registry-queryable
 `@Liveness HealthCheck` bean. 5/5 integration tests PASS.
