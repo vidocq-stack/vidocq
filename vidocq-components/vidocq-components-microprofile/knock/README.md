@@ -14,7 +14,7 @@ JSON serialisation via Champollion.
 | `knock-api` | Re-exports the `org.eclipse.microprofile.health` spec + public SPI |
 | `knock-core` | Standalone implementation: registry, aggregation, JSON serialisation (Jakarta JSON-P) |
 | `knock-cdi-vauban` | Vauban BCE discovering `@Liveness`/`@Readiness`/`@Startup` beans |
-| `knock-cassini` | Jakarta REST `/health*` endpoints via Cassini |
+| `knock-jaxrs` | Jakarta REST `/health*` endpoints via Cassini |
 | `knock-tck` | Official MicroProfile Health 4.0 TCK runner (in-reactor, activated by the `tck` Maven profile) |
 
 ## Prerequisites

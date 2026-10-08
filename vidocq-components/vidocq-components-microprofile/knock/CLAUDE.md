@@ -56,14 +56,14 @@ knock-core         ← Implementation: HealthCheckRegistry, UP/DOWN aggregation,
                      JSON serialization via champollion (Jakarta JSON-P/JSON-B)
 knock-cdi-vauban   ← CDI Vauban integration: BCE discovering
                      @Liveness / @Readiness / @Startup beans, auto-registering in registry
-knock-cassini      ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
+knock-jaxrs        ← Cassini adapter (Jakarta REST): JAX-RS resources /health,
                      /health/live, /health/ready, /health/started
 knock-tck          ← Official MicroProfile Health 4.0 TCK runner
                      (in-reactor, activated by the `tck` Maven profile)
 ```
 
 **Health check flow:**
-HTTP `GET /health/live` → `knock-cassini` (JAX-RS resource `@Path("/health/live")`)
+HTTP `GET /health/live` → `knock-jaxrs` (JAX-RS resource `@Path("/health/live")`)
 → `HealthCheckRegistry` → collect all `@Liveness HealthCheck` beans → call `.call()`
 on each instance → aggregation (DOWN if ≥ 1 DOWN) → JSON serialization via champollion
 → HTTP 200/503 response.
@@ -96,7 +96,7 @@ HTTP 200 if `status=UP`, HTTP 503 if `status=DOWN`.
    aggregation, and JSON serialization work in standalone SE.
 2. **`knock-cdi-vauban` depends on `knock-core` + `jakarta.cdi`** but never the reverse —
    CDI discovery is an optional module invisible from the core.
-3. **`knock-cassini` depends on `knock-core` + `jakarta.ws.rs`** (Jakarta REST, implemented by
+3. **`knock-jaxrs` depends on `knock-core` + `jakarta.ws.rs`** (Jakarta REST, implemented by
    Cassini) — JAX-RS adaptation is optional and decoupled from the core. The `/health*`
    endpoints are standard JAX-RS resources, not raw Chappe handlers.
 4. **champollion is the reference Jakarta JSON-P/JSON-B implementation**: `knock-core`

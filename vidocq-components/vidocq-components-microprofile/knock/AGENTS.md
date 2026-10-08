@@ -7,7 +7,7 @@
   on the CDI side (`README.md`, `pom.xml`, `CLAUDE.md`).
 - Strict Java Modules architecture: `knock-api` re-exports the spec, `knock-core` stays standalone SE
   (depends on `jakarta.json` / champollion for JSON serialization), `knock-cdi-vauban` is
-  an optional CDI adapter, `knock-cassini` is the optional Jakarta REST adapter
+  an optional CDI adapter, `knock-jaxrs` is the optional Jakarta REST adapter
   (JAX-RS `/health*` resources via Cassini), `knock-tck` is in-reactor behind the `tck`
   Maven profile (runnable via the TCK script or `./mvnw -Ptck -pl knock-tck test`).
 - Prefer `ROADMAP.md` to track project progress rather than updating this file,
@@ -26,7 +26,7 @@
   without a probe qualifier is not a procedure and is silently ignored (§4.2) — no deployment
   error (tests `HealthCheckCdiIntegrationTest` PASS against embedded Vauban).
 - `M3` is delivered: JAX-RS resource `KnockHealthResource` (`@Path("/health")`, 4 endpoints)
-  in `knock-cassini` (tests `KnockHealthResourceTest` 7/7 PASS, without HTTP container via a
+  in `knock-jaxrs` (tests `KnockHealthResourceTest` 7/7 PASS, without HTTP container via a
   minimal local `TestRuntimeDelegate` — zero internal Cassini imports).
 - The target flow in `knock-core`: `HealthCheckRegistry.getChecks(ProbeType)` → call `.call()`
   on each `HealthCheck` → aggregation (DOWN if ≥ 1 DOWN) → `HealthSnapshot` (status + list).
@@ -35,11 +35,11 @@
   `knock-core/src/main/java/module-info.java`.
 - **Exported runtime SPI**: `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService,
   HealthReport}` in `knock-core` — single entry point for adapters
-  (`knock-cdi-vauban`, `knock-cassini`). Never depend on `io.vidocq.knock.internal.*`
+  (`knock-cdi-vauban`, `knock-jaxrs`). Never depend on `io.vidocq.knock.internal.*`
   from a sibling module.
 - `knock-cdi-vauban` discovers at the BCE phase the beans annotated `@Liveness`, `@Readiness`,
   `@Startup` and registers them in the `HealthCheckRegistry` via `HealthCheckRegistrar`.
-- `knock-cassini` exposes Jakarta REST endpoints (`@Path("/health")` etc.) by delegating
+- `knock-jaxrs` exposes Jakarta REST endpoints (`@Path("/health")` etc.) by delegating
   to the registry; JSON serialization is produced by `knock-core` via Jakarta JSON-P
   (champollion as runtime implementation).
 - See `ROADMAP.md` for the detailed status of each milestone.
@@ -58,9 +58,9 @@
   A test that registers bean classes directly with the container gets its `--add-reads`/`--add-opens`
   to `io.vidocq.vauban.core` from surefire, test-only (the old `src/main/module-info/` workaround was
   removed on 2026-10-08, Vidocq/vidocq-parent#15).
-- `knock-cassini` depends on `knock-core` + `jakarta.ws.rs` (Jakarta REST spec); Cassini is
+- `knock-jaxrs` depends on `knock-core` + `jakarta.ws.rs` (Jakarta REST spec); Cassini is
   the provided runtime implementation. Do not import internal Cassini classes from
-  `knock-cassini` — limit to the standard JAX-RS API.
+  `knock-jaxrs` — limit to the standard JAX-RS API.
 - Keep `io.vidocq.knock.internal.*` unexported; all extensions must go through the SPI.
 - No `synchronized`, no `ThreadLocal` — virtual-thread-friendly.
 - No `setAccessible(true)` — no functional justification in a health system.
@@ -83,7 +83,7 @@ sdk env
 
 - The TCK always goes through the root script, which first installs the reactor then invokes
   `./mvnw -Ptck,tck-official -pl knock-tck test` (knock-tck is in-reactor behind the `tck` profile).
-- The TCK script explicitly installs `knock-api,knock-core,knock-cdi-vauban,knock-cassini`
+- The TCK script explicitly installs `knock-api,knock-core,knock-cdi-vauban,knock-jaxrs`
   via `./mvnw -pl ... -am install -DskipTests` before executing `knock-tck`.
 - The TCK is not "for later": it serves as continuous verification from M2/M3 onward.
 
@@ -103,7 +103,7 @@ sdk env
 - `M2` = CDI Vauban integration (`HealthCheckRegistrar` discovers `@Liveness/@Readiness/@Startup`
   and auto-registers them in the registry). A `HealthCheck` bean without a probe qualifier is
   not a procedure and is silently ignored (§4.2) — never a deployment error.
-- `M3` = Jakarta REST endpoints via Cassini (`knock-cassini`): JAX-RS resources
+- `M3` = Jakarta REST endpoints via Cassini (`knock-jaxrs`): JAX-RS resources
   `/health`, `/health/live`, `/health/ready`, `/health/started`. HTTP 200 if UP, 503 if DOWN.
   JAX-RS `Response` built with `jakarta.ws.rs.core.Response`; JSON body produced
   by `knock-core` via Jakarta JSON-P / champollion. **Delivered**: `KnockHealthResource` +
