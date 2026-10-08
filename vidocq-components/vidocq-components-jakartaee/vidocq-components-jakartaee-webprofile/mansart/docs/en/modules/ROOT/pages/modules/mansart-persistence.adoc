@@ -28,8 +28,11 @@ Delivered:
 * P1 — `PersistenceProvider`, `persistence.xml` 1.0 to 3.2 and `PersistenceConfiguration` bootstrap, `EntityManagerFactory` / `EntityManager` life cycle, resource-local `EntityTransaction`.
 * P2a — the entity model (access types, hierarchies, embeddables and records, identifiers, converters, enums, temporal types), entity accesses without reflection, JDBC binders; every TCK entity maps at bootstrap.
 * P2b — `mansart-jpa-processor`: entity accesses generated at build time (see below).
+* P3 — the persistence context (one instance per identity, snapshot-based dirty checking without enhancement) and the flush engine (ordered, batched statements, optimistic locking), with Mansart JPA's own SQL AST and dialects for H2 and PostgreSQL.
 
-Next: the persistence context and flush engine (P3), then entity operations (P4).
+Next: entity operations (`persist`, `find`, `merge`, `remove`, callbacks, locking — P4).
+
+An application adds the dialect of its database at run time: `io.vidocq.mansart:mansart-jpa-dialect-postgresql` or `mansart-jpa-dialect-h2`. The dialect is detected from the JDBC metadata; the property `io.vidocq.mansart.jpa.dialect` names it explicitly.
 
 == Configuring an application
 

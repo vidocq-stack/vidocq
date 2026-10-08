@@ -72,7 +72,7 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 - **T1–T7** ✅ — Full Jakarta Transactions 2.0: local TM (ScopedValue, no ThreadLocal pinning), synchronizations, suspend/resume, 2PC + recovery log, CDI `@Transactional` (6 propagation variants), `@TransactionScoped`; TCK smoke **5/5 PASS**.
 
 ### mansart-persistence
-- 🚧 **Restarted (2026-10-07)** — milestones P0 (TCK instrument) → P12 (certification) in `mansart-persistence/ROADMAP.md`. Delivered: P0 (TCK runner), P1 (bootstrap, provider SPI, resource-local transactions), P2a (entity model read with the Class-File API, accessors generated as hidden classes, JDBC binders, mapping at bootstrap). Design decisions kept: shared dialect SPI, generated entity access (APT / Class-File API), no runtime bytecode library.
+- 🚧 **Restarted (2026-10-07)** — milestones P0 (TCK instrument) → P12 (certification) in `mansart-persistence/ROADMAP.md`. Delivered: P0 (TCK runner), P1 (bootstrap, provider SPI, resource-local transactions), P2 (entity model read with the Class-File API, JDBC binders, mapping at bootstrap; entity accesses generated at build time by `mansart-jpa-processor`, or as hidden classes at bootstrap). Design decisions kept: shared dialect SPI, generated entity access (APT / Class-File API), no runtime bytecode library.
 
 ## Documentation (Antora) conventions
 
