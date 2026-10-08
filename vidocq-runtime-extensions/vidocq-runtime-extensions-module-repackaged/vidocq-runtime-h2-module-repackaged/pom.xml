@@ -80,13 +80,6 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <version>3.8.1</version>
                 <executions>
-                    <!-- Neutralize the copy-compile-deps-to-module-path execution managed by
-                         vidocq-parent: this module uses the dependency plugin to unpack h2,
-                         it does not need a javamodules copy. -->
-                    <execution>
-                        <id>copy-compile-deps-to-module-path</id>
-                        <phase>none</phase>
-                    </execution>
                     <execution>
                         <id>unpack-h2</id>
                         <phase>generate-resources</phase>

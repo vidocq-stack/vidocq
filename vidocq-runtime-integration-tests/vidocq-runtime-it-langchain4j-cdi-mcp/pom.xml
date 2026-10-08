@@ -78,10 +78,6 @@
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <!-- Inherited from vidocq-parent: not wanted here. -->
-                    <execution>
-                        <id>copy-compile-deps-to-module-path</id>
-                        <phase>none</phase>
-                    </execution>
                     <!-- The lib/ directory of the launched JVMs: what the application needs at run time, no test
                          jar. -->
                     <execution>
