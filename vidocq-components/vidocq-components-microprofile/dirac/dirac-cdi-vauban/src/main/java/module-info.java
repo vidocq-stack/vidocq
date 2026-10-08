@@ -33,12 +33,6 @@
  *       ({@code APPLICATION}, {@code BASE}, {@code VENDOR}) as {@code @ApplicationScoped}
  *       beans with the {@code @RegistryScope} qualifier.</li>
  * </ul>
- *
- * <p><strong>Java Modules note — testCompile workaround</strong> :
- * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven
- * Compiler Plugin from detecting Java Modules during {@code testCompile} (vauban-core is test-scope,
- * absent from {@code target/javamodules/}).
- * See {@code dirac-core/pom.xml} for the full workaround description.</p>
  */
 module io.vidocq.dirac.cdi.vauban {
     requires transitive io.vidocq.dirac.core;

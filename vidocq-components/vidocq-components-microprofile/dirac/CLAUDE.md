@@ -143,8 +143,8 @@ delegates to `ctx.proceed()`.
 
 ## Conventions
 
-- **Explicit Java modules**: `dirac-api` already has its `module-info.java` under `src/main/java/`;
-  `dirac-core` and `dirac-cdi-vauban` keep theirs under `src/main/module-info/`;
+- **Explicit Java modules**: `dirac-api`, `dirac-core` and `dirac-cdi-vauban` keep their `module-info.java`
+  under `src/main/java/`, and their tests run on the module path;
   `dirac-rest`, `dirac-bench`, and `dirac-examples` don't yet have a `module-info.java` in the
   current state and neutralize the inherited parent `compilerArgs` in their `pom.xml`.
 - **Packages**:

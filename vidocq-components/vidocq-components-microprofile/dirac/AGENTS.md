@@ -137,21 +137,19 @@ dirac-examples       io.vidocq.dirac.examples
   or `dirac-cdi-vauban` (inverted dependency or SPI).
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
 
-## Java Modules Convention — `module-info` + `target/javamodules/` Workaround
+## Java Modules Convention
 
-- In `dirac-core` and `dirac-cdi-vauban`, the `module-info.java` lives under
-  `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: prevents
-  Maven Compiler Plugin from switching to Java Modules mode during `testCompile`. The `module-info.class`
-  is compiled alone in the `prepare-package` phase. Same constraint as in Heisenberg.
-- `dirac-api` currently keeps its `module-info.java` under `src/main/java/`.
+- Every module with a descriptor keeps `module-info.java` under `src/main/java/`, and its tests run on the
+  module path. A test that registers bean classes directly with the container gets `--add-reads`/`--add-opens`
+  to `io.vidocq.vauban.core` from surefire, test-only. (The `src/main/module-info/` and `target/javamodules/`
+  workarounds were removed in 2026-10.)
 - `dirac-rest`, `dirac-bench`, and `dirac-examples` don't yet have a `module-info.java` in
   the current state; their `pom.xml` neutralize inherited parent `compilerArgs` via
   `combine.self="override"` to avoid an invalid `--module-path`.
 - `microprofile-metrics-api:5.1.1`: verify the presence or absence of `Automatic-Module-Name`
   in the MANIFEST.MF before declaring the `requires`. If absent, the Java Modules name is derived
   from the artifact (`microprofile.metrics.api`).
-- Tests run on the classpath (`useModulePath=false`); Java Modules wiring is validated
-  by the smoke TCK.
+- Java Modules wiring is exercised by the unit tests themselves (module path) and by the smoke TCK.
 
 ## Useful Workflows
 

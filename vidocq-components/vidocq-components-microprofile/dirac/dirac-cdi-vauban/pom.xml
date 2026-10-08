@@ -71,36 +71,6 @@
                  per-package _VaubanComponents, and — for any intercepted target — its $$Intercepted
                  subclass. Build-time only, no compile/runtime dependency on Vauban, Weld-safe.
              -->
-             <!--
-                 Java Modules workaround dirac-cdi-vauban: vauban-core is test-scope,
-                 absent from target/javamodules/. Same three-step solution as dirac-core.
-             -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <!-- process-resources (just before `compile`), NOT generate-test-sources:
-                             removes a stale module-info.class left in target/classes by a prior
-                             prepare-package `compile-module-info`, so a non-clean install/deploy
-                             (e.g. CI cache) doesn't trip default-compile into module mode. -->
-                        <id>remove-stale-module-info-before-compile</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -114,26 +84,16 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <!-- No annotation processing on the separate module-info compile. -->
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
+            <!-- Tests run on the module path: the container is booted over test beans that have no generated provider, so Vauban reaches the test package reflectively and defines interceptor subclasses that call into vauban-core (module-path wiring without opens is covered by dirac-cdi-vauban-module-it). -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-reads io.vidocq.dirac.cdi.vauban=io.vidocq.vauban.core
+                        --add-opens io.vidocq.dirac.cdi.vauban/io.vidocq.dirac.cdi.internal=io.vidocq.vauban.core
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>

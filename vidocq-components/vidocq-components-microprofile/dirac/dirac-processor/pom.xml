@@ -18,8 +18,8 @@
             <artifactId>dirac-api</artifactId>
         </dependency>
         <!-- metrics.api (transitive via dirac-api) `requires transitive jakarta.interceptor`,
-             so the module-info compile needs it resolvable on the module path (same
-             workaround as dirac-core). -->
+             so the module-info compile needs it resolvable on the module path (as in
+             dirac-core). -->
         <dependency>
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>
@@ -41,31 +41,6 @@
 
     <build>
         <plugins>
-            <!-- Same Java Modules workaround as dirac-core: module-info.java lives in
-                 src/main/module-info so testCompile runs on the classpath; the module
-                 descriptor is compiled alone at prepare-package. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>remove-module-info-before-testcompile</id>
-                        <phase>generate-test-sources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -73,25 +48,6 @@
                     <!-- Disable annotation processing during the processor's own compilation
                          to avoid circular bootstrap issues. -->
                     <proc>none</proc>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
         </plugins>
