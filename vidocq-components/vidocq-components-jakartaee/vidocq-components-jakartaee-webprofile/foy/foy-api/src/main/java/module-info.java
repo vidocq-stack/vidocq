@@ -23,4 +23,6 @@ module io.vidocq.foy.api {
 
     exports io.vidocq.foy.spi.session;
     exports io.vidocq.foy.spi.security;
+    exports io.vidocq.foy.spi.gen;
+    exports io.vidocq.foy.spi.cdi;
 }
