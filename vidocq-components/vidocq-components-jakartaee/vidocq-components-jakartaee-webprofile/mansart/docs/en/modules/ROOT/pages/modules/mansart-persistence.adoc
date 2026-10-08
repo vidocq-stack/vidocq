@@ -34,6 +34,8 @@ Next: entity operations (`persist`, `find`, `merge`, `remove`, callbacks, lockin
 
 An application adds the dialect of its database at run time: `io.vidocq.mansart:mansart-jpa-dialect-postgresql` or `mansart-jpa-dialect-h2`. The dialect is detected from the JDBC metadata; the property `io.vidocq.mansart.jpa.dialect` names it explicitly.
 
+In Java SE, a persistence unit configured by the `jakarta.persistence.jdbc.*` properties gets its connections from a `mansart-pool` pool, closed with the `EntityManagerFactory`. It is sized by `io.vidocq.mansart.jpa.pool.max-size` (default 10), `io.vidocq.mansart.jpa.pool.min-idle` (default 0) and `io.vidocq.mansart.jpa.pool.acquire-timeout` (ISO-8601, default `PT5S`), and turned off by `io.vidocq.mansart.jpa.pool=false`. A `javax.sql.DataSource` passed as `jakarta.persistence.nonJtaDataSource` or `jakarta.persistence.dataSource` is used as is — that is what the Vidocq runtime does with its own pool.
+
 == Configuring an application
 
 Mansart reaches entity state without reflection, through an *access* per managed class. There are two ways to get one:
