@@ -53,15 +53,8 @@
     </scm>
 
     <properties>
-        <!--
-            MicroProfile Fault Tolerance 4.1 API.
-            ATTENTION : microprofile-fault-tolerance-api:4.1 peut ne pas avoir d'Automatic-Module-Name
-            dans son MANIFEST.MF. Si c'est le cas, le nom Java Modules dérivé du nom de fichier est
-            "microprofile.fault.tolerance.api" (strip version + remplacement '-' par '.').
-            Le maven-dependency-plugin copie les JARs compile-scope dans target/javamodules/
-            en phase initialize, et le maven-compiler-plugin reçoit l'argument module-path
-            pointant vers target/javamodules pour que javac dérive le nom depuis le nom de fichier.
-        -->
+        <!-- MicroProfile Fault Tolerance 4.1 API. The upstream jar is not modular: heisenberg-mp-ft-api
+             repackages it with a module-info (module microprofile.fault.tolerance.api). -->
         <microprofile.fault.tolerance.version>4.1</microprofile.fault.tolerance.version>
 
         <!-- Jakarta CDI 4.1 (Jakarta EE 11) -->
