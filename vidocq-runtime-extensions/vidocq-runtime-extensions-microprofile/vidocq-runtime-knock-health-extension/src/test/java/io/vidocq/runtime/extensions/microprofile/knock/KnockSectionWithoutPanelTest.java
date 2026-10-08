@@ -38,7 +38,8 @@ class KnockSectionWithoutPanelTest {
 
     @Test
     void theJarNamesItsDevCompanion() throws Exception {
-        try (var in = KnockHealthExtension.class.getClassLoader().getResourceAsStream("META-INF/vidocq/dev-module")) {
+        // This jar's own marker: a class-loader-wide lookup returns the first one among every module.
+        try (var in = KnockHealthExtension.class.getResourceAsStream("/META-INF/vidocq/dev-module")) {
             assertEquals("vidocq-runtime-knock-health-extension-dev", new String(in.readAllBytes()).strip());
         }
     }

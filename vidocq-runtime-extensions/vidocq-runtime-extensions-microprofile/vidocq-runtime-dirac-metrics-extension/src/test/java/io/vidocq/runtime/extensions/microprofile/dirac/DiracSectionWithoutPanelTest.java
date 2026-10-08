@@ -38,7 +38,8 @@ class DiracSectionWithoutPanelTest {
 
     @Test
     void theJarNamesItsDevCompanion() throws Exception {
-        try (var in = DiracMetricsExtension.class.getClassLoader().getResourceAsStream("META-INF/vidocq/dev-module")) {
+        // This jar's own marker: a class-loader-wide lookup returns the first one among every module.
+        try (var in = DiracMetricsExtension.class.getResourceAsStream("/META-INF/vidocq/dev-module")) {
             assertEquals("vidocq-runtime-dirac-metrics-extension-dev", new String(in.readAllBytes()).strip());
         }
     }

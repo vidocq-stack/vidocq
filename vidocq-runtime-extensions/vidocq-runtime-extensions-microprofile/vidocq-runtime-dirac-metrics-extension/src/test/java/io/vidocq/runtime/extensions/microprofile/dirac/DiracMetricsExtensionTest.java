@@ -51,8 +51,7 @@ class DiracMetricsExtensionTest {
 
     @Test
     void itIsAVidocqExtensionFoundByTheServiceLoaderAndContributesItsSection() {
-        assertTrue(ServiceLoader.load(VidocqExtension.class).stream()
-                .anyMatch(provider -> provider.type() == DiracMetricsExtension.class));
+        assertTrue(providedAsVidocqExtension(DiracMetricsExtension.class));
         assertEquals("metrics", extension.id());
         assertEquals("Metrics (Dirac)", extension.title());
         assertEquals("dirac-metrics", extension.name());
@@ -89,5 +88,20 @@ class DiracMetricsExtensionTest {
     private static Object existing(BeanManager beans) {
         Bean<?> bean = producerBean(beans);
         return beans.getContext(bean.getScope()).get(bean);
+    }
+
+    /**
+     * On the module path the test runs inside the extension's module, which provides {@link VidocqExtension}
+     * without using it, so {@link ServiceLoader} refuses the lookup: read the {@code provides} clause there,
+     * and ask {@link ServiceLoader} on the class path.
+     */
+    private static boolean providedAsVidocqExtension(Class<?> type) {
+        Module module = type.getModule();
+        if (module.isNamed()) {
+            return module.getDescriptor().provides().stream()
+                    .anyMatch(provides -> provides.service().equals(VidocqExtension.class.getName())
+                            && provides.providers().contains(type.getName()));
+        }
+        return ServiceLoader.load(VidocqExtension.class).stream().anyMatch(provider -> provider.type() == type);
     }
 }
