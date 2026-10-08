@@ -586,6 +586,12 @@
                 <version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
             </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+                <type>pom</type>
+            </dependency>
 
             <!-- GraalJS for tests that run the dev console's JavaScript: never on a runtime module path. -->
             <dependency>

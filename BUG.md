@@ -5,6 +5,35 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261008-01 — `@Inject @RestClient` is unsatisfied, and a Rest Client application cannot be linked
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path, with cyrano and vauban branches of the same name)
+- **Affected module**: vidocq-runtime-cyrano-rest-client-extension (no codegen bundle), vidocq-runtime-cli
+- **Symptom**: an application depending on `vidocq-runtime-cyrano-rest-client-extension` fails at boot with
+  `DeploymentException: Unsatisfied dependency: field RelayResource.greetings of type GreetingClient with qualifiers
+  [@RestClient, @Any]`. At compile time the Vauban processor only warns that Cyrano's Build Compatible Extensions are
+  not on the processor path and "will not run", and that the field is unsatisfied; `vidocq:checkpom` reports "all
+  aligned". Adding `cyrano-cdi-vauban` to the processor path by hand turns the warning into a compilation error. The
+  same application cannot be linked: `vidocq:jlink` stops on `org.reactivestreams`, an automatic module cyrano-core
+  brought along.
+- **Minimal repro**: `vidocq-runtime-examples/vidocq-runtime-cyrano-rest-client-example` (a resource calling another
+  through `@Inject @RestClient`), on a plain module path or from its jlink image.
+- **Cause hypothesis**: four causes in a row. (1) No codegen bundle put Cyrano's extension on the processor path, so
+  checkpom had nothing to ask for; the runtime does not run extensions over an application the processor already
+  handled. (2) Once on the processor path, the extension skipped interfaces it could not load — every interface the
+  application is compiling (cyrano BUG-20261008-06). (3) Declared from the language model, the bean type was dropped
+  from the build-time metadata (vauban BUG-20261008-01). (4) cyrano-core passed reactive-streams on to every client
+  (cyrano BUG-20261008-07).
+- **Correction**: new `vidocq-runtime-cyrano-rest-client-extension-codegen` bundle (→ `cyrano-cdi-vauban` for the
+  extension, `cyrano-processor` for compile-time proxies), known to the CLI (`KnownExtensions.codegenBundle
+  ("cyrano-rest-client")`) and therefore required by `checkpom` (seen failing the example's build without it, with the
+  entry to add); added to the IT and the two TCK runners that declare the extension. With the cyrano and vauban fixes,
+  `vidocq-runtime-it-cyrano-jpms` (`RestClientInjectionTest`) injects the client and calls through it on the module
+  path — it failed to compile against the published cyrano; the new `vidocq-runtime-cyrano-rest-client-example` answers
+  `/api/relay` through `@Inject @RestClient` on a plain module path and from its `vidocq:jlink` image, which no longer
+  holds `org.reactivestreams`. The example's module opens nothing.
+
 ## BUG-20261006-02 — an application with its own version resolves every Vidocq artifact at that version
 
 - **Date** : 2026-10-06

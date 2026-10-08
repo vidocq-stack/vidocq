@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
+    <packaging>pom</packaging>
+    <name>Vidocq :: MicroProfile Extensions :: Rest Client (Cyrano) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-cyrano-rest-client-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Rest Client extension; Maven resolves the transitive
+        APT dependencies below automatically.
+
+        - cyrano-cdi-vauban: runs Cyrano's Build Compatible Extension inside the Vauban
+          processor, so the @RestClient bean of each @RegisterRestClient interface exists
+          when the processor validates the deployment and is recorded for the runtime.
+          Without it, @Inject @RestClient fails: the runtime does not run extensions over
+          an application the processor already handled (unsatisfied dependency).
+        - cyrano-processor: generates each client's proxy at compile time, so the
+          application needs no `opens` to io.vidocq.cyrano.core (without it, Cyrano
+          defines the proxy at run time, in the interface's package).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-cdi-vauban</artifactId>
+            <version>${cyrano.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-processor</artifactId>
+            <version>${cyrano.version}</version>
+        </dependency>
+    </dependencies>
+</project>

@@ -170,6 +170,9 @@ public final class KnownExtensions {
             case "ravel-config" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.microprofile",
                     "vidocq-runtime-ravel-config-extension-codegen"));
+            case "cyrano-rest-client" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.microprofile",
+                    "vidocq-runtime-cyrano-rest-client-extension-codegen"));
             default -> Optional.empty();
         };
     }

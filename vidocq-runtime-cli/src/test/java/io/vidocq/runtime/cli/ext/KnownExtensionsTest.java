@@ -74,6 +74,16 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void cyranoRestClientShipsACodegenBundle() {
+        // BUG-20261008-01: without Cyrano's extension on the processor path, no
+        // @RestClient bean exists and every @Inject @RestClient point is unsatisfied.
+        assertEquals(java.util.Optional.of(new ExtensionCoordinate(
+                        "io.vidocq.runtime.extensions.microprofile",
+                        "vidocq-runtime-cyrano-rest-client-extension-codegen")),
+                KnownExtensions.codegenBundle("cyrano-rest-client"));
+    }
+
+    @Test
     void shortIdLookupIsCaseInsensitive() {
         assertTrue(KnownExtensions.byId("Knock-Health").isPresent());
         assertTrue(KnownExtensions.isKnown("CASSINI-REST"));
