@@ -71,40 +71,7 @@
                 (in-module instantiation / field-injection / producer & observer invocation, no
                 `opens … to io.vidocq.vauban.core`). Build-time only: adds no compile/runtime
                 dependency on Vauban, and the output stays inert for a standard CDI container (Weld).
-
-                The module-info lives in src/main/module-info/ and is compiled in a separate step
-                (vauban-core is test-scope, absent from target/javamodules/; keeping module-info.class
-                out of target/classes during testCompile prevents Maven from activating Java Modules and
-                failing to resolve the test modules — same workaround as knock-cdi-vauban).
             -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <!-- Bound to process-resources (just before `compile`), NOT generate-test-sources:
-                             a stale module-info.class from a previous prepare-package `compile-module-info`
-                             survives in target/classes on a non-clean build; if default-compile sees it,
-                             javac switches to module mode without the module path and fails
-                             `module not found: …`. Removing it before compile makes the build robust to
-                             `install`/`deploy` without `clean` (e.g. CI cache). -->
-                        <id>remove-stale-module-info-before-compile</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -120,7 +87,7 @@
                 </configuration>
                 <executions>
                     <!-- Test fixtures are not application beans: the integration test bootstraps a
-                         container on the class path (useModulePath=false) and the container resolves
+                         container and the container resolves
                          its (often nested) test beans reflectively. Running the APT over them would
                          emit a provider for nested fixtures (bogus package / cannot find symbol). -->
                     <execution>
@@ -129,26 +96,16 @@
                             <proc>none</proc>
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <!-- No annotation processing on the separate module-info compile
-                                 (the beans were already processed in the main compile). -->
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
                 </executions>
             </plugin>
+            <!-- Tests run on the module path: the container reaches the test beans (no generated provider for test fixtures) reflectively. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-opens io.vidocq.ravel.cdi.vauban/io.vidocq.ravel.cdi=io.vidocq.vauban.core
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>
