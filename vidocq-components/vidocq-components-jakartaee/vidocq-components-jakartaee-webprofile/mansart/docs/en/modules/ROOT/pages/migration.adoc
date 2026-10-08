@@ -4,6 +4,18 @@
 [.lead]
 Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2]), not proprietary extensions. Migrating from Spring Data is trivial — the Jakarta Data spec explicitly took Spring Data conventions on board. Hibernate / EclipseLink takes more effort if the application uses out-of-spec features (custom dialects, listeners, events).
 
+[#upgrading-from-0-3-0]
+== Upgrading from 0.3.0 [.tag-new]#NEW#
+
+=== `@Enumerated(EnumType.ORDINAL)` now stores the index
+
+Mansart 0.3.0 ignored `@Enumerated`: every enum attribute was stored by its constant name, in a text column, whatever the annotation said. From 0.4, `@Enumerated(EnumType.ORDINAL)` and a bare `@Enumerated` store the constant's index in an integer column (see xref:reference.adoc#enum-storage[enum storage]). An attribute with no `@Enumerated`, or with `@Enumerated(EnumType.STRING)`, is unaffected: it is still stored by name.
+
+If an entity declares `ORDINAL` (or a bare `@Enumerated`), its existing rows hold names that Mansart no longer reads for that attribute, and new rows would hold indexes. Before upgrading, pick one:
+
+* **Keep the data as it is** — change the attribute to `@Enumerated(EnumType.STRING)`, or remove the annotation. That is what 0.3.0 actually did, so nothing else changes.
+* **Store indexes** — keep `ORDINAL` and migrate the column in the same deployment: rewrite each name as its constant's index (`UPDATE ticket SET priority = CASE priority WHEN 'LOW' THEN '0' WHEN 'HIGH' THEN '1' END`, following the declaration order of the enum), then change the column type to an integer type. Mansart's own DDL only creates a missing table; it does not alter an existing column. Keep the enum's constants in the same order from then on: reordering them changes what every stored index means.
+
 == From Spring Data JPA
 
 [cols="2,2,3"]

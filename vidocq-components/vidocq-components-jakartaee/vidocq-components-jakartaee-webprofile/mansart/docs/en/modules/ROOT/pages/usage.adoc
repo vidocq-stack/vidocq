@@ -43,6 +43,7 @@ List<Book> find(String title, Author author);
 
 The Java parameter name must match the entity attribute (compile with `-parameters`); each parameter is an equality match. `@Find` methods are currently served by the reflective runtime fallback — range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles.
 
+[#query-jdql]
 === `@Query` JDQL
 
 JDQL is the query dialect defined by {spec-data-1}[Jakarta Data 1.0]. Simpler than JPQL, sufficient for typed SELECT/UPDATE/DELETE.
@@ -55,6 +56,8 @@ List<Author> search(String pattern, Long minId);
 @Query("UPDATE Author SET name = :newName WHERE name = :oldName")
 long rename(String oldName, String newName);
 ----
+
+A statement is one query (`FROM …` or `SELECT … FROM …`), one `UPDATE` or one `DELETE`. [.tag-new]#NEW# When Mansart parses the statement at run time — a repository generated at run time, a statement passed to xref:reference.adoc#tooling-api[`JdqlExecutor.run`] — a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause, such as `SELECT this DELETE FROM Product`, is refused with a `MansartDataException`; it used to run as the `DELETE`.
 
 === Pagination — offset and keyset
 

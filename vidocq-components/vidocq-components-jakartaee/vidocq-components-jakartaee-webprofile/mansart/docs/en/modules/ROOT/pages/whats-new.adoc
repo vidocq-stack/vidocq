@@ -1,0 +1,22 @@
+= What's new
+:description: Everything that changed in Mansart since the {release-version} release — enum storage that follows @Enumerated, a stricter JDQL parser, the Jakarta Data core API for tools, and the restart of Mansart JPA.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== Jakarta Data
+
+* **An enum is stored as `@Enumerated` says** (mansart#26) — `@Enumerated` used to be read and then ignored: every enum was stored by its name, `@Enumerated(EnumType.ORDINAL)` included. Now `@Enumerated(EnumType.ORDINAL)`, and a bare `@Enumerated`, store the constant's index in an integer column, and `@Enumerated(EnumType.STRING)` stores its name, in writes, row mapping, projections, `WHERE` bindings and the generated DDL. An enum with **no** `@Enumerated` still stores its name, unlike the Jakarta Persistence default, which is the index. **This changes what an existing application does** if it declares `ORDINAL`: its tables hold names, and Mansart now writes and reads indexes for that attribute. Either switch the attribute to `@Enumerated(EnumType.STRING)` (or drop the annotation) to keep the data as it is, or convert the column to indexes before upgrading. xref:reference.adoc#enum-storage[Enum storage], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+* **An `UPDATE` or a `DELETE` cannot follow a `SELECT` clause** — the JDQL parser Mansart uses at run time — for a repository generated at run time and for `JdqlExecutor.run` — read a `SELECT` clause and then went on to whatever followed it, so `SELECT this DELETE FROM Product` ran as a `DELETE`. Such a statement is now refused with a `MansartDataException`. A tool that tells reads from writes by the first keyword can no longer be led to run a write as a query. xref:usage.adoc#query-jdql[`@Query` JDQL].
+
+== The Jakarta Data core for tools
+
+`io.vidocq.mansart.data.core` gives a tool — the Vidocq dev console, for one — what Mansart knows about an entity and a way to run a JDQL statement typed as text:
+
+* **`EntityModels.of(Class<E>)`** — the model Mansart uses for an entity: its generated `_Entity.$MODEL`, or one built at run time from the mapping annotations. A tool no longer has to re-read the annotations or reflect on generated classes to describe an entity. xref:reference.adoc#tooling-api[The core API for tools].
+* **`JdqlExecutor.run(jdql, parameters, model, runtime)`** — parses one statement against the entity's model, binds its named parameters by name, converts a text value to the attribute's type (enum, `java.time`, numbers, booleans, UUIDs), and runs it as a `@Query` method's statement would, returning a `JdqlResult`: entities, projected rows, a count or an aggregate's value. An overload with `maxRows` reads at most that many rows, as a SQL `LIMIT`. `isWrite` and `target` read a statement's first keyword and its entity without parsing it. xref:reference.adoc#tooling-api[The core API for tools].
+* **An entity model no longer keeps its class loader reachable** — models used to be cached in a static map keyed by the entity class, which kept every class and its loader alive. Under a dev reload, where the application layer is replaced while Mansart stays, each discarded layer stayed in memory. Models now live with their class and go away with its loader. xref:reference.adoc#tooling-api[The core API for tools].
+
+== In the works
+
+* **Mansart JPA restarted** — `mansart-persistence` (Maven parent `mansart-jpa`) is back in the reactor as an empty aggregator, with a milestone plan that starts from the official Jakarta Persistence TCK. It contains no implementation yet: `mansart-jakarta-data` remains the answer for persistence in Vidocq. xref:modules/mansart-persistence.adoc#status[mansart-persistence — Status].

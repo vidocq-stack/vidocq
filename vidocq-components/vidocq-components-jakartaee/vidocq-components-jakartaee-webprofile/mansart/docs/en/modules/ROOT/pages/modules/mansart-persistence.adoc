@@ -18,9 +18,10 @@ Jakarta Data 1.0 and Jakarta Persistence 3.2 do not serve the same purpose:
 
 Both modules will share the same dialect SPI (`mansart-data-dialect-spi`) and the same static metamodel. No SQL duplication.
 
+[#status]
 == Status
 
-⏳ **M7 pending** — see link:{repo-mansart}/src/branch/main/mansart-persistence/PLAN.md[mansart-persistence/PLAN.md] (sketch) and link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data/PLAN.md] (M7 milestone "mansart-persistence bridge").
+[.tag-new]#NEW# 🚧 **Restarted, skeleton only** — `mansart-persistence` (Maven parent `mansart-jpa`) is back in the Mansart reactor as an empty aggregator: no implementation module, nothing an application can depend on yet. The work follows a milestone plan that starts from the official Jakarta Persistence 3.2 TCK (P0, the TCK instrument, before any implementation) and ends with certification (P12); see link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md]. Until it delivers, `mansart-jakarta-data` is the answer for persistence in Vidocq.
 
 Target scope (to be refined):
 

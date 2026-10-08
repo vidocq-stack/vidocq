@@ -72,7 +72,10 @@ All modules are strict Java Modules — minimal `exports`, no unjustified `opens
 
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
-An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
+[#enum-storage]
+[.tag-new]#NEW# An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
+
+The storage applies wherever Mansart knows which attribute a value belongs to: inserts and updates, row mapping, projections, `WHERE` bindings, bulk updates by attribute, and the table DDL Mansart generates (an integer column for `ORDINAL`). Two paths do not know it yet and still bind a value by its Java type: an aggregate (`SELECT MAX(…)`, …) over an `ORDINAL` enum, and a JDQL `UPDATE … SET` that Mansart runs at run time rather than compiling it (a `SET` with an arithmetic expression, or a statement passed to `JdqlExecutor.run`). Before 0.4, `@Enumerated` was ignored and every enum was stored by its name; see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0] for existing `ORDINAL` columns.
 
 **Out of scope v1**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Deferred to `mansart-persistence` (M7).
 
@@ -151,6 +154,27 @@ An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL
 |===
 
 Discovered via `ServiceLoader` (`provides DialectFactory with H2DialectFactory`).
+
+[#tooling-api]
+== The core API for tools [.tag-new]#NEW#
+
+`io.vidocq.mansart.data.core` (artefact `mansart-data-core`) exposes what a tool needs to describe an application's entities and to run a JDQL statement typed as text, without re-reading annotations or reflecting on generated classes. The Vidocq dev console uses it for its Mansart Data catalogue and its JDQL prompt. An application does not need it: repositories cover that.
+
+`EntityModels.of(Class<E>)`::
+The `EntityModel<E>` Mansart uses for an entity: the generated `<package>._<Entity>.$MODEL` when the processor wrote one, otherwise a model built at run time from the entity's fields and its `jakarta.persistence` annotations. It throws a `MansartDataException` when Mansart cannot map the class (no id field, no no-arg constructor, a package not open to `io.vidocq.mansart.data.core`). The model's attributes carry the getter and setter handles Mansart reads and writes the entity with; a tool may use them as Mansart does, but must not change the model.
++
+The model is cached with its class (a `ClassValue`): a second call returns the same instance, and the model goes away with the class's loader. Under a dev reload, where the application layer is replaced while Mansart stays, a discarded layer is no longer kept in memory by Mansart.
+
+`JdqlExecutor.run(jdql, parameters, model, runtime)`::
+Parses one statement (`FROM …`, `SELECT … FROM …`, `UPDATE … SET …` or `DELETE FROM …`) against `model`, takes each named parameter `:name` from `parameters.get("name")`, and runs it on `runtime` as a `@Query` method's statement would, in whatever transaction the caller has begun. A `String` value compared or assigned to an attribute that is not text is converted to the attribute's type: an enum by constant name, the `java.time` types by ISO parsing, numbers exactly (`BigDecimal` and `BigInteger` included), `Boolean` from `true`/`false`, `UUID`. A positional parameter (`?1`), a parameter without a value, a value no parameter uses and a value that does not convert are refused before anything runs.
++
+The result is a sealed `JdqlResult`: `Entities`, `Rows` (the columns and rows of a projection), `Count` (the rows counted, or changed by an `UPDATE` or a `DELETE`) or `Value` (an aggregate's value).
+
+`JdqlExecutor.run(jdql, parameters, model, runtime, maxRows)`::
+The same, reading at most `maxRows` entities or projected rows in the statement's order, through the dialect's pagination (a SQL `LIMIT`): no more is ever read from the database. A count, an aggregate, an `UPDATE` and a `DELETE` are not affected. `maxRows` below 1 is refused.
+
+`JdqlExecutor.isWrite(jdql)`, `JdqlExecutor.target(jdql)`::
+Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the entity it names, without parsing it. Since a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause is refused, a tool can rely on the first keyword to tell a read from a write.
 
 == Compatibility
 
