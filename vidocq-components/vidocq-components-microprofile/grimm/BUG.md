@@ -306,3 +306,19 @@ Track reproducible bugs with:
   the one the mapping uses), plus implementation, ref, required and properties. An empty `@Schema()` is
   unchanged. Covered by `JaxRsResourceScannerTest` (parameter and request body; minimum, examples, oneOf,
   readOnly; empty schema) and `SchemaPropertyMappingTest`.
+
+### BUG-20261008-01 — grimm-processor does not compile as a module: grimm-core packages exported to grimm-cdi-vauban only (grimm#19)
+
+- **id**: BUG-20261008-01
+- **date**: 2026-10-08
+- **symptom**: compiled as a module (its `module-info.java` with the rest of its sources, not alone
+  at `prepare-package`), `grimm-processor` fails: `GrimmModelProcessor` uses
+  `io.vidocq.grimm.internal.OpenApiSerializers` and `io.vidocq.grimm.internal.schema.*`, which
+  grimm-core exports only to `io.vidocq.grimm.cdi.vauban` (qualified exports).
+- **minimal repro**: move `grimm-processor/src/main/module-info/module-info.java` to
+  `src/main/java/` and run `./mvnw clean verify -pl grimm-processor -am`.
+- **hypothesis (confirmed)**: the descriptor was compiled alone, late, so javac never checked the
+  processor's code against grimm-core's exports. The shipped jar is a named module that would fail
+  to resolve `OpenApiSerializers` at run time as soon as javac loads it from the module path.
+- **status**: OPEN — grimm-core exports `io.vidocq.grimm.internal` and
+  `io.vidocq.grimm.internal.schema` to `io.vidocq.grimm.processor` too (still qualified).
