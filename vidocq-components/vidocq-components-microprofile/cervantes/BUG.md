@@ -202,3 +202,28 @@ CI fail a Telemetry 2.2 test that only the pull request passes.
 `<cervantes.version>${project.version}</cervantes.version>`: the TCK now resolves the reactor's own
 version (same repro gives `0.4.0-SIMCI` everywhere). Unchanged for a local build, where it still
 resolves `0.4.0-SNAPSHOT`.
+
+## CERV-006 — `cervantes-cdi-vauban` uses `jakarta.json` without reading it (cervantes#21)
+
+- **Opening date**: 2026-10-08
+- **Status**: 🔴 OPEN
+
+### Symptom
+
+`io.vidocq.cervantes.cdi.internal.ClaimResolver` maps claims to JSON-P values (`jakarta.json.Json`,
+`JsonValue`, `JsonString`, ...), but the module descriptor of `io.vidocq.cervantes.cdi.vauban` has no
+`requires jakarta.json`. `cervantes-core` reads `jakarta.json` only through a non-transitive
+`requires`, so nothing gives the module that read edge.
+
+### Minimal repro
+
+Move `cervantes-cdi-vauban/src/main/module-info/module-info.java` to `src/main/java/` and build:
+javac compiles the module's code against its descriptor and rejects every `jakarta.json` import
+(package not visible). Equivalently, `jar --describe-module` of the produced jar lists no
+`requires jakarta.json`.
+
+### Cause
+
+The late module-info workaround compiled `module-info.java` alone at `prepare-package`, after the
+code was compiled on the class path, so javac never checked the code against the descriptor and the
+missing read edge went unnoticed.
