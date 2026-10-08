@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Lance la suite TCK officielle MicroProfile Health 4.0
+# Runs the official MicroProfile Health 4.0 TCK
 # (org.eclipse.microprofile.health:microprofile-health-tck:4.0.1)
-# contre l'implémentation Knock.
+# against the Knock implementation.
 #
-# Modes :
-#   ./run-official-tck-mp-health-4.0.sh                 # smoke test (sans Arquillian)
-#   ./run-official-tck-mp-health-4.0.sh all             # suite complète (Arquillian + Weld)
-#   ./run-official-tck-mp-health-4.0.sh -Dtest=Foo      # test ciblé via le profil tck-official
+# Modes:
+#   ./run-official-tck-mp-health-4.0.sh                 # smoke test (default, no Arquillian)
+#   ./run-official-tck-mp-health-4.0.sh all             # full suite (Arquillian + Weld)
+#   ./run-official-tck-mp-health-4.0.sh -Dtest=Foo      # targeted test, tck-official profile
 #
-# Comportement :
-#   1. Installe en local (./mvnw install -DskipTests) knock-api/knock-core/knock-cdi-vauban/knock-jaxrs
-#   2. Invoque ./mvnw -P"tck,<profile>" -pl knock-tck test [args...]
-#      (knock-tck est in-reactor, activé par le profil Maven `tck` — harmonisation TCK)
-#   3. Génère target/tck-report.txt avec le résumé PASS/FAIL/SKIP
+# Behaviour:
+#   1. Installs knock-api/knock-core/knock-cdi-vauban/knock-jaxrs locally (./mvnw install -DskipTests)
+#   2. Runs ./mvnw -P"tck,<profile>" -pl knock-tck test [args...]
+#      (knock-tck is in the reactor, enabled by the `tck` Maven profile — TCK harmonisation)
+#   3. Writes knock-tck/target/tck-report.txt with the test counts and PASS/FAIL
 #
-# Prérequis avant d'utiliser le mode 'all' :
-#   Vérifier la disponibilité du TCK sur Maven Central :
+# Before using the 'all' mode:
+#   check that the TCK is available on Maven Central:
 #   mvn dependency:get -Dartifact=org.eclipse.microprofile.health:microprofile-health-tck:4.0.1
 #
 set -euo pipefail
@@ -32,27 +32,27 @@ shift || true
 case "${mode}" in
     smoke)
         profile="smoke"
-        echo "==> Mode : SMOKE (KnockTckSmokeTest, hors Arquillian)"
+        echo "==> Mode: SMOKE (KnockTckSmokeTest, no Arquillian)"
         ;;
     all)
         profile="tck-official"
-        echo "==> Mode : ALL (suite officielle MicroProfile Health 4.0 — TestNG/Arquillian/Weld)"
+        echo "==> Mode: ALL (official MicroProfile Health 4.0 suite — TestNG/Arquillian/Weld)"
         ;;
     -Dtest=*)
         profile="tck-official"
         set -- "${mode}" "$@"
-        echo "==> Mode : ciblé (${mode}) avec profil tck-official"
+        echo "==> Mode: targeted (${mode}) with the tck-official profile"
         ;;
     *)
-        echo "Usage : $0 [smoke|all|-Dtest=NomDuTest]" >&2
+        echo "Usage: $0 [smoke|all|-Dtest=TestName]" >&2
         exit 64
         ;;
 esac
 
-echo "==> Étape 1/2 : install local des artefacts Knock (./mvnw install -DskipTests)"
+echo "==> Step 1/2: local install of the Knock artifacts (./mvnw install -DskipTests)"
 ( cd "${ROOT_DIR}" && ./mvnw -ntp -pl knock-api,knock-core,knock-cdi-vauban,knock-jaxrs -am install -DskipTests )
 
-echo "==> Étape 2/2 : exécution Maven in-reactor sur knock-tck (profils=tck,${profile})"
+echo "==> Step 2/2: Maven run on the in-reactor knock-tck (profiles=tck,${profile})"
 mkdir -p "${TCK_DIR}/target"
 
 MVN="${ROOT_DIR}/mvnw"
@@ -63,10 +63,10 @@ set +e
 status=$?
 set -e
 
-echo "==> Génération du rapport : ${REPORT_FILE}"
+echo "==> Writing the report: ${REPORT_FILE}"
 {
     echo "# Knock TCK report"
-    echo "# Généré le $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "# Generated $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "# Profile : ${profile}"
     echo "# Args    : $*"
     echo
