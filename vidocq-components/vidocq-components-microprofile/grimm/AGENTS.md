@@ -53,15 +53,13 @@
 
 ## Java Modules Convention — `module-info` placement
 
-- In `grimm-core` and `grimm-cdi-vauban`, place `module-info.java` under
-  `src/main/module-info/` (not `src/main/java/`). This prevents Maven Compiler Plugin from
-  switching to Java Modules mode during `testCompile` (test-scope dependencies like Vauban/Ravel
-  are not on the module path).
-- `module-info.class` is compiled alone in the `prepare-package` phase; `maven-clean-plugin`
-  removes it before incremental builds.
-- Module-path JARs are assembled by `maven-dependency-plugin` in the `initialize` phase
-  (copied to `target/javamodules/`). Any new module-path dependency must be referenced in
-  that copy step.
+- `module-info.java` sits in `src/main/java/` of `grimm-core`, `grimm-processor`,
+  `grimm-cdi-vauban` and `grimm-examples`: it is compiled with the code it describes, and the
+  tests run on the module path. What only the tests need (extra `--add-reads`, `--add-exports`,
+  `--add-opens`, test-scope modules) goes in the test compiler/surefire configuration of the
+  module's `pom.xml`, with a comment, never in the descriptor.
+- `grimm-bench` (shaded JMH uber-jar run on the class path) and `grimm-tck` (no main code,
+  out-of-reactor TCK on the class path) have no descriptor.
 - `microprofile-openapi-api:4.2-RC5` provides `module-info.class`; use
   `requires org.eclipse.microprofile.openapi` in `module-info.java`.
 - MP Config API is consumed via `io.vidocq.ravel:ravel-mp-config-api`, which provides

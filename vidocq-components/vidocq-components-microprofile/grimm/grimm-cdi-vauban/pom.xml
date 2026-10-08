@@ -98,35 +98,6 @@
         GrimmModelCache) without scanning the dependency from the consumer. Build-time only; the
         output is inert for a standard CDI container (Weld).
       -->
-      <!--
-        Java Modules: module-info.java sits in src/main/module-info/ so that testCompile stays on the
-        class path (test-scope dependencies are not modules). It is compiled alone at prepare-package
-        and ships in the jar: Grimm's jars are named modules, never automatic ones (grimm#15).
-        A module-info.class left in target/classes by a previous build would switch the main
-        compile to module mode before the module path is complete: it is removed first.
-      -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-clean-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>remove-stale-module-info-before-compile</id>
-            <phase>process-resources</phase>
-            <goals><goal>clean</goal></goals>
-            <configuration>
-              <excludeDefaultDirectories>true</excludeDefaultDirectories>
-              <filesets>
-                <fileset>
-                  <directory>${project.build.outputDirectory}</directory>
-                  <includes>
-                    <include>module-info.class</include>
-                  </includes>
-                </fileset>
-              </filesets>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -149,21 +120,30 @@
           <execution>
             <id>default-testCompile</id>
             <configuration>
+              <!-- OpenApiHttpChappeTest calls the served document with the JDK HTTP client, a module the main code does not read. -->
+              <compilerArgs combine.children="append">
+                <arg>--add-modules</arg>
+                <arg>java.net.http</arg>
+                <arg>--add-reads</arg>
+                <arg>io.vidocq.grimm.cdi.vauban=java.net.http</arg>
+              </compilerArgs>
               <proc>none</proc>
-            </configuration>
-          </execution>
-          <execution>
-            <id>compile-module-info</id>
-            <phase>prepare-package</phase>
-            <goals><goal>compile</goal></goals>
-            <configuration>
-              <proc>none</proc>
-              <compileSourceRoots>
-                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-              </compileSourceRoots>
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <!-- Tests run on the module path: they boot a VaubanContainer and a Cassini/Chappe HTTP stack (test-scope modules) directly, over test beans that have no generated provider. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <argLine>
+            --add-modules java.net.http
+            --add-reads io.vidocq.grimm.cdi.vauban=java.net.http,io.vidocq.vauban.core,io.vidocq.cassini.api,io.vidocq.cassini.chappe,io.vidocq.chappe.api
+            --add-opens io.vidocq.grimm.cdi.vauban/io.vidocq.grimm.cdi=io.vidocq.vauban.core
+            --add-opens io.vidocq.grimm.cdi.vauban/test.grimm.app=io.vidocq.vauban.core
+          </argLine>
+        </configuration>
       </plugin>
     </plugins>
   </build>

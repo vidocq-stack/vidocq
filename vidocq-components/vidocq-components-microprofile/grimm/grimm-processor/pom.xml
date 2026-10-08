@@ -24,6 +24,18 @@
             <artifactId>jakarta.ws.rs-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- grimm-core requires the MicroProfile Config and Jakarta Annotations modules, which it only
+             declares as provided: the module-path test run must find them. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -33,35 +45,6 @@
 
     <build>
         <plugins>
-            <!--
-                Java Modules: module-info.java sits in src/main/module-info/ so that testCompile stays on the
-                class path (test-scope dependencies are not modules). It is compiled alone at prepare-package
-                and ships in the jar: Grimm's jars are named modules, never automatic ones (grimm#15).
-                A module-info.class left in target/classes by a previous build would switch the main
-                compile to module mode before the module path is complete: it is removed first.
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>remove-stale-module-info-before-compile</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -72,23 +55,31 @@
                 </configuration>
                 <executions>
                     <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
+                        <id>default-testCompile</id>
                         <configuration>
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
+                            <!-- The oracle test drives grimm-core's runtime scanner, which grimm-core does not export to the processor. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.grimm.core/io.vidocq.grimm.internal.config=io.vidocq.grimm.processor</arg>
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.grimm.core/io.vidocq.grimm.internal.scanner=io.vidocq.grimm.processor</arg>
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.grimm.core/io.vidocq.grimm.internal.serialization=io.vidocq.grimm.processor</arg>
+                            </compilerArgs>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
+            <!-- Tests run on the module path; the oracle test drives grimm-core's runtime scanner. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.config=io.vidocq.grimm.processor
+                        --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.scanner=io.vidocq.grimm.processor
+                        --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.serialization=io.vidocq.grimm.processor
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>
