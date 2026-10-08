@@ -24,13 +24,12 @@
  * by the {@link io.vidocq.cervantes.cdi.JsonWebTokenContext} context, set by the JAX-RS
  * authentication filter) and produces a {@code JwtValidator} configured from the
  * MicroProfile Config properties {@code mp.jwt.verify.*} (via Ravel).</p>
- *
- * <p>Note Java Modules — workaround testCompile: {@code module-info.java} in {@code src/main/module-info/}
- * (vauban-core/ravel-core are test-scope, absent from the module path). See {@code cervantes-core/pom.xml}.</p>
  */
 module io.vidocq.cervantes.cdi.vauban {
     requires transitive io.vidocq.cervantes.core;
     requires org.eclipse.microprofile.config;
+    // ClaimResolver maps claims to JSON-P values; cervantes-core reads jakarta.json non-transitively.
+    requires jakarta.json;
 
     requires static jakarta.cdi;
     requires static jakarta.inject;
