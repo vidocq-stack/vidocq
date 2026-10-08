@@ -29,12 +29,6 @@
  *   <li>{@code StateRegistryBean} — {@code @ApplicationScoped} bean carrying the global state
  *       of CircuitBreaker and Bulkhead (identified by {@code beanClass + method}).</li>
  * </ul>
- *
- * <p><strong>Java Modules note — testCompile workaround</strong>:
- * {@code module-info.java} is in {@code src/main/module-info/} to prevent Maven
- * Compiler Plugin from detecting Java Modules during {@code testCompile} (vauban-core and ravel-core
- * are test-scope, absent from {@code target/javamodules/}).
- * See {@code heisenberg-core/pom.xml} for the complete description of the workaround.</p>
  */
 module io.vidocq.heisenberg.cdi.vauban {
     requires transitive io.vidocq.heisenberg.core;

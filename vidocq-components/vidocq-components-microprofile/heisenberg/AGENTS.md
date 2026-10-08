@@ -88,15 +88,10 @@
 
 ## Java Modules convention — `module-info` + `target/javamodules/` workaround
 
-- In `heisenberg-core` and `heisenberg-cdi-vauban`, `module-info.java` lives under
-  `src/main/module-info/` (and **not** `src/main/java/`). This is intentional: it prevents
-  Maven Compiler Plugin from switching into Java Modules mode during `testCompile` (test-scope
-  dependencies such as Vauban/Ravel are not on the module-path). `module-info.class`
-  is compiled on its own during `prepare-package`, and `maven-clean-plugin` deletes it before
-  incremental builds. `heisenberg-api` keeps its `module-info.java` under
-  `src/main/java/` (no CDI test-scope isolation required).
-- Tests run on the classpath (`useModulePath=false`) ; Java Modules wiring is validated
-  only by the TCK smoke test.
+- Every module keeps its `module-info.java` under `src/main/java/`, and tests run on the
+  module path (test classes patched into the module under test). Test-only `--add-reads` /
+  `--add-opens` live in the Surefire `argLine` of the module that needs them, each one
+  explained in a comment there; no production `module-info` opens anything for tests.
 - The compilation module-path is built through `maven-dependency-plugin` during the
   `initialize` phase, which copies required JARs into `target/javamodules/`. Any dependency added
   to the module-path must be referenced in that copy step.

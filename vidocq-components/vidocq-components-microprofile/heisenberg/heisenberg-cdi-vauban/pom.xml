@@ -12,7 +12,7 @@
 
     <artifactId>heisenberg-cdi-vauban</artifactId>
     <name>Heisenberg :: CDI Vauban Integration</name>
-    <description>Intercepteur CDI Fault Tolerance (FaultToleranceInterceptor, priorité 4010) et BCE Vauban (HeisenbergExtension, StateRegistryBean)</description>
+    <description>Fault Tolerance CDI interceptor (FaultToleranceInterceptor, priority 4010) and Vauban BCE (HeisenbergExtension, StateRegistryBean)</description>
 
     <dependencies>
         <dependency>
@@ -71,7 +71,7 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Container CDI Vauban pour les tests d'intégration -->
+        <!-- Vauban CDI container for the integration tests -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
@@ -82,7 +82,7 @@
             <artifactId>vauban-classloader-spi</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Implémentation Config pour les tests (Ravel) -->
+        <!-- Config implementation for the tests (Ravel) -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-core</artifactId>
@@ -92,40 +92,6 @@
 
     <build>
         <plugins>
-            <!--
-                Java Modules workaround heisenberg-cdi-vauban : même problème que heisenberg-core.
-                vauban-core et ravel-core sont test-scope, absents de target/javamodules/.
-                Si module-info.class est dans target/classes, Maven active Java Modules pour
-                testCompile et ne trouve pas les modules test sur le module-path.
-                Même solution en trois temps (voir heisenberg-core/pom.xml).
-            -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-clean-plugin</artifactId>
-                <executions>
-                    <!-- process-resources runs before default-compile: removes any module-info.class
-                         left in target/classes by a prior build's compile-module-info (prepare-package).
-                         Without this, a no-clean `mvn install` (as the TCK runner does) lets javac
-                         detect the stale descriptor and switch the main compile to module mode, failing
-                         to resolve the dependency modules. -->
-                    <execution>
-                        <id>remove-stale-module-info</id>
-                        <phase>process-resources</phase>
-                        <goals><goal>clean</goal></goals>
-                        <configuration>
-                            <excludeDefaultDirectories>true</excludeDefaultDirectories>
-                            <filesets>
-                                <fileset>
-                                    <directory>${project.build.outputDirectory}</directory>
-                                    <includes>
-                                        <include>module-info.class</include>
-                                    </includes>
-                                </fileset>
-                            </filesets>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
             <!--
                 Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
                 plugin is reserved for freezing external, non-APT dependency jars). It generates
@@ -157,24 +123,28 @@
                             <proc>none</proc>
                         </configuration>
                     </execution>
-                    <execution>
-                        <id>compile-module-info</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>compile</goal></goals>
-                        <configuration>
-                            <proc>none</proc>
-                            <compileSourceRoots>
-                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
-                            </compileSourceRoots>
-                        </configuration>
-                    </execution>
                 </executions>
             </plugin>
+            <!--
+                Tests run on the module path, test classes patched into io.vidocq.heisenberg.cdi.vauban.
+                Test-only grants, which no production module needs:
+                - add-reads to io.vidocq.vauban.core: vauban-core is a test-scope dependency that the
+                  module does not require, yet one test builds a VaubanContainer directly;
+                - opens of the test package to io.vidocq.vauban.core: the test beans have no generated
+                  provider, so Vauban reaches them reflectively;
+                - read edge from io.vidocq.heisenberg.core to this module, and opens of the test
+                  package to it: FallbackResolver resolves the test beans' fallback methods through
+                  MethodHandles.privateLookupIn, which needs both.
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <useModulePath>false</useModulePath>
+                    <argLine>
+                        --add-reads io.vidocq.heisenberg.cdi.vauban=io.vidocq.vauban.core
+                        --add-reads io.vidocq.heisenberg.core=io.vidocq.heisenberg.cdi.vauban
+                        --add-opens io.vidocq.heisenberg.cdi.vauban/io.vidocq.heisenberg.cdi.internal=io.vidocq.heisenberg.core,io.vidocq.vauban.core
+                    </argLine>
                 </configuration>
             </plugin>
         </plugins>

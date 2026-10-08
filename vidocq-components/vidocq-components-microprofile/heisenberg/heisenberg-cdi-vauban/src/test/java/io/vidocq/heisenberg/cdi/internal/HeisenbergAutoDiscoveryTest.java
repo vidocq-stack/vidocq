@@ -29,8 +29,10 @@ class HeisenbergAutoDiscoveryTest {
 
     @Test
     void registersConfigProviderResolverInServiceDescriptor() throws Exception {
-        String resourcePath = "META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver";
-        try (var input = HeisenbergAutoDiscovery.class.getClassLoader().getResourceAsStream(resourcePath)) {
+        // Read the descriptor from this module's own jar: a class-loader-wide lookup returns the first
+        // match among every module on the path (ravel-core ships the same service file).
+        String resourcePath = "/META-INF/services/org.eclipse.microprofile.config.spi.ConfigProviderResolver";
+        try (var input = HeisenbergAutoDiscovery.class.getResourceAsStream(resourcePath)) {
             assertNotNull(input);
             String content = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(content.contains(HeisenbergAutoDiscovery.class.getName()));
