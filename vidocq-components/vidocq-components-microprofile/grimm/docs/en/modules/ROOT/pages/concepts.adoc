@@ -24,6 +24,7 @@ The OpenAPI format describes an HTTP service through a structured JSON or YAML t
 
 The MP OpenAPI 4.2 spec's Java model mirrors that structure: the `OpenAPI` interface → `Info`, `Paths`, `Components`. Grimm provides concrete implementations (records or final classes) in `io.vidocq.grimm.internal.model`, produced by its own `OASFactoryResolver`.
 
+[#three-sources]
 == Three sources, one merge
 
 The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged in this order (lowest to highest priority):
@@ -34,7 +35,10 @@ The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged i
 
 `ModelMerger` combines the three with the spec priority annotations > static file > reader: the static file overrides the conflicting elements of the reader model, and the annotations override any conflicting element of both. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
 
-=== How the sources combine
+[.tag-new]#NEW# In {release-version} and earlier, Grimm merged the static file first and the reader on top of it, so on a conflict the reader won over the static file. It now follows the spec order above: the static file wins over the reader.
+
+[#how-the-sources-combine]
+=== How the sources combine [.tag-new]#NEW#
 
 The sources are applied in the order above, each one on top of the result of the previous ones: reader, then static file, then annotations, and finally the `OASFilter` if one is configured. Two rules decide what happens when several sources describe the same element:
 

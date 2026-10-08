@@ -9,6 +9,19 @@ Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.2 spec is fully cove
 [.lead]
 On the application code side, migration is trivial: Grimm strictly consumes the standard `org.eclipse.microprofile.openapi.annotations.*` annotations. No proprietary import to replace. The gaps lie in configuration and packaging.
 
+[#upgrading-from-0-3-0]
+== Upgrading from 0.3.0 [.tag-new]#NEW#
+
+What an application built against Grimm {release-version} may need to change, or will see change, on this development line. The full list is in xref:whats-new.adoc[What's new].
+
+* **Module name.** Grimm's jars are named modules now (xref:reference.adoc#java-modules[Java modules]). A `module-info.java` that read Grimm by its automatic name changes `requires grimm.cdi.vauban;` to `requires io.vidocq.grimm.cdi.vauban;`. That module `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs, so `jakarta.ws.rs-api` reaches your build at compile scope through it.
+* **MicroProfile OpenAPI API 4.2.** Grimm builds on `microprofile-openapi-api` `4.2-RC5` until the final reaches Maven Central; an application that declares the API itself moves to the same version (see xref:getting-started.adoc[Getting started]).
+* **Static file over `OASModelReader`.** On a conflicting element, the static file now wins over the reader model, as the specification orders; it used to be the reverse. An application that relied on the reader to override `META-INF/openapi.yaml` moves that override to an annotation or an `OASFilter`. xref:concepts.adoc#how-the-sources-combine[How the sources combine].
+* **Annotation values read as JSON.** `constValue` and `examples` of a non-`STRING` schema, and `@Extension(parseValue = true)` values, go through a strict JSON reader: lenient forms (`{a: 1}`, single quotes, `TRUE`, `1L`) stay strings, and an integral `1.0` inside an array is a `Double`. xref:reference.adoc#annotation-values[How annotation values are mapped].
+* **Fewer stray keywords.** Annotated schemas no longer carry `minItems: 2147483647`, `maxItems: -2147483648` and `maxProperties: 0`. A client generated from the old document, or a test that compared against it, sees them go.
+* **Static-file keywords are typed.** Keywords such as `minimum` or `discriminator` read from a static file are no longer extensions: an `OASFilter` that looked for them in `getExtensions()` reads the typed getter instead. xref:reference.adoc#static-documents[Static documents and schema overrides].
+* **Explicit `$ref` in `mp.openapi.schema.<FQCN>` is verbatim.** A short name in `$ref` (`"$ref": "Pet"`) is no longer expanded; write `"ref": "Pet"` or the full `#/components/schemas/Pet`. xref:reference.adoc#static-documents[Static documents and schema overrides].
+
 == From SmallRye OpenAPI
 
 SmallRye OpenAPI is the reference implementation in Quarkus and several Jakarta EE servers. Migration is direct — Grimm targets strict conformance to the same spec.
@@ -77,7 +90,7 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 * **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
 * **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
 * **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
-* **`summary` next to a `$ref` is dropped** — a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
+* **`summary` next to a `$ref` is dropped** [.tag-new]#NEW# — a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
 
 == Porting checklist
 

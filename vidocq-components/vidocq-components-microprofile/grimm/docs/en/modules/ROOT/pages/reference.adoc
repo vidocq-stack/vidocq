@@ -37,24 +37,28 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 
 Every artefact is at `{project-version}`.
 
+[#java-modules]
 == Java modules
+
+[.tag-new]#NEW# Every Grimm jar ships its compiled `module-info.class`, so Grimm is made of the three named modules below, never of automatic modules. Up to {release-version} the descriptors were not compiled into the jars: Grimm ran as automatic modules (`grimm.core`, `grimm.processor`, `grimm.cdi.vauban`), and in a modular application a build tool could take `grimm-cdi-vauban` for a class-path jar and split its package (grimm#15). An application module that read Grimm by its automatic name moves to `requires io.vidocq.grimm.cdi.vauban;` — see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
 
 [cols="2,3"]
 |===
 | Module | Contents
 
 | `io.vidocq.grimm.core`
-| Exports `io.vidocq.grimm.spi.gen` (compile-time contribution SPI) and `io.vidocq.grimm.internal.reader` (static-document readers) unqualified; exports `io.vidocq.grimm.internal`, `internal.config`, `internal.merger`, `internal.schema` only to `io.vidocq.grimm.cdi.vauban`. `internal.factory`, `internal.invoker`, `internal.model`, `internal.scanner`, `internal.serialization` are not exported at all.
+| Exports `io.vidocq.grimm.spi.gen` (compile-time contribution SPI) and `io.vidocq.grimm.internal.reader` (static-document readers) unqualified; exports `io.vidocq.grimm.internal.config` and `internal.merger` only to `io.vidocq.grimm.cdi.vauban`, and `io.vidocq.grimm.internal` and `internal.schema` only to `io.vidocq.grimm.cdi.vauban` and `io.vidocq.grimm.processor` [.tag-new]#NEW#. `internal.factory`, `internal.invoker`, `internal.model`, `internal.scanner`, `internal.serialization` are not exported at all.
 
 | `io.vidocq.grimm.processor`
-| No exports — the APT processor is consumed exclusively through the `javax.annotation.processing.Processor` service it `provides`.
+| No exports — the APT processor is consumed exclusively through the `javax.annotation.processing.Processor` service it `provides`. It resolves on the module path, as a named module (grimm#19). [.tag-new]#NEW#
 
 | `io.vidocq.grimm.cdi.vauban`
-| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`.
+| `io.vidocq.grimm.cdi` — `GrimmExtension`, `OpenApiResource`, `GrimmModelCache`, `GrimmConfigProducer`, `GrimmAutoDiscovery`. [.tag-new]#NEW# `requires transitive` the MicroProfile OpenAPI and JAX-RS APIs that its own API exposes (`OpenAPI`, `Response`), and `provides` its Vauban-generated `_VaubanComponents`, so the container builds Grimm's beans with no `opens`.
 |===
 
 Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` packages are reserved for Grimm's own modules. Any application class depending on them signals a regression to fix.
 
+[#supported-annotations]
 == Supported MicroProfile OpenAPI annotations
 
 [cols="2,3,1"]
@@ -106,7 +110,15 @@ Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` p
 | ✅
 
 | `@ExternalDocumentation`
-| Link to external documentation.
+| Link to external documentation. On a resource method, it becomes the operation's `externalDocs` (MP OpenAPI 4.2). [.tag-new]#NEW#
+| ✅
+
+| `@Header`
+| Describes a response or encoding header, including its `example` and `examples` (MP OpenAPI 4.2). [.tag-new]#NEW#
+| ✅
+
+| `@SchemaProperty`
+| Describes one property inside `@Schema(properties = ...)`, with every attribute it shares with `@Schema` — see xref:#annotation-values[How annotation values are mapped]. [.tag-new]#NEW#
 | ✅
 
 | `@Components`
@@ -119,6 +131,31 @@ Apart from `io.vidocq.grimm.internal.reader`, the `io.vidocq.grimm.internal.*` p
 |===
 
 JAX-RS annotations consumed by the scanner: `@Path`, `@GET`, `@POST`, `@PUT`, `@DELETE`, `@PATCH`, `@HEAD`, `@OPTIONS`, `@Produces`, `@Consumes`, `@PathParam`, `@QueryParam`, `@HeaderParam`, `@CookieParam`, `@FormParam`, `@MatrixParam`, `@DefaultValue`, `@ApplicationPath`.
+
+[#annotation-values]
+== How annotation values are mapped [.tag-new]#NEW#
+
+These rules follow the MicroProfile OpenAPI 4.2 Javadoc of each attribute.
+
+* **`@Schema` and `@SchemaProperty` map the same attributes.** Every attribute the two annotations share is applied by one mapping: bounds and their exclusive forms, `multipleOf`, lengths, `pattern`, item and property counts, `requiredProperties`, `nullable`, `readOnly`, `writeOnly`, `deprecated`, `enumeration`, `defaultValue`, `constValue`, `examples`, `externalDocs` (with its extensions), composition (`allOf`, `anyOf`, `oneOf`, `not`), the discriminator, and the JSON Schema 2020-12 keywords (`if`/`then`/`else`, `contains`, `prefixItems`, `patternProperties`, `propertyNames`, `dependentSchemas`, `contentSchema`, …). When a field's `@Schema` and the class's `@Schema(properties = @SchemaProperty(...))` both describe a property, the `@SchemaProperty` is applied last, attribute by attribute.
+* **An attribute left at its default writes nothing.** A schema no longer carries `minItems: 2147483647`, `maxItems: -2147483648` or `maxProperties: 0` because some other attribute was set; an explicit value, `0` included, is written.
+* **A partial `@Schema` counts.** On a parameter, a request body, a header or a content entry, a `@Schema` that sets any attribute (only `minimum`, only `examples`, only `oneOf`, …) is applied on top of the inferred schema. An empty `@Schema()` still gives the inferred schema.
+* **`constValue` and `examples` are JSON unless the type is `STRING`.** With `type = STRING` the value is the literal string; with any other type it is parsed as JSON, so `@Schema(type = INTEGER, examples = "1")` gives the number `1` and an object example is an object. A value that is not valid JSON stays the string as written. The deprecated `example` attribute is always copied as written.
+* **`@Extension(parseValue = true)` uses a strict JSON reader** — the reader of static files. `null`, `1e3`, escaped quotes and nested arrays come out as JSON says. Lenient forms that are not JSON (`{a: 1}`, single quotes, `TRUE`, `1L`) stay strings, and a JSON `null` adds no extension.
+* **`@Digits` gives `multipleOf` or `pattern`** (MicroProfile OpenAPI 4.2), when `mp.openapi.scan.beanvalidation` is not `false`: `multipleOf` of `10^-fraction` on a `number` schema, a `pattern` such as `^-?\d{1,5}(\.\d{1,2})?$` on a `string` schema, nothing on an `integer` schema. A value set explicitly on the schema is never overridden. Decimal values are written as plain decimals in JSON and YAML (`0.0000000001`, not `1E-10`), so a YAML 1.1 parser still reads them as numbers.
+* **A `@DiscriminatorMapping` or `@PatternProperty` with no `schema`** (left at `Void.class`) is skipped instead of producing an empty entry.
+
+[#static-documents]
+== Static documents and schema overrides [.tag-new]#NEW#
+
+A static file (`META-INF/openapi.yaml`, `.yml`, `.json`), the value of an `mp.openapi.schema.<FQCN>` key and the `$$GrimmModel` fragments of the annotation processor are all read by the same mapper.
+
+* **Standard keywords get their model type.** `minimum`, `maxLength`, `not`, `discriminator`, `xml`, `externalDocs`, `allOf`, … become typed `Schema` properties, nested schemas included, and `true`/`false` subschemas become boolean schemas. They are no longer stored as extensions, so an `OASFilter` that clears a schema's extensions keeps them. A value of another JSON type is kept as written, for an alternative dialect.
+* **Unknown keywords are extensions** (MicroProfile OpenAPI 4.2). A `Schema` keeps any property it does not know, `x-` or not, and writes it back. `Schema.getAll()` lists every property set, standard ones and `$ref` included, under its JSON name, and `Schema.setAll(...)` clears them all before setting the new ones, as the 4.2 Javadoc says.
+* **`$ref` is kept as written** on schemas and on the referenceable objects — parameters, request bodies and responses (whose `$ref` used to be dropped), callbacks (whose `$ref` used to be read as a callback expression), path items: a document reference such as `Pet.yaml` is not expanded into `#/components/...`, in the static file and when models merge.
+* **Every field is read.** A parameter keeps `style`, `explode`, `allowReserved`, `deprecated`, `allowEmptyValue`, `example`, `examples` and `content`; a header keeps `style`, `explode`, `content`, `example` and `examples`; a discriminator keeps its `x-` keys. `type: "null"` (alone or in a type array) is `SchemaType.NULL`, and a type name that is not a JSON Schema type is kept as written.
+* **YAML numbers follow YAML 1.2**: `+1`, `1e3`, `.5`, `0o17` and `0x1F` are numbers; integers beyond a `long` are read as `BigInteger`.
+* **In `mp.openapi.schema.<FQCN>`**, the historical `ref` key is accepted at every level of the schema, `$defs` and `definitions` included, and expands a short name to `#/components/schemas/<name>`. An explicit `$ref` is kept as written, as in a static file.
 
 == MicroProfile Config keys
 

@@ -10,6 +10,7 @@ Grimm refuses per-request classpath scanning: all the work happens once, at CDI 
 
 `grimm-cdi-vauban` is the integration layer: it plugs `grimm-core` into the Vauban Build Compatible Extension, exposes the `/openapi` resource, and supplies the `Supplier<OpenAPI>` consumed by downstream tools.
 
+[#build-pipeline]
 == Build pipeline
 
 Six steps, executed once when the container activates (`ModelBuilder` in `grimm-core`), with the result stored in `GrimmModelCache`:
@@ -35,8 +36,8 @@ flowchart LR
 
 . **`ModelReaderInvoker`** — if `mp.openapi.model.reader` is set, instantiates the class (CDI lookup preferred, no-arg constructor as fallback) and calls `buildModel()`: the starting model.
 . **`StaticFileReader`** — searches for `META-INF/openapi.yaml`, `.yml`, then `.json`. Read through the current classloader. Returns `Optional<OpenAPI>`.
-. **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`).
-. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both).
+. **Annotation source** — compile-time `$$GrimmModel` fragments contributed by `grimm-processor` are folded in first (`ContributionRegistry` + `FragmentMerger`); `AnnotationScanner` then walks the remaining application classes recorded by the BCE — `@Path` resources as well as `@Schema` POJOs and the `Application` subclass — and builds a partial `OpenAPI`. The output is tagged by `AnnotationSource` (sealed sub-type of `ModelSource`). [.tag-new]#NEW# The processor leaves to the runtime scan any class with a `jakarta.validation.constraints.*` or `javax.validation.constraints.*` annotation on an operation parameter, as it does for the other constructs outside its subset, so the constraints the scan derives (`minimum`, `pattern`, …) reach the document.
+. **`ModelMerger`** — merges the three `ModelSource` instances (sealed: `StaticFileSource`, `ReaderSource`, `AnnotationSource`) into a single `OpenAPI`, with the spec priority annotations > static file > reader (the static file overrides the conflicting elements of the reader model, the annotations those of both). [.tag-new]#NEW# The reader is invoked before the static file is read, and the merge order follows (it was static file, then reader, up to {release-version}); see xref:concepts.adoc#how-the-sources-combine[How the sources combine].
 . **`ConfigApplier`** — applies the configuration overrides on the merged document: `mp.openapi.servers`, `mp.openapi.servers.path.<path>`, `mp.openapi.servers.operation.<operationId>`, and the `mp.openapi.schema.<FQCN>` schema overrides (registered before the scan so that references resolve, applied here).
 . **`FilterInvoker`** — if `mp.openapi.filter` is set, loads the `OASFilter` (CDI lookup or no-arg constructor) and walks it across the tree. The filter is dispatched recursively via a typed visitor that `switch`es on the sealed model types.
 
