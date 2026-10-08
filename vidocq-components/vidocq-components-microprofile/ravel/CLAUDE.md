@@ -63,7 +63,7 @@ ravel-core         ← Implementation: ConfigSources (SysProps/EnvVars/Propertie
                      built-in and SPI type converters, property expressions, config profiles
 ravel-cdi-vauban   ← CDI Vauban integration: @Inject @ConfigProperty, BCE, Optional injection
 ravel-bench        ← JMH: comparison Smallrye Config / Helidon Config, lookup throughput, overhead
-ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (OUT of reactor)
+ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (in reactor, `tck` profile only)
 ```
 
 **Lookup flow:**
@@ -150,8 +150,8 @@ Concrete rules:
 
 ## TCK — Technology Compatibility Kit
 
-MicroProfile Config TCK — run in the `ravel-tck` module (in-reactor, `tck` Maven profile)
-to work around ShrinkWrap Maven Resolver 3.3:
+MicroProfile Config TCK — run in the `ravel-tck` module, in the reactor but listed only
+under the `tck` Maven profile of the root `pom.xml`, so a plain build never pulls the TCK:
 
 | TCK | Artifact | Target |
 |---|---|---|
@@ -159,9 +159,12 @@ to work around ShrinkWrap Maven Resolver 3.3:
 
 The `run-official-tck-mp-config-3.1.sh` script:
 
-- supports `smoke` (default), `all`, and targeted `-Dtest=TestName`;
-- installs the reactor locally (`mvn install -DskipTests`) before invocation;
-- produces a `target/tck-report.txt` report with the PASS/FAIL/SKIP score.
+- supports `smoke` (default: `RavelTckSmokeTest`, the `smoke` profile of `ravel-tck`, outside
+  Arquillian), `all` (the official suite, `tck-official` profile), and targeted `-Dtest=TestName`;
+- installs `ravel-api`, `ravel-core` and `ravel-cdi-vauban` locally (`mvn install -DskipTests`)
+  before invocation;
+- produces a `ravel-tck/target/tck-report.txt` report with the Maven test counts and PASS/FAIL,
+  and exits with Maven's status.
 
 **Release discipline:**
 
