@@ -1,0 +1,31 @@
+= What's new
+:description: Everything that changed in Humboldt since the {release-version} release — MicroProfile Telemetry 2.2 on OpenTelemetry 1.66, richer log records, a stricter OTLP/JSON encoder, and OpenTelemetry jars on the module path.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== MicroProfile Telemetry 2.2 and OpenTelemetry 1.66
+
+* **MicroProfile Telemetry 2.2** — Humboldt implements Telemetry 2.2 and passes the official TCK 2.2-RC3, 85/85 across tracing, metrics and logs (humboldt#17). The 2.2 final TCK is not on Maven Central yet. xref:tck.adoc#current-status[TCK — current status].
+* **OpenTelemetry 1.66.0** — the repackaged API and context move from 1.39 to 1.66.0, `opentelemetry-instrumentation-annotations` from 2.7.0 to 2.31.1, and the semantic conventions of the TCK harness from 1.27.0-alpha to 1.44.0. OpenTelemetry SDK, autoconfigure SPI or exporter jars you add next to `humboldt-otel-interop` belong to the 1.66 line. xref:reference.adoc#compatibility[Compatibility], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+* **`code.function.name` on `@WithSpan` spans** — every span the interceptor opens carries `<binary class name>.<method>`, which Telemetry 2.2 makes mandatory. xref:usage.adoc#with-span[Instrument a method with `@WithSpan`].
+* **`@WithSpan(inheritContext = false)`** — the span starts a new trace with `Context.root()` as its parent, and the method runs in that root context: the caller's context and baggage are not visible inside it. The default, `inheritContext = true`, is unchanged. xref:usage.adoc#with-span[Instrument a method with `@WithSpan`].
+
+== Logs and exceptions
+
+* **Exceptions and event names on log records** — `LogRecordBuilder.setException(Throwable)` and `setEventName(String)` used to be dropped silently (the API's no-op defaults). The exception now gives `exception.type`, `exception.message` and `exception.stacktrace`; the event name goes to the OTLP `eventName` field and the `logging` exporter's output. The JUL bridge passes a JUL record's exception too. xref:usage.adoc#log-record-content[What a log record carries].
+* **Structured log bodies** — `setBody(Value)` keeps a map or an array as a structured OTLP `AnyValue`, where it used to be flattened into a JSON string. `LogRecordData` gains the `bodyValue` and `eventName` components; the earlier constructors are kept. xref:usage.adoc#log-record-content[What a log record carries].
+* **An empty log body is kept** — `setBody("")` exports `"body":{"stringValue":""}`, as the OpenTelemetry SDK does, where it used to export no body. xref:usage.adoc#log-record-content[What a log record carries], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].
+* **`exception.type` is the canonical class name on spans too** — `Span.recordException` writes `com.acme.Outer.Nested`, not `com.acme.Outer$Nested`, like the new log-side `setException` and the OpenTelemetry SDK; additional attributes passed to `recordException` now override the derived ones. A backend query on the binary name of a nested exception class needs updating. xref:reference.adoc#exception-attributes[Exception attributes].
+
+== OTLP/JSON exporter
+
+* **Double points and synchronous gauges** — double counters, double up-down counters and double gauges used to be exported with an empty `dataPoints` array, and a synchronous gauge with no data at all; both are now encoded. xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
+* **Non-finite doubles** — `NaN` and infinities are written as the JSON strings `"NaN"`, `"Infinity"`, `"-Infinity"` instead of making the payload invalid. xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
+* **Complex attributes** — a `Value` attribute (`setAttribute(String, Value)`) is encoded as a full `AnyValue`, where it used to be exported as `{}`. xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
+* **A metric batch that cannot be encoded fails** — a data point that does not match its metric used to vanish from the export. The batch now fails: nothing is sent, the exporter returns a failed result and logs the first such batch at `WARNING`. xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
+
+== Java modules
+
+* **OpenTelemetry SDK and exporter jars on the module path** — the OTLP exporters failed on the module path with an `IllegalAccessError` or a `ServiceConfigurationError`. The repackaged `io.opentelemetry.api` and `io.opentelemetry.context` now export the internal packages the 1.66 stable jars use, qualified to exactly those modules; `humboldt-otel-interop` extends these exports to the layer of each OpenTelemetry provider it discovers, and the default `ComponentLoader` declares the `uses` of a service before loading it, so an exporter finds its sender and its compressor. One limit remains: when `humboldt-otel-interop` sits in a child layer of the two API modules, the exports cannot be extended; keep it in the same layer, as the Vidocq runtime does, or add `--add-exports` by hand. Incubating (`-alpha`) artifacts still need `--add-exports`. xref:reference.adoc#otel-jars-on-the-module-path[Java modules — OpenTelemetry jars on the module path].
+* **`humboldt-rest` reads Cyrano's Rest Client API module** — the descriptor now requires `io.vidocq.cyrano.mp.rest.client.api` (statically) instead of the automatic module `microprofile.rest.client.api`, which Vidocq never ships, so the Rest Client listener works on a strict module path and in a jlink image (humboldt#18). xref:reference.adoc#java-modules[Java modules], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].

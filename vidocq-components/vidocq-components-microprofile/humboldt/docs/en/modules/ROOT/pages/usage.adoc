@@ -4,6 +4,7 @@
 [.lead]
 This page gathers common patterns: instrumenting a business method, exposing an application metric, propagating baggage across an outbound call, tuning sampling, configuring an OTLP exporter to a Collector. All examples assume a runtime auto-configured through `HumboldtAutoConfigure.configure()` (cf. xref:getting-started.adoc[Getting started]).
 
+[#with-span]
 == Instrument a method with `@WithSpan`
 
 The standard OpenTelemetry annotation `@WithSpan` (from `opentelemetry-instrumentation-annotations`) is intercepted by `humboldt-cdi` through `HumboldtBuildCompatibleExtension` (CDI 4.1 Lite, Vauban-compatible).
@@ -29,8 +30,8 @@ Behavior of `WithSpanInterceptor`:
 
 * Annotation resolution: method overrides class.
 * Default name (`@WithSpan` without `value`): `Class.method`.
-* Every span carries the `code.function.name` attribute (`<binary class name>.<method>`, for example `com.acme.PaymentService.charge`), mandatory since MicroProfile Telemetry 2.2.
-* Parent: the current context by default. With `@WithSpan(inheritContext = false)` the span uses `Context.root()` as its parent: it starts a new trace, and the method runs without the caller's context (the caller's baggage is not visible inside it).
+* Every span carries the `code.function.name` attribute (`<binary class name>.<method>`, for example `com.acme.PaymentService.charge`), mandatory since MicroProfile Telemetry 2.2. [.tag-new]#NEW#
+* Parent: the current context by default. With `@WithSpan(inheritContext = false)` the span uses `Context.root()` as its parent: it starts a new trace, and the method runs without the caller's context (the caller's baggage is not visible inside it). [.tag-new]#NEW#
 * `Tracer` resolved via `GlobalOpenTelemetry.get()` (overridable for tests).
 * On exception: `span.recordException(ex)` + `span.setStatus(ERROR)` then re-throw.
 * Priority: `Interceptor.Priority.APPLICATION + 1`.
@@ -174,6 +175,7 @@ latency.record(durationMs);
 
 `PeriodicMetricReader` collects every 60 s (configurable via `OTEL_METRIC_EXPORT_INTERVAL`).
 
+[#otel-logs]
 == OTel logs
 
 `humboldt-sdk-log` exposes `SdkLoggerProvider`. The JUL bridge (`HumboldtJulHandler`, shipped in M5b) is installed automatically on the root JUL logger by `HumboldtAutoConfigure` whenever the log pipeline is active, so `java.util.logging` records flow to the OTel pipeline out of the box. There is no SLF4J bridge. Direct emission is also possible:
@@ -192,6 +194,18 @@ logger.logRecordBuilder()
 ----
 
 `LogRecordBuilder` automatically captures the current `Span` (correlation `trace_id` ↔ `span_id`).
+
+[#log-record-content]
+=== What a log record carries [.tag-new]#NEW#
+
+The builder keeps everything the OpenTelemetry 1.66 log API lets you set:
+
+* **Exceptions** — `setException(Throwable)` adds `exception.type` (the canonical class name), `exception.message` and `exception.stacktrace`, as the OpenTelemetry SDK does. An attribute already set on the builder under one of those keys is kept; a `null` value adds nothing. The JUL bridge passes the exception of a `java.util.logging.LogRecord` (`getThrown()`) the same way.
+* **Event names** — `setEventName(String)` is kept on the record, written to the OTLP `eventName` field, and printed by the `logging` exporter.
+* **Structured bodies** — `setBody(Value)` keeps the value: a map or an array reaches the OTLP exporter as a structured `AnyValue` (`kvlistValue`, `arrayValue`, …), not as a JSON string inside a `stringValue`. The `logging` exporter prints the body's string form.
+* **Empty bodies** — `setBody("")` and `setBody(Value.of(""))` keep an empty string body, exported as `"body":{"stringValue":""}`, as the OpenTelemetry SDK does. Only a record whose body was never set has no body.
+
+`LogRecordData` gains two components for this, `bodyValue` (the body as set, `null` when there is none; `body()` stays its string form) and `eventName` (empty for a plain log record). The earlier constructors are kept, so code that builds records directly still compiles and links.
 
 == Sampling — tuning throughput
 

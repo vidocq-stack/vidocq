@@ -77,6 +77,7 @@ This page consolidates Humboldt's public surface: artifacts to declare, exported
 
 All versions are `{project-version}`.
 
+[#java-modules]
 == Java modules
 
 [cols="2,3"]
@@ -111,7 +112,7 @@ All versions are `{project-version}`.
 | `@WithSpan` annotation (re-exported), `WithSpanInterceptor`, `HumboldtBuildCompatibleExtension`, Tracer/Meter/Logger producers.
 
 | `io.vidocq.humboldt.rest`
-| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`).
+| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`). Reads the MicroProfile Rest Client API through `requires static io.vidocq.cyrano.mp.rest.client.api`, the module Vidocq ships (`io.vidocq.cyrano:cyrano-mp-rest-client-api`), for `HumboldtMpRestClientListener`; it no longer names the automatic module `microprofile.rest.client.api` [.tag-new]#NEW#.
 
 | `io.vidocq.humboldt.runtime`
 | `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
@@ -123,7 +124,8 @@ All versions are `{project-version}`.
 | Java modules of the public OTel artifacts, rebundled with explicit `module-info`.
 |===
 
-Upstream, the OpenTelemetry jars are automatic modules, which export every package. The rebundled modules differ in three ways, so that the OpenTelemetry SDK and OTLP exporter jars can run next to them on the module path:
+[#otel-jars-on-the-module-path]
+Upstream, the OpenTelemetry jars are automatic modules, which export every package. The rebundled modules differ in three ways, so that the OpenTelemetry SDK and OTLP exporter jars can run next to them on the module path [.tag-new]#NEW#:
 
 * Packages that are not API but that the OpenTelemetry jars use across jars are exported, each only to the OpenTelemetry 1.66 stable modules whose classes reference it (found with `jdeps`; the lists are in the two `src/main/moditect/module-info.java` descriptors): `io.opentelemetry.api.internal`, `io.opentelemetry.api.impl` and `io.opentelemetry.api.trace.propagation.internal` from `io.opentelemetry.api`, `io.opentelemetry.context.internal.shaded` from `io.opentelemetry.context`.
 * A qualified export reaches only target modules of the same module layer or of a parent layer. When `humboldt-otel-interop` discovers an OpenTelemetry provider defined in another layer (a child layer of Humboldt's modules, for instance), the two modules add the exports their descriptors name to the modules of that layer, at run time. An OpenTelemetry component that the application builds itself, outside that discovery, does not get them. Limitation: when `humboldt-otel-interop` itself sits in a child layer of `io.opentelemetry.api` / `io.opentelemetry.context`, it cannot call the layer helper (the package is exported to the interop module by name, which reaches only the same layer or a parent layer). The provider is still kept, but its layer's exports are not extended and the exporter can later fail with an `IllegalAccessError`; keep interop in the same layer as the two API modules (as the Vidocq runtime does), or add the `--add-exports` by hand.
@@ -280,6 +282,27 @@ OTel HTTP conventions 1.27+ are applied automatically by `humboldt-rest` on the 
 
 For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
 
+[#exception-attributes]
+== Exception attributes [.tag-new]#NEW#
+
+`Span.recordException(Throwable)` and the log API's `LogRecordBuilder.setException(Throwable)` derive the same attributes, as the OpenTelemetry SDK 1.66 does:
+
+[cols="2,3"]
+|===
+| Attribute | Value
+
+| `exception.type`
+| The exception's canonical class name (`com.acme.Outer.Nested`, not the binary name `com.acme.Outer$Nested`). A class without a canonical name (anonymous or local) falls back to its binary name, where the OpenTelemetry SDK leaves the attribute out.
+
+| `exception.message`
+| `Throwable.getMessage()`, when not `null`.
+
+| `exception.stacktrace`
+| The printed stack trace.
+|===
+
+On a span, the additional attributes passed to `recordException(Throwable, Attributes)` are applied last and override the derived ones. On a log record, an attribute already set on the builder under one of these keys is kept. `@WithSpan` records the exception a method throws through `recordException` (see xref:usage.adoc#with-span[Instrument a method with `@WithSpan`]); the JUL bridge passes the exception of a JUL record to `setException` (see xref:usage.adoc#log-record-content[What a log record carries]).
+
 == Registered propagators
 
 `AutoConfiguredHumboldt.getPropagators()` returns by default a composite `TextMapPropagator`:
@@ -308,9 +331,22 @@ No B3 by default. With the optional `humboldt-otel-interop` bridge on the module
 | No processor registered — signal disabled.
 |===
 
+[#otlp-json-encoding]
+=== OTLP/JSON encoding [.tag-new]#NEW#
+
+The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.66 JSON marshalers do:
+
+* **Metrics** — sums and gauges carry their long points as `asInt` (a JSON string) and their double points as `asDouble`, so double counters, double up-down counters and double gauges are exported with their data points. A synchronous gauge (`InstrumentType.GAUGE`) is exported as a gauge, like an observable one.
+* **Non-finite doubles** — `NaN`, `+∞` and `-∞` are written as the strings `"NaN"`, `"Infinity"` and `"-Infinity"`, in attributes (plain, in arrays, nested in a `Value`), double points and histogram `sum`/`min`/`max`, since JSON has no literal for them.
+* **Complex attributes** — an attribute set through `setAttribute(String, Value)` on a span or a log record is encoded recursively: scalars as `stringValue`/`boolValue`/`intValue`/`doubleValue`, arrays as `arrayValue`, maps as `kvlistValue`, bytes as base64 `bytesValue`, and an empty value as an `AnyValue` with no field set.
+* **Log records** — structured bodies are encoded as `AnyValue`, and the event name as the `eventName` field (see xref:usage.adoc#log-record-content[What a log record carries]).
+* **A metric batch that cannot be encoded fails** — a data point that does not match its metric (a histogram point in a sum or a gauge, a number point in a histogram) or an instrument type with no OTLP encoding makes the batch fail instead of being dropped silently. The exporter sends nothing, returns a failed `CompletableResultCode`, and logs the first such batch at `WARNING` with the metric, its instrument type and the point type. `humboldt-sdk-metric` never produces such data; a `MetricData` built elsewhere may.
+
+[#compatibility]
 == Compatibility
 
 * Java 25 LTS minimum (compile and runtime).
+* OpenTelemetry API and context 1.66.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0 [.tag-new]#NEW#.
 * Maven 3.9.16 or later (Model 4.0.0 everywhere; the TCK runner is in-reactor behind the `tck` profile).
 * Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). CDI Full (Weld, OpenWebBeans) not tested.
 

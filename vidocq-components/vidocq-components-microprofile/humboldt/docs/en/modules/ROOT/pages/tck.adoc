@@ -20,6 +20,7 @@ TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 * Humboldt Arquillian adapter: `HumboldtDeployableContainer` (deploys through Vauban + Chappe + Cassini), `HumboldtCdiEnricher` (CDI bean injection into `@Test`), runtime hook `withExtraSpanExporter` to plug the TCK's `InMemorySpanExporter`.
 * The TCK imports its own copy of `io.opentelemetry:opentelemetry-sdk` for its internal fixtures — that is OK on the profile-gated runner; it does not pollute the production classpath.
 
+[#current-status]
 == Current status
 
 **M7 complete — 85/85 PASS.** The full official suite (tracing + metrics + logs, as composed by the `tck-official` profile) runs green:
@@ -28,7 +29,7 @@ TCK coordinates publicly confirmed on Maven Central (M7.1 audit, 2026-05-21).
 Tests run: 85, Failures: 0, Errors: 0, Skipped: 0
 ----
 
-On 2026-10-04 the TCK 2.2-RC3 ran 85/85 (`./run-official-tck-telemetry-2.2.sh all`, Temurin 25, Maven 3.9.16), including `code.function.name` on `@WithSpan` spans and `@WithSpan(inheritContext = false)`. History with the 2.1 TCK: first 85/85 on 2026-05-24, re-verified on 2026-06-01 and 2026-06-24 (`run-official-tck-telemetry-2.1.sh`, since renamed). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md].
+On 2026-10-04 the TCK 2.2-RC3 ran 85/85 (`./run-official-tck-telemetry-2.2.sh all`, Temurin 25, Maven 3.9.16), including `code.function.name` on `@WithSpan` spans and `@WithSpan(inheritContext = false)` [.tag-new]#NEW#. History with the 2.1 TCK: first 85/85 on 2026-05-24, re-verified on 2026-06-01 and 2026-06-24 (`run-official-tck-telemetry-2.1.sh`, since renamed). Every run is archived with its raw counters in `tck-runs/`; consolidated status lives in https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md[TCK.md].
 
 The road to green (M7b Arquillian adapter, M7c failure clusters — `@ArquillianResource URL` wiring, ShrinkWrap deployments, required CDI beans, commons-io conflicts) is preserved in the dated reports under `tck-runs/` for archaeology.
 

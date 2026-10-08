@@ -120,6 +120,17 @@ Recommendation: align on the standard OTel keys (`OTEL_*`) for portability. Humb
 * **No direct Jaeger exporter** — use the OTLP Collector as a proxy to Jaeger.
 * **SDK disabled by default** — per MP Telemetry 2.2, `OTEL_SDK_DISABLED` defaults to `true`: coming from the OTel Java SDK (opposite default), remember to export `OTEL_SDK_DISABLED=false` or nothing is emitted. To disable a single signal, use `OTEL_TRACES_EXPORTER=none` / `_METRICS_EXPORTER=none` / `_LOGS_EXPORTER=none`.
 
+[#upgrading-from-0-3-0]
+== Upgrading from Humboldt 0.3.0 [.tag-new]#NEW#
+
+Changes an application upgrading from Humboldt 0.3.0 may observe:
+
+* **OpenTelemetry 1.66** — the repackaged API and context move from 1.39 to 1.66.0, and `opentelemetry-instrumentation-annotations` from 2.7.0 to 2.31.1. If you supply OpenTelemetry SDK, autoconfigure SPI or exporter jars next to `humboldt-otel-interop`, move them to the 1.66 line. See xref:reference.adoc#compatibility[Compatibility].
+* **`exception.type` on spans is the canonical class name** — `com.acme.Outer.Nested` where 0.3.0 wrote `com.acme.Outer$Nested`, as the OpenTelemetry SDK does and as the new log-side `setException` does. Update any query or alert in your backend that matches the binary name of a nested exception class. See xref:reference.adoc#exception-attributes[Exception attributes].
+* **An empty log body is kept** — `setBody("")` used to export no body; it now exports `"body":{"stringValue":""}`. See xref:usage.adoc#log-record-content[What a log record carries].
+* **A metric batch the OTLP exporter cannot encode fails** — a data point that does not match its metric used to vanish from the export; the whole batch now fails, with one `WARNING`. See xref:reference.adoc#otlp-json-encoding[OTLP/JSON encoding].
+* **MicroProfile Rest Client API module** — `humboldt-rest` now reads `io.vidocq.cyrano.mp.rest.client.api`, brought by Cyrano, instead of the automatic module `microprofile.rest.client.api` of the upstream jar. The 0.3.0 descriptor named a module Vidocq never ships, so on a strict module path or in a jlink image the Rest Client listener could not read the API Cyrano provides; it now does, with no upstream `microprofile-rest-client-api` jar (humboldt#18). See xref:reference.adoc#java-modules[Java modules].
+
 == Migration checklist
 
 . [x] Remove `quarkus-opentelemetry` / `smallrye-opentelemetry` / `opentelemetry-sdk` / third-party exporters.
