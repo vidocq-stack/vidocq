@@ -10,7 +10,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-transactions` — Jakarta Transactions 2.0 (virtual-thread-native TM, `@Transactional`, `@TransactionScoped`). **Delivered — TCK smoke 5/5 PASS.**
 - `mansart-pool` — virtual-thread-native JDBC pool, zero-dep, optional. **Delivered.**
 - `mansart-validation` — Jakarta Validation 3.1 (Bean Validation), needed by `mansart-persistence` (spec §3.7) and usable standalone. **Planned — roadmap only**, see `mansart-validation/ROADMAP.md`. TCK runs out of the Vidocq reactor (`mansart-validation-tck`) and in it (`vidocq-runtime-tck-validation`, `tck` profile).
-- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0 to P7 delivered (TCK 1063 / 2135; remaining P7 gate errors depend on P10 XML mappings, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
+- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0 to P8 delivered: runtime/canonical metamodel, Criteria through the shared JPQL AST, entity graphs (TCK 2013 / 2135; 118 errors attributed to P9/P10/P11, see `mansart-persistence/TCK.md`). Plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`. Data remains frozen; incompatible Data-owned canonical plural fields require a maintainer decision.
 
 `mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; `mansart-persistence` through its own SQL AST and dialects (`mansart-jpa-dialect-*`, decision D4 in `mansart-persistence/ROADMAP.md`). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
@@ -49,7 +49,8 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 ## Conventions
 
 - PostgreSQL integration tests via **Testcontainers** in `<scope>test</scope>` only — never at runtime.
-- Generated metamodel under `target/generated-sources/annotations/`; generated classes are prefixed with `_` (JPA static metamodel convention) and annotated `@Generated`.
+- Generated Data metamodel under `target/generated-sources/annotations/`: `_Entity` is the Data DSL convention.
+  Standard JPA canonical classes use `Entity_`; both producers retain foreign canonical ownership rather than collide.
 - All generated queries go through the `mansart-data-dialect-spi` AST — never inline SQL in `mansart-data-core`.
 - Reproducible bugs → `BUG.md` (skill `/log-bug`). Performance measurements → `BENCH.md` (skill `/log-bench`).
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.

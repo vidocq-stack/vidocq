@@ -2,7 +2,7 @@
 :description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — entity operations, relationships, inheritance, JPQL, native query results and stored procedures are delivered; Criteria and the metamodel remain ahead (see the roadmap below).
+`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — milestones P0–P8 are delivered, including entity operations, relationships, inheritance, JPQL, native/stored queries, Criteria, the runtime/canonical metamodel and entity graphs. Container/schema, ORM XML and second-level cache/validation work remain.
 
 [NOTE]
 ====
@@ -38,11 +38,48 @@ Delivered:
 
 * P7 — JPQL selects, joins, predicates, map expressions, whole-embeddable comparison, correlated subqueries, `TREAT`, functions, constructors, bulk statements, named queries, locking, set operations and casts; native result mappings and stored procedures.
 
-The official PostgreSQL 17 TCK reports **1063 / 2135 passed**. The P7 gate has four XML-mapping-dependent errors
+The official PostgreSQL 17 TCK reports **2013 / 2135 passed**, 118 errors and four official skips.
+There are no P8-attributable gate errors. The P7 gate still has four XML-mapping-dependent errors
 (P10), no P7-attributable `core.query` errors, and one official skip. See
 link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters and attribution].
 
-Next: Criteria, the metamodel and entity graphs (P8).
+* P8 — runtime and canonical metamodel, Criteria selects/bulk statements/subqueries/joins, tuple and constructor results,
+  parameter identities, 3.2 temporal/set operations, entity graphs and fetch/load hints.
+  The dedicated official gate reports *924 passes, no failures/errors and one upstream skip / 925*.
+
+Next: container contracts and schema generation (P9), ORM XML (P10), second-level caching and validation (P11).
+
+== Metamodel, Criteria and entity graphs
+
+`EntityManagerFactory.getMetamodel()` exposes entity, mapped-superclass and embeddable types from the same entity
+model used by mapping and generated access. Identifiers, versions, inherited/declared attributes and plural/map
+key/value types retain their declaring type and Java type.
+
+`mansart-jpa-processor` also generates standard canonical `Book_` classes (§6.2.1.1), not Data's `_Book` classes.
+Their public volatile fields are populated through package-local application helpers invoked by the existing
+generated access provider. This works without additional entity exports/opens or a dependency on `java.compiler`.
+Incremental builds regenerate JPA-owned canonical output and preserve helpers for unchanged managed classes.
+Opaque canonical classes are populated with method handles on public static fields; already explicitly opened
+packages may use their existing private lookup permission. Entity state is never read or written reflectively;
+`getJavaMember()` supplies the reflective metadata required by the standard API.
+
+Criteria is a second frontend for the *same immutable JPQL AST, SQL dialect and virtual-thread execution path*.
+This includes correlated subqueries, association/entity joins, `TREAT`, map keys/list indexes, predicates, aggregates,
+cases, constructors/arrays/tuples and aliases, named/anonymous parameter expressions, bulk mutations and 3.2 set
+operations. Named queries registered from Criteria retain their AST and settings.
+
+Graph metadata validates attributes and key/value/subclass subgraphs against the metamodel.
+Named graphs are immutable recursive snapshots; entity-manager graph copies are mutable and independent.
+`jakarta.persistence.fetchgraph` / `jakarta.persistence.loadgraph` hints and typed 3.2 graph APIs are supported.
+The eager loader legally loads the required graph state; these hints do not guarantee lazy exclusion of other state.
+
+[IMPORTANT]
+====
+Data and JPA processors can run together in either order without duplicate canonical-class generation.
+JPA retains canonical output owned by another producer. The frozen Data producer still emits singular canonical
+fields for collections: those incompatible fields are diagnosed and cannot be populated.
+Reconciliation requires a maintainer decision in the Data workstream; P8 does not modify delivered Data.
+====
 
 == Inheritance
 

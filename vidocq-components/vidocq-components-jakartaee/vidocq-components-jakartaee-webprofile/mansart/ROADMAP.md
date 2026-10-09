@@ -12,7 +12,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 | `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
 | `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
-| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — P0 to P7 delivered (TCK 1063 / 2135; the remaining P7-gate errors depend on P10 XML mappings), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
+| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — P0 to P8 delivered (TCK 2013 / 2135; 118 P9/P10/P11 errors, 4 official skips), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 | `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ⏳ planned — needed by `mansart-persistence` P11, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
 
@@ -84,9 +84,10 @@ Scope:
 - [x] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations (loaded eagerly; `LAZY` remains a hint)
 - [x] Required `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL `TYPE` (P6);
       optional `TABLE_PER_CLASS` explicitly refused, decision D5 open
-- [ ] Criteria API / metamodel (P8)
+- [x] Runtime/canonical metamodel, Criteria API through the shared JPQL AST, entity graphs (P8);
+      frozen Data-owned incompatible canonical plural fields remain a producer-reconciliation boundary
 - [ ] Optional L2 cache (homegrown, opt-in — no external cache library)
-- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (1063 / 2135 passed)
+- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (2013 / 2135 passed)
 - [ ] Jakarta Persistence 3.2 certification (P12)
 
 ### M8 — Performance & footprint (TBD)

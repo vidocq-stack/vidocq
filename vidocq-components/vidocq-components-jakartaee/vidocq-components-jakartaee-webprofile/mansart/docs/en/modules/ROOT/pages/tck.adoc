@@ -47,21 +47,28 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
-| 1063
-| 🚧 P0–P7 delivered. PostgreSQL 17, 0 failures, 1068 errors and 4 official skips; remaining P7 gate errors depend on P10 XML mappings. See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 2013
+| 🚧 P0–P8 delivered. Temurin 25.0.4+7-LTS, PostgreSQL 17, 0 failures, 118 errors and 4 official skips. Remaining blockers: P9 schema/container (28), P10 XML (78), P11 cache (12). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
 
 Runner: `mansart-persistence/mansart-jpa-tck`, out of the reactor, using the official unmodified 3.2.1 suite
 and PostgreSQL 17 DDL.
-The P7 full run passes **1063 tests**; compared test by test with the P6 baseline (1005 passes), 58 tests newly pass
-with no regression. Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
+The P8 full run passes **2013 tests**; compared test by test with the preserved P7 baseline (1063 passes),
+**950 tests newly pass**, with no regression or added/missing tests. This includes one earlier converted-literal
+query defect exposed and fixed during attribution, not later-milestone implementation.
+Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
 The focused P7 gates total 307 / 312 passed, 4 XML-mapping-dependent errors and 1 skipped. `core.query` reports
 244 / 245 passed and has no P7-attributable failure. The four errors are the two native constructor-result tests whose
 entity is declared in ORM XML and two stored-procedure tests that override metadata in ORM XML (P10).
-Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Criteria/metamodel/graphs, schema
-generation, XML, and caching/validation remain ahead.
+The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
+metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
+The clean runtime/processor/module-path reactor reports **470 passing tests**, including populated canonical fields
+in entity packages neither exported nor opened to the provider.
+Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Schema/container contracts, XML,
+and caching/validation remain ahead. Data's incompatible canonical plural field kinds need a maintainer-approved
+producer reconciliation; Data is unchanged. This is not full Jakarta Persistence certification.
 
 [source,bash]
 ----

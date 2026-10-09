@@ -2,6 +2,14 @@
 
 Contributor guidance for agents working on this repository. See also the companion `CLAUDE.md` file.
 
+## Persistence implementation
+
+Jakarta Persistence milestones P0–P8 are delivered. Read `mansart-persistence/AGENTS.md`,
+`ROADMAP.md` and `TCK.md` before changes. Criteria and JPQL share the same AST and SQL execution path;
+canonical `Entity_` initialization uses application-generated access providers without extra opens.
+Jakarta Data remains delivered and frozen: do not overwrite its canonical output or alter its producer
+to reconcile plural field kinds without a maintainer decision. The full TCK is not yet certified.
+
 ## Documentation (Antora) conventions
 
 The project documentation lives in `docs/en` as an Antora component and is
