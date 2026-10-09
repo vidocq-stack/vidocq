@@ -433,3 +433,20 @@
   `code.function.name`. A passing TCK on a pull request therefore proved nothing about those modules.
 - **Fix**: `<humboldt.version>${project.version}</humboldt.version>`. Same reproduction: every Humboldt
   artifact resolves at `0.4.0-SIMCI`. A local build is unchanged (`0.4.0-SNAPSHOT`).
+
+## BUG-20261009-01 — `@WithSpan` and the server filters are not discovered under Weld SE
+
+- **Date**: 2026-10-09
+- **Status**: FIXED (branch `fix/23-bean-archives`, 2026-10-09)
+- **Component**: humboldt-cdi, humboldt-rest
+- **Affected**: any CDI container that does not scan implicit bean archives (Weld SE by default)
+- **Symptom**: outside Vauban, a `@WithSpan` method opens no span, `@Inject Tracer` is unsatisfied, and the
+  server request/response filters and the span finalizer are not registered as CDI beans. No error is reported.
+- **Minimal reproduction**: `jar tf humboldt-cdi-*.jar | grep beans.xml` and the same for `humboldt-rest`: no
+  `META-INF/beans.xml`.
+- **Cause**: both jars were implicit bean archives. Vauban discovers their beans anyway, so every test and the
+  TCK, which run on Vauban, hid the gap (humboldt#23, umbrella Vidocq/vidocq-workspace#15).
+- **Fix**: both jars ship `META-INF/beans.xml` with `bean-discovery-mode="annotated"`; every class they need
+  discovered already carries a bean-defining annotation (`@Interceptor`, `@ApplicationScoped`, `@Dependent`).
+  `BeanArchiveTest` in each module pins the file; it fails on `main` with `missing target/classes/META-INF/beans.xml`.
+  A Weld SE and an OpenLiberty integration test follow in humboldt#23.

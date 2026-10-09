@@ -135,6 +135,11 @@ A module-layer test checks the result with `opentelemetry-exporter-otlp` 1.66 an
 
 `io.vidocq.humboldt.internal.*` packages are never exported. Any direct access fails with a clear Java Modules crash.
 
+[#bean-archives]
+=== Bean archives [.tag-new]#NEW#
+
+`humboldt-cdi` and `humboldt-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@WithSpan` interceptor, the telemetry producers (`Tracer`, `Meter`, `Span`, ...), the server request and response filters and the span finalizer. Without it, `@WithSpan` did nothing there, and no error was reported (BUG-20261009-01).
+
 == Configuration keys
 
 Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`). Env vars take priority.
