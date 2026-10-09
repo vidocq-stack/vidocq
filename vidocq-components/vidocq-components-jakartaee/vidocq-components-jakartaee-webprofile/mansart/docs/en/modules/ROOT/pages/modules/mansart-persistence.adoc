@@ -2,7 +2,7 @@
 :description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — entity operations, relationships, inheritance and the main JPQL query path are delivered; Criteria and the metamodel remain ahead (see the roadmap below).
+`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — entity operations, relationships, inheritance, JPQL, native query results and stored procedures are delivered; Criteria and the metamodel remain ahead (see the roadmap below).
 
 [NOTE]
 ====
@@ -36,9 +36,13 @@ Delivered:
 
 * P6 — default and explicit `SINGLE_TABLE`, required `JOINED`, discriminator metadata and values, abstract entities and mapped superclasses, polymorphic loading and shared identity, JPQL polymorphic selection and `TYPE`, including joined bulk mutations.
 
-* P7 slices 1–4 — JPQL selects, joins, predicates, functions, aggregates, constructors, subqueries, parameters, bulk statements, named queries, locking, set operations and casts. Native result mappings are partly implemented; stored procedures remain ahead.
+* P7 — JPQL selects, joins, predicates, map expressions, whole-embeddable comparison, correlated subqueries, `TREAT`, functions, constructors, bulk statements, named queries, locking, set operations and casts; native result mappings and stored procedures.
 
-Next: finish native query results and stored procedures (P7), then Criteria and the metamodel (P8).
+The official PostgreSQL 17 TCK reports **1063 / 2135 passed**. The P7 gate has four XML-mapping-dependent errors
+(P10), no P7-attributable `core.query` errors, and one official skip. See
+link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters and attribution].
+
+Next: Criteria, the metamodel and entity graphs (P8).
 
 == Inheritance
 

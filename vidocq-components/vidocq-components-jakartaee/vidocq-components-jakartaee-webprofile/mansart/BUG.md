@@ -357,3 +357,68 @@ Two aligned changes: (1) `MansartMetamodelWriter` should read `@Enumerated` and 
 - `EnumStorageTest` (processor, runtime builder, H2 column contents, derived query on an ORDINAL column), failing
   first. Reactor 312 tests; Jakarta Data TCK 73/73, the same as main.
 
+
+---
+
+## MANSART-008 — `StoredProcedureQuery` lifecycle: single execution, stale/unsafe results, leaks on failure
+
+- **Date**: 2026-10-09 (parent review of the uncommitted P7 `StoredProcedureQueryImpl`, branch `persistence-work`)
+- **Status**: FIXED 2026-10-09 (uncommitted, branch `persistence-work`)
+- **Severity**: medium (API-contract violations; none surfaced by the official TCK at 1063 / 2135)
+
+### Symptom
+`mansart-jpa-core` `io.vidocq.mansart.jpa.core.query.StoredProcedureQueryImpl` (H2, `StoredProcedureQueryTest`):
+1. a second `execute()` → `IllegalStateException`; `setParameter` after an execution → `IllegalArgumentException`;
+   a failed call left the query "executed" (not retryable);
+2. `setParameter(…)` and `getParameter(int|String, Class)` on a closed entity manager → `IllegalArgumentException`
+   instead of `IllegalStateException`; `getParameterValue(Parameter)` of an unbound `IN` → `null` instead of
+   `IllegalStateException`;
+3. `setFirstResult(1)` without `setMaxResults` → `IllegalArgumentException: fromIndex(1) > toIndex(-2147483648)`
+   (`first + Integer.MAX_VALUE` overflow);
+4. a procedure returning a `null` scalar → `NullPointerException` (`List.copyOf`);
+5. `getResultList()` when the pending result is not a result set → `[]` (javadoc: `null`); `getSingleResult()`
+   then → `NoResultException` (javadoc: `null`);
+6. an unbound trailing `IN` → `IllegalStateException`, although §3.11.12 says parameters with database defaults
+   need no binding;
+7. temporal bindings stored the converted `java.sql.*` value (so `getParameterValue` did not return the bound
+   `Calendar`), rejected a `java.util.Date` for a `java.sql.Date` parameter, and `setNull` used the registered
+   type rather than the temporal type;
+8. `closeStatement()` swallowed `SQLException`, and a mapper/runtime exception between `prepareCall` and
+   `closeStatement()` leaked the `CallableStatement` (it was an instance field).
+
+### Minimal repro
+```java
+em.runWithConnection(c -> c.createStatement().execute(
+    "CREATE ALIAS ADD_ONE AS 'int addOne(int value) { return value + 1; }'"));
+var q = em.createStoredProcedureQuery("ADD_ONE", Integer.class);
+q.registerStoredProcedureParameter(1, Integer.class, ParameterMode.IN);
+q.setParameter(1, 41).execute();
+q.setParameter(1, 9);           // IllegalArgumentException: The parameter cannot be bound: 1
+```
+
+### Cause
+The first P7 implementation modelled a one-shot JDBC `CallableStatement` (kept open as a field) instead of the
+reusable `Query` contract, and copied `NativeQuery` helpers (`List.copyOf`, `first + max`) unchanged.
+
+### Fix (2026-10-09)
+- `execute()` always calls the procedure with the current bindings, replacing the previous results/outputs; a
+  failed call leaves the query unexecuted and retryable. Binding or registering a parameter makes the query
+  unexecuted, so `getResultList`/`getSingleResult[OrNull]`/`executeUpdate` (which execute only an unexecuted query,
+  §3.11.12) never read results of stale inputs, and never run a procedure twice behind the user's back.
+- The `CallableStatement` is a local try-with-resources: the primary failure is preserved, a close failure is
+  suppressed on it, or reported as `PersistenceException` on its own. All output values are read before closing.
+- `checkOpen()` on every parameter lookup; `getParameterValue(Parameter)` of an unbound input → `IllegalStateException`.
+- Paging in `long`; results kept in an unmodifiable `ArrayList` copy (nulls allowed).
+- `getResultList()` → `null`, `getSingleResult[OrNull]()` → `null` when the pending result is not a result set; the
+  single-result methods no longer mutate `maxResults` (the inherited `NativeQuery.limited` did).
+- Trailing unbound `IN` parameters are left out of the positional call so database defaults apply (works on every
+  dialect; PostgreSQL requires defaulted parameters to be trailing anyway). An unbound `IN` before a sent parameter,
+  or an unbound `INOUT`, remains an `IllegalStateException`. Named parameters are still sent positionally in
+  registration order (named-notation calls would depend on the TCK's procedure argument names: not changed).
+- Temporal bindings keep the value as given plus its `TemporalType`; the JDBC value and `setNull` type derive from
+  the temporal type; `java.util.Date`/`Calendar` parameters accept either temporal value; plain `Calendar` /
+  `java.util.Date` values are sent as timestamps.
+- 9 new `StoredProcedureQueryTest` scenarios, red first (9 failures/errors), green after.
+- Verification (2026-10-09, Temurin 25.0.4, PostgreSQL 17): clean JPA reactor 453 tests, 0 failures; full official
+  TCK 2135 tests, 1063 passed, 1068 errors, 4 skipped — identical test by test to the preserved 1063 baseline
+  (`core.StoredProcedureQuery` 38 / 40, the two XML-override tests wait for P10).

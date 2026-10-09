@@ -47,23 +47,21 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
-| 1005
-| 🚧 P0–P6 and P7 slices 1–4 delivered. PostgreSQL 17, 1126 errors and 4 official skips; see link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 1063
+| 🚧 P0–P7 delivered. PostgreSQL 17, 0 failures, 1068 errors and 4 official skips; remaining P7 gate errors depend on P10 XML mappings. See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
-== Jakarta Persistence 3.2 — inheritance milestone
+== Jakarta Persistence 3.2 — current status
 
 Runner: `mansart-persistence/mansart-jpa-tck`, out of the reactor, using the official unmodified 3.2.1 suite
 and PostgreSQL 17 DDL.
-The P6 full run passes 1005 tests, compared with 909 in the rebuilt pre-P6 checkout:
-96 newly passing tests, no test-by-test regression.
-The older documented score of 897 predates that checkout's partial native-result changes.
-
-The inheritance, discriminator and inheritance-callback gates report 19 / 21 passed.
-Only two mapped-superclass descriptor tests remain, waiting for XML mappings (P10); they are not excluded.
-Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
-Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open.
-Criteria/metamodel/graphs, schema generation, XML, unfinished query/native/stored-procedure cases and caching/validation remain ahead.
+The P7 full run passes **1063 tests**; compared test by test with the P6 baseline (1005 passes), 58 tests newly pass
+with no regression. Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
+The focused P7 gates total 307 / 312 passed, 4 XML-mapping-dependent errors and 1 skipped. `core.query` reports
+244 / 245 passed and has no P7-attributable failure. The four errors are the two native constructor-result tests whose
+entity is declared in ORM XML and two stored-procedure tests that override metadata in ORM XML (P10).
+Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Criteria/metamodel/graphs, schema
+generation, XML, and caching/validation remain ahead.
 
 [source,bash]
 ----
@@ -73,7 +71,6 @@ cd mansart/main/mansart-persistence/mansart-jpa-tck
 
 The script exits zero once it produced a report even if tests failed; inspect
 `target/tck-report-persistence.txt` and the failsafe XML counters.
-The two known native constructor-result failures remain unchanged.
 
 == Jakarta Data 1.0 — detail
 

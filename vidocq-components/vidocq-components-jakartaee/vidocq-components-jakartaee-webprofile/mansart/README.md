@@ -29,10 +29,10 @@ the persistence layer in the stack.
 
 ## Status
 
-🚧 Jakarta Persistence is in progress: P0–P6 and P7 slices 1–4 are delivered, including required
-`SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL `TYPE`.
-The official PostgreSQL 17 TCK reports **1005 / 2135 passed**; see
-[`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
+🚧 Jakarta Persistence is in progress: P0–P7 are delivered, including required
+`SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL, native-query and stored-procedure support.
+The official PostgreSQL 17 TCK reports **1063 / 2135 passed**; remaining P7-gate errors depend on P10 XML mappings.
+See [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
 `TABLE_PER_CLASS` remains explicitly refused and decision D5 remains open.
 See [`PLAN.md`](./PLAN.md) for the overall vision and
 [`ROADMAP.md`](./ROADMAP.md) for all sub-project statuses.
