@@ -131,3 +131,31 @@ Verified: dirac unit tests + **MP-Metrics 5.1 TCK 127/127 PASS**; Arago Docker `
     `getValue()` time (registration order independent). Unit tests added
     (`MetricRegistryDefaultInjectionCdiIntegrationTest`), per-brick TCK still 127/127
     PASS, runtime TCK runner 127/127 PASS.
+
+## DRC-003 — Interceptors and `/metrics` not discovered by Weld SE (dirac#23)
+
+- **Opening date**: 2026-10-09
+- **Status**: ✅ FIXED 2026-10-09
+
+### Symptom
+
+Under a CDI container other than Vauban that does not scan implicit bean archives (Weld SE by
+default), `@Counted` and `@Timed` methods are never intercepted, `@Inject MetricRegistry` is
+unsatisfied, and the `GET /metrics` resource is not a bean: metrics silently stay empty.
+
+### Minimal repro
+
+`jar tf dirac-cdi-vauban-*.jar | grep beans.xml` and the same for `dirac-rest`: no
+`META-INF/beans.xml`, so both jars are only implicit bean archives.
+
+### Cause
+
+Every test and the TCK run on Vauban, which is told about Dirac's beans through its build-time
+index, so the missing `beans.xml` never showed.
+
+### Fix
+
+`dirac-cdi-vauban` and `dirac-rest` ship `META-INF/beans.xml` (`bean-discovery-mode="annotated"`).
+`BeanArchiveTest` in each module pins it; both fail on `main` (`missing
+target/classes/META-INF/beans.xml`). A Weld SE and an OpenLiberty integration test follow in
+dirac#23.

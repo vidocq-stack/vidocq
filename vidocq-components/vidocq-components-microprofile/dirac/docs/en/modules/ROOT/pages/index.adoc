@@ -89,6 +89,7 @@ Dirac consumes the ecosystem bottom-up: xref:chappe::index.adoc[Chappe] serves t
 
 == Quick links
 
+* xref:whats-new.adoc[What's new] [.tag-new]#NEW# — what changed since {release-version}: explicit bean archives for containers other than Vauban.
 * xref:getting-started.adoc[Getting started] — first counter, first `/metrics`.
 * xref:usage.adoc[Usage patterns] — `@Counted`, `@Timed`, `@Gauge`, tags, format, configuration.
 * xref:concepts.adoc[Concepts] — metric types, scopes, tags, formats, registries.

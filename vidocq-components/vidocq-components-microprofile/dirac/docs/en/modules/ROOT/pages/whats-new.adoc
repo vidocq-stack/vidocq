@@ -1,0 +1,9 @@
+= What's new
+:description: Everything that changed in Dirac since the {release-version} release — explicit bean archives, so Weld SE and other containers discover Dirac's beans.
+
+[.lead]
+New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== CDI containers other than Vauban
+
+* **Explicit bean archives** — `dirac-cdi-vauban` and `dirac-rest` now ship a `META-INF/beans.xml` (`bean-discovery-mode="annotated"`) (DRC-003, dirac#23). `{release-version}` shipped none, so the jars were implicit bean archives: Weld SE, which does not scan those by default, saw neither the `@Counted` / `@Timed` interceptors nor the `MetricRegistry` producer nor the `GET /metrics` resource, and metrics silently stayed empty. Nothing changes under Vauban. xref:reference.adoc#bean-archives[Bean archives].

@@ -76,6 +76,11 @@ All artefacts share the version `{project-version}`.
 
 `io.vidocq.dirac.internal.*` is never exported to application code: any direct dependency signals a regression.
 
+[#bean-archives]
+=== Bean archives [.tag-new]#NEW#
+
+`dirac-cdi-vauban` and `dirac-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@Counted` and `@Timed` interceptors, the `MetricRegistry` and gauge beans, and the `GET /metrics` resource. Under Vauban nothing changes: `annotated` is already how CDI Lite discovers beans. `DiracExtension` is listed in `META-INF/services` as well as in the module descriptor, so it also runs on a class path.
+
 == Supported MicroProfile Metrics annotations
 
 [cols="2,3,1"]
