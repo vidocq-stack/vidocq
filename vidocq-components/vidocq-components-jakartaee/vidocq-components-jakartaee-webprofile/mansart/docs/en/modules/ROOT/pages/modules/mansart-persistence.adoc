@@ -2,7 +2,7 @@
 :description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — bootstrap, resource-local transactions and the entity model are delivered; entity operations come next (see the roadmap below).
+`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: in progress** — entity operations, relationships, inheritance and the main JPQL query path are delivered; Criteria and the metamodel remain ahead (see the roadmap below).
 
 [NOTE]
 ====
@@ -16,7 +16,7 @@ Jakarta Data 1.0 and Jakarta Persistence 3.2 do not serve the same purpose:
 * **Jakarta Data** — typed declarative repositories, stateless, no L1 cache, direct ResultSet mapping. Covers 80% of common application needs. Delivered.
 * **Jakarta Persistence** — imperative `EntityManager`, persistence context (managed/detached), L1 cache, listeners (`@PrePersist`, `@PostLoad`), rich JPQL, Criteria API. Required for: complex entity graphs, long transactions with batches of modifications, applications ported from Hibernate that rely on the persistence context.
 
-Both modules will share the same dialect SPI (`mansart-data-dialect-spi`) and the same static metamodel. No SQL duplication.
+Jakarta Data uses `mansart-data-dialect-spi`; Jakarta Persistence uses its own sealed SQL AST and `mansart-jpa-dialect-*` modules (roadmap decision D4). Both use generated entity access rather than reflective state access.
 
 == Status
 
@@ -34,7 +34,39 @@ Delivered:
 
 * P5 — relationships and collections: to-one relationships through foreign keys (cycles written without deferred constraints), one-to-many and many-to-many through the foreign keys of their elements or join tables, element collections of basic and embeddable values, maps (`@MapKey`, `@MapKeyColumn`, `@MapKeyJoinColumn`) and order columns, `@OrderBy`, orphan removal, derived identities (`@MapsId`, relationship identifiers), `PersistenceUnitUtil`. Relationships are loaded with their owner (`LAZY` is a hint). TCK: 635 / 2135, no failure left that P5 owns.
 
-Next: inheritance (P6) and Jakarta Persistence queries (P7).
+* P6 — default and explicit `SINGLE_TABLE`, required `JOINED`, discriminator metadata and values, abstract entities and mapped superclasses, polymorphic loading and shared identity, JPQL polymorphic selection and `TYPE`, including joined bulk mutations.
+
+* P7 slices 1–4 — JPQL selects, joins, predicates, functions, aggregates, constructors, subqueries, parameters, bulk statements, named queries, locking, set operations and casts. Native result mappings are partly implemented; stored procedures remain ahead.
+
+Next: finish native query results and stored procedures (P7), then Criteria and the metamodel (P8).
+
+== Inheritance
+
+`SINGLE_TABLE` is the default for entity hierarchies, even without `@Inheritance`.
+All subclass state is stored in the root entity's primary table.
+The default discriminator is `DTYPE`, of type `STRING`; its default value is the entity name.
+`@DiscriminatorColumn` and `@DiscriminatorValue` customize this metadata, including `CHAR` and `INTEGER`.
+For these two types, unspecified discriminator values are assigned in stable binary class-name order, skipping explicit values.
+
+With `@Inheritance(strategy = JOINED)`, the root and every entity subclass have a primary table.
+`@PrimaryKeyJoinColumn(s)` customize the subclass key; composite keys are matched by `referencedColumnName`, not annotation order.
+An explicit discriminator is honored; without one, the presence of subclass rows identifies the concrete class.
+Inherited attributes stay in their declaring entity's table, including mapped-superclass state; nonentity state is not persisted.
+
+`find(Base.class, id)` and queries over a base return concrete descendants.
+Finding the same identity through compatible base and subclass types returns the same managed instance;
+finding it through an incompatible sibling returns `null`.
+Relationships use the same polymorphic loader, and inherited collections keep their declaring entity's mapping defaults.
+Callbacks, identifiers, versions, secondary tables and dirty checking use the existing generated-access and flush paths.
+The module-path tests also exercise inheritance with APT-generated accesses in a package neither opened nor exported to Mansart.
+
+JPQL supports polymorphic ranges and entity selections, inherited and subclass attributes, and `TYPE` selection and predicates
+with entity literals and class-valued parameters, including `IN`.
+Joined bulk updates capture qualifying keys and assignment values before modifying any table;
+bulk deletes remove subclass rows before superclass rows and return an entity count, not a table-row count.
+
+`TABLE_PER_CLASS` is optional in the specification and is explicitly refused at bootstrap.
+Decision D5 remains open: this milestone neither implements the strategy nor decides against its future implementation.
 
 An application adds the dialect of its database at run time: `io.vidocq.mansart:mansart-jpa-dialect-postgresql` or `mansart-jpa-dialect-h2`. The dialect is detected from the JDBC metadata; the property `io.vidocq.mansart.jpa.dialect` names it explicitly.
 
@@ -104,7 +136,7 @@ For JPA needs in Vidocq today:
 
 * If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
 * If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
-* Entities with listeners and locks work with the `EntityManager` since P4, their relationships and collections since P5; inheritance comes with P6, queries with P7.
+* Entities with listeners and locks work with the `EntityManager` since P4, their relationships and collections since P5, inheritance since P6, and the main JPQL query path since P7 slices 1–4.
 
 == See also
 

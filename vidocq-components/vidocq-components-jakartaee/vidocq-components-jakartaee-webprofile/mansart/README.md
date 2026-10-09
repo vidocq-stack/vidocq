@@ -29,7 +29,13 @@ the persistence layer in the stack.
 
 ## Status
 
-🚧 Under design — see [`PLAN.md`](./PLAN.md) for the overall vision and [`mansart-jakarta-data/PLAN.md`](./mansart-jakarta-data/PLAN.md) for the detailed plan of the first module.
+🚧 Jakarta Persistence is in progress: P0–P6 and P7 slices 1–4 are delivered, including required
+`SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL `TYPE`.
+The official PostgreSQL 17 TCK reports **1005 / 2135 passed**; see
+[`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
+`TABLE_PER_CLASS` remains explicitly refused and decision D5 remains open.
+See [`PLAN.md`](./PLAN.md) for the overall vision and
+[`ROADMAP.md`](./ROADMAP.md) for all sub-project statuses.
 
 ## Priority dialects
 

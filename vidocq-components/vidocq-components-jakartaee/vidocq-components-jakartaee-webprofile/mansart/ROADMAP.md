@@ -12,7 +12,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 | `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
 | `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
-| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — P0 to P5 and P7 slices 1 to 4 delivered (TCK 897 / 2135), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
+| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — P0 to P6 and P7 slices 1 to 4 delivered (TCK 1005 / 2135), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 | `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ⏳ planned — needed by `mansart-persistence` P11, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
 
@@ -79,11 +79,15 @@ The detailed plan — milestones P0 (TCK instrument) to P12 (certification) — 
 for the overview.
 
 Scope:
-- [ ] `EntityManager`, `EntityManagerFactory`, JPQL, Criteria API
-- [ ] Lifecycle (`@PrePersist`, `@PostLoad`, etc.)
-- [ ] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations, lazy/eager fetch
+- [x] `EntityManager`, `EntityManagerFactory`, main JPQL query path (P7 slices 1–4)
+- [x] Lifecycle (`@PrePersist`, `@PostLoad`, etc.)
+- [x] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations (loaded eagerly; `LAZY` remains a hint)
+- [x] Required `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL `TYPE` (P6);
+      optional `TABLE_PER_CLASS` explicitly refused, decision D5 open
+- [ ] Finish native query results / stored procedures (P7), Criteria API / metamodel (P8)
 - [ ] Optional L2 cache (homegrown, opt-in — no external cache library)
-- [ ] Jakarta Persistence 3.2 TCK outside the reactor
+- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (1005 / 2135 passed)
+- [ ] Jakarta Persistence 3.2 certification (P12)
 
 ### M8 — Performance & footprint (TBD)
 - [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, Eclipselink, Hibernate
