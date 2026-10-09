@@ -32,7 +32,9 @@ Delivered:
 
 * P4 — the entity operations (`find`, `getReference`, `persist`, `merge`, `remove`, `refresh`, `detach`) with their cascades, identifier generation (`IDENTITY`, pooled `SEQUENCE` and `TABLE` without a lock held across the round trip, `UUID`, `AUTO`), lifecycle callbacks and entity listeners, optimistic and pessimistic locks with lock timeouts, the exception contract, secondary tables and native `executeUpdate`. TCK: 609 / 2135, no failure left that P4 owns.
 
-Next: relationships and collections (P5).
+* P5 — relationships and collections: to-one relationships through foreign keys (cycles written without deferred constraints), one-to-many and many-to-many through the foreign keys of their elements or join tables, element collections of basic and embeddable values, maps (`@MapKey`, `@MapKeyColumn`, `@MapKeyJoinColumn`) and order columns, `@OrderBy`, orphan removal, derived identities (`@MapsId`, relationship identifiers), `PersistenceUnitUtil`. Relationships are loaded with their owner (`LAZY` is a hint). TCK: 635 / 2135, no failure left that P5 owns.
+
+Next: inheritance (P6) and Jakarta Persistence queries (P7).
 
 An application adds the dialect of its database at run time: `io.vidocq.mansart:mansart-jpa-dialect-postgresql` or `mansart-jpa-dialect-h2`. The dialect is detected from the JDBC metadata; the property `io.vidocq.mansart.jpa.dialect` names it explicitly.
 
@@ -102,7 +104,7 @@ For JPA needs in Vidocq today:
 
 * If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
 * If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
-* Entities without relationships, with listeners and locks, work with the `EntityManager` since P4; relationships come with P5, queries with P7.
+* Entities with listeners and locks work with the `EntityManager` since P4, their relationships and collections since P5; inheritance comes with P6, queries with P7.
 
 == See also
 
