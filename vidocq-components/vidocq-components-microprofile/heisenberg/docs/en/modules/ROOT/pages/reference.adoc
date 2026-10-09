@@ -60,6 +60,13 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 
 `io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
 
+[#class-path]
+=== On a class path [.tag-new]#NEW#
+
+`heisenberg-cdi-vauban` is an explicit bean archive. It ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`, so the interceptors, the state registries and the metrics recorders are discovered even by a container that does not scan implicit archives, such as Weld SE by default. Without it, `@Retry`, `@Timeout` and the other annotations were silently ignored there (BUG-004).
+
+On a class path, `provides` clauses are ignored. `HeisenbergExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
+
 == MicroProfile Fault Tolerance 4.1 annotations
 
 Summary table of the six annotations, in wrapping order from the outside in.
