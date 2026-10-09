@@ -47,8 +47,8 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
-| 2040
-| ✅ P0–P9 implementation complete. Temurin 25.0.4+7-LTS, PostgreSQL 17, 2040 passes, 0 failures, 91 errors and 4 official skips. P10 XML (78) and P11 cache (13) remain. Vidocq Arquillian contract test: 3/3 passed using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 2096
+| 🚧 P0–P9 complete; P10 partial. Temurin 25.0.4+7-LTS, PostgreSQL 17, 2096 passes, 0 failures, 35 errors and 4 official skips: 10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities. Quotation is no longer ignored; official fixtures/DDL are unchanged. Vidocq Arquillian contract baseline: 3/3 using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
@@ -62,6 +62,14 @@ Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are de
 The focused P7 gates total 307 / 312 passed, 4 XML-mapping-dependent errors and 1 skipped. `core.query` reports
 244 / 245 passed and has no P7-attributable failure. The four errors are the two native constructor-result tests whose
 entity is declared in ORM XML and two stored-procedure tests that override metadata in ORM XML (P10).
+The initial P10 baseline passed 2121 tests but ignored `<delimited-identifiers/>`.
+Correct quotation now reports **2096 passes, 35 errors, four skips / 2135** with no added/missing tests:
+25 regressions are confined to `core.annotations.nativequery` (1 / 12) and `core.entitytest.apitests` (7 / 21),
+whose delimited-default mappings conflict with the unquoted PostgreSQL DDL.
+`core.override` 26 / 26, `core.callback` 66 / 66, `core.relationship.descriptors` 8 / 8,
+`se.descriptor` 1 / 1 and `core.StoredProcedureQuery` 40 / 40 retain their results.
+The same 10 second-level cache errors remain (P11). Embedded association overrides are not yet executable;
+P10 is partial, not delivered.
 The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
 metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
 The clean runtime/processor/module-path reactor reports **470 passing tests**, including populated canonical fields

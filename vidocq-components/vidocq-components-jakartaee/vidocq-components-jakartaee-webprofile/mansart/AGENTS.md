@@ -4,13 +4,20 @@ Contributor guidance for agents working on this repository. See also the compani
 
 ## Persistence implementation
 
-Jakarta Persistence milestones P0–P9 are implemented. Read `mansart-persistence/AGENTS.md`,
+Jakarta Persistence milestones P0–P9 are implemented; P10 remains partial. Read `mansart-persistence/AGENTS.md`,
 `ROADMAP.md` and `TCK.md` before changes. Criteria and JPQL share the same AST and SQL execution path;
 canonical `Entity_` initialization uses application-generated access providers without extra opens.
 P9 includes schema generation, JTA/CDI integration, the Vidocq runtime extension, and Arquillian coverage.
-The official standalone score is 2040 / 2135; 91 errors belong to P10/P11 and four tests are official skips.
+P10 maps `orm.xml` through an overlay of the class-file annotations (one mapping engine).
+The official standalone score is 2096 / 2135: 10 P11 cache errors, 25 delimited-fixture/unquoted-DDL
+incompatibilities and four official skips. The earlier 2121 result ignored quotation and is superseded.
+Inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded relationships
+and collections use dotted execution-state slots composed from generated accesses; unsupported P5 shapes fail explicitly.
+The final full run at 20:43:24Z includes embedded execution, embeddable map keys and query identifier fixes.
+The clean persistence reactor passes 549 tests and the Vidocq Arquillian vehicle passes six tests.
 The runtime checks use the local Vauban snapshot containing the upstream injection fix (pending release).
-See `TCK.md` for exact evidence and remaining P10/P11 scope.
+See `TCK.md` for exact evidence and remaining P10/P11 scope. Do not weaken quotation or edit official DDL to
+restore a score.
 Jakarta Data remains delivered and frozen: do not overwrite its canonical output or alter its producer
 to reconcile plural field kinds without a maintainer decision. The full TCK is not yet certified.
 

@@ -32,11 +32,18 @@ the persistence layer in the stack.
 🚧 Jakarta Persistence is in progress: P0–P8 are delivered, including required
 `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading, JPQL/native/stored queries, runtime/canonical metamodel,
 Criteria through the shared query engine, and entity graphs.
-The P9 working tree adds dialect-rendered schema generation, `SchemaManager`, and an isolated JTA/CDI bridge.
-The official PostgreSQL 17 TCK reports **2040 / 2135 passed**, 91 errors and 4 official skips (+27, no regression).
-P9 is **partial, not delivered**: the two upstream Vauban persistence-injection defects are fixed in the Vauban working
-tree (real module-path vehicle 4/4 green, pending a Vauban release); the Arquillian container gate and separate Vidocq runtime extension remain pending. Remaining standalone errors
-belong to P10 XML (78) and P11 cache (13). The P8 gate remains **924 passed / 925**, one official skip.
+P9 adds dialect-rendered schema generation, `SchemaManager`, the JTA/CDI bridge, the Vidocq runtime extension and
+its Arquillian gate (6/6). The P10 working tree maps `orm.xml` mapping files (secure StAX + XSD, metadata-complete,
+unit defaults, XML-over-annotation overrides, XML callbacks and default listeners) into the same entity model.
+P10 remains **partial** pending the official fixture/DDL case contract: case-preserving delimited identifiers,
+inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded references
+and collections execute through composed generated accesses and existing relationship planners; unsupported P5
+mapping shapes are rejected, not silently omitted.
+The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 errors and 4 official skips:
+10 P11 cache errors and 25 incompatibilities between its delimited-default fixtures and unquoted DDL.
+The earlier 2121-pass result ignored quotation and is superseded; no official sources/DDL were edited.
+Runtime baseline checks use the local Vauban snapshot carrying the
+upstream injection fix (pending a Vauban release). The P8 gate remains **924 passed / 925**, one official skip.
 See [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
 `TABLE_PER_CLASS` remains explicitly refused and decision D5 remains open.
 Data remains unchanged: incompatible plural fields in Data-owned canonical classes need producer reconciliation.
