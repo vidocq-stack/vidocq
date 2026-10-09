@@ -241,3 +241,35 @@ missing read edge went unnoticed.
 Verified: `clean verify` gives the same test counts as `main` per module (cervantes-cdi-vauban
 +1, the new test); `jar --describe-module` is identical for every jar except
 cervantes-cdi-vauban gaining `requires jakarta.json`; MP JWT 2.2 TCK 208/208 PASS.
+
+## CERV-007 — `@Claim` injection unsatisfied on a class path (cervantes#24)
+
+- **Opening date**: 2026-10-09
+- **Status**: ✅ FIXED 2026-10-09
+
+### Symptom
+
+On a class path (Weld SE, an application server such as OpenLiberty, any WAR), a deployment with an
+`@Inject @Claim(...)` injection point fails with an unsatisfied dependency: the Cervantes CDI
+extension never runs. Under Weld SE, the producers, `JsonWebTokenContext`, the authentication filter
+and the `@RolesAllowed` feature are not discovered either.
+
+### Minimal repro
+
+`jar tf cervantes-cdi-vauban-*.jar | grep META-INF`: no
+`META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`, and no
+`META-INF/beans.xml` in `cervantes-cdi-vauban` nor in `cervantes-jaxrs`.
+
+### Cause
+
+`CervantesClaimExtension` was registered only through `provides` in the module descriptor, which a
+class path ignores. Vauban, on the module path, hid the gap; every test and the TCK run on Vauban.
+Without `beans.xml` the jars are implicit bean archives, which Weld SE does not scan by default.
+
+### Fix
+
+`META-INF/services/...BuildCompatibleExtension` lists the extension, and both jars ship a
+`META-INF/beans.xml` (`bean-discovery-mode="annotated"`). `ClassPathRegistrationTest` checks that the
+services file lists exactly what the descriptor provides and that the archive is explicit;
+`BeanArchiveTest` does the same for `cervantes-jaxrs`. Both fail on `main` (`missing
+target/classes/META-INF/...`). A Weld SE and an OpenLiberty integration test follow in cervantes#24.

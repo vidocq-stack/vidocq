@@ -70,6 +70,13 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 
 `io.vidocq.cervantes.internal` (the core engine) is exported only to `io.vidocq.cervantes.cdi.vauban` — application modules cannot read it, and any application class depending on it signals a regression to be fixed. The `io.vidocq.cervantes.cdi.internal` package, although exported for the Vauban wiring, is likewise not a supported API.
 
+[#class-path]
+=== On a class path [.tag-new]#NEW#
+
+On a class path, `provides` clauses are ignored. This is the case under Weld, in an application server, or in any WAR. So `cervantes-cdi-vauban` also lists `CervantesClaimExtension` in `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`. Without it, `@Claim` injection points stay unsatisfied (CERV-007).
+
+`cervantes-cdi-vauban` and `cervantes-jaxrs` are also explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the producers, the request context, the authentication filter and the `@RolesAllowed` feature.
+
 == Recognised security annotations
 
 [cols="2,3,1"]
