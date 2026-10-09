@@ -58,6 +58,10 @@
 | `jakartaee-web`
 | Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>).
 
+| `vidocq-runtime-mansart-persistence-extension`
+| `jakartaee-web`
+| Wires Mansart Jakarta Persistence 3.2 into Vidocq: discovers persistence units, initializes container-owned factories at startup, supplies the transaction manager and passes the configured CDI-managed `DataSource` through. An omitted unit name resolves only when exactly one unit exists; multiple or unavailable names fail deployment. Add its `-codegen` companion to `annotationProcessorPaths` for generated entity access. Six integration tests cover field/setter injection, default-unit and named data-source selection, JTA commit/rollback, transaction-scoped identity, explicit unsynchronized joining, factory ownership and undeploy cleanup. CDI closes deployment-owned factories without closing application-owned data sources. This does not claim full Persistence TCK certification.
+
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
 | {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion.

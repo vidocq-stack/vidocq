@@ -247,6 +247,17 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-mansart-persistence-extension</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-mansart-persistence-extension-codegen</artifactId>
+                <version>${project.version}</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>

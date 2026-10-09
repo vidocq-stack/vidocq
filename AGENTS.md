@@ -65,7 +65,7 @@ Each extension is named after a **codename** mapping to its spec — keep this m
 | Knock | MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` |
 | Dirac | MicroProfile Metrics 5.1 | `vidocq-runtime-dirac-metrics-extension` |
 | Grimm | MicroProfile OpenAPI 4.x (+ Swagger UI) | `vidocq-runtime-grimm-openapi-extension` |
-| Mansart | Jakarta Data 1.0 / Pool / JTA | `vidocq-runtime-mansart-{data,pool,transactions}-extension` |
+| Mansart | Jakarta Data 1.0 / Persistence 3.2 / Pool / JTA | `vidocq-runtime-mansart-{data,persistence,pool,transactions}-extension` |
 
 ### Codegen (APT) wiring — required pattern for apps/examples
 

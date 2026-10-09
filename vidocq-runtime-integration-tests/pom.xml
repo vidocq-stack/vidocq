@@ -30,6 +30,7 @@
     <modules>
         <module>vidocq-runtime-arquillian</module>
         <module>vidocq-runtime-it-cassini-rest</module>
+        <module>vidocq-runtime-it-mansart-persistence</module>
         <module>vidocq-runtime-it-humboldt-cassini</module>
         <module>vidocq-runtime-it-cervantes-jwt</module>
         <module>vidocq-runtime-it-grimm-openapi</module>

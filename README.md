@@ -144,7 +144,7 @@ vidocq/
 ├── vidocq-runtime-extensions/           Runtime extensions, grouped by domain
 │   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport, dev console, schema migration, langchain4j-cdi MCP
 │   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
-│   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Transactions / JDBC pool
+│   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / Transactions / JDBC pool
 │   ├── vidocq-runtime-extensions-microprofile/     Config, Fault Tolerance, Health, JWT, Metrics, OpenAPI (+ Swagger UI), Rest Client, Telemetry
 │   └── vidocq-runtime-extensions-module-repackaged/  Third-party Java Modules repackages (H2)
 ├── vidocq-runtime-examples/             Examples (cassini-rest, cervantes-jwt, knock-health, mansart-h2, petstore, external-rest-lib)
@@ -262,7 +262,7 @@ Other goals of `vidocq-runtime-maven-plugin`:
 | Jakarta Data 1.0 | [mansart](https://codefloe.com/Vidocq/mansart) | `vidocq-runtime-mansart-data-extension` | ✅ |
 | Jakarta Transactions 2.0 | mansart | `vidocq-runtime-mansart-transactions-extension` | ✅ |
 | Virtual-thread-native JDBC pool | mansart | `vidocq-runtime-mansart-pool-extension` | ✅ |
-| Jakarta Persistence 3.2 | mansart | — | ⏸️ suspended (M7 Mansart) |
+| Jakarta Persistence 3.2 | [mansart](https://codefloe.com/Vidocq/mansart) | `vidocq-runtime-mansart-persistence-extension` | 🧪 P9 integration tests green; not TCK-certified |
 | MicroProfile Config 3.1 | [ravel](https://codefloe.com/Vidocq/ravel) | `vidocq-runtime-ravel-config-extension` | ✅ TCK green on the runtime |
 | MicroProfile Fault Tolerance 4.1 | [heisenberg](https://codefloe.com/Vidocq/heisenberg) | `vidocq-runtime-heisenberg-fault-tolerance-extension` | ✅ TCK green on the runtime |
 | MicroProfile Health 4.0 | [knock](https://codefloe.com/Vidocq/knock) | `vidocq-runtime-knock-health-extension` | ✅ TCK green on the runtime |
