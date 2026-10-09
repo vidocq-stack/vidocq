@@ -32,8 +32,11 @@ the persistence layer in the stack.
 🚧 Jakarta Persistence is in progress: P0–P8 are delivered, including required
 `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading, JPQL/native/stored queries, runtime/canonical metamodel,
 Criteria through the shared query engine, and entity graphs.
-The official PostgreSQL 17 TCK reports **2013 / 2135 passed**, 118 errors and 4 official skips;
-the P8 gate reports **924 passed / 925**, one official skip and no errors. Remaining blockers belong to P9/P10/P11.
+The P9 working tree adds dialect-rendered schema generation, `SchemaManager`, and an isolated JTA/CDI bridge.
+The official PostgreSQL 17 TCK reports **2040 / 2135 passed**, 91 errors and 4 official skips (+27, no regression).
+P9 is **partial, not delivered**: the two upstream Vauban persistence-injection defects are fixed in the Vauban working
+tree (real module-path vehicle 4/4 green, pending a Vauban release); the Arquillian container gate and separate Vidocq runtime extension remain pending. Remaining standalone errors
+belong to P10 XML (78) and P11 cache (13). The P8 gate remains **924 passed / 925**, one official skip.
 See [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
 `TABLE_PER_CLASS` remains explicitly refused and decision D5 remains open.
 Data remains unchanged: incompatible plural fields in Data-owned canonical classes need producer reconciliation.

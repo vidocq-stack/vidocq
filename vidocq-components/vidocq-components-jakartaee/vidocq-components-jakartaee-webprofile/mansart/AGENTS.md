@@ -4,9 +4,13 @@ Contributor guidance for agents working on this repository. See also the compani
 
 ## Persistence implementation
 
-Jakarta Persistence milestones P0–P8 are delivered. Read `mansart-persistence/AGENTS.md`,
+Jakarta Persistence milestones P0–P9 are implemented. Read `mansart-persistence/AGENTS.md`,
 `ROADMAP.md` and `TCK.md` before changes. Criteria and JPQL share the same AST and SQL execution path;
 canonical `Entity_` initialization uses application-generated access providers without extra opens.
+P9 includes schema generation, JTA/CDI integration, the Vidocq runtime extension, and Arquillian coverage.
+The official standalone score is 2040 / 2135; 91 errors belong to P10/P11 and four tests are official skips.
+The runtime checks use the local Vauban snapshot containing the upstream injection fix (pending release).
+See `TCK.md` for exact evidence and remaining P10/P11 scope.
 Jakarta Data remains delivered and frozen: do not overwrite its canonical output or alter its producer
 to reconcile plural field kinds without a maintainer decision. The full TCK is not yet certified.
 

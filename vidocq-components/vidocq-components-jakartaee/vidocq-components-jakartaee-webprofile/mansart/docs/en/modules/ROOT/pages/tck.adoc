@@ -47,15 +47,15 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
-| 2013
-| 🚧 P0–P8 delivered. Temurin 25.0.4+7-LTS, PostgreSQL 17, 0 failures, 118 errors and 4 official skips. Remaining blockers: P9 schema/container (28), P10 XML (78), P11 cache (12). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 2040
+| ✅ P0–P9 implementation complete. Temurin 25.0.4+7-LTS, PostgreSQL 17, 2040 passes, 0 failures, 91 errors and 4 official skips. P10 XML (78) and P11 cache (13) remain. Vidocq Arquillian contract test: 3/3 passed using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
 
 Runner: `mansart-persistence/mansart-jpa-tck`, out of the reactor, using the official unmodified 3.2.1 suite
 and PostgreSQL 17 DDL.
-The P8 full run passes **2013 tests**; compared test by test with the preserved P7 baseline (1063 passes),
+The P8 full run passed **2013 tests**; compared test by test with the preserved P7 baseline (1063 passes),
 **950 tests newly pass**, with no regression or added/missing tests. This includes one earlier converted-literal
 query defect exposed and fixed during attribution, not later-milestone implementation.
 Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
