@@ -68,6 +68,11 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
 
+[#bean-archives]
+=== Bean archives [.tag-new]#NEW#
+
+`mansart-data-cdi` and `mansart-transactions-cdi` are explicit bean archives. Each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore treats them as bean archives too. The default `RepositoryRuntime` producer (`MansartRuntimeProducer`) does not depend on discovery mode: the `mansart-data-cdi` extension adds it at `@Discovery`.
+
 == Entity annotations
 
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
