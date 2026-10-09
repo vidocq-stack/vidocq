@@ -10,7 +10,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-transactions` — Jakarta Transactions 2.0 (virtual-thread-native TM, `@Transactional`, `@TransactionScoped`). **Delivered — TCK smoke 5/5 PASS.**
 - `mansart-pool` — virtual-thread-native JDBC pool, zero-dep, optional. **Delivered.**
 - `mansart-validation` — Jakarta Validation 3.1 (Bean Validation), needed by `mansart-persistence` (spec §3.7) and usable standalone. **Planned — roadmap only**, see `mansart-validation/ROADMAP.md`. TCK runs out of the Vidocq reactor (`mansart-validation-tck`) and in it (`vidocq-runtime-tck-validation`, `tck` profile).
-- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0 to P5 delivered (TCK 635 / 2135, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
+- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **In progress** — P0 to P5 and P7 slices 1 to 4 delivered (TCK 897 / 2135, see `mansart-persistence/TCK.md`); plan in `mansart-persistence/ROADMAP.md`, agent rules in `mansart-persistence/AGENTS.md`.
 
 `mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; `mansart-persistence` through its own SQL AST and dialects (`mansart-jpa-dialect-*`, decision D4 in `mansart-persistence/ROADMAP.md`). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
