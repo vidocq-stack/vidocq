@@ -2,7 +2,9 @@
 :description: Intended usage patterns of Peano — standalone, embedded, build-time accessors. In design.
 
 [.lead]
-Nothing on this page works yet. It lists the usage patterns Peano is designed for, in the order the milestones deliver them.
+Constant literal/operator expressions work through `ExpressionFactory.newInstance()`
+and `StandardELContext`; see xref:getting-started.adoc[Getting started].
+The model-object, container and code-generation patterns below are planned.
 
 == Standalone evaluation
 

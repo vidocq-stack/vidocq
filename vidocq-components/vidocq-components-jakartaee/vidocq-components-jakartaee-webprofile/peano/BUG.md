@@ -16,3 +16,13 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   the producer metadata. PR validation run 9 passes both governance and the
   complete build/downstream validation on commit `1d4065d`.
 - Evidence: PR validation run 7, job `pr-validate`, fails after `BUILD SUCCESS`.
+
+## EL-001 · 2026-10-10 · Asymmetric empty-string enum equality
+
+- Symptom: comparing an empty string with an enum on the right throws ELException,
+  while the reversed operands correctly return false.
+- Minimal reproduction: `Comparison.equal("", Color.RED)` with any enum `Color`.
+- Cause: empty-string-to-enum conversion returns null (EL 6.0 section 1.25.6);
+  the equality branch invoked equals on that null result.
+- Status: resolved during P1 implementation. Compare from the enum value;
+  regression assertions cover both operand orders in ComparisonTest.

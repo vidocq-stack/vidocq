@@ -1,8 +1,9 @@
 = Getting started
-:description: How Peano will be used — Maven coordinates and a first standalone expression. In design.
+:description: Maven coordinates and a first constant expression through the Jakarta EL API.
 
 [.lead]
-Peano is not usable yet: the scaffold builds, but there is no evaluation engine. This page shows the intended first steps so the target experience is explicit.
+Peano's development build evaluates constant expressions through the Jakarta EL API.
+Bean access, functions, method expressions, lambdas and collection construction remain planned.
 
 == Prerequisites
 
@@ -10,7 +11,7 @@ Peano is not usable yet: the scaffold builds, but there is no evaluation engine.
 * **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
 * Strict Java Modules: one `module-info.java` per Maven module.
 
-== Maven coordinates (planned)
+== Maven coordinates (development build)
 
 [source,xml,subs=attributes+]
 ----
@@ -29,7 +30,7 @@ Peano is not usable yet: the scaffold builds, but there is no evaluation engine.
 
 Your code compiles against `jakarta.el` only; Peano is found at run time through `ServiceLoader`.
 
-== A first expression (target, milestone P5)
+== A first expression (implemented)
 
 [source,java]
 ----
@@ -41,10 +42,20 @@ module com.example.app {
 
 [source,java]
 ----
-ELProcessor el = new ELProcessor();
-el.defineBean("order", new Order(new BigDecimal("100")));
-BigDecimal total = el.eval("order.total * 1.2");
+import jakarta.el.ExpressionFactory;
+import jakarta.el.StandardELContext;
+
+ExpressionFactory factory = ExpressionFactory.newInstance();
+StandardELContext context = new StandardELContext(factory);
+Object result = factory.createValueExpression(context, "${1 + 2 * 3}", Object.class)
+        .getValue(context); // Long value 7
 ----
+
+The provider is discovered on the module path without exporting its implementation package.
+An independent named-consumer test compiles against the API alone and verifies this bootstrap.
+
+Expressions over model objects are a later milestone. The current provider reports
+unsupported evaluation rather than returning a placeholder value.
 
 == Building Peano from source
 

@@ -19,13 +19,13 @@
  */
 
 /**
- * Peano — Jakarta Expression Language 6.0 implementation (scaffold).
+ * Peano — Jakarta Expression Language 6.0 implementation.
  *
  * <p>Nothing is exported: {@code io.vidocq.peano.core.internal} is the engine.
- * Discovery will happen exclusively through
- * {@code provides jakarta.el.ExpressionFactory with ...} (see PLAN.md, milestone P1),
+ * Discovery happens through the ExpressionFactory service provider,
  * which the module system allows without an export.
  */
 module io.vidocq.peano.core {
     requires transitive jakarta.el;
+    provides jakarta.el.ExpressionFactory with io.vidocq.peano.core.internal.PeanoExpressionFactory;
 }

@@ -2,7 +2,9 @@
 :description: Peano's planned architecture — modules, parser, interpreter, build-time code generation.
 
 [.lead]
-How Peano is designed to work inside. `peano-core` now contains the P1 lexer, parser and immutable AST; the full design is `PLAN.md` in {repo-peano}[the repository].
+How Peano is designed to work inside. `peano-core` now contains the P1 lexer, parser,
+immutable AST, constant-expression evaluator and API provider; the full design is
+`PLAN.md` in {repo-peano}[the repository].
 
 == Modules
 
@@ -10,7 +12,7 @@ How Peano is designed to work inside. `peano-core` now contains the P1 lexer, pa
 |===
 | Artefact | Java module | Role
 
-| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; lexer/parser/AST implemented, `ExpressionFactory` provider planned
+| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constant expressions
 | `peano-api` | `io.vidocq.peano.api` | Generated-code SPI (accessor tables) — planned, P6
 | `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
 | `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
@@ -25,7 +27,11 @@ How Peano is designed to work inside. `peano-core` now contains the P1 lexer, pa
 
 == AOT compatibility
 
-Target: no bytecode generated at run time, no `opens`, no `setAccessible`. The only reflection left is the spec's own `BeanELResolver`, used as a fallback for types without a generated table — documented, and switchable to an error.
+Target: no bytecode generated at run time, no `opens`, no `setAccessible`.
+The spec's own `BeanELResolver` is the planned property-access fallback.
+The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
+and the `empty` operator (EL 6.0 sections 1.25.7 and 1.11): allocation, element access
+and length, with no member lookup, accessibility changes or `java.desktop` dependency.
 
 == Lexer (implemented)
 
@@ -52,3 +58,25 @@ All AST collections are copied into immutable lists.
 composite expressions (section 1.2). It balances collection braces and quoted strings,
 rejects nested eval-expressions and mixed immediate/deferred composites, and delegates
 bodies to `Parser`. Errors and token spans use offsets in the original expression.
+
+== Constant evaluation and coercions (implemented)
+
+The interpreter evaluates literals, arithmetic, comparison, logic, `empty`,
+conditional expressions, string concatenation and constant sequences.
+`and`, `or` and `?:` discard the unused branch without evaluating it.
+Single eval-expressions retain their value type; composites concatenate string values
+before conversion to the expected type.
+
+Numeric operators select `Long`, `Double`, `BigInteger` or `BigDecimal` according
+to section 1.7. Decimal equality respects scale, while ordering uses numeric comparison.
+Coercions distinguish primitive null defaults from nullable reference targets, and cover
+strings, numeric types, booleans, characters, enums and arrays (section 1.25).
+
+`PeanoExpressionFactory` is registered with `provides` in the core module.
+Its package is neither exported nor opened. Value expressions apply the expected
+type through `ELContext.convertToType`, allowing the context to override final conversion.
+
+Remaining work includes resolver-aware operand conversion, model-object access,
+method/function execution, assignment, lambdas and collection construction.
+Functional-interface adaptation and PropertyEditor conversions are not implemented.
+Evaluation listeners and expression serialization remain P5 work.

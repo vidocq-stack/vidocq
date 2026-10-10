@@ -15,7 +15,9 @@
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
-The evaluator, coercions and ExpressionFactory provider are not implemented yet.
+The ExpressionFactory provider now evaluates literal/operator expressions, with
+scalar and array coercions. Resolver-based access, method/function execution,
+assignment, lambdas, collection construction and full compliance remain planned.
 The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java
 Modules layout, integration points, TCK plan, milestones P0–P9).
 
@@ -38,7 +40,7 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P1 lexer/parser/AST implemented; evaluation and provider planned |
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P1 constant expressions evaluate through the Jakarta API; remaining milestones planned |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | skeleton |
 
 Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)
@@ -50,7 +52,7 @@ are described in [PLAN.md](PLAN.md) and created by the milestone that needs them
 sdk env          # Java 25 (Temurin) + Maven 3.9.16, pinned by .sdkmanrc
 ./mvnw -ntp install
 ./mvnw -Ptck -pl peano-tck test                 # TCK runner skeleton
-./mvnw -Ptck,tck-official -pl peano-tck test    # official TCK (coordinates to confirm)
+./mvnw -Ptck,tck-official -pl peano-tck test    # official TCK runner still requires wiring
 ```
 
 ## License

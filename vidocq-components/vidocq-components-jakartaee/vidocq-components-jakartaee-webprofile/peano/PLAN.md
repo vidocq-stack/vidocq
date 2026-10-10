@@ -136,6 +136,18 @@ fallbacks" approach Vauban follows.
 
 ## Java Modules layout
 
+Implementation note (2026-10-10): runtime-typed array conversion (section 1.25.7)
+and the `empty` array case (section 1.11) use `java.lang.reflect.Array` for
+allocation, element access and length only. Array component types are supplied
+at runtime, so a single statically typed allocation cannot cover arbitrary
+reference and primitive array targets. This narrow exception requires only
+`java.base` and performs no member lookup or accessibility override.
+
+P1 implements scalar and array coercions. Resolver-aware operand conversion is
+P2 work; functional-interface adaptation belongs with lambdas in P4. PropertyEditor
+conversion remains a design question because Peano forbids `java.desktop` and
+`java.beans` introspection. Unsupported conversions raise ELException.
+
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
 | `peano-api` | `io.vidocq.peano.api` | runtime | `jakarta.el` | `io.vidocq.peano.spi` (generated-code SPI: `AccessorProvider`, accessor table contract), the opt-in annotation |
