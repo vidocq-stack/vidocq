@@ -122,5 +122,13 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
+        <!-- humboldt-rest requires jakarta.ws.rs, but leaves the Jakarta platform APIs to the
+             runtime (`provided`, vidocq-workspace#17). The extension assembles the runtime, so it
+             brings the API, even in an application with no REST endpoint. -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
     </dependencies>
 </project>
