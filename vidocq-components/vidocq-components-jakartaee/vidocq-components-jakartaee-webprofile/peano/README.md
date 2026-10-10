@@ -1,5 +1,7 @@
 # Peano
 
+![Peano logo](docs/en/modules/ROOT/images/peano-logo.png)
+
 **Jakarta Expression Language 6.0** implementation for the
 [Vidocq](https://codeberg.org/Vidocq/vidocq) runtime.
 

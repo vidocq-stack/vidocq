@@ -1,8 +1,8 @@
 = Peano
 :description: Jakarta Expression Language 6.0 implementation — zero third-party dependency, native Java Modules, build-time accessors and compiled expressions. In design.
 
-// TODO: add modules/ROOT/images/peano-logo.png and the module-logo image block
-// ([.text-center] image::peano-logo.png[Peano,300,role=module-logo]) once the logo exists.
+[.text-center]
+image::peano-logo.png[Peano,300,role=module-logo]
 
 [.lead]
 Peano is the Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem, in pure Java 25: zero third-party dependency (only the `jakarta.el` spec jar), strict Java Modules, and — like every Vidocq brick — property accessors and expressions generated at build time where others reflect at run time.
