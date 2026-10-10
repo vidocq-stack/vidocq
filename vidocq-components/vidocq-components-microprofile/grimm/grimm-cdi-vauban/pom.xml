@@ -26,11 +26,14 @@
       <artifactId>ravel-mp-config-api</artifactId>
       <scope>provided</scope>
     </dependency>
-    <!-- Compile scope: OpenApiResource is a JAX-RS resource and its API returns a Response, so the
-         module requires jakarta.ws.rs transitively — every consumer needs the API (a Jakarta spec). -->
+    <!-- OpenApiResource is a JAX-RS resource and its API returns a Response, so the module requires
+         jakarta.ws.rs transitively. A Jakarta platform API: `provided`, the container brings it (the
+         Vidocq OpenAPI extension, or an application server), so a WAR never ships a second copy
+         (vidocq-workspace#17). -->
     <dependency>
       <groupId>jakarta.ws.rs</groupId>
       <artifactId>jakarta.ws.rs-api</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>jakarta.enterprise</groupId>
@@ -44,16 +47,27 @@
     </dependency>
 
     <!--
-      Vauban API (provided): referenced only by the Vauban APT-generated infrastructure
-      (_Factory / _ClientProxy / _VaubanComponents). Build-time only — no runtime coupling to
-      a specific Vauban version beyond the stable component SPI. Pinned to the runtime line (0.2.x)
-      so the generated metadata is consumed correctly by the Vidocq runtime.
+      Runtime dependency under any CDI container, not only Vauban: the build weaves a
+      `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+      (GrimmModelCache, OpenApiResource, GrimmAutoDiscovery). Without this jar Weld cannot load their
+      classes and skips the beans silently (WELD-000119). API types only, no code runs outside
+      Vauban (vidocq-workspace#15, grimm-it-weld). Its Jakarta CDI dependencies are excluded: the
+      container brings the CDI API.
     -->
     <dependency>
       <groupId>io.vidocq.vauban</groupId>
       <artifactId>vauban-api</artifactId>
       <version>0.4.0-SNAPSHOT</version>
-      <scope>provided</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>jakarta.enterprise</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>jakarta.inject</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>

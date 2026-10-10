@@ -18,11 +18,13 @@
             <artifactId>grimm-core</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- JAX-RS annotations read by the processor (provided, like in grimm-core). -->
+        <!-- Compile scope: the processor reads @Path and the other Jakarta REST annotations, and runs on
+             the build machine, from an annotationProcessorPaths entry that only resolves its compile and
+             runtime dependencies. A build tool may carry its dependencies (AGENTS.md, zero-dependency
+             rule); the shipped grimm-cdi-vauban leaves this API `provided`. -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
-            <scope>provided</scope>
         </dependency>
         <!-- grimm-core requires the MicroProfile Config and Jakarta Annotations modules, which it only
              declares as provided: the module-path test run must find them. -->

@@ -19,14 +19,17 @@
  */
 package io.vidocq.grimm.cdi;
 
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.ws.rs.Path;
 
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * MicroProfile OpenAPI 4.2 integration as a CDI 4.1
@@ -34,14 +37,18 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * <p>During the {@code @Enhancement} phase, every class annotated with
  * {@link Path @Path} (typically JAX-RS resource beans) is recorded by its fully-qualified
- * name. The collected set is exposed to the runtime side via {@link #discoveredTypes()}
- * so that the {@link GrimmModelCache} can feed them to the annotation scanner at
- * startup.</p>
+ * name. The collected set reaches the runtime side as the synthetic {@link ScannedTypes} bean,
+ * which the {@link GrimmModelCache} feeds to the annotation scanner at startup.</p>
  *
  * <p>The BCE itself performs no scanning — it merely tells CDI which classes are
  * candidates. The actual model build pipeline (spec "Processing rules" — reader → static
  * file → annotation scan → merge → config-apply → filter) runs inside
  * {@link io.vidocq.grimm.internal.ModelBuilder} when the model cache is instantiated.</p>
+ *
+ * <p>The recorded names belong to this extension instance, so to one container: the
+ * {@code @Synthesis} phase hands them to a synthetic {@link ScannedTypes} bean, which
+ * {@link ScannedTypesCreator} resolves in the container. They used to live in a static set,
+ * shared by every container of the class loader (grimm#22).</p>
  *
  * <p>Registered as a Java Modules service in {@code module-info.java}:
  * {@code provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
@@ -49,23 +56,11 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class GrimmExtension implements BuildCompatibleExtension {
 
-    private static final ReentrantLock LOCK = new ReentrantLock();
-    private static final Set<String> DISCOVERED_NAMES = new LinkedHashSet<>();
+    /** Grimm's own classes stay out of the document: /openapi must not list itself (spec §2.2). */
+    static final String OWN_PACKAGE_PREFIX = "io.vidocq.grimm.";
 
-    /**
-     * One container boot = one deployment: drop everything collected by a
-     * previous boot in the same JVM (sequential Arquillian TCK deployments)
-     * before this deployment's {@code @Enhancement} phase runs.
-     */
-    @jakarta.enterprise.inject.build.compatible.spi.Discovery
-    public void resetForNewDeployment(jakarta.enterprise.inject.build.compatible.spi.ScannedClasses classes) {
-        LOCK.lock();
-        try {
-            DISCOVERED_NAMES.clear();
-        } finally {
-            LOCK.unlock();
-        }
-    }
+    // One extension instance per container start: the classes of this deployment only.
+    private final Set<String> discoveredNames = Collections.synchronizedSet(new LinkedHashSet<>());
 
     /**
      * Records every application class found by the CDI scanner — spec §4.4: the
@@ -78,64 +73,25 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     @Enhancement(types = Object.class, withSubtypes = true)
     public void registerApplicationClass(ClassConfig classConfig) {
         String name = classConfig.info().name();
-        if (name.startsWith("io.vidocq.grimm.")) {
-            return;
-        }
-        LOCK.lock();
-        try {
-            DISCOVERED_NAMES.add(name);
-        } finally {
-            LOCK.unlock();
+        if (!name.startsWith(OWN_PACKAGE_PREFIX)) {
+            discoveredNames.add(name);
         }
     }
 
     /**
-     * Returns the resolved {@link Class} objects for all class names recorded during
-     * the BCE {@code @Enhancement} phase. Class loading uses the thread context
-     * classloader (Vauban deployment classloader at runtime).
-     *
-     * <p>Unresolvable names are silently skipped — they shouldn't happen in practice
-     * since they were observable by the BCE.</p>
+     * Hands this container's classes to the runtime, as a synthetic {@link ScannedTypes} bean
+     * whose parameter lists their names.
      */
-    public static Set<Class<?>> discoveredTypes() {
-        Set<String> snapshot;
-        LOCK.lock();
-        try {
-            snapshot = new LinkedHashSet<>(DISCOVERED_NAMES);
-        } finally {
-            LOCK.unlock();
+    @Synthesis
+    public void registerScannedTypes(SyntheticComponents components) {
+        String[] names;
+        synchronized (discoveredNames) {
+            names = discoveredNames.toArray(String[]::new);
         }
-        Set<Class<?>> resolved = new LinkedHashSet<>();
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        if (cl == null) cl = GrimmExtension.class.getClassLoader();
-        for (String name : snapshot) {
-            try {
-                resolved.add(Class.forName(name, false, cl));
-            } catch (ClassNotFoundException ignored) {
-                // Skip: the class is no longer visible (e.g. test isolation).
-            }
-        }
-        return resolved;
-    }
-
-    /** Test hook — clears the collected names. Not for production use. */
-    static void resetForTesting() {
-        LOCK.lock();
-        try {
-            DISCOVERED_NAMES.clear();
-        } finally {
-            LOCK.unlock();
-        }
-    }
-
-    /** Test hook — manually injects discovered class names. */
-    static void recordForTesting(String name) {
-        LOCK.lock();
-        try {
-            DISCOVERED_NAMES.add(name);
-        } finally {
-            LOCK.unlock();
-        }
+        components.addBean(ScannedTypes.class)
+                .type(ScannedTypes.class)
+                .scope(Dependent.class)
+                .withParam(ScannedTypesCreator.CLASSES, names)
+                .createWith(ScannedTypesCreator.class);
     }
 }
-

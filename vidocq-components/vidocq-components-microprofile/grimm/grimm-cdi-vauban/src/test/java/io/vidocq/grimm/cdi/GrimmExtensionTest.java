@@ -19,26 +19,31 @@
  */
 package io.vidocq.grimm.cdi;
 
-import org.junit.jupiter.api.AfterEach;
+import jakarta.enterprise.inject.build.compatible.spi.Parameters;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GrimmExtensionTest {
 
-    @AfterEach
-    void cleanup() {
-        GrimmExtension.resetForTesting();
-    }
-
     @Test
-    void discoveredTypes_resolvesRecordedNames() {
-        GrimmExtension.recordForTesting(GrimmExtensionTest.class.getName());
-        GrimmExtension.recordForTesting(String.class.getName());
+    void creatorResolvesTheRecordedNamesAndSkipsUnknownOnes() {
+        var created = new ScannedTypesCreator().create(null, new Parameters() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <T> T get(String key, Class<T> type) {
+                return (T) new String[] {GrimmExtensionTest.class.getName(), String.class.getName(), "com.example.Missing"};
+            }
 
-        var types = GrimmExtension.discoveredTypes();
-        assertTrue(types.contains(GrimmExtensionTest.class));
-        assertTrue(types.contains(String.class));
+            @Override
+            public <T> T get(String key, Class<T> type, T defaultValue) {
+                return get(key, type);
+            }
+        });
+
+        assertTrue(created.classes().contains(GrimmExtensionTest.class));
+        assertTrue(created.classes().contains(String.class));
+        assertFalse(created.classes().stream().anyMatch(c -> c.getName().equals("com.example.Missing")));
     }
 }
-

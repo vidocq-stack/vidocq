@@ -48,13 +48,6 @@ public class GrimmConfigProducer {
             return GrimmConfig.defaults();
         }
     }
-
-    /** Bridges the BCE-discovered {@code @Path} classes into the CDI runtime. */
-    @Produces
-    @Dependent
-    public ScannedTypes produceScannedTypes() {
-        return ScannedTypes.of(GrimmExtension.discoveredTypes());
-    }
 }
 
 

@@ -325,3 +325,34 @@ Track reproducible bugs with:
   Covered by `GrimmCoreExportsTest` (grimm-processor). Commit 8081a87 then compiles the
   descriptors in `src/main/java`, so the processor is built as a module; reactor tests unchanged
   (282 / 11 / 14), official TCK 367/367.
+
+### BUG-20261010-01 — Grimm's beans do not load under Weld or Open Liberty (grimm#22)
+
+- **id**: BUG-20261010-01
+- **date**: 2026-10-10
+- **symptom**: Weld skips `GrimmModelCache`, `OpenApiResource` and `GrimmAutoDiscovery` with an INFO message,
+  `WELD-000119: ... Type io.vidocq.vauban.api.ProxyLink not found`; `OpenApiResource` is then unsatisfied
+  (`WELD-001334`).
+- **minimal repro**: `grimm-it-weld` (`WeldPortabilityTest`) on `main`.
+- **hypothesis (confirmed)**: the Vauban build weaves a `protected <init>(io.vidocq.vauban.api.ProxyLink)`
+  entry constructor into every normal-scoped bean, and `vauban-api` was `provided` (`requires static`). Same
+  cause as in Knock, Heisenberg, Cervantes, Humboldt and Dirac.
+- **status**: FIXED — 2026-10-10. `vauban-api` is a runtime dependency of `grimm-cdi-vauban` (plain
+  `requires`), its Jakarta CDI dependencies excluded.
+
+### BUG-20261010-02 — Two containers in one JVM document each other's resources (grimm#22)
+
+- **id**: BUG-20261010-02
+- **date**: 2026-10-10
+- **symptom**: two containers sharing Grimm's classes (two applications on one class loader, or two Weld
+  containers in one JVM) that start together: the first one's `/openapi` lists the second one's resources
+  (`{"paths":{"/second":...}}` in the first container).
+- **minimal repro**: `grimm-it-weld`, `TwoContainersOneJvmTest`: the first container starts the second
+  from an `@Initialized(ApplicationScoped.class)` observer, before building its document.
+- **hypothesis (confirmed)**: `GrimmExtension` recorded the class names in a `static` set, cleared at each
+  container's `@Discovery` phase, and `GrimmConfigProducer` built `ScannedTypes` from whatever it held.
+- **status**: FIXED — 2026-10-10. The names belong to the extension instance; `@Synthesis` registers a
+  synthetic `ScannedTypes` bean with them as a parameter, resolved by `ScannedTypesCreator`, which also adds
+  the resources `grimm-processor` described (a `@Path` class that is not a bean, in `annotated` mode).
+  `GrimmModelCache` takes `Instance<ScannedTypes>`. Covered by `TwoContainersOneJvmTest`,
+  `ScannedTypesCreatorTest`, `GrimmExtensionApplicationScanTest`; official TCK 367/367.

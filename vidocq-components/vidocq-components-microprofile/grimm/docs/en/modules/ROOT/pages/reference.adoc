@@ -222,11 +222,44 @@ Two spec keys are deliberately deferred and currently unimplemented: `mp.openapi
 | Status | Always `200` when the scan succeeded
 |===
 
+[#other-containers]
+== Other CDI containers [.tag-new]#NEW#
+
+Grimm does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `grimm-it-other-containers`, prove it on every build (grimm#22):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `grimm-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: the document lists a resource, its operation and its `@Schema`, and not `/openapi` itself. A second test starts two Weld containers in one JVM, the second during the first one's start, and checks that each document lists only its own resources. A third checks that a resource described only by `grimm-processor` enters the document.
+
+| `grimm-it-openliberty`
+| A WAR compiled with `grimm-processor` on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Config 3.1), with Liberty's `mpOpenAPI` feature off: `GET /openapi` lists a resource that is a CDI bean and one that is not.
+|===
+
+Neither module is published. What they found, now fixed:
+
+* **`vauban-api` is a runtime dependency** of `grimm-cdi-vauban`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`GrimmModelCache`, `OpenApiResource`, `GrimmAutoDiscovery`); a container that cannot load that type cannot load the class, and Weld drops the bean with an INFO message (`WELD-000119`). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded.
+* **Each container has its own document** — see xref:internals.adoc[Internals].
+* **A complete document in `annotated` mode** — compile the application with `grimm-processor`: the resources it describes enter the document even when they are not CDI beans.
+* **`grimm-processor` carries Jakarta REST** — it reads the Jakarta REST annotations, and an `annotationProcessorPaths` entry only resolves its compile and runtime dependencies; the API used to be `provided` there, so the processor could not load from such an entry.
+
+Grimm's own classes (`io.vidocq.grimm.*`) never enter the document, so `/openapi` does not describe itself: keep your application out of that package.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own OpenAPI off** — `mpOpenAPI` on Open Liberty. Otherwise the server answers `/openapi` itself.
+* **Enable the server's CDI, Jakarta REST and MicroProfile Config** — `cdi-4.0`, `restfulWS-3.1` and `mpConfig-3.1` on Open Liberty. `grimm-cdi-vauban` leaves Jakarta REST and the MicroProfile Config API `provided` (vidocq-workspace#17); under Vidocq, the OpenAPI extension brings them.
+* **Nothing to exclude** — the WAR carries the Grimm jars, the MicroProfile OpenAPI API and `vauban-api` (API types only). `grimm-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == Compatibility
 
 * Java 25 (LTS), Maven 3.9.16.
 * JAX-RS 4.0 (Cassini or any conformant runtime).
-* CDI 4.1 Lite (Vauban) or Lite-compatible.
+* CDI 4.1 Lite (Vauban) or Lite-compatible — proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
 * No Jakarta EE Full Profile dependency.
 
 == Bugs and benchmarks

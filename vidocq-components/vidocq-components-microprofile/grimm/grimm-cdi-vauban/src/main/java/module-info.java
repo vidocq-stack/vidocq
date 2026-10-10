@@ -27,8 +27,14 @@ module io.vidocq.grimm.cdi.vauban {
   requires jakarta.inject;
   requires jakarta.annotation;
   requires org.eclipse.microprofile.config;
-  // Compile-only: the service type of the APT-generated _VaubanComponents below.
-  requires static io.vidocq.vauban.api;
+  // Required at runtime under any CDI container, not only Vauban: the build weaves a
+  // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans, so their
+  // classes cannot be loaded without this module. It also supplies the service type of the
+  // APT-generated _VaubanComponents below.
+  requires io.vidocq.vauban.api;
+
+  // ScannedTypesCreator reads the resources the Grimm annotation processor described (grimm#22).
+  uses io.vidocq.grimm.spi.gen.OpenApiContribution;
 
   exports io.vidocq.grimm.cdi;
 

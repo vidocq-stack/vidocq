@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Grimm on Open Liberty (MicroProfile 7 distribution). mpOpenAPI stays off, otherwise Liberty would
+    serve /openapi itself. mpConfig is on: Grimm reads its mp.openapi.* keys through the MicroProfile
+    Config API, which it leaves to the runtime.
+-->
+<server description="grimm-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.0</feature>
+        <feature>restfulWS-3.1</feature>
+        <feature>mpConfig-3.1</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <webApplication location="grimm-it-openliberty.war" contextRoot="/grimm"/>
+</server>

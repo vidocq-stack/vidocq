@@ -23,6 +23,7 @@ import io.vidocq.grimm.internal.ModelBuilder;
 import io.vidocq.grimm.internal.config.GrimmConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -52,6 +53,13 @@ public class GrimmModelCache {
 
     /** CDI constructor. */
     @Inject
+    public GrimmModelCache(GrimmConfig config, Instance<ScannedTypes> scannedTypes) {
+        // An Instance: ScannedTypes is a synthetic bean of GrimmExtension, which exists once the
+        // extension ran in this container, not when the Vauban processor validates the module.
+        this(config, scannedTypes != null && scannedTypes.isResolvable() ? scannedTypes.get() : ScannedTypes.empty());
+    }
+
+    /** Builds the cache over explicit inputs (tests, no-CDI usage). */
     public GrimmModelCache(GrimmConfig config, ScannedTypes scannedTypes) {
         this.config = Objects.requireNonNullElse(config, GrimmConfig.defaults());
         this.scannedTypes = Objects.requireNonNullElse(scannedTypes, ScannedTypes.empty());

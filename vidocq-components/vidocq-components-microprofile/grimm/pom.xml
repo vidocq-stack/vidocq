@@ -64,6 +64,7 @@
     <module>grimm-core</module>
     <module>grimm-processor</module>
     <module>grimm-cdi-vauban</module>
+    <module>grimm-it-other-containers</module>
     <module>grimm-bench</module>
     <module>grimm-examples</module>
   </modules>

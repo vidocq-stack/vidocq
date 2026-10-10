@@ -65,7 +65,9 @@ public void registerApplicationClass(ClassConfig classConfig) {
 }
 ----
 
-The recorded class names are handed to the pipeline through plain CDI producers: `GrimmConfigProducer` `@Produces` the `GrimmConfig` (read from MicroProfile Config) and the `ScannedTypes` holder built from `GrimmExtension.discoveredTypes()`. `GrimmModelCache` is a regular `@ApplicationScoped` bean — no synthesis involved — whose `@PostConstruct` runs the pipeline once; `getDocument()` simply returns the cached reference.
+[.tag-new]#NEW# The recorded class names belong to the extension instance, so to one container. Its `@Synthesis` phase registers a synthetic `ScannedTypes` bean whose parameter lists them, and `ScannedTypesCreator` resolves them in the container, through the application's class loader. The creator also adds every resource class `grimm-processor` described in the application's `META-INF/services/io.vidocq.grimm.spi.gen.OpenApiContribution`: in `annotated` discovery mode a `@Path` class with no bean-defining annotation is not a bean, so the extension never sees it, and its generated description is what puts it in the document. Up to {release-version}, the names lived in a `static` set, shared by every container of the class loader (grimm#22).
+
+`GrimmConfigProducer` `@Produces` the `GrimmConfig` (read from MicroProfile Config). `GrimmModelCache` is a regular `@ApplicationScoped` bean, which takes the `ScannedTypes` through an `Instance` (the synthetic bean only exists once the extension ran) and whose `@PostConstruct` runs the pipeline once; `getDocument()` simply returns the cached reference.
 
 == Threading model
 

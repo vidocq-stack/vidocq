@@ -20,7 +20,6 @@
 package io.vidocq.grimm.cdi;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import test.grimm.app.SamplePojo;
 import test.grimm.app.SampleResource;
@@ -43,11 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class GrimmExtensionApplicationScanTest {
 
-    @AfterEach
-    void cleanup() {
-        GrimmExtension.resetForTesting();
-    }
-
     @Test
     void collectsEveryApplicationClassAndSkipsRuntimeClasses() {
         try (VaubanContainer container = VaubanContainer.builder()
@@ -56,7 +50,7 @@ class GrimmExtensionApplicationScanTest {
                 .addBeanClass(SamplePojo.class)
                 .build()) {
 
-            var types = GrimmExtension.discoveredTypes();
+            var types = container.select(ScannedTypes.class).classes();
             assertTrue(types.contains(SampleResource.class), "@Path resources must be collected");
             assertTrue(types.contains(SamplePojo.class),
                     "plain application classes (@Schema POJOs) must be collected");
@@ -71,14 +65,14 @@ class GrimmExtensionApplicationScanTest {
                 .addBeanClass(GrimmExtension.class)
                 .addBeanClass(SamplePojo.class)
                 .build()) {
-            assertTrue(GrimmExtension.discoveredTypes().contains(SamplePojo.class));
+            assertTrue(first.select(ScannedTypes.class).classes().contains(SamplePojo.class));
         }
 
         try (VaubanContainer second = VaubanContainer.builder()
                 .addBeanClass(GrimmExtension.class)
                 .addBeanClass(SampleResource.class)
                 .build()) {
-            var types = GrimmExtension.discoveredTypes();
+            var types = second.select(ScannedTypes.class).classes();
             assertTrue(types.contains(SampleResource.class));
             assertFalse(types.contains(SamplePojo.class),
                     "types from a previous deployment must not leak into the next boot");
