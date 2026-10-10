@@ -89,6 +89,14 @@ Neither module is published. Three things make this work:
 * **Names come from the class the application wrote** — metric names, configuration keys and fallback methods are keyed by the bean class, and the interceptor sees the subclass the container generated: `Foo$$Intercepted` under Vauban, `Foo$Proxy$_$$_WeldSubclass` under Weld and Open Liberty, `Foo$$OwbInterceptProxy0` under OpenWebBeans. Heisenberg walks up past every class whose name holds `$$`, which javac never produces.
 * **`HeisenbergAutoDiscovery` stays out of the way** — it forwards to the first other `ConfigProviderResolver` on the path (Ravel under Weld); Open Liberty's mpConfig feature installs its own resolver, which wins.
 
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own Fault Tolerance off** — `mpFaultTolerance` on Open Liberty. Otherwise its interceptor applies the policies too.
+* **Enable the server's CDI and MicroProfile Config** — `cdi-4.0` and `mpConfig-3.1` on Open Liberty; the `<class>/<method>/<annotation>/<parameter>` keys are read through the MicroProfile Config API. Metrics and Telemetry are optional: without their API, Heisenberg publishes no metrics and starts anyway.
+* **Nothing to exclude** — the WAR carries the Heisenberg jars, the MicroProfile Fault Tolerance and Config APIs and `vauban-api` (API types only); with the features above, the server's MicroProfile Config is loaded first. `heisenberg-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == MicroProfile Fault Tolerance 4.1 annotations
 
 Summary table of the six annotations, in wrapping order from the outside in.
