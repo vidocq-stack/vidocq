@@ -121,6 +121,31 @@ sdk env
 * MicroProfile Health 4.0.
 * Zero third-party libraries — Jakarta / MicroProfile specs only.
 * Compatible with GraalVM `native-image` and `jlink` minimal images.
+* Runs without Vauban, under Weld or Open Liberty — see <<other-containers>>.
+
+[#other-containers]
+== Other CDI containers [.tag-new]#NEW#
+
+Knock does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `knock-it-other-containers`, prove it on every build (Vidocq/knock#34):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `knock-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: the checks are discovered and registered by probe type, `KnockHealthService` reports them, and `KnockHealthResource` is a bean.
+
+| `knock-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-P 2.1), with Liberty's `mpHealth` feature off: `/health`, `/health/live`, `/health/ready` and `/health/started` answer over HTTP from Knock.
+|===
+
+Neither module is published. Three things make this work:
+
+* **`vauban-api` is a runtime dependency** of `knock-cdi-vauban` and `knock-jaxrs`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (the client-proxy entry point, see the Vauban usage guide); a container that cannot load that type cannot load the bean class, and Weld then drops the bean with an INFO message (`WELD-000119`) instead of failing. `vauban-api` holds API types only (13 KB, no dependency): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Both jars are explicit bean archives** — `knock-cdi-vauban` and `knock-jaxrs` ship a `META-INF/beans.xml` (`bean-discovery-mode="annotated"`), so a container that does not scan implicit archives (Weld SE by default) still finds their beans.
+* **The Jakarta APIs come from the container** — Knock uses nothing beyond CDI 4.0 and Jakarta REST 3.1, so it runs on a Jakarta EE 10 server as well.
+
+The application provides Jakarta REST, JSON-P and CDI, as any server does. With Weld SE alone there is no Jakarta REST runtime: use `KnockHealthService` to build the reports.
 
 == See also
 

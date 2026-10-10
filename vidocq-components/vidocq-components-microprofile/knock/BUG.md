@@ -189,3 +189,39 @@ back with compiler plugin 3.13 either). Workaround removed; the shared execution
     `<maven.javadoc.failOnError>false</maven.javadoc.failOnError>` in the module POM so an
     (empty) javadoc jar is still produced for the release train, rather than skipping the
     javadoc jar entirely (Central requires the artifact's presence).
+
+## BUG-20261010-01 — outside Vauban, every Knock bean is dropped: woven `ProxyLink` constructor, `vauban-api` only `provided`
+
+- **Date**: 2026-10-10
+- **Status**: FIXED locally (branch `test/weld-openliberty-it`, not pushed yet) — Vidocq/knock#34
+- **Modules**: knock-cdi-vauban, knock-jaxrs
+- **Symptom**: under Weld SE 6.0.4 (class path) and Open Liberty 26.0.0.10 (Weld 5.1.1 inside),
+  `HealthCheckRegistry` is unsatisfied, no check is registered and `KnockHealthResource` is not a
+  bean. The container starts anyway; the only trace is an INFO line per bean:
+  `WELD-000119: Not generating any bean definitions from io.vidocq.knock.cdi.internal.KnockCdiHealthCheckRegistry
+  because of underlying class loading error: Type io.vidocq.vauban.api.ProxyLink not found`.
+  On Liberty, the Jakarta REST application then fails with `NoClassDefFoundError: io/vidocq/vauban/api/ProxyLink`.
+- **Minimal repro**: `./mvnw install -pl :knock-it-weld -am` with `vauban-api` back in `provided`
+  scope; or `knock-it-openliberty` with `<packagingExcludes>WEB-INF/lib/vauban-api-*.jar</packagingExcludes>`.
+- **Cause**: the Vauban build (vauban#24) weaves `protected <init>(io.vidocq.vauban.api.ProxyLink)`
+  into every normal-scoped bean. Knock declared `vauban-api` as `provided` (and `requires static`),
+  on the belief that the generated output was inert outside Vauban. Reflecting on the class's
+  constructors needs `ProxyLink`, so without the jar the bean class cannot be introspected.
+  Separately, `knock-jaxrs` had no `META-INF/beans.xml`, so Weld SE never scanned it.
+- **Fix**: `vauban-api` becomes a compile dependency (its `jakarta.enterprise` / `jakarta.inject`
+  dependencies excluded, the container supplies those) and `requires io.vidocq.vauban.api`;
+  `knock-jaxrs` ships `beans.xml` (`annotated`). New modules `knock-it-weld` and
+  `knock-it-openliberty` guard it.
+- **Validation (2026-10-10)**: `clean install` 68/68 (Weld 5/5, Liberty 4/4 on the packaged WAR,
+  no warning in `messages.log`); negative control on Liberty without `vauban-api`: 4/4 red;
+  MicroProfile Health 4.0 TCK on Vauban 28/28; vidocq knock extension + example rebuilt against
+  this Knock (1240 tests) and the jlinked example answers `/api/health*` with 200.
+- **Same fix, Jakarta APIs**: `knock-core` declared `jakarta.json-api` and `knock-mp-health-api`
+  declared `jakarta.enterprise.cdi-api` + `jakarta.inject-api` in `compile` scope (the latter two
+  despite `requires static`), so the WAR on a CDI 4.0 Liberty carried CDI 4.1 API jars. All three
+  are now `provided`; `knock-tck`, which plays the container, declares the CDI and Inject APIs
+  itself (it failed 20 classes with `NoClassDefFoundError: jakarta/enterprise/inject/Produces`
+  until it did). Re-validated: 68/68, TCK 28/28, vidocq extension + example 1240 tests, WAR holds
+  only the Knock jars and `vauban-api`.
+- **Scope**: every brick whose beans the Vauban build weaves has the same defect
+  (Vidocq/vidocq-workspace#15).

@@ -315,6 +315,18 @@
                     <version>${chappe.version}</version>
                     <scope>test</scope>
                 </dependency>
+                <!-- Jakarta CDI and Inject APIs: the container supplies them (Knock declares them
+                     `provided`), and this runner plays the container. -->
+                <dependency>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>jakarta.inject-api</artifactId>
+                    <scope>test</scope>
+                </dependency>
                 <!-- champollion: Jakarta JSON-P implementation used by knock-core at runtime -->
                 <dependency>
                     <groupId>io.vidocq.champollion</groupId>

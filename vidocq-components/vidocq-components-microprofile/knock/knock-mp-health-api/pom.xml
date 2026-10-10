@@ -37,13 +37,18 @@
             <version>${microprofile.health.upstream.version}</version>
             <scope>provided</scope>
         </dependency>
+        <!-- `provided`, matching `requires static` in module-info: the probe qualifiers are CDI
+             annotations, and the container supplies the CDI API. Shipping it from here would put a
+             CDI 4.1 API jar in applications running on a CDI 4.0 server (knock-it-openliberty). -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 

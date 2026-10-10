@@ -111,6 +111,7 @@
         <module>knock-core</module>
         <module>knock-cdi-vauban</module>
         <module>knock-jaxrs</module>
+        <module>knock-it-other-containers</module>
     </modules>
 
     <dependencyManagement>

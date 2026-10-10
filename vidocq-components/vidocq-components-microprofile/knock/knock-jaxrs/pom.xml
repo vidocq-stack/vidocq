@@ -56,12 +56,26 @@
             <artifactId>cassini-core</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
-             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <!-- Runtime dependency, under any CDI container: the Vauban build weaves a
+             `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into every
+             normal-scoped bean, so the bean class cannot be loaded without this jar — Weld, for one,
+             then skips the bean silently (WELD-000119). API types only, no code runs outside Vauban
+             (vidocq-workspace#15, knock-it-weld). The Jakarta CDI APIs it declares are excluded: like
+             every Jakarta API here they come from the container (`provided`), and a CDI 4.0 server
+             (Open Liberty, MicroProfile 7) must not find CDI 4.1 API jars in the application. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
@@ -81,7 +95,8 @@
                 Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
                 plugin is reserved for freezing external, non-APT dependency jars). It generates
                 _ClientProxy/_Factory, META-INF/vauban-beans.list and one _VaubanComponents per
-                package (in-module instantiation/field-injection, no opens). Build-time only.
+                package (in-module instantiation/field-injection, no opens). The processor runs at build
+                time only; its output needs vauban-api at runtime (see the dependency above).
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

@@ -35,8 +35,11 @@ module io.vidocq.knock.jaxrs {
     requires jakarta.ws.rs;
     requires static jakarta.cdi;
     requires static jakarta.inject;
-    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
-    requires static io.vidocq.vauban.api;
+    // Required at runtime under any CDI container, not only Vauban: the build weaves a
+    // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans, so their
+    // classes cannot be loaded without this module. It also supplies the VaubanComponentProvider
+    // service type.
+    requires io.vidocq.vauban.api;
     // Compile-only (optional at runtime): the generated KnockHealthResource$$CassiniAdapter
     // implements a cassini-api type. `requires static` keeps knock-jaxrs runtime-agnostic — the
     // pre-generated adapter stays dormant unless a Cassini runtime is present.

@@ -19,10 +19,12 @@
             <groupId>io.vidocq.knock</groupId>
             <artifactId>knock-api</artifactId>
         </dependency>
-        <!-- JSON-P API (runtime implementation: champollion) -->
+        <!-- JSON-P API, `provided`: the runtime supplies it with its implementation (champollion on
+             Vidocq, the jsonp feature on a server, the implementation jar an application adds). -->
         <dependency>
             <groupId>jakarta.json</groupId>
             <artifactId>jakarta.json-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
