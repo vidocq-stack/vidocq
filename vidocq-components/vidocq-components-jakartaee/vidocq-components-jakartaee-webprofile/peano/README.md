@@ -11,7 +11,7 @@
 
 ## Status
 
-🚧 **Implementation in progress (P4)** — the lexer and recursive-descent parser build
+🚧 **Implementation in progress (P5)** — the lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
@@ -22,6 +22,8 @@ chain, including imports and static fields. Functions, resolver method calls,
 MethodExpression metadata/invocation and assignment operators are implemented.
 Lambda construction/invocation, lexical closures and list/set/map construction are
 implemented, together with lazy chapter 2 collection pipelines and EL optional results.
+Evaluation listeners and value/method expression serialization are implemented.
+Serialized expressions retain parse-time bindings and use the receiving evaluation context.
 Java functional-interface adaptation and full compliance remain planned.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.
 The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java

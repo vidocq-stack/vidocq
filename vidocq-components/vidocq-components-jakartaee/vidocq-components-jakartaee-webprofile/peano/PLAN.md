@@ -1,8 +1,10 @@
 # Peano — Design plan
 
-> Status: **in design**. This document is the design of record for Peano, the
-> Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. Nothing
-> below is implemented yet beyond the scaffold (milestone P0). Decisions marked
+> Status: **implementation in progress (P5)**. This document is the design of record for Peano, the
+> Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
+> now implements grammar, evaluation, resolvers, lambdas, collection pipelines,
+> evaluation events and expression serialization. Functional-interface adaptation,
+> PropertyEditor conversion, generated accessors and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
 
@@ -137,7 +139,7 @@ fallbacks" approach Vauban follows.
 ## Java Modules layout
 
 Implementation note (2026-10-10): runtime-typed array conversion (section 1.25.7)
-and the `empty` array case (section 1.11) use `java.lang.reflect.Array` for
+the `empty` array case (section 1.11) and stream sources (section 2.3.1) use `java.lang.reflect.Array` for
 allocation, element access and length only. Array component types are supplied
 at runtime, so a single statically typed allocation cannot cover arbitrary
 reference and primitive array targets. This narrow exception requires only
@@ -158,6 +160,13 @@ application resolver; hidden metadata and requested return-type validation need 
 Captured FunctionMapper methods invoke through the API's StaticFieldELResolver, retaining
 the mapped declaring class/name/parameter descriptor and API-qualified export access.
 
+P5 serialization (2026-10-10): value and method expressions use a source/binding
+serialization proxy. Public static function descriptors restore metadata through
+Class.getMethod only; invocation stays in the API resolver. Contexts and parser trees
+are rebuilt rather than serialized. Captured object values must be serializable.
+Functional-interface adaptation remains open until build-time adapter generation;
+it is not implemented with runtime proxies or bytecode generation.
+
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
 | `peano-api` | `io.vidocq.peano.api` | runtime | `jakarta.el` | `io.vidocq.peano.spi` (generated-code SPI: `AccessorProvider`, accessor table contract), the opt-in annotation |
@@ -167,7 +176,7 @@ the mapped declaring class/name/parameter descriptor and API-qualified export ac
 | `peano-tck` | — | test, `-Ptck` | `peano-core` | — |
 | `peano-bench` | — | JMH, not deployed | `peano-core`, Expressly (bench scope only) | — |
 
-Today only `peano-core` (scaffold) and `peano-tck` (skeleton) exist; the other
+Today only `peano-core` (interpreter) and `peano-tck` (skeleton) exist; the other
 modules are created by the milestone that needs them — no empty placeholders.
 No `peano-api` re-export aggregator of the spec jar (unlike `erasmus-api`):
 `jakarta.el-api` 6.0.1 is already a proper Java module.

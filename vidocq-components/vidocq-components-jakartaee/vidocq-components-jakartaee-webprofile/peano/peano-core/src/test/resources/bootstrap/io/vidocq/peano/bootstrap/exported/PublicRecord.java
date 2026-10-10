@@ -20,7 +20,7 @@
 package io.vidocq.peano.bootstrap.exported;
 
 /** This fixture package is exported only to the Jakarta API resolver. */
-public record PublicRecord(long count) {
+public record PublicRecord(long count) implements java.io.Serializable {
     @Deprecated
     public long count() {
         return count;

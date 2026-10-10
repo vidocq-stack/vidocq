@@ -82,6 +82,13 @@ final class PeanoMethodExpression extends MethodExpression {
     }
 
     private Object invokeChecked(ELContext context, Object[] parameters, List<Class<?>> inheritedReturns) {
+        context.notifyBeforeEvaluation(source);
+        Object result = invokeBody(context, parameters, inheritedReturns);
+        context.notifyAfterEvaluation(source);
+        return result;
+    }
+
+    private Object invokeBody(ELContext context, Object[] parameters, List<Class<?>> inheritedReturns) {
         var returns = new ArrayList<>(inheritedReturns);
         if (expectedReturnType != null) returns.add(expectedReturnType);
         if (isLiteralText()) {
@@ -123,6 +130,13 @@ final class PeanoMethodExpression extends MethodExpression {
     @Override
     public MethodReference getMethodReference(ELContext context) {
         Objects.requireNonNull(context, "context");
+        context.notifyBeforeEvaluation(source);
+        MethodReference reference = reference(context);
+        context.notifyAfterEvaluation(source);
+        return reference;
+    }
+
+    private MethodReference reference(ELContext context) {
         if (isLiteralText()) return null;
         if (body instanceof Ast.Identifier) {
             MethodReference reference = delegate(context).getMethodReference(context);
@@ -140,6 +154,15 @@ final class PeanoMethodExpression extends MethodExpression {
         Object value = Interpreter.evaluate(body, context, variables, functions);
         if (value instanceof MethodExpression expression) return expression;
         throw new MethodNotFoundException("Variable does not resolve to a MethodExpression");
+    }
+
+    private Object writeReplace() {
+        return ExpressionSerialization.create(true, false, source, null,
+                expectedReturnType, expectedParameterTypes, variables, functions);
+    }
+
+    private void readObject(java.io.ObjectInputStream input) throws java.io.InvalidObjectException {
+        throw new java.io.InvalidObjectException("Serialization proxy required");
     }
 
     private Resolved resolve(ELContext context, Object[] parameters) {

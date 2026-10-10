@@ -78,7 +78,7 @@ type through `ELContext.convertToType`, allowing the context to override convers
 Operator operand conversions also use the evaluation context.
 
 Functional-interface adaptation and PropertyEditor conversions are not implemented.
-Evaluation listeners and expression serialization remain P5 work.
+Evaluation listeners and value/method expression serialization are implemented.
 
 == Resolver-backed values (implemented)
 
@@ -180,3 +180,29 @@ callbacks only when needed. Arithmetic uses the interpreter's context-aware nume
 These operations are available through value-expression invocation. MethodExpression
 metadata and declared return-type checks for synthetic stream/optional operations
 require future generated metadata, like closed-package application methods.
+
+== Evaluation events and serialization (implemented)
+
+Text ValueExpression.getValue and MethodExpression.invoke/getMethodReference notify
+the supplied context before evaluation and after successful completion, following
+the Jakarta API hooks and reference implementation. Failed evaluation or conversion
+does not report successful completion. Metadata lookup and value writes do not emit
+outer evaluation events. Object-valued variable bindings do not emit synthetic events.
+Property notifications stay with ELContext.setPropertyResolved(base, property);
+the interpreter adds no duplicate property event. Listeners and their exception
+handling are owned by the Jakarta API context.
+
+Value and method expressions serialize through an internal serialization proxy.
+It stores the expression source, expected types, captured variable expressions and
+public static function descriptors. Restoration parses a fresh AST and rebuilds
+the saved bindings; it does not capture the original context or consult the receiving
+context's variable/function mappings to replace saved bindings.
+Function descriptors restore public method metadata with Class.getMethod, while
+invocation remains delegated to Jakarta's resolver and preserves Java module boundaries.
+The parser tree and java.lang.reflect.Method objects are not serialized.
+
+Captured object values must themselves support Java serialization, otherwise
+ObjectOutputStream reports NotSerializableException. Evaluated streams and arbitrary
+lambda objects are not added to the serializable payload contract.
+Named-consumer tests round-trip a pipeline, an API-qualified mapped function and
+a method bound to a serializable record, with no exports or opens toward the core.

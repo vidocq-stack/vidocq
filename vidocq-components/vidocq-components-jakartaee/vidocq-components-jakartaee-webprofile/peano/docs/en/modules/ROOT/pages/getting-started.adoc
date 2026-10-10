@@ -121,6 +121,34 @@ call get(), orElse(value), orElseGet(lambda) or ifPresent(lambda).
 Unlike Java streams, anyMatch/allMatch/noneMatch return an empty optional on empty input.
 Java functional-interface adaptation remains future work.
 
+== Observing and saving an expression (implemented)
+
+[source,java]
+----
+var factory = jakarta.el.ExpressionFactory.newInstance();
+var context = new jakarta.el.StandardELContext(factory);
+context.addEvaluationListener(new jakarta.el.EvaluationListener() {
+    @Override
+    public void beforeEvaluation(jakarta.el.ELContext current, String expression) {
+        System.out.println("Evaluating " + expression);
+    }
+});
+var expression = factory.createValueExpression(context, "${1+2}", Object.class);
+var bytes = new java.io.ByteArrayOutputStream();
+try (var output = new java.io.ObjectOutputStream(bytes)) {
+    output.writeObject(expression);
+}
+jakarta.el.ValueExpression restored;
+try (var input = new java.io.ObjectInputStream(
+        new java.io.ByteArrayInputStream(bytes.toByteArray()))) {
+    restored = (jakarta.el.ValueExpression) input.readObject();
+}
+Object result = restored.getValue(context); // Long value 3; listener runs on this context
+----
+
+Captured bindings survive serialization. Captured object values must be serializable;
+contexts and listeners are supplied when the restored expression is evaluated.
+
 == Building Peano from source
 
 [source,bash]

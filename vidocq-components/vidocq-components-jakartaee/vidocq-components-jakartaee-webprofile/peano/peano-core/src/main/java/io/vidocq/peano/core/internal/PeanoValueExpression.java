@@ -69,7 +69,10 @@ final class PeanoValueExpression extends ValueExpression {
     @SuppressWarnings("unchecked")
     public <T> T getValue(ELContext context) {
         Objects.requireNonNull(context, "context");
-        return (T) context.convertToType(rawValue(context), expectedType);
+        if (!objectExpression) context.notifyBeforeEvaluation(source);
+        T value = (T) context.convertToType(rawValue(context), expectedType);
+        if (!objectExpression) context.notifyAfterEvaluation(source);
+        return value;
     }
 
     @Override
@@ -128,6 +131,15 @@ final class PeanoValueExpression extends ValueExpression {
 
     private Object rawValue(ELContext context) {
         return objectExpression ? instance : Interpreter.evaluate(template, context, variables, functions);
+    }
+
+    private Object writeReplace() {
+        return ExpressionSerialization.create(false, objectExpression, source, instance,
+                expectedType, null, variables, functions);
+    }
+
+    private void readObject(java.io.ObjectInputStream input) throws java.io.InvalidObjectException {
+        throw new java.io.InvalidObjectException("Serialization proxy required");
     }
 
     private Ast body() {

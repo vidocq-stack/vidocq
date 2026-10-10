@@ -3,6 +3,30 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-007 · 2026-10-10 · Evaluation boundary notifications missing
+
+- Symptom: EvaluationListener received resolver property events but no expression
+  before/after events.
+- Minimal reproduction: register a listener on StandardELContext and evaluate
+  a ValueExpression created from `${1+2}`.
+- Cause: expression entry points did not call the Jakarta context notification hooks.
+- Status: resolved during P5. Text value evaluation, method invocation and method
+  references notify before evaluation and after success. Writes/metadata preserve
+  reference behavior, and object variable bindings emit no synthetic boundary.
+- Evidence: four EvaluationEventsTest scenarios were red before the implementation.
+
+## EL-008 · 2026-10-10 · Parsed expressions could not be serialized
+
+- Symptom: ObjectOutputStream rejected value/method expressions with
+  NotSerializableException for Template, Ast.Call or java.lang.reflect.Method.
+- Minimal reproduction: write a parsed `${1+2}` expression to ObjectOutputStream.
+- Cause: default serialization traversed the parser tree and reflective function objects.
+- Status: resolved during P5 through a source/binding serialization proxy. Public
+  function descriptors preserve overloads, while the receiving context owns execution.
+  Nonserializable captured user objects still fail with NotSerializableException.
+- Evidence: four ExpressionSerializationTest scenarios failed before the proxy;
+  named-consumer round trips also pass without adding exports or opens.
+
 ## EL-006 · 2026-10-10 · Null stream callback results unboxed incorrectly
 
 - Symptom: a predicate returning null caused a wrapped NullPointerException instead

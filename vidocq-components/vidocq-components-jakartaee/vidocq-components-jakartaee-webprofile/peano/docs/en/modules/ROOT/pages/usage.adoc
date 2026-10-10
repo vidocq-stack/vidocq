@@ -9,6 +9,8 @@ Functions, method calls, MethodExpression metadata and assignments are implement
 Lambda construction, list/set/map construction and chapter 2 collection pipelines
 are implemented. Java functional-interface adaptation, container integration and
 code generation remain planned.
+Evaluation listeners and value/method expression serialization are implemented.
+Serializable captured values are retained; the evaluation context is supplied after restoration.
 
 == Standalone evaluation
 

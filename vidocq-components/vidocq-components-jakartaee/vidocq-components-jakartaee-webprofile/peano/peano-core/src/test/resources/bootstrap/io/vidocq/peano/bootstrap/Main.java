@@ -33,7 +33,7 @@ import io.vidocq.peano.bootstrap.exported.PublicRecord;
 
 /** Independent consumer: references only the Jakarta API. */
 public final class Main {
-    public static void main(String[] args) throws ReflectiveOperationException {
+    public static void main(String[] args) throws Exception {
         var factory = ExpressionFactory.newInstance();
         var module = factory.getClass().getModule();
         if (!"io.vidocq.peano.core".equals(module.getName())
@@ -55,10 +55,24 @@ public final class Main {
                         "${[].stream().findFirst().orElseGet(()->42)}", Object.class).getValue(context))) {
             throw new AssertionError("Collection dispatch failed inside the closed provider module");
         }
+        var restored = (jakarta.el.ValueExpression) roundTrip(pipeline);
+        if (!java.util.List.of(4L, 6L).equals(restored.getValue(new StandardELContext(factory)))) {
+            throw new AssertionError("Serialization failed inside the closed provider module");
+        }
         System.out.println("PEANO_MODULE_OK");
     }
 
-    private static void verifyResolvers(ExpressionFactory factory) throws ReflectiveOperationException {
+    private static Object roundTrip(Object expression) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var output = new java.io.ObjectOutputStream(bytes)) {
+            output.writeObject(expression);
+        }
+        try (var input = new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray()))) {
+            return input.readObject();
+        }
+    }
+
+    private static void verifyResolvers(ExpressionFactory factory) throws Exception {
         Module app = Main.class.getModule();
         Module api = ExpressionFactory.class.getModule();
         Module core = factory.getClass().getModule();
@@ -96,6 +110,15 @@ public final class Main {
         context.getFunctionMapper().mapFunction("f", "twice", PublicRecord.class.getMethod("twice", long.class));
         if (!Long.valueOf(84L).equals(factory.createValueExpression(context, "${f:twice(42)}", Object.class).getValue(context))) {
             throw new AssertionError("API-only export failed for a mapped function");
+        }
+        var savedFunction = (jakarta.el.ValueExpression) roundTrip(
+                factory.createValueExpression(context, "${f:twice(42)}", Object.class));
+        if (!Long.valueOf(84L).equals(savedFunction.getValue(new StandardELContext(factory)))) {
+            throw new AssertionError("Serialized function crossed the wrong module boundary");
+        }
+        var savedMethod = (jakarta.el.MethodExpression) roundTrip(recordMethod);
+        if (!Long.valueOf(42L).equals(savedMethod.invoke(new StandardELContext(factory), null))) {
+            throw new AssertionError("Serialized method crossed the wrong module boundary");
         }
         context.getVariableMapper().setVariable("recordClass", factory.createValueExpression(new ELClass(PublicRecord.class), Object.class));
         for (Class<?> parameter : new Class<?>[] {int.class, Integer.class}) {
