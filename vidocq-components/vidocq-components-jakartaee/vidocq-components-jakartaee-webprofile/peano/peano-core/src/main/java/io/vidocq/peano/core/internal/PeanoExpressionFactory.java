@@ -22,11 +22,13 @@ package io.vidocq.peano.core.internal;
 import java.util.Objects;
 import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
+import jakarta.el.CompositeELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.el.MethodExpression;
 import jakarta.el.ValueExpression;
 import io.vidocq.peano.core.internal.evaluation.Coercions;
 import io.vidocq.peano.core.internal.evaluation.StreamELResolver;
+import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
 
 /** Jakarta EL provider, discovered through the core module's service declaration. */
 public final class PeanoExpressionFactory extends ExpressionFactory {
@@ -35,7 +37,10 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
 
     @Override
     public ELResolver getStreamELResolver() {
-        return new StreamELResolver();
+        var resolver = new CompositeELResolver();
+        resolver.add(new GeneratedAccessorELResolver());
+        resolver.add(new StreamELResolver());
+        return resolver;
     }
 
     @Override

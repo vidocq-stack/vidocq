@@ -27,5 +27,7 @@
  */
 module io.vidocq.peano.core {
     requires transitive jakarta.el;
+    requires io.vidocq.peano.api;
+    uses io.vidocq.peano.spi.AccessorProvider;
     provides jakarta.el.ExpressionFactory with io.vidocq.peano.core.internal.PeanoExpressionFactory;
 }

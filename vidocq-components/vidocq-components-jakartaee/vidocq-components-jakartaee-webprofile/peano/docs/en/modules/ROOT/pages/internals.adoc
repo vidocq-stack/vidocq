@@ -13,7 +13,7 @@ immutable AST, resolver-backed evaluator and API provider; the full design is
 | Artefact | Java module | Role
 
 | `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constants and resolver-backed value expressions
-| `peano-api` | `io.vidocq.peano.api` | Generated-code SPI (accessor tables) — planned, P6
+| `peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable contract — implemented; exports only `io.vidocq.peano.spi`
 | `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
 | `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
 | `peano-tck` | — | Official TCK runner, `-Ptck` profile only
@@ -32,6 +32,32 @@ The spec's own `BeanELResolver` is the property-access fallback for accessible e
 The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
 the `empty` operator and array stream sources (EL 6.0 sections 1.25.7, 1.11 and 2.3.1): allocation, element access
 and length, with no member lookup, accessibility changes or `java.desktop` dependency.
+
+== Application-owned accessor tables (P6 foundation implemented)
+
+AccessorProvider contributes a collection of AccessorTable instances, each an ELResolver
+for one exact runtime class. A Java module provides directive registers the public provider,
+even when the provider and model package have no exports or opens.
+GeneratedAccessorELResolver loads providers through ServiceLoader and snapshots their
+tables in an immutable class-keyed map. Duplicate target registrations fail explicitly.
+Tables keep evaluation state in ELContext and must support concurrent use.
+
+The factory's getStreamELResolver hook returns a composite containing the table resolver
+followed by the stream resolver. The Jakarta API places this hook after custom application
+resolvers and before its built-in resolvers. Custom claims keep precedence; unknown types
+and properties fall through. Tables claim resolved nulls through the ordinary API flag.
+No reflection or accessibility override performs table calls.
+
+The independent consumer fixture verifies a closed bean and record, direct method calls,
+typed writes, read-only metadata, nullable results and custom precedence. A comparison
+record exported only to jakarta.el produces the same value/type/read-only results through
+its table and the API RecordELResolver. The original API-only bootstrap fixture still
+compiles without a Peano API requirement.
+
+This slice validates the runtime service contract with handwritten tables.
+The annotation processor, selected-type annotation/options and generated method metadata
+are future P6 work. Exact runtime-class registration intentionally requires separate
+tables for subclasses.
 
 == Lexer (implemented)
 

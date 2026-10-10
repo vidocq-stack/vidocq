@@ -158,6 +158,29 @@ Object result = restored.getValue(context); // Long value 3; listener runs on th
 Captured bindings survive serialization. Captured object values must be serializable;
 contexts and listeners are supplied when the restored expression is evaluated.
 
+== Registering application accessor tables (P6 foundation)
+
+An application that supplies direct tables compiles against peano-api and registers
+its public AccessorProvider implementation through its own Java module:
+
+[source,java]
+----
+module com.example.app {
+    requires io.vidocq.peano.api;
+    provides io.vidocq.peano.spi.AccessorProvider with com.example.model.ApplicationTables;
+}
+----
+
+ApplicationTables returns AccessorTable instances. Each table implements the ELResolver
+operations with direct calls to one exact runtime class and claims handled properties
+through ELContext.setPropertyResolved(base, property), including null results.
+Unknown operations stay unresolved. The model/provider package needs no exports or opens.
+StandardELContext and ELProcessor discover the tables automatically; custom resolvers
+keep their precedence. Tables and providers must support concurrent use.
+
+The current slice validates this contract using handwritten tables. Generating these
+classes through peano-processor remains the next P6 work.
+
 == Building Peano from source
 
 [source,bash]

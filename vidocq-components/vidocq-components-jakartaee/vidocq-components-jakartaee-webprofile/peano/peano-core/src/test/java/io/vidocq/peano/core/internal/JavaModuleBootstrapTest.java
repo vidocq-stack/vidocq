@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import jakarta.el.ExpressionFactory;
+import io.vidocq.peano.spi.AccessorProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -35,9 +36,31 @@ class JavaModuleBootstrapTest {
     Path temporary;
 
     @Test
+    void loadsAccessorTablesFromAnIndependentClosedConsumerModule() throws Exception {
+        Path api = Path.of(ExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path core = Path.of(PeanoExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path spi = Path.of(AccessorProvider.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path source = temporary.resolve("accessor-source");
+        copyResource("/accessor-bootstrap/module-info.java", source.resolve("module-info.java"));
+        copyResource("/accessor-bootstrap/Main.java", source.resolve("Main.java"));
+        copyResource("/accessor-bootstrap/PublicItem.java", source.resolve("PublicItem.java"));
+        Path classes = temporary.resolve("accessor-classes");
+        Path javaBin = Path.of(System.getProperty("java.home"), "bin");
+        assertEquals(0, run(javaBin.resolve("javac").toString(), "--module-path",
+                String.join(File.pathSeparator, api.toString(), spi.toString()),
+                "-d", classes.toString(), source.resolve("module-info.java").toString(),
+                source.resolve("Main.java").toString(), source.resolve("PublicItem.java").toString()));
+        assertEquals(0, run(javaBin.resolve("java").toString(), "--module-path",
+                String.join(File.pathSeparator, api.toString(), spi.toString(), core.toString(), classes.toString()),
+                "--module", "peano.accessorconsumer/io.vidocq.peano.accessorconsumer.Main"));
+        assertTrue(Files.readString(temporary.resolve("process.log")).contains("PEANO_ACCESSORS_OK"));
+    }
+
+    @Test
     void discoversTheProviderFromAnIndependentNamedConsumer() throws Exception {
         Path api = Path.of(ExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         Path core = Path.of(PeanoExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path spi = Path.of(AccessorProvider.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         Path source = temporary.resolve("source");
         copyResource("/bootstrap/module-info.java", source.resolve("module-info.java"));
         copyResource("/bootstrap/io/vidocq/peano/bootstrap/Main.java", source.resolve("Main.java"));
@@ -51,7 +74,7 @@ class JavaModuleBootstrapTest {
                 source.resolve("PublicRecord.java").toString()));
         // No classpath and no explicit root for Peano: service binding must resolve it.
         assertEquals(0, run(javaBin.resolve("java").toString(), "--module-path",
-                String.join(File.pathSeparator, api.toString(), core.toString(), classes.toString()),
+                String.join(File.pathSeparator, api.toString(), spi.toString(), core.toString(), classes.toString()),
                 "--module", "peano.bootstrap/io.vidocq.peano.bootstrap.Main"));
         assertTrue(Files.readString(temporary.resolve("process.log")).contains("PEANO_MODULE_OK"));
     }

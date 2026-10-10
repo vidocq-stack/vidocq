@@ -16,6 +16,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>jakarta.el</groupId>
             <artifactId>jakarta.el-api</artifactId>
         </dependency>

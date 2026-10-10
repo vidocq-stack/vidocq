@@ -73,6 +73,7 @@
         Activation: ./mvnw -Ptck -pl peano-tck test
     -->
     <modules>
+        <module>peano-api</module>
         <module>peano-core</module>
     </modules>
 
@@ -86,6 +87,11 @@
             </dependency>
 
             <!-- Internal Peano modules -->
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-core</artifactId>

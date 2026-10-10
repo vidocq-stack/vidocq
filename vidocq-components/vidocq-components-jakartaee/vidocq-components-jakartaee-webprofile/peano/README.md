@@ -11,7 +11,7 @@
 
 ## Status
 
-🚧 **Implementation in progress (P5)** — the lexer and recursive-descent parser build
+🚧 **Implementation in progress (P6)** — the lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
@@ -26,6 +26,9 @@ Evaluation listeners and value/method expression serialization are implemented.
 Serialized expressions retain parse-time bindings and use the receiving evaluation context.
 The statically compiled Java Predicate adapter is available. Other functional
 interfaces remain planned for build-time generation.
+Application-owned accessor tables can now register through peano-api services.
+The provider dispatches their direct calls inside closed application packages.
+The annotation processor and generated method metadata remain planned.
 The official EL 6.0.1 TCK passes all 361 tests, including signatures; this result
 is not a certification announcement.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.
@@ -51,10 +54,11 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P4 lambdas, collection construction and chapter 2 pipelines available |
+| `peano-api` | Application accessor-table service contract | Exports only `io.vidocq.peano.spi` |
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P6 direct accessor-table dispatch available |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | 361/361 tests pass on Temurin 25; full suite runs in CI |
 
-Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)
+Planned modules (`peano-processor`, `peano-compiler`, `peano-bench`)
 are described in [PLAN.md](PLAN.md) and created by the milestone that needs them.
 
 ## Build

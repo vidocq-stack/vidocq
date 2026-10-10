@@ -11,7 +11,7 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | Maven coordinates | Java module | Notes
 
 | `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory`
-| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | _planned_ — generated-code SPI
+| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | AccessorProvider and AccessorTable service contract; exports only `io.vidocq.peano.spi`
 | `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | _planned_ — annotation processor, build time only
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
 |===

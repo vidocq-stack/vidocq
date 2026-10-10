@@ -74,8 +74,9 @@ sdk env
 ```
 peano-core   ← Engine: parser, AST, interpreter, coercions,
                provides jakarta.el.ExpressionFactory
+peano-api    ← Application-owned accessor tables, exports io.vidocq.peano.spi
 peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
-(planned)    peano-api (generated-code SPI), peano-processor (APT accessor tables),
+(planned)    peano-processor (APT accessor tables),
              peano-compiler (Class-File API compiled expressions), peano-bench (JMH)
 ```
 
