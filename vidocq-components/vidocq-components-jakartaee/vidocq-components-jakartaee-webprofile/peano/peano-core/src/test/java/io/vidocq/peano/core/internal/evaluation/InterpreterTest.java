@@ -72,7 +72,7 @@ class InterpreterTest {
     @Test
     void doesNotSilentlyEvaluateUnimplementedNodesOrOutOfRangeIntegers() {
         for (String source : List.of("${missing}", "${bean.name}", "${f()}",
-                "${x=1}", "${x->x}", "${[1]}", "${9223372036854775808}")) {
+                "${x=1}", "${x->x}", "${9223372036854775808}")) {
             assertThrows(ELException.class, () -> Interpreter.evaluate(ExpressionParser.parse(source)), source);
         }
         assertThrows(ELException.class, () -> Interpreter.evaluate(ExpressionParser.parse("${1 mod 0}")));

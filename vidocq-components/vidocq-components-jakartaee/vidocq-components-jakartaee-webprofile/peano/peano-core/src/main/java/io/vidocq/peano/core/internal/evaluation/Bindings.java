@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import jakarta.el.ELContext;
@@ -97,6 +98,24 @@ public final class Bindings {
 
     public static String functionKey(String prefix, String name) {
         return prefix + ":" + name;
+    }
+
+    public static Map<String, Object> captureLambdaArguments(Ast.Lambda lambda, ELContext context) {
+        var captured = new HashMap<String, Object>();
+        var mapper = new VariableMapper() {
+            @Override
+            public ValueExpression resolveVariable(String name) {
+                if (context.isLambdaArgument(name)) captured.put(name, context.getLambdaArgument(name));
+                return null;
+            }
+
+            @Override
+            public ValueExpression setVariable(String name, ValueExpression expression) {
+                throw new UnsupportedOperationException("Capture mapper is read-only");
+            }
+        };
+        visit(lambda.body(), mapper, new HashMap<>(), new HashSet<>(), new HashSet<>(lambda.parameters()));
+        return Collections.unmodifiableMap(captured);
     }
 
     public static Map<String, Method> captureFunctions(Template template, ELContext context) {

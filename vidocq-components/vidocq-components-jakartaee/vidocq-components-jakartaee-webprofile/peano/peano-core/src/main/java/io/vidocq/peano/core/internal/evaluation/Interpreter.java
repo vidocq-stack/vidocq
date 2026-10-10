@@ -23,6 +23,9 @@ import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 import java.lang.reflect.Method;
 import jakarta.el.ELException;
@@ -97,12 +100,38 @@ public final class Interpreter {
             case Ast.Property property -> property(property);
             case Ast.Call call -> call(call);
             case Ast.Function function -> function(function);
+            case Ast.ListLiteral list -> list(list.elements());
+            case Ast.SetLiteral set -> new LinkedHashSet<>(list(set.elements()));
+            case Ast.MapLiteral map -> map(map);
+            case Ast.Lambda lambda -> lambda(lambda);
             case Ast.Unary unary -> unary(unary);
             case Ast.Binary binary -> binary(binary);
             case Ast.Conditional conditional -> convert(eval(conditional.condition()), boolean.class)
                     ? eval(conditional.whenTrue()) : eval(conditional.whenFalse());
-            default -> throw new ELException("Evaluation not implemented for " + ast.getClass().getSimpleName());
         };
+    }
+
+    private List<Object> list(List<Ast> expressions) {
+        var values = new ArrayList<Object>(expressions.size());
+        for (Ast expression : expressions) values.add(eval(expression));
+        return values;
+    }
+
+    private Map<Object, Object> map(Ast.MapLiteral map) {
+        var values = new LinkedHashMap<Object, Object>();
+        for (Ast.Entry entry : map.entries()) {
+            Object key = eval(entry.key());
+            Object value = eval(entry.value());
+            values.put(key, value);
+        }
+        return values;
+    }
+
+    private LambdaExpression lambda(Ast.Lambda lambda) {
+        if (context == null) throw new ELException("Lambda construction requires an ELContext");
+        var expression = new LambdaExpression(lambda.parameters(), new LambdaBody(lambda, context, variables, functions));
+        expression.setELContext(context);
+        return expression;
     }
 
     private static Object literal(Token token) {

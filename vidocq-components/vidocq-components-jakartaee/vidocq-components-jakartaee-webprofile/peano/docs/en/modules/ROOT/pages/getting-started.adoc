@@ -4,7 +4,7 @@
 [.lead]
 Peano's development build evaluates constants and resolver-backed value expressions
 through the Jakarta EL API, including functions, method expressions and assignments.
-Lambda construction and collection operations remain planned.
+Lambdas and list/set/map construction are implemented; chapter 2 collection operations remain planned.
 
 == Prerequisites
 
@@ -99,6 +99,20 @@ Function mappings are captured at expression creation. Inline method parameters 
 the parameters passed to invoke. Bare method expressions require explicit parameter types.
 MethodInfo and MethodReference use a documented public-member metadata fallback;
 metadata for a closed application package requires the future generated-accessor SPI.
+
+== Lambdas and collections (implemented)
+
+[source,java]
+----
+var el = new jakarta.el.ELProcessor();
+Object sum = el.eval("((x,y)->x+y)(3,4)"); // Long value 7
+Object factorial = el.eval("fact=n->n==0?1:n*fact(n-1); fact(5)"); // Long value 120
+Object values = el.eval("{'total': [1,2+3], 'labels': {'a','b'}}");
+----
+
+Lambda parameters are read-only bindings; closures retain enclosing argument values.
+Constructed collections are fresh and mutable. Stream filter/map/reduce operations
+remain the next P4 work.
 
 == Building Peano from source
 
