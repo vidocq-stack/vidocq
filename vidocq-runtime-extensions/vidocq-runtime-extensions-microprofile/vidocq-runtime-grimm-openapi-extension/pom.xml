@@ -57,6 +57,15 @@
             <artifactId>grimm-cdi-vauban</artifactId>
             <version>${grimm.version}</version>
         </dependency>
+        <!-- grimm-cdi-vauban requires jakarta.ws.rs (its /openapi resource) but leaves the Jakarta
+             platform APIs to the runtime (`provided`, vidocq-workspace#17). The extension assembles the
+             runtime and serves /openapi through Chappe, so it brings the API itself, even in an
+             application with no Cassini. -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
         <!-- grimm-cdi-vauban requires org.eclipse.microprofile.config (provided there). -->
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
