@@ -3,7 +3,9 @@
 > Status: **implementation in progress (P5)**. This document is the design of record for Peano, the
 > Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
 > now implements grammar, evaluation, resolvers, lambdas, collection pipelines,
-> evaluation events and expression serialization. Functional-interface adaptation,
+> evaluation events, expression serialization and a compiled Predicate adapter.
+> All 361 official EL 6.0.1 TCK tests pass on Temurin 25 (2026-10-10).
+> Other functional-interface adapters,
 > PropertyEditor conversion, generated accessors and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
@@ -211,20 +213,40 @@ No `peano-api` re-export aggregator of the spec jar (unlike `erasmus-api`):
 - Distribution (checked 2026-10-10): the standalone EL 6.0 TCK is **not on Maven
   Central**. It ships as `jakarta-expression-language-tck-6.0.1.zip` (and 6.0.0)
   on `download.eclipse.org/jakartaee/expression-language/6.0/`; its artefacts are
-  installed into the local Maven repository, as for the Servlet TCK of `foy-tck`.
+  installed into the local Maven repository by the runner script, as for the Servlet TCK of `foy-tck`.
   The 6.0.x branch of `jakartaee/expression-language` builds
   `jakarta.tck:jakarta-expression-language-tck:6.0.1`, confirmed from the
   distribution's embedded Maven metadata on 2026-10-10. Central only has the
   Platform-mode `jakarta.tck:el-platform-tck` 11.0.x.
   The suite uses JUnit Jupiter and selects the provider through
   `ExpressionFactory.newInstance()`. It includes `ELSigTestIT` for signature
-  testing. Official cases are named `ELClientIT`: the runner must explicitly
-  include `*IT` classes instead of relying on Surefire's default test patterns.
+  testing. Official cases are named `ELClientIT`: the runner explicitly
+  includes `*IT` classes instead of relying on Surefire's default test patterns.
 - EL is Java SE friendly: inspected suite sources do not use Arquillian.
-- Script `run-official-tck-el-6.0.sh` (`smoke` / `all` / `-Dtest=`), added with
-  the first real run, following the other bricks.
-- Gate: once green, 100 % PASS is a merge gate on `main`; any challenge or
+- Script `run-official-tck-el-6.0.sh` (`smoke` / `all` / `-Dtest=`) installs
+  the official jar and executes the suite. `all` is the default. An invalid or
+  empty selection fails. Signature setup supplies sigTestClasspath and jimage.dir;
+  the upstream SigTest extracts the JDK modules itself.
+- The test-only StandardVariableMapper supplies the TCK's reflective variable.mapper
+  hook by delegating to the API's actual StandardELContext mapper. No fake mapper
+  behavior or modified official test is used.
+- The non-modular official harness runs on the classpath with explicit provider
+  selection, confined to peano-tck. Runtime module checks stay in independent named consumers.
+- First full Temurin 25 run after harness configuration: 361 tests, 21 errors.
+  Regression tests and corrections for root writes, normalized equality, literal
+  method invocation, unspecified conversion targets, bare-method fallback and
+  compiled Predicate adaptation reduce this to 361/361 PASS, signatures included.
+- Gate: 100 % PASS is now a merge gate on `main`; any challenge or
   exclusion goes to a `TCK.md` with the spec citation.
+- A dedicated workflow runs the full TCK on pull requests and main.
+
+Compatibility notes (2026-10-10): dynamic root namespace writes use the original
+assigned value; only non-root properties query their writable type for conversion.
+Bare MethodExpression invocation uses API-owned fallback when the resolver chain
+does not handle it, as required by section 1.6; inline calls stay resolver-owned.
+Expression identity uses normalized syntax while preserving source diagnostics.
+Predicate adaptation is a statically compiled private implementation, not a runtime
+proxy or generated class. Other Java functional interfaces remain build-time work.
 
 ## Milestones (TDD — test first, every milestone)
 

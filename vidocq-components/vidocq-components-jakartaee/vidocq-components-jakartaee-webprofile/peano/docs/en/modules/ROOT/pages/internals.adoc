@@ -77,7 +77,8 @@ Its package is neither exported nor opened. Value expressions apply the expected
 type through `ELContext.convertToType`, allowing the context to override conversion.
 Operator operand conversions also use the evaluation context.
 
-Functional-interface adaptation and PropertyEditor conversions are not implemented.
+Predicate conversion uses a statically compiled adapter; other functional-interface
+adapters and PropertyEditor conversions are not implemented.
 Evaluation listeners and value/method expression serialization are implemented.
 
 == Resolver-backed values (implemented)
@@ -94,7 +95,12 @@ before invocation and checks whether the resolver claimed the property.
 
 ValueExpression getType, isReadOnly and setValue delegate the terminal operation to
 the resolver without invoking the terminal getter. Writes convert to the property's
-actual writable type through ELContext before setValue. getValueReference retains the
+actual writable type through ELContext before setValue for non-root properties.
+Root namespace writes pass the original value to the resolver without inferring
+a type from a current bean value. This supports reassignment of null or dynamically
+typed names and avoids the API BeanNameELResolver null-type defect (API-003).
+Root ownership checks use isReadOnly instead of inspecting the current value type.
+getValueReference retains the
 evaluated base and key. Metadata reports writable types from the resolver rather than
 inferring them from current values; read-only static fields have a null writable type.
 Resolver runtime failures are wrapped in ELException with their original cause.
@@ -115,6 +121,9 @@ Functions invoke the captured declaring class/name/parameter descriptor through 
 API's StaticFieldELResolver; changes to the mapper do not change existing expressions.
 Ordinary method calls delegate to the context resolver's invoke operation, including
 static imports and constructors. Custom application resolvers keep invocation precedence.
+Bare MethodExpression references additionally use the documented API BeanELResolver
+or StaticFieldELResolver fallback if the chain does not handle invocation (section 1.6).
+Thrown resolver failures remain failures; inline calls receive no extra fallback.
 
 MethodExpression supports bare references, inline parameters, MethodExpression-valued
 variables and literal text. Inline arguments override invocation arguments, expected
@@ -153,7 +162,16 @@ Body scopes are restored in finally blocks, including failed evaluations.
 The API enforces argument counts and ignores extra arguments according to section 1.20.
 No proxy, member reflection, bytecode generation or module access override is added.
 
-Java functional-interface adaptation remains pending.
+Java Predicate conversion uses an ordinary compiled private record implementing
+the public java.util.function.Predicate interface. It invokes the EL lambda and
+coerces its result to primitive boolean; closures and scope cleanup remain intact.
+Other functional interfaces require future build-time adapters. No dynamic proxy
+or runtime bytecode generation is introduced.
+
+Expression equality and hash codes use normalized immutable syntax, ignoring
+whitespace, operator aliases and the choice of immediate/deferred delimiter.
+Operand order, literal text, expected types and captured bindings remain significant.
+Original source and positions are retained for diagnostics and getExpressionString.
 
 == Collection pipelines (implemented)
 

@@ -59,6 +59,11 @@ public final class Main {
         if (!java.util.List.of(4L, 6L).equals(restored.getValue(new StandardELContext(factory)))) {
             throw new AssertionError("Serialization failed inside the closed provider module");
         }
+        java.util.function.Predicate<?> predicate = factory.createValueExpression(context,
+                "${x->x!=null}", java.util.function.Predicate.class).getValue(context);
+        if (predicate.test(null)) {
+            throw new AssertionError("Predicate adaptation failed inside the closed provider module");
+        }
         System.out.println("PEANO_MODULE_OK");
     }
 

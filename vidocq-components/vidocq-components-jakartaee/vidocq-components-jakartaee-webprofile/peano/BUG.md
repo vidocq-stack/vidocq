@@ -3,6 +3,100 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## TCK-001 · 2026-10-10 · Official profile executed no tests
+
+- Symptom: the official profile could report BUILD SUCCESS without executing the suite.
+- Minimal reproduction: install the official artifact and run the old
+  `./mvnw -Ptck,tck-official -pl peano-tck test` configuration.
+- Cause: Surefire's default discovery excludes upstream ELClientIT/ELSigTestIT names.
+- Status: resolved. Explicit *IT inclusion and failIfNoTests are configured;
+  the script also rejects empty/unknown selections. No tests were excluded.
+- Evidence: the pre-change run with failIfNoTests enabled was red with
+  "No tests were executed"; the configured full suite executes 361 cases.
+
+## TCK-002 · 2026-10-10 · Missing mapper and signature harness properties
+
+- Symptom: mapper cases failed with null VariableMapper; signature testing had
+  an empty test classpath and an invalid jimage extraction directory.
+- Minimal reproduction: run the unconfigured official suite after enabling *IT discovery.
+- Cause: upstream contexts instantiate the class named by variable.mapper, and
+  signature tests require sigTestClasspath and jimage.dir.
+- Status: resolved. Test-only StandardVariableMapper delegates to the API's actual
+  mapper. Signature configuration supplies the API jar and extracted JDK classes.
+- Evidence: mapper cases and ELSigTestIT pass in the full 361-test run.
+
+## EL-009 · 2026-10-10 · Dynamic root writes queried current bean types
+
+- Symptom: reassignment of a null bean name failed with a wrapped NPE; dynamic
+  namespace writes could coerce to a type inferred from a previous value.
+- Minimal reproduction: define bean a as null, then evaluate `a=1; a=2.5; a`.
+- Cause: root writes queried BeanNameELResolver.getType before setValue, triggering
+  API-003 and applying a property-type inference to dynamic namespace entries.
+- Status: resolved. Root writes pass their original value to the resolver.
+  Non-root property writes still use their declared writable type.
+- Evidence: OfficialCompatibilityTest and all assignment/semicolon TCK cases pass.
+
+## EL-010 · 2026-10-10 · Expression identity used raw source text
+
+- Symptom: equivalent expressions differing only by whitespace, operator aliases
+  or immediate/deferred delimiters compared unequal.
+- Minimal reproduction: compare expressions `${A<B}` and `#{ A lt B }`.
+- Cause: equals/hashCode used the original expression string.
+- Status: resolved through normalized immutable syntax. Operand order, expected
+  types and captured bindings remain significant; diagnostics retain original source.
+- Evidence: regression cases and official valueExpressionEqualsTest pass.
+
+## EL-011 · 2026-10-10 · Void literal method expression failed too early
+
+- Symptom: creation rejected a literal MethodExpression with expected void return type.
+- Minimal reproduction: create a method expression from "literal" with return
+  type void and an empty parameter-type array.
+- Cause: the void check ran during construction instead of invocation.
+- Status: resolved. Creation and metadata work; invocation raises ELException,
+  matching MethodExpression.invoke's API contract.
+- Evidence: updated red regression and official negativeMethodExpressionTest pass.
+
+## EL-012 · 2026-10-10 · Unspecified conversion target rejected
+
+- Symptom: ExpressionFactory.coerceToType(null, null) threw NullPointerException.
+- Minimal reproduction: call the method with a null target type.
+- Cause: Coercions required a non-null target before applying conversion rules.
+- Status: resolved. An unspecified target preserves the original value.
+- Evidence: UnspecifiedConversionTest and official coerceToTypeTest pass.
+
+## EL-013 · 2026-10-10 · Bare methods required an invocation-aware custom chain
+
+- Symptom: a bare MethodExpression could report correct metadata but fail to invoke
+  a public method when its custom resolver chain only resolved the target.
+- Minimal reproduction: bind a Vector and invoke `#{vect.add}` using an empty invocation chain.
+- Cause: invocation stopped at the unresolved chain instead of invoking the method
+  found under section 1.6's bare-reference rules.
+- Status: resolved through API BeanELResolver/StaticFieldELResolver fallback for bare
+  references only. Custom resolver errors and claims keep precedence; inline calls
+  retain the chain's invocation contract and module access remains enforced.
+- Evidence: regression and official positiveMethodExpressionTest pass.
+
+## EL-014 · 2026-10-10 · Lambda could not convert to Java Predicate
+
+- Symptom: a Java method taking Predicate rejected an EL lambda with ELException.
+- Minimal reproduction: request Predicate.class for `x->x>5` with ELProcessor.getValue.
+- Cause: functional-interface coercion had no compiled adapter.
+- Status: Predicate case resolved through a statically compiled private implementation.
+  Arbitrary functional interfaces remain planned for build-time generation.
+- Evidence: PredicateConversionTest, named-consumer check and the official lambda
+  coercion case pass; no proxy or runtime bytecode generation is used.
+
+## API-003 · 2026-10-10 · BeanNameELResolver null bean type query
+
+- Symptom: getType on a resolved writable name holding null throws NullPointerException.
+- Minimal reproduction: define bean a as null with ELProcessor and ask its context's
+  resolver for getType(context, null, "a").
+- Cause: jakarta.el 6.0.1 BeanNameELResolver calls getBean(name).getClass() without
+  a null check.
+- Status: open, upstream API limitation. Peano wraps direct metadata failures.
+  Dynamic root writes avoid the unnecessary type query (EL-009).
+- Evidence: BeanNameELResolver.java:162 in the official assignment/semicolon failures.
+
 ## EL-007 · 2026-10-10 · Evaluation boundary notifications missing
 
 - Symptom: EvaluationListener received resolver property events but no expression

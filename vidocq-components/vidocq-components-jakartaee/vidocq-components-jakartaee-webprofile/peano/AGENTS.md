@@ -8,7 +8,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > evaluated mechanically. The Peano project implements **Jakarta Expression Language
 > 6.0**: it parses `${...}` / `#{...}` into an unambiguous tree and evaluates it.
 
-**Status: in design.** Read [PLAN.md](PLAN.md) before any change — it is the design of
+**Status: implementation in progress.** Read [PLAN.md](PLAN.md) before any change — it is the design of
 record (spec scope, codegen doctrine, Java Modules layout, integration points, TCK plan,
 milestones P0–P9, open questions). Structural decisions marked "to validate" there need
 the maintainer's sign-off first.
@@ -51,7 +51,8 @@ of local divergence, the brick-specific sections further down take precedence.
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
 - `jakarta.el:jakarta.el-api:6.0.1` is already modular upstream (module `jakarta.el`) —
   no Vidocq fork needed.
-- The official EL 6.0 TCK coordinates are **not yet confirmed** (see PLAN.md "TCK plan").
+- The official EL 6.0.1 TCK is `jakarta.tck:jakarta-expression-language-tck:6.0.1`;
+  use the run script to install the distribution and execute it (see PLAN.md "TCK plan").
 - The build uses `git-commit-id-maven-plugin` (from `vidocq-parent`): it needs at least
   one commit in the repository.
 
@@ -61,8 +62,8 @@ of local divergence, the brick-specific sections further down take precedence.
 sdk env
 ./mvnw -ntp install                               # default reactor (no TCK)
 ./mvnw test
-./mvnw -Ptck -pl peano-tck test                   # TCK runner skeleton
-./mvnw -Ptck,tck-official -pl peano-tck test      # official TCK (coordinates to confirm)
+./mvnw -Ptck -pl peano-tck test                   # test support only, not a TCK pass
+./run-official-tck-el-6.0.sh all                  # official full TCK, including signatures
 ```
 
 `peano-tck` is **in-reactor behind the `tck` Maven profile** from day one: a plain
@@ -71,7 +72,7 @@ sdk env
 ## Architecture
 
 ```
-peano-core   ← Engine (scaffold today): parser, AST, interpreter, coercions,
+peano-core   ← Engine: parser, AST, interpreter, coercions,
                provides jakarta.el.ExpressionFactory
 peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
 (planned)    peano-api (generated-code SPI), peano-processor (APT accessor tables),
@@ -116,7 +117,7 @@ coercions").
 
 ## TCK — Technology Compatibility Kit
 
-Not run yet (milestone P8). Once green, 100 % PASS is a merge gate; any challenge goes
+EL 6.0.1 passes 361/361 tests on Temurin 25 (2026-10-10). 100 % PASS is a merge gate; any challenge goes
 in a `TCK.md` with spec citation — created only if one is actually filed.
 
 ## AI Principles — Collaboration on This Repository

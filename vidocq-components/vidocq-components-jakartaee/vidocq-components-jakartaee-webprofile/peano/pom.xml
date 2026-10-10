@@ -99,7 +99,7 @@
             TCK harmonisation: the official Jakarta Expression Language 6.0 TCK
             runner joins the reactor only when this profile is active.
 
-                ./mvnw -Ptck -pl peano-tck test                  (runner skeleton only)
+                ./mvnw -Ptck -pl peano-tck test                  (test support only)
                 ./mvnw -Ptck,tck-official -pl peano-tck test     (pulls the official TCK)
 
             See PLAN.md, "TCK plan".

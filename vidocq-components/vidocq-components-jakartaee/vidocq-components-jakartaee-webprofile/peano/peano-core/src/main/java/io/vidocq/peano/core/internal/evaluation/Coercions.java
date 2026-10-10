@@ -22,8 +22,9 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Objects;
+import java.util.function.Predicate;
 import jakarta.el.ELException;
+import jakarta.el.LambdaExpression;
 
 /** Scalar and array conversions from EL 6.0 section 1.25. */
 public final class Coercions {
@@ -32,7 +33,9 @@ public final class Coercions {
 
     /**
      * Converts a value, preserving null for reference targets except String.
-     * Functional-interface adapters and PropertyEditor conversions are not implemented.
+     * An unspecified target type preserves the original value.
+     * Supports the statically compiled Predicate adapter; other functional interfaces
+     * and PropertyEditor conversions remain unimplemented.
      *
      * @param value input value
      * @param type target type
@@ -41,7 +44,7 @@ public final class Coercions {
      */
     @SuppressWarnings("unchecked")
     public static <T> T convert(Object value, Class<T> type) {
-        Objects.requireNonNull(type, "type");
+        if (type == null) return (T) value;
         try {
             return (T) convertValue(value, type);
         } catch (ELException error) {
@@ -58,6 +61,9 @@ public final class Coercions {
         Class<?> boxed = boxed(type);
         if (boxed.isInstance(value)) {
             return value;
+        }
+        if (type == Predicate.class && value instanceof LambdaExpression lambda) {
+            return new LambdaPredicate(lambda);
         }
         if (boxed == String.class) {
             return value == null ? "" : value instanceof Enum<?> e ? e.name() : value.toString();
@@ -171,6 +177,14 @@ public final class Coercions {
 
     private static ELException failure(Class<?> type) {
         return new ELException("Cannot coerce to " + type.getTypeName());
+    }
+
+    /** A normal compiled class, with no dynamic proxy or runtime bytecode generation. */
+    private record LambdaPredicate(LambdaExpression lambda) implements Predicate<Object> {
+        @Override
+        public boolean test(Object value) {
+            return convert(lambda.invoke(value), boolean.class);
+        }
     }
 }
 

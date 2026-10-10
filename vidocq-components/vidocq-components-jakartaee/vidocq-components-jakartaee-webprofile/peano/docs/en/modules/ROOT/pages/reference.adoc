@@ -10,7 +10,7 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 |===
 | Maven coordinates | Java module | Notes
 
-| `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory` (scaffold)
+| `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory`
 | `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | _planned_ — generated-code SPI
 | `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | _planned_ — annotation processor, build time only
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
@@ -20,7 +20,19 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 
 `jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.
 
-Build-time tooling may take a dependency when it saves rewriting something done elsewhere; each one will be named on this page. None so far.
+== Official TCK tooling
+
+The unpublished peano-tck runner uses
+`jakarta.tck:jakarta-expression-language-tck:6.0.1` from the official distribution
+and `jakarta.tck:sigtest-maven-plugin:2.3` as its signature-test runtime, matching
+the distribution's embedded metadata. Both are test dependencies behind
+`-Ptck,tck-official`; none ships with peano-core.
+The signature runtime's Maven tooling dependencies remain test-only.
+Local installation uses a minimal POM to avoid importing the TCK's release-build parent.
+
+The upstream suite is non-modular. Its runner uses the classpath and selects
+Peano via the Jakarta ExpressionFactory property, an exception confined to this
+test harness. Independent named-consumer tests enforce the production module boundaries.
 
 == Configuration keys (planned)
 

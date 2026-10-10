@@ -14,9 +14,11 @@ provider are implemented. Resolver-backed value expressions now navigate models,
 capture variables and expose get/set/metadata with imports and static fields.
 Functions, method expressions, method references and assignments are implemented.
 Lambda execution, list/set/map construction and lazy chapter 2 collection
-pipelines are implemented. Java functional-interface adaptation remains planned; known API limitations
+pipelines and a compiled Java Predicate adapter are implemented. Other functional-interface adapters remain planned; known API limitations
 are recorded in BUG.md.
 Evaluation listeners and expression serialization are implemented.
+All 361 official EL 6.0.1 TCK tests pass on Temurin 25, including signatures.
+This is a test result, not a certification announcement.
 This documentation describes the intended `{project-version}` development line; every page states what exists today.
 ====
 
@@ -36,7 +38,7 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 | Java modules | `io.vidocq.peano.core` (more as milestones land — see xref:internals.adoc[Internals])
 | Runtime dependencies | None beyond `jakarta.el`
 | Status | P5 evaluation events and expression serialization usable — not released or certified
-| Official TCK | planned (milestone P8) — see xref:tck.adoc[TCK status]
+| Official TCK | 361/361 tests pass, including signatures — see xref:tck.adoc[TCK status]
 |===
 
 == Three identifying traits

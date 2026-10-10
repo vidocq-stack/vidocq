@@ -46,6 +46,7 @@ final class PeanoMethodExpression extends MethodExpression {
     private static final long serialVersionUID = 1L;
     private final String source;
     private final Template template;
+    private final Template identity;
     private final Ast body;
     private final Class<?> expectedReturnType;
     private final Class<?>[] expectedParameterTypes;
@@ -59,6 +60,7 @@ final class PeanoMethodExpression extends MethodExpression {
     PeanoMethodExpression(ELContext context, String source, Class<?> expectedReturnType, Class<?>[] expectedTypes) {
         this.source = source;
         this.template = ExpressionParser.parse(source);
+        this.identity = ExpressionIdentity.template(template);
         this.body = template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
                 ? evaluation.body() : null;
         boolean literal = template.kind() == Template.Kind.LITERAL;
@@ -68,7 +70,6 @@ final class PeanoMethodExpression extends MethodExpression {
         }
         parametersProvided = body instanceof Ast.Call;
         if (!parametersProvided) Objects.requireNonNull(expectedTypes, "expectedParamTypes");
-        if (literal && expectedReturnType == void.class) throw new ELException("Literal method expression cannot return void");
         this.expectedReturnType = expectedReturnType;
         this.expectedParameterTypes = parametersProvided ? null : expectedTypes.clone();
         variables = Bindings.capture(template, context);
@@ -92,6 +93,7 @@ final class PeanoMethodExpression extends MethodExpression {
         var returns = new ArrayList<>(inheritedReturns);
         if (expectedReturnType != null) returns.add(expectedReturnType);
         if (isLiteralText()) {
+            if (expectedReturnType == void.class) throw new ELException("Literal method expression cannot return void");
             Class<?> literalType = expectedReturnType == null ? String.class : expectedReturnType;
             returns.forEach(type -> MethodMetadata.checkReturn(type, literalType));
             Object value = Interpreter.evaluate(template, context, variables, functions);
@@ -109,7 +111,9 @@ final class PeanoMethodExpression extends MethodExpression {
             Method method = find(resolved, context);
             returns.forEach(type -> MethodMetadata.checkReturn(type, method.getReturnType()));
         }
-        return ResolverAccess.invoke(context, resolved.location(), resolved.types(), resolved.arguments());
+        return parametersProvided
+                ? ResolverAccess.invoke(context, resolved.location(), resolved.types(), resolved.arguments())
+                : ResolverAccess.invokeBare(context, resolved.location(), resolved.types(), resolved.arguments());
     }
 
     @Override
@@ -205,7 +209,7 @@ final class PeanoMethodExpression extends MethodExpression {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof PeanoMethodExpression expression && source.equals(expression.source)
+        return other instanceof PeanoMethodExpression expression && identity.equals(expression.identity)
                 && expectedReturnType == expression.expectedReturnType
                 && Arrays.equals(expectedParameterTypes, expression.expectedParameterTypes)
                 && variables.equals(expression.variables) && functions.equals(expression.functions);
@@ -213,7 +217,7 @@ final class PeanoMethodExpression extends MethodExpression {
 
     @Override
     public int hashCode() {
-        return Objects.hash(source, expectedReturnType, Arrays.hashCode(expectedParameterTypes), variables, functions);
+        return Objects.hash(identity, expectedReturnType, Arrays.hashCode(expectedParameterTypes), variables, functions);
     }
 }
 

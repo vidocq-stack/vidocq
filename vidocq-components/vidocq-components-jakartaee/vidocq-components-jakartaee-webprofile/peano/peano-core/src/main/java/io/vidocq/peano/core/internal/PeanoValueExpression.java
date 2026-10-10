@@ -39,6 +39,7 @@ final class PeanoValueExpression extends ValueExpression {
     private final Class<?> expectedType;
     private final String source;
     private final Template template;
+    private final Template identity;
     private final Object instance;
     private final boolean objectExpression;
     private final Map<String, ValueExpression> variables;
@@ -49,6 +50,7 @@ final class PeanoValueExpression extends ValueExpression {
         this.expectedType = expectedType;
         this.source = source;
         this.template = template;
+        this.identity = template == null ? null : ExpressionIdentity.template(template);
         this.instance = instance;
         this.objectExpression = objectExpression;
         this.variables = variables;
@@ -184,12 +186,12 @@ final class PeanoValueExpression extends ValueExpression {
                 && variables.equals(expression.variables)
                 && functions.equals(expression.functions)
                 && (objectExpression ? Objects.equals(instance, expression.instance)
-                        : source.equals(expression.source));
+                        : identity.equals(expression.identity));
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(expectedType, objectExpression, objectExpression ? instance : source, variables, functions);
+        return Objects.hash(expectedType, objectExpression, objectExpression ? instance : identity, variables, functions);
     }
 }
 

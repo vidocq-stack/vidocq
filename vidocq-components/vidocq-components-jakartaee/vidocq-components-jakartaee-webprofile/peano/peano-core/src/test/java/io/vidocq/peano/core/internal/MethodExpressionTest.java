@@ -72,7 +72,10 @@ class MethodExpressionTest {
         var literal = factory.createMethodExpression(context, "42", Long.class, new Class<?>[0]);
         assertTrue(literal.isLiteralText());
         assertEquals(42L, literal.invoke(context, new Object[] {"ignored"}));
-        assertThrows(ELException.class, () -> factory.createMethodExpression(context, "literal", void.class, new Class<?>[0]));
+        var voidLiteral = factory.createMethodExpression(context, "literal", void.class, new Class<?>[0]);
+        assertTrue(voidLiteral.isLiteralText());
+        assertEquals(void.class, voidLiteral.getMethodInfo(context).getReturnType());
+        assertThrows(ELException.class, () -> voidLiteral.invoke(context, null));
         var mismatch = factory.createMethodExpression(context, "#{text.length}", String.class, new Class<?>[0]);
         assertThrows(MethodNotFoundException.class, () -> mismatch.getMethodInfo(context));
         assertThrows(MethodNotFoundException.class, () -> mismatch.invoke(context, null));

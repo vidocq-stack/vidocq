@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Local installation metadata for the unmodified official 6.0.1 TCK jar.
+    Runtime test dependencies are declared explicitly by the runner, rather than
+    inheriting the distribution's release-build parent and plugin dependencies.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>jakarta.tck</groupId>
+    <artifactId>jakarta-expression-language-tck</artifactId>
+    <version>6.0.1</version>
+</project>

@@ -1,0 +1,16 @@
+name: tck-official
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  official-el-6-0:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+      - name: Run the complete official EL 6.0.1 TCK
+        run: ./run-official-tck-el-6.0.sh all

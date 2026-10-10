@@ -119,7 +119,16 @@ Constructed collections are fresh and mutable. Stream callbacks run when a termi
 operation consumes elements. Aggregate/search results use EL optional values:
 call get(), orElse(value), orElseGet(lambda) or ifPresent(lambda).
 Unlike Java streams, anyMatch/allMatch/noneMatch return an empty optional on empty input.
-Java functional-interface adaptation remains future work.
+The standard Java Predicate interface has a compiled adapter:
+
+[source,java]
+----
+java.util.function.Predicate<Object> predicate =
+        el.getValue("x->x>5", java.util.function.Predicate.class);
+boolean accepted = predicate.test(6); // true
+----
+
+Other functional-interface adapters remain future work.
 
 == Observing and saving an expression (implemented)
 

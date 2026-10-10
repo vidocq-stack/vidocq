@@ -7,19 +7,19 @@
     `mvn install` neither downloads nor runs anything TCK-related.
 
     Two levels:
-      -Ptck                 builds this (empty) runner against peano-core;
+      -Ptck                 builds test support against peano-core, without the suite;
       -Ptck,tck-official    additionally resolves the official TCK artifact and
                             scans it with Surefire.
 
-    The EL 6.0 TCK is a JUnit 5 suite (to confirm) living in the jakartaee/expression-language
+    The EL 6.0 TCK is a JUnit Jupiter suite living in the jakartaee/expression-language
     repository (tck/ module) — no Arquillian container expected, EL is Java SE friendly.
     Distribution (checked 2026-10-10): the standalone TCK is NOT on Maven Central.
     It ships as https://download.eclipse.org/jakartaee/expression-language/6.0/
     jakarta-expression-language-tck-6.0.1.zip (6.0.0 also exists), whose
     artefacts must be installed into the local Maven repository, like the
     Servlet TCK for foy-tck. The 6.0.x branch of that repository builds
-    jakarta.tck:jakarta-expression-language-tck — TO CONFIRM against the zip
-    content. Central only carries the Platform-mode variant
+    jakarta.tck:jakarta-expression-language-tck:6.0.1, confirmed from the zip.
+    Central only carries the Platform-mode variant
     jakarta.tck:el-platform-tck (11.0.x), not the standalone certification suite.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -35,10 +35,9 @@
 
     <artifactId>peano-tck</artifactId>
     <name>Peano :: TCK</name>
-    <description>Official Jakarta Expression Language 6.0 TCK runner — skeleton, see PLAN.md milestone P8</description>
+    <description>Official Jakarta Expression Language 6.0 TCK runner, see PLAN.md milestone P8</description>
 
     <properties>
-        <!-- TO CONFIRM (PLAN.md, "TCK plan"). -->
         <tck.el.groupId>jakarta.tck</tck.el.groupId>
         <tck.el.artifactId>jakarta-expression-language-tck</tck.el.artifactId>
         <tck.el.version>6.0.1</tck.el.version>
@@ -72,6 +71,13 @@
                     <version>${tck.el.version}</version>
                     <scope>test</scope>
                 </dependency>
+                <!-- The distribution uses this artifact as the signature runtime. -->
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>sigtest-maven-plugin</artifactId>
+                    <version>2.3</version>
+                    <scope>test</scope>
+                </dependency>
             </dependencies>
             <build>
                 <plugins>
@@ -82,6 +88,17 @@
                             <!-- The TCK jar is not a Java module: run it on the class path,
                                  like the other Vidocq TCK runners. -->
                             <useModulePath>false</useModulePath>
+                            <failIfNoTests>true</failIfNoTests>
+                            <includes>
+                                <include>**/*IT.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <!-- The upstream non-modular harness cannot use module services. -->
+                                <jakarta.el.ExpressionFactory>io.vidocq.peano.core.internal.PeanoExpressionFactory</jakarta.el.ExpressionFactory>
+                                <variable.mapper>io.vidocq.peano.tck.StandardVariableMapper</variable.mapper>
+                                <jimage.dir>${project.build.directory}/jimage</jimage.dir>
+                                <sigTestClasspath>${settings.localRepository}/jakarta/el/jakarta.el-api/${jakarta.el.version}/jakarta.el-api-${jakarta.el.version}.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.desktop</sigTestClasspath>
+                            </systemPropertyVariables>
                             <dependenciesToScan>
                                 <dependency>${tck.el.groupId}:${tck.el.artifactId}</dependency>
                             </dependenciesToScan>
