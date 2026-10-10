@@ -148,6 +148,16 @@ the evaluation context; functional-interface adaptation belongs with lambdas in 
 conversion remains a design question because Peano forbids `java.desktop` and
 `java.beans` introspection. Unsupported conversions raise ELException.
 
+P3 metadata fallback (2026-10-10): ELResolver exposes invocation but no method-metadata
+lookup SPI. MethodInfo/MethodReference temporarily use public method signature and
+annotation inspection, restricted to members accessible to the jakarta.el API module,
+including accessible interface/superclass declarations. This fallback never invokes
+members, changes accessibility, adds opens or generates runtime bytecode. Generated
+accessor metadata replaces it in P6. Custom hidden-method invocation still uses the
+application resolver; hidden metadata and requested return-type validation need that SPI.
+Captured FunctionMapper methods invoke through the API's StaticFieldELResolver, retaining
+the mapped declaring class/name/parameter descriptor and API-qualified export access.
+
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
 | `peano-api` | `io.vidocq.peano.api` | runtime | `jakarta.el` | `io.vidocq.peano.spi` (generated-code SPI: `AccessorProvider`, accessor table contract), the opt-in annotation |

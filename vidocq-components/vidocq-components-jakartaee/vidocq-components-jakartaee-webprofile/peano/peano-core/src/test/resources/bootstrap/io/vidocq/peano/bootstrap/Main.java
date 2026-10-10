@@ -24,13 +24,16 @@ import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.PropertyNotFoundException;
 import jakarta.el.PropertyNotWritableException;
+import jakarta.el.MethodNotFoundException;
+import jakarta.el.ELClass;
+import jakarta.el.ELException;
 import jakarta.el.StandardELContext;
 import io.vidocq.peano.bootstrap.hidden.HiddenBean;
 import io.vidocq.peano.bootstrap.exported.PublicRecord;
 
 /** Independent consumer: references only the Jakarta API. */
 public final class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws ReflectiveOperationException {
         var factory = ExpressionFactory.newInstance();
         var module = factory.getClass().getModule();
         if (!"io.vidocq.peano.core".equals(module.getName())
@@ -48,7 +51,7 @@ public final class Main {
         System.out.println("PEANO_MODULE_OK");
     }
 
-    private static void verifyResolvers(ExpressionFactory factory) {
+    private static void verifyResolvers(ExpressionFactory factory) throws ReflectiveOperationException {
         Module app = Main.class.getModule();
         Module api = ExpressionFactory.class.getModule();
         Module core = factory.getClass().getModule();
@@ -76,6 +79,45 @@ public final class Main {
         if (!Long.valueOf(42L).equals(record.getValue(context)) || !record.isReadOnly(context)) {
             throw new AssertionError("Qualified record export was not respected");
         }
+        var recordMethod = factory.createMethodExpression(context, "#{record.count()}", long.class, null);
+        var reference = recordMethod.getMethodReference(context);
+        if (!Long.valueOf(42L).equals(recordMethod.invoke(context, null))
+                || reference.getMethodInfo().getReturnType() != long.class
+                || java.util.Arrays.stream(reference.getAnnotations()).noneMatch(a -> a.annotationType() == Deprecated.class)) {
+            throw new AssertionError("API-only export failed for method invocation or metadata");
+        }
+        context.getFunctionMapper().mapFunction("f", "twice", PublicRecord.class.getMethod("twice", long.class));
+        if (!Long.valueOf(84L).equals(factory.createValueExpression(context, "${f:twice(42)}", Object.class).getValue(context))) {
+            throw new AssertionError("API-only export failed for a mapped function");
+        }
+        context.getVariableMapper().setVariable("recordClass", factory.createValueExpression(new ELClass(PublicRecord.class), Object.class));
+        for (Class<?> parameter : new Class<?>[] {int.class, Integer.class}) {
+            var overload = factory.createMethodExpression(context, "#{recordClass.boxed}", String.class,
+                    new Class<?>[] {parameter});
+            if (overload.getMethodInfo(context).getParamTypes()[0] != parameter
+                    || overload.getMethodReference(context).getMethodInfo().getParamTypes()[0] != parameter
+                    || !(parameter == int.class ? "primitive" : "reference").equals(overload.invoke(context, new Object[] {1L}))) {
+                throw new AssertionError("Primitive/wrapper overload selection lost the declared descriptor");
+            }
+        }
+        var ambiguous = factory.createMethodExpression(context, "#{recordClass.pick}", String.class,
+                new Class<?>[] {PublicRecord.Argument.class});
+        try {
+            ambiguous.getMethodInfo(context);
+            throw new AssertionError("Unrelated matching interfaces must remain ambiguous");
+        } catch (MethodNotFoundException expected) {
+            // B and C both match; C only dominates A.
+        }
+        var hiddenMethod = factory.createMethodExpression(context, "#{bean.greet(2)}", null, null);
+        if (!"changed2".equals(hiddenMethod.invoke(context, null))) {
+            throw new AssertionError("Custom invocation crossed the wrong module boundary");
+        }
+        try {
+            hiddenMethod.getMethodInfo(context);
+            throw new AssertionError("Metadata fallback must not expose a closed package");
+        } catch (MethodNotFoundException expected) {
+            // Generated metadata is a later milestone; the public fallback stays closed.
+        }
 
         var fallback = new StandardELContext(factory);
         fallback.getVariableMapper().setVariable("bean", factory.createValueExpression(bean, Object.class));
@@ -93,9 +135,27 @@ public final class Main {
             // The API resolver cannot reach the accessor.
         }
         if (!"changed".equals(bean.getName())) throw new AssertionError("Rejected fallback write mutated the bean");
+        try {
+            factory.createValueExpression(fallback, "${bean.greet(2)}", Object.class).getValue(fallback);
+            throw new AssertionError("Fallback invoked across a non-exported package");
+        } catch (ELException expected) {
+            if (!(expected instanceof MethodNotFoundException) && !(expected.getCause() instanceof NullPointerException)) {
+                throw new AssertionError("Unexpected inaccessible-method failure", expected);
+            }
+            // Only the application resolver may invoke the hidden method.
+        }
     }
 
     private static final class HiddenResolver extends ELResolver {
+        @Override
+        public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
+            if (base instanceof HiddenBean bean && "greet".equals(method)) {
+                context.setPropertyResolved(base, method);
+                return bean.greet(context.convertToType(arguments[0], long.class));
+            }
+            return null;
+        }
+
         private boolean handles(ELContext context, Object base, Object property) {
             if (base instanceof HiddenBean && "name".equals(property)) {
                 context.setPropertyResolved(base, property);

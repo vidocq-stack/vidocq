@@ -21,5 +21,45 @@ package io.vidocq.peano.bootstrap.exported;
 
 /** This fixture package is exported only to the Jakarta API resolver. */
 public record PublicRecord(long count) {
+    @Deprecated
+    public long count() {
+        return count;
+    }
+
+    public static long twice(long value) {
+        return value * 2;
+    }
+
+    public interface A {
+    }
+
+    public interface B {
+    }
+
+    public interface C extends A {
+    }
+
+    public record Argument() implements C, B {
+    }
+
+    public static String pick(A value) {
+        return "A";
+    }
+
+    public static String pick(B value) {
+        return "B";
+    }
+
+    public static String pick(C value) {
+        return "C";
+    }
+
+    public static String boxed(int value) {
+        return "primitive";
+    }
+
+    public static String boxed(Integer value) {
+        return "reference";
+    }
 }
 

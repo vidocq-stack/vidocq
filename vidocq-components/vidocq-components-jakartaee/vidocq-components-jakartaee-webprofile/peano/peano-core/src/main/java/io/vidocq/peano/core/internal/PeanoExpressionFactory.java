@@ -21,7 +21,6 @@ package io.vidocq.peano.core.internal;
 
 import java.util.Objects;
 import jakarta.el.ELContext;
-import jakarta.el.ELException;
 import jakarta.el.ExpressionFactory;
 import jakarta.el.MethodExpression;
 import jakarta.el.ValueExpression;
@@ -50,8 +49,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
             Class<?> expectedReturnType, Class<?>[] expectedParamTypes) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
-        Objects.requireNonNull(expectedParamTypes, "expectedParamTypes");
-        throw new ELException("Method expressions are not implemented (P3)");
+        return new PeanoMethodExpression(context, expression, expectedReturnType, expectedParamTypes);
     }
 
     @Override

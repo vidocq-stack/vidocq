@@ -30,5 +30,9 @@ public final class HiddenBean {
     public void setName(String name) {
         this.name = name;
     }
+
+    public String greet(long suffix) {
+        return name + suffix;
+    }
 }
 

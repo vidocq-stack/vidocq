@@ -50,3 +50,49 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: engine resolver calls did not wrap non-EL runtime exceptions.
 - Status: resolved during P2; guarded resolver calls preserve ELException subclasses
   and wrap other runtime failures. Regression tests verify read/write causes.
+
+## EL-003 · 2026-10-10 · Property writes omitted actual-type coercion
+
+- Symptom: setting a String value into an Integer[] element failed rather than
+  converting the value to Integer; a typed custom property received the raw value.
+- Minimal reproduction: create a ValueExpression for an Integer[] element with
+  expected type String, then setValue(context, "42").
+- Cause: writes delegated the raw value without using the actual writable type
+  required by EL 6.0 section 1.2.1.1.
+- Status: resolved during P3. Query the terminal resolver type, convert through
+  ELContext and then setValue. AssignmentExpressionTest covers object arrays and
+  a typed custom property; API-001 remains independent.
+
+## EL-004 · 2026-10-10 · Literal method aliases skipped inherited return checks
+
+- Symptom: a MethodExpression variable holding a Long-valued literal was invoked
+  through an alias expecting String without rejecting the signature mismatch.
+- Minimal reproduction: bind createMethodExpression(context, "42", Long.class, [])
+  as a variable, then invoke an alias expecting String.
+- Cause: the literal invocation branch ignored return-type constraints accumulated
+  through MethodExpression-valued variables.
+- Status: resolved during P3; literal aliases validate inherited return constraints.
+  MethodExpressionTest contains the regression assertion.
+
+## EL-005 · 2026-10-10 · Primitive/wrapper overload metadata lost exact descriptors
+
+- Symptom: metadata for overloads boxed(int) and boxed(Integer) selected the same
+  descriptor regardless of the caller's explicit expected parameter type.
+- Minimal reproduction: request each overload from the independent PublicRecord fixture
+  through getMethodInfo/getMethodReference and invoke it.
+- Cause: matching boxed parameter types counted as exact, and identical boxed types
+  were treated as strict specificity in both directions.
+- Status: resolved during P3 after a red module fixture. Exact declared types take
+  precedence over boxing; equal boxed types cannot dominate each other.
+
+## API-002 · 2026-10-10 · Inaccessible method fallback produces NullPointerException
+
+- Symptom: BeanELResolver.invoke on a public method in a non-exported package
+  throws NullPointerException instead of MethodNotFoundException.
+- Minimal reproduction: invoke HiddenBean.greet in the independent bootstrap fixture
+  through a fresh StandardELContext without its application resolver.
+- Cause: ELUtil.findMethod returns null for an inaccessible method, then
+  ELUtil.invokeMethod dereferences that null at ELUtil.java:213.
+- Status: open, jakarta.el 6.0.1 API limitation. Peano wraps the NPE in ELException
+  with the original cause. Invocation remains blocked; custom resolver invocation works.
+  The fixture accepts the current wrapped NPE or a future corrected MethodNotFoundException.

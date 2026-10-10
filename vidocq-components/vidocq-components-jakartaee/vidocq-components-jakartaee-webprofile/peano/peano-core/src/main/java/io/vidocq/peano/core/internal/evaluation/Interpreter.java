@@ -22,9 +22,16 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Map;
+import java.util.List;
+import java.util.function.Consumer;
+import java.lang.reflect.Method;
 import jakarta.el.ELException;
 import jakarta.el.ELContext;
 import jakarta.el.ValueExpression;
+import jakarta.el.ELClass;
+import jakarta.el.LambdaExpression;
+import jakarta.el.MethodNotFoundException;
+import jakarta.el.PropertyNotWritableException;
 import io.vidocq.peano.core.internal.syntax.Ast;
 import io.vidocq.peano.core.internal.syntax.Template;
 import io.vidocq.peano.core.internal.syntax.Token;
@@ -34,10 +41,12 @@ import io.vidocq.peano.core.internal.syntax.TokenKind;
 public final class Interpreter {
     private final ELContext context;
     private final Map<String, ValueExpression> variables;
+    private final Map<String, Method> functions;
 
-    private Interpreter(ELContext context, Map<String, ValueExpression> variables) {
+    private Interpreter(ELContext context, Map<String, ValueExpression> variables, Map<String, Method> functions) {
         this.context = context;
         this.variables = variables;
+        this.functions = functions;
     }
 
     public static Object evaluate(Template template) {
@@ -45,7 +54,12 @@ public final class Interpreter {
     }
 
     public static Object evaluate(Template template, ELContext context, Map<String, ValueExpression> variables) {
-        return new Interpreter(context, variables).template(template);
+        return evaluate(template, context, variables, Map.of());
+    }
+
+    public static Object evaluate(Template template, ELContext context, Map<String, ValueExpression> variables,
+            Map<String, Method> functions) {
+        return new Interpreter(context, variables, functions).template(template);
     }
 
     private Object template(Template template) {
@@ -68,7 +82,12 @@ public final class Interpreter {
     }
 
     public static Object evaluate(Ast ast, ELContext context, Map<String, ValueExpression> variables) {
-        return new Interpreter(context, variables).eval(ast);
+        return evaluate(ast, context, variables, Map.of());
+    }
+
+    public static Object evaluate(Ast ast, ELContext context, Map<String, ValueExpression> variables,
+            Map<String, Method> functions) {
+        return new Interpreter(context, variables, functions).eval(ast);
     }
 
     private Object eval(Ast ast) {
@@ -76,6 +95,8 @@ public final class Interpreter {
             case Ast.Literal literal -> literal(literal.token());
             case Ast.Identifier identifier -> ResolverAccess.identifier(identifier.name(), context, variables);
             case Ast.Property property -> property(property);
+            case Ast.Call call -> call(call);
+            case Ast.Function function -> function(function);
             case Ast.Unary unary -> unary(unary);
             case Ast.Binary binary -> binary(binary);
             case Ast.Conditional conditional -> convert(eval(conditional.condition()), boolean.class)
@@ -122,7 +143,10 @@ public final class Interpreter {
     private Object binary(Ast.Binary binary) {
         TokenKind operator = binary.operator().kind();
         if (operator == TokenKind.ASSIGN) {
-            throw new ELException("Assignment evaluation is not implemented (P3)");
+            Consumer<Object> target = writer(binary.left());
+            Object value = eval(binary.right());
+            target.accept(value);
+            return value;
         }
         Object left = eval(binary.left());
         // Logical and conditional operators must not evaluate a discarded branch.
@@ -152,6 +176,75 @@ public final class Interpreter {
         Object key = eval(property.key());
         if (key == null) return null;
         return ResolverAccess.read(context, new ResolverAccess.Location(base, key));
+    }
+
+    private Object[] arguments(List<Ast> expressions) {
+        Object[] arguments = new Object[expressions.size()];
+        for (int i = 0; i < arguments.length; i++) arguments[i] = eval(expressions.get(i));
+        return arguments;
+    }
+
+    private Object function(Ast.Function function) {
+        Method method = functions.get(Bindings.functionKey(function.prefix(), function.name()));
+        if (method == null) throw new MethodNotFoundException("Unmapped function " + function.name());
+        return ResolverAccess.function(context, method, arguments(function.arguments()));
+    }
+
+    private Object call(Ast.Call call) {
+        if (call.target() instanceof Ast.Property property) {
+            Object base = eval(property.base());
+            if (base == null) return null;
+            Object key = eval(property.key());
+            if (key == null) return null;
+            return ResolverAccess.invoke(context, new ResolverAccess.Location(base, convert(key, String.class)),
+                    null, arguments(call.arguments()));
+        }
+        if (call.target() instanceof Ast.Identifier identifier) {
+            Object callable = ResolverAccess.callable(identifier.name(), context, variables);
+            if (callable instanceof LambdaExpression lambda) return lambda.invoke(context, arguments(call.arguments()));
+            Method method = functions.get(Bindings.functionKey("", identifier.name()));
+            if (method != null) return ResolverAccess.function(context, method, arguments(call.arguments()));
+            Class<?> type = context.getImportHandler().resolveClass(identifier.name());
+            if (type != null) {
+                return ResolverAccess.invoke(context, new ResolverAccess.Location(new ELClass(type), "<init>"),
+                        null, arguments(call.arguments()));
+            }
+            type = context.getImportHandler().resolveStatic(identifier.name());
+            if (type != null) {
+                return ResolverAccess.invoke(context, new ResolverAccess.Location(new ELClass(type), identifier.name()),
+                        null, arguments(call.arguments()));
+            }
+            throw new MethodNotFoundException("Unresolved function " + identifier.name());
+        }
+        Object callable = eval(call.target());
+        if (callable instanceof LambdaExpression lambda) return lambda.invoke(context, arguments(call.arguments()));
+        throw new MethodNotFoundException("Expression does not resolve to a callable value");
+    }
+
+    private Consumer<Object> writer(Ast target) {
+        if (context == null) throw new ELException("Assignment requires an ELContext");
+        if (target instanceof Ast.Identifier identifier) {
+            if (context.isLambdaArgument(identifier.name())) {
+                throw new PropertyNotWritableException("Lambda arguments are read-only");
+            }
+            ValueExpression variable = variables.get(identifier.name());
+            if (variable != null) {
+                var reference = variable.getValueReference(context);
+                if (reference != null) {
+                    var location = new ResolverAccess.Location(reference.getBase(), reference.getProperty());
+                    return value -> ResolverAccess.write(context, location, value);
+                }
+                if (variable.isReadOnly(context)) throw new PropertyNotWritableException("Variable is read-only");
+                return value -> variable.setValue(context, value);
+            }
+            var location = new ResolverAccess.Location(null, identifier.name());
+            return value -> ResolverAccess.write(context, location, value);
+        }
+        if (target instanceof Ast.Property property) {
+            var location = ResolverAccess.property(property, context, variables, functions);
+            return value -> ResolverAccess.write(context, location, value);
+        }
+        throw new PropertyNotWritableException("Assignment target is not an lvalue");
     }
 
     private <T> T convert(Object value, Class<T> type) {

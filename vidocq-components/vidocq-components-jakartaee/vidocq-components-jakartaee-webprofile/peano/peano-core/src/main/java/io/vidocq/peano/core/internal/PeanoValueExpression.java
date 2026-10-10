@@ -21,6 +21,7 @@ package io.vidocq.peano.core.internal;
 
 import java.util.Objects;
 import java.util.Map;
+import java.lang.reflect.Method;
 import jakarta.el.ELContext;
 import jakarta.el.PropertyNotWritableException;
 import jakarta.el.ValueExpression;
@@ -41,25 +42,27 @@ final class PeanoValueExpression extends ValueExpression {
     private final Object instance;
     private final boolean objectExpression;
     private final Map<String, ValueExpression> variables;
+    private final Map<String, Method> functions;
 
     private PeanoValueExpression(Class<?> expectedType, String source, Template template,
-            Object instance, boolean objectExpression, Map<String, ValueExpression> variables) {
+            Object instance, boolean objectExpression, Map<String, ValueExpression> variables, Map<String, Method> functions) {
         this.expectedType = expectedType;
         this.source = source;
         this.template = template;
         this.instance = instance;
         this.objectExpression = objectExpression;
         this.variables = variables;
+        this.functions = functions;
     }
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context) {
         Template template = ExpressionParser.parse(source);
         return new PeanoValueExpression(expectedType, source, template, null, false,
-                Bindings.capture(template, context));
+                Bindings.capture(template, context), Bindings.captureFunctions(template, context));
     }
 
     static PeanoValueExpression object(Object instance, Class<?> expectedType) {
-        return new PeanoValueExpression(expectedType, null, null, instance, true, Map.of());
+        return new PeanoValueExpression(expectedType, null, null, instance, true, Map.of(), Map.of());
     }
 
     @Override
@@ -124,7 +127,7 @@ final class PeanoValueExpression extends ValueExpression {
     }
 
     private Object rawValue(ELContext context) {
-        return objectExpression ? instance : Interpreter.evaluate(template, context, variables);
+        return objectExpression ? instance : Interpreter.evaluate(template, context, variables, functions);
     }
 
     private Ast body() {
@@ -142,7 +145,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     private ResolverAccess.Location location(Ast body, ELContext context) {
         if (body instanceof Ast.Identifier identifier) return new ResolverAccess.Location(null, identifier.name());
-        if (body instanceof Ast.Property property) return ResolverAccess.property(property, context, variables);
+        if (body instanceof Ast.Property property) return ResolverAccess.property(property, context, variables, functions);
         return null;
     }
 
@@ -167,13 +170,14 @@ final class PeanoValueExpression extends ValueExpression {
                 && expectedType == expression.expectedType
                 && objectExpression == expression.objectExpression
                 && variables.equals(expression.variables)
+                && functions.equals(expression.functions)
                 && (objectExpression ? Objects.equals(instance, expression.instance)
                         : source.equals(expression.source));
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(expectedType, objectExpression, objectExpression ? instance : source, variables);
+        return Objects.hash(expectedType, objectExpression, objectExpression ? instance : source, variables, functions);
     }
 }
 

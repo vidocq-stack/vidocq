@@ -90,7 +90,7 @@ class PeanoExpressionFactoryTest {
         assertThrows(NullPointerException.class, () -> factory.createValueExpression(context, "${1}", null));
         assertThrows(NullPointerException.class, () -> factory.createValueExpression(1, null));
         assertThrows(ELException.class, () -> factory.createValueExpression(context, "${1+}", Object.class));
-        assertThrows(ELException.class, () -> factory.createMethodExpression(context, "#{bean.run}", Object.class, new Class<?>[0]));
+        assertThrows(ELException.class, () -> factory.createMethodExpression(context, "#{1 + 2}", Object.class, new Class<?>[0]));
     }
 }
 

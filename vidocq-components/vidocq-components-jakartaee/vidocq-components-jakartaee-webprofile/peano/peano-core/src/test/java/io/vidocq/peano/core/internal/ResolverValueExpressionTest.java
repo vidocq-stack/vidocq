@@ -188,7 +188,8 @@ class ResolverValueExpressionTest {
 
             @Override
             public Class<?> getType(ELContext context, Object base, Object property) {
-                return null;
+                context.setPropertyResolved(true);
+                return Object.class;
             }
 
             @Override

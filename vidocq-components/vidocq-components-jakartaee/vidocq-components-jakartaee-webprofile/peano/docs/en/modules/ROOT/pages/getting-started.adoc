@@ -3,8 +3,8 @@
 
 [.lead]
 Peano's development build evaluates constants and resolver-backed value expressions
-through the Jakarta EL API. Functions, method expressions, lambda execution and
-collection construction remain planned.
+through the Jakarta EL API, including functions, method expressions and assignments.
+Lambda construction and collection operations remain planned.
 
 == Prerequisites
 
@@ -77,6 +77,28 @@ access their own non-exported types without opening packages.
 The current provider reports unsupported later-milestone evaluation rather than
 returning a placeholder value. Primitive-array writes remain an upstream API
 limitation tracked in BUG.md.
+
+== Functions and methods (implemented)
+
+[source,java]
+----
+context.getFunctionMapper().mapFunction("f", "max",
+        Math.class.getMethod("max", int.class, int.class));
+Object maximum = factory.createValueExpression(context, "${f:max(2,3)}", Object.class)
+        .getValue(context); // Integer value 3
+context.getVariableMapper().setVariable("text",
+        factory.createValueExpression("Peano", Object.class));
+var method = factory.createMethodExpression(context, "#{text.substring(1,3)}",
+        String.class, null);
+Object text = method.invoke(context, null); // "ea"
+Object assigned = factory.createValueExpression(context, "${a = b = 42; a + b}", Object.class)
+        .getValue(context); // Long value 84
+----
+
+Function mappings are captured at expression creation. Inline method parameters override
+the parameters passed to invoke. Bare method expressions require explicit parameter types.
+MethodInfo and MethodReference use a documented public-member metadata fallback;
+metadata for a closed application package requires the future generated-accessor SPI.
 
 == Building Peano from source
 

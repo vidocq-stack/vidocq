@@ -21,11 +21,14 @@ package io.vidocq.peano.core.internal.evaluation;
 
 import java.util.Map;
 import java.util.function.Supplier;
+import java.lang.reflect.Method;
 import jakarta.el.ELClass;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
 import jakarta.el.PropertyNotFoundException;
 import jakarta.el.PropertyNotWritableException;
+import jakarta.el.MethodNotFoundException;
+import jakarta.el.StaticFieldELResolver;
 import jakarta.el.ValueExpression;
 import jakarta.el.ValueReference;
 import io.vidocq.peano.core.internal.syntax.Ast;
@@ -63,9 +66,14 @@ public final class ResolverAccess {
 
     public static Location property(Ast.Property property, ELContext context,
             Map<String, ValueExpression> variables) {
-        Object base = Interpreter.evaluate(property.base(), context, variables);
+        return property(property, context, variables, Map.of());
+    }
+
+    public static Location property(Ast.Property property, ELContext context,
+            Map<String, ValueExpression> variables, Map<String, Method> functions) {
+        Object base = Interpreter.evaluate(property.base(), context, variables, functions);
         if (base == null) throw missing("null base");
-        Object key = Interpreter.evaluate(property.key(), context, variables);
+        Object key = Interpreter.evaluate(property.key(), context, variables, functions);
         if (key == null) throw missing("null property");
         return new Location(base, key);
     }
@@ -95,11 +103,41 @@ public final class ResolverAccess {
         Location effective = effectiveRoot(context, location);
         if (effective == null) throw new PropertyNotWritableException("An imported class is read-only");
         context.setPropertyResolved(false);
+        Class<?> type = guarded(() -> context.getELResolver().getType(context, effective.base(), effective.property()));
+        Object converted = type != null && context.isPropertyResolved() ? context.convertToType(value, type) : value;
+        context.setPropertyResolved(false);
         guarded(() -> {
-            context.getELResolver().setValue(context, effective.base(), effective.property(), value);
+            context.getELResolver().setValue(context, effective.base(), effective.property(), converted);
             return null;
         });
         if (!context.isPropertyResolved()) throw new PropertyNotWritableException("Unresolved property " + effective.property());
+    }
+
+    public static Object invoke(ELContext context, Location location, Class<?>[] types, Object[] arguments) {
+        requireContext(context);
+        context.setPropertyResolved(false);
+        Object value = guarded(() -> context.getELResolver().invoke(
+                context, location.base(), location.property(), types, arguments));
+        if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved method " + location.property());
+        return value;
+    }
+
+    public static Object function(ELContext context, Method method, Object[] arguments) {
+        requireContext(context);
+        context.setPropertyResolved(false);
+        Object value = guarded(() -> new StaticFieldELResolver().invoke(context,
+                new ELClass(method.getDeclaringClass()), method.getName(), method.getParameterTypes(), arguments));
+        if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved function " + method.getName());
+        return value;
+    }
+
+    public static Object callable(String name, ELContext context, Map<String, ValueExpression> variables) {
+        requireContext(context);
+        if (context.isLambdaArgument(name)) return context.getLambdaArgument(name);
+        ValueExpression variable = variables.get(name);
+        if (variable != null) return variable.getValue(context);
+        context.setPropertyResolved(false);
+        return guarded(() -> context.getELResolver().getValue(context, null, name));
     }
 
     public static ValueReference reference(ELContext context, Location location) {
