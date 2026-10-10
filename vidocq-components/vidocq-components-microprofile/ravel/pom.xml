@@ -96,6 +96,7 @@
         <module>ravel-api</module>
         <module>ravel-core</module>
         <module>ravel-cdi-vauban</module>
+        <module>ravel-it-other-containers</module>
         <module>ravel-bench</module>
     </modules>
 

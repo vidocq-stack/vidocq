@@ -1,5 +1,5 @@
 = What's new
-:description: Everything that changed in Ravel since the {release-version} release — configuration injection under the Vauban annotation processor.
+:description: Everything that changed in Ravel since the {release-version} release — configuration injection under the Vauban annotation processor, and Ravel proven on Weld and Open Liberty.
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
@@ -7,3 +7,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Fixes that change behaviour
 
 * **`@Inject @ConfigProperty` works under the Vauban processor** — on {release-version}, a plain `@Inject @ConfigProperty String` did not compile in a Vidocq application, and once `ravel-cdi-vauban` was on the annotation processor path the application either failed to build or failed to start (ravel#21). Two things went wrong at build time: the extension checked the values against the build machine ("Missing required config property"), although they come from where the application runs, and it synthesised the fallback `Config` bean, which made every `@Inject Config` ambiguous at start. When the extension runs in the compiler it now registers the beans that satisfy each `@ConfigProperty` and `@ConfigProperties` injection point and still rejects an unsupported type, but leaves the value checks and the fallback `Config` bean to the container start, which knows the deployment. A missing key still fails the start, as before. Nothing to change in the application. xref:cdi-integration.adoc#extension-in-the-compiler[When the extension runs in the compiler].
+
+== Other CDI containers
+
+* **Proven on Weld and Open Liberty** — two new test modules run the Ravel jars, unchanged, without Vauban: `ravel-it-weld` on Weld SE 6.0 (class path) and `ravel-it-openliberty` as a WAR on Open Liberty 26.0.0.10 (MicroProfile 7, CDI 4.0) with Liberty's own `mpConfig` off. Ravel needed no change. Neither module is published (ravel#25). xref:cdi-integration.adoc#other-containers[Other CDI containers].

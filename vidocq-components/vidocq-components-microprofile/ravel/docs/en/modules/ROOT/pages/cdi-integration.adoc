@@ -285,6 +285,31 @@ public class ApiClient {
 }
 ----
 
+[#other-containers]
+== Other CDI containers [.tag-new]#NEW#
+
+Ravel does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `ravel-it-other-containers`, prove it on every build (ravel#25), next to the official TCK, which already runs on Weld (xref:tck.adoc[TCK]):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `ravel-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@ConfigProperty` with and without a default, `@ConfigProperties`, an injected `Config`, and `ConfigProvider.getConfig()` answering with Ravel.
+
+| `ravel-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1), with Liberty's `mpConfig` feature off: the same checks, over HTTP.
+|===
+
+Neither module is published. `ravel-cdi-vauban` ships no `beans.xml`, on purpose: every bean it adds is synthetic, made by its build compatible extension, except `RavelConfigProducer`. A container that does not scan implicit archives, such as Weld SE by default, does not discover that producer, and the extension then synthesises the `@Default Config` bean itself.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own MicroProfile Config off** — `mpConfig` on Open Liberty. Ravel registers its `ConfigProviderResolver` through `META-INF/services`; with the server's implementation enabled, the two compete for `ConfigProvider` and for the `@ConfigProperty` injection points.
+* **Nothing to exclude** — the WAR carries `ravel-core`, `ravel-api` and the MicroProfile Config API (`ravel-mp-config-api`), and the Jakarta APIs are `provided`. `ravel-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == Next
 
 * xref:usage.adoc[Usage] — programmatic configuration and custom converters
