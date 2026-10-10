@@ -312,11 +312,7 @@ public final class PolicyComposer {
             return method.getDeclaringClass();
         }
 
-        Class<?> current = target.getClass();
-        while (current.getName().contains("$$Intercepted") && current.getSuperclass() != null) {
-            current = current.getSuperclass();
-        }
-        return current;
+        return BeanClasses.userClass(target.getClass());
     }
 
     /**

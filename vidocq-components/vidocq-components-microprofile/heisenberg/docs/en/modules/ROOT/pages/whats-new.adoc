@@ -1,5 +1,5 @@
 = What's new
-:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens, and Fault Tolerance that starts without Metrics or Telemetry.
+:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens, Fault Tolerance that starts without Metrics or Telemetry, and Heisenberg proven on Weld and Open Liberty.
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
@@ -16,6 +16,9 @@ New in the `{project-version}` development line — everything listed here lande
 == Outside Vauban
 
 * **`heisenberg-cdi-vauban` is an explicit bean archive** — the jar now ships `META-INF/beans.xml` (`bean-discovery-mode="annotated"`, heisenberg#25, BUG-004). Under a container that does not scan implicit archives, such as Weld SE by default, `{release-version}` was not discovered: its interceptors never ran and the Fault Tolerance annotations were silently ignored. Nothing changes under Vauban. xref:reference.adoc#class-path[On a class path].
+* **Proven on Weld and Open Liberty** — two new test modules run the Heisenberg jars, unchanged, without Vauban: `heisenberg-it-weld` on Weld SE 6.0 (class path), `heisenberg-it-openliberty` as a WAR on Open Liberty 26.0.0.10 (MicroProfile 7, CDI 4.0) with Liberty's own `mpFaultTolerance` off. Neither is published (heisenberg#25). xref:reference.adoc#other-containers[Other CDI containers].
+* **`vauban-api` is now a runtime dependency** of `heisenberg-cdi-vauban` — it was `provided`, so outside Vauban the state registries and the metrics recorders, which carry a constructor taking `io.vidocq.vauban.api.ProxyLink`, could not be loaded, and the deployment failed (BUG-006). The module descriptor now `requires io.vidocq.vauban.api`. Nothing changes on the Vidocq runtime, which already has it. xref:reference.adoc#other-containers[Other CDI containers].
+* **Metric names and configuration keys use the bean class under every container** — they were keyed by Weld's generated subclass (`Foo$Proxy$_$$_WeldSubclass`), so a `<class>/<method>/<annotation>/<parameter>` override was ignored and metrics carried the wrong `method` tag (BUG-007). xref:reference.adoc#other-containers[Other CDI containers].
 
 == Fault Tolerance without Metrics or Telemetry
 

@@ -39,17 +39,18 @@
             <artifactId>jakarta.interceptor-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- MP Metrics API — version modularise Dirac (named module, jlink-compatible), provided en runtime -->
+        <!-- MP Metrics API, Dirac's modular build (named module, jlink-compatible). Optional at runtime:
+             without it DiracFtMetricsRecorder stays inactive (BUG-005). -->
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-mp-metrics-api</artifactId>
             <scope>provided</scope>
         </dependency>
         <!--
-            OpenTelemetry API : utilis par OtelFtMetricsRecorder pour publier les mtriques §10
-            (ft.invocations.total, ft.retry.calls.total, etc.) via GlobalOpenTelemetry.
-            Optionnel  l'excution (le bean est silencieusement ignor par CDI si OTel absent).
-            justifi par dependency-gatekeeper : §10 de la spec MP Fault Tolerance 4.1.
+            OpenTelemetry API: OtelFtMetrics publishes the §10 metrics (ft.invocations.total,
+            ft.retry.calls.total, ...) through GlobalOpenTelemetry. Optional at runtime: without it
+            OtelFtMetricsRecorder stays inactive (BUG-005). Justified by dependency-gatekeeper:
+            §10 of the MP Fault Tolerance 4.1 specification.
         -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
@@ -58,13 +59,29 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
-             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (StateRegistryBean, BulkheadStateRegistryBean, the metrics recorders). Without this jar
+             Weld cannot load their classes and skips the beans silently (WELD-000119), then fails
+             the deployment on the unsatisfied injection points of the interceptor. API types only,
+             no code runs outside Vauban (vidocq-workspace#15, heisenberg-it-weld). The Jakarta CDI
+             APIs it declares are excluded: like every Jakarta API here they come from the container
+             (`provided`), and a CDI 4.0 server (Open Liberty, MicroProfile 7) must not find CDI 4.1
+             API jars in the application. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
             <version>${vauban.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

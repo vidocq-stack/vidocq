@@ -114,6 +114,7 @@
         <module>heisenberg-core</module>
         <module>heisenberg-cdi-vauban</module>
         <module>heisenberg-cdi-vauban-module-it</module>
+        <module>heisenberg-it-other-containers</module>
         <module>heisenberg-bench</module>
         <module>heisenberg-examples</module>
     </modules>

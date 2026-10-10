@@ -106,6 +106,13 @@
                             <artifactId>heisenberg-cdi-vauban</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <!-- The BCE needs the CDI API to load. heisenberg-cdi-vauban leaves it to the
+                             container (`provided`, and excluded from vauban-api), so name it here. -->
+                        <path>
+                            <groupId>jakarta.enterprise</groupId>
+                            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                            <version>${jakarta.cdi.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <!-- The fixture/interceptor inject state beans produced in heisenberg-cdi-vauban

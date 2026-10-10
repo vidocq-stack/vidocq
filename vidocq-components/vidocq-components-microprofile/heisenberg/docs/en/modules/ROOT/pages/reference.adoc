@@ -55,7 +55,7 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 | Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
 
 | `io.vidocq.heisenberg.cdi.vauban`
-| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`. [.tag-new]#NEW# Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.
+| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`. [.tag-new]#NEW# Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime. [.tag-new]#NEW# Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
 |===
 
 `io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
@@ -66,6 +66,28 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 `heisenberg-cdi-vauban` is an explicit bean archive. It ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`, so the interceptors, the state registries and the metrics recorders are discovered even by a container that does not scan implicit archives, such as Weld SE by default. Without it, `@Retry`, `@Timeout` and the other annotations were silently ignored there (BUG-004).
 
 On a class path, `provides` clauses are ignored. `HeisenbergExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
+
+[#other-containers]
+== Other CDI containers [.tag-new]#NEW#
+
+Heisenberg does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `heisenberg-it-other-containers`, prove it on every build (heisenberg#25):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `heisenberg-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Fallback` (private fallback method) and `@Bulkhead` apply, a `<class>/<method>/Retry/maxRetries` key overrides the annotation, and metrics carry the bean class name.
+
+| `heisenberg-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Config 3.1), with Liberty's `mpFaultTolerance` feature off: the same scenarios, driven over HTTP.
+|===
+
+Neither module is published. Three things make this work:
+
+* **`vauban-api` is a runtime dependency** of `heisenberg-cdi-vauban`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (the state registries, the metrics recorders); a container that cannot load that type cannot load the bean class, and Weld drops the bean with an INFO message (`WELD-000119`), then fails the deployment on the interceptor's unsatisfied injection points. `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Names come from the class the application wrote** — metric names, configuration keys and fallback methods are keyed by the bean class, and the interceptor sees the subclass the container generated: `Foo$$Intercepted` under Vauban, `Foo$Proxy$_$$_WeldSubclass` under Weld and Open Liberty, `Foo$$OwbInterceptProxy0` under OpenWebBeans. Heisenberg walks up past every class whose name holds `$$`, which javac never produces.
+* **`HeisenbergAutoDiscovery` stays out of the way** — it forwards to the first other `ConfigProviderResolver` on the path (Ravel under Weld); Open Liberty's mpConfig feature installs its own resolver, which wins.
 
 == MicroProfile Fault Tolerance 4.1 annotations
 
@@ -294,7 +316,7 @@ The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegist
 == Compatibility
 
 * Java 25 (LTS), Maven 3.9.16.
-* CDI 4.1 Lite (Vauban) or any CDI 4.1 Lite-compatible container.
+* CDI 4.1 Lite (Vauban) or any CDI 4.0 Lite-compatible container — proven on Weld and Open Liberty, see <<other-containers>>.
 * MicroProfile Config 3.1 (Ravel) in `provided`.
 * OpenTelemetry 1.39 (Humboldt) in `requires static` — optional.
 * MicroProfile Metrics 5.x (Dirac) — optional.

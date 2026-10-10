@@ -21,6 +21,7 @@ package io.vidocq.heisenberg.cdi.internal;
 
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import io.vidocq.heisenberg.internal.AnnotationReader;
+import io.vidocq.heisenberg.internal.BeanClasses;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.PolicyComposer;
 import java.lang.reflect.Method;
@@ -108,11 +109,8 @@ public class FaultToleranceInterceptor {
 
     private static void registerMetricsOnce(FtMetricsRecorder recorder, Object target, Method method) {
         if (recorder == null || method == null) return;
-        Class<?> beanClass = target != null ? target.getClass() : method.getDeclaringClass();
-        // Unwrap intercepted classes (Vauban: $$Intercepted)
-        while (beanClass.getName().contains("$$Intercepted") && beanClass.getSuperclass() != null) {
-            beanClass = beanClass.getSuperclass();
-        }
+        // The application's class, not the container's interception subclass (heisenberg#25)
+        Class<?> beanClass = target != null ? BeanClasses.userClass(target.getClass()) : method.getDeclaringClass();
         String key = beanClass.getName() + "#" + method.getName();
         if (!REGISTERED.add(key)) return;
         AnnotationReader.FaultToleranceAnnotations ann = AnnotationReader.read(method, beanClass);
@@ -143,10 +141,7 @@ public class FaultToleranceInterceptor {
             return interceptedMethod;
         }
 
-        Class<?> current = target.getClass();
-        while (current.getName().contains("$$Intercepted") && current.getSuperclass() != null) {
-            current = current.getSuperclass();
-        }
+        Class<?> current = BeanClasses.userClass(target.getClass());
 
         while (current != null && current != Object.class) {
             try {

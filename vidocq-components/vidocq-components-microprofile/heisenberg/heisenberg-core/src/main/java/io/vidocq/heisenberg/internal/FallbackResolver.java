@@ -384,11 +384,7 @@ public final class FallbackResolver {
     }
 
     private Class<?> resolveUserClass(Class<?> runtimeClass) {
-        Class<?> current = runtimeClass;
-        while (current.getName().contains("$$Intercepted") && current.getSuperclass() != null) {
-            current = current.getSuperclass();
-        }
-        return current;
+        return BeanClasses.userClass(runtimeClass);
     }
 
     private FallbackHandler<?> instantiateHandler(Class<? extends FallbackHandler<?>> handlerClass) {
