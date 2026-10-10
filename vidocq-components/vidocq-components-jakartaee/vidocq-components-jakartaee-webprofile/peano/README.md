@@ -9,7 +9,10 @@
 
 ## Status
 
-🚧 **In design** — repository scaffold only, implementation not started.
+🚧 **Implementation started (P1)** — the eval-expression lexer recognizes
+EL 6.0 literals, identifiers, reserved words and operators, with source offsets
+and lexical error diagnostics. The parser, evaluator and ExpressionFactory
+provider are not implemented yet.
 The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java
 Modules layout, integration points, TCK plan, milestones P0–P9).
 
@@ -32,7 +35,7 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | scaffold |
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P1 lexer implemented; remaining engine planned |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | skeleton |
 
 Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)
