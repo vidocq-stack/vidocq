@@ -48,7 +48,7 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
 | 2096
-| 🚧 P0–P10 complete (P10 under a scope-based gate). Temurin 25.0.4+7-LTS, PostgreSQL 17, untouched suite: 2096 passes, 0 failures, 35 errors and 4 official skips (10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities). With the default local fixture patch TCK-BUG-001 (upstream jakartaee/persistence#1175, commit `1fea05e`): 2121 passes, 10 P11 errors, 4 skips — a local result, not official; no certification is sought. Vidocq Arquillian contract baseline: 3/3 using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| ✅ P0–P12 delivered under a scope-based gate; no formal certification sought. Temurin 25.0.4+7-LTS, PostgreSQL 17, untouched suite baseline: 2096 passes, 0 failures, 35 errors and 4 official skips (10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities). The final local fixture-patched TCK-BUG-001 run: 2131 passes, 0 failures/errors, 4 skips, same identities/outcomes as the prior P11 run; this is not an official result or certification. The Web Profile is not a target. Vidocq Arquillian baseline: 3/3 using a local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
@@ -72,16 +72,17 @@ whose delimited-default mappings conflict with the unquoted PostgreSQL DDL.
 `core.override` 26 / 26, `core.callback` 66 / 66, `core.relationship.descriptors` 8 / 8,
 `se.descriptor` 1 / 1 and `core.StoredProcedureQuery` 40 / 40 retain their results.
 The same 10 second-level cache errors remain (P11).
-With TCK-BUG-001 (2026-10-10, provider unchanged) the full run reports **2121 passes, 10 errors, four skips / 2135**:
-the 25 fixture errors pass, zero regressions, the same test identities; the 10 remaining errors are P11.
-P10 is delivered under this scope-based gate; the patched score is a local result, not an official one.
+With TCK-BUG-001 (2026-10-10, provider unchanged) the P10 full run reported **2121 passes, 10 errors, four skips / 2135**;
+the 25 fixture errors passed with zero regressions and the same test identities. P11 subsequently fixed the cache assertions.
+The latest local patched full run reports **2131 passes, 0 failures/errors, four skips / 2135**, unchanged against
+the previous P11 run. These patched scores are local development results, not official results or formal certification.
 The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
 metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
 The clean runtime/processor/module-path reactor reports **470 passing tests**, including populated canonical fields
 in entity packages neither exported nor opened to the provider.
 Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Schema/container contracts, XML,
 and caching/validation remain ahead. Data's incompatible canonical plural field kinds need a maintainer-approved
-producer reconciliation; Data is unchanged. This is not full Jakarta Persistence certification.
+producer reconciliation; Data is unchanged. No formal certification or Web Profile is sought.
 
 [source,bash]
 ----

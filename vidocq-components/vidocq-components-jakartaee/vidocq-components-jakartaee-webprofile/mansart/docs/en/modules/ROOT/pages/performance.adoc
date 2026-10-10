@@ -1,0 +1,76 @@
+= Performance and startup evidence
+:description: Reproducible JPA provider comparisons and the bounded Leyden AOT smoke.
+
+== Jakarta Persistence comparative benchmark
+
+`mansart-persistence/mansart-jpa-bench` is a standalone Maven project, intentionally outside the
+normal reactor. Its classpath-only provider dependencies are test-scoped and isolated by provider
+profiles; none enter a production Mansart module. The runner activates exactly one provider profile
+per run and builds it in its own directory, `target/<provider>` (POM property
+`bench.build.directory`, default `target`), so cleaning one provider never wipes another's build.
+
+The JMH fixture uses the same H2 in-memory database, manually-created schema, 128 seeded rows,
+entity class, `@Version` policy and resource-local transaction boundaries for Mansart, Hibernate ORM
+and EclipseLink. Shared and provider-specific second-level caches are disabled; Jakarta Validation
+mode is explicitly `NONE` for every provider. Each measured operation creates a new entity manager,
+preventing first-level-cache hits from standing in for SQL.
+The workloads are primary-key find, JPQL query/materialization (32 rows), versioned update and
+insert/update/delete in one transaction. The timed `update` writes a label derived from the next
+`@Version` value and returns the persisted version, so every invocation is a dirty, versioned
+`UPDATE` rather than a no-op commit. Before timing, setup verifies exact database row and query
+counts, exercises insert/update/delete, and runs the timed `update` method twice on the same row,
+checking through plain JDBC that both calls changed the label and incremented the version. JMH runs
+with `-foe true`, so any setup, preflight or benchmark failure stops the run with a non-zero exit
+(JMH's default would only report the error and exit 0). JMH reports throughput, iteration confidence
+intervals and allocation via its GC profiler.
+
+Build/install the provider and processor from the Mansart reactor, then run each provider separately
+with an explicit Temurin 25:
+
+[source,bash]
+----
+export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem PATH=$JAVA_HOME/bin:$PATH
+cd mansart/main
+./mvnw -ntp -pl mansart-persistence/mansart-jpa-processor-module-it -am install -DskipTests
+cd mansart-persistence/mansart-jpa-bench
+export BENCH_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
+./run-bench.sh mansart
+./run-bench.sh hibernate
+./run-bench.sh eclipselink
+----
+
+Every run stores its raw evidence, never cleaned by the runner and never overwritten, in
+`target/bench-reports/<run-id>/<provider>/`: `jmh.log`, `jmh.json`, `maven.log`,
+`java-version.txt`, `test-dependencies.txt` and `test-classpath.txt`. `BENCH_RUN_ID` groups the
+three providers of one comparison; it defaults to a UTC timestamp.
+
+Versions and the full measurement protocol are fixed in the standalone benchmark POM and runner.
+These runs establish comparative observations on Java 25; they are not vendor certification claims.
+Raw scores, hardware, JVM, commands, and comparison notes are recorded in
+`mansart-persistence/BENCH.md`. No performance winner is claimed unless the measured evidence
+supports one.
+
+=== Limitations
+
+* Single fork, one thread, short in-memory H2 runs of four specific operations on one machine: not an
+  application workload, not a CI-wide result and not a general provider ranking.
+* Caches: second-level and query caches are disabled for every provider; internal statement and
+  metadata caches stay at each provider's defaults.
+* Connection pools differ: each provider uses its own pool for `jakarta.persistence.jdbc.*` units
+  (Mansart `mansart-pool`, Hibernate's built-in `DriverManagerConnectionProvider`, EclipseLink's
+  internal pool).
+* The `update` results recorded before BENCH-20261010-03 measured a mostly no-op workload (a fixed
+  label repeated after the first 128 invocations) and are marked invalid in `BENCH.md`.
+* Jakarta Data remains frozen in this phase and is not benchmarked here.
+
+== JDK Leyden AOT cache smoke
+
+Run `mansart-persistence/mansart-jpa-processor-module-it/run-aot-smoke.sh` with Temurin 25 and Maven
+to build and launch a small named application module using APT-generated managed access. The smoke
+asserts CRUD and JPQL results, checks the generated service provider is part of the application
+module, and fails if the entity package is opened or exported to Mansart. It creates a JDK Leyden
+AOT cache, reruns the same modular application with that cache, and checks the startup log reports
+cache use. Before recording, the script deletes only its own named cache
+(`target/mansart-jpa-smoke.aot`) and logs, so a stale cache can never satisfy the checks; each JVM
+writes to `target/aot-record.log` or `target/aot-cache-use.log`, and a non-zero JVM exit prints that
+log and fails the script with the same status. Use an explicit Temurin 25 `JAVA_HOME`. This demonstrates a Leyden AOT cache and is **not** a GraalVM `native-image` proof.

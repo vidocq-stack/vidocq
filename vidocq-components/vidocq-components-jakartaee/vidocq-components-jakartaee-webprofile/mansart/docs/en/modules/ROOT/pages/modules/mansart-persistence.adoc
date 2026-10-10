@@ -1,8 +1,8 @@
 = mansart-persistence
-:description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
+:description: Jakarta Persistence 3.2 (JPA) implementation — scope-based milestones P0 to P12; mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: P10 complete (scope-based gate); not certified, no certification sought** — schema generation, CDI/JTA, Vidocq Arquillian integration and XML mapping files are implemented. Second-level cache/validation work remains.
+`mansart-persistence` implements {spec-jpa-3-2}[Jakarta Persistence 3.2]: `EntityManager`, JPQL, Criteria API, listeners and the standard metamodel. **P0–P12 are delivered under a scope-based gate. No formal certification is sought and the Web Profile is not a target.** TCK results, comparative JMH methodology and the Leyden AOT smoke are documented separately; the patched TCK result is not an official certification.
 
 [NOTE]
 ====
@@ -20,7 +20,7 @@ Jakarta Data uses `mansart-data-dialect-spi`; Jakarta Persistence uses its own s
 
 == Status
 
-🚧 **In progress** — milestones P0 (TCK instrument) to P12 (certification) in link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md]; measured score in link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[mansart-persistence/TCK.md].
+✅ **Scope-based delivery** — milestones P0–P12 in link:{repo-mansart}/src/branch/main/mansart-persistence/ROADMAP.md[mansart-persistence/ROADMAP.md]. The completed engineering scope is not a claim of formal certification; see link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK evidence] and xref:performance.adoc[performance methodology].
 
 Delivered:
 
@@ -42,8 +42,10 @@ The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 erro
 Ten errors are second-level cache assertions (P11); 25 newly exposed errors are confined to the two
 delimited-default fixtures whose declared case conflicts with the official unquoted DDL.
 With the default local fixture patch TCK-BUG-001 (byte-exact backport of upstream commit `1fea05e`,
-jakartaee/persistence#1175, applied to a derived jar only) the suite reports **2121 / 2135 passed**; the 10 remaining
-errors are P11. This is a local result, not an official one. The earlier quotation-ignoring 2121 result is superseded. See
+jakartaee/persistence#1175, applied to a derived jar only), the P10 run reported **2121 / 2135 passed**; P11 resolved
+the cache assertions. The latest full run reports **2131 / 2135 passed, 0 failures/errors, four official skips**, with
+no test identity or outcome changes against the prior P11 run. This is a local result, not an official one or formal
+certification. See
 link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters and attribution].
 
 * P8 — runtime and canonical metamodel, Criteria selects/bulk statements/subqueries/joins, tuple and constructor results,
@@ -69,7 +71,13 @@ link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters
   key/value overrides and conversions, record reconstruction, independent snapshots and merge copies.
   The targeted official embeddable-metamodel regression gate is restored to 51/51; this is not a new full-suite score.
 
-Next: second-level caching and validation (P11).
+* P11 — factory-scoped optional second-level cache and Bean Validation integration, with rollback-safe publication,
+  cache invalidation, configured validation groups and optional-provider behavior. The local fixture-patched
+  PostgreSQL TCK run is recorded in `TCK.md`; no formal certification is sought.
+
+* P12 — bounded JMH comparisons against Hibernate ORM and EclipseLink on H2, plus a modular APT-only JDK Leyden
+  AOT cache smoke. Exact commands and honest raw results live in `mansart-persistence/BENCH.md`; see
+  xref:performance.adoc[performance methodology].
 
 == Schema generation and container integration (P9 complete)
 
@@ -87,9 +95,9 @@ Container-managed managers and injected factories reject application `close()` c
 
 The real Vauban module-path/H2 tests pass 4/4; the Vidocq Arquillian test exercises persistence injection,
 transaction commit/rollback and container-owned factory closure (3/3). Both use the local Vauban snapshot
-containing an upstream fix that is not yet released. This milestone does not claim full Jakarta Persistence
-conformance: the untouched suite reports 2096/2135 passes (2121/2135 with the local fixture patch TCK-BUG-001);
-P11 remains (see `TCK.md`).
+containing an upstream fix that is not yet released. The untouched and locally fixture-patched full-suite
+results, including their remaining scope and skips, are recorded in `TCK.md`; neither result is represented as
+formal certification.
 Stored-procedure queries created outside a transaction run against the current transaction at execution.
 
 == Metamodel, Criteria and entity graphs

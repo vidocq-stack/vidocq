@@ -12,7 +12,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 | `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
 | `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
-| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | 🚧 **M7 restarted** — P0 to P10 delivered (TCK 2096 / 2135 untouched; 2121 / 2135 with local fixture patch TCK-BUG-001, not official; 10 P11 errors, 4 official skips), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
+| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | ✅ **P0–P12 delivered, scope-based; no formal certification sought** (TCK evidence and bounded comparative performance/AOT smoke in sub-project docs), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
 | `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ⏳ planned — needed by `mansart-persistence` P11, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
 
@@ -74,7 +74,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 ### M7 — Mansart Persistence (JPA 3.2) 🚧 RESTARTED
 
 **Status**: restarted on 2026-10-07 as `mansart-persistence/` (Maven parent `mansart-jpa`).
-The detailed plan — milestones P0 (TCK instrument) to P12 (certification) — lives in
+The detailed plan — milestones P0 (TCK instrument) to P12 (comparative performance and AOT smoke) — lives in
 [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md); the summary below is kept
 for the overview.
 
@@ -87,13 +87,13 @@ Scope:
 - [x] Runtime/canonical metamodel, Criteria API through the shared JPQL AST, entity graphs (P8);
       frozen Data-owned incompatible canonical plural fields remain a producer-reconciliation boundary
 - [ ] Optional L2 cache (homegrown, opt-in — no external cache library)
-- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (2096 / 2135 untouched; 2121 / 2135 with local fixture patch TCK-BUG-001)
-- [ ] Jakarta Persistence 3.2 certification (P12)
+- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (2096 / 2135 untouched baseline; 2131 / 2135 with local fixture patch TCK-BUG-001, zero failures/errors and four official skips)
+- [x] Bounded P12 evidence (TCK, comparative JMH, and Leyden AOT cache smoke); no formal certification or Web Profile target
 
 ### M8 — Performance & footprint (TBD)
-- [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, Eclipselink, Hibernate
+- [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, EclipseLink, Hibernate
 - [ ] Benchmarks `mansart-pool` vs HikariCP, Agroal (focus virtual threads, pinning)
-- [ ] AOT GraalVM memory footprint (zero runtime reflection already respected on the APT side)
+- [ ] AOT GraalVM memory footprint for other building blocks (zero runtime reflection already respected on the APT side)
 
 ## Cross-cutting technical backlog
 
@@ -119,4 +119,4 @@ the pattern of the other sub-projects: short id, date, symptom, repro, status).
 - **`PLAN.md`** : architecture, structural decisions, overall vision.
 - **`<sous-projet>/PLAN.md`** : specific architecture (exists for `mansart-pool/`).
 - **`TCK.md`** : will be created in M6 (Jakarta Data conformance status).
-- **`BENCH.md`** : will be created in M8 (reproducible JMH numbers).
+- **`BENCH.md`** : reproducible JMH numbers; JPA results are in `mansart-persistence/BENCH.md`.

@@ -29,7 +29,7 @@ the persistence layer in the stack.
 
 ## Status
 
-🚧 Jakarta Persistence is in progress: P0–P10 are delivered, including required
+✅ Jakarta Persistence P0–P12 are delivered under a scope-based engineering gate, including required
 `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading, JPQL/native/stored queries, runtime/canonical metamodel,
 Criteria through the shared query engine, and entity graphs.
 P9 adds dialect-rendered schema generation, `SchemaManager`, the JTA/CDI bridge, the Vidocq runtime extension and
@@ -39,15 +39,23 @@ P10 is **delivered** under a scope-based gate (2026-10-10): case-preserving deli
 inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded references
 and collections execute through composed generated accesses and existing relationship planners; unsupported P5
 mapping shapes are rejected, not silently omitted.
-The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 errors and 4 official skips:
-10 P11 cache errors and 25 incompatibilities between two delimited-default fixtures and the unquoted DDL.
+The untouched official PostgreSQL 17 TCK baseline reports **2096 / 2135 passed**, 35 errors and 4 official skips:
+10 cache errors in the earlier P11 baseline and 25 incompatibilities between two delimited-default fixtures and
+the unquoted DDL.
 The runner applies by default the local fixture patch **TCK-BUG-001**, a byte-exact backport of the upstream fix
-(jakartaee/persistence#1175, commit `1fea05e`) to a derived copy of the spec-tests jar: **2121 / 2135 passed**,
-10 errors (all P11 cache), 4 skips, zero regressions. This locally patched score is not an official result and no
-certification is sought; official artifacts and the provider are unchanged (`TCK_FIXTURES=official` reproduces 2096).
+(jakartaee/persistence#1175, commit `1fea05e`) to a derived copy of the spec-tests jar: **2131 / 2135 passed**,
+0 failures/errors, 4 official skips, zero regressions. This locally patched score is not an official result and no
+certification is sought; official artifacts and the provider are unchanged (`TCK_FIXTURES=official` reproduces the
+2096 baseline). The final full rerun and exact counters are recorded in [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md).
 Runtime baseline checks use the local Vauban snapshot carrying the
 upstream injection fix (pending a Vauban release). The P8 gate remains **924 passed / 925**, one official skip.
 See [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.
+P11 adds the optional second-level cache and Bean Validation bridge. P12 adds isolated JMH comparisons against
+Hibernate ORM and EclipseLink plus a modular JDK Leyden AOT cache smoke for the APT path; raw benchmark evidence
+is recorded in [`mansart-persistence/BENCH.md`](./mansart-persistence/BENCH.md) (commands and raw log locations:
+[`mansart-jpa-bench/README.md`](./mansart-persistence/mansart-jpa-bench/README.md)). No performance winner is claimed
+without supporting measurements. A Leyden cache smoke is not a GraalVM native-image proof.
+No formal Jakarta Persistence certification is sought, and the Web Profile is not a target.
 `TABLE_PER_CLASS` remains explicitly refused and decision D5 remains open.
 Data remains unchanged: incompatible plural fields in Data-owned canonical classes need producer reconciliation.
 See [`PLAN.md`](./PLAN.md) for the overall vision and
