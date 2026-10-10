@@ -49,7 +49,7 @@ class PropertyProcessorTest {
     void generatesModularPropertyProvidersAndRunsWithoutTheProcessor() throws Exception {
         Path sources = temporary.resolve("sources");
         Files.createDirectories(sources);
-        for (String name : List.of("module-info.java","Bean.java","Derived.java","Item.java","Explicit.java","PublicBean.java","Main.java")) {
+        for (String name : List.of("module-info.java","Bean.java","Derived.java","Callbacks.java","Item.java","Explicit.java","PublicBean.java","Main.java")) {
             try (var input = getClass().getResourceAsStream("/property-bootstrap/"+name)) {
                 assertNotNull(input);
                 Files.copy(input,sources.resolve(name));
@@ -216,6 +216,29 @@ class PropertyProcessorTest {
     }
 
     @Test
+    void waitsForFunctionalParentsGeneratedInALaterRound() throws Exception {
+        Path source=sources("package demo; @FunctionalInterface public interface Model extends Later {}");
+        Files.writeString(source.resolve("Main.java"),"""
+                package demo;
+                public class Main {
+                    public static void main(String[] args) {
+                        var factory=jakarta.el.ExpressionFactory.newInstance();
+                        var context=new jakarta.el.StandardELContext(factory);
+                        Object lambda=factory.createValueExpression(context,"${x->x+1}",Object.class).getValue(context);
+                        var table=new Model__PeanoAccessors().accessors().iterator().next();
+                        Model callback=table.convertToType(context,lambda,Model.class);
+                        if (callback.apply(6)!=7) throw new AssertionError("Inherited callback failed");
+                    }
+                }
+                """);
+        compileWithLaterModel(source,"demo.Model","package demo; public interface Later { int apply(int value); }");
+        Path core=Path.of(ExpressionFactory.newInstance().getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
+        run(List.of(javaBin("java"),"--module-path",String.join(File.pathSeparator,
+                el().toString(),api().toString(),core.toString(),temporary.resolve("classes").toString()),
+                "--add-modules","io.vidocq.peano.core","--module","peano.propertynegative/demo.Main"),0);
+    }
+
+    @Test
     void diagnosesTypeVariableBeanProperties() throws Exception {
         var result = compile(sources("""
                 package demo;
@@ -227,6 +250,36 @@ class PropertyProcessorTest {
                 """));
         assertNotEquals(0,result.status());
         assertTrue(result.log().contains("Type-variable property"),result.log());
+    }
+
+    @Test
+    void diagnosesInterfacesWithoutTheRequiredFunctionalAnnotation() throws Exception {
+        var result=compile(sources("package demo; @io.vidocq.peano.annotation.ELAccessible public interface Model { int apply(int value); }"));
+        assertNotEquals(0,result.status());
+        assertTrue(result.log().contains("annotated with @FunctionalInterface"),result.log());
+    }
+
+    @Test
+    void diagnosesSealedFunctionalTargets() throws Exception {
+        var result=compile(sources("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible
+                public sealed interface Model permits Child { int apply(int value); }
+                final class Child implements Model { public int apply(int value) { return value; } }
+                """));
+        assertNotEquals(0,result.status());
+        assertTrue(result.log().contains("non-sealed"),result.log());
+    }
+
+    @Test
+    void diagnosesGenericFunctionalMethods() throws Exception {
+        var result=compile(sources("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible @FunctionalInterface
+                public interface Model { <T> T apply(T value); }
+                """));
+        assertNotEquals(0,result.status());
+        assertTrue(result.log().contains("Generic functional methods"),result.log());
     }
 
     @Test

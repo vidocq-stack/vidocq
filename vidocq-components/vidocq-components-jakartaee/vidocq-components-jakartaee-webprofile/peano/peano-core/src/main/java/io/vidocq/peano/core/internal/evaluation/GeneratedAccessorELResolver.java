@@ -87,7 +87,14 @@ public final class GeneratedAccessorELResolver extends ELResolver {
     public <T> T convertToType(ELContext context, Object value, Class<T> type) {
         Objects.requireNonNull(context, "context");
         bind(context);
-        return null;
+        AccessorTable table = tables.get(type);
+        return table == null ? null : table.convertToType(context, value, type);
+    }
+
+    /** Factory coercion has no caller context; adapters retain the lambda's own context. */
+    public static <T> T adapt(jakarta.el.LambdaExpression value, Class<T> type) {
+        AccessorTable table = new GeneratedAccessorELResolver().tables.get(type);
+        return table == null ? null : table.convertToType(null, value, type);
     }
 
     /** Generated metadata is context-owned; lazy service discovery also supports custom contexts. */

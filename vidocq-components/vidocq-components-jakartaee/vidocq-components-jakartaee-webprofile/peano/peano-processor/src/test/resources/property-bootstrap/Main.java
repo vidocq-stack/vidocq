@@ -210,6 +210,60 @@ public final class Main {
         if (!"derived-static".equals(factory.createValueExpression(context,"${derivedClass.getStaticValue()}",Object.class).getValue(context))) {
             throw new AssertionError("Concrete static shadow must keep its declaration");
         }
+        var sum=factory.createValueExpression(context,"${(a,b)->a+b}",Callbacks.Sum.class)
+                .getValue(context);
+        if (!(sum instanceof Callbacks.Sum callback) || callback.apply(2,3)!=5 || callback.twice(4)!=8)
+            throw new AssertionError("Primitive callback or default method failed");
+        context.getVariableMapper().setVariable("callbackBean",factory.createValueExpression(new Bean(),Object.class));
+        if (!Integer.valueOf(5).equals(factory.createValueExpression(context,"${callbackBean.callback((a,b)->a+b)}",Object.class).getValue(context)))
+            throw new AssertionError("Callback conversion during generated method selection failed");
+        var raw=factory.createValueExpression(context,"${x->x+= '!'}",Object.class).getValue(context);
+        Callbacks.Text text=factory.coerceToType(raw,Callbacks.Text.class);
+        if (!"hello!".equals(text.apply("hello"))) throw new AssertionError("Inherited generic callback failed");
+        var size=(Callbacks.Size)factory.createValueExpression(context,"${xs->xs.length}",Callbacks.Size.class).getValue(context);
+        if (size.size("a","b")!=2) throw new AssertionError("Varargs array was flattened");
+        var source=(Callbacks.Source)factory.createValueExpression(context,"${()->'7'}",Callbacks.Source.class).getValue(context);
+        if (source.get()!=7L) throw new AssertionError("Zero-argument result coercion failed");
+        var sink=new java.util.concurrent.atomic.AtomicReference<String>();
+        context.getVariableMapper().setVariable("sink",factory.createValueExpression(sink,Object.class));
+        context.addELResolver(new jakarta.el.ELResolver() {
+            public Object getValue(jakarta.el.ELContext c,Object b,Object p) { return null; }
+            public Class<?> getType(jakarta.el.ELContext c,Object b,Object p) { return null; }
+            public void setValue(jakarta.el.ELContext c,Object b,Object p,Object v) {}
+            public boolean isReadOnly(jakarta.el.ELContext c,Object b,Object p) { return false; }
+            public Class<?> getCommonPropertyType(jakarta.el.ELContext c,Object b) { return null; }
+            public Object invoke(jakarta.el.ELContext c,Object b,Object m,Class<?>[] t,Object[] a) {
+                if (b==sink && "set".equals(m)) { c.setPropertyResolved(true); sink.set((String)a[0]); }
+                return null;
+            }
+        });
+        var action=(Callbacks.Action)factory.createValueExpression(context,"${x->sink.set(x)}",Callbacks.Action.class).getValue(context);
+        action.accept("done");
+        if (!"done".equals(sink.get())) throw new AssertionError("Void callback failed");
+        if (factory.coerceToType(text,Callbacks.Text.class)!=text
+                || factory.coerceToType(null,Callbacks.Text.class)!=null)
+            throw new AssertionError("Identity or null conversion changed");
+        var custom=new jakarta.el.StandardELContext(factory);
+        boolean[] overrideTarget={true};
+        custom.addELResolver(new jakarta.el.ELResolver() {
+            public Object getValue(jakarta.el.ELContext c,Object b,Object p) { return null; }
+            public Class<?> getType(jakarta.el.ELContext c,Object b,Object p) { return null; }
+            public void setValue(jakarta.el.ELContext c,Object b,Object p,Object v) {}
+            public boolean isReadOnly(jakarta.el.ELContext c,Object b,Object p) { return false; }
+            public Class<?> getCommonPropertyType(jakarta.el.ELContext c,Object b) { return null; }
+            public <T> T convertToType(jakarta.el.ELContext c,Object value,Class<T> target) {
+                if (target==Callbacks.Source.class && overrideTarget[0]) { c.setPropertyResolved(true); return target.cast((Callbacks.Source)()->99L); }
+                if (target==long.class) { c.setPropertyResolved(true); return (T)Long.valueOf(23); }
+                return null;
+            }
+        });
+        var overridden=(Callbacks.Source)factory.createValueExpression(custom,"${()->7}",Callbacks.Source.class).getValue(custom);
+        if (overridden.get()!=99L) throw new AssertionError("Custom target conversion lost precedence");
+        overrideTarget[0]=false;
+        var convertedResult=(Callbacks.Source)factory.createValueExpression(custom,"${()->7}",Callbacks.Source.class).getValue(custom);
+        if (convertedResult.get()!=23L) throw new AssertionError("Callback result bypassed custom conversion");
+        var customResult=context.convertToType(raw,Callbacks.Text.class);
+        if (!"value!".equals(customResult.apply("value"))) throw new AssertionError("Context conversion failed");
         System.out.println("PEANO_PROPERTIES_OK");
     }
 }

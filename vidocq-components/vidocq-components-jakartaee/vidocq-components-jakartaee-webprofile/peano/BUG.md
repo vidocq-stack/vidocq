@@ -3,6 +3,18 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## APT-007 · 2026-10-11 · Unselected child interfaces caused adapter diagnostics
+
+- Symptom: selecting a functional root caused an unrelated unselected child interface
+  to fail the functional annotation requirement during generation.
+- Minimal reproduction: selected @FunctionalInterface Source with get(); unselected
+  Unselected extends Source adds another abstract method.
+- Cause: class-family discovery also selected every source subinterface.
+- Status: resolved. Implicit family traversal skips interfaces; explicit interface
+  selection retains validation and unresolved-hierarchy deferral.
+- Evidence: the closed-module callback fixture failed compilation before the fix
+  and now compiles and runs with the unselected interface present.
+
 ## APT-005 · 2026-10-10 · Static hiding generated duplicate signatures
 
 - Symptom: a generated child table rejected a hidden static method as ambiguous.

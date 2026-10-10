@@ -33,6 +33,10 @@ import jakarta.el.MethodReference;
  * Tables must be safe for concurrent use and keep evaluation state in the ELContext.
  * Selection uses the exact runtime class; subclass tables are registered separately.
  * This contract can be implemented by generated code or by a handwritten table.
+ * Functional-interface tables handle convertToType by exact target interface.
+ * Factory-driven lambda conversion supplies a null context; adapters then use the
+ * lambda's captured context and ExpressionFactory result coercion. Ordinary resolver
+ * conversion supplies the caller context and retains custom conversion precedence.
  */
 public abstract class AccessorTable extends ELResolver {
     /** Creates an accessor table. */

@@ -36,6 +36,12 @@ test harness. Independent named-consumer tests enforce the production module bou
 
 == Annotation processor selection (implemented)
 
+Selected application interfaces generate lambda adapters when annotated with
+java.lang.FunctionalInterface and non-sealed (EL 6.0 section 1.25.8).
+Use the same ELAccessible annotation or explicit-types option and register the emitted
+AccessorProvider fragment. Child interfaces require their own selection. Generic
+interface signatures use erasure; generic functional methods receive diagnostics.
+
 Annotated and explicit roots also select accessible source descendants in the current
 compilation, including nested and later-round declarations. Each type has its own
 provider and registration fragment. Register every required provider in module-info.java.

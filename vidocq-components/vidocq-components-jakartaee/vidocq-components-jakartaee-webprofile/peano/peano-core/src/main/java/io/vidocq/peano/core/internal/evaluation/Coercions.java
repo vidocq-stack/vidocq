@@ -34,8 +34,8 @@ public final class Coercions {
     /**
      * Converts a value, preserving null for reference targets except String.
      * An unspecified target type preserves the original value.
-     * Supports the statically compiled Predicate adapter; other functional interfaces
-     * and PropertyEditor conversions remain unimplemented.
+     * Supports the statically compiled Predicate adapter and registered application
+     * functional-interface adapters. PropertyEditor conversions remain unimplemented.
      *
      * @param value input value
      * @param type target type
@@ -64,6 +64,10 @@ public final class Coercions {
         }
         if (type == Predicate.class && value instanceof LambdaExpression lambda) {
             return new LambdaPredicate(lambda);
+        }
+        if (value instanceof LambdaExpression lambda && type.isInterface()) {
+            Object adapted = GeneratedAccessorELResolver.adapt(lambda, type);
+            if (adapted != null) return adapted;
         }
         if (boxed == String.class) {
             return value == null ? "" : value instanceof Enum<?> e ? e.name() : value.toString();

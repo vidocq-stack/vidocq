@@ -22,6 +22,9 @@ module peano.propertyconsumer {
     exports demo.exported to jakarta.el;
     provides io.vidocq.peano.spi.AccessorProvider with
         demo.Bean__PeanoAccessors, demo.Derived__PeanoAccessors, demo.Item__PeanoAccessors,
-        demo.Explicit__PeanoAccessors, demo.exported.PublicBean__PeanoAccessors;
+        demo.Explicit__PeanoAccessors, demo.exported.PublicBean__PeanoAccessors,
+        demo.Callbacks$Sum__PeanoAccessors, demo.Callbacks$Action__PeanoAccessors,
+        demo.Callbacks$Size__PeanoAccessors, demo.Callbacks$Text__PeanoAccessors,
+        demo.Callbacks$Source__PeanoAccessors;
 }
 

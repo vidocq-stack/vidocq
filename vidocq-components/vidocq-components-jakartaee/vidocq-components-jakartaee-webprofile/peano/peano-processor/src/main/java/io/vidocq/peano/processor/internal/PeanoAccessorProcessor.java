@@ -111,6 +111,7 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
                 });
         for (TypeElement type : new ArrayList<>(deferredTypes.values())) generate(type);
         for (TypeElement candidate : sourceTypes.values()) {
+            if (candidate.getKind() == ElementKind.INTERFACE) continue;
             if (!eligibleSubtype(candidate) || unresolvedHierarchy(candidate.asType(), new HashSet<>())) continue;
             boolean selectedFamily = selectedRoots.values().stream().anyMatch(root ->
                     !unresolvedHierarchy(root.asType(), new HashSet<>())
@@ -130,7 +131,8 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
 
     private boolean eligibleSubtype(TypeElement type) {
         ModuleElement module = processingEnv.getElementUtils().getModuleOf(type);
-        return (type.getKind() == ElementKind.CLASS || type.getKind() == ElementKind.RECORD)
+        return (type.getKind() == ElementKind.CLASS || type.getKind() == ElementKind.RECORD
+                || type.getKind() == ElementKind.INTERFACE)
                 && module != null && !module.isUnnamed() && applicationModules.contains(module)
                 && !privateEnclosing(type);
     }
@@ -149,15 +151,16 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
             error("Accessor type must belong to the current application module: " + type.getQualifiedName(), type);
             return;
         }
-        if (type.getKind() != ElementKind.CLASS && type.getKind() != ElementKind.RECORD) {
-            error("Only classes and records can declare property accessors", type);
+        if (type.getKind() != ElementKind.CLASS && type.getKind() != ElementKind.RECORD
+                && type.getKind() != ElementKind.INTERFACE) {
+            error("Only classes, records and functional interfaces can declare accessors", type);
             return;
         }
         if (privateEnclosing(type)) {
             error("Accessor type has a private enclosing declaration and cannot be accessed by a package table", type);
             return;
         }
-        List<Property> properties = properties(type);
+        List<Property> properties = type.getKind() == ElementKind.INTERFACE ? List.of() : properties(type);
         if (properties == null) return;
         String pkg = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
         String binary = processingEnv.getElementUtils().getBinaryName(type).toString();
@@ -283,7 +286,8 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         operation(text, model, properties, "getType");
         operation(text, model, properties, "isReadOnly");
         operation(text, model, properties, "setValue");
-        new MethodGenerator(processingEnv).append(text, type);
+        if (type.getKind() == ElementKind.INTERFACE) new FunctionalGenerator(processingEnv).append(text, type);
+        else new MethodGenerator(processingEnv).append(text, type);
         text.append("    public java.lang.Class<?> getCommonPropertyType(jakarta.el.ELContext context, java.lang.Object base) {\n")
                 .append("      java.util.Objects.requireNonNull(context); return base != null && base.getClass() == ")
                 .append(model).append(".class ? java.lang.String.class : null;\n    }\n")

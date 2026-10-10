@@ -8,7 +8,7 @@
 > The peano-api service contract and direct accessor-table resolver are implemented.
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
 > Direct methods, runtime annotation literals and method metadata are implemented for selected models.
-> Other functional-interface adapters, PropertyEditor conversion
+> Further Java platform functional-interface adapters, PropertyEditor conversion
 > and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
@@ -169,8 +169,8 @@ P5 serialization (2026-10-10): value and method expressions use a source/binding
 serialization proxy. Public static function descriptors restore metadata through
 Class.getMethod only; invocation stays in the API resolver. Contexts and parser trees
 are rebuilt rather than serialized. Captured object values must be serializable.
-Functional-interface adaptation remains open until build-time adapter generation;
-it is not implemented with runtime proxies or bytecode generation.
+Selected application functional interfaces now receive build-time adapters;
+no runtime proxies or bytecode generation are used.
 
 P6 runtime foundation (2026-10-10): peano-api exports only io.vidocq.peano.spi.
 AccessorProvider contributes AccessorTable instances (ELResolver subclasses), keyed
@@ -199,8 +199,8 @@ Generated public providers live in the model package; Filer emits source and a
 META-INF/peano/accessor-providers registration fragment for each selected type.
 Users add that fragment's provides directive to the application's module-info.java.
 Public method metadata and dispatch are now implemented. Source subtype support is
-implemented; custom functional-interface adapters and the reflection-denial switch
-are subsequent P6 slices.
+implemented, together with custom functional-interface adapters. The reflection-denial
+switch remains a subsequent P6 slice.
 
 P6 source hierarchies (2026-10-10): annotated and explicitly selected roots also select
 their accessible descendants in the current compilation, including nested declarations
@@ -304,6 +304,23 @@ does not handle it, as required by section 1.6; inline calls stay resolver-owned
 Expression identity uses normalized syntax while preserving source diagnostics.
 Predicate adaptation is a statically compiled private implementation, not a runtime
 proxy or generated class. Other Java functional interfaces remain build-time work.
+
+P6 functional adapters (2026-10-10, EL 6.0 section 1.25.8): select application interfaces
+through ELAccessible or the existing explicit-types option. The selected interface must
+carry java.lang.FunctionalInterface and permit a generated implementation (non-sealed).
+Its provider contributes a conversion table keyed by target interface. An ordinary
+generated Adapter class invokes the EL lambda and coerces its result, supporting primitive,
+reference and void returns, zero/multiple parameters, array/varargs inputs and inherited
+generic specialization. Generic interface signatures use Java erasure; generic SAM methods
+receive a diagnostic. Object-equivalent methods and default/static methods do not count
+as the abstract descriptor. Signature types must be accessible from the generated package.
+Unselected child interfaces are not inferred. Parent hierarchies generated in later
+rounds retain the same deferral rule as class tables.
+ELContext conversions preserve custom resolver precedence and use the caller context
+for lambda invocation/result conversion. Factory conversion has no caller context: its
+table receives null and its adapter invokes the lambda with its captured context, then
+uses ExpressionFactory result coercion. Providers use the existing registration fragments.
+No new runtime dependency, exports, opens or member introspection is introduced.
 
 ## Milestones (TDD — test first, every milestone)
 

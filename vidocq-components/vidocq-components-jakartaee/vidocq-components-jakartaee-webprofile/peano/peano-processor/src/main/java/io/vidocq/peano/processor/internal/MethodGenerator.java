@@ -234,7 +234,7 @@ final class MethodGenerator {
         return constant.toString();
     }
 
-    private void accessible(TypeMirror type,TypeElement model) throws IOException {
+    void accessible(TypeMirror type,TypeElement model) throws IOException {
         if(type instanceof ArrayType array) { accessible(array.getComponentType(),model); return; }
         if(!(type instanceof DeclaredType declared)) return;
         String pkg=environment.getElementUtils().getPackageOf(model).getQualifiedName().toString();

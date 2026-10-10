@@ -35,6 +35,12 @@ and length, with no member lookup, accessibility changes or `java.desktop` depen
 
 == Application-owned accessor tables (P6 foundation implemented)
 
+Selected functional interfaces contribute target-keyed conversion tables through the
+same provider service. Generated adapters are ordinary Java classes in the application's
+module. They invoke the EL lambda and convert its result through the caller context;
+factory conversion instead uses the lambda's captured context and factory result coercion.
+No proxy, runtime bytecode generation or reflective method lookup is involved.
+
 The processor generates separate tables for accessible source descendants of selected
 roots in the current compilation. Runtime dispatch remains keyed by exact class, so
 new overloads, covariant returns and override annotations belong to the concrete table.

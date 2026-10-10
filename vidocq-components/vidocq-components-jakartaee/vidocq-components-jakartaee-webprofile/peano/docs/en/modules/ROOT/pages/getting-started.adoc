@@ -199,6 +199,13 @@ Register the deterministic generated provider name. Accessible source descendant
 in the same compilation also receive providers: register each descendant's generated
 fragment when that runtime type is used. Binary descendants are not scanned.
 
+For custom callbacks, select a non-sealed interface annotated with
+java.lang.FunctionalInterface in the same way. Its provider converts EL lambdas through
+ELContext.convertToType or ExpressionFactory.coerceToType. Primitive, reference and
+void returns are supported; generic functional methods are diagnosed. Register each
+selected interface's provider, just as for a bean. Unselected child interfaces are
+not inferred.
+
 [source,java]
 ----
 module com.example.app {
