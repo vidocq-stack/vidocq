@@ -97,6 +97,14 @@ Neither module is published. `vauban-api` is a runtime dependency of `cervantes-
 
 `JwtValidator` stays `@Dependent` on purpose: with no verification key configured, the producer returns `null`, which only a `@Dependent` bean may do.
 
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own JWT and security off** — `mpJwt` and `appSecurity` on Open Liberty. Otherwise the server authenticates the requests and enforces `@RolesAllowed` itself, before Cervantes sees them.
+* **Enable the server's CDI, Jakarta REST, JSON-P and MicroProfile Config** — `cdi-4.0`, `restfulWS-3.1`, `jsonp-2.1` and `mpConfig-3.1` on Open Liberty. Cervantes reads `mp.jwt.verify.*` through the MicroProfile Config API and parses tokens with the JSON-P API.
+* **Nothing to exclude** — the WAR carries the Cervantes jars, the MicroProfile JWT and Config APIs, the JSON-P and JSON-B APIs (through `champollion-api`) and `vauban-api` (API types only); with the features above, the server's copies are loaded first. `cervantes-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == Recognised security annotations
 
 [cols="2,3,1"]
