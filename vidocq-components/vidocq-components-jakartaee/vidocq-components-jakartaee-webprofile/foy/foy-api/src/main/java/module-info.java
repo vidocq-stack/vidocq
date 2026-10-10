@@ -20,6 +20,8 @@
 module io.vidocq.foy.api {
     requires transitive jakarta.servlet;
     requires static jakarta.annotation;
+    // CdiContextListeners names the BeanManager; only its implementers need CDI.
+    requires static jakarta.cdi;
 
     exports io.vidocq.foy.spi.session;
     exports io.vidocq.foy.spi.security;
