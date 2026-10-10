@@ -134,7 +134,7 @@ public class HumboldtDeployableContainer implements DeployableContainer<Humboldt
             // BaggageResource, RestSpanTest$SpanResource) receive a synthetic
             // @RequestScoped and are discovered as Vauban beans → @Inject Baggage/Tracer
             // on resource instances remains non-null.
-            builder.addBeanClass(io.vidocq.cassini.cdi.vauban.CassiniScopeExtension.class);
+            builder.addBeanClass(io.vidocq.cassini.cdi.CassiniScopeExtension.class);
             // Same issue for the Humboldt BCE: HumboldtBuildCompatibleExtension scans
             // classes annotated with @WithSpan (OTel) and adds @SpanBinding to activate
             // WithSpanInterceptor. Without this BCE, TCK inner classes such as
