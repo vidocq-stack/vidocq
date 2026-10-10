@@ -178,8 +178,55 @@ Unknown operations stay unresolved. The model/provider package needs no exports 
 StandardELContext and ELProcessor discover the tables automatically; custom resolvers
 keep their precedence. Tables and providers must support concurrent use.
 
-The current slice validates this contract using handwritten tables. Generating these
-classes through peano-processor remains the next P6 work.
+The processor generates property tables using this contract.
+
+== Generating property tables at compilation (implemented)
+
+[source,java]
+----
+package com.example.model;
+
+@io.vidocq.peano.annotation.ELAccessible
+public class Order {
+    private int quantity;
+    public int getQuantity() { return quantity; }
+    public void setQuantity(int quantity) { this.quantity = quantity; }
+}
+----
+
+Register the deterministic generated provider name:
+
+[source,java]
+----
+module com.example.app {
+    requires io.vidocq.peano.api;
+    provides io.vidocq.peano.spi.AccessorProvider
+        with com.example.model.Order__PeanoAccessors;
+}
+----
+
+Set PEANO_PROCESSOR, PEANO_API and JAKARTA_EL_API to their jar files or compiled
+module directories. Compile one application module at a time:
+
+[source,bash]
+----
+javac --module-path "$PEANO_API:$JAKARTA_EL_API" \
+      --processor-module-path "$PEANO_PROCESSOR:$PEANO_API:$JAKARTA_EL_API" \
+      -proc:full -s target/generated-sources/annotations -d target/classes \
+      src/main/java/module-info.java src/main/java/com/example/model/Order.java
+----
+
+To select unannotated owned types, pass
+`-Apeano.accessorTypes=com.example.model.Order,com.example.model.Other`.
+Names produced by another annotation processor can resolve in later processing rounds.
+Each generated provider has a matching registration fragment under
+META-INF/peano/accessor-providers in the class output directory.
+The processor itself is needed only at compilation.
+
+Public getters/setters, primitive boolean is-getter precedence, acronym properties,
+inherited properties, write-only setters and read-only record components are supported.
+Type-variable bean properties and ambiguous write-only setters have explicit diagnostics.
+Generated method invocation/metadata and subclass dispatch remain later P6 work.
 
 == Building Peano from source
 

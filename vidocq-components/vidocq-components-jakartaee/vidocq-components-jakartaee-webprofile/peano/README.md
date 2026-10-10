@@ -28,7 +28,8 @@ The statically compiled Java Predicate adapter is available. Other functional
 interfaces remain planned for build-time generation.
 Application-owned accessor tables can now register through peano-api services.
 The provider dispatches their direct calls inside closed application packages.
-The annotation processor and generated method metadata remain planned.
+The peano-processor APT module generates property tables for `@ELAccessible` types
+and explicit selected types. Generated method metadata remains planned.
 The official EL 6.0.1 TCK passes all 361 tests, including signatures; this result
 is not a certification announcement.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.
@@ -54,11 +55,12 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-api` | Application accessor-table service contract | Exports only `io.vidocq.peano.spi` |
+| `peano-api` | Application accessor-table service contract and selection annotation | Exports SPI and SOURCE-retained annotation packages |
+| `peano-processor` | Build-time APT property generation | Annotation and explicit-type selection; no runtime dependency on processor |
 | `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P6 direct accessor-table dispatch available |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | 361/361 tests pass on Temurin 25; full suite runs in CI |
 
-Planned modules (`peano-processor`, `peano-compiler`, `peano-bench`)
+Planned modules (`peano-compiler`, `peano-bench`)
 are described in [PLAN.md](PLAN.md) and created by the milestone that needs them.
 
 ## Build

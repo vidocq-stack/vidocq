@@ -6,7 +6,8 @@
 > evaluation events, expression serialization and a compiled Predicate adapter.
 > All 361 official EL 6.0.1 TCK tests pass on Temurin 25 (2026-10-10).
 > The peano-api service contract and direct accessor-table resolver are implemented.
-> Other functional-interface adapters, PropertyEditor conversion, APT generation
+> Property table APT generation is implemented with the approved annotation and explicit-type selection.
+> Other functional-interface adapters, PropertyEditor conversion, generated method metadata
 > and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
@@ -106,12 +107,12 @@ an application module at all. Peano adds a resolver that does not reflect:
   resolves a property it calls `ELContext.setPropertyResolved(true)`; when it
   does not know the type, it leaves resolution to the next resolver — semantics
   stay exactly those of the spec chain, custom resolvers keep their precedence.
-- **Type selection (to validate):** (a) types annotated with a Peano annotation
+- **Type selection (approved 2026-10-10):** (a) types annotated with `@ELAccessible`
   in `peano-api`; (b) types referenced by a typed declaration the build already
   knows (Jakarta Pages `jsp:useBean`, tag attribute types, CDI `@Named` beans
   found by Vauban's indexer); (c) a Maven-plugin scan of compiled classes, as in
   `erasmus-codegen-maven-plugin`, for types the user cannot annotate. Recommended
-  start: (a) + (b); (c) on demand.
+  selection: (a) + (b), approved by the maintainer; (c) remains on demand.
 
 **Degraded reflective path (documented, not hidden):** a type with no generated
 table falls through to the API's `BeanELResolver` (reflection, exported public
@@ -180,29 +181,35 @@ Named-consumer tests cover closed beans/records and compare a direct table again
 the API RecordELResolver for an API-qualified exported record.
 No APT generation or generated method metadata is claimed by this first slice.
 
-### P6 processor type-selection proposal (to validate)
+### P6 processor property generation (selection approved 2026-10-10)
 
-The next processor slice should support an opt-in SOURCE-retained TYPE annotation
-named `@ELAccessible`, plus explicit `-Apeano.accessorTypes=pkg.Type,pkg.Other`
-for types supplied by an integrating build. This implements selection options (a)
-and (b) above without a class-file scan.
-The first generated property tables should cover classes/records owned by the
-current application module: JavaBean getters/setters and record components.
-Generated public providers live in the model package; the build documents their
-provides directive for the application's module-info.java.
+The maintainer approved the opt-in SOURCE-retained TYPE annotation
+`io.vidocq.peano.annotation.ELAccessible` and explicit
+`-Apeano.accessorTypes=pkg.Type,pkg.Other` for integrating builds.
+The processor now implements both selections without a class-file scan.
+It processes one named application module per javac invocation and rejects foreign
+types and private enclosing declarations. Explicit names are retried across rounds
+so another processor can supply a selected model before processing finishes.
+Generated property tables cover public JavaBean getters/setters (including inherited
+methods, primitive boolean is-getter precedence and acronym capitalization), write-only
+properties and read-only record components. Ambiguous write-only setters and class
+properties containing unbound type variables receive diagnostics.
+Generated public providers live in the model package; Filer emits source and a
+META-INF/peano/accessor-providers registration fragment for each selected type.
+Users add that fragment's provides directive to the application's module-info.java.
 Arbitrary method metadata, subtype dispatch, custom functional-interface adapters
 and the reflection-denial switch are subsequent P6 slices.
 
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
-| `peano-api` | `io.vidocq.peano.api` | runtime | `transitive jakarta.el` | `io.vidocq.peano.spi` (AccessorProvider and AccessorTable); opt-in annotation planned |
+| `peano-api` | `io.vidocq.peano.api` | runtime | `transitive jakarta.el` | `io.vidocq.peano.spi` and `io.vidocq.peano.annotation` (SOURCE ELAccessible) |
 | `peano-core` | `io.vidocq.peano.core` | runtime | `transitive jakarta.el`, `io.vidocq.peano.api` | nothing — `provides jakarta.el.ExpressionFactory`, `uses io.vidocq.peano.spi.AccessorProvider` |
 | `peano-processor` | `io.vidocq.peano.processor` | build | `java.compiler`, `io.vidocq.peano.api` | nothing — `provides javax.annotation.processing.Processor` |
 | `peano-compiler` | `io.vidocq.peano.compiler` | build | `io.vidocq.peano.core` (parser/AST via a qualified export `to io.vidocq.peano.compiler`) | `io.vidocq.peano.compiler` |
 | `peano-tck` | — | test, `-Ptck` | `peano-core` | — |
 | `peano-bench` | — | JMH, not deployed | `peano-core`, Expressly (bench scope only) | — |
 
-Today `peano-api` (accessor contract), `peano-core` (interpreter) and `peano-tck` (official runner) exist; the other
+Today `peano-api`, `peano-core`, `peano-processor` and `peano-tck` exist; the other
 modules are created by the milestone that needs them — no empty placeholders.
 No `peano-api` re-export aggregator of the spec jar (unlike `erasmus-api`):
 `jakarta.el-api` 6.0.1 is already a proper Java module.

@@ -18,7 +18,8 @@ pipelines and a compiled Java Predicate adapter are implemented. Other functiona
 are recorded in BUG.md.
 Evaluation listeners and expression serialization are implemented.
 The peano-api accessor-table service and direct resolver dispatch are implemented.
-APT generation and generated method metadata remain planned.
+APT property generation supports @ELAccessible and explicit selected types.
+Generated method metadata remains planned.
 All 361 official EL 6.0.1 TCK tests pass on Temurin 25, including signatures.
 This is a test result, not a certification announcement.
 This documentation describes the intended `{project-version}` development line; every page states what exists today.

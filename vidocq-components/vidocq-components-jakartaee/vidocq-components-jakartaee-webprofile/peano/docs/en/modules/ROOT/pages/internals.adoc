@@ -13,8 +13,8 @@ immutable AST, resolver-backed evaluator and API provider; the full design is
 | Artefact | Java module | Role
 
 | `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constants and resolver-backed value expressions
-| `peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable contract — implemented; exports only `io.vidocq.peano.spi`
-| `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
+| `peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable contract and SOURCE-retained ELAccessible annotation
+| `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating property tables — implemented, build time only
 | `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
 | `peano-tck` | — | Official TCK runner, `-Ptck` profile only
 |===
@@ -54,10 +54,36 @@ record exported only to jakarta.el produces the same value/type/read-only result
 its table and the API RecordELResolver. The original API-only bootstrap fixture still
 compiles without a Peano API requirement.
 
-This slice validates the runtime service contract with handwritten tables.
-The annotation processor, selected-type annotation/options and generated method metadata
-are future P6 work. Exact runtime-class registration intentionally requires separate
+The runtime foundation validates the service contract with handwritten tables;
+the processor now emits property tables using the same contract.
+Generated method metadata remains future P6 work. Exact runtime-class registration intentionally requires separate
 tables for subclasses.
+
+== APT property generation (implemented)
+
+ELAccessible or the peano.accessorTypes option selects owned model types.
+PeanoAccessorProcessor is discovered on javac's processor module path and generates
+one provider per selected type through Filer, with the model as originating element.
+Source names include the application module; resource fragments target that
+single-module compilation's class output. Generated Java files carry the project license.
+Provider names use the binary model name followed by __PeanoAccessors.
+
+Generated tables call public getters and setters directly. Primitive boolean isX
+getters take precedence over getX; acronym property names retain their capitals.
+Inherited properties and write-only setters are supported; records expose read-only
+component accessors. Known null results are claimed, setter operands use ELContext
+conversion, and accessor failures preserve ELException or wrap their cause.
+Metadata queries do not execute getters.
+
+Unrelated annotations are not claimed. Explicit type names are retried across
+processing rounds, allowing another processor to generate a selected model.
+Unresolved names are errors when processing finishes. Foreign/unnamed modules,
+private enclosing types, ambiguous write-only setters and type-variable bean
+properties receive diagnostics. Compile one application module per javac invocation.
+
+The integration fixture runs the compiled consumer without the processor module.
+Generated properties are checked against API BeanELResolver on the same API-qualified
+exported bean; closed model access cannot rely on that reflective fallback.
 
 == Lexer (implemented)
 
