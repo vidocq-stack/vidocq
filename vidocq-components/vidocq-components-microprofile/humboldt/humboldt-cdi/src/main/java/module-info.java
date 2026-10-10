@@ -45,8 +45,11 @@ module io.vidocq.humboldt.cdi {
     requires transitive jakarta.cdi;
     requires transitive jakarta.interceptor;
     requires java.logging;
-    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
-    requires static io.vidocq.vauban.api;
+    // Required at runtime under any CDI container, not only Vauban: the build weaves a
+    // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans, so their
+    // classes cannot be loaded without this module. It also supplies the VaubanComponentProvider
+    // service type.
+    requires io.vidocq.vauban.api;
 
     exports io.vidocq.humboldt.cdi;
 

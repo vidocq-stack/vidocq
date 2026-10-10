@@ -118,6 +118,7 @@
         <module>humboldt-rest</module>
         <module>humboldt-runtime</module>
         <module>humboldt-otel-interop</module>
+        <module>humboldt-it-other-containers</module>
     </modules>
 
     <dependencyManagement>

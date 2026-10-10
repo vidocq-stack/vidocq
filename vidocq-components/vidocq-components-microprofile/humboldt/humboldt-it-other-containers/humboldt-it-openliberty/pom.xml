@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.humboldt</groupId>
+        <artifactId>humboldt-it-other-containers</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>humboldt-it-openliberty</artifactId>
+    <packaging>war</packaging>
+    <name>Humboldt :: Integration tests on Open Liberty</name>
+    <description>Portability proof: a WAR bundling the Humboldt jars, unchanged, deployed on Open Liberty
+        (MicroProfile 7 distribution, CDI 4.0 + Jakarta REST 3.1 + MicroProfile Rest Client 4.0) with
+        Liberty's own mpTelemetry feature off — server spans and Rest Client context propagation by
+        Humboldt, checked over HTTP (vidocq-workspace#15).</description>
+
+    <properties>
+        <!-- The application under test has no public API to document. -->
+        <maven.javadoc.failOnError>false</maven.javadoc.failOnError>
+        <!-- Open Liberty runtime: the MicroProfile 7 distribution ships the cdi-4.0, restfulWS-3.1
+             and mpRestClient-4.0 features, so nothing is installed from the network at build time. -->
+        <openliberty.version>26.0.0.10</openliberty.version>
+        <liberty.maven.plugin.version>3.12.3</liberty.maven.plugin.version>
+        <failsafe.plugin.version>3.5.5</failsafe.plugin.version>
+        <build.helper.plugin.version>3.6.1</build.helper.plugin.version>
+        <war.plugin.version>3.4.0</war.plugin.version>
+    </properties>
+
+    <!--
+        The WAR bundles humboldt-rest, humboldt-cdi and humboldt-runtime with what they bring
+        transitively (the Humboldt SDK, the repackaged OpenTelemetry API, vauban-api), exactly as an
+        application would. The Jakarta APIs are `provided` by Liberty's features, the MicroProfile
+        Rest Client API by its mpRestClient feature. Liberty's mpTelemetry feature is never enabled:
+        it would trace the requests itself and the test would prove nothing about Humboldt.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-rest</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-cdi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-mp-rest-client-api</artifactId>
+            <version>0.4.0-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <!-- Jakarta REST 3.1, the level of Liberty's restfulWS-3.1 feature. -->
+            <version>3.1.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>${war.plugin.version}</version>
+                <configuration>
+                    <failOnMissingWebXml>false</failOnMissingWebXml>
+                </configuration>
+            </plugin>
+            <!-- A free HTTP port per build, so parallel builds on one runner do not collide. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>${build.helper.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>reserve-ports</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>reserve-network-port</goal>
+                        </goals>
+                        <configuration>
+                            <portNames>
+                                <portName>liberty.http.port</portName>
+                                <portName>liberty.https.port</portName>
+                            </portNames>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.openliberty.tools</groupId>
+                <artifactId>liberty-maven-plugin</artifactId>
+                <version>${liberty.maven.plugin.version}</version>
+                <configuration>
+                    <runtimeArtifact>
+                        <groupId>io.openliberty</groupId>
+                        <artifactId>openliberty-microProfile7</artifactId>
+                        <version>${openliberty.version}</version>
+                        <type>zip</type>
+                    </runtimeArtifact>
+                    <serverName>humboldtIt</serverName>
+                    <!-- Deploy the packaged WAR, the artefact an application ships — not a loose
+                         application, which points Liberty at the jars in the local repository and
+                         would test those instead of what the WAR holds. -->
+                    <deployPackages>project</deployPackages>
+                    <looseApplication>false</looseApplication>
+                    <bootstrapProperties>
+                        <http.port>${liberty.http.port}</http.port>
+                        <https.port>${liberty.https.port}</https.port>
+                    </bootstrapProperties>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>start-liberty</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>create</goal>
+                            <goal>deploy</goal>
+                            <goal>test-start</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>stop-liberty</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>test-stop</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${failsafe.plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <humboldt.it.base>http://localhost:${liberty.http.port}/humboldt</humboldt.it.base>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -40,22 +40,40 @@
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-otel-instrumentation-annotations</artifactId>
         </dependency>
+        <!-- Jakarta platform APIs are `provided`: the container brings them (the Vidocq runtime,
+             or an application server), so a WAR never ships a second copy (vidocq-workspace#17).
+             The CDI API brings jakarta.interceptor-api transitively. -->
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
         </dependency>
-        <!-- CDI API tire jakarta.interceptor-api en transitive. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
         </dependency>
-        <!-- Compile-only: supplies the VaubanComponentProvider service type referenced by the
-             APT-generated _VaubanComponents. Provided scope: no runtime dependency on Vauban. -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
+             HumboldtTelemetryProducers. Without this jar Weld cannot load the class and skips the
+             producers silently (WELD-000119), then fails the deployment on the first injected
+             Tracer or Span. API types only, no code runs outside Vauban (vidocq-workspace#15,
+             humboldt-it-weld). Its Jakarta CDI dependencies are excluded: the CDI API is declared
+             above. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
             <version>${vauban.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

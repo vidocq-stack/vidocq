@@ -19,63 +19,44 @@
  */
 package io.vidocq.humboldt.rest;
 
-import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
-import io.opentelemetry.context.Scope;
 import jakarta.annotation.Priority;
-import jakarta.ws.rs.container.ContainerRequestContext;
-import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
-import java.lang.System.Logger;
-import java.lang.System.Logger.Level;
-
 /**
- * {@link ExceptionMapper} fallback that terminates the span started by
- * {@link HumboldtServerRequestFilter} when an exception propagates out of the
- * resource method — a case where {@link HumboldtServerResponseFilter}
- * is not called by the JAX-RS container.
+ * {@link ExceptionMapper} fallback that records an exception escaping a resource method on the
+ * SERVER span started by {@link HumboldtServerRequestFilter}.
  *
- * <p><b>Why necessary</b>: per JAX-RS spec §10.2.7, {@code ContainerResponseFilter}
- * instances MUST be invoked EVEN when an {@code ExceptionMapper} transforms the
- * exception into a {@code Response}. Certain containers (including Cassini at the
- * time this was written — see {@code Invoker.java:365}) short-circuit this
- * flow and go directly from {@code ExceptionMapper.toResponse()} to marshalling
- * without invoking the response filters. Without this fallback mapper the SERVER
- * span created by the request filter would never be {@code end()}'d and would
- * remain invisible in the exporter.</p>
+ * <p>The span stays open: {@link HumboldtServerResponseFilter} ends it, with the status code of the
+ * mapped response. Jakarta REST runs the response filters after an {@code ExceptionMapper}
+ * (§6.7.4), and every runtime Humboldt is tested on does: Cassini, and RESTEasy in Open Liberty.</p>
  *
- * <p><b>JAX-RS selection</b>: {@code ExceptionMapper<Throwable>} is as generic as
- * possible — it is only selected by the container if NO more-specific application
- * mapper matches the exception. Applications can therefore provide their own
- * {@code ExceptionMapper<UserSpecificException>} without collision. For that case
- * (a user mapper that matches), the span will (should) be terminated by the normal
- * response filter — unless the container also has the Cassini bug, in which case
- * the application must explicitly end the span itself.</p>
+ * <p>The SERVER span is the current one: the request filter made it current, on the thread that
+ * maps the exception, and the response filter closes that scope. The mapper therefore needs no
+ * {@code @Context ContainerRequestContext}, which Jakarta REST does not define as injectable into
+ * a provider: RESTEasy fails on it, and turned every application exception into an internal
+ * error (humboldt#23).</p>
  *
- * <p>Once the Cassini bug is fixed (response filters called after ExceptionMapper),
- * this code becomes redundant but harmless — the span has already been end()'d by
- * the response filter, the {@code instanceof Span} check will return false (the
- * property will have been removed), and the mapper simply returns a generic 500.</p>
+ * <p><b>JAX-RS selection</b>: {@code ExceptionMapper<Throwable>} is as generic as possible — the
+ * container only selects it when no more specific application mapper matches. A
+ * {@link WebApplicationException} keeps its own response, so a 404 or a 406 stays one; only a 5xx
+ * marks the span as an error, as for any response.</p>
  */
 @Provider
 @jakarta.enterprise.context.Dependent
 @Priority(jakarta.ws.rs.Priorities.USER + 1000)
 public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
 
-    private static final Logger LOG = System.getLogger(HumboldtSpanFinalizer.class.getName());
-    private static final AttributeKey<Long> HTTP_RESPONSE_STATUS_CODE =
-            AttributeKey.longKey("http.response.status_code");
-
-    @Context
-    ContainerRequestContext requestContext;
-
     @Override
     public Response toResponse(Throwable exception) {
-        finalizeSpan(exception);
+        if (exception instanceof WebApplicationException wae && wae.getResponse() != null) {
+            return wae.getResponse();
+        }
+        recordOnServerSpan(exception);
         return Response.status(500)
                 .entity(exception.getClass().getSimpleName()
                         + ": " + (exception.getMessage() != null ? exception.getMessage() : ""))
@@ -83,27 +64,12 @@ public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
                 .build();
     }
 
-    private void finalizeSpan(Throwable t) {
-        if (requestContext == null) return;
-        Object spanObj = requestContext.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY);
-        Object scopeObj = requestContext.getProperty(HumboldtServerRequestFilter.SCOPE_PROPERTY);
-        if (!(spanObj instanceof Span span)) return;
-
+    private static void recordOnServerSpan(Throwable t) {
+        Span span = Span.current();
+        if (!span.isRecording()) return;
         span.recordException(t);
         span.setStatus(StatusCode.ERROR,
                 t.getClass().getSimpleName()
                         + ": " + (t.getMessage() != null ? t.getMessage() : ""));
-        span.setAttribute(HTTP_RESPONSE_STATUS_CODE, 500L);
-        try {
-            if (scopeObj instanceof Scope scope) {
-                scope.close();
-            }
-        } finally {
-            span.end();
-        }
-        requestContext.removeProperty(HumboldtServerRequestFilter.SPAN_PROPERTY);
-        requestContext.removeProperty(HumboldtServerRequestFilter.SCOPE_PROPERTY);
-        LOG.log(Level.DEBUG, "Humboldt SERVER span ended via ExceptionMapper fallback: {0}",
-                t.getClass().getSimpleName());
     }
 }

@@ -449,4 +449,41 @@
 - **Fix**: both jars ship `META-INF/beans.xml` with `bean-discovery-mode="annotated"`; every class they need
   discovered already carries a bean-defining annotation (`@Interceptor`, `@ApplicationScoped`, `@Dependent`).
   `BeanArchiveTest` in each module pins the file; it fails on `main` with `missing target/classes/META-INF/beans.xml`.
-  A Weld SE and an OpenLiberty integration test follow in humboldt#23.
+  The Weld SE and Open Liberty integration tests are in `humboldt-it-other-containers` (BUG-20261010-01, -02).
+
+## BUG-20261010-01 — the telemetry producers do not load under Weld or Open Liberty
+
+- **Date**: 2026-10-10
+- **Status**: FIXED (branch `test/weld-openliberty-it`, 2026-10-10)
+- **Component**: humboldt-cdi
+- **Affected**: any CDI container other than Vauban
+- **Symptom**: Weld skips `HumboldtTelemetryProducers` with an INFO message,
+  `WELD-000119: ... Type io.vidocq.vauban.api.ProxyLink not found`, then fails the deployment:
+  `WELD-001408: Unsatisfied dependencies for type Span with qualifiers @Default`.
+- **Minimal reproduction**: `humboldt-it-weld` (`WeldPortabilityTest`) on `main`.
+- **Cause**: the Vauban build weaves a `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into
+  every normal-scoped bean, and `vauban-api` was `provided` (`requires static`), so it is absent outside Vauban.
+  Same cause as Knock's BUG-20261010-01, Heisenberg's BUG-006 and Cervantes' CERV-008.
+- **Fix**: `vauban-api` is a runtime dependency of `humboldt-cdi` (plain `requires`), its Jakarta CDI dependencies
+  excluded. `humboldt-it-weld`: 5 tests.
+
+## BUG-20261010-02 — the span finalizer turns every exception into a 500, and fails on RESTEasy
+
+- **Date**: 2026-10-10
+- **Status**: FIXED (branch `test/weld-openliberty-it`, 2026-10-10)
+- **Component**: humboldt-rest
+- **Affected**: every Jakarta REST runtime; RESTEasy (Open Liberty, WildFly) fails outright
+- **Symptom**: on Open Liberty, any exception escaping a resource, a `NotAcceptableException` or a
+  `NotFoundException` included, answers 500 and logs
+  `RESTEASY003880: Unable to find contextual data of type: jakarta.ws.rs.container.ContainerRequestContext`
+  from `HumboldtSpanFinalizer.finalizeSpan`; the SERVER span is never ended, so it is never exported. On any
+  runtime, a `WebApplicationException` without an entity (404, 406, ...) becomes a 500.
+- **Minimal reproduction**: `humboldt-it-openliberty`, `webApplicationExceptionKeepsItsStatus` (500 instead of
+  404) and `failingResourceRecordsTheExceptionOnItsServerSpan` (no SERVER span) on `main`.
+- **Cause**: `HumboldtSpanFinalizer` is an `ExceptionMapper<Throwable>`. It injected `@Context
+  ContainerRequestContext`, which Jakarta REST does not define as injectable into a provider (Cassini supplies it,
+  RESTEasy does not), to end the span itself, working around a Cassini that once skipped the response filters
+  after an `ExceptionMapper`; Cassini now runs them (§6.7.4). It also answered 500 for every throwable.
+- **Fix**: the finalizer returns a `WebApplicationException`'s own response, records any other exception on the
+  current SERVER span (made current by the request filter, on the same thread) and answers 500; the response
+  filter ends the span on every runtime.

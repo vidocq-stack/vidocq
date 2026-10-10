@@ -35,9 +35,12 @@
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-otel-context</artifactId>
         </dependency>
+        <!-- Jakarta platform APIs are `provided`: the container brings them (the Vidocq runtime,
+             or an application server), so a WAR never ships a second copy (vidocq-workspace#17). -->
         <dependency>
             <groupId>jakarta.ws.rs</groupId>
             <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!-- CDI scope annotations on the server filters (provided: the runtime brings CDI). -->
         <dependency>
@@ -62,6 +65,7 @@
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!--
             Vauban SPI (provided): the Vauban APT below generates the

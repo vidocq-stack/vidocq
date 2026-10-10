@@ -140,6 +140,48 @@ A module-layer test checks the result with `opentelemetry-exporter-otlp` 1.66 an
 
 `humboldt-cdi` and `humboldt-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@WithSpan` interceptor, the telemetry producers (`Tracer`, `Meter`, `Span`, ...), the server request and response filters and the span finalizer. Without it, `@WithSpan` did nothing there, and no error was reported (BUG-20261009-01).
 
+[#other-containers]
+=== Other CDI containers [.tag-new]#NEW#
+
+Humboldt does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `humboldt-it-other-containers`, prove it on every build (humboldt#23):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `humboldt-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: a `@WithSpan` method opens a span with its `@SpanAttribute`, the injected `Span` is the current one, the injected `Tracer` records spans, and the produced `OpenTelemetry` is the installed one.
+
+| `humboldt-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Rest Client 4.0), with Liberty's `mpTelemetry` feature off: a request produces a SERVER span, a MicroProfile Rest Client call carries the trace context to the callee, a `WebApplicationException` keeps its status, and an exception escaping a resource is recorded on its SERVER span.
+|===
+
+Neither module is published. What it takes:
+
+* **Install the SDK once.** Under Vidocq the Telemetry extension builds the SDK and sets it as `GlobalOpenTelemetry`. Elsewhere nothing does, and the API stays a no-op: `@WithSpan` runs, but no span is recorded. Install it when the application starts, with the same `OTEL_*` keys as under Vidocq. MicroProfile Telemetry keeps the SDK off unless `OTEL_SDK_DISABLED` is `false`:
++
+[source,java]
+----
+@ApplicationScoped
+public class TelemetryBootstrap {
+
+    void install(@Observes @Initialized(ApplicationScoped.class) Object started) {
+        GlobalOpenTelemetry.set(HumboldtAutoConfigure.configure(EnvConfig.system())); // humboldt-runtime
+    }
+}
+----
+* **`vauban-api` is a runtime dependency** of `humboldt-cdi`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into the normal-scoped `HumboldtTelemetryProducers`; a container that cannot load that type cannot load the class, and Weld drops the producers with an INFO message (`WELD-000119`), then fails on the first injected `Tracer` or `Span` (BUG-20261010-01). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban.
+* **The Jakarta APIs come from the container** — CDI, Annotation and Jakarta REST are `provided` in `humboldt-cdi` and `humboldt-rest`. The Vidocq Telemetry extension brings Jakarta REST itself, so an application with no REST endpoint still starts.
+* **The span finalizer only records the exception.** `HumboldtSpanFinalizer`, an `ExceptionMapper<Throwable>`, records an exception escaping a resource on the current SERVER span and answers 500; the response filter ends the span. A `WebApplicationException` keeps its own response. It used to inject `ContainerRequestContext`, which Jakarta REST does not make injectable into a provider, and to answer 500 for everything: on RESTEasy every application exception, even a 404, became an internal error (BUG-20261010-02).
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own telemetry off** — `mpTelemetry` on Open Liberty, the OpenTelemetry subsystem elsewhere. The WAR carries Humboldt's repackaged OpenTelemetry API (`humboldt-otel-api`, `humboldt-otel-context`); a server that also exposes its own `io.opentelemetry` API to applications gives you two copies and two SDKs.
+* **The MicroProfile Rest Client API is `provided`** in `humboldt-rest`: enable the server's Rest Client feature (`mpRestClient-4.0` on Open Liberty) for client spans, or leave `humboldt-rest`'s `RestClientListener` unused.
+* **Nothing else to exclude** — the Jakarta APIs are `provided`. `humboldt-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == Configuration keys
 
 Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent system properties (`SCREAMING_SNAKE_CASE` → `lower.dot.case`). Env vars take priority.
@@ -353,6 +395,6 @@ The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.
 * Java 25 LTS minimum (compile and runtime).
 * OpenTelemetry API and context 1.66.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0 [.tag-new]#NEW#.
 * Maven 3.9.16 or later (Model 4.0.0 everywhere; the TCK runner is in-reactor behind the `tck` profile).
-* Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). CDI Full (Weld, OpenWebBeans) not tested.
+* Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). Also proven on Weld SE 6.0 and on Open Liberty (CDI 4.0, Jakarta REST 3.1): see <<other-containers>>.
 
 Next: xref:internals.adoc[Internals].

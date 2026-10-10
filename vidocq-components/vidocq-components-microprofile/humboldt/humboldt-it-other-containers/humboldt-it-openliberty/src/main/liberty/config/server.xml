@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Humboldt on Open Liberty (MicroProfile 7 distribution). mpTelemetry stays off, otherwise
+    Liberty's own OpenTelemetry would trace the requests and expose its own io.opentelemetry API.
+    mpRestClient is on: Humboldt's RestClientListener plugs its client filters into Liberty's
+    MicroProfile Rest Client, as in any application.
+-->
+<server description="humboldt-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.0</feature>
+        <feature>restfulWS-3.1</feature>
+        <feature>mpRestClient-4.0</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <webApplication location="humboldt-it-openliberty.war" contextRoot="/humboldt"/>
+</server>
