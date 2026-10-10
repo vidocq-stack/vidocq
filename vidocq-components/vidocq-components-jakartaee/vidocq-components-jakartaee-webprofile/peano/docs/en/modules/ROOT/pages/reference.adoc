@@ -11,7 +11,7 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | Maven coordinates | Java module | Notes
 
 | `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory`
-| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable SPI and SOURCE-retained ELAccessible annotation
+| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable SPI, MethodDescriptor/MethodSelection and SOURCE-retained ELAccessible annotation
 | `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | APT property tables, build time only; exports nothing, provides javax.annotation.processing.Processor
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
 |===
@@ -44,6 +44,9 @@ test harness. Independent named-consumer tests enforce the production module bou
 Put peano-processor, peano-api and jakarta.el-api on javac's processor module path.
 Only peano-api and peano-core are needed at application runtime.
 The processor uses java.compiler and the internal API, with no external tooling dependency.
+AccessorTable.getMethodReference supplies generated metadata. MethodDescriptor snapshots
+erased signatures and runtime annotations; MethodSelection chooses overloads from those
+constants, using the evaluation context for coercion probes.
 
 == Configuration keys (planned)
 

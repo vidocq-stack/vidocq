@@ -29,5 +29,8 @@ public class PublicBean {
     public int getCount() { return count; }
     public void setCount(int count) { this.count=count; }
     public String getNullable() { return null; }
+    @Deprecated(since="6")
+    @demo.Bean.Tag(value="math",levels={2,3})
+    public int add(int a,int b) { return a+b; }
 }
 

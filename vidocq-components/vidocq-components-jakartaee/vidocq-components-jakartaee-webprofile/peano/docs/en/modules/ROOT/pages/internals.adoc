@@ -56,7 +56,7 @@ compiles without a Peano API requirement.
 
 The runtime foundation validates the service contract with handwritten tables;
 the processor now emits property tables using the same contract.
-Generated method metadata remains future P6 work. Exact runtime-class registration intentionally requires separate
+Generated method metadata is implemented. Exact runtime-class registration intentionally requires separate
 tables for subclasses.
 
 == APT property generation (implemented)
@@ -84,6 +84,38 @@ properties receive diagnostics. Compile one application module per javac invocat
 The integration fixture runs the compiled consumer without the processor module.
 Generated properties are checked against API BeanELResolver on the same API-qualified
 exported bean; closed model access cannot rely on that reflective fallback.
+
+== Generated methods and metadata (implemented)
+
+MethodGenerator emits declared erased signatures, direct call branches and static
+runtime annotation literal classes for public selected-model methods.
+MethodDescriptor protects its parameter/annotation arrays and creates fresh Jakarta
+MethodInfo data. Annotation literals implement Java equality/hashCode, including
+nested annotations, enums, class constants, arrays, NaN and signed zero.
+Array-valued members return fresh arrays. No dynamic annotation proxy is created.
+
+MethodSelection shares overload rules with the API-accessible reflective metadata
+fallback. Declared primitive/wrapper descriptors remain distinct; equally matched
+unrelated overloads remain ambiguous. Conversion probes use ELContext.
+Generated varargs branches allocate typed arrays in Java source; neither reflective
+array allocation nor runtime bytecode generation prepares method parameters.
+
+The table resolver binds its immutable catalog in ELContext during ordinary
+resolver callbacks, including conversion callbacks that leave resolution unclaimed.
+Metadata reads reuse that snapshot; custom contexts can discover it lazily through
+the same services. Generated metadata is queried before public-member reflection.
+References retain raw evaluated parameters without invoking the referenced method.
+
+Invocations preserve custom resolver precedence. Captured FunctionMapper calls
+first consult their declaring owner's generated static table, then retain the
+documented API fallback if unresolved. Getter/setter and method exceptions preserve
+ELException or wrap the underlying failure as its cause.
+
+Metadata constants must be accessible to the owning application package/module.
+Specialized inherited generic parameters are diagnosed. Object-declared methods,
+constructors and synthetic stream/optional metadata retain their existing fallback
+or pending status; exact-class dispatch still requires separately selected subclasses.
+All emitted Java platform names are qualified to survive application names such as Class or Object.
 
 == Lexer (implemented)
 
@@ -188,9 +220,9 @@ The temporary MethodMetadata fallback scans public signatures and annotations ac
 to the Jakarta API module, including accessible interface/superclass declarations.
 It distinguishes exact primitive/wrapper descriptors and requires a unique most-specific
 match among equally scored candidates. It performs no member invocation, access override
-or bytecode generation. Generated accessor metadata will replace this fallback in P6.
-Closed-package custom invocation works without metadata; metadata and requested return-type
-validation for those hidden methods require that future SPI.
+or bytecode generation. Generated accessor metadata takes precedence for selected models.
+Closed-package custom invocation works without metadata; generated tables supply metadata
+and requested return-type validation for selected hidden methods.
 
 Assignments freeze the left-hand base/key before evaluating the right-hand expression,
 including variable aliases, then return the original right-hand value. Non-lvalues and
@@ -249,7 +281,7 @@ callbacks only when needed. Arithmetic uses the interpreter's context-aware nume
 
 These operations are available through value-expression invocation. MethodExpression
 metadata and declared return-type checks for synthetic stream/optional operations
-require future generated metadata, like closed-package application methods.
+remain future work. Selected closed-package application methods now have generated metadata.
 
 == Evaluation events and serialization (implemented)
 

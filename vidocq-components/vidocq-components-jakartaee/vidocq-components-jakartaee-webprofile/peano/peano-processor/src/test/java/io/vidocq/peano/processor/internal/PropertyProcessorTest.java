@@ -169,6 +169,30 @@ class PropertyProcessorTest {
         assertTrue(result.log().contains("Type-variable property"),result.log());
     }
 
+    @Test
+    void generatedJavaLangReferencesDoNotResolveToApplicationModelNames() throws Exception {
+        Path source=sources("package demo; public class Model {}");
+        for(String name:List.of("Object","Class","String","Float","Double","Boolean","Long","Throwable","SuppressWarnings")) {
+            String body="package demo; @io.vidocq.peano.annotation.ELAccessible public class "+name
+                    +" { @java.lang.Deprecated public int getValue(){ return 7; } }";
+            if(name.equals("Float")) body="""
+                    package demo;
+                    @io.vidocq.peano.annotation.ELAccessible
+                    public class Float {
+                        @Tag public int getValue(){ return 7; }
+                        @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+                        public @interface Tag {
+                            float decimal() default 0.0f/0.0f;
+                            double precise() default -0.0;
+                        }
+                    }
+                    """;
+            Files.writeString(source.resolve(name+".java"),body);
+        }
+        var result=compile(source);
+        assertEquals(0,result.status(),result.log());
+    }
+
     private Path sources(String model) throws Exception {
         Path source = temporary.resolve("sources");
         Files.createDirectories(source);

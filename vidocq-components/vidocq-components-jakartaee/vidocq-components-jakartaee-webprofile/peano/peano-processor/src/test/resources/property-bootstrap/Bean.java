@@ -27,6 +27,7 @@ public class Bean extends Parent {
     private boolean ready;
     private int reads;
     private String written;
+    private int calls;
     public String getName() { reads++; return name; }
     public void setName(String value) { name=value; }
     public int getCount() { return count; }
@@ -41,6 +42,34 @@ public class Bean extends Parent {
     public String written() { return written; }
     public int reads() { return reads; }
     public static String getStaticValue() { return "static"; }
+    @Deprecated(since="6",forRemoval=false)
+    @Tag(value="math",levels={2,3})
+    public int add(int a,int b) { calls++; return a+b; }
+    public void accept(String value) { calls++; name=value; }
+    public int calls() { return calls; }
+    public String choose(int value) { return "primitive"; }
+    public String choose(Integer value) { return "wrapper"; }
+    public String join(String separator,String... values) { return String.join(separator,values); }
+    public int sum(int... values) { return java.util.Arrays.stream(values).sum(); }
+    public int rows(int[]... values) { return values.length; }
+    public void broken() throws java.io.IOException { throw new java.io.IOException("method failure"); }
+    public String ambiguous(java.io.Serializable value) { return "serializable"; }
+    public String ambiguous(CharSequence value) { return "sequence"; }
+
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    public @interface Tag {
+        String value();
+        int[] levels() default {1};
+        Class<?> type() default String.class;
+        Mode mode() default Mode.FAST;
+        Nested nested() default @Nested;
+        String[] labels() default {"a","b"};
+        float decimal() default 0.0f/0.0f;
+        double precise() default -0.0;
+    }
+    public enum Mode { FAST, SLOW }
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    public @interface Nested { String text() default "nested"; }
 }
 
 class Parent {

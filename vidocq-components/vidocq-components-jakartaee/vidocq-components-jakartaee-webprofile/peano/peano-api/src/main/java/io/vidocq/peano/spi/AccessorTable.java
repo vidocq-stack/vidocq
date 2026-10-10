@@ -20,6 +20,8 @@
 package io.vidocq.peano.spi;
 
 import jakarta.el.ELResolver;
+import jakarta.el.ELContext;
+import jakarta.el.MethodReference;
 
 /**
  * Application-owned resolver using direct property and method calls for one runtime type.
@@ -42,5 +44,20 @@ public abstract class AccessorTable extends ELResolver {
      * @return a non-null target class
      */
     public abstract Class<?> targetType();
+
+    /**
+     * Returns generated metadata without invoking the referenced method.
+     *
+     * @param context evaluation context
+     * @param base method target
+     * @param method method name
+     * @param parameterTypes declared parameter types or null for inline arguments
+     * @param arguments raw evaluated arguments
+     * @return reference or null if this table supplies no metadata for the method
+     */
+    public MethodReference getMethodReference(ELContext context, Object base, String method,
+            Class<?>[] parameterTypes, Object[] arguments) {
+        return null;
+    }
 }
 

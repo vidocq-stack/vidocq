@@ -36,6 +36,7 @@ import jakarta.el.ValueExpression;
 import io.vidocq.peano.core.internal.evaluation.Bindings;
 import io.vidocq.peano.core.internal.evaluation.Interpreter;
 import io.vidocq.peano.core.internal.evaluation.MethodMetadata;
+import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
 import io.vidocq.peano.core.internal.evaluation.ResolverAccess;
 import io.vidocq.peano.core.internal.syntax.Ast;
 import io.vidocq.peano.core.internal.syntax.ExpressionParser;
@@ -108,7 +109,7 @@ final class PeanoMethodExpression extends MethodExpression {
         }
         Resolved resolved = resolve(context, parameters);
         if (!returns.isEmpty()) {
-            Method method = find(resolved, context);
+            MethodInfo method = metadataInfo(resolved, context);
             returns.forEach(type -> MethodMetadata.checkReturn(type, method.getReturnType()));
         }
         return parametersProvided
@@ -126,9 +127,9 @@ final class PeanoMethodExpression extends MethodExpression {
             MethodMetadata.checkReturn(expectedReturnType, info.getReturnType());
             return info;
         }
-        Method method = find(resolve(context, null), context);
+        MethodInfo method = metadataInfo(resolve(context, null), context);
         MethodMetadata.checkReturn(expectedReturnType, method.getReturnType());
-        return info(method);
+        return method;
     }
 
     @Override
@@ -148,10 +149,24 @@ final class PeanoMethodExpression extends MethodExpression {
             return reference;
         }
         Resolved resolved = resolve(context, null);
+        MethodReference reference = metadata(resolved, context);
+        MethodMetadata.checkReturn(expectedReturnType, reference.getMethodInfo().getReturnType());
+        return reference;
+    }
+
+    private static MethodReference metadata(Resolved resolved, ELContext context) {
+        MethodReference generated = GeneratedAccessorELResolver.reference(context, resolved.location().base(),
+                (String) resolved.location().property(), resolved.types(), resolved.arguments());
+        if (generated != null) return generated;
         Method method = find(resolved, context);
-        MethodMetadata.checkReturn(expectedReturnType, method.getReturnType());
         Annotation[] annotations = method.getAnnotations();
         return new MethodReference(resolved.location().base(), info(method), annotations, resolved.arguments());
+    }
+
+    private static MethodInfo metadataInfo(Resolved resolved, ELContext context) {
+        MethodReference generated = GeneratedAccessorELResolver.reference(context, resolved.location().base(),
+                (String) resolved.location().property(), resolved.types(), resolved.arguments());
+        return generated != null ? generated.getMethodInfo() : info(find(resolved, context));
     }
 
     private MethodExpression delegate(ELContext context) {

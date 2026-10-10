@@ -3,6 +3,28 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## APT-004 · 2026-10-10 · Application names shadowed generated Java types
+
+- Symptom: selected models named Class, Object or String prevented generated
+  providers from compiling; wrapper names also broke annotation literal helpers.
+- Minimal reproduction: select demo.Class in a named application module.
+- Cause: generated source used unqualified java.lang names inside the model package.
+- Status: resolved in both property and method generators. All emitted Java platform
+  type/wrapper/annotation names are qualified.
+- Evidence: a nine-name compilation regression was red and is green, including
+  floating annotation values in a model named Float.
+
+## EL-015 · 2026-10-10 · Mapped static functions bypassed generated accessors
+
+- Symptom: a captured public static function on a generated closed model failed
+  through the API reflective resolver despite a directly callable generated table.
+- Minimal reproduction: map a public selected model's getStaticValue method and
+  evaluate f:value() while the model package is not exported.
+- Cause: captured functions invoked the API StaticFieldELResolver directly.
+- Status: resolved. Captured owner/name/descriptor first dispatches through its
+  registered table; unresolved functions retain the documented API fallback.
+- Evidence: the named consumer failed before direct registered dispatch and now passes.
+
 ## APT-001 · 2026-10-10 · Module-qualified resource path rejected
 
 - Symptom: provider source was generated but its registration resource failed

@@ -146,6 +146,9 @@ public final class ResolverAccess {
     public static Object function(ELContext context, Method method, Object[] arguments) {
         requireContext(context);
         context.setPropertyResolved(false);
+        Object generated = guarded(() -> GeneratedAccessorELResolver.invokeRegistered(context,
+                new ELClass(method.getDeclaringClass()), method.getName(), method.getParameterTypes(), arguments));
+        if (context.isPropertyResolved()) return generated;
         Object value = guarded(() -> new StaticFieldELResolver().invoke(context,
                 new ELClass(method.getDeclaringClass()), method.getName(), method.getParameterTypes(), arguments));
         if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved function " + method.getName());

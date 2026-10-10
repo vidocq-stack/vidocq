@@ -7,7 +7,8 @@
 > All 361 official EL 6.0.1 TCK tests pass on Temurin 25 (2026-10-10).
 > The peano-api service contract and direct accessor-table resolver are implemented.
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
-> Other functional-interface adapters, PropertyEditor conversion, generated method metadata
+> Direct methods, runtime annotation literals and method metadata are implemented for selected models.
+> Other functional-interface adapters, PropertyEditor conversion
 > and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
@@ -159,8 +160,8 @@ lookup SPI. MethodInfo/MethodReference temporarily use public method signature a
 annotation inspection, restricted to members accessible to the jakarta.el API module,
 including accessible interface/superclass declarations. This fallback never invokes
 members, changes accessibility, adds opens or generates runtime bytecode. Generated
-accessor metadata replaces it in P6. Custom hidden-method invocation still uses the
-application resolver; hidden metadata and requested return-type validation need that SPI.
+accessor metadata now takes precedence for selected models in P6. Custom hidden-method invocation uses the
+application resolver; generated tables supply hidden metadata and requested return-type validation.
 Captured FunctionMapper methods invoke through the API's StaticFieldELResolver, retaining
 the mapped declaring class/name/parameter descriptor and API-qualified export access.
 
@@ -197,8 +198,20 @@ properties containing unbound type variables receive diagnostics.
 Generated public providers live in the model package; Filer emits source and a
 META-INF/peano/accessor-providers registration fragment for each selected type.
 Users add that fragment's provides directive to the application's module-info.java.
-Arbitrary method metadata, subtype dispatch, custom functional-interface adapters
-and the reflection-denial switch are subsequent P6 slices.
+Public method metadata and dispatch are now implemented. Subtype dispatch, custom
+functional-interface adapters and the reflection-denial switch are subsequent P6 slices.
+
+P6 methods (2026-10-10): generated signatures and annotation literals provide metadata
+without lookup or invocation. MethodSelection shares exact/assignable/coercible and
+most-specific rules with the reflective metadata fallback. Generated branches convert
+operands through ELContext and prepare typed varargs arrays at compile time.
+The resolver binds its catalog in ELContext; metadata queries reuse the context snapshot
+or discover the same services lazily for custom contexts.
+Captured static functions dispatch through their owner's registered table before API fallback.
+Public runtime annotation literals preserve defaults, nested/enum/class values and
+Java equals/hashCode/defensive-array behavior, with no runtime proxies.
+Object-declared methods and constructors retain the documented API path.
+Inaccessible metadata types and specialized inherited generic parameters receive diagnostics.
 
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|

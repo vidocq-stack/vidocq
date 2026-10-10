@@ -29,6 +29,8 @@ import java.util.ServiceLoader;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
 import jakarta.el.ELResolver;
+import jakarta.el.ELClass;
+import jakarta.el.MethodReference;
 import io.vidocq.peano.spi.AccessorProvider;
 import io.vidocq.peano.spi.AccessorTable;
 
@@ -71,7 +73,45 @@ public final class GeneratedAccessorELResolver extends ELResolver {
 
     private AccessorTable table(ELContext context, Object base) {
         Objects.requireNonNull(context, "context");
-        return base == null ? null : tables.get(base.getClass());
+        bind(context);
+        return base == null ? null : tables.get(base instanceof ELClass type ? type.getKlass() : base.getClass());
+    }
+
+    private void bind(ELContext context) {
+        if (context.getContext(GeneratedAccessorELResolver.class) == null) {
+            context.putContext(GeneratedAccessorELResolver.class, this);
+        }
+    }
+
+    @Override
+    public <T> T convertToType(ELContext context, Object value, Class<T> type) {
+        Objects.requireNonNull(context, "context");
+        bind(context);
+        return null;
+    }
+
+    /** Generated metadata is context-owned; lazy service discovery also supports custom contexts. */
+    public static MethodReference reference(ELContext context, Object base, String method,
+            Class<?>[] types, Object[] arguments) {
+        var resolver = catalog(context);
+        AccessorTable table = resolver.table(context, base);
+        return table == null ? null : table.getMethodReference(context, base, method, types, arguments);
+    }
+
+    /** Direct captured-function dispatch; the ordinary resolution flag distinguishes a null result. */
+    public static Object invokeRegistered(ELContext context, Object base, String method,
+            Class<?>[] types, Object[] arguments) {
+        AccessorTable table = catalog(context).table(context, base);
+        return table == null ? null : table.invoke(context, base, method, types, arguments);
+    }
+
+    private static GeneratedAccessorELResolver catalog(ELContext context) {
+        var resolver = (GeneratedAccessorELResolver) context.getContext(GeneratedAccessorELResolver.class);
+        if (resolver == null) {
+            resolver = new GeneratedAccessorELResolver();
+            resolver.bind(context);
+        }
+        return resolver;
     }
 
     @Override

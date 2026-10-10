@@ -97,8 +97,9 @@ Object assigned = factory.createValueExpression(context, "${a = b = 42; a + b}",
 
 Function mappings are captured at expression creation. Inline method parameters override
 the parameters passed to invoke. Bare method expressions require explicit parameter types.
-MethodInfo and MethodReference use a documented public-member metadata fallback;
-metadata for a closed application package requires the future generated-accessor SPI.
+MethodInfo and MethodReference use generated data for selected models, including
+closed application packages. Other models retain the documented API-accessible
+public-member metadata fallback.
 
 == Lambdas and collections (implemented)
 
@@ -226,7 +227,33 @@ The processor itself is needed only at compilation.
 Public getters/setters, primitive boolean is-getter precedence, acronym properties,
 inherited properties, write-only setters and read-only record components are supported.
 Type-variable bean properties and ambiguous write-only setters have explicit diagnostics.
-Generated method invocation/metadata and subclass dispatch remain later P6 work.
+Public method invocation and metadata are generated too; subclass dispatch remains later P6 work.
+
+== Generated methods and references (implemented)
+
+Selected models expose public instance and static methods through direct generated
+calls, including overloads, void methods and typed varargs. MethodReference contains
+the declared signature, raw evaluated parameters and runtime annotation literals.
+Retrieving metadata does not invoke the referenced method.
+
+For an owned selected bean with `public int add(int a, int b)`:
+
+[source,java]
+----
+var expression = factory.createMethodExpression(context, "#{bean.add(2,3)}", int.class, null);
+var reference = expression.getMethodReference(context); // no add invocation
+Object sum = expression.invoke(context, null); // Integer value 5
+----
+
+The same tables support static calls through ELClass and captured FunctionMapper
+methods. Annotation member arrays are defensive; generated literals follow Java's
+annotation equality/hashCode rules. The processor performs no runtime reflection
+or proxy generation for these paths.
+
+Methods declared by Object and constructors retain the API fallback.
+Metadata types must be accessible from the generated provider's application package
+and module. Specialized inherited generic parameter types receive a diagnostic;
+their generated dispatch is a later slice.
 
 == Building Peano from source
 
