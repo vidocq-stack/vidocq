@@ -133,10 +133,16 @@
             <version>${ravel.version}</version>
         </dependency>
 
-        <!-- Champollion JSON-P -->
+        <!-- Champollion JSON-P, and JSON-B for the TCK's JAX-RS endpoints: cassini-core depends
+             on the JSON-B API only (vidocq-workspace#17), so the runner picks the implementation. -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonp</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
             <version>${champollion.version}</version>
         </dependency>
 

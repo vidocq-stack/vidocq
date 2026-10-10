@@ -19,7 +19,7 @@
  */
 package io.vidocq.cervantes.tck.arquillian;
 
-import io.vidocq.cassini.cdi.vauban.CassiniScopeExtension;
+import io.vidocq.cassini.cdi.CassiniScopeExtension;
 import io.vidocq.cassini.cdi.vauban.VaubanBeanProvider;
 import io.vidocq.cassini.cdi.vauban.VaubanRequestScopeFilter;
 import io.vidocq.cassini.chappe.ChappeHttpAdapter;
