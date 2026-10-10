@@ -182,12 +182,14 @@ No `peano-api` re-export aggregator of the spec jar (unlike `erasmus-api`):
   on `download.eclipse.org/jakartaee/expression-language/6.0/`; its artefacts are
   installed into the local Maven repository, as for the Servlet TCK of `foy-tck`.
   The 6.0.x branch of `jakartaee/expression-language` builds
-  `jakarta.tck:jakarta-expression-language-tck` (coordinates in the `peano-tck`
-  POM, **to confirm** against the zip). Central only has the Platform-mode
-  `jakarta.tck:el-platform-tck` 11.0.x. Also to confirm: how the suite selects the implementation
-  under test (`ServiceLoader` vs a system property) and whether it ships a
-  signature test.
-- EL is Java SE friendly: no Arquillian container expected (to confirm).
+  `jakarta.tck:jakarta-expression-language-tck:6.0.1`, confirmed from the
+  distribution's embedded Maven metadata on 2026-10-10. Central only has the
+  Platform-mode `jakarta.tck:el-platform-tck` 11.0.x.
+  The suite uses JUnit Jupiter and selects the provider through
+  `ExpressionFactory.newInstance()`. It includes `ELSigTestIT` for signature
+  testing. Official cases are named `ELClientIT`: the runner must explicitly
+  include `*IT` classes instead of relying on Surefire's default test patterns.
+- EL is Java SE friendly: inspected suite sources do not use Arquillian.
 - Script `run-official-tck-el-6.0.sh` (`smoke` / `all` / `-Dtest=`), added with
   the first real run, following the other bricks.
 - Gate: once green, 100 % PASS is a merge gate on `main`; any challenge or

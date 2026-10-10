@@ -16,8 +16,11 @@ A successful build of that profile is not a TCK pass.
 | Item | Plan
 
 | Runner | `peano-tck` module, in the reactor only under the `-Ptck` Maven profile (same pattern as the other Vidocq bricks); the official artefact is resolved only under `-Ptck,tck-official`.
-| Artefact | Not on Maven Central: `jakarta-expression-language-tck-6.0.1.zip` from download.eclipse.org, installed into the local Maven repository. Maven coordinates (`jakarta.tck:jakarta-expression-language-tck`) to confirm against the zip.
-| Container | None expected: Expression Language is Java SE friendly (to confirm).
+| Artefact | `jakarta-expression-language-tck-6.0.1.zip` from download.eclipse.org. Embedded Maven metadata confirms `jakarta.tck:jakarta-expression-language-tck:6.0.1`; local installation is required.
+| Test framework | JUnit Jupiter. Official cases are named `ELClientIT`; the runner must include `*IT` classes explicitly.
+| Provider selection | Suite sources call `ExpressionFactory.newInstance()`.
+| Container | Inspected standalone suite sources do not use Arquillian.
+| Signature test | The distribution includes `ELSigTestIT`; its runtime setup still needs wiring.
 | Script | `run-official-tck-el-6.0.sh` with `smoke` / `all` / `-Dtest=` modes, added with the first run.
 | Merge gate | Once wired, 100 % PASS becomes a hard merge gate on `main`.
 |===
@@ -28,3 +31,6 @@ A successful build of that profile is not a TCK pass.
 * Plan and open questions: `PLAN.md` in {repo-peano}[the repo]
 
 This page will carry the run date, suite version, exact command and pass counts as soon as the first official run happens.
+
+The 6.0.1 distribution was inspected on 2026-10-10. This confirms its metadata
+and test layout, and does not constitute an execution or a certification result.
