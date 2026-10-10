@@ -435,3 +435,29 @@ where this whole bug class is invisible.
     `exports … to io.vidocq.runtime.core;` or a CDI bean): `Vidocq.inaccessibleApplicationClass`, vidocq#201,
     `BootLayerAccessTest`.
 
+
+## BUG-20261010-01 — A scaffolded application boots in place and loses its generated code in jlink
+
+- **Date**: 2026-10-10
+- **Status**: FIXED (branch `fix/scaffold-main-vidocq-run`)
+- **Affected module**: vidocq-runtime-cli / `ProjectScaffolder.buildApp`, `CliParser.parseCreate`
+- **Symptom**: `vidocq create -x heisenberg-fault-tolerance`, a bean with a `@Retry` method, no
+  `exports` (what the scaffold writes): `vidocq start` works, the jlink image fails on first use with
+  `DeploymentException: Failed to create client proxy for normal-scoped bean …Flaky` caused by
+  `IllegalAccessException: … cannot access class …Flaky_ClientProxy … does not export … to module
+  io.vidocq.vauban.core`. Separately, `vidocq create --name ft-030` writes the module
+  `io.example.ft.030`, which does not compile.
+- **Minimal reproduction**: the application above, `vidocq build jlink`, `target/dist/bin/<app>`.
+- **Cause**: the scaffolded `main` was `VidocqBootstrap.create().configure().start()`, not a
+  `Vidocq.run` trampoline. The jlink launcher runs `-m <app>/<main>`, the application stays in the
+  boot layer, and its `_VaubanComponents` (listed in `META-INF/services`, never in a `provides` the
+  scaffold does not write) is invisible to `ServiceLoader`; Vauban then falls back to reflection,
+  which needs the package exported. Under `vidocq start` the runtime re-layers the application
+  anyway, which is why only the image failed. The examples already use `Vidocq.run`. The name was
+  never checked against the Java package syntax.
+- **Fix**: the scaffold writes a `@VidocqMain` class whose `main` is `Vidocq.run(args)`;
+  `parseCreate` refuses a package (derived or given) that is not a valid Java package name and
+  points to `--package`. `ProjectScaffolderAppTest`, `CliParserCreateTest`.
+- **Verification**: CLI module 273 tests; the Fault Tolerance application with the new `main` and no
+  `exports`/`opens`: `vidocq:run` and the jlink image (`boot-layer detection`) both run the
+  `@Retry` bean (3 calls). Found while checking heisenberg BUG-005 with scaffolded applications.

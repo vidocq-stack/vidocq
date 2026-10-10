@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CliParserCreateTest {
 
@@ -40,5 +42,28 @@ class CliParserCreateTest {
                 CliParser.parse(new String[]{"create", "--name", "demo",
                         "--parent-version", "1.2.3"}));
         assertEquals("1.2.3", c.parentVersion());
+    }
+
+    @Test
+    void rejectsANameThatMakesAnInvalidPackage() {
+        // "ft-030" would give the package and module io.example.ft.030, which does not compile.
+        var e = assertThrows(CliException.class,
+                () -> CliParser.parse(new String[]{"create", "--name", "ft-030"}));
+        assertTrue(e.getMessage().contains("io.example.ft.030"), e.getMessage());
+        assertTrue(e.getMessage().contains("--package"), e.getMessage());
+    }
+
+    @Test
+    void rejectsAnInvalidExplicitPackage() {
+        var e = assertThrows(CliException.class,
+                () -> CliParser.parse(new String[]{"create", "--name", "demo", "--package", "com.acme.class"}));
+        assertTrue(e.getMessage().contains("com.acme.class"), e.getMessage());
+    }
+
+    @Test
+    void acceptsAValidPackageForANameWithDigits() {
+        Command.Create c = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "ft-030", "--package", "io.example.ft030"}));
+        assertEquals("io.example.ft030", c.pkg());
     }
 }

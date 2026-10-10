@@ -120,7 +120,35 @@ public final class CliParser {
         if (name == null) throw new CliException("'create' requires --name <app-name>.");
         String gid = groupId != null ? groupId : "io.example";
         String p   = pkg != null ? pkg : gid + "." + name.replace('-', '.');
+        if (!isPackageName(p)) {
+            throw new CliException("'" + p + "' is not a valid Java package name"
+                    + (pkg != null ? "." : " (derived from --group-id and --name).")
+                    + " It is also the module name, so each dot-separated part must be a Java"
+                    + " identifier that is not a keyword; choose another with --package <pkg>.");
+        }
         return new Command.Create(name, gid, p, Set.copyOf(extensions), parentVersion);
+    }
+
+    /** Java keywords and literals, which no package segment may be (JLS §3.9, §3.10). */
+    private static final Set<String> RESERVED = Set.of(
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
+            "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
+            "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+            "interface", "long", "native", "new", "package", "private", "protected", "public",
+            "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+            "throw", "throws", "transient", "try", "void", "volatile", "while", "_",
+            "true", "false", "null");
+
+    /** Whether {@code name} is a qualified Java name usable as a package and module name. */
+    static boolean isPackageName(String name) {
+        for (String segment : name.split("\\.", -1)) {
+            if (segment.isEmpty() || RESERVED.contains(segment)
+                    || !Character.isJavaIdentifierStart(segment.codePointAt(0))
+                    || !segment.codePoints().allMatch(Character::isJavaIdentifierPart)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static Command.Build parseBuild(String[] args, int from) {

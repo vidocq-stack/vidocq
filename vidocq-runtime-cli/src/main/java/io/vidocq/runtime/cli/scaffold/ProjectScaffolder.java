@@ -267,15 +267,19 @@ public final class ProjectScaffolder {
         return """
                 package %s;
 
-                import io.vidocq.runtime.core.VidocqBootstrap;
+                import io.vidocq.runtime.core.Vidocq;
+                import io.vidocq.runtime.spi.VidocqMain;
 
+                /**
+                 * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
+                 * into the Vauban layer and boots it there, from the IDE, {@code vidocq start} or a jlink
+                 * image alike. Put no code before it: it would run outside that layer.
+                 */
+                @VidocqMain
                 public final class %s {
 
                     public static void main(String[] args) {
-                        VidocqBootstrap.create()
-                                .configure()
-                                .start()
-                                .awaitShutdown();
+                        Vidocq.run(args);
                     }
                 }
                 """.formatted(c.pkg(), className);
