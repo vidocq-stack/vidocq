@@ -35,6 +35,12 @@ and length, with no member lookup, accessibility changes or `java.desktop` depen
 
 == Application-owned accessor tables (P6 foundation implemented)
 
+The reflection guard follows generated and stream resolvers in the factory-supplied
+chain, before the API's member fallback. It permits direct map/list/resource-bundle/array
+property resolution, while deny mode rejects remaining bean/record/static member access.
+Explicit bare-method/function fallback, reflective metadata selection and serialized
+function restoration also check the policy.
+
 Selected functional interfaces contribute target-keyed conversion tables through the
 same provider service. Generated adapters are ordinary Java classes in the application's
 module. They invoke the EL lambda and convert its result through the caller context;

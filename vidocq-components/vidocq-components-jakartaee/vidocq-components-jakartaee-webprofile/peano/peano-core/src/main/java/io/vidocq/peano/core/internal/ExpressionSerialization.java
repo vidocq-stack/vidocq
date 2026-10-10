@@ -43,6 +43,7 @@ record ExpressionSerialization(boolean methodExpression, boolean objectExpressio
         private static final long serialVersionUID = 1L;
 
         Method resolve() throws ReflectiveOperationException {
+            io.vidocq.peano.core.internal.evaluation.ReflectionGuard.requireAllowedType(declaringClass);
             return declaringClass.getMethod(name, parameterTypes.toArray(Class<?>[]::new));
         }
     }

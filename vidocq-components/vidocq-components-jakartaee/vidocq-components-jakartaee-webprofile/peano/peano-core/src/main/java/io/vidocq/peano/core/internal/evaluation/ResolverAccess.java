@@ -136,6 +136,7 @@ public final class ResolverAccess {
         Object value = guarded(() -> context.getELResolver().invoke(
                 context, location.base(), location.property(), types, arguments));
         if (!context.isPropertyResolved() && bareReference) {
+            ReflectionGuard.requireAllowed(location.base());
             ELResolver fallback = location.base() instanceof ELClass ? new StaticFieldELResolver() : new BeanELResolver();
             value = guarded(() -> fallback.invoke(context, location.base(), location.property(), types, arguments));
         }
@@ -149,6 +150,7 @@ public final class ResolverAccess {
         Object generated = guarded(() -> GeneratedAccessorELResolver.invokeRegistered(context,
                 new ELClass(method.getDeclaringClass()), method.getName(), method.getParameterTypes(), arguments));
         if (context.isPropertyResolved()) return generated;
+        ReflectionGuard.requireAllowedType(method.getDeclaringClass());
         Object value = guarded(() -> new StaticFieldELResolver().invoke(context,
                 new ELClass(method.getDeclaringClass()), method.getName(), method.getParameterTypes(), arguments));
         if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved function " + method.getName());

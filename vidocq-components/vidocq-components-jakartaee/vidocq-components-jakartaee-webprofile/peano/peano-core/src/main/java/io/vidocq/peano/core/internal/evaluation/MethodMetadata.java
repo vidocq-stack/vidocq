@@ -46,6 +46,7 @@ public final class MethodMetadata {
 
 
     public static Method find(Object base, String name, Class<?>[] expectedTypes, Object[] values, ELContext context) {
+        ReflectionGuard.requireAllowed(base);
         Class<?> type = base instanceof ELClass elClass ? elClass.getKlass() : base.getClass();
         boolean staticOnly = base instanceof ELClass;
         var candidates = new LinkedHashMap<Signature, Method>();

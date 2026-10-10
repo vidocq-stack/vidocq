@@ -22,6 +22,7 @@ import io.vidocq.peano.annotation.ELAccessible;
 
 @ELAccessible
 public class PublicBean {
+    public record FallbackRecord(int value) {}
     private String value = "initial";
     private int count;
     public String getValue() { return value; }

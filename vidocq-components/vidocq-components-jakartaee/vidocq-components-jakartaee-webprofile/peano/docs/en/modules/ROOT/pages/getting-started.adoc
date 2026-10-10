@@ -6,6 +6,14 @@ Peano's development build evaluates constants and resolver-backed value expressi
 through the Jakarta EL API, including functions, method expressions and assignments.
 Lambdas, list/set/map construction and lazy chapter 2 collection pipelines are implemented.
 
+== Reflection policy
+
+To verify that generated tables cover member access, start the application with
+`-Dpeano.reflection=deny`. Peano then reports the target type whenever evaluation would
+enter its reflective member fallback. The default allow mode preserves Jakarta API
+fallback behavior. Custom resolvers, generated tables and direct collection access
+continue to work in deny mode.
+
 == Prerequisites
 
 * **Java 25** — Temurin recommended. Module path enabled.

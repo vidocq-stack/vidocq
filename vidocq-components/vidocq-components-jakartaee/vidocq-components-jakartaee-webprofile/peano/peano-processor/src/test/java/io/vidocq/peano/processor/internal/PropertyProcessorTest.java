@@ -49,7 +49,7 @@ class PropertyProcessorTest {
     void generatesModularPropertyProvidersAndRunsWithoutTheProcessor() throws Exception {
         Path sources = temporary.resolve("sources");
         Files.createDirectories(sources);
-        for (String name : List.of("module-info.java","Bean.java","Derived.java","Callbacks.java","Item.java","Explicit.java","PublicBean.java","Main.java")) {
+        for (String name : List.of("module-info.java","Bean.java","Derived.java","Callbacks.java","Item.java","Explicit.java","PublicBean.java","Main.java","DenialMain.java")) {
             try (var input = getClass().getResourceAsStream("/property-bootstrap/"+name)) {
                 assertNotNull(input);
                 Files.copy(input,sources.resolve(name));
@@ -62,6 +62,16 @@ class PropertyProcessorTest {
                 String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
                 "--module","peano.propertyconsumer/demo.Main"),0);
         assertTrue(result.contains("PEANO_PROPERTIES_OK"));
+        for (String policy:List.of("allow","deny")) {
+            String checked=run(List.of(javaBin("java"),"-Dpeano.reflection="+policy,"--module-path",
+                    String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
+                    "--module","peano.propertyconsumer/demo.DenialMain"),0);
+            assertTrue(checked.contains("PEANO_DENIAL_OK"));
+        }
+        String invalid=run(List.of(javaBin("java"),"-Dpeano.reflection=denny","--module-path",
+                String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
+                "--module","peano.propertyconsumer/demo.DenialMain"),1);
+        assertTrue(invalid.contains("Invalid peano.reflection value"),invalid);
         for (String name : List.of("demo.Bean","demo.Derived","demo.Item","demo.Explicit","demo.exported.PublicBean")) {
             Path fragment = compilation.classes().resolve("META-INF/peano/accessor-providers/"+name+"__PeanoAccessors.txt");
             assertEquals("provides io.vidocq.peano.spi.AccessorProvider with "+name+"__PeanoAccessors;\n",Files.readString(fragment));

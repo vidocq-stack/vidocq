@@ -16,6 +16,19 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
 |===
 
+== Reflection policy
+
+The system property peano.reflection accepts allow (default) or deny. Other values
+raise ELException. Set it before application startup.
+In deny mode, Peano's member fallback rejects ungenerated bean/record access, static
+fields and methods, constructors and reflective method metadata, naming the target type.
+Custom resolvers and generated tables run first. Direct map/list/resource-bundle/array
+properties and collection pipelines remain available.
+Restoring serialized captured functions requires allow, including functions whose
+invocation has a generated table: their Method descriptor is restored by lookup.
+The setting governs Peano's fallback; application resolvers and API import handling
+retain their own implementation responsibility.
+
 == Runtime dependencies
 
 `jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.

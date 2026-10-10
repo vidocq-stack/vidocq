@@ -33,6 +33,11 @@ The peano-processor APT module generates property tables for `@ELAccessible` typ
 and explicit selected types, plus their accessible source descendants in the current
 compilation, direct public method calls and generated metadata.
 Method references retain raw arguments and runtime annotations without invoking the method.
+
+Set `-Dpeano.reflection=deny` to reject Peano's reflective member fallback with a
+diagnostic naming the target type. Generated tables, custom resolvers and collection
+operations remain available. The default is `allow`; captured-function deserialization
+requires that default because restoring its method descriptor uses reflective lookup.
 The official EL 6.0.1 TCK passes all 361 tests, including signatures; this result
 is not a certification announcement.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.

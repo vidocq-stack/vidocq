@@ -117,9 +117,9 @@ an application module at all. Peano adds a resolver that does not reflect:
 
 **Degraded reflective path (documented, not hidden):** a type with no generated
 table falls through to the API's `BeanELResolver` (reflection, exported public
-members only). A system property `peano.reflection=deny` (name to validate)
+members only). The system property `peano.reflection=deny` (name approved 2026-10-11)
 turns that fallback into an `ELException` naming the type, so an application can
-prove at test time that it runs reflection-free — the same "eliminate runtime
+prove at test time that Peano's member fallback stays unused — the same "eliminate runtime
 fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
@@ -200,7 +200,7 @@ META-INF/peano/accessor-providers registration fragment for each selected type.
 Users add that fragment's provides directive to the application's module-info.java.
 Public method metadata and dispatch are now implemented. Source subtype support is
 implemented, together with custom functional-interface adapters. The reflection-denial
-switch remains a subsequent P6 slice.
+switch is implemented with the approved configuration name.
 
 P6 source hierarchies (2026-10-10): annotated and explicitly selected roots also select
 their accessible descendants in the current compilation, including nested declarations
@@ -323,6 +323,22 @@ uses ExpressionFactory result coercion. Providers use the existing registration 
 No new runtime dependency, exports, opens or member introspection is introduced.
 
 ## Milestones (TDD — test first, every milestone)
+
+P6 reflection policy (2026-10-11): peano.reflection defaults to allow; deny prevents
+Peano-controlled member fallback and invalid values receive an explicit diagnostic.
+The factory-supplied resolver chain tries custom resolvers, generated tables and
+collection pipelines before the guard. Direct map/list/resource-bundle/array property
+operations remain available; bean/record fallback, static fields/methods, constructors
+and ungenerated Object methods are denied with the target type named in ELException.
+Generated method metadata remains available; reflective metadata searches and direct
+bare-method/captured-function fallback are guarded even with a custom ELContext.
+Captured-function deserialization is denied, including generated function owners,
+because restoring the Method descriptor requires reflective lookup. Serialization
+without captured functions remains available.
+Application-supplied resolver chains and callbacks retain their own implementation
+responsibility: the setting governs Peano's fallback, not reflection inside application
+resolvers or API import handling. Runtime-typed array operations remain the documented
+non-member reflection exception. Configure the system property before application startup.
 
 | # | Content | Done when |
 |---|---|---|
