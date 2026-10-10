@@ -67,6 +67,16 @@
             <artifactId>jakarta.annotation-api</artifactId>
         </dependency>
 
+        <!-- Cassini reads and writes JSON through the JSON-B and JSON-P APIs only
+             (vidocq-workspace#17). The extension assembles the runtime, so it picks the
+             implementation: Champollion (champollion-jsonb brings champollion-jsonp). -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <version>${champollion.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
