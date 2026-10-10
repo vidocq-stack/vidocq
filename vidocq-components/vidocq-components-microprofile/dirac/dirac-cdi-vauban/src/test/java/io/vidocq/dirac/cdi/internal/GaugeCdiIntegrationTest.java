@@ -24,7 +24,6 @@ import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,19 +34,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 class GaugeCdiIntegrationTest {
 
-    @AfterEach
-    void cleanup() {
-        DiracExtension.clearDiscoveredGauges();
-    }
-
     @Test
     void registersGaugeInApplicationRegistry() {
-        DiracExtension.scanGaugeMethods(GaugeService.class);
+        var discovered = new DiscoveredMetrics();
+        discovered.scanGaugeMethods(GaugeService.class);
         var service = new GaugeService();
         service.setCurrent(42);
         var registries = new MetricRegistryProducerBean();
 
-        DiracExtension.registerDiscoveredGauges(registries.applicationRegistry(), ignored -> service);
+        discovered.registerGauges(registries.applicationRegistry(), ignored -> service);
 
         var gauge = registries.applicationRegistry().getGauge(new MetricID("integration.gauge", new Tag("source", "cdi")));
         assertEquals(42, gauge.getValue());
@@ -55,12 +50,13 @@ class GaugeCdiIntegrationTest {
 
     @Test
     void routesGaugeToVendorScope() {
-        DiracExtension.scanGaugeMethods(VendorGaugeService.class);
+        var discovered = new DiscoveredMetrics();
+        discovered.scanGaugeMethods(VendorGaugeService.class);
         var service = new VendorGaugeService();
         service.setCurrent(9);
         var registries = new MetricRegistryProducerBean();
 
-        DiracExtension.registerDiscoveredGauges(registries, ignored -> service);
+        discovered.registerGauges(registries, ignored -> service);
 
         var metricId = new MetricID("vendor.gauge", new Tag("scope", "vendor"));
         assertEquals(9, registries.vendorRegistry().getGauge(metricId).getValue());

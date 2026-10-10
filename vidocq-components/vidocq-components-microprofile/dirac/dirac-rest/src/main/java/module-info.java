@@ -26,8 +26,11 @@ module io.vidocq.dirac.rest {
     requires static jakarta.cdi;
     requires static jakarta.inject;
     requires static jakarta.ws.rs;
-    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
-    requires static io.vidocq.vauban.api;
+    // Required at runtime under any CDI container, not only Vauban: the build weaves a
+    // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans, so their
+    // classes cannot be loaded without this module. It also supplies the VaubanComponentProvider
+    // service type.
+    requires io.vidocq.vauban.api;
     // Compile-only (optional at runtime): the generated MetricsResource$$CassiniAdapter implements a
     // cassini-api type. `requires static` keeps dirac-rest runtime-agnostic — the pre-generated
     // adapter stays dormant unless a Cassini runtime is present.

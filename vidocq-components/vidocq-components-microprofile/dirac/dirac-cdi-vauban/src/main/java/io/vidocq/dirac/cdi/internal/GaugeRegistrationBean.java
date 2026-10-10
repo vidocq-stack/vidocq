@@ -23,7 +23,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +36,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class GaugeRegistrationBean {
     @Inject
     MetricRegistryProducerBean registries;
+
+    // This container's metrics, synthesised by DiracExtension (dirac#23). An Instance, not a plain
+    // injection point: the synthetic bean exists only once the extension ran in this container.
+    @Inject
+    Instance<DiscoveredMetrics> discovered;
+
+    // Gauge beans are looked up in this container, not through CDI.current(), which is ambiguous
+    // when several containers run in one JVM.
+    @Inject
+    Instance<Object> beans;
 
     private final AtomicBoolean registered = new AtomicBoolean();
 
@@ -52,11 +62,12 @@ public class GaugeRegistrationBean {
         if (!registered.compareAndSet(false, true)) {
             return;
         }
-        DiracExtension.registerDiscoveredGauges(
-                registries,
-                beanClass -> CDI.current().select(beanClass).get()
-        );
-        DiracExtension.registerDiscoveredTimers(registries);
-        DiracExtension.registerDiscoveredCounters(registries);
+        if (discovered.isUnsatisfied()) {
+            return;
+        }
+        DiscoveredMetrics metrics = discovered.get();
+        metrics.registerGauges(registries, beanClass -> beans.select(beanClass).get());
+        metrics.registerTimers(registries);
+        metrics.registerCounters(registries);
     }
 }

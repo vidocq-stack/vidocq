@@ -40,9 +40,6 @@ class CompanionEquivalenceTest {
 
     @BeforeEach
     void reset() {
-        DiracExtension.clearDiscoveredGauges();
-        DiracExtension.clearDiscoveredTimers();
-        DiracExtension.clearDiscoveredCounters();
         CompanionRegistry.resetForTests();
     }
 
@@ -71,26 +68,24 @@ class CompanionEquivalenceTest {
     @Test
     void companionIngestion_matchesScan_fieldByField() {
         // Reference: the reflective scan.
-        DiracExtension.scanGaugeMethods(MeteredService.class);
-        DiracExtension.scanTimedMethods(MeteredService.class);
-        DiracExtension.scanCountedMethods(MeteredService.class);
-        var scannedTimers = canonMetrics(DiracExtension.discoveredTimers());
-        var scannedCounters = canonMetrics(DiracExtension.discoveredCounters());
-        var scannedGauges = canonGauges(DiracExtension.discoveredGauges());
+        var scanned = new DiscoveredMetrics();
+        scanned.scanGaugeMethods(MeteredService.class);
+        scanned.scanTimedMethods(MeteredService.class);
+        scanned.scanCountedMethods(MeteredService.class);
+        var scannedTimers = canonMetrics(scanned.timers());
+        var scannedCounters = canonMetrics(scanned.counters());
+        var scannedGauges = canonGauges(scanned.gauges());
         assertFalse(scannedTimers.isEmpty());
         assertFalse(scannedCounters.isEmpty());
         assertEquals(2, scannedGauges.size());
 
-        DiracExtension.clearDiscoveredGauges();
-        DiracExtension.clearDiscoveredTimers();
-        DiracExtension.clearDiscoveredCounters();
-
         // Candidate: the compile-time companion.
-        DiracExtension.ingestCompanion(new MeteredService$$DiracMetrics());
+        var fromCompanion = new DiscoveredMetrics();
+        fromCompanion.ingestCompanion(new MeteredService$$DiracMetrics());
 
-        assertEquals(scannedTimers, canonMetrics(DiracExtension.discoveredTimers()), "timers diverge");
-        assertEquals(scannedCounters, canonMetrics(DiracExtension.discoveredCounters()), "counters diverge");
-        assertEquals(scannedGauges, canonGauges(DiracExtension.discoveredGauges()), "gauges diverge");
+        assertEquals(scannedTimers, canonMetrics(fromCompanion.timers()), "timers diverge");
+        assertEquals(scannedCounters, canonMetrics(fromCompanion.counters()), "counters diverge");
+        assertEquals(scannedGauges, canonGauges(fromCompanion.gauges()), "gauges diverge");
     }
 
     @Test

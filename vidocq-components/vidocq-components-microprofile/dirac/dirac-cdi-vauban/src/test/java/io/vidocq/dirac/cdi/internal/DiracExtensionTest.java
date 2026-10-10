@@ -23,7 +23,6 @@ import io.vidocq.dirac.api.DiracException;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -35,44 +34,35 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class DiracExtensionTest {
 
-    // DISCOVERED_GAUGES is a static registry also populated by the CDI integration
-    // tests running in the same JVM. Clearing only after each test made the counting
-    // assertions depend on surefire's filesystem-dependent class order (green on
-    // macOS, red on the CI runner) — clear before as well.
-    @BeforeEach
-    @AfterEach
-    void cleanup() {
-        DiracExtension.clearDiscoveredGauges();
-    }
-
     @Test
     void scansValidGaugeMethod() {
-        DiracExtension.scanGaugeMethods(ValidGaugeService.class);
+        var discovered = new DiscoveredMetrics();
+        discovered.scanGaugeMethods(ValidGaugeService.class);
 
-        assertEquals(1, DiracExtension.discoveredGaugeCount());
-        var resolved = DiracExtension.discoveredGauges().iterator().next();
+        assertEquals(1, discovered.gauges().size());
+        var resolved = discovered.gauges().iterator().next();
         assertEquals("valid.gauge", resolved.metricID().getName());
         assertEquals(MetricRegistry.APPLICATION_SCOPE, resolved.scope());
     }
 
     @Test
     void rejectsGaugeWithParameters() {
-        assertThrows(DiracException.class, () -> DiracExtension.scanGaugeMethods(InvalidParamGaugeService.class));
+        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidParamGaugeService.class));
     }
 
     @Test
     void rejectsGaugeReturningVoid() {
-        assertThrows(DiracException.class, () -> DiracExtension.scanGaugeMethods(InvalidVoidGaugeService.class));
+        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidVoidGaugeService.class));
     }
 
     @Test
     void rejectsGaugeReturningNonNumericType() {
-        assertThrows(DiracException.class, () -> DiracExtension.scanGaugeMethods(InvalidTypeGaugeService.class));
+        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidTypeGaugeService.class));
     }
 
     @Test
     void rejectsMalformedGaugeTags() {
-        assertThrows(DiracException.class, () -> DiracExtension.scanGaugeMethods(InvalidTagGaugeService.class));
+        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidTagGaugeService.class));
     }
 
     static class ValidGaugeService {

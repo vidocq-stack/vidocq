@@ -26,7 +26,6 @@ import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,18 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class GaugeRegistrationBeanCdiIntegrationTest {
 
-    @AfterEach
-    void cleanup() {
-        DiracExtension.clearDiscoveredGauges();
-    }
-
     @Test
     void registersDiscoveredGaugesOnApplicationStartup() {
-        DiracExtension.scanGaugeMethods(StartupGaugeService.class);
+        // DiracExtension discovers the class itself, in this container (dirac#23).
 
         try (SeContainer container = SeContainerInitializer.newInstance()
                 .disableDiscovery()
-                .addBeanClasses(MetricRegistryProducerBean.class, GaugeRegistrationBean.class, StartupGaugeService.class)
+                .addBeanClasses(DiracExtension.class, MetricRegistryProducerBean.class, GaugeRegistrationBean.class, StartupGaugeService.class)
                 .initialize()) {
 
             var service = container.select(StartupGaugeService.class).get();

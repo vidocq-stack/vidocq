@@ -157,5 +157,89 @@ index, so the missing `beans.xml` never showed.
 
 `dirac-cdi-vauban` and `dirac-rest` ship `META-INF/beans.xml` (`bean-discovery-mode="annotated"`).
 `BeanArchiveTest` in each module pins it; both fail on `main` (`missing
-target/classes/META-INF/beans.xml`). A Weld SE and an OpenLiberty integration test follow in
-dirac#23.
+target/classes/META-INF/beans.xml`). The Weld SE and Open Liberty integration tests are in
+`dirac-it-other-containers` (DRC-004, DRC-005, DRC-006).
+
+## DRC-004 — Dirac does not deploy under Weld or Open Liberty (dirac#23)
+
+- **Opening date**: 2026-10-10
+- **Status**: ✅ FIXED 2026-10-10
+
+### Symptom
+
+Weld skips `MetricRegistryProducerBean` and `GaugeRegistrationBean` with an INFO message,
+`WELD-000119: ... Type io.vidocq.vauban.api.ProxyLink not found`, then fails the deployment:
+`WELD-001408: Unsatisfied dependencies for type MetricRegistryProducerBean`.
+
+### Minimal repro
+
+`dirac-it-weld` on `main`.
+
+### Cause
+
+The Vauban build weaves a `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into every
+normal-scoped bean, and `vauban-api` was `provided` (`requires static`). Same cause as Knock's
+BUG-20261010-01, Heisenberg's BUG-006, Cervantes' CERV-008 and Humboldt's BUG-20261010-01.
+
+### Fix
+
+`vauban-api` is a runtime dependency of `dirac-cdi-vauban` and `dirac-rest` (plain `requires`), its Jakarta
+CDI dependencies excluded. `dirac-cdi-vauban-module-it` names the CDI API on its processor path, and
+`dirac-bench` and `dirac-examples` declare it, as they got it through `vauban-api` before.
+
+## DRC-005 — Two containers in one JVM register each other's metrics (dirac#23)
+
+- **Opening date**: 2026-10-10
+- **Status**: ✅ FIXED 2026-10-10
+
+### Symptom
+
+Two containers sharing Dirac's classes (two applications on one class loader, or two Weld containers in
+one JVM) that start together: the first one registers the second one's gauges instead of its own.
+
+### Minimal repro
+
+`dirac-it-weld`, `TwoContainersOneJvmTest`: the first container starts the second from an
+`@Initialized(ApplicationScoped.class)` observer, before its own gauges are registered. On `main`:
+`expected: <[first.gauge]> but was: <[second.gauge]>`.
+
+### Cause
+
+`DiracExtension` kept the discovered gauges, timers and counters in `static` sets, cleared at each
+container's `@Discovery` phase, and `GaugeRegistrationBean` registered whatever they held at application
+start. `GaugeRegistrationBean` also looked gauge beans up through `CDI.current()`, ambiguous with several
+containers.
+
+### Fix
+
+The extension keeps, per instance, the names of the classes that carry metrics, and registers a synthetic
+`DiscoveredMetrics` bean with them as a parameter; `DiscoveredMetricsCreator` resolves the metrics in the
+container. `GaugeRegistrationBean` injects `Instance<DiscoveredMetrics>` and looks gauge beans up through
+its own `Instance<Object>`. Unit tests use `DiscoveredMetrics` directly; the container tests add
+`DiracExtension`, as the TCK bootstrap does, instead of filling the static sets by hand.
+
+## DRC-006 — An application with Dirac does not deploy on Open Liberty (dirac#23)
+
+- **Opening date**: 2026-10-10
+- **Status**: ✅ FIXED 2026-10-10
+
+### Symptom
+
+`CWWKZ0002E ... DeploymentException: Exception List with 11 exceptions`, each one logged as
+`Unable to load metric candidate class 'com.ibm.tx.jta.cdi.AbstractTransactionContext'` (and other
+Liberty classes) by `LiteExtensionTranslator`.
+
+### Minimal repro
+
+`dirac-it-openliberty` before the fix.
+
+### Cause
+
+`collectMetricAnnotations` (`@Enhancement(types = Object.class, withSubtypes = true)`) is also called for
+the server's own bean classes, which the application's class loader cannot load, and reported each
+`ClassNotFoundException` through `Messages.error`, which fails the deployment.
+
+### Fix
+
+A class that cannot be loaded (`ClassNotFoundException` or `LinkageError`) is skipped, with a `DEBUG` log:
+it cannot carry a metric of the application.

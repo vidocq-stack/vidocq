@@ -27,13 +27,26 @@
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
-             named in module-info `provides`. Non-transitive; absent under non-Vauban containers. -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (MetricsResource). Without this jar Weld cannot load their classes and skips the beans silently
+             (WELD-000119), then fails the deployment on unsatisfied injection points. API types
+             only, no code runs outside Vauban (vidocq-workspace#15, dirac-it-weld). Its Jakarta CDI
+             dependencies are excluded: the container brings the CDI API. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
             <version>${vauban.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- Cassini adapter codegen (APT): cassini-api supplies the adapter interface that the
              generated $$CassiniAdapter implements. provided = compile-only, non-transitive — the jar

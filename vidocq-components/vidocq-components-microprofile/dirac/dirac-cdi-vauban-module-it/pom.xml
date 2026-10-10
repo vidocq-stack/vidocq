@@ -91,6 +91,13 @@
                             <artifactId>dirac-cdi-vauban</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <!-- The BCE needs the CDI API to load. dirac-cdi-vauban leaves it to the
+                             container (`provided`, and excluded from vauban-api), so name it here. -->
+                        <path>
+                            <groupId>jakarta.enterprise</groupId>
+                            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                            <version>${jakarta.cdi.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <!-- The fixture/interceptors inject MetricRegistry beans produced in dirac-cdi-vauban

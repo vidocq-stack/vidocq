@@ -22,6 +22,12 @@
     </properties>
 
     <dependencies>
+        <!-- An application declares the CDI API itself: Dirac leaves it to the container
+             (vidocq-workspace#17), and vauban-api no longer brings it. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-cdi-vauban</artifactId>

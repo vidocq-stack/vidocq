@@ -22,6 +22,12 @@
     </properties>
 
     <dependencies>
+        <!-- The benchmarks boot a CDI container: the CDI API used to come through vauban-api, which
+             now excludes it (the container brings it, vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.dirac</groupId>
             <artifactId>dirac-cdi-vauban</artifactId>

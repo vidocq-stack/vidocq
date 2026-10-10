@@ -34,9 +34,10 @@ flowchart LR
 
 . `DiracExtension` is discovered by Vauban through `ServiceLoader` (`provides BuildCompatibleExtension`).
 . `@Discovery` phase — `registerCustomInterceptorBindings(MetaAnnotations)` declares the interceptor bindings backing `@Counted` and `@Timed`.
-. `@Enhancement` phase — `collectMetricAnnotations(ClassInfo, Messages)` scans every bean class for `@Counted`, `@Timed` and `@Gauge`; gauge methods are resolved to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. These are the only two BCE hooks — no `@Synthesis` phase is used.
+. `@Enhancement` phase — `collectMetricAnnotations(ClassInfo, Messages)` scans every bean class for `@Counted`, `@Timed` and `@Gauge`, which also validates them (a bad `@Gauge` fails the deployment), and keeps the name of each class that carries a metric. A class the application cannot load — the container's own types, on Open Liberty — is skipped.
+. `@Synthesis` phase [.tag-new]#NEW# — `registerDiscoveredMetrics(SyntheticComponents)` registers a synthetic `DiscoveredMetrics` bean whose parameter lists those class names; `DiscoveredMetricsCreator` resolves their metrics again, in the container: gauge methods to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. The state belongs to the extension instance, so each container has its own: two containers sharing Dirac's classes, as two applications on one class loader do, never see each other's metrics (dirac#23). It used to be a `static` field of the extension.
 . `MetricRegistryProducerBean` is a regular `@ApplicationScoped` bean; its **constructor** instantiates the three `MetricRegistryImpl` (`APPLICATION`, `BASE`, `VENDOR`) and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges: GC, threads, heap, classloader, CPU, uptime). No `@PostConstruct` callback is involved.
-. The gathered `@Gauge` are registered as `Gauge<T>` in the target scope (`APPLICATION` by default).
+. `GaugeRegistrationBean`, at application start, takes this container's `DiscoveredMetrics` and registers the gathered `@Gauge` as `Gauge<T>` in the target scope (`APPLICATION` by default), and pre-registers the `@Timed` and `@Counted` metrics. Gauge beans are looked up in this container, not through `CDI.current()`.
 
 No user class is instantiated until it is actually injected: `MethodHandle` resolution runs on metadata, not on instances.
 

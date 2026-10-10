@@ -81,6 +81,36 @@ All artefacts share the version `{project-version}`.
 
 `dirac-cdi-vauban` and `dirac-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@Counted` and `@Timed` interceptors, the `MetricRegistry` and gauge beans, and the `GET /metrics` resource. Under Vauban nothing changes: `annotated` is already how CDI Lite discovers beans. `DiracExtension` is listed in `META-INF/services` as well as in the module descriptor, so it also runs on a class path.
 
+[#other-containers]
+=== Other CDI containers [.tag-new]#NEW#
+
+Dirac does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `dirac-it-other-containers`, prove it on every build (dirac#23):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `dirac-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@Counted`, `@Timed` and `@Gauge` land in the application registry. A second test starts two Weld containers in one JVM, the second one during the first one's start, and checks that each registers only its own gauges.
+
+| `dirac-it-openliberty`
+| A WAR bundling `dirac-cdi-vauban` and `dirac-rest` on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1), with Liberty's `mpMetrics` feature off: `GET /metrics/application` and `GET /metrics/base`, over HTTP.
+|===
+
+Neither module is published. What they found, now fixed:
+
+* **`vauban-api` is a runtime dependency** of `dirac-cdi-vauban` and `dirac-rest`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`MetricRegistryProducerBean`, `GaugeRegistrationBean`, `MetricsResource`); a container that cannot load that type cannot load the class, and Weld drops the bean with an INFO message (`WELD-000119`) before failing the deployment (DRC-004). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Each container has its own discovered metrics** — see xref:internals.adoc[Internals] (DRC-005).
+* **The container's own classes are skipped** — on Open Liberty, the extension visits the server's beans too, and reported each one it could not load as an error, which failed the deployment (DRC-006).
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own metrics off** — `mpMetrics` on Open Liberty. Otherwise its interceptors count the same methods and it answers `/metrics` itself.
+* **Enable the server's CDI and Jakarta REST** — `cdi-4.0` and `restfulWS-3.1` on Open Liberty; Jakarta REST only if you use `dirac-rest`.
+* **Nothing to exclude** — the WAR carries the Dirac jars, the MicroProfile Metrics API (`dirac-mp-metrics-api`) and `vauban-api` (API types only). `dirac-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == Supported MicroProfile Metrics annotations
 
 [cols="2,3,1"]
@@ -179,7 +209,7 @@ MetricRegistry vendor;
 == Compatibility
 
 * Java 25 (LTS), Maven 3.9.16.
-* CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice.
+* CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice. Proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
 * JAX-RS 4.0 (Cassini) — only if `dirac-rest` is used.
 * No MicroProfile Config integration: the `mp.metrics.distribution.*` keys are read from system properties or `META-INF/microprofile-config.properties` directly.
 * No Jakarta EE Full Profile dependency.

@@ -106,6 +106,7 @@
         <module>dirac-cdi-vauban</module>
         <module>dirac-cdi-vauban-module-it</module>
         <module>dirac-rest</module>
+        <module>dirac-it-other-containers</module>
         <module>dirac-bench</module>
         <module>dirac-examples</module>
     </modules>

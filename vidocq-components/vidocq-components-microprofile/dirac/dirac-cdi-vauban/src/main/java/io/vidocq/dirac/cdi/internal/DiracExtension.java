@@ -20,13 +20,14 @@
 package io.vidocq.dirac.cdi.internal;
 
 import io.vidocq.dirac.api.DiracException;
-import io.vidocq.dirac.internal.GaugeImpl;
-import io.vidocq.dirac.internal.MetricRegistryImpl;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
+import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricID;
@@ -42,8 +43,6 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -53,18 +52,18 @@ import java.util.function.Function;
  * and {@code @Counted} at startup.
  */
 public class DiracExtension implements BuildCompatibleExtension {
-    private static final Set<ResolvedGauge> DISCOVERED_GAUGES = ConcurrentHashMap.newKeySet();
-    private static final Set<PreRegisteredMetric> DISCOVERED_TIMERS = ConcurrentHashMap.newKeySet();
-    private static final Set<PreRegisteredMetric> DISCOVERED_COUNTERS = ConcurrentHashMap.newKeySet();
+
+    private static final System.Logger LOG = System.getLogger(DiracExtension.class.getName());
+    // Per container (one extension instance per container start): the classes that carry metrics.
+    // The metrics themselves are resolved again, for this container only, by DiscoveredMetricsCreator.
+    // A static set here was shared by every container of the class loader (dirac#23).
+    private final Set<String> metricClasses = ConcurrentHashMap.newKeySet();
 
     public DiracExtension() {
     }
 
     @Discovery
     public void registerCustomInterceptorBindings(MetaAnnotations meta) {
-        DISCOVERED_GAUGES.clear();
-        DISCOVERED_TIMERS.clear();
-        DISCOVERED_COUNTERS.clear();
         meta.addInterceptorBinding(Timed.class);
         meta.addInterceptorBinding(Counted.class);
     }
@@ -77,220 +76,41 @@ public class DiracExtension implements BuildCompatibleExtension {
             // CG-05: compile-time $$DiracMetrics companion first; the reflective
             // annotation scan below stays as the documented fallback for classes
             // compiled without the dirac-processor.
-            var companion = CompanionRegistry.resolve(beanClass);
-            if (companion != null) {
-                ingestCompanion(companion);
-                return;
+            // Resolving the metrics here validates them (a bad @Gauge fails the deployment); only the
+            // class name is kept, for the synthetic DiscoveredMetrics bean of this container.
+            var probe = new DiscoveredMetrics();
+            probe.ingest(beanClass);
+            if (!probe.isEmpty()) {
+                metricClasses.add(beanClassName);
             }
-            CompanionRegistry.noteScanFallback();
-            scanGaugeMethods(beanClass);
-            scanTimedMethods(beanClass);
-            scanCountedMethods(beanClass);
-        } catch (ClassNotFoundException exception) {
-            if (messages != null) messages.error("Unable to load metric candidate class '" + beanClassName + "': " + exception.getMessage());
+        } catch (ClassNotFoundException | LinkageError notVisible) {
+            // Not a class of this application: the enhancement also visits the container's own
+            // types (Open Liberty's transaction beans, for one), which the application's class
+            // loader cannot see. They carry no application metric; reporting them as errors failed
+            // the deployment (dirac#23).
+            LOG.log(System.Logger.Level.DEBUG, "Metric candidate {0} is not visible to the application: {1}",
+                    beanClassName, notVisible.toString());
         } catch (DiracException exception) {
             if (messages != null) messages.error(exception.getMessage());
             throw exception;
         }
     }
 
-    static void clearDiscoveredGauges() {
-        DISCOVERED_GAUGES.clear();
+    /**
+     * Registers this container's {@link DiscoveredMetrics}: a synthetic bean whose parameter lists the
+     * classes {@link #collectMetricAnnotations} found, resolved again by {@link DiscoveredMetricsCreator}
+     * in the container. {@link GaugeRegistrationBean} registers them in that container's registries.
+     */
+    @Synthesis
+    public void registerDiscoveredMetrics(SyntheticComponents components) {
+        components.addBean(DiscoveredMetrics.class)
+                .type(DiscoveredMetrics.class)
+                .scope(Dependent.class)
+                .withParam(DiscoveredMetricsCreator.CLASSES, metricClasses.toArray(String[]::new))
+                .createWith(DiscoveredMetricsCreator.class);
     }
 
-    static void clearDiscoveredTimers() {
-        DISCOVERED_TIMERS.clear();
-    }
-
-    static void clearDiscoveredCounters() {
-        DISCOVERED_COUNTERS.clear();
-    }
-
-    static int discoveredGaugeCount() {
-        return DISCOVERED_GAUGES.size();
-    }
-
-    static Set<ResolvedGauge> discoveredGauges() {
-        return Collections.unmodifiableSet(DISCOVERED_GAUGES);
-    }
-
-    static Set<PreRegisteredMetric> discoveredTimers() {
-        return Collections.unmodifiableSet(DISCOVERED_TIMERS);
-    }
-
-    static Set<PreRegisteredMetric> discoveredCounters() {
-        return Collections.unmodifiableSet(DISCOVERED_COUNTERS);
-    }
-
-    /** Ingests fully-resolved compile-time metadata — no annotation is read. */
-    static void ingestCompanion(io.vidocq.dirac.spi.gen.MetricsCompanion companion) {
-        for (var spec : companion.timers()) {
-            DISCOVERED_TIMERS.add(toPreRegistered(spec));
-        }
-        for (var spec : companion.counters()) {
-            DISCOVERED_COUNTERS.add(toPreRegistered(spec));
-        }
-        for (var gauge : companion.gauges()) {
-            var tags = parseTags(gauge.tags().toArray(new String[0]));
-            DISCOVERED_GAUGES.add(new ResolvedGauge(
-                    companion.beanClass(),
-                    null,
-                    gauge.staticMethod(),
-                    new MetricID(gauge.name(), tags),
-                    Metadata.builder()
-                            .withName(gauge.name())
-                            .withDescription(gauge.description())
-                            .withUnit(gauge.unit())
-                            .build(),
-                    tags,
-                    normalizeScope(gauge.scope()),
-                    gauge.invoker()));
-        }
-    }
-
-    private static PreRegisteredMetric toPreRegistered(io.vidocq.dirac.spi.gen.MetricsCompanion.MetricSpec spec) {
-        return new PreRegisteredMetric(
-                Metadata.builder()
-                        .withName(spec.name())
-                        .withDescription(spec.description())
-                        .withUnit(spec.unit())
-                        .build(),
-                parseTags(spec.tags().toArray(new String[0])),
-                normalizeScope(spec.scope()));
-    }
-
-    static void scanGaugeMethods(Class<?> beanClass) {
-        Objects.requireNonNull(beanClass, "beanClass must not be null");
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) return;
-        for (var method : beanClass.getDeclaredMethods()) {
-            var gauge = method.getAnnotation(Gauge.class);
-            if (gauge == null) {
-                continue;
-            }
-            DISCOVERED_GAUGES.add(resolveGauge(beanClass, method, gauge));
-        }
-    }
-
-    static void scanTimedMethods(Class<?> beanClass) {
-        Objects.requireNonNull(beanClass, "beanClass must not be null");
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) return;
-        var classTimed = findTimedOnElement(beanClass);
-        for (var method : beanClass.getDeclaredMethods()) {
-            if (Modifier.isStatic(method.getModifiers()) || method.isSynthetic() || method.isBridge()) continue;
-            if (method.getName().contains("$$")) continue;
-            var methodTimed = findTimedOnElement(method);
-            final Timed timed = methodTimed != null ? methodTimed : classTimed;
-            if (timed == null) continue;
-            boolean classLevel = (methodTimed == null);
-            if (classLevel && Modifier.isPrivate(method.getModifiers())) continue;
-            DISCOVERED_TIMERS.add(resolvePreRegisteredMetric(beanClass, method, timed.name(), timed.absolute(),
-                    timed.description(), timed.unit(), timed.tags(), normalizeScope(timed.scope()), classLevel));
-        }
-        for (var constructor : beanClass.getDeclaredConstructors()) {
-            if (Modifier.isPrivate(constructor.getModifiers())) continue;
-            var constructorTimed = findTimedOnElement(constructor);
-            final Timed timed = constructorTimed != null ? constructorTimed : classTimed;
-            if (timed == null) continue;
-            boolean classLevel = (constructorTimed == null);
-            var metricName = classLevel
-                    ? resolveClassLevelConstructorMetricName(beanClass, timed)
-                    : resolveConstructorLevelMetricName(beanClass, timed.name(), timed.absolute());
-            var tags = parseTags(timed.tags());
-            var metadata = Metadata.builder()
-                    .withName(metricName).withDescription(timed.description()).withUnit(timed.unit()).build();
-            DISCOVERED_TIMERS.add(new PreRegisteredMetric(metadata, tags, normalizeScope(timed.scope())));
-        }
-    }
-
-    static void scanCountedMethods(Class<?> beanClass) {
-        Objects.requireNonNull(beanClass, "beanClass must not be null");
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) return;
-        var classCounted = findCountedOnElement(beanClass);
-        for (var method : beanClass.getDeclaredMethods()) {
-            if (Modifier.isStatic(method.getModifiers()) || method.isSynthetic() || method.isBridge()) continue;
-            if (method.getName().contains("$$")) continue;
-            var methodCounted = findCountedOnElement(method);
-            final Counted counted = methodCounted != null ? methodCounted : classCounted;
-            if (counted == null) continue;
-            boolean classLevel = (methodCounted == null);
-            if (classLevel && Modifier.isPrivate(method.getModifiers())) continue;
-            DISCOVERED_COUNTERS.add(resolvePreRegisteredMetric(beanClass, method, counted.name(), counted.absolute(),
-                    counted.description(), counted.unit(), counted.tags(), normalizeScope(counted.scope()), classLevel));
-        }
-        for (var constructor : beanClass.getDeclaredConstructors()) {
-            if (Modifier.isPrivate(constructor.getModifiers())) continue;
-            var constructorCounted = findCountedOnElement(constructor);
-            final Counted counted = constructorCounted != null ? constructorCounted : classCounted;
-            if (counted == null) continue;
-            boolean classLevel = (constructorCounted == null);
-            var metricName = classLevel
-                    ? resolveClassLevelConstructorMetricName(beanClass, counted.name(), counted.absolute())
-                    : resolveConstructorLevelMetricName(beanClass, counted.name(), counted.absolute());
-            var tags = parseTags(counted.tags());
-            var metadata = Metadata.builder()
-                    .withName(metricName).withDescription(counted.description())
-                    .withUnit(counted.unit()).build();
-            DISCOVERED_COUNTERS.add(new PreRegisteredMetric(metadata, tags, normalizeScope(counted.scope())));
-        }
-    }
-
-    static void registerDiscoveredGauges(MetricRegistry registry, Function<Class<?>, Object> beanResolver) {
-        Objects.requireNonNull(registry, "registry must not be null");
-        Objects.requireNonNull(beanResolver, "beanResolver must not be null");
-        for (var resolved : DISCOVERED_GAUGES) {
-            var metric = toGaugeMetric(resolved, beanResolver);
-
-            if (registry instanceof MetricRegistryImpl implementation) {
-                implementation.register(resolved.metadata(), metric, resolved.tags());
-            } else {
-                registry.gauge(resolved.metadata(), metric::getValue, resolved.tags());
-            }
-        }
-    }
-
-    static void registerDiscoveredGauges(MetricRegistryProducerBean registries, Function<Class<?>, Object> beanResolver) {
-        Objects.requireNonNull(registries, "registries must not be null");
-        Objects.requireNonNull(beanResolver, "beanResolver must not be null");
-        for (var resolved : DISCOVERED_GAUGES) {
-            var targetRegistry = registries.registry(resolved.scope());
-            var metric = toGaugeMetric(resolved, beanResolver);
-            if (targetRegistry instanceof MetricRegistryImpl implementation) {
-                implementation.register(resolved.metadata(), metric, resolved.tags());
-            } else {
-                targetRegistry.gauge(resolved.metadata(), metric::getValue, resolved.tags());
-            }
-        }
-    }
-
-    static void registerDiscoveredTimers(MetricRegistryProducerBean registries) {
-        Objects.requireNonNull(registries, "registries must not be null");
-        for (var resolved : DISCOVERED_TIMERS) {
-            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.tags());
-        }
-    }
-
-    static void registerDiscoveredCounters(MetricRegistryProducerBean registries) {
-        Objects.requireNonNull(registries, "registries must not be null");
-        for (var resolved : DISCOVERED_COUNTERS) {
-            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.tags());
-        }
-    }
-
-    private static org.eclipse.microprofile.metrics.Gauge<Number> toGaugeMetric(
-            ResolvedGauge resolved, Function<Class<?>, Object> beanResolver) {
-        if (resolved.invoker() != null) {
-            // CG-05 companion path: direct functional accessor, no MethodHandle.
-            return resolved.staticMethod()
-                    ? new io.vidocq.dirac.internal.FunctionalGaugeImpl<Number>(resolved.invoker())
-                    : new io.vidocq.dirac.internal.FunctionalGaugeImpl<Number>(
-                            () -> beanResolver.apply(resolved.beanClass()), resolved.invoker());
-        }
-        return resolved.staticMethod()
-                ? new GaugeImpl<Number>(resolved.methodHandle())
-                : new GaugeImpl<Number>(() -> beanResolver.apply(resolved.beanClass()), resolved.methodHandle());
-    }
-
-    private static ResolvedGauge resolveGauge(Class<?> beanClass, Method method, Gauge gauge) {
+    static ResolvedGauge resolveGauge(Class<?> beanClass, Method method, Gauge gauge) {
         validateGaugeSignature(method);
         var metricName = resolveMetricName(method, gauge);
         var tags = parseTags(gauge.tags());
@@ -310,7 +130,7 @@ public class DiracExtension implements BuildCompatibleExtension {
         );
     }
 
-    private static PreRegisteredMetric resolvePreRegisteredMetric(Class<?> beanClass, Method method, String name, boolean absolute,
+    static PreRegisteredMetric resolvePreRegisteredMetric(Class<?> beanClass, Method method, String name, boolean absolute,
                                                                     String description, String unit,
                                                                     String[] tags, String scope, boolean classLevel) {
         var metricName = resolveSimpleMetricName(beanClass, method, name, absolute, classLevel);
@@ -362,7 +182,7 @@ public class DiracExtension implements BuildCompatibleExtension {
         return absolute ? method.getName() : MetricRegistry.name(beanClass, method.getName());
     }
 
-    private static Timed findTimedOnElement(java.lang.reflect.AnnotatedElement element) {
+    static Timed findTimedOnElement(java.lang.reflect.AnnotatedElement element) {
         var direct = element.getAnnotation(Timed.class);
         if (direct != null) {
             return direct;
@@ -376,7 +196,7 @@ public class DiracExtension implements BuildCompatibleExtension {
         return null;
     }
 
-    private static Counted findCountedOnElement(java.lang.reflect.AnnotatedElement element) {
+    static Counted findCountedOnElement(java.lang.reflect.AnnotatedElement element) {
         var direct = element.getAnnotation(Counted.class);
         if (direct != null) {
             return direct;
@@ -436,12 +256,12 @@ public class DiracExtension implements BuildCompatibleExtension {
         }
     }
 
-    private static String normalizeScope(String scope) {
+    static String normalizeScope(String scope) {
         var normalized = scope == null ? MetricRegistry.APPLICATION_SCOPE : scope.trim();
         return normalized.isEmpty() ? MetricRegistry.APPLICATION_SCOPE : normalized;
     }
 
-    private static Tag[] parseTags(String[] tagValues) {
+    static Tag[] parseTags(String[] tagValues) {
         if (tagValues == null || tagValues.length == 0) {
             return new Tag[0];
         }

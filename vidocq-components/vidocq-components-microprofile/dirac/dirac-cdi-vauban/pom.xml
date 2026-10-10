@@ -42,12 +42,25 @@
              <artifactId>junit-jupiter</artifactId>
              <scope>test</scope>
          </dependency>
-        <!-- Compile-only (optional at runtime): supplies the VaubanComponentProvider service type
-             implemented by the APT-generated _VaubanComponents. Non-transitive. -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (MetricRegistryProducerBean, GaugeRegistrationBean). Without this jar Weld cannot load their classes and skips the beans silently
+             (WELD-000119), then fails the deployment on unsatisfied injection points. API types
+             only, no code runs outside Vauban (vidocq-workspace#15, dirac-it-weld). Its Jakarta CDI
+             dependencies are excluded: the container brings the CDI API. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
          <!-- Vauban CDI container for integration tests -->
          <dependency>

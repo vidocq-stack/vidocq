@@ -26,7 +26,6 @@ import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.annotation.Counted;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,18 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class CountedInterceptorCdiIntegrationTest {
 
-    @AfterEach
-    void cleanup() {
-        DiracExtension.clearDiscoveredCounters();
-    }
-
     @Test
     void countedInterceptorIncrementsApplicationRegistryInContainer() {
-        DiracExtension.scanCountedMethods(CountedService.class);
+        // DiracExtension discovers the class itself, in this container (dirac#23).
 
         try (SeContainer container = SeContainerInitializer.newInstance()
                 .disableDiscovery()
-                .addBeanClasses(CountedInterceptor.class, MetricRegistryProducerBean.class,
+                .addBeanClasses(DiracExtension.class, CountedInterceptor.class, MetricRegistryProducerBean.class,
                         GaugeRegistrationBean.class, CountedService.class)
                 .initialize()) {
 
