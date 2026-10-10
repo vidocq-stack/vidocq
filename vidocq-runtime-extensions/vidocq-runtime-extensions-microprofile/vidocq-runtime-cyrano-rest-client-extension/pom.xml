@@ -41,6 +41,23 @@
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
         </dependency>
+        <!-- Cyrano leaves Jakarta REST to the runtime (`provided`, vidocq-workspace#17): the
+             extension assembles the runtime, so it brings the API, even in an application with no
+             REST endpoint. -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <!-- Cyrano reads and writes bodies through the JSON-B and JSON-P APIs only. The extension
+             picks the implementation: Champollion, as the Health extension does for JSON-P. Without
+             it, an application with the Rest Client and no REST server has no JSON-B provider. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <version>${champollion.version}</version>
+            <scope>runtime</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

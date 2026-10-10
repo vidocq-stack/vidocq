@@ -80,11 +80,11 @@
 
 | `vidocq-runtime-cyrano-rest-client-extension`
 | `microprofile`
-| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. [[cyrano-rest-client-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it. An application with a Rest Client now links with `vidocq:jlink`: `org.reactivestreams`, an automatic module, is no longer required (Vidocq/cyrano#30). `vidocq-runtime-cyrano-rest-client-example` calls one of its own resources through an injected client.
+| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. [[cyrano-rest-client-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it. An application with a Rest Client now links with `vidocq:jlink`: `org.reactivestreams`, an automatic module, is no longer required (Vidocq/cyrano#30). `vidocq-runtime-cyrano-rest-client-example` calls one of its own resources through an injected client. [[cyrano-rest-client-apis]]The extension brings the Jakarta REST API and Champollion's JSON-B implementation [.tag-new]#NEW#: Cyrano depends on the APIs only, so an application with the Rest Client and no REST server needs nothing else to read and write JSON bodies.
 
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
-| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export.
+| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API [.tag-new]#NEW#, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts.
 
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 | `microprofile`

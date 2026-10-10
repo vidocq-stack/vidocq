@@ -461,3 +461,21 @@ where this whole bug class is invisible.
 - **Verification**: CLI module 273 tests; the Fault Tolerance application with the new `main` and no
   `exports`/`opens`: `vidocq:run` and the jlink image (`boot-layer detection`) both run the
   `@Retry` bean (3 calls). Found while checking heisenberg BUG-005 with scaffolded applications.
+
+## BUG-20261010-02 — An application with the Rest Client extension and no REST server has no JSON-B provider
+
+- **Date**: 2026-10-10
+- **Status**: FIXED (branch `fix/cyrano-extension-declares-apis`)
+- **Affected module**: vidocq-runtime-cyrano-rest-client-extension
+- **Symptom**: an application with `vidocq-runtime-cyrano-rest-client-extension` and no Cassini, calling a
+  JSON endpoint, fails on the first response body: `ExceptionInInitializerError` at
+  `io.vidocq.cyrano.internal.JsonbHolder.get`. With Cyrano's Jakarta REST API now `provided`
+  (Vidocq/cyrano#34, vidocq-workspace#17), the same application does not even compile: `module not found:
+  jakarta.ws.rs`.
+- **Minimal reproduction**: an application with the Rest Client extension only, a `@RegisterRestClient`
+  interface returning a JSON-B class, built with `RestClientBuilder` against a local stub, `vidocq:run`.
+- **Cause**: `cyrano-core` depends on the JSON-B and JSON-P APIs only, as a brick should; no module
+  brought an implementation. Every Rest Client test and example also had the Cassini extension, which brings
+  Champollion through `cassini-core`.
+- **Fix**: the extension declares `champollion-jsonb` (`runtime`, with `champollion-jsonp`) and
+  `jakarta.ws.rs-api`: a brick depends on APIs, its Vidocq runtime extension picks the implementations.
