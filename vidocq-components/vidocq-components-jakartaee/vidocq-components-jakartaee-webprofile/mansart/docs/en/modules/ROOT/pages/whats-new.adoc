@@ -1,5 +1,5 @@
 = What's new
-:description: Everything that changed in Mansart since the {release-version} release — enum storage that follows @Enumerated, a stricter JDQL parser, the Jakarta Data core API for tools, and the restart of Mansart JPA.
+:description: Changes since the {release-version} release — Jakarta Data fixes and tooling, and scope-based delivery of Mansart JPA.
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
@@ -18,6 +18,6 @@ New in the `{project-version}` development line — everything listed here lande
 * **`JdqlExecutor.run(jdql, parameters, model, runtime)`** — parses one statement against the entity's model, binds its named parameters by name, converts a text value to the attribute's type (enum, `java.time`, numbers, booleans, UUIDs), and runs it as a `@Query` method's statement would, returning a `JdqlResult`: entities, projected rows, a count or an aggregate's value. An overload with `maxRows` reads at most that many rows, as a SQL `LIMIT`. `isWrite` and `target` read a statement's first keyword and its entity without parsing it. xref:reference.adoc#tooling-api[The core API for tools].
 * **An entity model no longer keeps its class loader reachable** — models used to be cached in a static map keyed by the entity class, which kept every class and its loader alive. Under a dev reload, where the application layer is replaced while Mansart stays, each discarded layer stayed in memory. Models now live with their class and go away with its loader. xref:reference.adoc#tooling-api[The core API for tools].
 
-== In the works
+== Jakarta Persistence
 
-* **Mansart JPA restarted** — `mansart-persistence` (Maven parent `mansart-jpa`) is back in the reactor as an empty aggregator, with a milestone plan that starts from the official Jakarta Persistence TCK. It contains no implementation yet: `mansart-jakarta-data` remains the answer for persistence in Vidocq. xref:modules/mansart-persistence.adoc#status[mansart-persistence — Status].
+* **Mansart JPA P0–P12 delivered within scope** — `mansart-persistence` provides entity lifecycle, JPQL/Criteria, XML mapping, container integration, cache and Validation integration. The locally patched PostgreSQL TCK passes all non-skipped tests; comparative benchmarks and a modular Leyden AOT smoke are recorded. Remaining mapping boundaries and the local TCK patch are explicit; no formal certification or GraalVM native-image support is claimed. See xref:modules/mansart-persistence.adoc#status[implementation status], xref:tck.adoc[TCK evidence] and xref:performance.adoc[performance methodology].

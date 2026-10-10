@@ -38,8 +38,8 @@ Delivered:
 
 * P7 — JPQL selects, joins, predicates, map expressions, whole-embeddable comparison, correlated subqueries, `TREAT`, functions, constructors, bulk statements, named queries, locking, set operations and casts; native result mappings and stored procedures.
 
-The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 errors and four official skips.
-Ten errors are second-level cache assertions (P11); 25 newly exposed errors are confined to the two
+The historical pre-P11 untouched PostgreSQL 17 run reported **2096 / 2135 passed**, 35 errors and four official skips.
+Ten errors were second-level cache assertions subsequently fixed in P11; 25 errors were confined to the two
 delimited-default fixtures whose declared case conflicts with the official unquoted DDL.
 With the default local fixture patch TCK-BUG-001 (byte-exact backport of upstream commit `1fea05e`,
 jakartaee/persistence#1175, applied to a derived jar only), the P10 run reported **2121 / 2135 passed**; P11 resolved
@@ -93,9 +93,11 @@ Transaction-scoped contexts share identity within the transaction; extended cont
 Synchronized commit flushes and rollback detaches; unsynchronized contexts require explicit joining.
 Container-managed managers and injected factories reject application `close()` calls.
 
-The real Vauban module-path/H2 tests pass 4/4; the Vidocq Arquillian test exercises persistence injection,
-transaction commit/rollback and container-owned factory closure (3/3). Both use the local Vauban snapshot
-containing an upstream fix that is not yet released. The untouched and locally fixture-patched full-suite
+The real Vauban module-path/H2 tests pass 4/4; the Vidocq Arquillian vehicle passes 6/6, exercising persistence
+injection, transaction commit/rollback, transaction-scoped identity, explicit joining of unsynchronized contexts
+and undeploy cleanup without closing the application DataSource. These runs used the local Vauban snapshot
+containing the upstream injection fix; they do not exhaustively test runtime L2 caching or Validation.
+The untouched and locally fixture-patched full-suite
 results, including their remaining scope and skips, are recorded in `TCK.md`; neither result is represented as
 formal certification.
 Stored-procedure queries created outside a transaction run against the current transaction at execution.
@@ -214,21 +216,20 @@ An access generated at build time is used only if it still matches the entity cl
 * **Strict Java Modules** — `module io.vidocq.mansart.jpa.core`: the provider is found through `ServiceLoader`; the only exported package is the SPI the generated accesses implement.
 
 [#target-modules]
-== Target modules
+== Implemented modules and remaining boundaries
 
-* L1 cache strategy (HashMap per EM? virtual-thread-compatible?).
-* Persistence context handling across transaction `suspend/resume`.
-* Cascade `PERSIST` / `MERGE` / `REMOVE` on entity graphs.
-* Lazy loading without bytecode enhancement.
-* `mansart-jakarta-data` ↔ `mansart-persistence` co-existence in the same application (same `Book` consumed by both).
+Production artifacts are `mansart-jpa-core`, `mansart-jpa-dialect-spi`, `mansart-jpa-dialect-h2`,
+`mansart-jpa-dialect-postgresql`, `mansart-jpa-processor` and `mansart-jpa-cdi`.
+`mansart-jpa` is their POM aggregator, not a runtime dependency.
+The official TCK runner and comparative benchmark harness remain outside the production reactor.
 
-== Meanwhile
+Some mapping shapes remain explicitly refused: to-one join tables, unidirectional one-to-many foreign-key
+collections and associations inside collection-table embeddable elements.
+`TABLE_PER_CLASS` is optional and deferred. Eager relationship loading is supported; lazy exclusion is not guaranteed.
+Data/JPA bridging and generation mutualisation remain deferred, without modifying the delivered Data producer.
 
-For JPA needs in Vidocq today:
-
-* If CRUD + typed queries are enough → `mansart-jakarta-data` (delivered, TCK 74/74).
-* If advanced JPQL not covered by JDQL is needed → native SQL via `@Query("...")` or `Connection.prepareStatement(...)`.
-* Entities with listeners and locks work with the `EntityManager` since P4, their relationships and collections since P5, inheritance since P6, and the main JPQL query path since P7 slices 1–4.
+For declarative repository needs, use `mansart-jakarta-data`. For persistence contexts, JPQL, Criteria,
+entity graphs and callbacks, use `mansart-persistence` within these documented boundaries.
 
 == See also
 

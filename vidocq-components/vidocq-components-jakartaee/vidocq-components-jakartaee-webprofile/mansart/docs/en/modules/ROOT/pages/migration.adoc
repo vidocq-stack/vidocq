@@ -63,11 +63,11 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Hibernate | Mansart | Note
 
 | `SessionFactory` / `EntityManagerFactory`
-| `EntityManagerFactory` from `mansart-persistence` *(not implemented yet)*
-| For everyday needs, switch to `mansart-jakarta-data` directly.
+| Standard `EntityManagerFactory` from `mansart-persistence`
+| Implemented; use Jakarta Data instead when declarative repositories suffice.
 
 | HQL
-| JPQL (`mansart-persistence`, not implemented yet) or JDQL (delivered)
+| JPQL (`mansart-persistence`) or JDQL (`mansart-jakarta-data`)
 | Mansart targets the spec, not proprietary HQL extensions.
 
 | `@Entity`, `@Id`, `@GeneratedValue`, `@Column`
@@ -75,24 +75,24 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Standard JPA annotations recognized as-is.
 
 | `@OneToMany`, `@ManyToMany`, inheritance
-| Out of scope v1
-| Deferred to `mansart-persistence`.
+| Implemented by `mansart-persistence` within its mapping boundaries
+| Required `SINGLE_TABLE` and `JOINED` are supported; optional `TABLE_PER_CLASS` and some relationship shapes remain refused.
 
 | Hibernate Reactive
 | `mansart-jakarta-data` + virtual threads
 | Blocking JDBC under Loom — no Vert.x, no callback.
 
 | JPA listeners (`@PrePersist`, `@PostLoad`)
-| Out of scope v1
-| Planned in `mansart-persistence`.
+| Standard callbacks implemented by `mansart-persistence`
+| Annotation and XML listener/callback metadata are supported.
 
 | Criteria API
-| Out of scope v1
-| Planned in `mansart-persistence`.
+| Standard Criteria API implemented by `mansart-persistence`
+| Shares the JPQL AST and execution path.
 
 | Schema generation (`hibernate.hbm2ddl`)
-| External (Flyway / Liquibase recommended)
-| Mansart does not handle DDL migrations.
+| Standard JPA schema-generation properties and `SchemaManager`
+| Schema creation/drop/validation are implemented; existing-schema migrations remain external.
 |===
 
 == From EclipseLink / OpenJPA

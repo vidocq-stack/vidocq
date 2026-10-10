@@ -29,7 +29,8 @@ with an explicit Temurin 25:
 
 [source,bash]
 ----
-export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem PATH=$JAVA_HOME/bin:$PATH
+export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem
+export PATH=$JAVA_HOME/bin:$PATH
 cd mansart/main
 ./mvnw -ntp -pl mansart-persistence/mansart-jpa-processor-module-it -am install -DskipTests
 cd mansart-persistence/mansart-jpa-bench

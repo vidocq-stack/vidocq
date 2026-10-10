@@ -23,7 +23,7 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Data 1.0 — `PersistenceTests`
 | —
 | —
-| ⏳ Out of scope v1 — depends on `mansart-persistence` (restarted, not implemented yet).
+| ⏳ Deferred Data/JPA integration; Persistence is delivered, but Data remains frozen.
 
 | Jakarta Data 1.0 — `NoSQLTests`
 | —
@@ -45,10 +45,10 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | ✅
 | Compiled against the Mansart classpath, `BUILD SUCCESSFUL`.
 
-| Jakarta Persistence 3.2 — official 3.2.1 suite
+| Jakarta Persistence 3.2 — locally patched 3.2.1 suite
 | 2135
-| 2096
-| ✅ P0–P12 delivered under a scope-based gate; no formal certification sought. Temurin 25.0.4+7-LTS, PostgreSQL 17, untouched suite baseline: 2096 passes, 0 failures, 35 errors and 4 official skips (10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities). The final local fixture-patched TCK-BUG-001 run: 2131 passes, 0 failures/errors, 4 skips, same identities/outcomes as the prior P11 run; this is not an official result or certification. The Web Profile is not a target. Vidocq Arquillian baseline: 3/3 using a local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 2131
+| ✅ P0–P12 delivered under a scope-based gate. Temurin 25.0.4+7-LTS, PostgreSQL 17; TCK-BUG-001: 2131 passes, no failures/errors, four official skips. Not an untouched official result or certification. The historical pre-P11 untouched baseline was 2096 passes, 35 errors and four skips; P11 subsequently fixed the ten cache errors. Vidocq Arquillian: 6/6 with the local Vauban snapshot used for those runs. See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
@@ -62,26 +62,25 @@ The P8 full run passed **2013 tests**; compared test by test with the preserved 
 **950 tests newly pass**, with no regression or added/missing tests. This includes one earlier converted-literal
 query defect exposed and fixed during attribution, not later-milestone implementation.
 Required `SINGLE_TABLE` and `JOINED`, polymorphic loading and JPQL `TYPE` are delivered.
-The focused P7 gates total 307 / 312 passed, 4 XML-mapping-dependent errors and 1 skipped. `core.query` reports
-244 / 245 passed and has no P7-attributable failure. The four errors are the two native constructor-result tests whose
-entity is declared in ORM XML and two stored-procedure tests that override metadata in ORM XML (P10).
+At P7, the focused gates totalled 307 / 312 passed, four XML-mapping-dependent errors and one skipped.
+The XML-dependent errors were resolved in P10.
 The initial P10 baseline passed 2121 tests but ignored `<delimited-identifiers/>`.
-Correct quotation now reports **2096 passes, 35 errors, four skips / 2135** with no added/missing tests:
+The pre-P11 untouched run with correct quotation reported **2096 passes, 35 errors, four skips / 2135**, with no added/missing tests:
 25 regressions are confined to `core.annotations.nativequery` (1 / 12) and `core.entitytest.apitests` (7 / 21),
 whose delimited-default mappings conflict with the unquoted PostgreSQL DDL.
 `core.override` 26 / 26, `core.callback` 66 / 66, `core.relationship.descriptors` 8 / 8,
 `se.descriptor` 1 / 1 and `core.StoredProcedureQuery` 40 / 40 retain their results.
-The same 10 second-level cache errors remain (P11).
+That historical run also contained ten second-level cache errors, subsequently fixed in P11.
 With TCK-BUG-001 (2026-10-10, provider unchanged) the P10 full run reported **2121 passes, 10 errors, four skips / 2135**;
 the 25 fixture errors passed with zero regressions and the same test identities. P11 subsequently fixed the cache assertions.
 The latest local patched full run reports **2131 passes, 0 failures/errors, four skips / 2135**, unchanged against
 the previous P11 run. These patched scores are local development results, not official results or formal certification.
 The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
 metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
-The clean runtime/processor/module-path reactor reports **470 passing tests**, including populated canonical fields
+The P8 runtime/processor/module-path reactor reported **470 passing tests**, including populated canonical fields
 in entity packages neither exported nor opened to the provider.
 Optional `TABLE_PER_CLASS` remains explicitly refused; decision D5 stays open. Schema/container contracts, XML,
-and caching/validation remain ahead. Data's incompatible canonical plural field kinds need a maintainer-approved
+and caching/validation are delivered. Data's incompatible canonical plural field kinds need a maintainer-approved
 producer reconciliation; Data is unchanged. No formal certification or Web Profile is sought.
 
 [source,bash]
@@ -90,12 +89,14 @@ cd mansart/main/mansart-persistence/mansart-jpa-tck
 ./run-official-tck-persistence-3.2.sh
 ----
 
-The script exits zero once it produced a report even if tests failed; inspect
+The script exits zero after a reported run even if tests failed, but nonzero on setup or fixture-provenance failures; inspect
 `target/tck-report-persistence.txt` and the failsafe XML counters.
 
 == Jakarta Data 1.0 — detail
 
-Runner: `mansart-jakarta-data/mansart-data-tck`, **out of reactor** (standalone POM Model 4.0.0, no `<parent>`). Reason: ShrinkWrap Maven Resolver 3.3 cannot parse Maven Model 4.1.0 (see workspace `CLAUDE.md`).
+Runner: `mansart-jakarta-data/mansart-data-tck`, **out of reactor** (standalone POM Model 4.0.0, no `<parent>`).
+This decouples the implementation and official TCK release cycles. The historical Maven Model 4.1.0 parsing
+constraint no longer applies since the move to Maven 3.9.x and Model 4.0.0.
 
 Harness architecture:
 
@@ -150,7 +151,7 @@ xdg-open ../dist/index.html
 | Test | Reason
 
 | `PersistenceTests.*` (Jakarta Data)
-| Depends on `mansart-persistence` (JPA 3.2) — restarted, not implemented yet. Jakarta Data NoSQL out of scope v1.
+| Data/JPA integration is deferred; Persistence is implemented, but Data remains frozen.
 
 | `NoSQLTests.*` (Jakarta Data)
 | Mansart targets SQL/JDBC exclusively in v1.

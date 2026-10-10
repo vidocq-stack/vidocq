@@ -5,7 +5,7 @@
 image::mansart-logo.png[Mansart,300,role=module-logo]
 
 [.lead]
-Mansart is the persistence layer of the Vidocq ecosystem. It implements {spec-data-1}[Jakarta Data 1.0] (declarative repositories), and is starting a {spec-jpa-3-2}[Jakarta Persistence 3.2] (JPA) implementation, alongside a Jakarta Transactions 2.0 transaction manager and a virtual-thread-native JDBC connection pool. Four decoupled bricks, a single SQL dialect SPI, static APT + Class-File API code generation — no runtime reflection, no dynamic proxy.
+Mansart is the persistence layer of the Vidocq ecosystem. It implements {spec-data-1}[Jakarta Data 1.0] (declarative repositories) and {spec-jpa-3-2}[Jakarta Persistence 3.2] within its documented scope, alongside a Jakarta Transactions 2.0 transaction manager and a virtual-thread-native JDBC connection pool. Independent bricks, separate Data/JPA dialect SPIs, APT + Class-File API entity access — no reflective entity-state access or dynamic proxies.
 
 == Origin of the name
 
@@ -18,7 +18,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 [cols="1,3"]
 |===
 | Specs implemented
-| {spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2] *(restarted, skeleton only)* + Jakarta Transactions 2.0
+| {spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2] (scope-based P0–P12 delivery) + Jakarta Transactions 2.0
 
 | Repository
 | {repo-mansart}[codefloe.com/Vidocq/mansart]
@@ -27,7 +27,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | 25 (LTS)
 
 | Java modules
-| `io.vidocq.mansart.data.core`, `io.vidocq.mansart.data.cdi`, `io.vidocq.mansart.data.dialect.*`, `io.vidocq.mansart.pool.api`, `io.vidocq.mansart.pool.core`, `io.vidocq.mansart.transactions.{api,core,cdi,jdbc}`
+| `io.vidocq.mansart.data.core`, `io.vidocq.mansart.data.cdi`, `io.vidocq.mansart.data.dialect.*`, `io.vidocq.mansart.jpa.*`, `io.vidocq.mansart.pool.api`, `io.vidocq.mansart.pool.core`, `io.vidocq.mansart.transactions.{api,core,cdi,jdbc}`
 
 | Runtime dependencies
 | Jakarta specs only (`jakarta.data-api`, `jakarta.persistence-api`, `jakarta.transaction-api`, `jakarta.inject-api`, `jakarta.cdi-api`). JDBC in the JDK. Drivers `provided`.
@@ -39,7 +39,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | APT (metamodel, `*RepositoryImpl`). The pool's `Connection` wrapper is a plain hand-written class. Zero ASM/Byte Buddy, no dynamic proxies.
 
 | TCK
-| ✅ Jakarta Data 1.0 74/74 (M7) — see xref:tck.adoc[detailed status]. Jakarta Transactions 2.0 — smoke 5/5; full suite in M6c.
+| Jakarta Data 1.0 74/74; Persistence 2131 passes and four official skips with local fixture patch TCK-BUG-001 (not certification); Transactions smoke 5/5. See xref:tck.adoc[detailed status].
 |===
 
 == Sub-modules
@@ -62,8 +62,8 @@ Mansart breaks down into four runtime-independent sub-projects, organized as lay
 | Jakarta Data 1.0 implementation — repositories, query methods, JDQL, JDBC dialects (H2, PostgreSQL).
 | xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
 
-| `mansart-persistence` *(restarted, skeleton only)*
-| Jakarta Persistence 3.2 (classic JPA) implementation, Maven parent `mansart-jpa`. An empty aggregator for now, with a milestone plan that starts from the official TCK — `mansart-jakarta-data` already covers everyday needs in Vidocq.
+| `mansart-persistence`
+| Jakarta Persistence 3.2: EntityManager, JPQL/Criteria, mapping, cache and validation integration; P0–P12 delivered within documented boundaries. Maven parent `mansart-jpa`.
 | xref:modules/mansart-persistence.adoc[mansart-persistence]
 |===
 
@@ -73,14 +73,12 @@ Mansart breaks down into four runtime-independent sub-projects, organized as lay
 ....
 flowchart TB
     APP[Vidocq application] --> DATA[mansart-jakarta-data<br/>Repositories]
-    APP --> JPA[mansart-persistence<br/>EntityManager — restarted]
+    APP --> JPA[mansart-persistence<br/>EntityManager]
     DATA --> TX[mansart-transactions<br/>TransactionManager]
     JPA --> TX
     TX --> POOL[mansart-pool<br/>MansartDataSource]
     POOL --> JDBC[(JDBC driver<br/>H2 / PostgreSQL)]
 
-    classDef wait fill:#fffae6,stroke:#b58105,stroke-dasharray: 4 2;
-    class JPA wait;
 ....
 
 Each layer can be used independently: `mansart-pool` is a standalone `DataSource`, `mansart-transactions` does not know about Jakarta Data, and `mansart-jakarta-data` works without the Mansart pool if the application supplies its own.

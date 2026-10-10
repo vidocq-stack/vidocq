@@ -1,7 +1,7 @@
 # Mansart — Roadmap
 
 Stack Jakarta Data 1.0 + Jakarta Persistence 3.2 + virtual-thread-native JDBC pool,
-zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
+zero or few external production dependencies. Independent runtime building blocks.
 
 > Vision and structural decisions: see [`PLAN.md`](PLAN.md). Product overview: [`README.md`](README.md).
 
@@ -14,7 +14,7 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
 | `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | ✅ **P0–P12 delivered, scope-based; no formal certification sought** (TCK evidence and bounded comparative performance/AOT smoke in sub-project docs), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
-| `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ⏳ planned — needed by `mansart-persistence` P11, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
+| `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ✅ V0–V2 stopgap usable by Persistence P11; not a complete Validation implementation, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
 
 ## Delivered phases
 
@@ -22,8 +22,8 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
 - `Dialect` + `DialectFactory` interface loaded via `ServiceLoader`
 - H2 and PostgreSQL implementations (SQL generation, types, paginated select,
   upsert/merge, identity)
-- Shared SPI for `mansart-jakarta-data` and `mansart-persistence` (interop format
-  close to the JPA static metamodel)
+- SPI for `mansart-jakarta-data`; Persistence uses its own SQL AST and dialect SPI
+  (decision D4), with convergence deferred.
 
 ### M2 — Mansart Pool MVP (H2) ✅
 - Virtual-thread-native JDBC pool (no pinning ThreadLocal, no classic thread pool
@@ -71,9 +71,10 @@ zero dependencies beyond Jakarta specs. Three independent runtime sub-projects.
       depending on an EntityManager will be explicitly excluded while M7 is
       suspended)
 
-### M7 — Mansart Persistence (JPA 3.2) 🚧 RESTARTED
+### M7 — Mansart Persistence (JPA 3.2) ✅ Scope-based delivery
 
-**Status**: restarted on 2026-10-07 as `mansart-persistence/` (Maven parent `mansart-jpa`).
+**Status**: restarted on 2026-10-07 as `mansart-persistence/` (Maven parent `mansart-jpa`);
+P0–P12 delivered on 2026-10-10 within the documented scope.
 The detailed plan — milestones P0 (TCK instrument) to P12 (comparative performance and AOT smoke) — lives in
 [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md); the summary below is kept
 for the overview.
@@ -86,9 +87,13 @@ Scope:
       optional `TABLE_PER_CLASS` explicitly refused, decision D5 open
 - [x] Runtime/canonical metamodel, Criteria API through the shared JPQL AST, entity graphs (P8);
       frozen Data-owned incompatible canonical plural fields remain a producer-reconciliation boundary
-- [ ] Optional L2 cache (homegrown, opt-in — no external cache library)
+- [x] Optional L2 cache (homegrown, opt-in — no external cache library) and optional Bean Validation integration (P11)
 - [x] Jakarta Persistence 3.2 TCK runner outside the reactor (2096 / 2135 untouched baseline; 2131 / 2135 with local fixture patch TCK-BUG-001, zero failures/errors and four official skips)
 - [x] Bounded P12 evidence (TCK, comparative JMH, and Leyden AOT cache smoke); no formal certification or Web Profile target
+
+Remaining boundaries: unsupported relationship mapping shapes, optional `TABLE_PER_CLASS`,
+runtime cache/validation coverage beyond the existing six integration scenarios, and deferred
+Data integration. See the detailed roadmap; a green local patched TCK is not exhaustive spec coverage.
 
 ### M8 — Performance & footprint (TBD)
 - [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, EclipseLink, Hibernate
@@ -103,9 +108,9 @@ Scope:
 
 ## Out of scope (explicit — see PLAN.md)
 
-- ❌ Heavy ORM (dynamic lazy loading, sophisticated dirty checking) → JPA in
-      M7 if needed, not in `mansart-data`
-- ❌ Default L2 cache → opt-in via SPI when M7
+- ❌ ORM persistence-context semantics in `mansart-data` → use the separate Persistence implementation;
+      runtime enhancement and dynamic proxies remain outside its scope
+- ❌ Mandatory/default L2 caching → optional cache delivered in Persistence P11
 - ❌ Reactive (Mutiny, R2DBC) → Vidocq philosophy = virtual threads, not reactive
 
 ## Bugs
