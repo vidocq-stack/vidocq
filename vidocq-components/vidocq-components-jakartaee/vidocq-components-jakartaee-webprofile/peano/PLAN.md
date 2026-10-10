@@ -198,8 +198,21 @@ properties containing unbound type variables receive diagnostics.
 Generated public providers live in the model package; Filer emits source and a
 META-INF/peano/accessor-providers registration fragment for each selected type.
 Users add that fragment's provides directive to the application's module-info.java.
-Public method metadata and dispatch are now implemented. Subtype dispatch, custom
-functional-interface adapters and the reflection-denial switch are subsequent P6 slices.
+Public method metadata and dispatch are now implemented. Source subtype support is
+implemented; custom functional-interface adapters and the reflection-denial switch
+are subsequent P6 slices.
+
+P6 source hierarchies (2026-10-10): annotated and explicitly selected roots also select
+their accessible descendants in the current compilation, including nested declarations
+and types generated in later processing rounds. Each concrete type gets its own table
+and registration fragment; register every required provider. Runtime lookup stays exact,
+preserving concrete overloads, override annotations and covariant return metadata.
+Static hiding keeps the most-derived declaration for each signature. Unselected private
+descendants are skipped; explicitly selected private declarations remain errors.
+Unresolved superclass/interface hierarchies defer generation until a later round and
+receive diagnostics if still unresolved when processing ends. No binary subtype scan
+is performed. Family selection depends on compilation roots and is not build-tool
+isolating incremental processing.
 
 P6 methods (2026-10-10): generated signatures and annotation literals provide metadata
 without lookup or invocation. MethodSelection shares exact/assignable/coercible and

@@ -49,7 +49,7 @@ class PropertyProcessorTest {
     void generatesModularPropertyProvidersAndRunsWithoutTheProcessor() throws Exception {
         Path sources = temporary.resolve("sources");
         Files.createDirectories(sources);
-        for (String name : List.of("module-info.java","Bean.java","Item.java","Explicit.java","PublicBean.java","Main.java")) {
+        for (String name : List.of("module-info.java","Bean.java","Derived.java","Item.java","Explicit.java","PublicBean.java","Main.java")) {
             try (var input = getClass().getResourceAsStream("/property-bootstrap/"+name)) {
                 assertNotNull(input);
                 Files.copy(input,sources.resolve(name));
@@ -62,7 +62,7 @@ class PropertyProcessorTest {
                 String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
                 "--module","peano.propertyconsumer/demo.Main"),0);
         assertTrue(result.contains("PEANO_PROPERTIES_OK"));
-        for (String name : List.of("demo.Bean","demo.Item","demo.Explicit","demo.exported.PublicBean")) {
+        for (String name : List.of("demo.Bean","demo.Derived","demo.Item","demo.Explicit","demo.exported.PublicBean")) {
             Path fragment = compilation.classes().resolve("META-INF/peano/accessor-providers/"+name+"__PeanoAccessors.txt");
             assertEquals("provides io.vidocq.peano.spi.AccessorProvider with "+name+"__PeanoAccessors;\n",Files.readString(fragment));
         }
@@ -120,6 +120,66 @@ class PropertyProcessorTest {
     @Test
     void waitsForOptionSelectedModelsGeneratedInALaterRound() throws Exception {
         Path source = sources("package demo; public class Model {}");
+        Path generated=compileWithLaterModel(source,"demo.Later",
+                "package demo; public class Later { public int getValue(){ return 7; } }");
+        assertTrue(Files.exists(generated.resolve("demo/Later__PeanoAccessors.java")));
+    }
+
+    @Test
+    void selectsSourceSubtypesForExplicitRootsAndSkipsUnrelatedPrivateTypes() throws Exception {
+        Path source=sources("""
+                package demo;
+                public class Model {
+                    public int getValue(){ return 1; }
+                    public static class Nested extends Model {}
+                    private static class Hidden extends Model {}
+                }
+                """);
+        Files.writeString(source.resolve("Child.java"),"package demo; public class Child extends Model {}");
+        Files.writeString(source.resolve("Sibling.java"),"package demo; public class Sibling {}");
+        var result=compile(source,"-Apeano.accessorTypes=demo.Model");
+        assertEquals(0,result.status(),result.log());
+        for(String name:List.of("Model","Child","Model$Nested")) {
+            assertTrue(Files.exists(result.generated().resolve("demo/"+name+"__PeanoAccessors.java")));
+        }
+        for(String name:List.of("Sibling","Model$Hidden")) {
+            assertFalse(Files.exists(result.generated().resolve("demo/"+name+"__PeanoAccessors.java")));
+        }
+    }
+
+    @Test
+    void selectsSubtypesEmittedByOtherProcessorsInALaterRound() throws Exception {
+        Path source=sources("package demo; public class Model { public int getValue(){ return 1; } }");
+        Path generated=compileWithLaterModel(source,"demo.Model",
+                "package demo; public class Later extends Model { public int getChild(){ return 7; } }");
+        assertTrue(Files.exists(generated.resolve("demo/Later__PeanoAccessors.java")));
+    }
+
+    @Test
+    void waitsForInheritedMembersFromParentsGeneratedInALaterRound() throws Exception {
+        Path source=sources("package demo; public class Model extends Later {}");
+        Files.writeString(source.resolve("Main.java"),"""
+                package demo;
+                public class Main {
+                    public static void main(String[] args) {
+                        var factory=jakarta.el.ExpressionFactory.newInstance();
+                        var context=new jakarta.el.StandardELContext(factory);
+                        var table=new Model__PeanoAccessors().accessors().iterator().next();
+                        Object value=table.getValue(context,new Model(),"value");
+                        if (!context.isPropertyResolved() || !Integer.valueOf(7).equals(value))
+                            throw new AssertionError("Inherited property was not generated");
+                    }
+                }
+                """);
+        compileWithLaterModel(source,"demo.Model",
+                "package demo; public class Later { public int getValue(){ return 7; } }");
+        Path core=Path.of(ExpressionFactory.newInstance().getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
+        run(List.of(javaBin("java"),"--module-path",String.join(File.pathSeparator,
+                el().toString(),api().toString(),core.toString(),temporary.resolve("classes").toString()),
+                "--add-modules","io.vidocq.peano.core","--module","peano.propertynegative/demo.Main"),0);
+    }
+
+    private Path compileWithLaterModel(Path source,String selected,String model) throws Exception {
         var compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
         var log = new java.io.StringWriter();
         var producer = new javax.annotation.processing.AbstractProcessor() {
@@ -134,7 +194,7 @@ class PropertyProcessorTest {
                     emitted = true;
                     try (var writer = processingEnv.getFiler()
                             .createSourceFile("peano.propertynegative/demo.Later").openWriter()) {
-                        writer.write("package demo; public class Later { public int getValue(){ return 7; } }");
+                        writer.write(model);
                     } catch (java.io.IOException failure) {
                         throw new java.io.UncheckedIOException(failure);
                     }
@@ -143,16 +203,16 @@ class PropertyProcessorTest {
             }
         };
         Path generated = temporary.resolve("generated");
-        try (var files = compiler.getStandardFileManager(null,null,null)) {
+        try (var files = compiler.getStandardFileManager(null,null,null); var paths=Files.list(source)) {
             var task = compiler.getTask(log,files,null,List.of("--module-path",
                     String.join(File.pathSeparator,el().toString(),api().toString()),"-proc:full",
-                    "-Apeano.accessorTypes=demo.Later","-d",temporary.resolve("classes").toString(),
+                    "-Apeano.accessorTypes="+selected,"-d",temporary.resolve("classes").toString(),
                     "-s",generated.toString()),null,files.getJavaFileObjectsFromPaths(
-                            List.of(source.resolve("module-info.java"),source.resolve("Model.java"))));
+                            paths.filter(path->path.toString().endsWith(".java")).toList()));
             task.setProcessors(List.of(new PeanoAccessorProcessor(),producer));
             assertTrue(task.call(),log.toString());
         }
-        assertTrue(Files.exists(generated.resolve("demo/Later__PeanoAccessors.java")));
+        return generated;
     }
 
     @Test

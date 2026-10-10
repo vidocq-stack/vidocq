@@ -36,6 +36,13 @@ test harness. Independent named-consumer tests enforce the production module bou
 
 == Annotation processor selection (implemented)
 
+Annotated and explicit roots also select accessible source descendants in the current
+compilation, including nested and later-round declarations. Each type has its own
+provider and registration fragment. Register every required provider in module-info.java.
+Binary descendants are not inferred; unselected private descendants are skipped.
+This family selection depends on compilation roots and is not build-tool isolating
+incremental processing.
+
 * `io.vidocq.peano.annotation.ELAccessible`: SOURCE-retained TYPE annotation on an owned class or record.
 * `-Apeano.accessorTypes=pkg.Type,pkg.Other`: comma-separated owned type names, including models produced by another processor in a later round.
 * Generated provider: `pkg.Type__PeanoAccessors` (nested binary names retain their dollar separators).

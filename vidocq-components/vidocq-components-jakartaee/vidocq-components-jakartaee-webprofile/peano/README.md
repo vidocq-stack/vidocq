@@ -29,7 +29,8 @@ interfaces remain planned for build-time generation.
 Application-owned accessor tables can now register through peano-api services.
 The provider dispatches their direct calls inside closed application packages.
 The peano-processor APT module generates property tables for `@ELAccessible` types
-and explicit selected types, plus direct public method calls and generated metadata.
+and explicit selected types, plus their accessible source descendants in the current
+compilation, direct public method calls and generated metadata.
 Method references retain raw arguments and runtime annotations without invoking the method.
 The official EL 6.0.1 TCK passes all 361 tests, including signatures; this result
 is not a certification announcement.

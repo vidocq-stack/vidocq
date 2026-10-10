@@ -52,6 +52,7 @@ public class Bean extends Parent {
     public String join(String separator,String... values) { return String.join(separator,values); }
     public int sum(int... values) { return java.util.Arrays.stream(values).sum(); }
     public int rows(int[]... values) { return values.length; }
+    public CharSequence label() { return "base"; }
     public void broken() throws java.io.IOException { throw new java.io.IOException("method failure"); }
     public String ambiguous(java.io.Serializable value) { return "serializable"; }
     public String ambiguous(CharSequence value) { return "sequence"; }

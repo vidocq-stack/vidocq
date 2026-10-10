@@ -195,7 +195,9 @@ public class Order {
 }
 ----
 
-Register the deterministic generated provider name:
+Register the deterministic generated provider name. Accessible source descendants
+in the same compilation also receive providers: register each descendant's generated
+fragment when that runtime type is used. Binary descendants are not scanned.
 
 [source,java]
 ----

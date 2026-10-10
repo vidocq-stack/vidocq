@@ -35,6 +35,13 @@ and length, with no member lookup, accessibility changes or `java.desktop` depen
 
 == Application-owned accessor tables (P6 foundation implemented)
 
+The processor generates separate tables for accessible source descendants of selected
+roots in the current compilation. Runtime dispatch remains keyed by exact class, so
+new overloads, covariant returns and override annotations belong to the concrete table.
+Static hiding retains the most-derived signature. Generation waits for unresolved
+superclass and interface hierarchies across processing rounds; unresolved selections
+receive final diagnostics. No binary subtype scan is performed.
+
 AccessorProvider contributes a collection of AccessorTable instances, each an ELResolver
 for one exact runtime class. A Java module provides directive registers the public provider,
 even when the provider and model package have no exports or opens.

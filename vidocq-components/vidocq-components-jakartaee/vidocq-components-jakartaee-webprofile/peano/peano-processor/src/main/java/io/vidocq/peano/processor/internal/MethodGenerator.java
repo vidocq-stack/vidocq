@@ -35,10 +35,19 @@ final class MethodGenerator {
     MethodGenerator(ProcessingEnvironment environment) { this.environment=environment; }
 
     void append(StringBuilder text, TypeElement model) throws IOException {
-        List<ExecutableElement> methods = ElementFilter.methodsIn(environment.getElementUtils().getAllMembers(model))
+        List<ExecutableElement> available = ElementFilter.methodsIn(environment.getElementUtils().getAllMembers(model))
                 .stream().filter(m->m.getModifiers().contains(Modifier.PUBLIC))
                 .filter(m->!((TypeElement)m.getEnclosingElement()).getQualifiedName().contentEquals("java.lang.Object"))
                 .sorted(java.util.Comparator.comparing(m->signature(m))).toList();
+        var signatures = new java.util.TreeMap<String, ExecutableElement>();
+        for (ExecutableElement method : available) {
+            ExecutableElement previous = signatures.get(signature(method));
+            if (previous == null || environment.getElementUtils().overrides(method,previous,model)
+                    || environment.getElementUtils().hides(method,previous)) {
+                signatures.put(signature(method), method);
+            }
+        }
+        List<ExecutableElement> methods = new ArrayList<>(signatures.values());
         for (ExecutableElement method : methods) {
             accessible(environment.getTypeUtils().erasure(method.getReturnType()),model);
             for (var parameter : method.getParameters()) accessible(environment.getTypeUtils().erasure(parameter.asType()),model);

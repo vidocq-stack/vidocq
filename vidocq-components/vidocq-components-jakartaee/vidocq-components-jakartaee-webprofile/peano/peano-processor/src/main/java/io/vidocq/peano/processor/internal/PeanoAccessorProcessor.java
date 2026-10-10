@@ -47,7 +47,7 @@ import javax.tools.StandardLocation;
 import io.vidocq.peano.annotation.ELAccessible;
 
 /**
- * Incremental per-type generation of application-owned property accessors.
+ * Per-type generation for selected roots and their current-compilation descendants.
  * Wildcard activation permits explicit selection when no annotation is present;
  * unrelated annotations are never claimed or scanned.
  */
@@ -59,6 +59,9 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
     private final Set<String> emitted = new HashSet<>();
     private final Set<ModuleElement> applicationModules = new HashSet<>();
     private final Set<String> pendingTypes = new java.util.LinkedHashSet<>();
+    private final java.util.Map<String, TypeElement> sourceTypes = new TreeMap<>();
+    private final java.util.Map<String, TypeElement> selectedRoots = new TreeMap<>();
+    private final java.util.Map<String, TypeElement> deferredTypes = new TreeMap<>();
     private boolean optionsProcessed;
 
     private record Property(String name, ExecutableElement getter, ExecutableElement setter) {}
@@ -69,11 +72,13 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
         if (round.processingOver()) {
             pendingTypes.forEach(name -> error("Unknown accessor type: " + name, null));
+            deferredTypes.forEach((name, type) -> error("Unresolved accessor hierarchy: " + name, type));
             return false;
         }
         for (Element root : round.getRootElements()) {
             ModuleElement module = processingEnv.getElementUtils().getModuleOf(root);
             if (module != null) applicationModules.add(module);
+            rememberSourceTypes(root);
         }
         if (applicationModules.size() > 1) {
             error("Compile one application module at a time for property accessor generation", null);
@@ -100,15 +105,46 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
             }
         }
         selected.stream().sorted(java.util.Comparator.comparing(t -> t.getQualifiedName().toString()))
-                .forEach(this::generate);
+                .forEach(type -> {
+                    if (eligibleSubtype(type)) selectedRoots.put(type.getQualifiedName().toString(), type);
+                    generate(type);
+                });
+        for (TypeElement type : new ArrayList<>(deferredTypes.values())) generate(type);
+        for (TypeElement candidate : sourceTypes.values()) {
+            if (!eligibleSubtype(candidate) || unresolvedHierarchy(candidate.asType(), new HashSet<>())) continue;
+            boolean selectedFamily = selectedRoots.values().stream().anyMatch(root ->
+                    !unresolvedHierarchy(root.asType(), new HashSet<>())
+                    && processingEnv.getTypeUtils().isSubtype(processingEnv.getTypeUtils().erasure(candidate.asType()),
+                            processingEnv.getTypeUtils().erasure(root.asType())));
+            if (selectedFamily) generate(candidate);
+        }
         // Do not consume annotations belonging to other processors.
         return false;
+    }
+
+    private void rememberSourceTypes(Element element) {
+        if (!(element instanceof TypeElement type)) return;
+        sourceTypes.put(type.getQualifiedName().toString(), type);
+        ElementFilter.typesIn(type.getEnclosedElements()).forEach(this::rememberSourceTypes);
+    }
+
+    private boolean eligibleSubtype(TypeElement type) {
+        ModuleElement module = processingEnv.getElementUtils().getModuleOf(type);
+        return (type.getKind() == ElementKind.CLASS || type.getKind() == ElementKind.RECORD)
+                && module != null && !module.isUnnamed() && applicationModules.contains(module)
+                && !privateEnclosing(type);
     }
 
     private void generate(TypeElement type) {
         ModuleElement module = processingEnv.getElementUtils().getModuleOf(type);
         String key = module + "/" + type.getQualifiedName();
-        if (!emitted.add(key)) return;
+        if (emitted.contains(key)) return;
+        if (eligibleSubtype(type) && unresolvedHierarchy(type.asType(), new HashSet<>())) {
+            deferredTypes.put(type.getQualifiedName().toString(), type);
+            return;
+        }
+        deferredTypes.remove(type.getQualifiedName().toString());
+        emitted.add(key);
         if (module == null || module.isUnnamed() || !applicationModules.contains(module)) {
             error("Accessor type must belong to the current application module: " + type.getQualifiedName(), type);
             return;
@@ -140,6 +176,14 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         } catch (IOException exception) {
             error("Cannot generate accessor provider " + provider + ": " + exception.getMessage(), type);
         }
+    }
+
+    private boolean unresolvedHierarchy(TypeMirror mirror, Set<String> visited) {
+        if (mirror.getKind() == TypeKind.ERROR) return true;
+        if (!(processingEnv.getTypeUtils().asElement(mirror) instanceof TypeElement type)
+                || !visited.add(type.getQualifiedName().toString())) return false;
+        return unresolvedHierarchy(type.getSuperclass(), visited)
+                || type.getInterfaces().stream().anyMatch(parent -> unresolvedHierarchy(parent, visited));
     }
 
     private List<Property> properties(TypeElement type) {

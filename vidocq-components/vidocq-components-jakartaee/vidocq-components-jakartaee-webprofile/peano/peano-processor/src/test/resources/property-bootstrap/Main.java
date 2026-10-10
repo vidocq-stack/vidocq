@@ -186,6 +186,30 @@ public final class Main {
                 throw new AssertionError("Generated annotation literal differs from runtime annotation");
             }
         }
+        context.getVariableMapper().setVariable("derived",factory.createValueExpression(new Derived(),Object.class));
+        if (!"derived".equals(factory.createValueExpression(context,"${derived.name}",Object.class).getValue(context))
+                || !Integer.valueOf(7).equals(factory.createValueExpression(context,"${derived.onlyChild}",Object.class).getValue(context))) {
+            throw new AssertionError("Concrete subtype properties were not generated");
+        }
+        var derivedMethod=factory.createMethodExpression(context,"#{derived.add(2,3)}",int.class,null);
+        var derivedReference=derivedMethod.getMethodReference(context);
+        Bean.Tag derivedTag=java.util.Arrays.stream(derivedReference.getAnnotations())
+                .filter(t->t instanceof Bean.Tag).map(t->(Bean.Tag)t).findFirst().orElseThrow();
+        if (!Integer.valueOf(105).equals(derivedMethod.invoke(context,null)) || !"derived".equals(derivedTag.value())) {
+            throw new AssertionError("Concrete override metadata or invocation was lost");
+        }
+        if (!"derived-long".equals(factory.createValueExpression(context,"${derived.choose(1)}",Object.class).getValue(context))) {
+            throw new AssertionError("Concrete overload must participate in method selection");
+        }
+        var covariant=factory.createMethodExpression(context,"#{derived.label()}",String.class,null);
+        if (covariant.getMethodInfo(context).getReturnType()!=String.class
+                || !"derived".equals(covariant.invoke(context,null))) {
+            throw new AssertionError("Covariant concrete return type was lost");
+        }
+        context.getVariableMapper().setVariable("derivedClass",factory.createValueExpression(new ELClass(Derived.class),Object.class));
+        if (!"derived-static".equals(factory.createValueExpression(context,"${derivedClass.getStaticValue()}",Object.class).getValue(context))) {
+            throw new AssertionError("Concrete static shadow must keep its declaration");
+        }
         System.out.println("PEANO_PROPERTIES_OK");
     }
 }

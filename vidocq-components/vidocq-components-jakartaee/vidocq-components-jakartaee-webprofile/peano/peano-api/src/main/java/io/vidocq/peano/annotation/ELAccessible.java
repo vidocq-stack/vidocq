@@ -25,9 +25,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Selects a class or record for build-time property accessor generation.
+ * Selects a class or record and its accessible source descendants in the current
+ * compilation for build-time accessor generation. Binary descendants are not scanned.
  * Generated providers stay in the model package; register them through the
- * application module's AccessorProvider provides directive.
+ * application module's AccessorProvider provides directive, including each descendant.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.SOURCE)

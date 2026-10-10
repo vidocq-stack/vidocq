@@ -3,6 +3,25 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## APT-005 · 2026-10-10 · Static hiding generated duplicate signatures
+
+- Symptom: a generated child table rejected a hidden static method as ambiguous.
+- Minimal reproduction: Bean and Derived both declare public static getStaticValue;
+  evaluate Derived.getStaticValue through its generated table.
+- Cause: the compiler member list included both declarations and generation retained both.
+- Status: resolved. Signature deduplication preserves overriding or hiding declarations.
+- Evidence: the closed-module fixture failed with MethodNotFoundException before the fix.
+
+## APT-006 · 2026-10-10 · Later-generated parent lost inherited accessors
+
+- Symptom: a selected child table omitted properties inherited from a generated parent.
+- Minimal reproduction: selected Model extends Later; another processor emits Later
+  with public getValue returning 7 after the initial round.
+- Cause: the table was emitted while its superclass was an unresolved error type.
+- Status: resolved. Unresolved hierarchies defer emission and are retried each round.
+- Evidence: the named-module runtime test failed its inherited-property assertion
+  before the fix and now reads 7 through the generated table.
+
 ## APT-004 · 2026-10-10 · Application names shadowed generated Java types
 
 - Symptom: selected models named Class, Object or String prevented generated
