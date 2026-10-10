@@ -48,13 +48,16 @@ This page consolidates the status of the official TCK runs against Mansart. Day-
 | Jakarta Persistence 3.2 — official 3.2.1 suite
 | 2135
 | 2096
-| 🚧 P0–P9 complete; P10 partial. Temurin 25.0.4+7-LTS, PostgreSQL 17, 2096 passes, 0 failures, 35 errors and 4 official skips: 10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities. Quotation is no longer ignored; official fixtures/DDL are unchanged. Vidocq Arquillian contract baseline: 3/3 using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
+| 🚧 P0–P10 complete (P10 under a scope-based gate). Temurin 25.0.4+7-LTS, PostgreSQL 17, untouched suite: 2096 passes, 0 failures, 35 errors and 4 official skips (10 P11 cache errors and 25 delimited-fixture/unquoted-DDL incompatibilities). With the default local fixture patch TCK-BUG-001 (upstream jakartaee/persistence#1175, commit `1fea05e`): 2121 passes, 10 P11 errors, 4 skips — a local result, not official; no certification is sought. Vidocq Arquillian contract baseline: 3/3 using the local Vauban snapshot with the upstream injection fix (not yet released). See link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[TCK.md].
 |===
 
 == Jakarta Persistence 3.2 — current status
 
-Runner: `mansart-persistence/mansart-jpa-tck`, out of the reactor, using the official unmodified 3.2.1 suite
-and PostgreSQL 17 DDL.
+Runner: `mansart-persistence/mansart-jpa-tck`, out of the reactor, using the official 3.2.1 suite and PostgreSQL 17
+DDL. By default it runs a derived copy of the spec-tests jar carrying the local fixture patch **TCK-BUG-001**: the
+byte-exact backport of upstream commit `1fea05e` (jakartaee/persistence#1175), which removes the
+`<delimited-identifiers/>` unit default from two `orm.xml` fixtures. Official artifacts are never modified and
+`TCK_FIXTURES=official` runs the untouched jar.
 The P8 full run passed **2013 tests**; compared test by test with the preserved P7 baseline (1063 passes),
 **950 tests newly pass**, with no regression or added/missing tests. This includes one earlier converted-literal
 query defect exposed and fixed during attribution, not later-milestone implementation.
@@ -68,8 +71,10 @@ Correct quotation now reports **2096 passes, 35 errors, four skips / 2135** with
 whose delimited-default mappings conflict with the unquoted PostgreSQL DDL.
 `core.override` 26 / 26, `core.callback` 66 / 66, `core.relationship.descriptors` 8 / 8,
 `se.descriptor` 1 / 1 and `core.StoredProcedureQuery` 40 / 40 retain their results.
-The same 10 second-level cache errors remain (P11). Embedded association overrides are not yet executable;
-P10 is partial, not delivered.
+The same 10 second-level cache errors remain (P11).
+With TCK-BUG-001 (2026-10-10, provider unchanged) the full run reports **2121 passes, 10 errors, four skips / 2135**:
+the 25 fixture errors pass, zero regressions, the same test identities; the 10 remaining errors are P11.
+P10 is delivered under this scope-based gate; the patched score is a local result, not an official one.
 The P8 gate totals **925 tests: 924 passed, no failures/errors, one upstream skip**:
 metamodel 258 / 259, Criteria 650 / 650, entity graphs 13 / 13 and repeatable named graphs 3 / 3.
 The clean runtime/processor/module-path reactor reports **470 passing tests**, including populated canonical fields

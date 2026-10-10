@@ -2,7 +2,7 @@
 :description: Jakarta Persistence 3.2 (JPA) implementation — in progress (milestones P0 to P12); mansart-jakarta-data covers everyday needs.
 
 [.lead]
-`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: P9 complete, P10 partial; not yet certified** — schema generation, CDI/JTA and Vidocq Arquillian integration are implemented. XML mapping hardening and second-level cache/validation work remain.
+`mansart-persistence` is Mansart's target {spec-jpa-3-2}[Jakarta Persistence 3.2] implementation: `EntityManager`, JPQL, Criteria API, listeners, JPA standard metamodel. **Status: P10 complete (scope-based gate); not certified, no certification sought** — schema generation, CDI/JTA, Vidocq Arquillian integration and XML mapping files are implemented. Second-level cache/validation work remains.
 
 [NOTE]
 ====
@@ -41,7 +41,9 @@ Delivered:
 The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 errors and four official skips.
 Ten errors are second-level cache assertions (P11); 25 newly exposed errors are confined to the two
 delimited-default fixtures whose declared case conflicts with the official unquoted DDL.
-The earlier 2121-pass result ignored quotation and is superseded. See
+With the default local fixture patch TCK-BUG-001 (byte-exact backport of upstream commit `1fea05e`,
+jakartaee/persistence#1175, applied to a derived jar only) the suite reports **2121 / 2135 passed**; the 10 remaining
+errors are P11. This is a local result, not an official one. The earlier quotation-ignoring 2121 result is superseded. See
 link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters and attribution].
 
 * P8 — runtime and canonical metamodel, Criteria selects/bulk statements/subqueries/joins, tuple and constructor results,
@@ -67,8 +69,7 @@ link:{repo-mansart}/src/branch/main/mansart-persistence/TCK.md[the full counters
   key/value overrides and conversions, record reconstruction, independent snapshots and merge copies.
   The targeted official embeddable-metamodel regression gate is restored to 51/51; this is not a new full-suite score.
 
-Next: rerun the official P10 gate and resolve the official fixture/DDL case
-contract without weakening quotation; then second-level caching and validation (P11).
+Next: second-level caching and validation (P11).
 
 == Schema generation and container integration (P9 complete)
 
@@ -87,7 +88,8 @@ Container-managed managers and injected factories reject application `close()` c
 The real Vauban module-path/H2 tests pass 4/4; the Vidocq Arquillian test exercises persistence injection,
 transaction commit/rollback and container-owned factory closure (3/3). Both use the local Vauban snapshot
 containing an upstream fix that is not yet released. This milestone does not claim full Jakarta Persistence
-conformance: the current full suite reports 2096/2135 passes; P10 remains partial alongside P11 (see `TCK.md`).
+conformance: the untouched suite reports 2096/2135 passes (2121/2135 with the local fixture patch TCK-BUG-001);
+P11 remains (see `TCK.md`).
 Stored-procedure queries created outside a transaction run against the current transaction at execution.
 
 == Metamodel, Criteria and entity graphs

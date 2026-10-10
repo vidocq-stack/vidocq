@@ -29,19 +29,22 @@ the persistence layer in the stack.
 
 ## Status
 
-🚧 Jakarta Persistence is in progress: P0–P8 are delivered, including required
+🚧 Jakarta Persistence is in progress: P0–P10 are delivered, including required
 `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading, JPQL/native/stored queries, runtime/canonical metamodel,
 Criteria through the shared query engine, and entity graphs.
 P9 adds dialect-rendered schema generation, `SchemaManager`, the JTA/CDI bridge, the Vidocq runtime extension and
-its Arquillian gate (6/6). The P10 working tree maps `orm.xml` mapping files (secure StAX + XSD, metadata-complete,
+its Arquillian gate (6/6). P10 maps `orm.xml` mapping files (secure StAX + XSD, metadata-complete,
 unit defaults, XML-over-annotation overrides, XML callbacks and default listeners) into the same entity model.
-P10 remains **partial** pending the official fixture/DDL case contract: case-preserving delimited identifiers,
+P10 is **delivered** under a scope-based gate (2026-10-10): case-preserving delimited identifiers,
 inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded references
 and collections execute through composed generated accesses and existing relationship planners; unsupported P5
 mapping shapes are rejected, not silently omitted.
 The untouched official PostgreSQL 17 TCK reports **2096 / 2135 passed**, 35 errors and 4 official skips:
-10 P11 cache errors and 25 incompatibilities between its delimited-default fixtures and unquoted DDL.
-The earlier 2121-pass result ignored quotation and is superseded; no official sources/DDL were edited.
+10 P11 cache errors and 25 incompatibilities between two delimited-default fixtures and the unquoted DDL.
+The runner applies by default the local fixture patch **TCK-BUG-001**, a byte-exact backport of the upstream fix
+(jakartaee/persistence#1175, commit `1fea05e`) to a derived copy of the spec-tests jar: **2121 / 2135 passed**,
+10 errors (all P11 cache), 4 skips, zero regressions. This locally patched score is not an official result and no
+certification is sought; official artifacts and the provider are unchanged (`TCK_FIXTURES=official` reproduces 2096).
 Runtime baseline checks use the local Vauban snapshot carrying the
 upstream injection fix (pending a Vauban release). The P8 gate remains **924 passed / 925**, one official skip.
 See [`mansart-persistence/TCK.md`](./mansart-persistence/TCK.md) for the measured scope and remaining blockers.

@@ -4,20 +4,22 @@ Contributor guidance for agents working on this repository. See also the compani
 
 ## Persistence implementation
 
-Jakarta Persistence milestones P0–P9 are implemented; P10 remains partial. Read `mansart-persistence/AGENTS.md`,
+Jakarta Persistence milestones P0–P10 are implemented (P10 under a scope-based gate). Read `mansart-persistence/AGENTS.md`,
 `ROADMAP.md` and `TCK.md` before changes. Criteria and JPQL share the same AST and SQL execution path;
 canonical `Entity_` initialization uses application-generated access providers without extra opens.
 P9 includes schema generation, JTA/CDI integration, the Vidocq runtime extension, and Arquillian coverage.
 P10 maps `orm.xml` through an overlay of the class-file annotations (one mapping engine).
-The official standalone score is 2096 / 2135: 10 P11 cache errors, 25 delimited-fixture/unquoted-DDL
-incompatibilities and four official skips. The earlier 2121 result ignored quotation and is superseded.
+The untouched official standalone score is 2096 / 2135: 10 P11 cache errors, 25 delimited-fixture/unquoted-DDL
+incompatibilities and four official skips. The runner applies by default the local fixture patch TCK-BUG-001
+(upstream jakartaee/persistence#1175, commit `1fea05e`) to a derived jar: 2121 / 2135, 10 P11 errors, not an
+official result and no certification sought. The earlier quotation-ignoring 2121 result remains superseded.
 Inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded relationships
 and collections use dotted execution-state slots composed from generated accesses; unsupported P5 shapes fail explicitly.
 The final full run at 20:43:24Z includes embedded execution, embeddable map keys and query identifier fixes.
 The clean persistence reactor passes 549 tests and the Vidocq Arquillian vehicle passes six tests.
 The runtime checks use the local Vauban snapshot containing the upstream injection fix (pending release).
-See `TCK.md` for exact evidence and remaining P10/P11 scope. Do not weaken quotation or edit official DDL to
-restore a score.
+See `TCK.md` for exact evidence and remaining P11 scope. Do not weaken quotation or edit official DDL to
+restore a score; the only fixture change allowed is the documented TCK-BUG-001 derived copy.
 Jakarta Data remains delivered and frozen: do not overwrite its canonical output or alter its producer
 to reconcile plural field kinds without a maintainer decision. The full TCK is not yet certified.
 
