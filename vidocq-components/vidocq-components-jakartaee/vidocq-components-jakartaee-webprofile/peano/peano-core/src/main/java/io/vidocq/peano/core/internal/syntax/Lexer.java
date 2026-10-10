@@ -43,10 +43,12 @@ public final class Lexer {
             Map.entry("mod", TokenKind.MODULO));
 
     private final String source;
+    private final int sourceOffset;
     private int cursor;
 
-    private Lexer(String source) {
+    private Lexer(String source, int sourceOffset) {
         this.source = Objects.requireNonNull(source, "source");
+        this.sourceOffset = sourceOffset;
     }
 
     /**
@@ -57,7 +59,11 @@ public final class Lexer {
      * @throws ELException for an illegal character or malformed string
      */
     public static List<Token> tokenize(String source) {
-        return new Lexer(source).scan();
+        return tokenize(source, 0);
+    }
+
+    static List<Token> tokenize(String source, int sourceOffset) {
+        return new Lexer(source, sourceOffset).scan();
     }
 
     private List<Token> scan() {
@@ -87,9 +93,10 @@ public final class Lexer {
             } else {
                 kind = operator();
             }
-            tokens.add(new Token(kind, source.substring(start, cursor), value, start, cursor));
+            tokens.add(new Token(kind, source.substring(start, cursor), value,
+                    sourceOffset + start, sourceOffset + cursor));
         }
-        tokens.add(new Token(TokenKind.EOF, "", null, cursor, cursor));
+        tokens.add(new Token(TokenKind.EOF, "", null, sourceOffset + cursor, sourceOffset + cursor));
         return List.copyOf(tokens);
     }
 
@@ -222,8 +229,8 @@ public final class Lexer {
         return ch >= lower && ch <= upper;
     }
 
-    private static ELException error(String message, int offset) {
-        return new ELException(message + " at offset " + offset);
+    private ELException error(String message, int offset) {
+        return new ELException(message + " at offset " + (sourceOffset + offset));
     }
 }
 

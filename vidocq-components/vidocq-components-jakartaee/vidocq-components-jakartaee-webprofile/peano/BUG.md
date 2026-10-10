@@ -12,7 +12,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   The global `graph/inverted.json` and `scripts/resolve_impact.py` both return 200.
 - Cause: the new Peano repository has not published its producer metadata;
   the dependency update workflow has no prior run.
-- Status: producer metadata initialized successfully by workflow run 8
-  (`update-dep-graph.yml` on `main`); the file now returns 200 and lists
-  `peano-core` and `peano-parent`. PR validation must confirm downstream recovery.
+- Status: resolved. Workflow run 8 (`update-dep-graph.yml` on `main`) initialized
+  the producer metadata. PR validation run 9 passes both governance and the
+  complete build/downstream validation on commit `1d4065d`.
 - Evidence: PR validation run 7, job `pr-validate`, fails after `BUILD SUCCESS`.

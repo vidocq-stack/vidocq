@@ -2,7 +2,7 @@
 :description: Peano's planned architecture — modules, parser, interpreter, build-time code generation.
 
 [.lead]
-How Peano is designed to work inside. `peano-core` now contains the P1 lexer; the full design is `PLAN.md` in {repo-peano}[the repository].
+How Peano is designed to work inside. `peano-core` now contains the P1 lexer, parser and immutable AST; the full design is `PLAN.md` in {repo-peano}[the repository].
 
 == Modules
 
@@ -10,7 +10,7 @@ How Peano is designed to work inside. `peano-core` now contains the P1 lexer; th
 |===
 | Artefact | Java module | Role
 
-| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing, `provides jakarta.el.ExpressionFactory` (scaffold today)
+| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; lexer/parser/AST implemented, `ExpressionFactory` provider planned
 | `peano-api` | `io.vidocq.peano.api` | Generated-code SPI (accessor tables) — planned, P6
 | `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
 | `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
@@ -30,7 +30,7 @@ Target: no bytecode generated at run time, no `opens`, no `setAccessible`. The o
 == Lexer (implemented)
 
 The internal `syntax` package tokenizes eval-expression bodies, without their expression delimiters.
-Composite text and expression delimiters will be handled by the parser.
+Composite text and expression delimiters are handled by `ExpressionParser`.
 Tokens are immutable records with the original text and a half-open UTF-16 source span.
 String tokens also retain the decoded value; numeric conversion belongs to evaluation.
 
@@ -39,3 +39,16 @@ identifier character ranges, whitespace and longest-match operators.
 Both quote escapes are accepted with either string delimiter, as permitted by section 1.3.
 Illegal characters and malformed strings raise `ELException` with a zero-based source offset.
 Each tokenization owns its cursor and returns an immutable list ending in an EOF token.
+
+== Parser and AST (implemented)
+
+`Parser` uses recursive descent to turn expression-body tokens into a sealed AST
+of records. Operator precedence and associativity follow EL 6.0 section 1.16.
+The grammar includes navigation, function and method calls, assignment, sequences,
+lambdas, lists, sets and maps. Parsing these constructs does not yet evaluate them.
+All AST collections are copied into immutable lists.
+
+`ExpressionParser` handles literal text, immediate and deferred delimiters, and
+composite expressions (section 1.2). It balances collection braces and quoted strings,
+rejects nested eval-expressions and mixed immediate/deferred composites, and delegates
+bodies to `Parser`. Errors and token spans use offsets in the original expression.

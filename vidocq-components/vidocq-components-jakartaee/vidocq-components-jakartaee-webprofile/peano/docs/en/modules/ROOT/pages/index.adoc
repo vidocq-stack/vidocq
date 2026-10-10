@@ -1,5 +1,5 @@
 = Peano
-:description: Jakarta Expression Language 6.0 implementation — zero third-party dependency, native Java Modules, build-time accessors and compiled expressions. In design.
+:description: Jakarta Expression Language 6.0 implementation — zero third-party dependency, native Java Modules, build-time accessors and compiled expressions. P1 implementation in progress.
 
 [.text-center]
 image::peano-logo.png[Peano,300,role=module-logo]
@@ -9,7 +9,9 @@ Peano is the Jakarta Expression Language 6.0 implementation of the Vidocq ecosys
 
 [IMPORTANT]
 ====
-Peano is **in design**: the repository holds a buildable scaffold and the design plan (`PLAN.md`), no evaluation engine yet. This documentation describes the intended `{project-version}` development line; every page states what exists today.
+Peano is **in development (P1)**: the lexer, parser and immutable AST are implemented.
+Evaluation, coercions and the `ExpressionFactory` provider are still planned.
+This documentation describes the intended `{project-version}` development line; every page states what exists today.
 ====
 
 == Origin of the name
@@ -27,7 +29,7 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.peano.core` (more as milestones land — see xref:internals.adoc[Internals])
 | Runtime dependencies | None beyond `jakarta.el`
-| Status | in design — scaffold only, not released
+| Status | P1 in progress — lexer/parser/AST implemented, not released
 | Official TCK | planned (milestone P8) — see xref:tck.adoc[TCK status]
 |===
 

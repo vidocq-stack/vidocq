@@ -2,7 +2,12 @@
 :description: Jakarta Expression Language 6.0 TCK — not run yet; the runner is milestone P8.
 
 [.lead]
-Honest status: the official Jakarta Expression Language 6.0 TCK has **not been run** against Peano — there is no engine yet. The runner is milestone P8.
+Honest status: the official Jakarta Expression Language 6.0 TCK has **not been run** against Peano.
+The lexer, parser and AST are implemented, but the evaluator and `ExpressionFactory`
+provider are still planned. The runner is milestone P8.
+
+The `-Ptck` profile currently builds an empty runner and reports `No tests to run`.
+A successful build of that profile is not a TCK pass.
 
 == Plan of record
 
