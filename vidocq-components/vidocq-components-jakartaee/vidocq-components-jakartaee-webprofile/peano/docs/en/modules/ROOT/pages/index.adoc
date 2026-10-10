@@ -13,8 +13,8 @@ Peano is **in development (P4)**: grammar, operators, coercions and the `Express
 provider are implemented. Resolver-backed value expressions now navigate models,
 capture variables and expose get/set/metadata with imports and static fields.
 Functions, method expressions, method references and assignments are implemented.
-Lambda execution and list/set/map construction are implemented. Chapter 2 collection
-operations remain planned; known API limitations
+Lambda execution, list/set/map construction and lazy chapter 2 collection
+pipelines are implemented. Java functional-interface adaptation remains planned; known API limitations
 are recorded in BUG.md.
 This documentation describes the intended `{project-version}` development line; every page states what exists today.
 ====
@@ -34,7 +34,7 @@ Peano wanted expressions written in a notation without ambiguity, so that evalua
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.peano.core` (more as milestones land — see xref:internals.adoc[Internals])
 | Runtime dependencies | None beyond `jakarta.el`
-| Status | P4 lambdas and collection construction usable — not released or certified
+| Status | P4 lambdas and collection pipelines usable — not released or certified
 | Official TCK | planned (milestone P8) — see xref:tck.adoc[TCK status]
 |===
 

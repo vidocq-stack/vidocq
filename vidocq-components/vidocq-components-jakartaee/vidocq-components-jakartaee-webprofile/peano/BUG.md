@@ -3,6 +3,18 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-006 · 2026-10-10 · Null stream callback results unboxed incorrectly
+
+- Symptom: a predicate returning null caused a wrapped NullPointerException instead
+  of excluding the element; null limit/comparator values had the same unboxing issue.
+- Minimal reproduction: evaluate `[1,2].stream().filter(x->null).toList()`.
+- Cause: stream dispatch requested nullable wrapper conversions and then unboxed
+  the returned null, instead of requesting primitive EL conversion defaults.
+- Status: resolved during P4. Predicate, limit and comparator operands convert through
+  ELContext to boolean, long and int respectively. Regression tests cover all three.
+- Evidence: StreamOperationsTest was red with the null predicate and is green after
+  the primitive conversion change.
+
 ## CI-001 · 2026-10-10 · Missing producer dependency graph
 
 - Symptom: PR #2 passes the Maven install and all 18 unit tests, then fails the

@@ -21,7 +21,8 @@ navigation and ValueExpression get/set/metadata now use the context's resolver
 chain, including imports and static fields. Functions, resolver method calls,
 MethodExpression metadata/invocation and assignment operators are implemented.
 Lambda construction/invocation, lexical closures and list/set/map construction are
-implemented. Chapter 2 collection operations and full compliance remain planned.
+implemented, together with lazy chapter 2 collection pipelines and EL optional results.
+Java functional-interface adaptation and full compliance remain planned.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.
 The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java
 Modules layout, integration points, TCK plan, milestones P0–P9).
@@ -45,7 +46,7 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P4 lambdas and collection construction available; chapter 2 operations planned |
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P4 lambdas, collection construction and chapter 2 pipelines available |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | skeleton |
 
 Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)

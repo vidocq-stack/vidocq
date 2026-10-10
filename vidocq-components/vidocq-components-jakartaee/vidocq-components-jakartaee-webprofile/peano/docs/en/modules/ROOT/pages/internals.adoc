@@ -30,7 +30,7 @@ immutable AST, resolver-backed evaluator and API provider; the full design is
 Target: no bytecode generated at run time, no `opens`, no `setAccessible`.
 The spec's own `BeanELResolver` is the property-access fallback for accessible exported types.
 The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
-and the `empty` operator (EL 6.0 sections 1.25.7 and 1.11): allocation, element access
+the `empty` operator and array stream sources (EL 6.0 sections 1.25.7, 1.11 and 2.3.1): allocation, element access
 and length, with no member lookup, accessibility changes or `java.desktop` dependency.
 
 == Lexer (implemented)
@@ -77,7 +77,6 @@ Its package is neither exported nor opened. Value expressions apply the expected
 type through `ELContext.convertToType`, allowing the context to override conversion.
 Operator operand conversions also use the evaluation context.
 
-Remaining work includes chapter 2 collection operations.
 Functional-interface adaptation and PropertyEditor conversions are not implemented.
 Evaluation listeners and expression serialization remain P5 work.
 
@@ -154,4 +153,30 @@ Body scopes are restored in finally blocks, including failed evaluations.
 The API enforces argument counts and ignores extra arguments according to section 1.20.
 No proxy, member reflection, bytecode generation or module access override is added.
 
-Chapter 2 stream operations and Java functional-interface adaptation remain pending.
+Java functional-interface adaptation remains pending.
+
+== Collection pipelines (implemented)
+
+The factory supplies StreamELResolver through the Jakarta API's getStreamELResolver hook.
+Application resolvers retain precedence. Collections and both object and primitive
+arrays expose stream(). Map collection views can serve as sources too.
+Private pipeline and optional records use direct dispatch inside the closed core
+module, without reflective member invocation, exports or opens.
+
+Java streams implement lazy filter, map, flatMap, distinct, sorted, peek, limit and
+substream pipelines. Terminal operations implement forEach, iterator, toArray,
+toList, reduce, min, max, average, sum, count, anyMatch, allMatch, noneMatch and findFirst.
+The EL callbacks invoke Jakarta LambdaExpression directly with their evaluation context.
+Count traverses elements so peek callbacks are not skipped by Java's sized-source optimisation.
+Sources are unaffected by sorting, and toList returns a fresh mutable list.
+Pipelines hold single-use Java stream state; obtain another stream from the source
+to perform another terminal operation.
+
+EL optional results distinguish absence from a present null element. Empty aggregates
+and searches use empty optionals, including all three match operations.
+Get on an empty result throws ELException; orElseGet and ifPresent execute their
+callbacks only when needed. Arithmetic uses the interpreter's context-aware numeric rules.
+
+These operations are available through value-expression invocation. MethodExpression
+metadata and declared return-type checks for synthetic stream/optional operations
+require future generated metadata, like closed-package application methods.

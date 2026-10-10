@@ -48,6 +48,13 @@ public final class Main {
             throw new AssertionError("Unexpected evaluation result");
         }
         verifyResolvers(factory);
+        var pipeline = factory.createValueExpression(context,
+                "${[3,1,2].stream().filter(x->x>1).sorted().map(x->x*2).toList()}", Object.class);
+        if (!java.util.List.of(4L, 6L).equals(pipeline.getValue(context))
+                || !Long.valueOf(42L).equals(factory.createValueExpression(context,
+                        "${[].stream().findFirst().orElseGet(()->42)}", Object.class).getValue(context))) {
+            throw new AssertionError("Collection dispatch failed inside the closed provider module");
+        }
         System.out.println("PEANO_MODULE_OK");
     }
 

@@ -4,7 +4,7 @@
 [.lead]
 Peano's development build evaluates constants and resolver-backed value expressions
 through the Jakarta EL API, including functions, method expressions and assignments.
-Lambdas and list/set/map construction are implemented; chapter 2 collection operations remain planned.
+Lambdas, list/set/map construction and lazy chapter 2 collection pipelines are implemented.
 
 == Prerequisites
 
@@ -108,11 +108,18 @@ var el = new jakarta.el.ELProcessor();
 Object sum = el.eval("((x,y)->x+y)(3,4)"); // Long value 7
 Object factorial = el.eval("fact=n->n==0?1:n*fact(n-1); fact(5)"); // Long value 120
 Object values = el.eval("{'total': [1,2+3], 'labels': {'a','b'}}");
+Object filtered = el.eval("[3,2,4,2].stream().filter(x->x%2==0)"
+        + ".map(x->x*2).distinct().sorted((a,b)->b-a).toList()"); // [8,4]
+Object average = el.eval("[1,2,3].stream().average().get()"); // Double value 2.0
+Object fallback = el.eval("[].stream().findFirst().orElseGet(()->42)"); // Long value 42
 ----
 
 Lambda parameters are read-only bindings; closures retain enclosing argument values.
-Constructed collections are fresh and mutable. Stream filter/map/reduce operations
-remain the next P4 work.
+Constructed collections are fresh and mutable. Stream callbacks run when a terminal
+operation consumes elements. Aggregate/search results use EL optional values:
+call get(), orElse(value), orElseGet(lambda) or ifPresent(lambda).
+Unlike Java streams, anyMatch/allMatch/noneMatch return an empty optional on empty input.
+Java functional-interface adaptation remains future work.
 
 == Building Peano from source
 
