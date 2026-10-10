@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.peano</groupId>
+    <artifactId>peano-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Peano</name>
+    <description>Jakarta Expression Language 6.0 implementation — zero third-party dependency, strict Java Modules, build-time accessor generation and compiled expressions instead of runtime reflection</description>
+    <url>https://codefloe.com/Vidocq/peano</url>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+    </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://codefloe.com/Vidocq/peano</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/peano.git</connection>
+        <developerConnection>scm:git:git@codefloe.com:Vidocq/peano.git</developerConnection>
+    </scm>
+
+    <properties>
+        <!-- Jakarta Expression Language 6.0 spec API — already modular upstream
+             (module jakarta.el), no Vidocq fork needed. -->
+        <jakarta.el.version>6.0.1</jakarta.el.version>
+    </properties>
+
+    <!--
+        Main reactor modules. peano-tck joins the reactor only under the `tck`
+        Maven profile (see <profiles> below) — TCK harmonisation, same pattern
+        as every other Vidocq sub-project: a regular `mvn install` neither
+        builds nor downloads the TCK harness.
+        Activation: ./mvnw -Ptck -pl peano-tck test
+    -->
+    <modules>
+        <module>peano-core</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Jakarta Expression Language 6.0 -->
+            <dependency>
+                <groupId>jakarta.el</groupId>
+                <artifactId>jakarta.el-api</artifactId>
+                <version>${jakarta.el.version}</version>
+            </dependency>
+
+            <!-- Internal Peano modules -->
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <profiles>
+        <!--
+            TCK harmonisation: the official Jakarta Expression Language 6.0 TCK
+            runner joins the reactor only when this profile is active.
+
+                ./mvnw -Ptck -pl peano-tck test                  (runner skeleton only)
+                ./mvnw -Ptck,tck-official -pl peano-tck test     (pulls the official TCK)
+
+            See PLAN.md, "TCK plan".
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>peano-tck</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

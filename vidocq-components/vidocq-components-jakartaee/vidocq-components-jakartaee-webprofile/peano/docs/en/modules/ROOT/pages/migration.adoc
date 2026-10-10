@@ -1,0 +1,15 @@
+= Migration
+:description: Coming to Peano from Expressly or another Expression Language implementation — what will map.
+
+[.lead]
+Peano is in design: there is nothing to migrate to yet. This page records the intended contract so the expectation is clear.
+
+== The good news (target)
+
+If your code sticks to the standard `jakarta.el` API — `ExpressionFactory.newInstance()`, `ELProcessor`, `ELManager`, `StandardELContext`, custom `ELResolver` implementations — nothing changes: swap the provider on the module path and the standard lookup picks Peano up.
+
+== What to check (target)
+
+* **Implementation-specific APIs** — Expressly classes (`org.glassfish.expressly.*`) have no Peano equivalent, by design.
+* **Reflective access to non-exported packages** — with the spec's `BeanELResolver`, properties of public types in non-exported packages are unreachable under Java Modules. Peano's generated accessors lift that limit; types without one behave as before.
+* **`java.desktop`** — Peano does not use `java.beans`; custom `BeanInfo` classes are not consulted by Peano's own resolver.

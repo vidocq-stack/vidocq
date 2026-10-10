@@ -1,0 +1,25 @@
+= Concepts
+:description: Expression Language concepts as Peano implements them — expressions, contexts, resolvers, coercions.
+
+[.lead]
+The Jakarta Expression Language concepts Peano is built around. The spec defines them; Peano's design choices are noted where they matter.
+
+== Immediate and deferred expressions
+
+`${expr}` is evaluated immediately; `#{expr}` yields a `ValueExpression` or `MethodExpression` evaluated later by its owner (a page tag, a framework). Both share one grammar and one parser in Peano.
+
+== ExpressionFactory and ELContext
+
+`ExpressionFactory` parses strings into expressions and performs type coercion. `ELContext` carries everything evaluation needs: the `ELResolver` chain, the `FunctionMapper`, the `VariableMapper`, the `ImportHandler`, the locale and evaluation listeners. Peano keeps no evaluation state elsewhere — no `ThreadLocal`.
+
+== The ELResolver chain
+
+`a.b` and `a[b]` are resolved by asking each resolver of the chain in turn until one marks the property resolved: bean names, statics, maps, resource bundles, lists, arrays, records, `Optional`, JavaBeans, streams. Peano adds one resolver ahead of the JavaBeans one: the generated-accessor resolver, which answers for types that have a build-time accessor table and passes otherwise.
+
+== Coercions
+
+The spec's coercion rules (to `String`, numbers, `Boolean`, `Character`, enums, functional interfaces) apply to every operator and every typed result. In Peano they are pure functions of the source value and the target type — the same code serves the interpreter and compiled expressions.
+
+== Lambdas and collection operations
+
+`x -> x * 2` is a first-class value; collections gain `stream()` with `filter`, `map`, `reduce` and friends. Peano supplies the stream resolver the spec leaves to implementations.

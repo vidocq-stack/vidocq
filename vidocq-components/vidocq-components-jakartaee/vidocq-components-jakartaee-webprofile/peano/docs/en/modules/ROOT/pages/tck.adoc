@@ -1,0 +1,25 @@
+= TCK status
+:description: Jakarta Expression Language 6.0 TCK — not run yet; the runner is milestone P8.
+
+[.lead]
+Honest status: the official Jakarta Expression Language 6.0 TCK has **not been run** against Peano — there is no engine yet. The runner is milestone P8.
+
+== Plan of record
+
+[cols="1,3",options="header"]
+|===
+| Item | Plan
+
+| Runner | `peano-tck` module, in the reactor only under the `-Ptck` Maven profile (same pattern as the other Vidocq bricks); the official artefact is resolved only under `-Ptck,tck-official`.
+| Artefact | Not on Maven Central: `jakarta-expression-language-tck-6.0.1.zip` from download.eclipse.org, installed into the local Maven repository. Maven coordinates (`jakarta.tck:jakarta-expression-language-tck`) to confirm against the zip.
+| Container | None expected: Expression Language is Java SE friendly (to confirm).
+| Script | `run-official-tck-el-6.0.sh` with `smoke` / `all` / `-Dtest=` modes, added with the first run.
+| Merge gate | Once wired, 100 % PASS becomes a hard merge gate on `main`.
+|===
+
+== Tracking
+
+* Reproducible issues: link:{repo-peano}/src/branch/main/BUG.md[BUG.md]
+* Plan and open questions: `PLAN.md` in {repo-peano}[the repo]
+
+This page will carry the run date, suite version, exact command and pass counts as soon as the first official run happens.

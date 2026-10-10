@@ -1,0 +1,13 @@
+= Performance
+:description: Peano performance — no measurements yet; the JMH harness is milestone P9.
+
+[.lead]
+No numbers yet. Expression evaluation sits on the hot path of every page render, which is why Peano compiles expressions known at build time and replaces reflective property access with generated accessors.
+
+== What will be measured
+
+* Interpreted vs compiled evaluation of the same expressions.
+* Generated-accessor resolution vs the spec's reflective `BeanELResolver`.
+* Peano vs Expressly (the Jakarta EE compatible implementation) on the same corpus.
+
+The `peano-bench` JMH module arrives with milestone P9. Every figure is recorded in link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command before it appears anywhere else.

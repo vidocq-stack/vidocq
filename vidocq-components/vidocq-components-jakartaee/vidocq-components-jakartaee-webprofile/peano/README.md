@@ -1,0 +1,53 @@
+# Peano
+
+**Jakarta Expression Language 6.0** implementation for the
+[Vidocq](https://codeberg.org/Vidocq/vidocq) runtime.
+
+> Named after **Giuseppe Peano** (1858–1932), the Turin logician who gave
+> mathematics a rigorous formal notation — the `∈` symbol, the Peano axioms:
+> expressions written in an unambiguous notation and evaluated mechanically.
+
+## Status
+
+🚧 **In design** — repository scaffold only, implementation not started.
+The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java
+Modules layout, integration points, TCK plan, milestones P0–P9).
+
+## Ecosystem rules
+
+Peano follows the transverse Vidocq philosophy (see the workspace
+[CLAUDE.md](https://codeberg.org/Vidocq/vidocq) conventions):
+
+- **Zero third-party dependency** — only the Jakarta Expression Language 6.0 API.
+- **Strict Java Modules** — proper `module-info.java`, minimal `exports`,
+  no unjustified `opens`, no classpath.
+- **Static code generation first** — build-time accessor tables (APT) and
+  compiled expressions (Class-File API, JEP 484) instead of runtime reflection;
+  AOT-friendly (GraalVM, Leyden). The reflective path is a documented fallback.
+- **TDD** — test (or TCK scenario) first, then code.
+- **Virtual threads** for any I/O.
+- Bugs tracked in [BUG.md](BUG.md), benchmarks in [BENCH.md](BENCH.md).
+
+## Modules
+
+| Module | Role | State |
+|---|---|---|
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | scaffold |
+| `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | skeleton |
+
+Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)
+are described in [PLAN.md](PLAN.md) and created by the milestone that needs them.
+
+## Build
+
+```bash
+sdk env          # Java 25 (Temurin) + Maven 3.9.16, pinned by .sdkmanrc
+./mvnw -ntp install
+./mvnw -Ptck -pl peano-tck test                 # TCK runner skeleton
+./mvnw -Ptck,tck-official -pl peano-tck test    # official TCK (coordinates to confirm)
+```
+
+## License
+
+Triple-licensed, at your option: **EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later**.
+See [LICENSE](LICENSE) and [NOTICE](NOTICE).

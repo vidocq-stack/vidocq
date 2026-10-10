@@ -1,0 +1,28 @@
+= Internals
+:description: Peano's planned architecture — modules, parser, interpreter, build-time code generation.
+
+[.lead]
+How Peano is designed to work inside. Only `peano-core` exists today, as a scaffold; the full design is `PLAN.md` in {repo-peano}[the repository].
+
+== Modules
+
+[cols="1,1,3",options="header"]
+|===
+| Artefact | Java module | Role
+
+| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing, `provides jakarta.el.ExpressionFactory` (scaffold today)
+| `peano-api` | `io.vidocq.peano.api` | Generated-code SPI (accessor tables) — planned, P6
+| `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
+| `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
+| `peano-tck` | — | Official TCK runner, `-Ptck` profile only
+|===
+
+== Pipeline
+
+. A hand-written lexer and recursive-descent parser produce an immutable AST (records and sealed interfaces).
+. A tree-walking interpreter evaluates the AST. It is the reference behaviour and the oracle of every differential test.
+. At build time, `peano-compiler` turns ASTs known in advance into classes; `peano-processor` generates accessor tables in the application's own packages.
+
+== AOT compatibility
+
+Target: no bytecode generated at run time, no `opens`, no `setAccessible`. The only reflection left is the spec's own `BeanELResolver`, used as a fallback for types without a generated table — documented, and switchable to an error.

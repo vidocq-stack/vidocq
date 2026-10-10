@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    peano-tck — runner for the official Jakarta Expression Language 6.0 TCK.
+
+    In-reactor module gated by the `tck` Maven profile of peano-parent (TCK
+    harmonisation — same pattern as every other Vidocq sub-project): a plain
+    `mvn install` neither downloads nor runs anything TCK-related.
+
+    Two levels:
+      -Ptck                 builds this (empty) runner against peano-core;
+      -Ptck,tck-official    additionally resolves the official TCK artifact and
+                            scans it with Surefire.
+
+    The EL 6.0 TCK is a JUnit 5 suite (to confirm) living in the jakartaee/expression-language
+    repository (tck/ module) — no Arquillian container expected, EL is Java SE friendly.
+    Distribution (checked 2026-10-10): the standalone TCK is NOT on Maven Central.
+    It ships as https://download.eclipse.org/jakartaee/expression-language/6.0/
+    jakarta-expression-language-tck-6.0.1.zip (6.0.0 also exists), whose
+    artefacts must be installed into the local Maven repository, like the
+    Servlet TCK for foy-tck. The 6.0.x branch of that repository builds
+    jakarta.tck:jakarta-expression-language-tck — TO CONFIRM against the zip
+    content. Central only carries the Platform-mode variant
+    jakarta.tck:el-platform-tck (11.0.x), not the standalone certification suite.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.peano</groupId>
+        <artifactId>peano-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>peano-tck</artifactId>
+    <name>Peano :: TCK</name>
+    <description>Official Jakarta Expression Language 6.0 TCK runner — skeleton, see PLAN.md milestone P8</description>
+
+    <properties>
+        <!-- TO CONFIRM (PLAN.md, "TCK plan"). -->
+        <tck.el.groupId>jakarta.tck</tck.el.groupId>
+        <tck.el.artifactId>jakarta-expression-language-tck</tck.el.artifactId>
+        <tck.el.version>6.0.1</tck.el.version>
+
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <id>tck-official</id>
+            <dependencies>
+                <dependency>
+                    <groupId>${tck.el.groupId}</groupId>
+                    <artifactId>${tck.el.artifactId}</artifactId>
+                    <version>${tck.el.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- The TCK jar is not a Java module: run it on the class path,
+                                 like the other Vidocq TCK runners. -->
+                            <useModulePath>false</useModulePath>
+                            <dependenciesToScan>
+                                <dependency>${tck.el.groupId}:${tck.el.artifactId}</dependency>
+                            </dependenciesToScan>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

@@ -1,0 +1,55 @@
+= Getting started
+:description: How Peano will be used — Maven coordinates and a first standalone expression. In design.
+
+[.lead]
+Peano is not usable yet: the scaffold builds, but there is no evaluation engine. This page shows the intended first steps so the target experience is explicit.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended. Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict Java Modules: one `module-info.java` per Maven module.
+
+== Maven coordinates (planned)
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>jakarta.el</groupId>
+    <artifactId>jakarta.el-api</artifactId>
+    <version>6.0.1</version>
+</dependency>
+<dependency>
+    <groupId>io.vidocq.peano</groupId>
+    <artifactId>peano-core</artifactId>
+    <version>{project-version}</version>
+    <scope>runtime</scope>
+</dependency>
+----
+
+Your code compiles against `jakarta.el` only; Peano is found at run time through `ServiceLoader`.
+
+== A first expression (target, milestone P5)
+
+[source,java]
+----
+// module-info.java
+module com.example.app {
+    requires jakarta.el;
+}
+----
+
+[source,java]
+----
+ELProcessor el = new ELProcessor();
+el.defineBean("order", new Order(new BigDecimal("100")));
+BigDecimal total = el.eval("order.total * 1.2");
+----
+
+== Building Peano from source
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install
+----

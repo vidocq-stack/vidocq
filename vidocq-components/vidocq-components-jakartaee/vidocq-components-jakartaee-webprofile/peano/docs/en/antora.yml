@@ -1,0 +1,13 @@
+name: peano
+title: Peano
+version: dev
+prerelease: true
+nav:
+  - modules/ROOT/nav.adoc
+asciidoc:
+  attributes:
+    lang: en
+    project-version: 0.4.0-SNAPSHOT
+    # Not defined by the vidocq-docs playbook yet: declared here so the links render.
+    repo-peano: https://codefloe.com/Vidocq/peano
+    spec-el-6-0: https://jakarta.ee/specifications/expression-language/6.0/

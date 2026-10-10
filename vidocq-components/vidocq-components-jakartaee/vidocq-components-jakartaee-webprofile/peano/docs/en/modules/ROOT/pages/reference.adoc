@@ -1,0 +1,32 @@
+= Reference
+:description: Peano coordinates, Java modules, dependencies and planned configuration keys.
+
+[.lead]
+Reference data for Peano `{project-version}`. Entries marked _planned_ do not exist yet.
+
+== Artefacts
+
+[cols="2,2,3",options="header"]
+|===
+| Maven coordinates | Java module | Notes
+
+| `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory` (scaffold)
+| `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | _planned_ — generated-code SPI
+| `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | _planned_ — annotation processor, build time only
+| `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
+|===
+
+== Runtime dependencies
+
+`jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.
+
+Build-time tooling may take a dependency when it saves rewriting something done elsewhere; each one will be named on this page. None so far.
+
+== Configuration keys (planned)
+
+[cols="1,3",options="header"]
+|===
+| Key | Meaning
+
+| `peano.reflection` | `allow` (default) or `deny` — whether types without a generated accessor table may be resolved reflectively. Name to validate.
+|===
