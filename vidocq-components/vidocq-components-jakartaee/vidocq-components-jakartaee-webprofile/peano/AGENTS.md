@@ -1,6 +1,132 @@
 # AGENTS.md
 
-Contributor guidance for agents working on this repository. See also the companion `CLAUDE.md` file.
+Single source of agent instructions for this repository (Codex, Claude Code and any other
+coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules here.
+
+> Giuseppe Peano (1858–1932) gave mathematics a rigorous formal notation — the `∈`
+> symbol, the Peano axioms — so that expressions could be written without ambiguity and
+> evaluated mechanically. The Peano project implements **Jakarta Expression Language
+> 6.0**: it parses `${...}` / `#{...}` into an unambiguous tree and evaluates it.
+
+**Status: in design.** Read [PLAN.md](PLAN.md) before any change — it is the design of
+record (spec scope, codegen doctrine, Java Modules layout, integration points, TCK plan,
+milestones P0–P9, open questions). Structural decisions marked "to validate" there need
+the maintainer's sign-off first.
+
+## Ecosystem rules
+
+Peano is one repository of the Vidocq ecosystem. These rules are shared by every Vidocq
+repository; the summary below is self-contained, the **full text lives in
+`vidocq-workspace/AGENTS.md`** (<https://codefloe.com/Vidocq/vidocq-workspace>). In case
+of local divergence, the brick-specific sections further down take precedence.
+
+- **Branch + pull request.** `main` is protected: it requires signed commits and green
+  `pr-validate` / `governance-checks` checks. Work on a branch, open a PR, never push to
+  `main`.
+- **Signed and signed-off commits** — `git commit -S -s`: GPG signature (key registered in
+  `Vidocq/governance`, CLA signed) and DCO `Signed-off-by` trailer (see `CONTRIBUTING.md`).
+- **Conventional Commits in English**, with the project ticket when there is one.
+- **AI provenance** — when an AI tool helped, add a `Co-Authored-By: <tool> <email>`
+  trailer (e.g. `Co-Authored-By: Claude Opus 4.x <noreply@anthropic.com>`, or the Codex
+  equivalent). It is a provenance record, not a claim of co-authorship: author and
+  committer stay the human.
+- **Mandatory TDD** — test (or TCK scenario) first; red → green → refactor.
+- **Java Modules** — strict `module-info.java`, minimal `exports`, no unjustified `opens`,
+  no classpath. Say "Java Modules" / "Java module", **never "JPMS"**.
+- **Zero runtime dependency beyond the Jakarta API** this brick implements. Build tooling
+  may take a dependency when justified in the PR and named in the module's reference page.
+- **Static code generation over runtime reflection** — Class-File API (JEP 484) and APT at
+  build time; no dynamic proxies, no ASM/Byte Buddy. AOT-compatible.
+- **Virtual threads** for I/O; no platform-thread pool without a documented reason.
+- **`BUG.md` / `BENCH.md`** — every reproducible bug goes in `BUG.md` (id, date, symptom,
+  minimal repro, hypothesised cause, status); every performance figure goes in `BENCH.md`
+  (date, hardware/JVM, exact command, raw results, delta vs previous run) before it may
+  appear in a README or a commit message.
+- **English everywhere** — code, Javadoc, comments, commits, CI, issues/PRs and every
+  Markdown file. Exchanges with the maintainer stay in French.
+- **Docs** in `docs/en` as an Antora component, English-only (see below).
+
+## Prerequisites
+
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- `jakarta.el:jakarta.el-api:6.0.1` is already modular upstream (module `jakarta.el`) —
+  no Vidocq fork needed.
+- The official EL 6.0 TCK coordinates are **not yet confirmed** (see PLAN.md "TCK plan").
+- The build uses `git-commit-id-maven-plugin` (from `vidocq-parent`): it needs at least
+  one commit in the repository.
+
+## Essential Commands
+
+```bash
+sdk env
+./mvnw -ntp install                               # default reactor (no TCK)
+./mvnw test
+./mvnw -Ptck -pl peano-tck test                   # TCK runner skeleton
+./mvnw -Ptck,tck-official -pl peano-tck test      # official TCK (coordinates to confirm)
+```
+
+`peano-tck` is **in-reactor behind the `tck` Maven profile** from day one: a plain
+`./mvnw install` neither builds nor downloads anything TCK-related.
+
+## Architecture
+
+```
+peano-core   ← Engine (scaffold today): parser, AST, interpreter, coercions,
+               provides jakarta.el.ExpressionFactory
+peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
+(planned)    peano-api (generated-code SPI), peano-processor (APT accessor tables),
+             peano-compiler (Class-File API compiled expressions), peano-bench (JMH)
+```
+
+## Architecture Constraints Not to Violate
+
+1. **Runtime modules depend on nothing beyond `jakarta.el`** — no CDI, no Pages, no
+   Servlet, no third-party parser generator. Peano never depends on Ibarra or Vauban;
+   they depend on Peano (or only on the `jakarta.el` API).
+2. **No `java.desktop`** — do not use `java.beans` introspection in Peano code; the
+   accessor logic (getter/setter/record naming) is Peano's own.
+3. **The interpreter is the oracle** — every generated accessor table and every compiled
+   expression is tested differentially against the interpreter / reflective path.
+4. **No bytecode generation at run time** unless PLAN.md open question 1 is decided
+   otherwise. Class-File API generation runs at build time.
+5. **Reflection only in the documented fallback** (the API's `BeanELResolver` and
+   whatever PLAN.md lists); never `setAccessible`, never `opens`.
+6. **No `synchronized`, no `ThreadLocal`** — caches are `ConcurrentHashMap`; evaluation
+   state travels in the `ELContext`.
+7. **JUnit 6** (`junit-bom` managed by `vidocq-parent`), no Mockito — hand-written
+   fixtures and doubles only.
+8. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
+   **English**.
+
+## Conventions
+
+- **Maven groupId**: `io.vidocq.peano`; version `0.4.0-SNAPSHOT` (workspace dev line,
+  parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
+- **Packages**: `io.vidocq.peano.core.internal.*` = implementation, not exported;
+  discovery only through `provides jakarta.el.ExpressionFactory`.
+- **Records + sealed interfaces** for AST nodes; one test class per grammar production.
+- Licence header from `etc/license-header.txt` on every `.java` file.
+- Commits: see "Ecosystem rules" above.
+
+## TDD — Test-Driven Development (mandatory)
+
+Red → green → refactor, one spec chapter at a time, following the PLAN.md milestones.
+Cite the spec section in commit messages / PR descriptions (e.g. "EL 6.0 §1.23
+coercions").
+
+## TCK — Technology Compatibility Kit
+
+Not run yet (milestone P8). Once green, 100 % PASS is a merge gate; any challenge goes
+in a `TCK.md` with spec citation — created only if one is actually filed.
+
+## AI Principles — Collaboration on This Repository
+
+- **Plan mode by default** on any structural change (new module, new SPI, change to
+  the evaluation engine's public shape).
+- When the workspace review agents are available (Claude Code subagents in
+  `vidocq-workspace/.claude/agents/`), use **`java-modules-guardian`**,
+  **`classfile-codegen`**, **`virtual-threads-reviewer`** and **`dependency-gatekeeper`**
+  proactively on `module-info.java`, codegen, concurrent code, or `pom.xml` changes.
 
 ## Documentation (Antora) conventions
 
@@ -42,8 +168,6 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 
 ### Logo
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
-
-> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
 
 ## Terminology
 

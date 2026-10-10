@@ -16,7 +16,7 @@ Modules layout, integration points, TCK plan, milestones P0–P9).
 ## Ecosystem rules
 
 Peano follows the transverse Vidocq philosophy (see the workspace
-[CLAUDE.md](https://codeberg.org/Vidocq/vidocq) conventions):
+[AGENTS.md](https://codefloe.com/Vidocq/vidocq-workspace/src/branch/main/AGENTS.md) conventions):
 
 - **Zero third-party dependency** — only the Jakarta Expression Language 6.0 API.
 - **Strict Java Modules** — proper `module-info.java`, minimal `exports`,
