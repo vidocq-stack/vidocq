@@ -180,7 +180,7 @@ java -jar heisenberg-bench/target/benchmarks.jar
   Execution is done through `Executors.newVirtualThreadPerTaskExecutor()` — no platform pool.
 - **Metrics §9 (MP Metrics) and §10 (OpenTelemetry)**: both APIs can be published
   simultaneously, the `Composite` fans out each call to all present recorders.
-  To add a new §10-side metric: edit `OtelFtMetricsRecorder` (names and
+  To add a new §10-side metric: edit `OtelFtMetrics` (names and
   attributes defined by the `TelemetryMetricDefinition` TCK, `seconds` units for
   durations, explicit bucket boundaries defined in `histogram(name, "seconds")`).
 - **Arquillian test enricher** (`heisenberg-tck/src/test/java/.../VaubanTckBootstrap.java`) :

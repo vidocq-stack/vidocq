@@ -1,5 +1,5 @@
 = What's new
-:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens.
+:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens, and Fault Tolerance that starts without Metrics or Telemetry.
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
@@ -16,3 +16,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Outside Vauban
 
 * **`heisenberg-cdi-vauban` is an explicit bean archive** — the jar now ships `META-INF/beans.xml` (`bean-discovery-mode="annotated"`, heisenberg#25, BUG-004). Under a container that does not scan implicit archives, such as Weld SE by default, `{release-version}` was not discovered: its interceptors never ran and the Fault Tolerance annotations were silently ignored. Nothing changes under Vauban. xref:reference.adoc#class-path[On a class path].
+
+== Fault Tolerance without Metrics or Telemetry
+
+* **An application with Fault Tolerance alone starts** — with neither MicroProfile Metrics nor OpenTelemetry present, `{release-version}` stopped the container start with `NoClassDefFoundError: org/eclipse/microprofile/metrics/MetricRegistry` (then `io/opentelemetry/api/common/AttributeKey` once Metrics was added), because both metrics recorder beans named those types in their fields (BUG-005). The recorder beans now refer to no observability type and stay inactive when their API is absent; with both APIs present, the published metrics are unchanged. xref:internals.adoc#observability[Optional observability].

@@ -159,9 +159,9 @@ Startup validation is crucial: any malformed annotation (`@Asynchronous void m()
 
 Either way, no `setAccessible(true)` and no `--add-reads` on the command line. `heisenberg-cdi-vauban-module-it` (`FallbackMethodModulePathTest`) covers private and package-private fallback methods on the module path with an application that opens nothing; the `heisenberg-cdi-vauban` unit tests, which call the interceptor without a container, keep the `opens`-only path covered.
 
-== Optional observability
-
 [#observability]
+== Optional observability [.tag-new]#NEW#
+
 The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel by two recorders:
 
 [cols="2,3"]
@@ -169,15 +169,17 @@ The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel 
 | Recorder | Module
 
 | `DiracFtMetricsRecorder`
-| `heisenberg-cdi-vauban` — MP Metrics §9 via Dirac, counters `ft.invocations.total`, `ft.retry.retries.total`, etc.
+| `heisenberg-cdi-vauban` — MP Metrics §9 via Dirac, counters `ft.invocations.total`, `ft.retry.retries.total`, etc. Publishes through `DiracFtMetrics` when the MicroProfile Metrics API is present.
 
 | `OtelFtMetricsRecorder`
-| `heisenberg-cdi-vauban` — OpenTelemetry §10, via `GlobalOpenTelemetry`. Declared `requires static io.opentelemetry.api`.
+| `heisenberg-cdi-vauban` — OpenTelemetry §10, via `GlobalOpenTelemetry`. Publishes through `OtelFtMetrics` when the OpenTelemetry API is present. Declared `requires static io.opentelemetry.api`.
 |===
 
 The `FaultToleranceInterceptor` injects `@Any Instance<FtMetricsRecorder>`. If several recorders are present, `MetricsRecorderResolver.resolve()` wraps them in a `CompositeFtMetricsRecorder` (fan-out) — this avoids `AmbiguousResolutionException` and publishes MP Metrics and OTel simultaneously.
 
-If no recorder is present (OpenTelemetry absent, Dirac absent), the `FtMetricsRecorder.NOOP` constant is used — invocation cost is negligible. The `run-tck-no-observability.sh` script validates this no-observability path.
+Both recorders are always deployed, and neither bean class refers to a type of its API: each forwards to a delegate (`DiracFtMetrics`, `OtelFtMetrics`, not beans) that it creates in `@PostConstruct` only when the API can be loaded and read from `io.vidocq.heisenberg.cdi.vauban`. A container inspects the fields and methods of every bean class it discovers, and a class that refers to a missing type fails to link: Weld drops it with `WELD-000119`, Vauban stops the start (BUG-005). Keeping the API types out of the beans makes an application with Fault Tolerance alone start on any container.
+
+If no recorder is active (OpenTelemetry absent, MicroProfile Metrics absent), `MetricsRecorderResolver` leaves the inactive recorders out and the `FtMetricsRecorder.NOOP` constant is used — invocation cost is negligible. `MetricsRecordersWithoutObservabilityTest` (`heisenberg-cdi-vauban-module-it`) deploys both recorders on a module path that has neither API. The `run-tck-no-observability.sh` script validates this no-observability path.
 
 == Records and exhaustive switches
 

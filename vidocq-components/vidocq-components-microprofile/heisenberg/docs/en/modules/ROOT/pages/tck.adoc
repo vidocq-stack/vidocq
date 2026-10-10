@@ -79,7 +79,7 @@ The `run-tck-no-observability.sh` script wraps the main runner and **excludes** 
 ./run-tck-no-observability.sh -Dtest=RetryTest
 ----
 
-Why this mode exists: it validates that fault tolerance _works_ even when no observability dependency is present on the classpath. Heisenberg declares OpenTelemetry as `requires static` (Java static module); if OTel is absent, CDI silently ignores `OtelFtMetricsRecorder`, and the `FtMetricsRecorder.NOOP` constant is used. This mode proves that this absence does not affect the Retry, Timeout, CircuitBreaker, Bulkhead, Fallback, Asynchronous policies.
+Why this mode exists: it validates that fault tolerance _works_ even when no observability dependency is present on the classpath. Heisenberg declares OpenTelemetry as `requires static` (Java static module); if OTel is absent, `OtelFtMetricsRecorder` stays inactive, and the `FtMetricsRecorder.NOOP` constant is used (xref:internals.adoc#observability[Optional observability]). This mode proves that this absence does not affect the Retry, Timeout, CircuitBreaker, Bulkhead, Fallback, Asynchronous policies.
 
 Exclusions applied by the wrapper:
 

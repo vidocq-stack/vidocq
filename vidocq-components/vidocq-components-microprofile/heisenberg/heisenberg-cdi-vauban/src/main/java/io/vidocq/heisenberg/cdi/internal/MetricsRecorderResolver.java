@@ -44,7 +44,9 @@ final class MetricsRecorderResolver {
         }
         List<FtMetricsRecorder> recorders = new ArrayList<>();
         for (FtMetricsRecorder r : recorderInstance) {
-            if (r != null) recorders.add(r);
+            // A recorder whose API is absent (BUG-005) publishes nothing: leave it out, so that no
+            // observability at all still resolves to NOOP.
+            if (r != null && !(r instanceof DelegatingFtMetricsRecorder d && !d.active())) recorders.add(r);
         }
         if (recorders.isEmpty()) return FtMetricsRecorder.NOOP;
         if (recorders.size() == 1) return recorders.get(0);

@@ -177,8 +177,11 @@ org.junit:junit-bom:6.0.3                                       (test, BOM)
 ```
 
 `opentelemetry-api` is `provided` on `heisenberg-cdi-vauban` only
-(`requires static io.opentelemetry.api` in `module-info`). CDI silently ignores
-`OtelFtMetricsRecorder` if OTel is not present at runtime.
+(`requires static io.opentelemetry.api` in `module-info`). `OtelFtMetricsRecorder` and
+`DiracFtMetricsRecorder` stay inactive when their API is not present at runtime: the beans
+refer to no OTel / Metrics type, the API code lives in `OtelFtMetrics` / `DiracFtMetrics`
+(BUG-005). Keep it that way: a bean field or method signature naming an optional type
+stops the container start when that API is absent.
 
 Any new `<scope>compile</scope>` or `<scope>runtime</scope>` dependency must go through
 `dependency-gatekeeper` and be explicitly justified in the PR.
