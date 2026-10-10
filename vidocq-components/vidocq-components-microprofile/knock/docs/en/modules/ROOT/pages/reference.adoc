@@ -147,6 +147,14 @@ Neither module is published. Three things make this work:
 
 The application provides Jakarta REST, JSON-P and CDI, as any server does. With Weld SE alone there is no Jakarta REST runtime: use `KnockHealthService` to build the reports.
 
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own health checks off** — `mpHealth` on Open Liberty. Otherwise the server answers `/health` itself, and Knock's checks are never reported.
+* **Enable the server's CDI, Jakarta REST and JSON-P** — `cdi-4.0`, `restfulWS-3.1` and `jsonp-2.1` on Open Liberty. Knock leaves them `provided` (vidocq-workspace#17); under Vidocq, the Health extension brings them, with Champollion for JSON-P.
+* **Nothing to exclude** — the WAR carries the Knock jars, the MicroProfile Health API and `vauban-api` (API types only). `knock-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
 == See also
 
 * xref:concepts.adoc[Concepts] — the model behind these artefacts.
