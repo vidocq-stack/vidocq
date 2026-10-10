@@ -23,14 +23,26 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import jakarta.el.ELException;
+import jakarta.el.ELContext;
 import io.vidocq.peano.core.internal.syntax.TokenKind;
 
 /** Numeric domain selection and arithmetic from EL 6.0 section 1.7. */
 public final class Arithmetic {
-    private Arithmetic() {
+    private final ELContext context;
+
+    private Arithmetic(ELContext context) {
+        this.context = context;
     }
 
     public static Number binary(TokenKind operator, Object a, Object b) {
+        return binary(operator, a, b, null);
+    }
+
+    public static Number binary(TokenKind operator, Object a, Object b, ELContext context) {
+        return new Arithmetic(context).binaryValues(operator, a, b);
+    }
+
+    private Number binaryValues(TokenKind operator, Object a, Object b) {
         try {
             if (a == null && b == null) {
                 return 0L;
@@ -70,6 +82,14 @@ public final class Arithmetic {
     }
 
     public static Number negate(Object value) {
+        return negate(value, null);
+    }
+
+    public static Number negate(Object value, ELContext context) {
+        return new Arithmetic(context).negateValue(value);
+    }
+
+    private Number negateValue(Object value) {
         if (value == null) {
             return 0L;
         }
@@ -89,8 +109,9 @@ public final class Arithmetic {
         };
     }
 
-    private static <T extends Number> T number(Object value, Class<T> type) {
-        return Coercions.convert(value == null ? 0L : value, type);
+    private <T extends Number> T number(Object value, Class<T> type) {
+        Object input = value == null ? 0L : value;
+        return context == null ? Coercions.convert(input, type) : context.convertToType(input, type);
     }
 
     private static boolean floating(Object value) {

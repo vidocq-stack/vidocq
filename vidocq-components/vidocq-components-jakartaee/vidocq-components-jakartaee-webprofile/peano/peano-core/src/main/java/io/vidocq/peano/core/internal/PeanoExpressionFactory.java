@@ -37,7 +37,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
         Objects.requireNonNull(expectedType, "expectedType");
-        return PeanoValueExpression.text(expression, expectedType);
+        return PeanoValueExpression.text(expression, expectedType, context);
     }
 
     @Override

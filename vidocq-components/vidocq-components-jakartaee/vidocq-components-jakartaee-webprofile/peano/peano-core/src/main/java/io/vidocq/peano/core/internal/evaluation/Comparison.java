@@ -22,40 +22,52 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import jakarta.el.ELException;
+import jakarta.el.ELContext;
 import io.vidocq.peano.core.internal.syntax.TokenKind;
 
 /** Equality and ordered comparison from EL 6.0 section 1.9. */
 public final class Comparison {
-    private Comparison() {
+    private final ELContext context;
+
+    private Comparison(ELContext context) {
+        this.context = context;
     }
 
     public static boolean equal(Object a, Object b) {
+        return equal(a, b, null);
+    }
+
+    public static boolean equal(Object a, Object b, ELContext context) {
+        return new Comparison(context).equalValues(a, b);
+    }
+
+    private boolean equalValues(Object a, Object b) {
         try {
             if (a == b) return true;
             if (a == null || b == null) return false;
             if (a instanceof BigDecimal || b instanceof BigDecimal) {
-                return Coercions.convert(a, BigDecimal.class).equals(Coercions.convert(b, BigDecimal.class));
+                return convert(a, BigDecimal.class).equals(convert(b, BigDecimal.class));
             }
             if (floating(a) || floating(b)) {
-                return Coercions.convert(a, Double.class).doubleValue() == Coercions.convert(b, Double.class).doubleValue();
+                return convert(a, Double.class).doubleValue() == convert(b, Double.class).doubleValue();
             }
             if (a instanceof BigInteger || b instanceof BigInteger) {
-                return Coercions.convert(a, BigInteger.class).equals(Coercions.convert(b, BigInteger.class));
+                return convert(a, BigInteger.class).equals(convert(b, BigInteger.class));
             }
             if (integral(a) || integral(b)) {
-                return Coercions.convert(a, Long.class).equals(Coercions.convert(b, Long.class));
+                return convert(a, Long.class).equals(convert(b, Long.class));
             }
             if (a instanceof Boolean || b instanceof Boolean) {
-                return Coercions.convert(a, Boolean.class).equals(Coercions.convert(b, Boolean.class));
+                return convert(a, Boolean.class).equals(convert(b, Boolean.class));
             }
             if (a instanceof Enum<?> e) {
-                return e.equals(Coercions.convert(b, e.getDeclaringClass()));
+                return e.equals(convert(b, e.getDeclaringClass()));
             }
             if (b instanceof Enum<?> e) {
-                return e.equals(Coercions.convert(a, e.getDeclaringClass()));
+                return e.equals(convert(a, e.getDeclaringClass()));
             }
             if (a instanceof String || b instanceof String) {
-                return Coercions.convert(a, String.class).equals(Coercions.convert(b, String.class));
+                return convert(a, String.class).equals(convert(b, String.class));
             }
             return a.equals(b);
         } catch (ELException error) {
@@ -66,17 +78,25 @@ public final class Comparison {
     }
 
     public static boolean relate(TokenKind operator, Object a, Object b) {
+        return relate(operator, a, b, null);
+    }
+
+    public static boolean relate(TokenKind operator, Object a, Object b, ELContext context) {
+        return new Comparison(context).relateValues(operator, a, b);
+    }
+
+    private boolean relateValues(TokenKind operator, Object a, Object b) {
         try {
             if (a == b) {
                 return operator == TokenKind.LESS_EQUAL || operator == TokenKind.GREATER_EQUAL;
             }
             if (a == null || b == null) return false;
             if (a instanceof BigDecimal || b instanceof BigDecimal) {
-                return ordered(operator, Coercions.convert(a, BigDecimal.class).compareTo(Coercions.convert(b, BigDecimal.class)));
+                return ordered(operator, convert(a, BigDecimal.class).compareTo(convert(b, BigDecimal.class)));
             }
             if (floating(a) || floating(b)) {
-                double left = Coercions.convert(a, Double.class);
-                double right = Coercions.convert(b, Double.class);
+                double left = convert(a, Double.class);
+                double right = convert(b, Double.class);
                 return switch (operator) {
                     case LESS -> left < right;
                     case GREATER -> left > right;
@@ -86,13 +106,13 @@ public final class Comparison {
                 };
             }
             if (a instanceof BigInteger || b instanceof BigInteger) {
-                return ordered(operator, Coercions.convert(a, BigInteger.class).compareTo(Coercions.convert(b, BigInteger.class)));
+                return ordered(operator, convert(a, BigInteger.class).compareTo(convert(b, BigInteger.class)));
             }
             if (integral(a) || integral(b)) {
-                return ordered(operator, Long.compare(Coercions.convert(a, Long.class), Coercions.convert(b, Long.class)));
+                return ordered(operator, Long.compare(convert(a, Long.class), convert(b, Long.class)));
             }
             if (a instanceof String || b instanceof String) {
-                return ordered(operator, Coercions.convert(a, String.class).compareTo(Coercions.convert(b, String.class)));
+                return ordered(operator, convert(a, String.class).compareTo(convert(b, String.class)));
             }
             if (a instanceof Comparable<?> c) return ordered(operator, compare(c, b));
             if (b instanceof Comparable<?> c) return ordered(operator, -Integer.signum(compare(c, a)));
@@ -102,6 +122,10 @@ public final class Comparison {
         } catch (RuntimeException error) {
             throw new ELException("Ordered comparison failed", error);
         }
+    }
+
+    private <T> T convert(Object value, Class<T> type) {
+        return context == null ? Coercions.convert(value, type) : context.convertToType(value, type);
     }
 
     @SuppressWarnings("unchecked")

@@ -4,8 +4,8 @@
 [.lead]
 Honest status: the official Jakarta Expression Language 6.0 TCK has **not been run** against Peano.
 The lexer, parser, constant-expression evaluator and `ExpressionFactory` provider
-are implemented. Resolver/model-object behavior and later milestones are still
-pending. The runner is milestone P8.
+and resolver-backed value expressions are implemented. Later milestones and the
+known upstream primitive-array write issue remain open. The runner is milestone P8.
 
 The `-Ptck` profile currently builds an empty runner and reports `No tests to run`.
 A successful build of that profile is not a TCK pass.

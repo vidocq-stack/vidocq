@@ -26,3 +26,27 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   the equality branch invoked equals on that null result.
 - Status: resolved during P1 implementation. Compare from the enum value;
   regression assertions cover both operand orders in ComparisonTest.
+
+## API-001 · 2026-10-10 · Primitive array writes rejected by the API resolver
+
+- Symptom: writing an Integer value into an int[] through jakarta.el 6.0.1's
+  ArrayELResolver throws ClassCastException, although the element is compatible.
+- Minimal reproduction: call `new ArrayELResolver().setValue(context, new int[1], 0, 42)`
+  with a non-null ELContext. Peano's ValueExpression delegates the same operation.
+- Cause: ArrayELResolver checks `componentType.isAssignableFrom(value.getClass())`
+  before Array.set; primitive `int.class` is not assignable from `Integer.class`.
+- Status: open, upstream API limitation. Peano reports ELException with the
+  ClassCastException cause. Object-array writes and primitive-array
+  reads work. No fallback bypasses user resolvers or swallows their exceptions.
+- Evidence: ArrayELResolver.java:219 in the 6.0.1 API stack, and the setValue bytecode
+  checks the primitive component type before invoking Array.set.
+
+## EL-002 · 2026-10-10 · Resolver runtime failure leaked outside the EL contract
+
+- Symptom: a custom resolver throwing IllegalStateException leaked that exception
+  directly from ValueExpression instead of an ELException with a cause.
+- Minimal reproduction: evaluate a property with an ELResolver whose getValue
+  throws IllegalStateException; repeat with setValue.
+- Cause: engine resolver calls did not wrap non-EL runtime exceptions.
+- Status: resolved during P2; guarded resolver calls preserve ELException subclasses
+  and wrap other runtime failures. Regression tests verify read/write causes.

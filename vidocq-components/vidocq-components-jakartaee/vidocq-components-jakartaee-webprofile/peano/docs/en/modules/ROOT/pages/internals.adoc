@@ -3,7 +3,7 @@
 
 [.lead]
 How Peano is designed to work inside. `peano-core` now contains the P1 lexer, parser,
-immutable AST, constant-expression evaluator and API provider; the full design is
+immutable AST, resolver-backed evaluator and API provider; the full design is
 `PLAN.md` in {repo-peano}[the repository].
 
 == Modules
@@ -12,7 +12,7 @@ immutable AST, constant-expression evaluator and API provider; the full design i
 |===
 | Artefact | Java module | Role
 
-| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constant expressions
+| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constants and resolver-backed value expressions
 | `peano-api` | `io.vidocq.peano.api` | Generated-code SPI (accessor tables) — planned, P6
 | `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating accessor tables — planned, P6, build time only
 | `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
@@ -28,7 +28,7 @@ immutable AST, constant-expression evaluator and API provider; the full design i
 == AOT compatibility
 
 Target: no bytecode generated at run time, no `opens`, no `setAccessible`.
-The spec's own `BeanELResolver` is the planned property-access fallback.
+The spec's own `BeanELResolver` is the property-access fallback for accessible exported types.
 The interpreter uses `java.lang.reflect.Array` only for runtime-typed array coercion
 and the `empty` operator (EL 6.0 sections 1.25.7 and 1.11): allocation, element access
 and length, with no member lookup, accessibility changes or `java.desktop` dependency.
@@ -74,9 +74,37 @@ strings, numeric types, booleans, characters, enums and arrays (section 1.25).
 
 `PeanoExpressionFactory` is registered with `provides` in the core module.
 Its package is neither exported nor opened. Value expressions apply the expected
-type through `ELContext.convertToType`, allowing the context to override final conversion.
+type through `ELContext.convertToType`, allowing the context to override conversion.
+Operator operand conversions also use the evaluation context.
 
-Remaining work includes resolver-aware operand conversion, model-object access,
-method/function execution, assignment, lambdas and collection construction.
+Remaining work includes method/function execution, assignment operators, lambdas
+and collection construction.
 Functional-interface adaptation and PropertyEditor conversions are not implemented.
 Evaluation listeners and expression serialization remain P5 work.
+
+== Resolver-backed values (implemented)
+
+The interpreter resolves identifiers in this order: lambda-scope arguments,
+captured variables, the context's resolver chain, imported static fields and imported classes.
+VariableMapper entries are captured when an expression is created; later mapper changes
+do not change its bindings. No VariableMapper is required when the context disables it.
+
+Property reads use `ELResolver.getValue`; a resolved null value remains distinct from
+an unresolved name. Null bases and keys short-circuit reads, while terminal lvalue
+operations reject null dereferences. Each resolver operation clears the resolution flag
+before invocation and checks whether the resolver claimed the property.
+
+ValueExpression getType, isReadOnly and setValue delegate the terminal operation to
+the resolver without invoking the terminal getter. getValueReference retains the
+evaluated base and key. Metadata reports writable types from the resolver rather than
+inferring them from current values; read-only static fields have a null writable type.
+Resolver runtime failures are wrapped in ELException with their original cause.
+
+The independent Java module fixture verifies maps, a hidden bean through an application
+resolver, an API fallback denied by module boundaries, and a record package exported
+only to `jakarta.el`. It uses no classpath, opens or access overrides.
+
+Known upstream limitation: jakarta.el 6.0.1 ArrayELResolver rejects boxed values when
+writing primitive arrays (API-001 in BUG.md). Object-array writes and primitive-array
+reads are supported; Peano preserves custom resolver precedence and does not bypass
+resolver failures with a direct array write.

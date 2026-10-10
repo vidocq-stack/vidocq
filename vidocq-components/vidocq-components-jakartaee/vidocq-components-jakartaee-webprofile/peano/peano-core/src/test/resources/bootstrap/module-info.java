@@ -19,5 +19,6 @@
  */
 module peano.bootstrap {
     requires jakarta.el;
+    exports io.vidocq.peano.bootstrap.exported to jakarta.el;
 }
 

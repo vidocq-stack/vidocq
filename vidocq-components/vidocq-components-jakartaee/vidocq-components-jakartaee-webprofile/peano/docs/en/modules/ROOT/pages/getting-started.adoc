@@ -2,8 +2,9 @@
 :description: Maven coordinates and a first constant expression through the Jakarta EL API.
 
 [.lead]
-Peano's development build evaluates constant expressions through the Jakarta EL API.
-Bean access, functions, method expressions, lambdas and collection construction remain planned.
+Peano's development build evaluates constants and resolver-backed value expressions
+through the Jakarta EL API. Functions, method expressions, lambda execution and
+collection construction remain planned.
 
 == Prerequisites
 
@@ -54,8 +55,28 @@ Object result = factory.createValueExpression(context, "${1 + 2 * 3}", Object.cl
 The provider is discovered on the module path without exporting its implementation package.
 An independent named-consumer test compiles against the API alone and verifies this bootstrap.
 
-Expressions over model objects are a later milestone. The current provider reports
-unsupported evaluation rather than returning a placeholder value.
+== Navigating a model (implemented)
+
+[source,java]
+----
+var order = new java.util.HashMap<String, Object>();
+order.put("total", 100L);
+context.getVariableMapper().setVariable("order",
+        factory.createValueExpression(order, Object.class));
+Object total = factory.createValueExpression(context, "${order.total * 1.2}", Object.class)
+        .getValue(context); // Double value 120.0
+factory.createValueExpression(context, "${order.total}", Object.class)
+        .setValue(context, 200L);
+----
+
+Variable mappings are captured when expressions are created. Their referenced values
+can remain mutable, as this map does. The context's standard resolvers handle navigation.
+Bean and record access obey Java module export boundaries; application resolvers can
+access their own non-exported types without opening packages.
+
+The current provider reports unsupported later-milestone evaluation rather than
+returning a placeholder value. Primitive-array writes remain an upstream API
+limitation tracked in BUG.md.
 
 == Building Peano from source
 

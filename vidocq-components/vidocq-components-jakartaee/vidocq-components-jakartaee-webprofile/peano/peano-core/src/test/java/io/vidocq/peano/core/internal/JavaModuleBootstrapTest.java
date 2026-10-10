@@ -41,11 +41,14 @@ class JavaModuleBootstrapTest {
         Path source = temporary.resolve("source");
         copyResource("/bootstrap/module-info.java", source.resolve("module-info.java"));
         copyResource("/bootstrap/io/vidocq/peano/bootstrap/Main.java", source.resolve("Main.java"));
+        copyResource("/bootstrap/io/vidocq/peano/bootstrap/hidden/HiddenBean.java", source.resolve("HiddenBean.java"));
+        copyResource("/bootstrap/io/vidocq/peano/bootstrap/exported/PublicRecord.java", source.resolve("PublicRecord.java"));
         Path classes = temporary.resolve("classes");
         Path javaBin = Path.of(System.getProperty("java.home"), "bin");
         assertEquals(0, run(javaBin.resolve("javac").toString(), "--module-path", api.toString(),
                 "-d", classes.toString(), source.resolve("module-info.java").toString(),
-                source.resolve("Main.java").toString()));
+                source.resolve("Main.java").toString(), source.resolve("HiddenBean.java").toString(),
+                source.resolve("PublicRecord.java").toString()));
         // No classpath and no explicit root for Peano: service binding must resolve it.
         assertEquals(0, run(javaBin.resolve("java").toString(), "--module-path",
                 String.join(File.pathSeparator, api.toString(), core.toString(), classes.toString()),

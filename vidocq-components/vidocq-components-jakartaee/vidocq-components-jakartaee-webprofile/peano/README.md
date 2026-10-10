@@ -11,13 +11,16 @@
 
 ## Status
 
-🚧 **Implementation started (P1)** — the lexer and recursive-descent parser build
+🚧 **Implementation in progress (P2)** — the lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
 The ExpressionFactory provider now evaluates literal/operator expressions, with
-scalar and array coercions. Resolver-based access, method/function execution,
-assignment, lambdas, collection construction and full compliance remain planned.
+scalar and array coercions. Identifiers, parse-time variable bindings, property
+navigation and ValueExpression get/set/metadata now use the context's resolver
+chain, including imports and static fields. Method/function execution, assignment
+operators, lambdas, collection construction and full compliance remain planned.
+Primitive-array writes are currently limited by the upstream API resolver (API-001 in BUG.md).
 The design of record is [PLAN.md](PLAN.md) (spec scope, codegen doctrine, Java
 Modules layout, integration points, TCK plan, milestones P0–P9).
 
@@ -40,7 +43,7 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P1 constant expressions evaluate through the Jakarta API; remaining milestones planned |
+| `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P2 resolver-backed value expressions available; remaining milestones planned |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | skeleton |
 
 Planned modules (`peano-api`, `peano-processor`, `peano-compiler`, `peano-bench`)
