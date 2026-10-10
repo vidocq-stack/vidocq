@@ -55,6 +55,10 @@ public class FaultTolerancePriority3850Interceptor {
     @Any
     Instance<FtMetricsRecorder> recorderInstance;
 
+    // Package-private, like the fields above, for the generated in-package injection.
+    @Inject
+    Instance<jakarta.enterprise.context.control.RequestContextController> requestContextControllers;
+
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
         if (ConfigResolver.interceptorPriority() != FaultToleranceInterceptor.TCK_PRIORITY_3850) {
@@ -68,7 +72,8 @@ public class FaultTolerancePriority3850Interceptor {
 
         Method resolvedMethod = FaultToleranceInterceptor.resolveInterceptedMethod(context);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry, recorder);
+                context.getParameters(), stateRegistry, bulkheadRegistry, recorder,
+                new RequestContextActivation(requestContextControllers));
     }
 }
 

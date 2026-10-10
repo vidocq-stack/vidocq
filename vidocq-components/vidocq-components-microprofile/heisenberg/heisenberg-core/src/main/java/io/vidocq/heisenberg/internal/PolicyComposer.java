@@ -52,6 +52,19 @@ public final class PolicyComposer {
         Object proceed() throws Exception;
     }
 
+    /**
+     * Wraps the work an {@code @Asynchronous} method runs on its own thread, the whole policy chain
+     * included, so that the CDI layer can give it the contexts MicroProfile Fault Tolerance requires
+     * there: the request context must be active (§5, {@code AsynchronousTest#testAsyncRequestContext*}).
+     * This module knows nothing of CDI; {@link #NONE} leaves the work as it is.
+     */
+    @FunctionalInterface
+    public interface AsyncContext {
+        AsyncContext NONE = invocation -> invocation;
+
+        Invocation wrap(Invocation invocation);
+    }
+
     public static Object invoke(Invocation invocation) throws Exception {
         return invocation.proceed();
     }
@@ -74,6 +87,13 @@ public final class PolicyComposer {
     public static Object invoke(Invocation invocation, Object target, Method method, Object[] parameters,
                                 CircuitBreakerStateRegistry cbRegistry, BulkheadStateRegistry bhRegistry,
                                 FtMetricsRecorder recorder) throws Exception {
+        return invoke(invocation, target, method, parameters, cbRegistry, bhRegistry, recorder, AsyncContext.NONE);
+    }
+
+    /** As above, with {@code asyncContext} wrapping the work of an {@code @Asynchronous} method. */
+    public static Object invoke(Invocation invocation, Object target, Method method, Object[] parameters,
+                                CircuitBreakerStateRegistry cbRegistry, BulkheadStateRegistry bhRegistry,
+                                FtMetricsRecorder recorder, AsyncContext asyncContext) throws Exception {
         if (method == null) {
             return invocation.proceed();
         }
@@ -256,7 +276,7 @@ public final class PolicyComposer {
                     }
                 };
             }
-            return AsynchronousEngine.executeAsync(withFallback, method.getName(), asyncInvocationStarted);
+            return AsynchronousEngine.executeAsync(asyncContext.wrap(withFallback), method.getName(), asyncInvocationStarted);
         }
 
         // Synchronous path

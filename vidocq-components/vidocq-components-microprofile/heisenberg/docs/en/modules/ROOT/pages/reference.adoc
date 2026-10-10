@@ -235,6 +235,8 @@ Note: `value` and `fallbackMethod` are mutually exclusive.
 
 No parameter. The method must return `CompletionStage<T>` or `Future<T>`.
 
+[.tag-new]#NEW# The method runs on its own virtual thread with the CDI request context active, as MicroProfile Fault Tolerance requires: a `@RequestScoped` bean used there lives for that call. Heisenberg activates it through the standard `RequestContextController` when it is not already active, and deactivates it after, on any CDI container.
+
 == MicroProfile Config keys
 
 [#mp-config]
