@@ -3,7 +3,7 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
-## APT-007 · 2026-10-11 · Unselected child interfaces caused adapter diagnostics
+## APT-007 · 2026-10-10 · Unselected child interfaces caused adapter diagnostics
 
 - Symptom: selecting a functional root caused an unrelated unselected child interface
   to fail the functional annotation requirement during generation.
