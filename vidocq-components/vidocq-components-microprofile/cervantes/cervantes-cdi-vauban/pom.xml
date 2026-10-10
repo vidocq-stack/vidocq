@@ -40,13 +40,27 @@
             <artifactId>jakarta.annotation-api</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- Vauban SPI (compile-only, like jakarta.cdi): lets module-info declare
-             `provides VaubanComponentProvider with _VaubanComponents`. `provided` is non-transitive
-             and pairs with `requires static`, so a Weld deployment pulls neither this nor vauban-core. -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (JsonWebTokenContext, JsonWebTokenProducer). Without this jar Weld cannot load their classes and skips the beans
+             silently (WELD-000119), then fails the deployment on unsatisfied injection points.
+             API types only, no code runs outside Vauban (vidocq-workspace#15, cervantes-it-weld).
+             The Jakarta CDI APIs it declares are excluded: like every Jakarta API here they come
+             from the container (`provided`), and a CDI 4.0 server (Open Liberty, MicroProfile 7)
+             must not find CDI 4.1 API jars in the application. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Tests -->

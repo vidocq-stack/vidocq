@@ -272,4 +272,36 @@ Without `beans.xml` the jars are implicit bean archives, which Weld SE does not 
 `META-INF/beans.xml` (`bean-discovery-mode="annotated"`). `ClassPathRegistrationTest` checks that the
 services file lists exactly what the descriptor provides and that the archive is explicit;
 `BeanArchiveTest` does the same for `cervantes-jaxrs`. Both fail on `main` (`missing
-target/classes/META-INF/...`). A Weld SE and an OpenLiberty integration test follow in cervantes#24.
+target/classes/META-INF/...`). The Weld SE and Open Liberty integration tests are in
+`cervantes-it-other-containers` (CERV-008).
+
+## CERV-008 — Cervantes does not deploy under Weld or Open Liberty (cervantes#24)
+
+- **Opening date**: 2026-10-10
+- **Status**: ✅ FIXED 2026-10-10
+
+### Symptom
+
+With the CERV-007 fix in, a Weld SE deployment still fails:
+`WELD-001408: Unsatisfied dependencies for type JsonWebToken with qualifiers @Default`. Weld first
+skips `JsonWebTokenContext`, `JsonWebTokenProducer`, `JwtAuthenticationFilter` and
+`RolesAllowedDynamicFeature` with an INFO message:
+`WELD-000119: ... Type io.vidocq.vauban.api.ProxyLink not found`. Open Liberty fails the same way
+(`CWWKZ0002E`).
+
+### Minimal repro
+
+`cervantes-it-weld` (`WeldPortabilityTest`) on `main`; on Liberty, `cervantes-it-openliberty` with
+`vauban-api` excluded from the WAR: 5/5 red.
+
+### Cause
+
+The Vauban build weaves a `protected <init>(io.vidocq.vauban.api.ProxyLink)` entry constructor into
+every normal-scoped bean, and `vauban-api` was `provided` (`requires static`), so it is absent
+outside Vauban. Same cause as Knock's BUG-20261010-01 and Heisenberg's BUG-006.
+
+### Fix
+
+`vauban-api` is a runtime dependency of `cervantes-cdi-vauban` and `cervantes-jaxrs` (plain
+`requires`), with its Jakarta CDI dependencies excluded. Covered by `cervantes-it-weld` (5 tests) and
+`cervantes-it-openliberty` (5 tests over HTTP).

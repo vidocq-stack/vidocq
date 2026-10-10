@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Cervantes on Open Liberty (MicroProfile 7 distribution). mpJwt stays off, otherwise Liberty's own
+    implementation would authenticate the requests; appSecurity stays off too, so @RolesAllowed is
+    enforced by Cervantes alone. mpConfig is on: the mp.jwt.verify.* keys are read through the
+    server's MicroProfile Config, as in any application. jsonp is on: Cervantes parses tokens with
+    the JSON-P API, and the server supplies the implementation.
+-->
+<server description="cervantes-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.0</feature>
+        <feature>restfulWS-3.1</feature>
+        <feature>jsonp-2.1</feature>
+        <feature>mpConfig-3.1</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <webApplication location="cervantes-it-openliberty.war" contextRoot="/cervantes"/>
+</server>

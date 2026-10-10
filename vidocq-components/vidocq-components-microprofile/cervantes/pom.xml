@@ -111,6 +111,7 @@
         <module>cervantes-core</module>
         <module>cervantes-cdi-vauban</module>
         <module>cervantes-jaxrs</module>
+        <module>cervantes-it-other-containers</module>
         <module>cervantes-bench</module>
         <module>cervantes-examples</module>
     </modules>

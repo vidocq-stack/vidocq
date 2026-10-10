@@ -62,10 +62,10 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 | No unqualified export — the only export is qualified: `exports io.vidocq.cervantes.internal to io.vidocq.cervantes.cdi.vauban`. The stable SPI reaches consumers through `requires transitive io.vidocq.cervantes.api`.
 
 | `io.vidocq.cervantes.cdi.vauban`
-| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver` [.tag-new]#NEW#.
+| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver` [.tag-new]#NEW#. `requires io.vidocq.vauban.api` [.tag-new]#NEW#: a runtime dependency under any container, see <<other-containers>>.
 
 | `io.vidocq.cervantes.jaxrs`
-| `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`.
+| `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`. `requires io.vidocq.vauban.api` [.tag-new]#NEW#, see <<other-containers>>.
 |===
 
 `io.vidocq.cervantes.internal` (the core engine) is exported only to `io.vidocq.cervantes.cdi.vauban` — application modules cannot read it, and any application class depending on it signals a regression to be fixed. The `io.vidocq.cervantes.cdi.internal` package, although exported for the Vauban wiring, is likewise not a supported API.
@@ -76,6 +76,26 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 On a class path, `provides` clauses are ignored. This is the case under Weld, in an application server, or in any WAR. So `cervantes-cdi-vauban` also lists `CervantesClaimExtension` in `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`. Without it, `@Claim` injection points stay unsatisfied (CERV-007).
 
 `cervantes-cdi-vauban` and `cervantes-jaxrs` are also explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the producers, the request context, the authentication filter and the `@RolesAllowed` feature.
+
+[#other-containers]
+=== Other CDI containers [.tag-new]#NEW#
+
+Cervantes does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `cervantes-it-other-containers`, prove it on every build (cervantes#24):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `cervantes-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: the authentication filter bean validates a signed bearer token and sets the security context, an application bean reads the caller through `JsonWebToken`, `@Claim` and `ClaimValue`, a request without a token stays anonymous, and a token signed by another key is rejected.
+
+| `cervantes-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-P 2.1, MicroProfile Config 3.1), with Liberty's `mpJwt` and `appSecurity` features off: a signed token reaches a `@RolesAllowed` resource, a missing or forged token gets 401, a missing role 403, and `@PermitAll` needs no token.
+|===
+
+Neither module is published. `vauban-api` is a runtime dependency of `cervantes-cdi-vauban` and `cervantes-jaxrs`, under any container: the Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`JsonWebTokenContext`, `JsonWebTokenProducer`, the authentication filter, the `@RolesAllowed` feature). A container that cannot load that type cannot load the bean class, and Weld drops the bean with an INFO message (`WELD-000119`) before failing the deployment (CERV-008). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+
+`JwtValidator` stays `@Dependent` on purpose: with no verification key configured, the producer returns `null`, which only a `@Dependent` bean may do.
 
 == Recognised security annotations
 
@@ -291,7 +311,7 @@ The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the
 
 * Java 25 (LTS), Maven 3.9.16.
 * JAX-RS 4.0 (xref:cassini::index.adoc[Cassini] or another compliant runtime).
-* CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support.
+* CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support, or any CDI 4.0 Lite container with BCE support — proven on Weld and Open Liberty, see <<other-containers>>.
 * MicroProfile Config 3.1+ (xref:ravel::index.adoc[Ravel]).
 * JSON-P 2.1 (xref:champollion::index.adoc[Champollion]).
 * No Jakarta EE Full Profile dependency.
