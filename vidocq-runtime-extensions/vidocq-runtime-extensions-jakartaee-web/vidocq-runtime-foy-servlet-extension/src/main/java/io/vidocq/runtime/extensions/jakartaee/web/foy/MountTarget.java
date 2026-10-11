@@ -20,15 +20,10 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.chappe.api.Handler;
-import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 
 /** Where the extension mounts Foy: the shared web server, or a recorder in tests. */
 @FunctionalInterface
 interface MountTarget {
 
     void mount(String listener, String prefix, Handler handler);
-
-    static MountTarget chappe() {
-        return (listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler);
-    }
 }

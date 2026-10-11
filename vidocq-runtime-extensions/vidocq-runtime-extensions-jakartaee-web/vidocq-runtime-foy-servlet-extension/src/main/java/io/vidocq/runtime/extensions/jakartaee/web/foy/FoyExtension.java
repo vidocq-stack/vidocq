@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -50,7 +51,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     private ServletSettings settings;
 
     public FoyExtension() {
-        this(MountTarget.chappe());
+        // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
+        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler));
     }
 
     FoyExtension(MountTarget target) {
