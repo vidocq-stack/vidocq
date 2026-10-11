@@ -27,6 +27,17 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## COMP-006 · 2026-10-11 · Property helper calls needed emitted class loading to verify
+
+- Symptom: standalone Class-File verification could not resolve the unloaded generated
+  class while validating invokevirtual calls to its superclass's protected helpers.
+- Minimal reproduction: compile `${bean[nil]}` and verify the returned bytes before loading.
+- Cause: generic virtual receiver verification requested an unavailable class hierarchy.
+- Status: resolved with invokespecial calls to the final superclass helpers; runtime
+  semantics remain direct parent dispatch and require no class loading during emission.
+- Evidence: property consumer verifies all emitted classes before writing or compiling
+  its module, then runs independently in both reflection modes.
+
 ## COMP-005 · 2026-10-11 · Integral equality unboxed custom null conversions
 
 - Symptom: a custom converter returning null for the right Long operand raised an

@@ -60,6 +60,8 @@ public final class ExpressionCompiler {
         else if (node instanceof Ast.Binary binary) { collectStrings(binary.left()); collectStrings(binary.right()); }
         else if (node instanceof Ast.Conditional conditional) {
             collectStrings(conditional.condition()); collectStrings(conditional.whenTrue()); collectStrings(conditional.whenFalse());
+        } else if (node instanceof Ast.Property property) {
+            collectStrings(property.base()); collectStrings(property.key());
         }
     }
 
@@ -85,6 +87,9 @@ public final class ExpressionCompiler {
         if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
                 && evaluation.body() instanceof Ast.Identifier identifier)
             return compileRoot(binaryName,source,identifier.name());
+        if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
+                && evaluation.body() instanceof Ast.Property property)
+            return compileProperty(binaryName,source,template,property);
         StringBuilder identity=new StringBuilder(template.kind()==Template.Kind.LITERAL ? "literal:" : "expression:");
         ClassDesc rawType=STRING;
         for (Template.Part part:template.parts()) {
@@ -185,6 +190,80 @@ public final class ExpressionCompiler {
         } catch (IllegalArgumentException failure) {
             throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
         }
+    }
+
+    private static void validateProperty(Ast node,StringBuilder identity,String source,java.util.Set<String> names) {
+        if (node instanceof Ast.Identifier identifier) {
+            key(identity,"identifier",identifier.name()); names.add(identifier.name());
+        } else if (node instanceof Ast.Property property) {
+            key(identity,"property","");
+            validateProperty(property.base(),identity,source,names);
+            validateProperty(property.key(),identity,source,names);
+        } else validate(node,identity,source);
+    }
+
+    private static byte[] compileProperty(String binaryName,String source,Template template,Ast.Property property) {
+        var identity=new StringBuilder("expression:");
+        var names=new java.util.LinkedHashSet<String>();
+        validateProperty(property,identity,source,names);
+        var owner=ClassDesc.of(binaryName);
+        var compiler=new ExpressionCompiler(owner,template);
+        var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
+        var reference=ClassDesc.of("jakarta.el.ValueReference");
+        var namesType=ClassDesc.ofDescriptor("[Ljava/lang/String;");
+        try {
+            return ClassFile.of().build(owner,builder-> {
+                builder.withFlags(ClassFile.ACC_PUBLIC|ClassFile.ACC_FINAL|ClassFile.ACC_SUPER)
+                        .withVersion(ClassFile.JAVA_25_VERSION,0).withSuperclass(pathBase);
+                builder.withField("serialVersionUID",LONG,
+                        field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
+                                .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
+                for (String field:compiler.strings.values())
+                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL);
+                if (!compiler.strings.isEmpty()) builder.withMethodBody("<clinit>",MethodTypeDesc.of(VOID),ClassFile.ACC_STATIC,code-> {
+                    for (var entry:compiler.strings.entrySet()) {
+                        code.new_(STRING).dup().ldc(entry.getKey().token().value())
+                                .invokespecial(STRING,"<init>",MethodTypeDesc.of(VOID,STRING)).putstatic(owner,entry.getValue(),STRING);
+                    }
+                    code.return_();
+                });
+                for (boolean capture:new boolean[]{false,true}) {
+                    var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS) : MethodTypeDesc.of(VOID,CLASS);
+                    builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
+                        code.aload(0).ldc(source).ldc(identity.toString()).aload(capture ? 2 : 1);
+                        if (capture) code.aload(1).ldc("creationContext")
+                                .invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",MethodTypeDesc.of(OBJECT,OBJECT,STRING))
+                                .checkcast(CONTEXT);
+                        else code.aconst_null();
+                        code.loadConstant(names.size()).anewarray(STRING);
+                        int index=0;
+                        for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
+                        code.invokespecial(pathBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType)).return_();
+                    });
+                }
+                builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
+                    compiler.emit(code,property); code.areturn();
+                });
+                builder.withMethodBody("locate",MethodTypeDesc.of(reference,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
+                    int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+                    compiler.emit(code,property.base()); code.astore(base);
+                    compiler.requirePresent(code,base,"null base");
+                    int key=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+                    compiler.emit(code,property.key()); code.astore(key);
+                    compiler.requirePresent(code,key,"null property");
+                    code.new_(reference).dup().aload(base).aload(key)
+                            .invokespecial(reference,"<init>",MethodTypeDesc.of(VOID,OBJECT,OBJECT)).areturn();
+                });
+            });
+        } catch (IllegalArgumentException failure) {
+            throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
+        }
+    }
+
+    private void requirePresent(CodeBuilder code,int slot,String property) {
+        var present=code.newLabel(); var exception=ClassDesc.of("jakarta.el.PropertyNotFoundException");
+        code.aload(slot).ifnonnull(present).new_(exception).dup().ldc("Unresolved property "+property)
+                .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow().labelBinding(present);
     }
 
     private static boolean dynamicType(Ast body) {
@@ -314,6 +393,23 @@ public final class ExpressionCompiler {
 
     private void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
+        var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
+        if (node instanceof Ast.Identifier identifier) {
+            code.aload(0).aload(1).ldc(identifier.name())
+                    .invokespecial(pathBase,"readIdentifier",MethodTypeDesc.of(OBJECT,CONTEXT,STRING));
+            return;
+        }
+        if (node instanceof Ast.Property property) {
+            int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            int key=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            var absent=code.newLabel(); var done=code.newLabel();
+            emit(code,property.base()); code.astore(base).aload(base).ifnull(absent);
+            emit(code,property.key()); code.astore(key).aload(key).ifnull(absent);
+            code.aload(0).aload(1).aload(base).aload(key)
+                    .invokespecial(pathBase,"readProperty",MethodTypeDesc.of(OBJECT,CONTEXT,OBJECT,OBJECT))
+                    .goto_(done).labelBinding(absent).aconst_null().labelBinding(done);
+            return;
+        }
         if (node instanceof Ast.Conditional conditional) {
             var otherwise=code.newLabel();
             var done=code.newLabel();

@@ -50,16 +50,20 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     @Override protected final Object evaluate(ELContext context) {
+        return resolveRoot(context,name,binding);
+    }
+
+    static Object resolveRoot(ELContext context,String name,ValueExpression binding) {
         if (context.isLambdaArgument(name)) return context.getLambdaArgument(name);
         if (binding!=null) return binding.getValue(context);
         context.setPropertyResolved(false);
         Object value=guarded(()->context.getELResolver().getValue(context,null,name));
         if (context.isPropertyResolved()) return value;
         Class<?> owner=context.getImportHandler().resolveStatic(name);
-        if (owner!=null) return read(context,new ELClass(owner));
+        if (owner!=null) return read(context,new ELClass(owner),name);
         Class<?> type=context.getImportHandler().resolveClass(name);
         if (type!=null) return new ELClass(type);
-        throw missing();
+        throw new PropertyNotFoundException("Unresolved property "+name);
     }
 
     @Override public final Class<?> getType(ELContext context) {
@@ -119,10 +123,10 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
         return new ValueReference(null,name);
     }
 
-    private Object read(ELContext context,Object base) {
+    private static Object read(ELContext context,Object base,String name) {
         context.setPropertyResolved(false);
         Object value=guarded(()->context.getELResolver().getValue(context,base,name));
-        if (!context.isPropertyResolved()) throw missing();
+        if (!context.isPropertyResolved()) throw new PropertyNotFoundException("Unresolved property "+name);
         return value;
     }
 

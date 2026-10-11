@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 property-navigation slice (2026-10-11): standalone property trees compile to direct
+evaluation and locate methods, backed by API CompiledPropertyValueExpression. Distinct
+root and key names are captured once in traversal order. Null base/key reads short-circuit;
+metadata and write paths reject null and avoid the final getter. Resolver flags, type
+coercion, callback order, causes and binding serialization match the interpreter protocol.
+Nested/indexed and literal-computed keys run in independent allow/deny consumers without
+core/compiler. Dynamic operator operands and calls remain later slices.
+
 P7 root-resolution slice (2026-10-11): standalone identifiers emit API
 CompiledRootValueExpression subclasses. The Class constructor uses resolver lookup;
 the ELContext/Class constructor captures the root's ValueExpression once at creation.

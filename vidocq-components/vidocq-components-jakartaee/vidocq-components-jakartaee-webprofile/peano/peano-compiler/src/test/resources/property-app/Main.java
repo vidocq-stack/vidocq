@@ -1,0 +1,147 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package demo;
+import jakarta.el.*;
+import java.util.*;
+public class Main {
+    static class Context extends ELContext {
+        final Map<String,Object> roots=new HashMap<>();
+        final Map<String,ValueExpression> bindings=new HashMap<>();
+        final List<String> calls=new ArrayList<>();
+        final List<String> captures=new ArrayList<>();
+        final ELResolver resolver=new ELResolver() {
+            public Object getValue(ELContext c,Object b,Object p) {
+                calls.add("read:"+p);
+                Map<?,?> values=b==null ? roots : b instanceof Map<?,?> m ? m : Map.of();
+                if (values.containsKey(p)) { c.setPropertyResolved(b,p); return values.get(p); }
+                return null;
+            }
+            public Class<?> getType(ELContext c,Object b,Object p) {
+                calls.add("type:"+p);
+                if (b instanceof Map<?,?> m && m.containsKey(p)) c.setPropertyResolved(b,p);
+                return Long.class;
+            }
+            public boolean isReadOnly(ELContext c,Object b,Object p) {
+                calls.add("readonly:"+p);
+                if (b instanceof Map<?,?> m && m.containsKey(p)) c.setPropertyResolved(b,p);
+                return false;
+            }
+            public void setValue(ELContext c,Object b,Object p,Object v) {
+                calls.add("write:"+p);
+                if (b instanceof Map m && m.containsKey(p)) { c.setPropertyResolved(b,p); m.put(p,v); }
+            }
+            public Class<?> getCommonPropertyType(ELContext c,Object b) { return Object.class; }
+        };
+        public ELResolver getELResolver() { return resolver; }
+        public FunctionMapper getFunctionMapper() { return null; }
+        public VariableMapper getVariableMapper() {
+            return new VariableMapper() {
+                public ValueExpression resolveVariable(String name) { captures.add(name); return bindings.get(name); }
+                public ValueExpression setVariable(String name,ValueExpression value) { return bindings.put(name,value); }
+            };
+        }
+        public <T> T convertToType(Object value,Class<T> type) {
+            if (type==Object.class) return (T)value;
+            if (type==boolean.class || type==Boolean.class) return (T)Boolean.valueOf(String.valueOf(value));
+            if (type==Long.class) { calls.add("convert:"+value); return (T)Long.valueOf(value.toString()); }
+            if (type==String.class) return (T)(value==null ? "" : value.toString());
+            return type.cast(value);
+        }
+    }
+    static final class Binding extends ValueExpression {
+        private static final long serialVersionUID=1;
+        final Object value;
+        Binding(Object value) { this.value=value; }
+        public <T> T getValue(ELContext c) { return (T)value; }
+        public void setValue(ELContext c,Object v) { throw new PropertyNotWritableException(); }
+        public boolean isReadOnly(ELContext c) { return true; }
+        public Class<?> getType(ELContext c) { return value==null ? null : value.getClass(); }
+        public String getExpressionString() { return "binding"; }
+        public Class<?> getExpectedType() { return Object.class; }
+        public boolean isLiteralText() { return false; }
+        public boolean equals(Object o) { return o instanceof Binding b && Objects.equals(value,b.value); }
+        public int hashCode() { return Objects.hashCode(value); }
+    }
+    static void check(boolean condition,String message) { if (!condition) throw new AssertionError(message); }
+    public static void main(String[] args) throws Exception {
+        check(ModuleLayer.boot().findModule("io.vidocq.peano.core").isEmpty()
+                && ModuleLayer.boot().findModule("io.vidocq.peano.compiler").isEmpty(),"Build modules resolved");
+        var context=new Context();
+        var child=new HashMap<String,Object>(); child.put("value",null);
+        var bean=new HashMap<String,Object>(); bean.put("value",7L); bean.put("child",child);
+        context.roots.put("bean",bean); context.roots.put("nil",null); context.roots.put("key","value");
+        var property=new Property(Object.class);
+        check(property.getValue(context).equals(7L),"Property value failed");
+        context.calls.clear();
+        check(property.getType(context)==Long.class && context.calls.equals(List.of("read:bean","type:value")),
+                "Metadata read final getter: "+context.calls);
+        context.calls.clear();
+        check(!property.isReadOnly(context) && context.calls.equals(List.of("read:bean","readonly:value")),"Read-only getter read");
+        context.calls.clear();
+        var reference=property.getValueReference(context);
+        check(reference.getBase()==bean && reference.getProperty().equals("value")
+                && context.calls.equals(List.of("read:bean")),"Reference getter read");
+        context.calls.clear();
+        property.setValue(context,"9");
+        check(bean.get("value").equals(9L)
+                && context.calls.equals(List.of("read:bean","type:value","convert:9","write:value")),"Property write ordering: "+context.calls);
+        context.calls.clear();
+        check(new Nested(Object.class).getValue(context)==null && context.isPropertyResolved(),"Nested claimed null lost");
+        context.calls.clear();
+        check(new NullBase(Object.class).getValue(context)==null && context.calls.equals(List.of("read:nil")),"Null base read key");
+        context.calls.clear();
+        try { new NullBase(Object.class).getType(context); throw new AssertionError("Null metadata base accepted"); }
+        catch (PropertyNotFoundException expected) {}
+        check(context.calls.equals(List.of("read:nil")),"Null metadata base read key");
+        check(new NullKey(Object.class).getValue(context)==null,"Null key read failed");
+        try { new NullKey(Object.class).setValue(context,7); throw new AssertionError("Null write key accepted"); }
+        catch (PropertyNotFoundException expected) {}
+        check(new LiteralKey(Object.class).getValue(context).equals(9L),"Literal key failed");
+        check(property.equals(new LiteralKey(Object.class)),"Equivalent navigation identity changed");
+        check(new ComputedKey(Object.class).getValue(context).equals(9L),"Computed key failed");
+        context.bindings.put("bean",new Binding(bean)); context.bindings.put("key",new Binding("value"));
+        var captured=new Indexed(context,Object.class);
+        check(context.captures.equals(List.of("bean","key")),"Capture order or duplicates: "+context.captures);
+        context.bindings.put("key",new Binding("child")); context.roots.put("bean",Map.of());
+        check(captured.getValue(context).equals(9L),"Path bindings remapped");
+        context.captures.clear(); bean.put("key","value");
+        check(new DuplicateRoots(context,Object.class).getValue(context).equals(9L)
+                && context.captures.equals(List.of("bean")),"Duplicate root capture: "+context.captures);
+        var events=new ArrayList<String>();
+        context.addEvaluationListener(new EvaluationListener() {
+            public void beforeEvaluation(ELContext c,String s) { events.add("before"); }
+            public void afterEvaluation(ELContext c,String s) { events.add("after"); }
+        });
+        captured.getValue(context); check(events.equals(List.of("before","after")),"Path evaluation events");
+        var bytes=new java.io.ByteArrayOutputStream();
+        try (var output=new java.io.ObjectOutputStream(bytes)) { output.writeObject(captured); }
+        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray()))) {
+            var restored=(ValueExpression)input.readObject();
+            check(restored.equals(captured) && restored.hashCode()==captured.hashCode()
+                    && restored.getValue(context).equals(9L),"Path serialization lost");
+        }
+        check(!captured.equals(new Indexed(Object.class)),"Path binding identity ignored");
+        var failure=new Context() { public ELResolver getELResolver() { throw new IllegalStateException("resolver"); } };
+        try { property.getValue(failure); throw new AssertionError("Path resolver failure swallowed"); }
+        catch (ELException expected) { check(expected.getCause() instanceof IllegalStateException,"Path resolver cause lost"); }
+        System.out.println("PEANO_COMPILED_PROPERTY_OK");
+    }
+}
+

@@ -23,8 +23,8 @@ for literal text and templates whose evaluation parts are scalar literal and ope
 It supports null, boolean, string, integer and floating values, minus, not/! and empty,
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
 % (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
-sequences are emitted directly. Standalone root identifiers are also supported;
-navigation, calls and dynamic operator operands are rejected in this slice.
+sequences are emitted directly. Standalone root identifiers and property navigation are
+also supported; calls and dynamic operator operands are rejected in this slice.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
 
@@ -85,6 +85,14 @@ Captured ValueExpressions and their payloads must be serializable; their impleme
 modules must remain available when restoring them.
 Generated root classes run with core and compiler absent in both reflection modes;
 resolver implementations retain responsibility for their own member access.
+
+Standalone property trees extend CompiledPropertyValueExpression. Both constructor
+forms are available; the context form captures each distinct root/key binding once.
+Generated evaluation short-circuits null bases and keys. Metadata and writes reject
+null locations and evaluate parent/key expressions without reading the final getter.
+Property writes consult the resolver's type before caller conversion and assignment.
+Nested/indexed paths and scalar computed keys are supported. Resolver flags, captured
+binding identity and serialization follow the root protocol's boundaries.
 
 == Legacy property-editor boundary
 
