@@ -32,20 +32,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   without a bean-defining annotation is never discovered, so `CassiniScopeExtension`, which gives the `Application`
   its default `@ApplicationScoped`, never sees it. Workaround: annotate the `Application` with `@ApplicationScoped`.
 
-## BUG-20261011-01 — the REST codegen bundle left Cassini's build-compatible extension out
+## BUG-20261011-01 — the REST codegen bundle leaves Cassini's build-compatible extension out
 
 - **Date**: 2026-10-11
-- **Status**: FIXED (branch feat/servlet-extension)
-- **Affected module**: vidocq-runtime-cassini-rest-extension-codegen
+- **Status**: OPEN
+- **Affected module**: vidocq-runtime-cassini-rest-extension-codegen; cassini-cdi (`CassiniScopeExtension`)
 - **Symptom**: compiling a REST application warns "[Vauban] 1 Build Compatible Extension(s) present on the
   compile/module path are NOT on the annotation-processor path and will not run:
   [io.vidocq.cassini.cdi.CassiniScopeExtension]". `@Path` classes without a scope do not get their default
   `@RequestScoped`, and a scoped `Application` is not given one either.
 - **Minimal repro**: any application compiled with the bundle, e.g. `vidocq-runtime-it-foy-servlet`.
-- **Cause**: the bundle only carried `cassini-processor`; the runtime does not run extensions over an application
+- **Cause**: the bundle only carries `cassini-processor`; the runtime does not run extensions over an application
   the processor already handled (same pattern as BUG-20261008-01).
-- **Correction**: the bundle also carries `cassini-cdi`; the warning is gone and the processor logs the default
-  scopes it adds.
+- **Why not fixed yet**: adding `cassini-cdi` to the bundle was tried on branch feat/servlet-extension and reverted.
+  `CassiniScopeExtension` then gives `@RequestScoped` to every `@Path` type, the Rest Client interfaces included:
+  `vidocq-runtime-cyrano-rest-client-example` no longer compiles (`GreetingClient_ClientProxy`,
+  `GreetingClient_Factory`). The extension must skip interfaces first (Cassini), then the bundle can carry it.
 
 ## BUG-20261008-01 — `@Inject @RestClient` is unsatisfied, and a Rest Client application cannot be linked
 
