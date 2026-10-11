@@ -125,6 +125,13 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 logical slice (2026-10-11): inline branches implement and/&& and or/|| over
+supported scalar trees. Each evaluated operand uses the caller's boolean conversion;
+discarded operands perform no evaluation or conversion. getType evaluates the body
+and preserves those effects. Numeric overflow errors are emitted at the literal's
+evaluation site, so discarded invalid numbers remain inert (COMP-003). Independent
+runtime tests verify operand order, altered conversions, failures and serialization.
+
 P7 arithmetic slice (2026-10-11): inline bytecode now implements +, -, *, / (div) and
 % (mod) over scalar literal/unary/arithmetic trees. Numeric domains are known for these
 inputs: Long or Double, including numeric-string floating markers. Both-null operands
@@ -134,7 +141,7 @@ Generated guards wrap arithmetic/coercion RuntimeExceptions with their causes wh
 rethrowing ELException, and leave operand-evaluation failures outside that guard.
 Operator getType reevaluates its body to retain conversion effects. Independent tests
 compare 50 templates and separately check order, metadata effects, division infinities,
-NaN, overflow and modulo-zero errors. Comparisons, logical/conditional operations,
+NaN, overflow and modulo-zero errors. Comparisons, conditional operations,
 concatenation and dynamic resolver-backed nodes remain subsequent slices.
 
 P7 unary slice (2026-10-11): the compiler now emits recursive minus, not/! and empty

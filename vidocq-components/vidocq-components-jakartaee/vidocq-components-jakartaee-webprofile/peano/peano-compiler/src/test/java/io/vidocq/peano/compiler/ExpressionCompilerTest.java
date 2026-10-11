@@ -47,7 +47,11 @@ class ExpressionCompilerTest {
                 "${null+null}", "${null/null}", "${null+7}", "${'1.5'+2}", "${'7'-2}",
                 "${-7%3}", "${1 + -'2'}", "${(-7+3)*2}", "${empty (1+2)}",
                 "${1/0}", "${0/0}", "${9223372036854775807+1}", "${'2e2'*3}",
-                "${null%null}", "result=${1+2}");
+                "${null%null}", "result=${1+2}", "${true and false}", "${true && true}",
+                "${false or true}", "${false || false}", "${null and true}", "${'' or 'true'}",
+                "${'TRUE' and not false}", "${true or (1%0)}", "${false and -true}",
+                "${false or true and false}", "${not (false or true)}", "logic=${true and false}",
+                "${true or 9223372036854775808}", "${false and -9223372036854775809}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -201,6 +205,41 @@ class ExpressionCompilerTest {
                         }
                         try { new BadOperand(Object.class).getValue(context); throw new AssertionError("Invalid operand was accepted"); }
                         catch (ELException expected) {}
+                        var logicalOrder=new java.util.ArrayList<String>();
+                        var logicalContext=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==boolean.class) logicalOrder.add(String.valueOf(value));
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        var lazy=new LazyLogical(Object.class);
+                        if (!Boolean.TRUE.equals(lazy.getValue(logicalContext))
+                                || !logicalOrder.equals(java.util.List.of("false","false","true")))
+                            throw new AssertionError("Logical conversion order mismatch: "+logicalOrder);
+                        logicalOrder.clear();
+                        if (lazy.getType(logicalContext)!=Boolean.class
+                                || !logicalOrder.equals(java.util.List.of("false","false","true")))
+                            throw new AssertionError("Logical metadata skipped conversions");
+                        var altered=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==boolean.class) return (T)Boolean.FALSE;
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        if (!Boolean.FALSE.equals(new AlteredLogical(Object.class).getValue(altered)))
+                            throw new AssertionError("Logical branch ignored caller boolean conversion");
+                        try { new BadLogical(Object.class).getValue(context); throw new AssertionError("Invalid boolean was accepted"); }
+                        catch (ELException expected) {}
+                        try { new OverflowLogical(Object.class).getValue(context); throw new AssertionError("Selected overflow was accepted"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof NumberFormatException)) throw expected;
+                        }
+                        try { lazy.getValue(operandFailure); throw new AssertionError("Selected operand failure was swallowed"); }
+                        catch (IllegalArgumentException expected) {}
+                        try { new OverflowLiteral(Object.class).getType(context); throw new AssertionError("Overflow metadata was accepted"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof NumberFormatException)) throw expected;
+                        }
                         try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
                             output.writeObject(new E2(Object.class));
                         }
@@ -216,6 +255,14 @@ class ExpressionCompilerTest {
         byte[] invalidOperand=ExpressionCompiler.compile("demo.BadOperand","${(-true)+1}");
         assertTrue(ClassFile.of().verify(invalidOperand).isEmpty());
         Files.write(classes.resolve("demo/BadOperand.class"),invalidOperand);
+        for (var entry:java.util.Map.of("LazyLogical","${false or not empty -'2'}",
+                "AlteredLogical","${true and (1%0)}", "BadLogical","${true and 7}",
+                "OverflowLogical","${false or 9223372036854775808}",
+                "OverflowLiteral","${9223372036854775808}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty());
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources");
         Files.createDirectories(source);
         Files.writeString(source.resolve("Main.java"),main);

@@ -27,6 +27,18 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## COMP-003 · 2026-10-11 · Discarded numeric overflow failed during compilation
+
+- Symptom: compiling a lazy logical expression rejected an overflowing numeric literal
+  even when evaluation would discard that operand.
+- Minimal reproduction: compile and evaluate `${true or 9223372036854775808}`.
+- Cause: compiler validation parsed every literal before emitted branch selection.
+- Status: resolved by emitting numeric failures at their evaluation site. A discarded
+  operand raises no error; a selected invalid literal raises ELException with a
+  NumberFormatException cause, matching the interpreter.
+- Evidence: independent named-consumer tests cover discarded positive and negative
+  overflow plus selected overflow, and verify emitted class files.
+
 ## EL-016 · 2026-10-11 · Registered legacy property editors are not discovered
 
 - Symptom: factory coercion of nonempty text to a custom target fails even after
