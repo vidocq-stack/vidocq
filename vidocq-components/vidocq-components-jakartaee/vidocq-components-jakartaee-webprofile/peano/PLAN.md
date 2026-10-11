@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 root-resolution slice (2026-10-11): standalone identifiers emit API
+CompiledRootValueExpression subclasses. The Class constructor uses resolver lookup;
+the ELContext/Class constructor captures the root's ValueExpression once at creation.
+The protocol retains no context or syntax, and preserves lambda precedence, resolver
+flags, import fallback, getter-free metadata, root writes, evaluation events and captured
+binding identity/serialization. Independent allow/deny consumers exclude core/compiler.
+Dynamic operator operands, navigation and calls remain compile-time diagnostics for now.
+
 P7 comparison slice (2026-10-11): scalar equality/ordering, concatenation += and
 sequences compile directly. Comparisons retain reference identity and null shortcuts,
 Double/Long/Boolean/String precedence, NaN rules, conversion order and guarded failures.

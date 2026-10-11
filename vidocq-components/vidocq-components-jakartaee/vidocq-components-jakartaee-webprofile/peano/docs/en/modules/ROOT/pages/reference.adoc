@@ -23,7 +23,8 @@ for literal text and templates whose evaluation parts are scalar literal and ope
 It supports null, boolean, string, integer and floating values, minus, not/! and empty,
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
 % (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
-sequences are emitted directly. Identifiers and calls are rejected in this slice.
+sequences are emitted directly. Standalone root identifiers are also supported;
+navigation, calls and dynamic operator operands are rejected in this slice.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
 
@@ -71,6 +72,19 @@ promote from the actual selected values; empty inspects the actual selected valu
 Scalar comparison preserves reference/null shortcuts, numeric/boolean/text precedence,
 NaN behavior and guarded conversion errors. Concatenation evaluates both operands before
 String conversion. Sequences evaluate the left operand before returning the right value.
+
+Standalone identifiers extend the API CompiledRootValueExpression protocol.
+Their public Class constructor uses dynamic resolver lookup without VariableMapper
+capture. Their public ELContext/Class constructor captures the root binding at creation;
+changing the mapper later does not remap that expression. No context is retained.
+Lambda arguments take precedence over captured bindings. Root metadata, writes and
+references delegate to the captured ValueExpression or resolver without reading a getter.
+Root resolver writes do not coerce against a declared property type. Import lookup,
+resolution flags, error causes, evaluation events and binding serialization are preserved.
+Captured ValueExpressions and their payloads must be serializable; their implementation
+modules must remain available when restoring them.
+Generated root classes run with core and compiler absent in both reflection modes;
+resolver implementations retain responsibility for their own member access.
 
 == Legacy property-editor boundary
 

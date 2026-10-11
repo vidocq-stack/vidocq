@@ -67,6 +67,7 @@ public final class ExpressionCompiler {
      * Emits a public CompiledValueExpression subclass with a public Class constructor.
      * The constructor receives the expected result type; the caller owns output placement.
      * This slice accepts scalar literals and operators, including comparisons, concatenation and sequences.
+     * Standalone root identifiers also support resolver metadata and creation-time variable capture.
      * Other nodes fail at build time, with no interpreter fallback.
      *
      * @param binaryName qualified binary name of the application-owned emitted class
@@ -81,6 +82,9 @@ public final class ExpressionCompiler {
         if (!binaryName.contains(".") || !SourceVersion.isName(binaryName,SourceVersion.RELEASE_25))
             throw new IllegalArgumentException("Expected a qualified Java binary name: "+binaryName);
         Template template=ExpressionParser.parse(source);
+        if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
+                && evaluation.body() instanceof Ast.Identifier identifier)
+            return compileRoot(binaryName,source,identifier.name());
         StringBuilder identity=new StringBuilder(template.kind()==Template.Kind.LITERAL ? "literal:" : "expression:");
         ClassDesc rawType=STRING;
         for (Template.Part part:template.parts()) {
@@ -151,6 +155,33 @@ public final class ExpressionCompiler {
                     });
                 }
         });
+        } catch (IllegalArgumentException failure) {
+            throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
+        }
+    }
+
+    private static byte[] compileRoot(String binaryName,String source,String name) {
+        var identity=new StringBuilder("expression:");
+        key(identity,"identifier",name);
+        var rootBase=ClassDesc.of("io.vidocq.peano.spi.CompiledRootValueExpression");
+        try {
+            return ClassFile.of().build(ClassDesc.of(binaryName),builder-> {
+                builder.withFlags(ClassFile.ACC_PUBLIC|ClassFile.ACC_FINAL|ClassFile.ACC_SUPER)
+                        .withVersion(ClassFile.JAVA_25_VERSION,0).withSuperclass(rootBase);
+                builder.withField("serialVersionUID",LONG,
+                        field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
+                                .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
+                builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CLASS),ClassFile.ACC_PUBLIC,code-> {
+                    code.aload(0).ldc(source).ldc(identity.toString()).aload(1).ldc(name).aconst_null()
+                            .invokespecial(rootBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,STRING,CONTEXT)).return_();
+                });
+                builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CONTEXT,CLASS),ClassFile.ACC_PUBLIC,code-> {
+                    code.aload(0).ldc(source).ldc(identity.toString()).aload(2).ldc(name).aload(1)
+                            .ldc("creationContext").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
+                                    MethodTypeDesc.of(OBJECT,OBJECT,STRING)).checkcast(CONTEXT)
+                            .invokespecial(rootBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,STRING,CONTEXT)).return_();
+                });
+            });
         } catch (IllegalArgumentException failure) {
             throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
         }
