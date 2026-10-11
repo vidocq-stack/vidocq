@@ -93,6 +93,7 @@
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
         <mansart.version>0.4.0-SNAPSHOT</mansart.version>
         <knock.version>0.4.0-SNAPSHOT</knock.version>
@@ -114,6 +115,7 @@
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
+        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
         <!-- DevServices container providers (build-tooling only — plugin classpath, never runtime) -->
         <testcontainers.version>1.21.4</testcontainers.version>
@@ -375,6 +377,11 @@
                 <artifactId>jakarta.annotation-api</artifactId>
                 <version>${jakarta.annotation.version}</version>
             </dependency>
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>${jakarta.servlet.version}</version>
+            </dependency>
 
             <!-- Vauban -->
             <dependency>
@@ -462,6 +469,38 @@
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-chappe</artifactId>
                 <version>${cassini.version}</version>
+            </dependency>
+
+            <!-- Foy: Jakarta Servlet 6.1 on Chappe (Servlet extension) -->
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-api</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-core</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-chappe</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-cdi-vauban</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-processor</artifactId>
+                <version>${foy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-webcontexts</artifactId>
+                <version>${vauban.version}</version>
             </dependency>
 
             <!-- Cyrano — MicroProfile Rest Client 4.0 implementation -->

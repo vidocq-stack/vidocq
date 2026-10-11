@@ -25,6 +25,7 @@
         <module>vidocq-runtime-mansart-data-extension-codegen</module>
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
+        <module>vidocq-runtime-foy-servlet-extension</module>
     </modules>
 
     <build>
