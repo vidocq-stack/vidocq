@@ -62,6 +62,10 @@ public final class ExpressionCompiler {
             collectStrings(conditional.condition()); collectStrings(conditional.whenTrue()); collectStrings(conditional.whenFalse());
         } else if (node instanceof Ast.Property property) {
             collectStrings(property.base()); collectStrings(property.key());
+        } else if (node instanceof Ast.ListLiteral list) list.elements().forEach(this::collectStrings);
+        else if (node instanceof Ast.SetLiteral set) set.elements().forEach(this::collectStrings);
+        else if (node instanceof Ast.MapLiteral map) {
+            for (var entry:map.entries()) { collectStrings(entry.key()); collectStrings(entry.value()); }
         }
     }
 
@@ -312,6 +316,15 @@ public final class ExpressionCompiler {
             validate(conditional.condition(),identity,source);
             validate(conditional.whenTrue(),identity,source);
             validate(conditional.whenFalse(),identity,source);
+        } else if (node instanceof Ast.ListLiteral list) {
+            key(identity,"list",Integer.toString(list.elements().size()));
+            for (Ast element:list.elements()) validate(element,identity,source);
+        } else if (node instanceof Ast.SetLiteral set) {
+            key(identity,"set",Integer.toString(set.elements().size()));
+            for (Ast element:set.elements()) validate(element,identity,source);
+        } else if (node instanceof Ast.MapLiteral map) {
+            key(identity,"map",Integer.toString(map.entries().size()));
+            for (var entry:map.entries()) { validate(entry.key(),identity,source); validate(entry.value(),identity,source); }
         } else throw new ELException("Unsupported compiled expression node "+node.getClass().getSimpleName()
                 +" in template: "+source);
     }
@@ -335,6 +348,9 @@ public final class ExpressionCompiler {
 
     private static ClassDesc rawType(Ast node) {
         if (node instanceof Ast.Literal literal) return rawType(literal);
+        if (node instanceof Ast.ListLiteral) return ClassDesc.of("java.util.ArrayList");
+        if (node instanceof Ast.SetLiteral) return ClassDesc.of("java.util.LinkedHashSet");
+        if (node instanceof Ast.MapLiteral) return ClassDesc.of("java.util.LinkedHashMap");
         if (node instanceof Ast.Conditional conditional) {
             ClassDesc yes=rawType(conditional.whenTrue());
             return Objects.equals(yes,rawType(conditional.whenFalse())) ? yes : OBJECT;
@@ -393,6 +409,25 @@ public final class ExpressionCompiler {
 
     private void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
+        if (node instanceof Ast.ListLiteral list) { emitList(code,list.elements()); return; }
+        if (node instanceof Ast.SetLiteral set) {
+            emitList(code,set.elements());
+            int values=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            var type=ClassDesc.of("java.util.LinkedHashSet");
+            code.astore(values).new_(type).dup().aload(values)
+                    .invokespecial(type,"<init>",MethodTypeDesc.of(VOID,ClassDesc.of("java.util.Collection")));
+            return;
+        }
+        if (node instanceof Ast.MapLiteral map) {
+            var type=ClassDesc.of("java.util.LinkedHashMap");
+            int slot=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            code.new_(type).dup().invokespecial(type,"<init>",MethodTypeDesc.of(VOID)).astore(slot);
+            for (var entry:map.entries()) {
+                code.aload(slot); emit(code,entry.key()); emit(code,entry.value());
+                code.invokevirtual(type,"put",MethodTypeDesc.of(OBJECT,OBJECT,OBJECT)).pop();
+            }
+            code.aload(slot); return;
+        }
         var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
         if (node instanceof Ast.Identifier identifier) {
             code.aload(0).aload(1).ldc(identifier.name())
@@ -477,10 +512,18 @@ public final class ExpressionCompiler {
                 emit(code,unary.operand());
                 var absent=code.newLabel();
                 var done=code.newLabel();
+                var collection=code.newLabel(); var map=code.newLabel();
                 code.dup().ifnull(absent);
                 int value=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
-                code.astore(value).ldc("").aload(value).invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT))
-                        .goto_(done).labelBinding(absent).pop().iconst_1().labelBinding(done);
+                var collectionType=ClassDesc.of("java.util.Collection"); var mapType=ClassDesc.of("java.util.Map");
+                code.astore(value).aload(value).instanceOf(collectionType).ifne(collection)
+                        .aload(value).instanceOf(mapType).ifne(map)
+                        .ldc("").aload(value).invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT))
+                        .goto_(done).labelBinding(collection).aload(value).checkcast(collectionType)
+                        .invokeinterface(collectionType,"isEmpty",MethodTypeDesc.of(BOOLEAN)).goto_(done)
+                        .labelBinding(map).aload(value).checkcast(mapType)
+                        .invokeinterface(mapType,"isEmpty",MethodTypeDesc.of(BOOLEAN)).goto_(done)
+                        .labelBinding(absent).pop().iconst_1().labelBinding(done);
                 code.invokestatic(boxedBoolean,"valueOf",MethodTypeDesc.of(boxedBoolean,BOOLEAN));
             }
             default -> throw new ELException("Unsupported unary operator");
@@ -490,6 +533,18 @@ public final class ExpressionCompiler {
     private static void number(CodeBuilder code,long value) {
         var boxed=ClassDesc.of("java.lang.Long");
         code.loadConstant(value).invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,LONG));
+    }
+
+    private void emitList(CodeBuilder code,java.util.List<Ast> elements) {
+        var type=ClassDesc.of("java.util.ArrayList");
+        int slot=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        code.new_(type).dup().loadConstant(elements.size())
+                .invokespecial(type,"<init>",MethodTypeDesc.of(VOID,ClassDesc.ofDescriptor("I"))).astore(slot);
+        for (Ast element:elements) {
+            code.aload(slot); emit(code,element);
+            code.invokevirtual(type,"add",MethodTypeDesc.of(BOOLEAN,OBJECT)).pop();
+        }
+        code.aload(slot);
     }
 
     private static void floatingOperand(CodeBuilder code,int slot,java.lang.classfile.Label floating) {
@@ -581,6 +636,7 @@ public final class ExpressionCompiler {
         boolean equality=operator==TokenKind.EQUAL || operator==TokenKind.NOT_EQUAL;
         var truth=code.newLabel(); var falsity=code.newLabel(); var boxed=code.newLabel();
         var floating=code.newLabel(); var integral=code.newLabel(); var bool=code.newLabel(); var text=code.newLabel();
+        var fallback=code.newLabel();
         var start=code.newLabel(); var end=code.newLabel(); var handler=code.newLabel(); var done=code.newLabel();
         code.labelBinding(start).aload(left).aload(right).if_acmpeq(equality
                 || operator==TokenKind.LESS_EQUAL || operator==TokenKind.GREATER_EQUAL ? truth : falsity);
@@ -592,7 +648,7 @@ public final class ExpressionCompiler {
         pairType(code,left,right,longType,integral);
         if (equality) pairType(code,left,right,booleanType,bool);
         pairType(code,left,right,STRING,text);
-        code.goto_(bool).labelBinding(floating);
+        code.goto_(fallback).labelBinding(floating);
         converted(code,left,doubleType);
         code.invokevirtual(doubleType,"doubleValue",MethodTypeDesc.of(DOUBLE));
         converted(code,right,doubleType);
@@ -625,6 +681,27 @@ public final class ExpressionCompiler {
         else {
             code.invokevirtual(STRING,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),STRING));
             orderedBranch(code,operator,truth);
+        }
+        code.goto_(falsity).labelBinding(fallback);
+        if (equality) code.aload(left).aload(right).invokevirtual(OBJECT,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
+        else {
+            var comparable=ClassDesc.of("java.lang.Comparable");
+            var rightComparable=code.newLabel();
+            code.aload(left).instanceOf(comparable).ifeq(rightComparable)
+                    .aload(left).checkcast(comparable).aload(right)
+                    .invokeinterface(comparable,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),OBJECT));
+            orderedBranch(code,operator,truth);
+            code.goto_(falsity).labelBinding(rightComparable);
+            var noncomparable=code.newLabel();
+            code.aload(right).instanceOf(comparable).ifeq(noncomparable)
+                    .aload(right).checkcast(comparable).aload(left)
+                    .invokeinterface(comparable,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),OBJECT))
+                    .invokestatic(ClassDesc.of("java.lang.Integer"),"signum",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),ClassDesc.ofDescriptor("I")))
+                    .ineg();
+            orderedBranch(code,operator,truth);
+            var exception=ClassDesc.of("jakarta.el.ELException");
+            code.goto_(falsity).labelBinding(noncomparable).new_(exception).dup().ldc("Operands are not comparable")
+                    .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow();
         }
         code.goto_(falsity).labelBinding(truth).iconst_1().goto_(boxed)
                 .labelBinding(falsity).iconst_0().labelBinding(boxed);

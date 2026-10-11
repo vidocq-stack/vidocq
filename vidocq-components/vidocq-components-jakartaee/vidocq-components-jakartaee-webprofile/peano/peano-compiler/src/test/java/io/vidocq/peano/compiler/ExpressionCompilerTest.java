@@ -70,7 +70,12 @@ class ExpressionCompilerTest {
                 "${1>(0/0)}", "${1<=(0/0)}", "${-0.0==0.0}",
                 "${(true ? '7' : 1.5)==7}", "${(false ? null : 1)<2}",
                 "${'x'+=7}", "${null+=null}", "${'x'+=''=='x'}", "${empty (''+='')}",
-                "${1;2}", "${1;null}", "${-(1;'1.5')}", "${(1;'1.5')+2}");
+                "${1;2}", "${1;null}", "${-(1;'1.5')}", "${(1;'1.5')+2}",
+                "${[]}", "${[1,null,'x']}", "${{}}", "${{1,2,1}}", "${{'x':1,'x':2,null:3}}",
+                "${[[1],{'x':[2,null]}]}", "${empty []}", "${empty {}}", "${empty {'x':1}}",
+                "${empty (true ? [] : 7)}", "${[1,2]==[1,2]}", "${[1]!=[2]}",
+                "${{'x':1}=={'x':1}}", "${{1,2}=={2,1}}", "${[]==null}",
+                "${true ? [1] : [2]}", "collection=${[1,null]}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -333,6 +338,22 @@ class ExpressionCompilerTest {
                             throw new AssertionError("Concat operand/conversion order: "+stringOrder);
                         try { new FailingSequence(Object.class).getValue(context); throw new AssertionError("Sequence skipped left failure"); }
                         catch (ELException expected) {}
+                        var collectionOrder=new java.util.ArrayList<String>();
+                        var collectionContext=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class) collectionOrder.add(String.valueOf(value));
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        if (!new OrderedMap(Object.class).getValue(collectionContext).equals(java.util.Map.of(-1L,-2L,-3L,-4L))
+                                || !collectionOrder.equals(java.util.List.of("1","2","3","4")))
+                            throw new AssertionError("Map key/value evaluation order: "+collectionOrder);
+                        var fresh=new FreshList(Object.class);
+                        var first=(java.util.List)fresh.getValue(context); first.add(99);
+                        if (!fresh.getValue(context).equals(java.util.List.of(1L)))
+                            throw new AssertionError("Collection literal retained mutation");
+                        try { new BadCollectionComparison(Object.class).getValue(context); throw new AssertionError("Noncomparable lists accepted"); }
+                        catch (ELException expected) {}
                         try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
                             output.writeObject(new E2(Object.class));
                         }
@@ -367,6 +388,12 @@ class ExpressionCompilerTest {
         for (var entry:java.util.Map.of("StringEquality","${'x'=='x'}", "CachedEquality","${1==1}",
                 "OrderedComparison","${2<3}", "OrderedConcat","${1 += ('x'+=2)}",
                 "FailingSequence","${1%0;7}", "NullEquality","${1==2}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty());
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
+        for (var entry:java.util.Map.of("OrderedMap","${{-'1':-'2',-'3':-'4'}}",
+                "FreshList","${[1]}", "BadCollectionComparison","${[1]<[2]}").entrySet()) {
             byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
             assertTrue(ClassFile.of().verify(bytes).isEmpty());
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);

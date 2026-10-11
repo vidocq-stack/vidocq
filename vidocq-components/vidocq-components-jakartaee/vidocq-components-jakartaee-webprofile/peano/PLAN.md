@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 collection-literal slice (2026-10-11): lists, sets and maps emit fresh ArrayList,
+LinkedHashSet and LinkedHashMap values. Sets evaluate all elements before deduplication;
+maps evaluate each key and value before insertion, retaining duplicate-key replacement
+and insertion order. Identity includes ordered element/entry counts and structure.
+Empty checks collection/map contents; equality falls back to Object.equals and ordered
+comparison uses Comparable precedence or the specified failure. Independent consumers
+verify nested/null/duplicate values, conversion order, metadata and mutation isolation.
+
 P7 property-navigation slice (2026-10-11): standalone property trees compile to direct
 evaluation and locate methods, backed by API CompiledPropertyValueExpression. Distinct
 root and key names are captured once in traversal order. Null base/key reads short-circuit;
