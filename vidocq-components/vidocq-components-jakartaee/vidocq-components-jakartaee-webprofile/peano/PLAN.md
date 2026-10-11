@@ -9,8 +9,8 @@
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
 > Direct methods, runtime annotation literals and method metadata are implemented for selected models.
 > Build-time literal/constant template compilation through the Class-File API is implemented.
-> PropertyEditor conversion
-> and certification remain open. Decisions marked
+> Optional PropertyEditor registry conversion is implemented; certification remains open.
+> Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
 
@@ -206,8 +206,8 @@ reference and primitive array targets. This narrow exception requires only
 P1 implements scalar and array coercions. P2 routes operand conversion through
 the evaluation context; functional-interface adaptation belongs with lambdas in P4. PropertyEditor
 conversion through an application-owned ELResolver is verified. Automatic registry
-discovery remains the open compatibility issue EL-016 because Peano forbids
-`java.desktop` and `java.beans` introspection. Unsupported conversions raise ELException.
+discovery is available through the approved optional peano-beans-compat module only.
+Core remains free of `java.desktop`; unsupported conversions raise ELException.
 
 P3 metadata fallback (2026-10-10): ELResolver exposes invocation but no method-metadata
 lookup SPI. MethodInfo/MethodReference temporarily use public method signature and
@@ -438,18 +438,20 @@ Two named-consumer proofs now cover the existing architecture:
   constructs a fresh editor. Failed empty text returns null, invalid nonempty text
   raises ELException, and the integration works in deny mode without core member lookup.
 
-The core keeps its current dependencies and does not discover PropertyEditorManager
-registrations. The explicit converter is an integration recipe, not automatic editor
-support or proof of full section 1.25.9 conformance when legacy editors are available.
-EL-016 records the remaining limitation.
+Approved implementation (2026-10-11): the opt-in `beans-compat` Maven profile builds
+peano-beans-compat (`io.vidocq.peano.beans.compat`). Only that module requires java.desktop
+and discovers PropertyEditorManager registrations. Core uses the API TypeConversionProvider
+service after built-in conversions and before the unsupported-target empty-text fallback.
+Providers run by descending priority, then class name; the legacy provider has lowest
+priority. Both factory and context coercion use this path, with context-local converters
+retaining precedence. A handled null is distinct from an unhandled conversion.
 
-Automatic compatibility remains **to validate**. An isolated optional resolver module
-could require java.desktop and perform editor-registry discovery only when installed.
-It would need an explicit exception to the project's java.beans prohibition. Covering
-ExpressionFactory.coerceToType as well as contexts would additionally require a
-conversion-provider SPI or a separate compatibility factory. Neither is introduced by
-this boundary study. Prefer the existing application-owned resolver until that choice
-is approved; P7 expression compilation does not depend on it.
+Each call obtains a fresh editor and observes current registrations. Successful empty
+text conversion returns the editor result; failed empty text returns null; invalid
+nonempty text raises ELException with its cause. JDK-created editor classes may need a
+package export qualified to java.desktop, without opens. Installing this optional artifact
+explicitly enables registry compatibility even in deny mode. Distributions without it
+retain the tested desktop-free boot layer. EL-016 is resolved for opt-in distributions.
 
 ## Open questions
 

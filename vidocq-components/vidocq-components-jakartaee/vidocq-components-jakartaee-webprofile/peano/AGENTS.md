@@ -88,6 +88,9 @@ peano-compiler ← Build-time Class-File API literal/constant expression compila
    they depend on Peano (or only on the `jakarta.el` API).
 2. **No `java.desktop`** — do not use `java.beans` introspection in Peano code; the
    accessor logic (getter/setter/record naming) is Peano's own.
+   Approved exception (2026-10-11): the opt-in `peano-beans-compat` module alone may
+   require `java.desktop` and use the JDK PropertyEditor registry. Installing it enables
+   that compatibility path in both reflection modes; other modules remain desktop-free.
 3. **The interpreter is the oracle** — every generated accessor table and every compiled
    expression is tested differentially against the interpreter / reflective path.
 4. **No bytecode generation at run time** unless PLAN.md open question 1 is decided

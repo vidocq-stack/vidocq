@@ -118,6 +118,8 @@ public final class Coercions {
             }
             return result;
         }
+        var registered=RegisteredConversions.discover(value,type);
+        if (registered.handled()) return registered.value();
         if ("".equals(value) && !type.isPrimitive()) {
             return null;
         }

@@ -18,7 +18,7 @@ continue to work in deny mode.
 
 Register custom conversions with ELManager.addELResolver or StandardELContext.addELResolver.
 An application's resolver can use its own legacy PropertyEditor when the application
-explicitly requires java.desktop; Peano itself keeps no such dependency.
+explicitly requires java.desktop; Peano's core modules keep no such dependency.
 Inside that resolver, implement the conversion method with a fresh editor per call:
 
 [source,java]
@@ -38,8 +38,10 @@ public <T> T convertToType(ELContext context, Object value, Class<T> target) {
 ----
 
 Value and ValueEditor belong to the application. Other resolver operations remain
-unresolved. Automatic PropertyEditorManager discovery is not implemented (EL-016);
-factory coercion does not inherit a context-local converter.
+unresolved. Factory coercion does not inherit a context-local converter.
+For automatic PropertyEditorManager discovery in both factory and context conversion,
+build with `-Pbeans-compat` and include `peano-beans-compat` on the runtime module path.
+Only this optional module requires java.desktop; see xref:reference.adoc[the compatibility rules].
 
 == Prerequisites
 

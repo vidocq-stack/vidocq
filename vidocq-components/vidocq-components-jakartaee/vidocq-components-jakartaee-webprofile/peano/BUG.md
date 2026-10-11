@@ -35,8 +35,11 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   ValueEditor for Value, then call factory.coerceToType("7", Value.class).
 - Cause: Peano intentionally has no java.beans dependency or editor-registry lookup.
   EL 6.0 section 1.25.9 describes the editor path; section 1.25 permits custom converters.
-- Status: open compatibility limitation. An application-owned ELResolver converter
-  works; automatic discovery needs a separately approved compatibility design.
+- Status: resolved by the approved opt-in peano-beans-compat artifact. Installing it
+  enables registered editors for factory and context conversion. Without it, discovery
+  remains unavailable by design and explicit application converters remain supported.
+- Evidence: CompatibilityModuleTest covers presence/absence, both reflection modes,
+  registry changes, input failures, resolver precedence and fresh concurrent editors.
 - Evidence: PropertyProcessorTest's editor integration scenario verifies the missing
   factory lookup and the working explicit converter, including empty/invalid input.
 

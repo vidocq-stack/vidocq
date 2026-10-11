@@ -1,0 +1,14 @@
+name: beans-compat
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  optional-editor-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+      - name: Verify optional JavaBeans compatibility
+        run: ./mvnw -ntp -Pbeans-compat clean install

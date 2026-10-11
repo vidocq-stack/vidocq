@@ -103,6 +103,12 @@
     </dependencyManagement>
 
     <profiles>
+        <profile>
+            <id>beans-compat</id>
+            <modules>
+                <module>peano-beans-compat</module>
+            </modules>
+        </profile>
         <!--
             TCK harmonisation: the official Jakarta Expression Language 6.0 TCK
             runner joins the reactor only when this profile is active.

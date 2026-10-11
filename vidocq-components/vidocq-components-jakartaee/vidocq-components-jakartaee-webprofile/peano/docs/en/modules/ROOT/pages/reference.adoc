@@ -62,10 +62,21 @@ supported scalar trees.
 
 == Legacy property-editor boundary
 
-Peano does not require java.desktop and does not discover PropertyEditorManager
-registrations. Nonempty text without a supported converter raises ELException;
-empty text to an otherwise unsupported reference target returns null.
-Automatic legacy editor discovery remains compatibility issue EL-016.
+Core, API, processor and compiler do not require java.desktop. Optional artifact
+`io.vidocq.peano:peano-beans-compat` (module `io.vidocq.peano.beans.compat`) enables
+PropertyEditorManager discovery. Build it with `./mvnw -ntp -Pbeans-compat install`
+and include its jar on the runtime module path; service binding can resolve java.desktop.
+Without that artifact, nonempty text without a converter raises ELException and empty
+text to an otherwise unsupported reference target returns null.
+
+The API TypeConversionProvider service runs after built-in coercions and before the
+unsupported-target empty-text fallback. Providers run by descending priority and class
+name; the editor provider has lowest priority. Context-local ELResolver converters win.
+Factory and context conversion both use installed providers. Each editor conversion
+obtains a fresh editor, observes registry updates and returns successful empty-text results.
+Failed empty text returns null; invalid nonempty text raises ELException with its cause.
+Editor packages instantiated by the JDK may need exports qualified to java.desktop.
+Installing the optional artifact enables registry compatibility in both reflection modes.
 
 An application that already uses java.beans can explicitly require java.desktop
 and add its own ELResolver converter to the context. Construct an editor for each
@@ -75,8 +86,8 @@ on other invalid text, raise ELException. This explicit integration is verified 
 a closed application module under reflection-denial mode.
 
 ELContext conversion can use that resolver; ExpressionFactory.coerceToType has no
-caller context and does not inherit context-local converters. The integration does
-not add automatic editor support to the factory.
+caller context and does not inherit context-local converters. Use the optional artifact
+when automatic registry discovery is needed for factory conversion.
 
 See https://jakarta.ee/specifications/expression-language/6.0/jakarta-expression-language-spec-6.0[EL 6.0 sections 1.25 and 1.25.9].
 
