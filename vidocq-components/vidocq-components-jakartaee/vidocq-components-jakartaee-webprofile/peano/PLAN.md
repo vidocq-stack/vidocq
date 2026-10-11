@@ -1,6 +1,6 @@
 # Peano — Design plan
 
-> Status: **implementation in progress (P9)**. This document is the design of record for Peano, the
+> Status: **P0–P9 implementation baseline complete**. This document is the design of record for Peano, the
 > Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
 > now implements grammar, evaluation, resolvers, lambdas, collection pipelines,
 > evaluation events, expression serialization and a compiled Predicate adapter.
@@ -8,7 +8,8 @@
 > The peano-api service contract and direct accessor-table resolver are implemented.
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
 > Direct methods, runtime annotation literals and method metadata are implemented for selected models.
-> Build-time literal/constant template compilation through the Class-File API is implemented.
+> Build-time ValueExpression/MethodExpression compilation through the Class-File API is implemented.
+> The modular JMH corpus and Vidocq provider/codegen integration are delivered.
 > Optional PropertyEditor registry conversion is implemented; certification remains open.
 > Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
@@ -140,8 +141,9 @@ timing. Compiled expression emission runs only at process-classes. Raw baseline 
 and limitations are recorded in BENCH.md. The expanded corpus covers arithmetic,
 generated-vs-reflective properties, lambdas and collections, with semantic agreement
 before timing and raw samples retained. Runtime integration is implemented in Vidocq
-PR #226, including the codegen bundle, CLI and compiled descriptor registration;
-its assembled-runtime checks are monitored separately.
+PR #226 (merged), including the codegen bundle, CLI and compiled descriptor registration.
+Its full reactor and five MicroProfile validation runners passed before merge; this
+does not constitute formal certification of the assembled runtime.
 
 P7 method-expression slice (2026-10-11): compileMethod emits one MethodExpression
 class for literal text, variable delegates and bare/inline property methods. A private

@@ -3,7 +3,7 @@
 ![Peano logo](docs/en/modules/ROOT/images/peano-logo.png)
 
 **Jakarta Expression Language 6.0** implementation for the
-[Vidocq](https://codeberg.org/Vidocq/vidocq) runtime.
+[Vidocq](https://codefloe.com/Vidocq/vidocq) runtime.
 
 > Named after **Giuseppe Peano** (1858–1932), the Turin logician who gave
 > mathematics a rigorous formal notation — the `∈` symbol, the Peano axioms:
@@ -11,7 +11,9 @@
 
 ## Status
 
-🚧 **Implementation in progress (P9)** — the lexer and recursive-descent parser build
+**P0–P9 implementation baseline complete.** The project remains on the 0.4.0-SNAPSHOT
+development line; formal certification and release are separate steps.
+The lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
@@ -99,6 +101,8 @@ Chained callable results and lambda construction compile with lexical argument c
 immediate invocation and nested parameter shadowing. The opt-in peano-bench harness
 compares warmed arithmetic evaluation and repeated expression creation with Expressly;
 initial results are recorded in [BENCH.md](BENCH.md).
+The Vidocq provider extension, CLI entry and accessor codegen integration are delivered
+in [Vidocq #226](https://codefloe.com/Vidocq/vidocq/pulls/226).
 ExpressionCompiler.compileMethod emits MethodExpression classes for literals,
 variables and bare/inline property references, with generated metadata and the existing
 policy-controlled public-member fallback.

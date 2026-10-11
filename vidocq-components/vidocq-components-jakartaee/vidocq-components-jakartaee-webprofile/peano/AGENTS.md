@@ -8,7 +8,8 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > evaluated mechanically. The Peano project implements **Jakarta Expression Language
 > 6.0**: it parses `${...}` / `#{...}` into an unambiguous tree and evaluates it.
 
-**Status: implementation in progress.** Read [PLAN.md](PLAN.md) before any change — it is the design of
+**Status: P0–P9 implementation baseline complete; certification/release remain separate.**
+Read [PLAN.md](PLAN.md) before any change — it is the design of
 record (spec scope, codegen doctrine, Java Modules layout, integration points, TCK plan,
 milestones P0–P9, open questions). Structural decisions marked "to validate" there need
 the maintainer's sign-off first.
