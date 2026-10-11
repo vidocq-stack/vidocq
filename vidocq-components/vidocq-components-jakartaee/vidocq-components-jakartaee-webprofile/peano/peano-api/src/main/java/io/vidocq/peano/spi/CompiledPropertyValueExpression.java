@@ -81,6 +81,30 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
         return value;
     }
 
+    protected final java.util.function.Consumer<Object> prepareRootWrite(ELContext context,String name) {
+        if (context.isLambdaArgument(name)) throw new PropertyNotWritableException("Lambda arguments are read-only");
+        ValueExpression binding=bindings.get(name);
+        if (binding!=null) {
+            var reference=binding.getValueReference(context);
+            if (reference!=null) return new LocationWrite(context,new ValueReference(reference.getBase(),reference.getProperty()));
+            if (binding.isReadOnly(context)) throw new PropertyNotWritableException("Variable is read-only");
+            return new BindingWrite(context,binding);
+        }
+        return new LocationWrite(context,new ValueReference(null,name));
+    }
+
+    protected final java.util.function.Consumer<Object> preparePropertyWrite(ELContext context,Object base,Object key) {
+        return new LocationWrite(context,new ValueReference(base,key));
+    }
+
+    private record LocationWrite(ELContext context,ValueReference location) implements java.util.function.Consumer<Object> {
+        public void accept(Object value) { CompiledRootValueExpression.writeReference(context,location,value); }
+    }
+
+    private record BindingWrite(ELContext context,ValueExpression binding) implements java.util.function.Consumer<Object> {
+        public void accept(Object value) { binding.setValue(context,value); }
+    }
+
     @Override protected final Object bindingIdentity() { return bindings; }
 
     @Override public final Class<?> getType(ELContext context) {

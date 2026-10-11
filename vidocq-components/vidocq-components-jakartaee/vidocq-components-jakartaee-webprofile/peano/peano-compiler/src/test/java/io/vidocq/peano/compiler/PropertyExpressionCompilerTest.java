@@ -65,6 +65,14 @@ class PropertyExpressionCompilerTest {
             assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("AssignProperty","${bean.value='7'}", "AssignRoot","${namespace='9'}",
+                "AssignAlias","${alias='8'}", "AssignLocked","${locked=model.mark()}",
+                "AssignNull","${nil.value=model.mark()}", "AssignFrozen","${bean.value=model.replace()}",
+                "AssignInvalid","${1=model.mark()}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
         try (var resource=getClass().getResourceAsStream("/property-app/Main.java")) {
             Files.copy(resource,source.resolve("Main.java"));

@@ -40,11 +40,13 @@ public class Main {
             }
             public boolean isReadOnly(ELContext c,Object b,Object p) {
                 calls.add("readonly:"+p);
+                if (b==null && roots.containsKey(p)) c.setPropertyResolved(b,p);
                 if (b instanceof Map<?,?> m && m.containsKey(p)) c.setPropertyResolved(b,p);
                 return false;
             }
             public void setValue(ELContext c,Object b,Object p,Object v) {
                 calls.add("write:"+p);
+                if (b==null && roots.containsKey(p)) { c.setPropertyResolved(b,p); roots.put((String)p,v); return; }
                 if (b instanceof Map m && m.containsKey(p)) { c.setPropertyResolved(b,p); m.put(p,v); }
             }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return Object.class; }
@@ -56,6 +58,8 @@ public class Main {
                     if ("box".equals(method)) { c.setPropertyResolved(base,method); return model.box(); }
                     if ("nothing".equals(method)) { c.setPropertyResolved(base,method); return null; }
                     if ("boom".equals(method)) { c.setPropertyResolved(base,method); throw new IllegalStateException("model failure"); }
+                    if ("mark".equals(method)) { c.setPropertyResolved(base,method); return 1L; }
+                    if ("replace".equals(method)) { c.setPropertyResolved(base,method); roots.put("bean",new HashMap<>(Map.of("value",0L))); return 6L; }
                 }
                 return null;
             }
@@ -80,7 +84,7 @@ public class Main {
         long sum(Object[] values) { return ((Number)values[0]).longValue()+((Number)values[1]).longValue(); }
         Map<String,Object> box() { return new HashMap<>(Map.of("value",42L)); }
     }
-    static final class Binding extends ValueExpression {
+    static class Binding extends ValueExpression {
         private static final long serialVersionUID=1;
         final Object value;
         Binding(Object value) { this.value=value; }
@@ -93,6 +97,12 @@ public class Main {
         public boolean isLiteralText() { return false; }
         public boolean equals(Object o) { return o instanceof Binding b && Objects.equals(value,b.value); }
         public int hashCode() { return Objects.hashCode(value); }
+    }
+    static final class Alias extends Binding {
+        private static final long serialVersionUID=1;
+        final Map<String,Object> bean;
+        Alias(Map<String,Object> bean) { super(bean); this.bean=bean; }
+        public ValueReference getValueReference(ELContext context) { return new ValueReference(bean,"value"); }
     }
     static void check(boolean condition,String message) { if (!condition) throw new AssertionError(message); }
     public static void main(String[] args) throws Exception {
@@ -216,6 +226,33 @@ public class Main {
                     "Serialized composite metadata changed");
             check(restored.getValue(context).equals("value=9;child"),"Serialized composite bindings lost");
         }
+        context.roots.put("bean",bean); context.roots.put("namespace",0L); context.calls.clear();
+        var assign=new AssignProperty(Object.class);
+        check(assign.getValue(context).equals("7") && bean.get("value").equals(7L)
+                && context.calls.equals(List.of("read:bean","type:value","convert:7","write:value")),"Assignment returned coerced value or read target getter: "+context.calls);
+        check(assign.getType(context)==String.class && assign.isReadOnly(context) && assign.getValueReference(context)==null,"Assignment metadata mismatch");
+        context.calls.clear();
+        check(new AssignRoot(Object.class).getValue(context).equals("9") && context.roots.get("namespace").equals("9")
+                && context.calls.equals(List.of("readonly:namespace","write:namespace")),"Namespace assignment coerced type: "+context.calls);
+        context.bindings.put("alias",new Alias(bean)); context.calls.clear();
+        check(new AssignAlias(context,Object.class).getValue(context).equals("8") && bean.get("value").equals(8L),"Captured alias reference ignored");
+        context.bindings.put("locked",new Binding(1L)); context.calls.clear();
+        try { new AssignLocked(context,Object.class).getValue(context); throw new AssertionError("Readonly variable assigned"); }
+        catch (PropertyNotWritableException expected) {}
+        check(context.calls.isEmpty(),"Readonly variable evaluated RHS");
+        try { new AssignNull(Object.class).getValue(context); throw new AssertionError("Null assignment target accepted"); }
+        catch (PropertyNotFoundException expected) {}
+        check(context.calls.equals(List.of("read:nil")),"Null assignment evaluated RHS");
+        context.calls.clear();
+        try { new AssignInvalid(Object.class).getValue(context); throw new AssertionError("Literal assignment target accepted"); }
+        catch (PropertyNotWritableException expected) {}
+        check(context.calls.isEmpty(),"Invalid lvalue evaluated RHS");
+        context.enterLambdaScope(Map.of("namespace",1));
+        try { new AssignRoot(Object.class).getValue(context); throw new AssertionError("Lambda argument assigned"); }
+        catch (PropertyNotWritableException expected) {}
+        context.exitLambdaScope();
+        check(new AssignFrozen(Object.class).getValue(context).equals(6L) && bean.get("value").equals(6L)
+                && ((Map)context.roots.get("bean")).get("value").equals(0L),"Assignment reevaluated target after RHS");
         var failure=new Context() { public ELResolver getELResolver() { throw new IllegalStateException("resolver"); } };
         try { property.getValue(failure); throw new AssertionError("Path resolver failure swallowed"); }
         catch (ELException expected) { check(expected.getCause() instanceof IllegalStateException,"Path resolver cause lost"); }

@@ -201,7 +201,8 @@ public final class ExpressionCompiler {
         return switch (node) {
             case Ast.Identifier _, Ast.Property _, Ast.Call _ -> true;
             case Ast.Unary unary -> containsResolved(unary.operand());
-            case Ast.Binary binary -> containsResolved(binary.left()) || containsResolved(binary.right());
+            case Ast.Binary binary -> binary.operator().kind()==TokenKind.ASSIGN
+                    || containsResolved(binary.left()) || containsResolved(binary.right());
             case Ast.Conditional conditional -> containsResolved(conditional.condition())
                     || containsResolved(conditional.whenTrue()) || containsResolved(conditional.whenFalse());
             case Ast.ListLiteral list -> list.elements().stream().anyMatch(ExpressionCompiler::containsResolved);
@@ -345,7 +346,7 @@ public final class ExpressionCompiler {
         } else if (node instanceof Ast.Binary binary
                 && (arithmetic(binary.operator().kind()) || logical(binary.operator().kind())
                     || comparison(binary.operator().kind()) || binary.operator().kind()==TokenKind.CONCAT
-                    || binary.operator().kind()==TokenKind.SEMICOLON)) {
+                    || binary.operator().kind()==TokenKind.SEMICOLON || binary.operator().kind()==TokenKind.ASSIGN)) {
             key(identity,"binary",binary.operator().kind().name());
             validate(binary.left(),identity,source,names);
             validate(binary.right(),identity,source,names);
@@ -399,6 +400,7 @@ public final class ExpressionCompiler {
                 return ClassDesc.of("java.lang.Boolean");
             if (binary.operator().kind()==TokenKind.CONCAT) return STRING;
             if (binary.operator().kind()==TokenKind.SEMICOLON) return rawType(binary.right());
+            if (binary.operator().kind()==TokenKind.ASSIGN) return rawType(binary.right());
             if (dynamicNumber(binary.left()) || dynamicNumber(binary.right())) return OBJECT;
             if (rawType(binary.left())==null && rawType(binary.right())==null)
                 return ClassDesc.of("java.lang.Long");
@@ -514,7 +516,8 @@ public final class ExpressionCompiler {
             return;
         }
         if (node instanceof Ast.Binary binary) {
-            if (logical(binary.operator().kind())) emitLogical(code,binary);
+            if (binary.operator().kind()==TokenKind.ASSIGN) emitAssignment(code,binary,pathBase);
+            else if (logical(binary.operator().kind())) emitLogical(code,binary);
             else if (comparison(binary.operator().kind())) emitComparison(code,binary);
             else if (binary.operator().kind()==TokenKind.CONCAT) emitConcat(code,binary);
             else if (binary.operator().kind()==TokenKind.SEMICOLON) {
@@ -596,6 +599,30 @@ public final class ExpressionCompiler {
     private static void number(CodeBuilder code,long value) {
         var boxed=ClassDesc.of("java.lang.Long");
         code.loadConstant(value).invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,LONG));
+    }
+
+    private void emitAssignment(CodeBuilder code,Ast.Binary binary,ClassDesc pathBase) {
+        var consumer=ClassDesc.of("java.util.function.Consumer");
+        if (binary.left() instanceof Ast.Identifier identifier) {
+            code.aload(0).aload(1).ldc(identifier.name())
+                    .invokespecial(pathBase,"prepareRootWrite",MethodTypeDesc.of(consumer,CONTEXT,STRING));
+        } else if (binary.left() instanceof Ast.Property property) {
+            int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            emit(code,property.base()); code.astore(base); requirePresent(code,base,"null base");
+            int key=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            emit(code,property.key()); code.astore(key); requirePresent(code,key,"null property");
+            code.aload(0).aload(1).aload(base).aload(key)
+                    .invokespecial(pathBase,"preparePropertyWrite",MethodTypeDesc.of(consumer,CONTEXT,OBJECT,OBJECT));
+        } else {
+            var exception=ClassDesc.of("jakarta.el.PropertyNotWritableException");
+            code.new_(exception).dup().ldc("Assignment target is not an lvalue")
+                    .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow();
+            return;
+        }
+        int writer=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        int value=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        code.astore(writer); emit(code,binary.right()); code.astore(value);
+        code.aload(writer).aload(value).invokeinterface(consumer,"accept",MethodTypeDesc.of(VOID,OBJECT)).aload(value);
     }
 
     private void emitList(CodeBuilder code,java.util.List<Ast> elements) {

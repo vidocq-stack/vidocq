@@ -92,18 +92,22 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
         Objects.requireNonNull(context,"context");
         if (context.isLambdaArgument(name)) throw new PropertyNotWritableException("Lambda arguments are read-only");
         if (binding!=null) { binding.setValue(context,value); return; }
-        var location=effectiveRoot(context);
+        writeReference(context,new ValueReference(null,name),value);
+    }
+
+    static void writeReference(ELContext context,ValueReference reference,Object value) {
+        var location=effectiveRoot(context,reference);
         if (location==null) throw new PropertyNotWritableException("An imported class is read-only");
         Object converted=value;
         if (location.getBase()!=null) {
             context.setPropertyResolved(false);
-            Class<?> target=guarded(()->context.getELResolver().getType(context,location.getBase(),name));
+            Class<?> target=guarded(()->context.getELResolver().getType(context,location.getBase(),location.getProperty()));
             if (target!=null && context.isPropertyResolved()) converted=context.convertToType(value,target);
         }
         context.setPropertyResolved(false);
         Object assigned=converted;
-        guarded(()-> { context.getELResolver().setValue(context,location.getBase(),name,assigned); return null; });
-        if (!context.isPropertyResolved()) throw new PropertyNotWritableException("Unresolved property "+name);
+        guarded(()-> { context.getELResolver().setValue(context,location.getBase(),location.getProperty(),assigned); return null; });
+        if (!context.isPropertyResolved()) throw new PropertyNotWritableException("Unresolved property "+location.getProperty());
     }
 
     @Override public final ValueReference getValueReference(ELContext context) {
@@ -114,13 +118,18 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     private ValueReference effectiveRoot(ELContext context) {
+        return effectiveRoot(context,new ValueReference(null,name));
+    }
+
+    private static ValueReference effectiveRoot(ELContext context,ValueReference reference) {
+        if (reference.getBase()!=null || !(reference.getProperty() instanceof String name)) return reference;
         context.setPropertyResolved(false);
         guarded(()->context.getELResolver().isReadOnly(context,null,name));
-        if (context.isPropertyResolved()) return new ValueReference(null,name);
+        if (context.isPropertyResolved()) return reference;
         Class<?> owner=context.getImportHandler().resolveStatic(name);
         if (owner!=null) return new ValueReference(new ELClass(owner),name);
         if (context.getImportHandler().resolveClass(name)!=null) return null;
-        return new ValueReference(null,name);
+        return reference;
     }
 
     private static Object read(ELContext context,Object base,String name) {

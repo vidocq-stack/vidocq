@@ -89,6 +89,8 @@ Captured roots/properties also compose in templates, logic, conditionals, concat
 sequences and collections. Runtime arithmetic covers BigInteger/BigDecimal promotion
 and wrapper-preserving unary minus. Dynamic comparisons preserve numeric, enum, string
 and Comparable domains. Inline member calls delegate to the supplied resolver.
+Assignments freeze their target before the RHS, honor captured aliases and return
+the original RHS after typed writes.
 Named callables, mapped functions and constructors remain subsequent P7 slices;
 peano-bench remains planned.
 Regenerate pre-v2 compiled

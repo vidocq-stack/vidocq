@@ -125,6 +125,15 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 assignment slice (2026-10-11): assignments prepare root/property writers before
+the RHS, freeze alias references and path locations, then return the original RHS
+after writing. Lambda arguments, readonly captured variables and invalid/null targets
+fail before RHS effects. Namespace/import resolution and declared property conversion
+occur during the write. Precompiled temporary Consumer records retain evaluation state
+only locally; expression binding/serialization fields stay unchanged. Metadata remains
+readonly while getType evaluates assignment effects. Independent consumers verify
+target replacement during RHS, alias precedence, errors, coercion and root behavior.
+
 P7 resolver-method slice (2026-10-11): property-target inline calls compile through
 the supplied ELResolver.invoke chain. Null bases/keys discard name conversion and
 arguments; otherwise key-to-String conversion precedes left-to-right arguments.
