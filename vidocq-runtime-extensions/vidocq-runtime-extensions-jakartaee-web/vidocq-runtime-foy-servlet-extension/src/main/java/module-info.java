@@ -27,7 +27,10 @@ module io.vidocq.runtime.extensions.jakartaee.web.foy {
     requires jakarta.servlet;
     requires jakarta.cdi;
 
-    // No exports: the runtime reaches the extension through the services below only.
+    // The runtime reaches the extension through the services below only; the dev panel, which only
+    // vidocq:dev adds, reads the live mounts.
+    exports io.vidocq.runtime.extensions.jakartaee.web.foy.live
+            to io.vidocq.runtime.extensions.jakartaee.web.foy.dev;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with FoyExtension;

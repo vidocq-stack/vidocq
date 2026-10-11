@@ -20,6 +20,9 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener;
 import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
@@ -133,6 +136,25 @@ class FoyExtensionTest {
 
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
         assertEquals(1, second.deployments().all().size());
+    }
+
+    @Test
+    void aBootsDeploymentsArePublishedForTheDevPanel(@TempDir Path root) throws Exception {
+        Object boot = new Object();
+        FoyDeployments deployments = FoyDeployments.forBoot(boot);
+        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(null, loaderWith(root, WEB_XML), "/shop",
+                1800, config(Map.of())).orElseThrow();
+
+        deployments.record("vidocq.servlet", "admin", mounted);
+
+        ServletMount mount = ServletMounts.of(boot).getFirst();
+        assertEquals("vidocq.servlet", mount.name());
+        assertEquals("admin", mount.listener());
+        assertEquals("/shop", mount.contextPath());
+        assertEquals(0, mount.activeSessions().getAsInt());
+        deployments.closeAll();
+        FoyDeployments.forget(boot);
+        assertTrue(ServletMounts.of(boot).isEmpty());
     }
 
     @Test

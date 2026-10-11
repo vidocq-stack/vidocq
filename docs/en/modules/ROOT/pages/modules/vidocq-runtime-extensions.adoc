@@ -242,7 +242,9 @@ The REST extension mounts its resources on the `@ApplicationPath` of the applica
 
 === The `servlet` section of the startup report
 
-The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener and the session timeout, or says that the extension is inactive.
+The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener, the context path and the session timeout, then every servlet and filter with what it is mapped to, and the listeners in registration order [.tag-new]#NEW#; or it says that the extension is inactive.
+
+[.tag-new]#NEW# Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
 
 == Typical lifecycle — Chappe example
 

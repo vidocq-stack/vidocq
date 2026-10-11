@@ -20,6 +20,8 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
@@ -45,11 +47,21 @@ final class FoyDeployments {
     private static final Map<Object, FoyDeployments> BY_BOOT = new IdentityHashMap<>();
 
     private final List<Live> live = new ArrayList<>();
+    /** The boot's container, under which the mounts are published for the dev panel; null in tests. */
+    private final Object boot;
+
+    FoyDeployments() {
+        this(null);
+    }
+
+    private FoyDeployments(Object boot) {
+        this.boot = boot;
+    }
 
     /** The deployments of the boot identified by {@code boot}, its container. */
     static FoyDeployments forBoot(Object boot) {
         synchronized (BY_BOOT) {
-            return BY_BOOT.computeIfAbsent(boot, b -> new FoyDeployments());
+            return BY_BOOT.computeIfAbsent(boot, FoyDeployments::new);
         }
     }
 
@@ -58,6 +70,7 @@ final class FoyDeployments {
         synchronized (BY_BOOT) {
             BY_BOOT.remove(boot);
         }
+        ServletMounts.forget(boot);
     }
 
     /**
@@ -83,6 +96,11 @@ final class FoyDeployments {
 
     synchronized void record(String name, String listener, FoyChappeBoot.Mounted mounted) {
         live.add(new Live(name, listener, mounted));
+        if (boot != null) {
+            String contextPath = mounted.servletContext().getContextPath();
+            ServletMounts.record(boot, new ServletMount(name, listener, contextPath.isEmpty() ? "/" : contextPath,
+                    mounted::activeSessions));
+        }
     }
 
     synchronized List<Live> all() {

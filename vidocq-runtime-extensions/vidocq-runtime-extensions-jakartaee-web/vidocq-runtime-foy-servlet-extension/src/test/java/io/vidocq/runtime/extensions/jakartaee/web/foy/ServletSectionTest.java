@@ -81,6 +81,9 @@ class ServletSectionTest {
         assertEquals("/shop", section.rows.get("Context path"));
         assertEquals(java.util.List.of("hello → /hello"), section.lists.get("Servlets"));
         assertEquals(java.util.List.of("stamp → /*"), section.lists.get("Filters"));
+        // Foy lists the container's own (CDI) listeners first, then the application's.
+        assertTrue(section.lists.get("Listeners").contains(
+                "io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener"), section.lists.toString());
     }
 
     /** {@link FoyExtensionTest#WEB_XML} plus a filter on every path. */

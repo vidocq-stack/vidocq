@@ -78,10 +78,13 @@ class FoyServletModulePathTest {
     }
 
     @Test
-    void theExtensionExportsNothing() {
+    void theExtensionExportsOnlyItsLiveMountsToItsDevPanel() {
         Module extension = ModuleLayer.boot().findModule("io.vidocq.runtime.extensions.jakartaee.web.foy").orElseThrow();
 
-        assertEquals(java.util.Set.of(), extension.getDescriptor().exports());
+        for (var export : extension.getDescriptor().exports()) {
+            assertEquals("io.vidocq.runtime.extensions.jakartaee.web.foy.live", export.source());
+            assertEquals(java.util.Set.of("io.vidocq.runtime.extensions.jakartaee.web.foy.dev"), export.targets());
+        }
     }
 
     @Test

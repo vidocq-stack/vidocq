@@ -168,6 +168,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
                 .sorted().toList());
         section.list("Filters", sc.getFilterRegistrations().values().stream()
                 .map(FoyExtension::filterLine).sorted().toList());
+        section.list("Listeners", first.mounted().listenerClassNames());
     }
 
     /** {@code name → /pattern, servlet-name}: what a filter applies to. */
