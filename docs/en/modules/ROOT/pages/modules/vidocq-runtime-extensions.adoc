@@ -42,6 +42,10 @@
 | `essentials`
 | Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<langchain4j-cdi-mcp-live>>). Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
 
+| `vidocq-runtime-peano-el-extension` [.tag-new]#NEW#
+| `jakartaee-core`
+| Activates xref:peano::index.adoc[Peano] for Jakarta Expression Language 6.0 and reports the selected provider module in the `el` startup section. Companion `-codegen` POM bundle generates application accessor tables. See <<peano-el>>.
+
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
 | Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban. Its `rest` section of the startup report lists every route, and is a live dev console panel [.tag-new]#NEW# (<<cassini-rest-report>>, <<cassini-rest-live>>).
@@ -96,6 +100,49 @@
 |===
 
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
+
+[[peano-el]]
+== Expression Language (Peano) [.tag-new]#NEW#
+
+With the Vidocq runtime parent, declare the provider extension and append its processor
+bundle to the inherited compiler configuration:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+    <artifactId>vidocq-runtime-peano-el-extension</artifactId>
+</dependency>
+
+<!-- maven-compiler-plugin -->
+<annotationProcessorPaths combine.children="append">
+    <path>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+        <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
+        <version>${vidocq.version}</version>
+        <type>pom</type>
+    </path>
+</annotationProcessorPaths>
+----
+
+`vidocq extension add peano-el` adds these coordinates. The application module requires
+`io.vidocq.runtime.extensions.jakartaee.core.peano`; generated accessor classes and
+`@ELAccessible` annotations also require `io.vidocq.peano.api`. No package opens are
+needed for generated tables. At process-classes, vidocq:generate reads the APT's
+META-INF/peano/accessor-providers fragments and merges their provides directives into
+the compiled application module descriptor. It preserves existing access and service
+directives and does not rewrite module-info.java. Ensure the generate goal is bound
+in the application's build lifecycle, as in Vidocq's generated projects.
+The extension re-exports Jakarta EL, so applications use
+the standard ExpressionFactory/ELProcessor APIs. Provider selection stays with the
+Jakarta API and respects explicit application overrides; no global property is changed.
+
+The `el` startup section reports the selected provider module and `peano.reflection`
+policy. Selection happens during startup; rendering reads lifecycle facts only. The
+processor is confined to the codegen bundle and the expression compiler remains a
+separate build-time tool. Optional JavaBeans compatibility
+is not pulled into the runtime extension. Peano's own official TCK results describe
+the implementation; these wiring tests do not certify the assembled runtime.
 
 [[servlet]]
 == Servlet (Foy) [.tag-new]#NEW#

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.example.it</groupId><artifactId>peano-accessors</artifactId><version>1.2.3</version>
+    <properties><maven.compiler.release>25</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+    <dependencies>
+        <dependency><groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId><version>@peano.version@</version></dependency>
+    </dependencies>
+    <build><plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.15.0</version>
+            <configuration><annotationProcessorPaths>
+                <path><groupId>io.vidocq.peano</groupId><artifactId>peano-processor</artifactId><version>@peano.version@</version></path>
+            </annotationProcessorPaths></configuration>
+        </plugin>
+        <plugin>
+            <groupId>io.vidocq.runtime</groupId><artifactId>vidocq-runtime-maven-plugin</artifactId><version>@project.version@</version>
+            <executions><execution><goals><goal>generate</goal></goals></execution></executions>
+            <configuration><autoScan>false</autoScan><scanDependencies/></configuration>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId><artifactId>maven-dependency-plugin</artifactId><version>3.9.0</version>
+            <executions><execution><phase>package</phase><goals><goal>copy-dependencies</goal></goals>
+                <configuration><includeScope>runtime</includeScope><outputDirectory>${project.build.directory}/modules</outputDirectory></configuration>
+            </execution></executions>
+        </plugin>
+    </plugins></build>
+</project>

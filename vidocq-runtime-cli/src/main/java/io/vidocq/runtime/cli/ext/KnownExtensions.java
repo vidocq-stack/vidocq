@@ -45,6 +45,10 @@ public final class KnownExtensions {
                     "io.vidocq.runtime.extensions.microprofile",
                     "vidocq-runtime-ravel-config-extension",
                     "MicroProfile Config"),
+            new RegistryEntry("peano-el",
+                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    "vidocq-runtime-peano-el-extension",
+                    "Jakarta Expression Language 6.0"),
             new RegistryEntry("cassini-rest",
                     "io.vidocq.runtime.extensions.jakartaee.core",
                     "vidocq-runtime-cassini-rest-extension",
@@ -162,6 +166,9 @@ public final class KnownExtensions {
      */
     public static Optional<ExtensionCoordinate> codegenBundle(String id) {
         return switch (id == null ? "" : id.trim().toLowerCase()) {
+            case "peano-el" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    "vidocq-runtime-peano-el-extension-codegen"));
             case "cassini-rest" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.core",
                     "vidocq-runtime-cassini-rest-extension-codegen"));
@@ -184,10 +191,11 @@ public final class KnownExtensions {
         };
     }
 
-    /** The JPMS module each catalog extension ships, which an application {@code requires}. */
+    /** The Java module each catalog extension ships, which an application {@code requires}. */
     private static final Map<String, String> MODULES = Map.ofEntries(
             Map.entry("chappe-webserver", "io.vidocq.runtime.extensions.essentials.chappe"),
             Map.entry("ravel-config", "io.vidocq.runtime.extensions.microprofile.ravel"),
+            Map.entry("peano-el", "io.vidocq.runtime.extensions.jakartaee.core.peano"),
             Map.entry("cassini-rest", "io.vidocq.runtime.extensions.jakartaee.core.cassini"),
             Map.entry("grimm-openapi", "io.vidocq.runtime.extensions.microprofile.grimm.openapi"),
             Map.entry("grimm-openapi-ui", "io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui"),
@@ -226,6 +234,7 @@ public final class KnownExtensions {
         List<String> directives = new ArrayList<>();
         boolean opens = false;
         switch (id.trim().toLowerCase()) {
+            case "peano-el" -> directives.addAll(List.of("requires " + module.get(),"requires io.vidocq.peano.api"));
             case "cassini-rest" -> {
                 directives.addAll(List.of("requires static java.compiler", "requires jakarta.cdi",
                         "requires jakarta.inject", "requires jakarta.ws.rs", "requires jakarta.json.bind",

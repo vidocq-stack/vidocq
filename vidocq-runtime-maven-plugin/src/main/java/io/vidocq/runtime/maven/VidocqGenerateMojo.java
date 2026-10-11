@@ -111,6 +111,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
 
         try {
+            int peanoProviders=PeanoAccessorRegistration.apply(classesDir);
+            if (peanoProviders>0) getLog().info("Peano accessor providers registered: "+peanoProviders);
             Map<Path, String> scannedByArtifactId = collectScannedDependencies();
             List<Path> vidocqDeps = new ArrayList<>(scannedByArtifactId.keySet());
             if (vidocqDeps.isEmpty()) {

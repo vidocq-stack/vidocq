@@ -58,6 +58,7 @@ Each extension is named after a **codename** mapping to its spec — keep this m
 |---|---|---|
 | Chappe | HTTP/1.1+H2+WS+gRPC server | `vidocq-runtime-chappe-webserver-extension` |
 | Cassini | JAX-RS 4.0 (transport via Chappe) | `vidocq-runtime-cassini-rest-extension` |
+| Peano | Jakarta Expression Language 6.0 | `vidocq-runtime-peano-el-extension` |
 | Ravel | MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` |
 | Cyrano | MicroProfile Rest Client 4.0 | `vidocq-runtime-cyrano-rest-client-extension` |
 | Cervantes | MicroProfile JWT Auth 2.2 | `vidocq-runtime-cervantes-jwt-extension` |

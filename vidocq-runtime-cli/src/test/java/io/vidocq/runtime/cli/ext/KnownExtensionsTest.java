@@ -95,6 +95,17 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void peanoElShipsItsAccessorCodegenBundle() {
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.core",KnownExtensions.resolve("peano-el").groupId());
+        assertEquals("vidocq-runtime-peano-el-extension",KnownExtensions.resolve("peano-el").artifactId());
+        assertEquals(java.util.Optional.of(new ExtensionCoordinate(
+                "io.vidocq.runtime.extensions.jakartaee.core","vidocq-runtime-peano-el-extension-codegen")),
+                KnownExtensions.codegenBundle("peano-el"));
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.core.peano","requires io.vidocq.peano.api"),
+                KnownExtensions.moduleDirectives("peano-el","consumer"));
+    }
+
+    @Test
     void shortIdLookupIsCaseInsensitive() {
         assertTrue(KnownExtensions.byId("Knock-Health").isPresent());
         assertTrue(KnownExtensions.isKnown("CASSINI-REST"));

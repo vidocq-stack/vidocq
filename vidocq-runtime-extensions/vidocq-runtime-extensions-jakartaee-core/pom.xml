@@ -14,9 +14,11 @@
     <artifactId>vidocq-runtime-extensions-jakartaee-core</artifactId>
     <packaging>pom</packaging>
     <name>Vidocq :: Extensions :: Jakarta EE Core</name>
-    <description>Jakarta EE core extensions (Vauban CDI, Cassini JAX-RS)</description>
+    <description>Jakarta EE core extensions (Vauban CDI, Cassini JAX-RS, Peano Expression Language)</description>
 
     <modules>
+        <module>vidocq-runtime-peano-el-extension</module>
+        <module>vidocq-runtime-peano-el-extension-codegen</module>
         <module>vidocq-runtime-cassini-rest-extension</module>
         <module>vidocq-runtime-cassini-rest-extension-codegen</module>
         <module>vidocq-runtime-cassini-rest-extension-dev</module>

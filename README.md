@@ -127,7 +127,7 @@ vidocq/
 ├── vidocq-runtime-maven-plugin          Bean indexing (vauban-beans.list) + ZIP packaging
 ├── vidocq-runtime-extensions/           Runtime extensions, grouped by domain
 │   ├── vidocq-runtime-extensions-essentials/       Chappe HTTP transport
-│   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0
+│   ├── vidocq-runtime-extensions-jakartaee-core/   Cassini JAX-RS 4.0, Peano EL 6.0
 │   ├── vidocq-runtime-extensions-jakartaee-web/    Mansart Data / Persistence / pool
 │   ├── vidocq-runtime-extensions-microprofile/     Config, Rest Client, JWT, Metrics, OpenAPI, Telemetry, Health, Fault Tolerance
 │   └── vidocq-runtime-extensions-module-repackaged/  Third-party Java Modules repackages (H2)

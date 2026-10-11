@@ -100,6 +100,13 @@
         </dependency>
 
         <dependency>
+            <groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId><scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId><artifactId>peano-processor</artifactId>
+            <version>${peano.version}</version><scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -190,6 +197,7 @@
                             <preBuildHookScript>prebuild</preBuildHookScript>
                             <postBuildHookScript>verify</postBuildHookScript>
                             <showErrors>true</showErrors>
+                            <filterProperties><peano.version>${peano.version}</peano.version></filterProperties>
                         </configuration>
                         <executions>
                             <execution>

@@ -5,6 +5,58 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## VIDOCQ-PEANO-003 — Maven processor paths do not discover Peano's module-only processor
+
+- **Date**: 2026-10-11
+- **Status**: FIXED with the maintainer-approved Maven-only APT exception (2026-10-11)
+- **Symptom**: a real Maven consumer compiles its annotated model successfully but
+  produces no Peano provider or accessor fragment through the codegen bundle.
+- **Minimal repro**: append the Peano codegen POM bundle to annotationProcessorPaths
+  with maven-compiler-plugin 3.15.0 and Maven 3.9.16; compile @ELAccessible Model.
+- **Cause**: Maven emits -processorpath; Peano registers its processor only through
+  module-info.java, which is ignored by that processor classloader. The same input works
+  with javac --processor-module-path, including closed-module deny-mode evaluation.
+- **Fix**: Peano adds the Maven processor service resource alongside its unchanged
+  named-module service declaration. Runtime applications remain module-path only.
+- **Evidence**: isolated real Maven consumer in /private/tmp/vidocq-peano-apt-consumer;
+  debug processor path initially contained the processor JAR but produced no fragment.
+  After the fix, a real Maven build generates/registers one provider; the closed model
+  runs in allow/deny named JVMs. Related Peano bug: PROC-001.
+
+## VIDOCQ-PEANO-002 — generated accessor fragments were not registered in applications
+
+- **Date**: 2026-10-11
+- **Status**: FIXED before publication (branch feat/peano-el-extension)
+- **Symptom**: an application compiled its annotated model's accessor table but a named
+  JVM in peano.reflection=deny could not discover it and denied the property read.
+- **Minimal repro**: compile a closed module containing @ELAccessible Model(String name)
+  with Peano's APT; evaluate model.name before consuming its generated provider fragment.
+- **Cause**: the processor emits META-INF/peano/accessor-providers fragments for the
+  application's build tool; Vidocq's generate goal did not consume them.
+- **Fix**: process-classes merges the fragments into compiled module-info through the
+  Class-File API before dependency-scan early returns. Existing module access and service
+  directives remain intact; no source change or package opening is needed.
+- **Evidence**: real javac APT consumer denies before registration, then succeeds in
+  independent named JVMs in allow/deny modes. Metadata tests check preservation,
+  idempotence, provider presence and malformed-fragment failures.
+
+## VIDOCQ-PEANO-001 — prototype extension metadata followed the application version
+
+- **Date**: 2026-10-11
+- **Status**: FIXED before publication (branch feat/peano-el-extension)
+- **Symptom**: an application versioned 1.2.3 inherited Peano extension/codegen coordinates
+  at 1.2.3; the initial codegen management also omitted its POM type. CLI module mapping
+  was incomplete while wiring the new catalogue entry.
+- **Minimal repro**: inherit the prototype runtime parent in a 1.2.3 application;
+  inspect help:effective-pom for both Peano wrapper dependencies. Existing CLI catalogue
+  consistency tests also detect the missing module name.
+- **Cause**: the new management entries used project.version instead of the runtime's
+  literal version, and omitted existing POM-bundle/catalogue conventions.
+- **Fix**: pin wrapper versions to 0.4.0-SNAPSHOT, manage the bundle as type pom and
+  provide catalogue coordinates, codegen mapping and minimal application directives.
+- **Evidence**: effective-POM probe red/green; all 275 CLI tests pass, including the
+  Peano codegen/directive regression and catalogue/module-info consistency checks.
+
 ## BUG-20261011-03 — a mount on `/` hid every mount registered after it, and a duplicate prefix was silent
 
 - **Date**: 2026-10-11

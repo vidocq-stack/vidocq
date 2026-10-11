@@ -28,6 +28,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}` [.tag-new]#NEW#
 | langchain4j-cdi MCP server extension. Built in the reactor, not published while langchain4j-cdi is a SNAPSHOT: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
 
+| `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}` [.tag-new]#NEW#
+| Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion POM bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
+
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
@@ -218,6 +221,8 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 
 | `vidocq:generate`
 | Generates the CDI bean index and pre-generates proxies/interceptors (compile-time codegen).
+  Also registers Peano APT accessor-provider fragments in the compiled application
+  module descriptor; existing access directives are preserved.
 
 | `vidocq:package`
 | Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers, `lib/*.jar` (application + module-path closure), attached as a `-dist.zip`.
