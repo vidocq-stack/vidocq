@@ -14,7 +14,9 @@ provider are implemented. Resolver-backed value expressions now navigate models,
 capture variables and expose get/set/metadata with imports and static fields.
 Functions, method expressions, method references and assignments are implemented.
 Lambda execution, list/set/map construction and lazy chapter 2 collection
-pipelines and a compiled Java Predicate adapter are implemented. Other functional-interface adapters remain planned; known API limitations
+pipelines and compiled adapters for all java.util.function interfaces, Runnable,
+Callable and Comparator are implemented. Selected application interfaces use generated
+adapters; known API limitations
 are recorded in BUG.md.
 Evaluation listeners and expression serialization are implemented.
 The peano-api accessor-table service and direct resolver dispatch are implemented.

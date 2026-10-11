@@ -180,8 +180,8 @@ Its package is neither exported nor opened. Value expressions apply the expected
 type through `ELContext.convertToType`, allowing the context to override conversion.
 Operator operand conversions also use the evaluation context.
 
-Predicate conversion uses a statically compiled adapter; other functional-interface
-adapters and PropertyEditor conversions are not implemented.
+Java platform conversion uses 46 statically compiled adapters; selected application
+interfaces use generated adapters. PropertyEditor conversion remains undecided.
 Evaluation listeners and value/method expression serialization are implemented.
 
 == Resolver-backed values (implemented)
@@ -265,11 +265,13 @@ Body scopes are restored in finally blocks, including failed evaluations.
 The API enforces argument counts and ignores extra arguments according to section 1.20.
 No proxy, member reflection, bytecode generation or module access override is added.
 
-Java Predicate conversion uses an ordinary compiled private record implementing
-the public java.util.function.Predicate interface. It invokes the EL lambda and
-coerces its result to primitive boolean; closures and scope cleanup remain intact.
-Other functional interfaces require future build-time adapters. No dynamic proxy
-or runtime bytecode generation is introduced.
+Java functional conversion uses ordinary compiled private records implementing
+all 43 public java.util.function interfaces plus Runnable, Callable and Comparator.
+Adapters invoke the EL lambda, preserve array arguments, and coerce primitive results
+through the caller context; closures and scope cleanup remain intact. Factory conversion
+uses the lambda's captured context and intrinsic result coercion. Selected application
+interfaces use build-time generated adapters. No dynamic proxy or runtime bytecode
+generation is introduced.
 
 Expression equality and hash codes use normalized immutable syntax, ignoring
 whitespace, operator aliases and the choice of immediate/deferred delimiter.

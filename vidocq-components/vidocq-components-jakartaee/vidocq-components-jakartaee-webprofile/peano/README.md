@@ -24,8 +24,9 @@ Lambda construction/invocation, lexical closures and list/set/map construction a
 implemented, together with lazy chapter 2 collection pipelines and EL optional results.
 Evaluation listeners and value/method expression serialization are implemented.
 Serialized expressions retain parse-time bindings and use the receiving evaluation context.
-The statically compiled Java Predicate adapter and generated application-owned
-functional-interface adapters are available. Select custom interfaces with the same
+Statically compiled adapters cover all 43 java.util.function interfaces plus Runnable,
+Callable and Comparator. Generated application-owned functional-interface adapters
+are available too. Select custom interfaces with the same
 annotation or processor option and annotate them with `@FunctionalInterface`.
 Application-owned accessor tables can now register through peano-api services.
 The provider dispatches their direct calls inside closed application packages.

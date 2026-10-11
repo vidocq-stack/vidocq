@@ -7,9 +7,9 @@ and `StandardELContext`; see xref:getting-started.adoc[Getting started].
 ValueExpression get/set/metadata, variable bindings and imports are implemented.
 Functions, method calls, MethodExpression metadata and assignments are implemented.
 Lambda construction, list/set/map construction and chapter 2 collection pipelines
-are implemented. The standard Java Predicate interface has a compiled adapter.
-Other functional-interface adapters, container integration and
-code generation remain planned.
+are implemented. Compiled adapters cover all java.util.function interfaces plus Runnable,
+Callable and Comparator. Selected application interfaces and accessor tables use
+build-time generation. Container integration and expression compilation remain planned.
 Evaluation listeners and value/method expression serialization are implemented.
 Serializable captured values are retained; the evaluation context is supplied after restoration.
 

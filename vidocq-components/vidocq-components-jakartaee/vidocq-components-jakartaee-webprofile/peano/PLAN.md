@@ -8,7 +8,7 @@
 > The peano-api service contract and direct accessor-table resolver are implemented.
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
 > Direct methods, runtime annotation literals and method metadata are implemented for selected models.
-> Further Java platform functional-interface adapters, PropertyEditor conversion
+> PropertyEditor conversion
 > and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
 > depends on them starts.
@@ -303,7 +303,8 @@ Bare MethodExpression invocation uses API-owned fallback when the resolver chain
 does not handle it, as required by section 1.6; inline calls stay resolver-owned.
 Expression identity uses normalized syntax while preserving source diagnostics.
 Predicate adaptation is a statically compiled private implementation, not a runtime
-proxy or generated class. Other Java functional interfaces remain build-time work.
+proxy or generated class. Java platform adapters now cover all 43 java.util.function
+interfaces plus Runnable, Callable and Comparator.
 
 P6 functional adapters (2026-10-10, EL 6.0 section 1.25.8): select application interfaces
 through ELAccessible or the existing explicit-types option. The selected interface must
@@ -323,6 +324,18 @@ uses ExpressionFactory result coercion. Providers use the existing registration 
 No new runtime dependency, exports, opens or member introspection is introduced.
 
 ## Milestones (TDD — test first, every milestone)
+
+P6 Java platform adapters (2026-10-11, EL 6.0 section 1.25.8): 46 statically compiled
+private records cover all java.util.function interfaces, Runnable, Callable and Comparator.
+Each has its Java descriptor signature, including primitive specializations; generic
+contracts use erasure. Context conversion claims supported lambdas after custom resolvers
+and registered application tables; result conversion reuses that context. Factory coercion
+uses the lambda's captured context and intrinsic result conversion. Null and identity
+conversions retain the ordinary rules. Default methods compose the implemented descriptor.
+Adapters are ordinary compiled classes, with no proxy, runtime generation or member lookup.
+Named-consumer tests verify typed callbacks and generated method arguments in deny mode.
+Reflective EL navigation on an adapter's Java methods remains subject to the existing
+fallback policy; the adapter itself invokes its lambda directly.
 
 P6 reflection policy (2026-10-11): peano.reflection defaults to allow; deny prevents
 Peano-controlled member fallback and invalid values receive an explicit diagnostic.

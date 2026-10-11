@@ -54,6 +54,9 @@ public final class DenialMain {
             throw new AssertionError("Generated metadata/invocation failed");
         var callback=(Callbacks.Sum)factory.createValueExpression(context,"${(a,b)->a+b}",Callbacks.Sum.class).getValue(context);
         if (callback.apply(2,3)!=5) throw new AssertionError("Generated callback failed");
+        var function=(java.util.function.Function<Object,Object>)factory.createValueExpression(context,"${x->x+1}",java.util.function.Function.class).getValue(context);
+        if (!Long.valueOf(3).equals(function.apply(2))) throw new AssertionError("Standard callback failed");
+        value(factory,context,"${bean.standardCallback(x->x+1)}",3);
         fallback(deny,AtomicInteger.class,()->factory.createValueExpression(context,"${foreign.class}",Object.class).getValue(context));
         fallback(deny,demo.exported.PublicBean.FallbackRecord.class,()->factory.createValueExpression(context,"${record.value}",Object.class).getValue(context));
         var writable=factory.createValueExpression(context,"${calendar.lenient}",Object.class);

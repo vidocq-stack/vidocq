@@ -88,7 +88,11 @@ public final class GeneratedAccessorELResolver extends ELResolver {
         Objects.requireNonNull(context, "context");
         bind(context);
         AccessorTable table = tables.get(type);
-        return table == null ? null : table.convertToType(context, value, type);
+        if (table != null) {
+            T converted=table.convertToType(context,value,type);
+            if (context.isPropertyResolved()) return converted;
+        }
+        return StandardFunctionalAdapters.adapt(context,value,type);
     }
 
     /** Factory coercion has no caller context; adapters retain the lambda's own context. */

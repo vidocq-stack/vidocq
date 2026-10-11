@@ -29,6 +29,19 @@ invocation has a generated table: their Method descriptor is restored by lookup.
 The setting governs Peano's fallback; application resolvers and API import handling
 retain their own implementation responsibility.
 
+== Java functional-interface conversion
+
+Peano includes statically compiled adapters for all 43 java.util.function interfaces
+and java.lang.Runnable, java.util.concurrent.Callable and java.util.Comparator
+(EL 6.0 section 1.25.8). Generic contracts use erasure; primitive specializations
+coerce lambda results to their descriptor's return type. Consumers and Runnable
+discard results. Default methods retain Java behavior.
+ELContext conversion preserves custom converters for both the target and result;
+ExpressionFactory.coerceToType retains the lambda's captured context and uses intrinsic
+result conversion. These adapters work as typed Java callbacks and as generated method
+arguments in reflection-denial mode. EL member navigation on adapters retains the
+normal fallback policy.
+
 == Runtime dependencies
 
 `jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.

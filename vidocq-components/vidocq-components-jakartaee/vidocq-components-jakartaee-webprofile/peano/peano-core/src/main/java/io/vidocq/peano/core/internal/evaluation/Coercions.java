@@ -22,7 +22,6 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.function.Predicate;
 import jakarta.el.ELException;
 import jakarta.el.LambdaExpression;
 
@@ -34,7 +33,7 @@ public final class Coercions {
     /**
      * Converts a value, preserving null for reference targets except String.
      * An unspecified target type preserves the original value.
-     * Supports the statically compiled Predicate adapter and registered application
+     * Supports statically compiled Java platform adapters and registered application
      * functional-interface adapters. PropertyEditor conversions remain unimplemented.
      *
      * @param value input value
@@ -62,10 +61,9 @@ public final class Coercions {
         if (boxed.isInstance(value)) {
             return value;
         }
-        if (type == Predicate.class && value instanceof LambdaExpression lambda) {
-            return new LambdaPredicate(lambda);
-        }
         if (value instanceof LambdaExpression lambda && type.isInterface()) {
+            Object standard = StandardFunctionalAdapters.adapt(null,lambda,type);
+            if (standard != null) return standard;
             Object adapted = GeneratedAccessorELResolver.adapt(lambda, type);
             if (adapted != null) return adapted;
         }
@@ -183,12 +181,5 @@ public final class Coercions {
         return new ELException("Cannot coerce to " + type.getTypeName());
     }
 
-    /** A normal compiled class, with no dynamic proxy or runtime bytecode generation. */
-    private record LambdaPredicate(LambdaExpression lambda) implements Predicate<Object> {
-        @Override
-        public boolean test(Object value) {
-            return convert(lambda.invoke(value), boolean.class);
-        }
-    }
 }
 

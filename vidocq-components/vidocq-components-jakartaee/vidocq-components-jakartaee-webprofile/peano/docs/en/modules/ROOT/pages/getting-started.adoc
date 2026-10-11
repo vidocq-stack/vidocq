@@ -137,7 +137,9 @@ java.util.function.Predicate<Object> predicate =
 boolean accepted = predicate.test(6); // true
 ----
 
-Other functional-interface adapters remain future work.
+The same conversion supports all 43 java.util.function interfaces, Runnable, Callable
+and Comparator, including primitive specializations. Default methods retain Java
+behavior. Custom application interfaces use the generated adapters described below.
 
 == Observing and saving an expression (implemented)
 

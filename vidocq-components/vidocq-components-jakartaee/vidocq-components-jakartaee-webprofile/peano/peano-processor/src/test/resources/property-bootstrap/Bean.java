@@ -54,6 +54,7 @@ public class Bean extends Parent {
     public int rows(int[]... values) { return values.length; }
     public CharSequence label() { return "base"; }
     public int callback(Callbacks.Sum sum) { return sum.apply(2,3); }
+    public int standardCallback(java.util.function.IntUnaryOperator operation) { return operation.applyAsInt(2); }
     public void broken() throws java.io.IOException { throw new java.io.IOException("method failure"); }
     public String ambiguous(java.io.Serializable value) { return "serializable"; }
     public String ambiguous(CharSequence value) { return "sequence"; }
