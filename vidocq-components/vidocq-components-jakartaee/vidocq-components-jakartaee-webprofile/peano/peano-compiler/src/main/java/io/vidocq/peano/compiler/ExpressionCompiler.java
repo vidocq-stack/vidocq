@@ -332,8 +332,6 @@ public final class ExpressionCompiler {
             key(identity,"property","");
             validate(property.base(),identity,source,names); validate(property.key(),identity,source,names);
         } else if (node instanceof Ast.Unary unary) {
-            if (unary.operator().kind()==TokenKind.MINUS && containsResolved(unary.operand()))
-                throw new ELException("Dynamic numeric operands are not compiled in template: "+source);
             key(identity,"unary",unary.operator().kind().name());
             if (signedInteger(unary)) {
                 literalKey(identity,(Ast.Literal)unary.operand());
@@ -343,8 +341,8 @@ public final class ExpressionCompiler {
                     || comparison(binary.operator().kind()) || binary.operator().kind()==TokenKind.CONCAT
                     || binary.operator().kind()==TokenKind.SEMICOLON)) {
             key(identity,"binary",binary.operator().kind().name());
-            if ((arithmetic(binary.operator().kind()) || comparison(binary.operator().kind())) && containsResolved(binary))
-                throw new ELException("Dynamic numeric/comparison operands are not compiled in template: "+source);
+            if (comparison(binary.operator().kind()) && containsResolved(binary))
+                throw new ELException("Dynamic comparison operands are not compiled in template: "+source);
             validate(binary.left(),identity,source,names);
             validate(binary.right(),identity,source,names);
         } else if (node instanceof Ast.Conditional conditional) {
@@ -384,6 +382,7 @@ public final class ExpressionCompiler {
 
     private static ClassDesc rawType(Ast node) {
         if (node instanceof Ast.Literal literal) return rawType(literal);
+        if (node instanceof Ast.Identifier || node instanceof Ast.Property) return OBJECT;
         if (node instanceof Ast.ListLiteral) return ClassDesc.of("java.util.ArrayList");
         if (node instanceof Ast.SetLiteral) return ClassDesc.of("java.util.LinkedHashSet");
         if (node instanceof Ast.MapLiteral) return ClassDesc.of("java.util.LinkedHashMap");
@@ -592,6 +591,7 @@ public final class ExpressionCompiler {
     private static void floatingOperand(CodeBuilder code,int slot,java.lang.classfile.Label floating) {
         var next=code.newLabel();
         code.aload(slot).instanceOf(ClassDesc.of("java.lang.Double")).ifne(floating)
+                .aload(slot).instanceOf(ClassDesc.of("java.lang.Float")).ifne(floating)
                 .aload(slot).instanceOf(STRING).ifeq(next);
         for (char marker:new char[]{'.','e','E'}) {
             code.aload(slot).checkcast(STRING).loadConstant((int)marker)
@@ -605,41 +605,51 @@ public final class ExpressionCompiler {
         int slot=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
         emit(code,operand);
         var present=code.newLabel();
-        var floating=code.newLabel();
-        var text=code.newLabel();
         var floatingText=code.newLabel();
+        var converted=code.newLabel(); var dispatch=code.newLabel();
         var done=code.newLabel();
         code.astore(slot).aload(slot).ifnonnull(present);
         number(code,0L);
         code.goto_(done).labelBinding(present)
-                .aload(slot).instanceOf(ClassDesc.of("java.lang.Double")).ifne(floating)
-                .aload(slot).instanceOf(STRING).ifne(text);
-        var valid=code.newLabel();
-        code.aload(slot).instanceOf(ClassDesc.of("java.lang.Long")).ifne(valid);
+                .aload(slot).instanceOf(STRING).ifeq(dispatch);
+        floatingOperand(code,slot,floatingText);
+        converted(code,slot,ClassDesc.of("java.lang.Number"),ClassDesc.of("java.lang.Long"));
+        code.goto_(converted).labelBinding(floatingText);
+        converted(code,slot,ClassDesc.of("java.lang.Number"),ClassDesc.of("java.lang.Double"));
+        code.labelBinding(converted).astore(slot).aload(slot).ifnonnull(dispatch);
+        var nullFailure=ClassDesc.of("java.lang.NullPointerException");
+        code.new_(nullFailure).dup().invokespecial(nullFailure,"<init>",MethodTypeDesc.of(VOID)).athrow()
+                .labelBinding(dispatch);
+        var types=java.util.List.of("BigDecimal","BigInteger","Byte","Short","Integer","Long","Float","Double");
+        var matches=new java.util.LinkedHashMap<String,java.lang.classfile.Label>();
+        for (String name:types) {
+            var match=code.newLabel(); matches.put(name,match);
+            code.aload(slot).instanceOf(ClassDesc.of((name.startsWith("Big") ? "java.math." : "java.lang.")+name)).ifne(match);
+        }
         var exception=ClassDesc.of("jakarta.el.ELException");
         code.new_(exception).dup().ldc("Invalid operand for unary minus")
-                .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow().labelBinding(valid);
-        negate(code,slot,false,false);
-        code.goto_(done).labelBinding(floating);
-        negate(code,slot,true,false);
-        code.goto_(done).labelBinding(text);
-        floatingOperand(code,slot,floatingText);
-        negate(code,slot,false,true);
-        code.goto_(done).labelBinding(floatingText);
-        negate(code,slot,true,true);
+                .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow();
+        for (var entry:matches.entrySet()) {
+            String name=entry.getKey();
+            var type=ClassDesc.of((name.startsWith("Big") ? "java.math." : "java.lang.")+name);
+            code.labelBinding(entry.getValue()).aload(slot).checkcast(type);
+            if (name.startsWith("Big")) code.invokevirtual(type,"negate",MethodTypeDesc.of(type));
+            else {
+                String descriptor=switch (name) {
+                    case "Byte"->"B"; case "Short"->"S"; case "Integer"->"I"; case "Long"->"J"; case "Float"->"F"; default->"D";
+                };
+                var primitive=ClassDesc.ofDescriptor(descriptor);
+                String method=name.equals("Integer") ? "intValue" : name.toLowerCase(java.util.Locale.ROOT)+"Value";
+                code.invokevirtual(type,method,MethodTypeDesc.of(primitive));
+                switch (descriptor) {
+                    case "J"->code.lneg(); case "F"->code.fneg(); case "D"->code.dneg();
+                    case "B"->code.ineg().i2b(); case "S"->code.ineg().i2s(); default->code.ineg();
+                }
+                code.invokestatic(type,"valueOf",MethodTypeDesc.of(type,primitive));
+            }
+            code.goto_(done);
+        }
         code.labelBinding(done);
-    }
-
-    private static void negate(CodeBuilder code,int slot,boolean floating,boolean convert) {
-        var boxed=ClassDesc.of(floating ? "java.lang.Double" : "java.lang.Long");
-        if (convert) code.aload(1);
-        code.aload(slot);
-        if (convert) code.ldc(boxed).invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS));
-        var number=ClassDesc.of("java.lang.Number");
-        code.checkcast(number).invokevirtual(number,floating ? "doubleValue" : "longValue",
-                MethodTypeDesc.of(floating ? DOUBLE : LONG));
-        if (floating) code.dneg(); else code.lneg();
-        code.invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,floating ? DOUBLE : LONG));
     }
 
     private static boolean comparison(TokenKind kind) {
@@ -650,8 +660,12 @@ public final class ExpressionCompiler {
     }
 
     private static void converted(CodeBuilder code,int slot,ClassDesc type) {
-        code.aload(1).aload(slot).ldc(type).invokevirtual(CONTEXT,"convertToType",
-                MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(type);
+        converted(code,slot,type,type);
+    }
+
+    private static void converted(CodeBuilder code,int slot,ClassDesc cast,ClassDesc target) {
+        code.aload(1).aload(slot).ldc(target).invokevirtual(CONTEXT,"convertToType",
+                MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(cast);
     }
 
     private static void orderedBranch(CodeBuilder code,TokenKind operator,java.lang.classfile.Label truth) {
@@ -841,18 +855,7 @@ public final class ExpressionCompiler {
         emit(code,binary.right());
         code.astore(right);
         if (OBJECT.equals(rawType(binary))) {
-            var nonnull=code.newLabel();
-            var floating=code.newLabel();
-            var done=code.newLabel();
-            code.aload(left).ifnonnull(nonnull).aload(right).ifnonnull(nonnull);
-            number(code,0L);
-            code.goto_(done).labelBinding(nonnull);
-            floatingOperand(code,left,floating);
-            floatingOperand(code,right,floating);
-            emitMath(code,binary.operator().kind(),left,right,false);
-            code.goto_(done).labelBinding(floating);
-            emitMath(code,binary.operator().kind(),left,right,true);
-            code.labelBinding(done);
+            emitDynamicMath(code,binary.operator().kind(),left,right);
             return;
         }
         if (rawType(binary.left())==null && rawType(binary.right())==null) {
@@ -861,6 +864,68 @@ public final class ExpressionCompiler {
         }
         boolean floating=rawType(binary).equals(ClassDesc.of("java.lang.Double"));
         emitMath(code,binary.operator().kind(),left,right,floating);
+    }
+
+    private static void emitDynamicMath(CodeBuilder code,TokenKind operator,int left,int right) {
+        var nonnull=code.newLabel(); var floating=code.newLabel(); var decimal=code.newLabel();
+        var integer=code.newLabel(); var maybeDecimal=code.newLabel(); var done=code.newLabel();
+        var decimalType=ClassDesc.of("java.math.BigDecimal"); var integerType=ClassDesc.of("java.math.BigInteger");
+        code.aload(left).ifnonnull(nonnull).aload(right).ifnonnull(nonnull);
+        number(code,0L);
+        code.goto_(done).labelBinding(nonnull);
+        if (operator==TokenKind.DIVIDE) {
+            pairType(code,left,right,decimalType,decimal); pairType(code,left,right,integerType,decimal);
+            code.goto_(floating);
+        } else if (operator==TokenKind.MODULO) {
+            pairType(code,left,right,decimalType,floating);
+            floatingOperand(code,left,floating); floatingOperand(code,right,floating);
+            pairType(code,left,right,integerType,integer);
+            emitMath(code,operator,left,right,false); code.goto_(done);
+        } else {
+            pairType(code,left,right,decimalType,decimal); pairType(code,left,right,integerType,maybeDecimal);
+            floatingOperand(code,left,floating); floatingOperand(code,right,floating);
+            emitMath(code,operator,left,right,false); code.goto_(done).labelBinding(maybeDecimal);
+            floatingOperand(code,left,decimal); floatingOperand(code,right,decimal); code.goto_(integer);
+        }
+        code.labelBinding(floating); emitMath(code,operator,left,right,true); code.goto_(done);
+        if (operator!=TokenKind.MODULO) {
+            code.labelBinding(decimal); emitBigMath(code,operator,left,right,decimalType); code.goto_(done);
+        }
+        if (operator!=TokenKind.DIVIDE) {
+            code.labelBinding(integer); emitBigMath(code,operator,left,right,integerType);
+        }
+        code.labelBinding(done);
+    }
+
+    private static void bigOperand(CodeBuilder code,int slot,ClassDesc target) {
+        var present=code.newLabel();
+        code.aload(1).aload(slot).dup().ifnonnull(present).pop();
+        number(code,0L);
+        code.labelBinding(present).ldc(target)
+                .invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(target);
+    }
+
+    private static void emitBigMath(CodeBuilder code,TokenKind operator,int left,int right,ClassDesc target) {
+        var start=code.newLabel(); var end=code.newLabel(); var handler=code.newLabel(); var done=code.newLabel();
+        code.labelBinding(start); bigOperand(code,left,target); bigOperand(code,right,target);
+        if (operator==TokenKind.DIVIDE) {
+            var rounding=ClassDesc.of("java.math.RoundingMode");
+            code.getstatic(rounding,"HALF_UP",rounding).invokevirtual(target,"divide",MethodTypeDesc.of(target,target,rounding));
+        } else {
+            String method=switch (operator) {
+                case PLUS->"add"; case MINUS->"subtract"; case MULTIPLY->"multiply"; case MODULO->"remainder";
+                default->throw new ELException("Invalid big-number operator");
+            };
+            code.invokevirtual(target,method,MethodTypeDesc.of(target,target));
+        }
+        code.labelBinding(end).goto_(done).labelBinding(handler);
+        int failure=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        var exception=ClassDesc.of("jakarta.el.ELException"); var rethrow=code.newLabel();
+        code.astore(failure).aload(failure).instanceOf(exception).ifne(rethrow)
+                .new_(exception).dup().ldc("Arithmetic error for "+operator).aload(failure)
+                .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING,ClassDesc.of("java.lang.Throwable")))
+                .athrow().labelBinding(rethrow).aload(failure).athrow().labelBinding(done);
+        code.exceptionCatch(start,end,handler,ClassDesc.of("java.lang.RuntimeException"));
     }
 
     private static void emitMath(CodeBuilder code,TokenKind operator,int left,int right,boolean floating) {

@@ -34,7 +34,7 @@ public final class Coercions {
      * Converts a value, preserving null for reference targets except String.
      * An unspecified target type preserves the original value.
      * Supports statically compiled Java platform adapters and registered application
-     * functional-interface adapters. PropertyEditor conversions remain unimplemented.
+     * functional-interface adapters. Optional providers include registered PropertyEditor conversion.
      *
      * @param value input value
      * @param type target type

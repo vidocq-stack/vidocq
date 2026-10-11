@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 runtime-numeric slice (2026-10-11): resolved values now participate in arithmetic
+and unary minus. Inline selection covers BigDecimal, BigInteger, floating and integral
+domains, decimal HALF_UP division and modulo promotion. Unary minus preserves every
+supported number wrapper. Operand reads precede conversion, null normalization and
+error guards; decimal operations retain both conversion effects before invocation.
+A 4,234-case independent matrix compares values, runtime types and exception causes
+to the interpreter in allow/deny modes. Dynamic comparison remains the next domain.
+
 P7 bound-composition slice (2026-10-11): roots and properties now compose in logical,
 conditional, concat, sequence, collection and composite templates. Capture traverses
 every distinct name once, including discarded branches. Readonly bodies use an optional
