@@ -159,16 +159,17 @@ therefore in neither the pull-request list nor the nightly job, like `vidocq-run
 ./mvnw -ntp -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet test
 ```
 
-**Result (2026-10-11, Foy main `ee6c899`, about 14 min):** 1714 run, **1694 passing**, 13 errors, 7 skipped
-(api 853/859, spec 196/207, pluggability 643/646, common 2/2). No "Failed to bind" on the final run.
+**Result (2026-10-11, Foy main `8b0b81d`, about 14 min):** 1714 run, **1698 passing**, 9 errors, 7 skipped
+(api 855/859, spec 196/207, pluggability 645/646, common 2/2). The first measure, on Foy `ee6c899`, was 1694:
+Foy's effective-version fix (foy#33) brought the four `getEffectiveMajor/MinorVersion` tests back.
 
-`foy-tck` on the same Foy: 1714 run, 1700 passing, 7 errors, 7 skipped. Every difference is
+`foy-tck` on Foy `ee6c899`: 1714 run, 1700 passing, 7 errors, 7 skipped. Every difference is
 explained:
 
 | Tests | Cause | Follow-up |
 |-------|-------|-----------|
 | 7 shared with `foy-tck`: `ServletContext40Tests` JSP ×3, CLIENT-CERT ×2, `SecFormTests` `test2`/`test2_anno` | no JSP engine, no TLS client certificates in the harness (`foy/TCK.md`) | none here |
-| `ServletContext30Tests` `getEffectiveMajorVersion`/`MinorVersion` ×4 (api and pluggability) | Foy: `FoyChappeBoot` never applies the `web.xml` version, so every application reports 6.1; only foy-tck's harness set it | fix in progress in Foy (`pr/ybl/effective-version`) |
+| ~~`ServletContext30Tests` `getEffectiveMajorVersion`/`MinorVersion` ×4~~ | Foy: `FoyChappeBoot` never applied the `web.xml` version; only foy-tck's harness set it | fixed in Foy (foy#33, `8b0b81d`): pass |
 | `HttpSessionxTests.expireHttpSessionxTest` | the test drives two WARs on one server; the container boots one runtime per WAR, each on its own port | harness limit |
 | `Aordering4Tests.absoluteOrderingTest` | a `@WebListener` of a fragment that `<absolute-ordering>` excludes is registered: in the runtime every archive class is a CDI bean, and Foy's CDI discovery does not drop the excluded fragments; the harness loads the classes from the TCK jar, so their code source cannot name the fragment either | Vidocq/vidocq#228 |
 
