@@ -46,6 +46,7 @@ public final class ExpressionCompiler {
     private final ClassDesc owner;
     private final java.util.Map<Ast.Literal,String> strings=new java.util.LinkedHashMap<>();
     private final java.util.Set<String> functionKeys=new java.util.LinkedHashSet<>();
+    private final java.util.List<FunctionReference> functionReferences=new java.util.ArrayList<>();
     private final java.util.Map<Ast.Lambda,Integer> lambdas=new java.util.LinkedHashMap<>();
     private java.util.Set<String> locals=java.util.Set.of();
     private boolean methodMode;
@@ -71,6 +72,7 @@ public final class ExpressionCompiler {
                 functionKeys.add(":"+identifier.name());
             collectStrings(call.target()); call.arguments().forEach(this::collectStrings);
         } else if (node instanceof Ast.Function function) {
+            functionReferences.add(new FunctionReference(function.prefix(),function.name(),function.arguments().size()));
             functionKeys.add(function.prefix()+":"+function.name()); function.arguments().forEach(this::collectStrings);
         } else if (node instanceof Ast.Lambda lambda) {
             lambdas.putIfAbsent(lambda,lambdas.size());
@@ -172,6 +174,12 @@ public final class ExpressionCompiler {
         } catch (IllegalArgumentException failure) {
             throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
         }
+    }
+
+    /** Returns every prefixed function occurrence from the parsed template, preserving arities. */
+    public static java.util.List<FunctionReference> functions(String source) {
+        var compiler=new ExpressionCompiler(OBJECT,ExpressionParser.parse(Objects.requireNonNull(source)));
+        return java.util.List.copyOf(compiler.functionReferences);
     }
 
     /**

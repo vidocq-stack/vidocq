@@ -32,6 +32,64 @@ import org.junit.jupiter.api.io.TempDir;
 
 class FunctionExpressionCompilerTest {
     @TempDir Path temporary;
+    @Test void descriptorMappersInvokeWithoutReflectionCoreOrAccessorDiscovery() throws Exception {
+        var oracle=ExpressionFactory.newInstance(); var oracleContext=new jakarta.el.StandardELContext(oracle);
+        oracleContext.getFunctionMapper().mapFunction("f","sum",Math.class.getMethod("addExact",int.class,int.class));
+        Object expected=oracle.createValueExpression(oracleContext,"${f:sum('7',2)}",Object.class).getValue(oracleContext);
+        Path classes=temporary.resolve("direct"); Files.createDirectories(classes.resolve("demo"));
+        for (var entry:Map.of("Direct","${f:sum('7',2)}", "LambdaDirect","${(x->f:sum(x,2))(3)}",
+                "VoidDirect","${f:none()}","FailDirect","${f:boom()}").entrySet())
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue()));
+        Path source=temporary.resolve("direct-source"); Files.createDirectories(source);
+        Files.writeString(source.resolve("module-info.java"),"module peano.directfunctions { requires io.vidocq.peano.api; }");
+        Files.writeString(source.resolve("Main.java"),"""
+                package demo;
+                import jakarta.el.*; import io.vidocq.peano.spi.*;
+                public class Main {
+                    public static int sum(int a,int b){return a+b;}
+                    public static void none(){}
+                    public static void boom() throws Exception {throw new Exception("direct failure");}
+                    public static class Invoker implements CompiledFunctionInvoker {
+                        private final String name; public Invoker(String name){this.name=name;}
+                        public Object invoke(ELContext context,Object[] arguments) throws Throwable {
+                            if(name.equals("sum"))return sum(context.convertToType(arguments[0],int.class),context.convertToType(arguments[1],int.class));
+                            if(name.equals("boom"))boom();else none(); return null;
+                        }
+                    }
+                    static class Context extends ELContext {
+                        public ELResolver getELResolver(){return new CompositeELResolver();}
+                        public VariableMapper getVariableMapper(){return null;}
+                        public FunctionMapper getFunctionMapper(){return new CompiledFunctionMapper(){
+                            public FunctionDescriptor resolveCompiledFunction(String prefix,String name){
+                                return new FunctionDescriptor(Main.class,new MethodDescriptor(name,name.equals("sum")?int.class:void.class,
+                                    name.equals("sum")?new Class<?>[]{int.class,int.class}:new Class<?>[0],false,true,new java.lang.annotation.Annotation[0]),new Invoker(name));
+                            }
+                        };}
+                        @SuppressWarnings("unchecked") public <T>T convertToType(Object value,Class<T> type){return (T)(type==int.class?Integer.valueOf(value.toString()):value);}
+                    }
+                    public static void main(String[]args)throws Exception{
+                        if(ModuleLayer.boot().findModule("io.vidocq.peano.core").isPresent())throw new AssertionError("Core present");
+                        var context=new Context(); var direct=new Direct(context,Object.class);
+                        if(!direct.getValue(context).equals(Integer.valueOf(args[0]))||!new LambdaDirect(context,Object.class).getValue(context).equals(5))throw new AssertionError("Wrong direct result");
+                        if(new VoidDirect(context,Object.class).getValue(context)!=null)throw new AssertionError("Wrong void result");
+                        try{new FailDirect(context,Object.class).getValue(context);throw new AssertionError("Failure swallowed");}
+                        catch(ELException expected){if(!expected.getCause().getMessage().equals("direct failure"))throw expected;}
+                        var bytes=new java.io.ByteArrayOutputStream();try(var out=new java.io.ObjectOutputStream(bytes)){out.writeObject(direct);}
+                        try(var in=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray()))){var restored=(ValueExpression)in.readObject();if(!restored.equals(direct)||!restored.getValue(context).equals(9))throw new AssertionError("Restore failed");}
+                        System.out.print("DIRECT_FUNCTION_OK");
+                    }
+                }
+                """);
+        String modules=location(ExpressionFactory.class)+File.pathSeparator+location(AccessorTable.class);
+        run(List.of(bin("javac"),"--module-path",modules,"--patch-module","peano.directfunctions="+classes,"-d",classes.toString(),source.resolve("module-info.java").toString(),source.resolve("Main.java").toString()));
+        assertTrue(run(List.of(bin("java"),"-Dpeano.reflection=deny","--module-path",modules+File.pathSeparator+classes,"-m","peano.directfunctions/demo.Main",expected.toString())).contains("DIRECT_FUNCTION_OK"));
+    }
+    @Test void functionReferencesFollowAstRatherThanColonText() {
+        assertEquals(List.of(new FunctionReference("f","sum",2),new FunctionReference("f","sum",1)),
+                ExpressionCompiler.functions("${true ? f:sum(1,2) : f:sum(3)}"));
+        assertTrue(ExpressionCompiler.functions("${true?name:(callable(1))}").isEmpty());
+        assertTrue(ExpressionCompiler.functions("${'f:sum(1)'}").isEmpty());
+    }
     @Test
     void mappedFunctionsUseDirectTablesWithoutCoreOrCompiler() throws Exception {
         Path classes=temporary.resolve("classes"); Files.createDirectories(classes.resolve("demo"));

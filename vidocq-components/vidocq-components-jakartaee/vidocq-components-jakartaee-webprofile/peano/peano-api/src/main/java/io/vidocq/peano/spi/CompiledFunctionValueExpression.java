@@ -39,6 +39,17 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
             int separator=key.indexOf(':');
             if (separator<0) throw new ELException("Invalid compiled function key "+key);
             String prefix=key.substring(0,separator),name=key.substring(separator+1);
+            if (mapper instanceof CompiledFunctionMapper compiled) {
+                var descriptor=compiled.resolveCompiledFunction(prefix,name);
+                if (descriptor==null) {
+                    if (!prefix.isEmpty()) throw new ELException("Unmapped function "+key);
+                    continue;
+                }
+                var method=descriptor.method();
+                captured.put(key,new FunctionBinding(descriptor.owner(),method.name(),
+                        Arrays.asList(method.parameterTypes()),method.returnType(),descriptor.invoker()));
+                continue;
+            }
             var method=mapper==null ? null : mapper.resolveFunction(prefix,name);
             if (method==null) {
                 if (!prefix.isEmpty()) throw new ELException("Unmapped function "+key);
@@ -48,7 +59,7 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
                     || !Modifier.isPublic(method.getDeclaringClass().getModifiers()))
                 throw new ELException("Function must reference a public static method: "+key);
             captured.put(key,new FunctionBinding(method.getDeclaringClass(),method.getName(),
-                    Arrays.asList(method.getParameterTypes()),method.getReturnType()));
+                    Arrays.asList(method.getParameterTypes()),method.getReturnType(),null));
         }
         functions=Map.copyOf(captured);
     }
@@ -82,6 +93,11 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
     protected final Object invokeFunction(ELContext context,String key,Object[] arguments) {
         FunctionBinding function=functions.get(key);
         if (function==null) throw new MethodNotFoundException("Unmapped function "+key);
+        if (function.invoker()!=null) {
+            try { return function.invoker().invoke(context,arguments); }
+            catch (ELException failure) { throw failure; }
+            catch (Throwable failure) { throw new ELException("Function invocation failed: "+key,failure); }
+        }
         var base=new ELClass(function.owner());
         Class<?>[] types=function.parameters().toArray(new Class<?>[0]);
         context.setPropertyResolved(false);
@@ -128,12 +144,18 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
 
     private record Registry(ClassLoader loader,Map<Class<?>,AccessorTable> tables) {}
 
-    private record FunctionBinding(Class<?> owner,String name,List<Class<?>> parameters,Class<?> returnType) implements Serializable {
+    private record FunctionBinding(Class<?> owner,String name,List<Class<?>> parameters,Class<?> returnType,
+            CompiledFunctionInvoker invoker) implements Serializable {
         private static final long serialVersionUID=1L;
         FunctionBinding {
             Objects.requireNonNull(owner,"owner"); Objects.requireNonNull(name,"name");
             parameters=List.copyOf(parameters); Objects.requireNonNull(returnType,"returnType");
         }
+        @Override public boolean equals(Object other) {
+            return other instanceof FunctionBinding binding && owner==binding.owner && name.equals(binding.name)
+                    && parameters.equals(binding.parameters) && returnType==binding.returnType;
+        }
+        @Override public int hashCode() { return Objects.hash(owner,name,parameters,returnType); }
     }
     private record BindingIdentity(Object variables,Object functions) {}
 

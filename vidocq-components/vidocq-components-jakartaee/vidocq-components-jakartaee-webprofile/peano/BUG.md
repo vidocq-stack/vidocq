@@ -3,6 +3,19 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## CI-003 · 2026-10-11 · Forge branch updates create unsigned merge commits
+
+- Symptom: PR #47 governance checks failed in run 36980, skipping pr-validate,
+  although its official EL TCK remained green.
+- Minimal reproduction: update the PR branch from main through the forge UI;
+  commit c1d07309552915560bf043b610dd56d6e6721771 is an unsigned server merge.
+- Cause: the forge's merge action does not create a maintainer GPG signature,
+  which the shared governance gate requires for every commit in the PR range.
+- Status: fixed by locally rebasing the original signed feature commit onto
+  main with --gpg-sign and replacing the server merge using an explicit lease.
+  The rebased source tree matches the server merge; no runtime behavior changes.
+  Future updates must use a locally signed rebase or the project's signing bot.
+
 ## BENCH-004 · 2026-10-11 · Published JFR files contained environment secrets
 
 - Symptom: raw profiles published with OPT-00 included initial environment records

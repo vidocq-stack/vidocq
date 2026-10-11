@@ -1,5 +1,12 @@
 # Peano — Design plan
 
+Function integration follow-up: descriptor-only CompiledFunctionMapper construction
+accepts immutable MethodDescriptor data and serializable direct invokers. Legacy
+FunctionMapper behaviour remains available. Compiler function-reference inspection
+uses the AST and preserves each occurrence's arity. A named API-only consumer
+proves calls, lambdas, void/error semantics and serialization with reflection denied.
+Java 25 validation passes 291 tests and the official EL TCK remains 361/361.
+
 > Status: **P0–P9 implementation baseline complete**. This document is the design of record for Peano, the
 > Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
 > now implements grammar, evaluation, resolvers, lambdas, collection pipelines,

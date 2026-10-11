@@ -1,4 +1,23 @@
 = Reference
+
+== Static function construction
+
+`CompiledFunctionMapper` supplies `FunctionDescriptor` values containing the owner
+class, existing immutable `MethodDescriptor` metadata and a serializable
+`CompiledFunctionInvoker`. Compiled expressions capture signatures and direct
+callbacks before trying the standard reflective FunctionMapper path. The callback
+owns exact argument conversion and calls a statically validated public static
+method; it must be safe for concurrent reuse and retain no request state.
+
+The callback path needs only Peano API and Jakarta EL at runtime. It does not
+discover providers or resolve reflective members. The descriptor mapper's
+reflective getter rejects interpretation explicitly; legacy construction remains
+available. Void results are null; failures follow existing ELException handling.
+
+`ExpressionCompiler.functions(source)` returns immutable FunctionReference
+occurrences from the parser, including each prefix, name and argument count.
+Repeated functions with differing arities remain separate; quoted colon text
+and unprefixed calls do not become qualified function references.
 :description: Peano coordinates, Java modules, dependencies and planned configuration keys.
 
 [.lead]
