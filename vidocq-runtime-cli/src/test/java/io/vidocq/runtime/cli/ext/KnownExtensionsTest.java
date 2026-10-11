@@ -84,6 +84,17 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void foyServletShipsACodegenBundle() {
+        // Without Foy's extensions on the processor path, @WebServlet classes are no beans and the
+        // session context is never registered (the runtime skips extensions the processor ran).
+        assertEquals(java.util.Optional.of(new ExtensionCoordinate(
+                        "io.vidocq.runtime.extensions.jakartaee.web",
+                        "vidocq-runtime-foy-servlet-extension-codegen")),
+                KnownExtensions.codegenBundle("foy-servlet"));
+        assertEquals("vidocq-runtime-foy-servlet-extension", KnownExtensions.resolve("foy-servlet").artifactId());
+    }
+
+    @Test
     void shortIdLookupIsCaseInsensitive() {
         assertTrue(KnownExtensions.byId("Knock-Health").isPresent());
         assertTrue(KnownExtensions.isKnown("CASSINI-REST"));

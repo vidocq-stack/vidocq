@@ -81,6 +81,10 @@ public final class KnownExtensions {
                     "io.vidocq.runtime.extensions.microprofile",
                     "vidocq-runtime-heisenberg-fault-tolerance-extension",
                     "MicroProfile Fault Tolerance"),
+            new RegistryEntry("foy-servlet",
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-foy-servlet-extension",
+                    "Jakarta Servlet (servlets, filters, HTTP sessions)"),
             new RegistryEntry("mansart-data",
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-data-extension",
@@ -161,6 +165,9 @@ public final class KnownExtensions {
             case "cassini-rest" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.core",
                     "vidocq-runtime-cassini-rest-extension-codegen"));
+            case "foy-servlet" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-foy-servlet-extension-codegen"));
             case "mansart-data" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-data-extension-codegen"));
@@ -190,6 +197,7 @@ public final class KnownExtensions {
             Map.entry("knock-health", "io.vidocq.runtime.extensions.microprofile.knock"),
             Map.entry("dirac-metrics", "io.vidocq.runtime.extensions.microprofile.dirac"),
             Map.entry("heisenberg-fault-tolerance", "io.vidocq.runtime.extensions.microprofile.heisenberg"),
+            Map.entry("foy-servlet", "io.vidocq.runtime.extensions.jakartaee.web.foy"),
             Map.entry("mansart-data", "io.vidocq.runtime.extensions.jakartaee.web.mansart.data"),
             Map.entry("mansart-pool", "io.vidocq.runtime.extensions.jakartaee.web.mansart.pool"),
             Map.entry("migration", "io.vidocq.runtime.extensions.essentials.migration"),
