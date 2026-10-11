@@ -32,9 +32,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FoyMountHandlerProviderTest {
 
+    private final FoyDeployments deployments = new FoyDeployments();
+
     @AfterEach
     void forget() {
-        FoyDeployments.closeAll();
+        deployments.closeAll();
     }
 
     @Test
@@ -46,10 +48,10 @@ class FoyMountHandlerProviderTest {
     void deploysWithTheMountPrefixAsContextPath(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of());
 
-        assertNotNull(new FoyMountHandlerProvider().create(cfg, null,
+        assertNotNull(new FoyMountHandlerProvider().create(cfg, deployments, null,
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
 
-        FoyDeployments.Live live = FoyDeployments.all().getFirst();
+        FoyDeployments.Live live = deployments.all().getFirst();
         assertEquals("web", live.name());
         assertEquals("/web", live.mounted().servletContext().getContextPath());
     }
@@ -59,9 +61,9 @@ class FoyMountHandlerProviderTest {
         MountConfig cfg = mount(Map.of("vidocq.servlet.session-timeout", "600",
                 "vidocq.http.mount.web.session-timeout", "120"));
 
-        new FoyMountHandlerProvider().create(cfg, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
+        new FoyMountHandlerProvider().create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
 
-        assertEquals(2, FoyDeployments.all().getFirst().mounted().servletContext().getSessionTimeout());
+        assertEquals(2, deployments.all().getFirst().mounted().servletContext().getSessionTimeout());
     }
 
     @Test
@@ -69,17 +71,17 @@ class FoyMountHandlerProviderTest {
         MountConfig cfg = mount(Map.of());
 
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> new FoyMountHandlerProvider().create(cfg, null, FoyExtensionTest.loaderWith(root, null)));
+                () -> new FoyMountHandlerProvider().create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, null)));
         assertTrue(e.getMessage().contains("vidocq.http.mount.web.type=servlet"), e.getMessage());
     }
 
     @Test
     void stopClosesDeclarativeDeployments(@TempDir Path root) throws Exception {
-        new FoyMountHandlerProvider().create(mount(Map.of()), null,
+        new FoyMountHandlerProvider().create(mount(Map.of()), deployments, null,
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
         int before = LifecycleListener.DESTROYED.get();
 
-        new FoyExtension((l, p, h) -> {}).onStop();
+        new FoyExtension((l, p, h) -> {}, deployments).onStop();
 
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
     }
@@ -89,9 +91,34 @@ class FoyMountHandlerProviderTest {
         MountConfig cfg = mount(Map.of("vidocq.servlet.confidential-port", "70000"));
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> new FoyMountHandlerProvider()
-                .create(cfg, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
+                .create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
+    }
+
+    @Test
+    void aServletMountWithoutPrefixStrippingIsRefused(@TempDir Path root) throws Exception {
+        MountConfig cfg = mount(Map.of("vidocq.http.mount.web.strip-prefix", "false"));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> new FoyMountHandlerProvider()
+                .create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
+
+        assertTrue(e.getMessage().contains("vidocq.http.mount.web.strip-prefix"), e.getMessage());
+        assertTrue(deployments.all().isEmpty());
+    }
+
+    @Test
+    void aSecondServletMountIsRefused(@TempDir Path root) throws Exception {
+        ClassLoader loader = FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML);
+        new FoyMountHandlerProvider().create(mount(Map.of()), deployments, null, loader);
+        MountConfig admin = new MountConfig("admin", "/admin", "default", 0, FoyExtensionTest.config(Map.of()), null);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> new FoyMountHandlerProvider().create(admin, deployments, null, loader));
+
+        assertTrue(e.getMessage().contains("vidocq.http.mount.admin"), e.getMessage());
+        assertTrue(e.getMessage().contains("vidocq.http.mount.web"), e.getMessage());
+        assertEquals(1, deployments.all().size());
     }
 
     private static MountConfig mount(Map<String, String> values) {

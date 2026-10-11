@@ -49,14 +49,19 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     private final MountTarget target;
     private ServletSettings settings;
+    private FoyDeployments deployments;
+    /** The container of the boot this extension started in: the key of its deployments. */
+    private Object boot;
 
     public FoyExtension() {
         // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
-        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler));
+        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler),
+                new FoyDeployments());
     }
 
-    FoyExtension(MountTarget target) {
+    FoyExtension(MountTarget target, FoyDeployments deployments) {
         this.target = target;
+        this.deployments = deployments;
     }
 
     @Override
@@ -82,6 +87,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void onStart(ExtensionContext context) {
+        boot = context.container();
+        deployments = FoyDeployments.forBoot(boot);
         start(context.beanManager(), context.config(), Thread.currentThread().getContextClassLoader());
     }
 
@@ -99,7 +106,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         }
         FoyChappeBoot.Mounted mounted = deployed.get();
         // Recorded before mounting: a refused mount (duplicate prefix) still leaves it to onStop.
-        FoyDeployments.record(AUTO_MOUNT, settings.listener(), mounted);
+        deployments.record(AUTO_MOUNT, settings.listener(), mounted);
         target.mount(settings.listener(), mounted.mountPrefix(), mounted.handler());
         LOG.log(System.Logger.Level.INFO, "Foy Servlet extension mounted on listener={0} prefix={1}",
                 settings.listener(), mounted.mountPrefix().isEmpty() ? "/" : mounted.mountPrefix());
@@ -107,7 +114,16 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void onStop() {
-        FoyDeployments.closeAll();
+        try {
+            deployments.closeAll();
+        } finally {
+            if (boot != null) FoyDeployments.forget(boot);
+        }
+    }
+
+    /** The deployments of this extension's boot. */
+    FoyDeployments deployments() {
+        return deployments;
     }
 
     @Override
@@ -122,7 +138,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        List<FoyDeployments.Live> live = FoyDeployments.all();
+        List<FoyDeployments.Live> live = deployments.all();
         if (live.isEmpty()) {
             section.summary("inactive: no web component");
             return;
@@ -137,9 +153,12 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
             prefixes.add(l.mounted().mountPrefix().isEmpty() ? "/" : l.mounted().mountPrefix());
         }
         section.summary(servlets + " servlet(s), " + filters + " filter(s) at " + String.join(", ", prefixes));
+        // One deployment per boot: the auto-mount and the declarative servlet mount exclude each other,
+        // and FoyMountHandlerProvider refuses a second servlet mount.
         FoyDeployments.Live first = live.getFirst();
+        int minutes = first.mounted().servletContext().getSessionTimeout();
         section.row("Listener", first.listener());
-        section.row("Session timeout", first.mounted().servletContext().getSessionTimeout() + " min");
+        section.row("Session timeout", minutes <= 0 ? "never" : minutes + " min");
     }
 
     private static boolean hasDeclarativeServletMount(VidocqConfig config) {

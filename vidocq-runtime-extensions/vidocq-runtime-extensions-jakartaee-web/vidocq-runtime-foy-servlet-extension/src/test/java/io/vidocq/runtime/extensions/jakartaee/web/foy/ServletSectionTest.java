@@ -30,14 +30,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ServletSectionTest {
 
+    private final FoyDeployments deployments = new FoyDeployments();
+
     @AfterEach
     void forget() {
-        FoyDeployments.closeAll();
+        deployments.closeAll();
     }
 
     @Test
     void contributesTheServletSection() {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {});
+        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
 
         assertEquals("servlet", extension.id());
         assertEquals("Servlet (Foy)", extension.title());
@@ -47,14 +49,14 @@ class ServletSectionTest {
     void inactiveWithoutDeployment() {
         RecordingSection section = new RecordingSection();
 
-        new FoyExtension((l, p, h) -> {}).contribute(null, section);
+        new FoyExtension((l, p, h) -> {}, deployments).contribute(null, section);
 
         assertEquals("inactive: no web component", section.summary);
     }
 
     @Test
     void summarizesTheLiveDeployments(@TempDir Path root) throws Exception {
-        FoyExtension extension = new FoyExtension((l, p, h) -> {});
+        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
         extension.configure(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "120")));
         extension.start(null, FoyExtensionTest.config(Map.of()),
                 FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
@@ -65,5 +67,18 @@ class ServletSectionTest {
         assertEquals("1 servlet(s), 0 filter(s) at /", section.summary);
         assertEquals("default", section.rows.get("Listener"));
         assertEquals("2 min", section.rows.get("Session timeout"));
+    }
+
+    @Test
+    void sessionsThatNeverExpireSayNever(@TempDir Path root) throws Exception {
+        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        extension.configure(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "0")));
+        extension.start(null, FoyExtensionTest.config(Map.of()),
+                FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
+        RecordingSection section = new RecordingSection();
+
+        extension.contribute(null, section);
+
+        assertEquals("never", section.rows.get("Session timeout"));
     }
 }

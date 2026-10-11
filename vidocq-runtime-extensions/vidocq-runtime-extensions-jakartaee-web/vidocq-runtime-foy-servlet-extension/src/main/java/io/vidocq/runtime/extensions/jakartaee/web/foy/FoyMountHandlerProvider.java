@@ -25,10 +25,13 @@ import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
 import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.util.List;
+
 /**
  * {@code vidocq.http.mount.<n>.type=servlet}: mounts the application's servlets on a declared
  * prefix and listener. The prefix is the context path; {@code vidocq.http.mount.<n>.session-timeout}
- * overrides {@code vidocq.servlet.session-timeout} for this mount.
+ * overrides {@code vidocq.servlet.session-timeout} for this mount. One servlet mount per application,
+ * which strips its prefix: {@code strip-prefix=false} and a second {@code type=servlet} mount fail.
  */
 public final class FoyMountHandlerProvider implements MountHandlerProvider {
 
@@ -39,19 +42,33 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
 
     @Override
     public Handler create(MountConfig cfg) {
-        return create(cfg, cfg.extensionContext().beanManager(), Thread.currentThread().getContextClassLoader());
+        return create(cfg, FoyDeployments.forBoot(cfg.extensionContext().container()),
+                cfg.extensionContext().beanManager(), Thread.currentThread().getContextClassLoader());
     }
 
-    Handler create(MountConfig cfg, BeanManager beanManager, ClassLoader loader) {
+    Handler create(MountConfig cfg, FoyDeployments deployments, BeanManager beanManager, ClassLoader loader) {
+        String key = "vidocq.http.mount." + cfg.name();
+        if ("false".equalsIgnoreCase(cfg.property("strip-prefix").map(String::trim).orElse("true"))) {
+            // Foy would see the full path, its context path included: every servlet path would be off.
+            throw new IllegalStateException(key + ".strip-prefix=false: a servlet mount strips its prefix, "
+                    + "which is the context path; remove the key");
+        }
+        List<FoyDeployments.Live> live = deployments.all();
+        if (!live.isEmpty()) {
+            String other = live.getFirst().name();
+            throw new IllegalStateException(key + ".type=servlet: the application is already mounted by "
+                    + (FoyExtension.AUTO_MOUNT.equals(other) ? other : "vidocq.http.mount." + other)
+                    + "; deploying it twice would start it twice (two ServletContexts). Keep one servlet mount");
+        }
         int global = ServletSettings.seconds(cfg.vidocqConfig().getValue(ServletSettings.SESSION_TIMEOUT).orElse(null));
-        int timeout = ServletSettings.seconds("vidocq.http.mount." + cfg.name() + ".session-timeout",
+        int timeout = ServletSettings.seconds(key + ".session-timeout",
                 cfg.property("session-timeout").orElse(null), global);
         String contextPath = cfg.prefix().isEmpty() || "/".equals(cfg.prefix()) ? "/" : cfg.prefix();
         FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(beanManager, loader, contextPath, timeout, cfg.vidocqConfig())
-                .orElseThrow(() -> new IllegalStateException("vidocq.http.mount." + cfg.name()
+                .orElseThrow(() -> new IllegalStateException(key
                         + ".type=servlet, but the application has no servlet, filter, listener, web.xml "
                         + "nor ServletContainerInitializer"));
-        FoyDeployments.record(cfg.name(), cfg.listener(), mounted);
+        deployments.record(cfg.name(), cfg.listener(), mounted);
         return mounted.handler();
     }
 }

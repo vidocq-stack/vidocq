@@ -25,22 +25,40 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
- * Deploys the application with Foy and keeps the live deployments of this boot: the startup
- * report reads them, {@link FoyExtension#onStop()} closes them (an in-JVM hot reload then starts
- * from a fresh deployment on the new class loader).
+ * Deploys the application with Foy and keeps the live deployments of one boot: the startup report
+ * reads them, {@link FoyExtension#onStop()} closes them (an in-JVM hot reload then starts from a
+ * fresh deployment on the new class loader). The extension and the declarative mounts of a boot
+ * share one instance, found by {@link #forBoot} with the boot's container: two live boots (parallel
+ * tests, a reload that starts the new boot before stopping the old) never see each other's.
  */
 final class FoyDeployments {
 
     /** A deployment mounted under {@code name} ({@code vidocq.servlet}, or a declarative mount's name). */
     record Live(String name, String listener, FoyChappeBoot.Mounted mounted) {}
 
-    private static final List<Live> LIVE = new ArrayList<>();
+    private static final Map<Object, FoyDeployments> BY_BOOT = new IdentityHashMap<>();
 
-    private FoyDeployments() {}
+    private final List<Live> live = new ArrayList<>();
+
+    /** The deployments of the boot identified by {@code boot}, its container. */
+    static FoyDeployments forBoot(Object boot) {
+        synchronized (BY_BOOT) {
+            return BY_BOOT.computeIfAbsent(boot, b -> new FoyDeployments());
+        }
+    }
+
+    /** Drops the deployments of a stopped boot. */
+    static void forget(Object boot) {
+        synchronized (BY_BOOT) {
+            BY_BOOT.remove(boot);
+        }
+    }
 
     /**
      * @param contextPath {@code null}: the descriptors' {@code <default-context-path>}, else {@code /}
@@ -63,25 +81,25 @@ final class FoyDeployments {
         }
     }
 
-    static synchronized void record(String name, String listener, FoyChappeBoot.Mounted mounted) {
-        LIVE.add(new Live(name, listener, mounted));
+    synchronized void record(String name, String listener, FoyChappeBoot.Mounted mounted) {
+        live.add(new Live(name, listener, mounted));
     }
 
-    static synchronized List<Live> all() {
-        return List.copyOf(LIVE);
+    synchronized List<Live> all() {
+        return List.copyOf(live);
     }
 
     /** Closes every deployment of this boot, the last mounted first. */
-    static synchronized void closeAll() {
+    synchronized void closeAll() {
         RuntimeException failure = null;
-        for (Live live : LIVE.reversed()) {
+        for (Live l : live.reversed()) {
             try {
-                live.mounted().close();
+                l.mounted().close();
             } catch (RuntimeException e) {
                 if (failure == null) failure = e; else failure.addSuppressed(e);
             }
         }
-        LIVE.clear();
+        live.clear();
         if (failure != null) throw failure;
     }
 }

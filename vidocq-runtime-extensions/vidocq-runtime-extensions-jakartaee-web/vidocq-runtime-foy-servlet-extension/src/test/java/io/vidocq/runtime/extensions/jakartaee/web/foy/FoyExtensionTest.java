@@ -60,10 +60,11 @@ class FoyExtensionTest {
             """;
 
     private final List<Mount> mounts = new ArrayList<>();
+    private final List<FoyExtension> extensions = new ArrayList<>();
 
     @AfterEach
     void forget() {
-        FoyDeployments.closeAll();
+        extensions.forEach(FoyExtension::onStop);
     }
 
     @Test
@@ -73,7 +74,7 @@ class FoyExtensionTest {
         extension.start(null, config(Map.of()), loaderWith(root, null));
 
         assertTrue(mounts.isEmpty());
-        assertTrue(FoyDeployments.all().isEmpty());
+        assertTrue(extension.deployments().all().isEmpty());
     }
 
     @Test
@@ -86,7 +87,7 @@ class FoyExtensionTest {
         assertEquals(1, mounts.size());
         assertEquals("admin", mounts.getFirst().listener());
         assertEquals("/app", mounts.getFirst().prefix());
-        assertEquals(1, FoyDeployments.all().size());
+        assertEquals(1, extension.deployments().all().size());
     }
 
     @Test
@@ -105,7 +106,7 @@ class FoyExtensionTest {
         extension.start(null, config(Map.of("vidocq.http.mount.web.type", "servlet")), loaderWith(root, WEB_XML));
 
         assertTrue(mounts.isEmpty());
-        assertTrue(FoyDeployments.all().isEmpty());
+        assertTrue(extension.deployments().all().isEmpty());
     }
 
     @Test
@@ -117,7 +118,30 @@ class FoyExtensionTest {
         extension.onStop();
 
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
-        assertTrue(FoyDeployments.all().isEmpty());
+        assertTrue(extension.deployments().all().isEmpty());
+    }
+
+    @Test
+    void stoppingOneBootLeavesTheOtherBootsDeployment(@TempDir Path a, @TempDir Path b) throws Exception {
+        FoyExtension first = configured(Map.of());
+        FoyExtension second = configured(Map.of());
+        first.start(null, config(Map.of()), loaderWith(a, WEB_XML));
+        second.start(null, config(Map.of()), loaderWith(b, WEB_XML));
+        int before = LifecycleListener.DESTROYED.get();
+
+        first.onStop();
+
+        assertEquals(before + 1, LifecycleListener.DESTROYED.get());
+        assertEquals(1, second.deployments().all().size());
+    }
+
+    @Test
+    void eachBootHasItsOwnDeployments() {
+        Object boot = new Object();
+
+        assertSame(FoyDeployments.forBoot(boot), FoyDeployments.forBoot(boot));
+        assertNotSame(FoyDeployments.forBoot(boot), FoyDeployments.forBoot(new Object()));
+        FoyDeployments.forget(boot);
     }
 
     @Test
@@ -131,8 +155,9 @@ class FoyExtensionTest {
     }
 
     private FoyExtension configured(Map<String, String> values) {
-        FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)));
+        FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)), new FoyDeployments());
         extension.configure(new MapConfiguration(values));
+        extensions.add(extension);
         return extension;
     }
 
