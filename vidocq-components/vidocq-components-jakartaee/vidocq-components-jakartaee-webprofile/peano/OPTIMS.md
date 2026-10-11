@@ -301,7 +301,8 @@ exception cleanup, mutable collection freshness and class-loader lifecycle.
 
 Prepared: 2026-10-11. OPT-00 is merged in PR #45. OPT-02/03 are implemented and pass
 their local semantic/reactor/TCK checks; cache measurements are recorded in BENCH.md.
-Their combined PR is being prepared. The remaining lots
+Their combined PR #49 is merged. OPT-04's stateless arithmetic experiment passes
+the reactor checks and its allocation criterion; its PR is being prepared. The remaining lots
 are conditional experiments, with one focused PR per independently reviewable change.
 This plan does not select a public SPI change or resolve an open structural question
 in [PLAN.md](PLAN.md).
@@ -446,6 +447,12 @@ creation for the selected workload. Report miss/eviction penalties alongside hit
 gains. A failed gate means discarding the cache, not relaxing semantic checks.
 
 ### OPT-04 and OPT-05 — Optimize measured evaluation costs
+
+OPT-04 implementation passes ELContext explicitly through static arithmetic helpers.
+Its baseline allocation profile supplied the performance red criterion; semantic
+conversion/order/failure tests passed before and after the change. The GC comparison
+confirms removal of surviving helper allocations. No conversion is bypassed. Results
+and protocol limits are in BENCH.md; final throughput validation remains OPT-08 scope.
 
 For OPT-04, select the conversion/dispatch branch identified by the profile. Write
 tests for compatible-type conversion, custom resolver results, propertyResolved state,

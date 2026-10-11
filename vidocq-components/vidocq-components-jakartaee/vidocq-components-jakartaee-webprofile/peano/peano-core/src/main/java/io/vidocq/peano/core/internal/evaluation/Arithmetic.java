@@ -28,10 +28,7 @@ import io.vidocq.peano.core.internal.syntax.TokenKind;
 
 /** Numeric domain selection and arithmetic from EL 6.0 section 1.7. */
 public final class Arithmetic {
-    private final ELContext context;
-
-    private Arithmetic(ELContext context) {
-        this.context = context;
+    private Arithmetic() {
     }
 
     public static Number binary(TokenKind operator, Object a, Object b) {
@@ -39,10 +36,10 @@ public final class Arithmetic {
     }
 
     public static Number binary(TokenKind operator, Object a, Object b, ELContext context) {
-        return new Arithmetic(context).binaryValues(operator, a, b);
+        return binaryValues(operator, a, b, context);
     }
 
-    private Number binaryValues(TokenKind operator, Object a, Object b) {
+    private static Number binaryValues(TokenKind operator, Object a, Object b, ELContext context) {
         try {
             if (a == null && b == null) {
                 return 0L;
@@ -50,30 +47,30 @@ public final class Arithmetic {
             if (operator == TokenKind.DIVIDE) {
                 if (a instanceof BigDecimal || b instanceof BigDecimal
                         || a instanceof BigInteger || b instanceof BigInteger) {
-                    return number(a, BigDecimal.class).divide(number(b, BigDecimal.class), RoundingMode.HALF_UP);
+                    return number(a, BigDecimal.class, context).divide(number(b, BigDecimal.class, context), RoundingMode.HALF_UP);
                 }
-                return number(a, Double.class) / number(b, Double.class);
+                return number(a, Double.class, context) / number(b, Double.class, context);
             }
             if (operator == TokenKind.MODULO) {
                 if (a instanceof BigDecimal || b instanceof BigDecimal || floating(a) || floating(b)) {
-                    return number(a, Double.class) % number(b, Double.class);
+                    return number(a, Double.class, context) % number(b, Double.class, context);
                 }
                 if (a instanceof BigInteger || b instanceof BigInteger) {
-                    return number(a, BigInteger.class).remainder(number(b, BigInteger.class));
+                    return number(a, BigInteger.class, context).remainder(number(b, BigInteger.class, context));
                 }
-                return number(a, Long.class) % number(b, Long.class);
+                return number(a, Long.class, context) % number(b, Long.class, context);
             }
             if (a instanceof BigDecimal || b instanceof BigDecimal
                     || ((floating(a) || floating(b)) && (a instanceof BigInteger || b instanceof BigInteger))) {
-                return decimal(operator, number(a, BigDecimal.class), number(b, BigDecimal.class));
+                return decimal(operator, number(a, BigDecimal.class, context), number(b, BigDecimal.class, context));
             }
             if (floating(a) || floating(b)) {
-                return floating(operator, number(a, Double.class), number(b, Double.class));
+                return floating(operator, number(a, Double.class, context), number(b, Double.class, context));
             }
             if (a instanceof BigInteger || b instanceof BigInteger) {
-                return integer(operator, number(a, BigInteger.class), number(b, BigInteger.class));
+                return integer(operator, number(a, BigInteger.class, context), number(b, BigInteger.class, context));
             }
-            return integral(operator, number(a, Long.class), number(b, Long.class));
+            return integral(operator, number(a, Long.class, context), number(b, Long.class, context));
         } catch (ELException error) {
             throw error;
         } catch (RuntimeException error) {
@@ -86,15 +83,15 @@ public final class Arithmetic {
     }
 
     public static Number negate(Object value, ELContext context) {
-        return new Arithmetic(context).negateValue(value);
+        return negateValue(value, context);
     }
 
-    private Number negateValue(Object value) {
+    private static Number negateValue(Object value, ELContext context) {
         if (value == null) {
             return 0L;
         }
         if (value instanceof String) {
-            value = floating(value) ? number(value, Double.class) : number(value, Long.class);
+            value = floating(value) ? number(value, Double.class, context) : number(value, Long.class, context);
         }
         return switch (value) {
             case BigDecimal n -> n.negate();
@@ -109,7 +106,7 @@ public final class Arithmetic {
         };
     }
 
-    private <T extends Number> T number(Object value, Class<T> type) {
+    private static <T extends Number> T number(Object value, Class<T> type, ELContext context) {
         Object input = value == null ? 0L : value;
         return context == null ? Coercions.convert(input, type) : context.convertToType(input, type);
     }

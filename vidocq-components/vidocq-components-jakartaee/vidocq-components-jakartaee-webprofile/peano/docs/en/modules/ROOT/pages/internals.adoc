@@ -186,6 +186,11 @@ bodies to `Parser`. Errors and token spans use offsets in the original expressio
 
 == Constant evaluation and coercions (implemented)
 
+Numeric domain selection uses stateless helpers with the caller's ELContext passed
+explicitly. Every required operand conversion still visits ELContext.convertToType;
+this removes helper object allocation without replacing converter hooks or changing
+numeric promotion, evaluation order and arithmetic error handling (EL 6.0 section 1.7).
+
 The interpreter evaluates literals, arithmetic, comparison, logic, `empty`,
 conditional expressions, string concatenation and constant sequences.
 `and`, `or` and `?:` discard the unused branch without evaluating it.

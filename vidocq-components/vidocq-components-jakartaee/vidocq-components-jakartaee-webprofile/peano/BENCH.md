@@ -448,3 +448,43 @@ The cache targets repeated creation, while unique misses include analysis/storag
 overhead. Rotating sources also exercise collision eviction. Setup and miss penalties
 must be assessed alongside the warm results; diagnostic timings have one-fork uncertainty.
 The final long corpus will verify the combined retained changes.
+
+## 2026-10-11 · OPT-04 stateless arithmetic helpers
+
+Branch perf/stateless-arithmetic atop the accepted creation cache. Numeric operations
+now pass ELContext directly through static helpers. Operand evaluation, conversion
+calls, promotion and exception handling remain unchanged. Before the refactor, the
+OPT-00 allocation profile identified surviving Arithmetic instances; eliminating
+that allocation is this experiment's acceptance criterion. New compatible-type,
+domain/order and failure tests passed before and after the refactor.
+
+Same hardware/JVM/context and one-fork GC protocol as the expanded OPT-00 evaluation
+run. The benchmark module now resolves JDK jdk.jfr for archive validation; the profile
+is not active in this GC run. The code change is assessed primarily on allocation;
+short diagnostic timing deltas are not a final throughput claim.
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat package
+rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano -p fixture=arithmetic,property,lambda,collection,arithmeticLarge,arithmeticDouble,arithmeticDecimal,nestedLambda,set,map,mapProperty -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-arithmetic-gc.json
+```
+
+```text
+fixture | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
++arithmetic | 185.329 | 4.501 | 24.001 | -10.9% | -32.000
+property | 71.067 | 5.526 | 24.000 | -2.7% | -0.000
+lambda | 213.299 | 41.373 | 736.001 | 0.2% | -16.000
+collection | 74.778 | 13.166 | 80.001 | 2.9% | 0.000
+arithmeticLarge | 212.759 | 39.123 | 120.001 | -4.3% | -32.000
+arithmeticDouble | 199.058 | 11.667 | 200.001 | -7.1% | -32.000
+arithmeticDecimal | 238.594 | 10.337 | 272.002 | -7.7% | -32.000
+nestedLambda | 413.803 | 15.348 | 2168.003 | -3.0% | -16.000
+set | 457.619 | 5.144 | 1832.003 | -2.6% | -0.000
+map | 1353.115 | 56.463 | 1864.009 | -1.9% | -0.000
+mapProperty | 82.386 | 19.642 | 24.001 | 5.6% | 0.000
+```
+
+[Raw GC results](peano-bench/results/2026-10-11-optim-arithmetic-gc.json). The
+arithmetic fixture removes the two helper allocations while retaining its evaluator
+object. Other allocation deltas depend on operations and JIT escape analysis. General
+numeric values and custom conversion effects remain covered by the semantic tests;
+the final long corpus checks the combined evaluation timing.
