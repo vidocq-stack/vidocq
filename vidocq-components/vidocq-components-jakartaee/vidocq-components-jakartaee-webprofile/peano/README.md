@@ -38,7 +38,8 @@ Method references retain raw arguments and runtime annotations without invoking 
 Set `-Dpeano.reflection=deny` to reject Peano's reflective member fallback with a
 diagnostic naming the target type. Generated tables, custom resolvers and collection
 operations remain available. The default is `allow`; captured-function deserialization
-requires that default because restoring its method descriptor uses reflective lookup.
+requires that default for interpreted expressions because restoring their method descriptor
+uses reflective lookup. Compiled function descriptors restore without member lookup.
 
 Peano's named-consumer tests also run with java.desktop excluded. Optional
 `peano-beans-compat` enables PropertyEditorManager discovery for factory and context
@@ -91,7 +92,8 @@ and wrapper-preserving unary minus. Dynamic comparisons preserve numeric, enum, 
 and Comparable domains. Inline member calls delegate to the supplied resolver.
 Assignments freeze their target before the RHS, honor captured aliases and return
 the original RHS after typed writes.
-Named callables, mapped functions and constructors remain subsequent P7 slices;
+Namespaced mapped functions capture immutable descriptors and use direct accessor tables,
+with the existing policy-controlled API fallback. Named callables and constructors remain subsequent P7 slices;
 peano-bench remains planned.
 Regenerate pre-v3 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.

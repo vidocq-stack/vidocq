@@ -125,6 +125,16 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 mapped-function slice (2026-10-11): namespaced FunctionMapper targets are captured
+at creation as immutable owner/name/parameter/return descriptors. Public/static validity
+and unmapped prefixes are checked even in discarded branches. Bindings contribute to
+identity and serialize without Method objects or member lookup on restoration.
+CompiledFunctionValueExpression invokes direct AccessorProvider tables first, then
+the existing allow/deny-controlled API static fallback. API declares the service use.
+An immutable evaluation-context catalog is reused and refreshed on loader change
+(COMP-008). Direct calls restore/run with no core/compiler in either mode. API reflection
+fallback requires an ExpressionFactory provider, verified with core present (EL-017).
+
 P7 literal-instance correction (2026-10-11, COMP-007): nonempty text literals now
 use private final instance fields initialized in every generated constructor. This
 preserves distinct values across expression instances while retaining stable values

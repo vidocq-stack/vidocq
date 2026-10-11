@@ -105,7 +105,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
         public void accept(Object value) { binding.setValue(context,value); }
     }
 
-    @Override protected final Object bindingIdentity() { return bindings; }
+    @Override protected Object bindingIdentity() { return bindings; }
 
     @Override public final Class<?> getType(ELContext context) {
         Objects.requireNonNull(context,"context");

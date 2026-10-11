@@ -22,5 +22,6 @@ module io.vidocq.peano.api {
     requires transitive jakarta.el;
     exports io.vidocq.peano.spi;
     exports io.vidocq.peano.annotation;
+    uses io.vidocq.peano.spi.AccessorProvider;
 }
 

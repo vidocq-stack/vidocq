@@ -27,6 +27,30 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## EL-017 · 2026-10-11 · API static fallback requires an ExpressionFactory provider
+
+- Symptom: API-only compiled runtime invokes an unregistered mapped Math function
+  through StaticFieldELResolver and fails with ExceptionInInitializerError.
+- Minimal reproduction: map Math.abs(long), omit core/other ExpressionFactory providers
+  and invoke the compiled function in allow mode without a matching accessor table.
+- Cause: Jakarta EL 6.0.1 ELUtil initializes an ExpressionFactory while matching
+  primitive/boxed arguments, even when the caller context supplies conversion.
+- Status: documented upstream prerequisite. Direct registered tables work with API alone;
+  allowed API reflection fallback needs Peano core or another ExpressionFactory provider.
+- Evidence: isolated direct-table allow/deny consumers and an additional core-backed
+  fallback consumer verify both boundaries; no alternative member-reflection path is added.
+
+## COMP-008 · 2026-10-11 · Mapped function calls recreated accessor providers
+
+- Symptom: repeated mapped-function evaluation recreated providers and their catalogs
+  in the same evaluation context instead of reusing the registered tables.
+- Minimal reproduction: call getValue and getType on one mapped function and count
+  provider constructor calls; initial implementation constructed the provider twice.
+- Cause: registered-table discovery ran afresh for every invocation.
+- Status: resolved by an immutable catalog in ELContext, refreshed when the context
+  class loader changes. No global mutable cache or expression context field is added.
+- Evidence: isolated consumers verify initial reuse and loader-change refresh/reuse.
+
 ## COMP-007 · 2026-10-11 · Expression instances shared nonempty text literals
 
 - Symptom: two instances of the same compiled literal class shared their text value,
