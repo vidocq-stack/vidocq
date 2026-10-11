@@ -70,6 +70,33 @@ class ServletSectionTest {
     }
 
     @Test
+    void listsTheContextPathServletsAndFilters(@TempDir Path root) throws Exception {
+        FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
+        extension.configure(new MapConfiguration(Map.of("vidocq.servlet.context-path", "/shop")));
+        extension.start(null, FoyExtensionTest.config(Map.of()), FoyExtensionTest.loaderWith(root, WITH_FILTER));
+        RecordingSection section = new RecordingSection();
+
+        extension.contribute(null, section);
+
+        assertEquals("/shop", section.rows.get("Context path"));
+        assertEquals(java.util.List.of("hello → /hello"), section.lists.get("Servlets"));
+        assertEquals(java.util.List.of("stamp → /*"), section.lists.get("Filters"));
+    }
+
+    /** {@link FoyExtensionTest#WEB_XML} plus a filter on every path. */
+    static final String WITH_FILTER = FoyExtensionTest.WEB_XML.replace("</web-app>", """
+              <filter>
+                <filter-name>stamp</filter-name>
+                <filter-class>io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.StampFilter</filter-class>
+              </filter>
+              <filter-mapping>
+                <filter-name>stamp</filter-name>
+                <url-pattern>/*</url-pattern>
+              </filter-mapping>
+            </web-app>
+            """);
+
+    @Test
     void sessionsThatNeverExpireSayNever(@TempDir Path root) throws Exception {
         FoyExtension extension = new FoyExtension((l, p, h) -> {}, deployments);
         extension.configure(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "0")));

@@ -23,6 +23,7 @@ import io.vidocq.runtime.spi.report.StartupReportSection;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Records what a contributor writes into its section. */
@@ -30,6 +31,7 @@ final class RecordingSection implements StartupReportSection {
 
     String summary;
     final Map<String, String> rows = new LinkedHashMap<>();
+    final Map<String, List<String>> lists = new LinkedHashMap<>();
 
     @Override
     public StartupReportSection summary(String text) {
@@ -45,6 +47,7 @@ final class RecordingSection implements StartupReportSection {
 
     @Override
     public StartupReportSection list(String key, Collection<String> items) {
+        lists.put(key, List.copyOf(items));
         return this;
     }
 

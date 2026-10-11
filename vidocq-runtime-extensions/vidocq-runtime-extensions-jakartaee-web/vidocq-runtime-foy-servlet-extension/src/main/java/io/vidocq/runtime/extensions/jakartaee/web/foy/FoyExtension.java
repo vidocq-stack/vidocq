@@ -29,6 +29,7 @@ import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.servlet.FilterRegistration;
 import jakarta.servlet.ServletContext;
 
 import java.util.ArrayList;
@@ -157,9 +158,23 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         // One deployment per boot: the auto-mount and the declarative servlet mount exclude each other,
         // and FoyMountHandlerProvider refuses a second servlet mount.
         FoyDeployments.Live first = live.getFirst();
-        int minutes = first.mounted().servletContext().getSessionTimeout();
+        ServletContext sc = first.mounted().servletContext();
+        int minutes = sc.getSessionTimeout();
         section.row("Listener", first.listener());
+        section.row("Context path", sc.getContextPath().isEmpty() ? "/" : sc.getContextPath());
         section.row("Session timeout", minutes <= 0 ? "never" : minutes + " min");
+        section.list("Servlets", sc.getServletRegistrations().values().stream()
+                .map(r -> r.getName() + " → " + String.join(", ", r.getMappings()))
+                .sorted().toList());
+        section.list("Filters", sc.getFilterRegistrations().values().stream()
+                .map(FoyExtension::filterLine).sorted().toList());
+    }
+
+    /** {@code name → /pattern, servlet-name}: what a filter applies to. */
+    private static String filterLine(FilterRegistration registration) {
+        List<String> targets = new ArrayList<>(registration.getUrlPatternMappings());
+        targets.addAll(registration.getServletNameMappings());
+        return registration.getName() + " → " + String.join(", ", targets);
     }
 
     private static boolean hasDeclarativeServletMount(VidocqConfig config) {
