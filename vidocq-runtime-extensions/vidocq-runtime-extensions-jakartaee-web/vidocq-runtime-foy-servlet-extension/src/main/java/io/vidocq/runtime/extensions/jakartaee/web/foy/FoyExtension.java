@@ -138,10 +138,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         }
         section.summary(servlets + " servlet(s), " + filters + " filter(s) at " + String.join(", ", prefixes));
         FoyDeployments.Live first = live.getFirst();
-        // Mounted.servletContext() is typed with a Foy-internal class: read it through the Servlet API.
-        ServletContext firstContext = first.mounted().servletContext();
         section.row("Listener", first.listener());
-        section.row("Session timeout", firstContext.getSessionTimeout() + " min");
+        section.row("Session timeout", first.mounted().servletContext().getSessionTimeout() + " min");
     }
 
     private static boolean hasDeclarativeServletMount(VidocqConfig config) {
