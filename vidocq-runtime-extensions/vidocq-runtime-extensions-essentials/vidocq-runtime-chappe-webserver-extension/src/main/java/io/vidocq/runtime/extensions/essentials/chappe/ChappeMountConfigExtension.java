@@ -70,9 +70,11 @@ import java.util.Set;
  * implementation. This leaves the door open for several providers to
  * the same type; a future {@code .impl} will then be able to discriminate.</p>
  *
- * <p>Mounts are recorded in <b>descending priority</b>: one mount
- * with a higher priority wins against another who would share a
- * shorter prefix. The <b>default priority</b> is the length of the
+ * <p>Mounts are routed in <b>descending priority</b>, together with the
+ * mounts other extensions make in code (whose priority is the length of
+ * their prefix): one mount with a higher priority wins against another
+ * that shares a shorter prefix. Two mounts on the same prefix of one
+ * listener fail at startup. The <b>default priority</b> is the length of the
  * normalized prefix, which naturally ensures that {@code /api} wins
  * against {@code /} without having to specify it.</p>
  */
@@ -141,7 +143,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
             // with absolute @Path (e.g. MicroProfile Health @Path("/health")) match at the prefix
             // without the path doubling, while sibling prefixes (static /, /api) stay routable.
             boolean stripPrefix = m.property("strip-prefix", Boolean.class, true);
-            ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler, stripPrefix);
+            ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler, stripPrefix, m.priority());
             LOG.log(System.Logger.Level.INFO,
                     "Mounted '{0}' (type={1}) on listener={2} prefix={3} priority={4} strip-prefix={5}",
                     m.name(), type, m.listener(), m.prefix().isEmpty() ? "/" : m.prefix(),

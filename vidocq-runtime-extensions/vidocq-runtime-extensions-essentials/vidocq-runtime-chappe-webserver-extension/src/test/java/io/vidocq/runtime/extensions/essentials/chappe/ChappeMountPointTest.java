@@ -271,4 +271,20 @@ class ChappeMountPointTest {
         assertEquals(List.of(""), mp.mountPrefixes("admin"));
         assertEquals(List.of(""), mp.mountPrefixes(ChappeListener.DEFAULT));
     }
+
+    @Test
+    void anExplicitPriorityOrdersBeforeThePrefixLength() {
+        mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("api"));
+        mp.mount(ChappeListener.DEFAULT, "/srv", _ -> Response.ok("srv"), true, 200);
+
+        assertEquals(List.of("/srv", "/api"), mp.mountPrefixes(ChappeListener.DEFAULT));
+    }
+
+    @Test
+    void aTrailingSlashIsDroppedFromTheRoutedPrefix() {
+        mp.mount(ChappeListener.DEFAULT, "/api/", _ -> Response.ok("api"));
+        mp.mount(ChappeListener.DEFAULT, "/", _ -> Response.ok("root"));
+
+        assertEquals(List.of("/api", ""), mp.mountPrefixes(ChappeListener.DEFAULT));
+    }
 }

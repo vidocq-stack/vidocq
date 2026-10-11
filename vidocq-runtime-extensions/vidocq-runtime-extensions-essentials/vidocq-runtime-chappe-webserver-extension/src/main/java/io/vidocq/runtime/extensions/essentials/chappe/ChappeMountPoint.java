@@ -255,27 +255,42 @@ public final class ChappeMountPoint {
      * full path (see {@link Router.Builder#mount(String, Handler, boolean)}).
      */
     public void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix) {
+        Objects.requireNonNull(prefix, "prefix");
+        mount(listenerName, prefix, handler, stripPrefix, routingKey(prefix).length());
+    }
+
+    /**
+     * Mounts with an explicit routing priority: the router tries the mounts of a listener by
+     * descending priority, the default one being the length of the prefix (longest prefix first).
+     * Used by {@code vidocq.http.mount.<n>.priority}.
+     */
+    void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority) {
         Objects.requireNonNull(listenerName, "listenerName");
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(handler, "handler");
         ensureOpen();
+        String key = routingKey(prefix);
         String owner = caller();
         List<PendingMount> listenerMounts = mounts.computeIfAbsent(listenerName, n -> new ArrayList<>());
         for (PendingMount existing : listenerMounts) {
-            if (routingKey(existing.prefix()).equals(routingKey(prefix))) {
+            if (existing.prefix().equals(key)) {
                 throw new IllegalStateException("listener '" + listenerName + "': prefix '"
-                        + (routingKey(prefix).isEmpty() ? "/" : prefix) + "' is mounted twice, by "
+                        + (key.isEmpty() ? "/" : key) + "' is mounted twice, by "
                         + existing.owner() + " and by " + owner + "; move one of them "
                         + "(vidocq.rest.context-path, vidocq.servlet.context-path, vidocq.http.mount.<n>.path)");
             }
         }
-        listenerMounts.add(new PendingMount(prefix, handler, stripPrefix, owner));
+        listenerMounts.add(new PendingMount(key, handler, stripPrefix, priority, owner));
         routers.computeIfAbsent(listenerName, n -> Router.builder());
     }
 
-    private record PendingMount(String prefix, Handler handler, boolean stripPrefix, String owner) {}
+    /** A mount waiting for the server start; {@code prefix} is already a routing key. */
+    private record PendingMount(String prefix, Handler handler, boolean stripPrefix, int priority, String owner) {}
 
-    /** The root is spelled {@code ""} or {@code "/"}; a trailing slash never changes the prefix. */
+    /**
+     * The prefix as the router matches it: the root is spelled {@code ""} or {@code "/"}, and a
+     * trailing slash never changes the prefix ({@code /api/} serves {@code /api/items}).
+     */
     private static String routingKey(String prefix) {
         return prefix.endsWith("/") ? prefix.substring(0, prefix.length() - 1) : prefix;
     }
@@ -294,8 +309,9 @@ public final class ChappeMountPoint {
 
     private List<PendingMount> ordered(String listenerName) {
         List<PendingMount> list = new ArrayList<>(mounts.getOrDefault(listenerName, List.of()));
-        // Chappe's router takes the first matching mount: the longest prefix must come first. Stable sort.
-        list.sort(Comparator.comparingInt((PendingMount m) -> routingKey(m.prefix()).length()).reversed());
+        // Chappe's router takes the first matching mount: the highest priority, by default the longest
+        // prefix, must come first. Stable sort.
+        list.sort(Comparator.comparingInt(PendingMount::priority).reversed());
         return list;
     }
 
