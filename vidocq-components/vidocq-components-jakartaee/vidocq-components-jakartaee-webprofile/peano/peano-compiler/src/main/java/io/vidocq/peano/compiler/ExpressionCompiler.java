@@ -116,22 +116,13 @@ public final class ExpressionCompiler {
                         field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
                                 .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
                 for (String field:compiler.strings.values())
-                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL);
-                if (!compiler.strings.isEmpty()) {
-                    builder.withMethodBody("<clinit>",MethodTypeDesc.of(VOID),ClassFile.ACC_STATIC,code-> {
-                        for (var entry:compiler.strings.entrySet()) {
-                            code.new_(STRING).dup().ldc(entry.getKey().token().value())
-                                    .invokespecial(STRING,"<init>",MethodTypeDesc.of(VOID,STRING))
-                                    .putstatic(owner,entry.getValue(),STRING);
-                        }
-                        code.return_();
-                    });
-                }
+                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_FINAL);
                 builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CLASS),ClassFile.ACC_PUBLIC,code-> {
                     code.aload(0).ldc(source).ldc(identity.toString()).aload(1);
                     if (template.kind()==Template.Kind.LITERAL) code.iconst_1(); else code.iconst_0();
                     if (resultType==null) code.aconst_null(); else code.ldc(resultType);
-                    code.invokespecial(BASE,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,BOOLEAN,CLASS)).return_();
+                    code.invokespecial(BASE,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,BOOLEAN,CLASS));
+                    compiler.initializeStrings(code); code.return_();
                 });
             builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                 if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation) {
@@ -167,6 +158,14 @@ public final class ExpressionCompiler {
         });
         } catch (IllegalArgumentException failure) {
             throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
+        }
+    }
+
+    private void initializeStrings(CodeBuilder code) {
+        for (var entry:strings.entrySet()) {
+            code.aload(0).new_(STRING).dup().ldc(entry.getKey().token().value())
+                    .invokespecial(STRING,"<init>",MethodTypeDesc.of(VOID,STRING))
+                    .putfield(owner,entry.getValue(),STRING);
         }
     }
 
@@ -234,14 +233,7 @@ public final class ExpressionCompiler {
                         field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
                                 .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
                 for (String field:compiler.strings.values())
-                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL);
-                if (!compiler.strings.isEmpty()) builder.withMethodBody("<clinit>",MethodTypeDesc.of(VOID),ClassFile.ACC_STATIC,code-> {
-                    for (var entry:compiler.strings.entrySet()) {
-                        code.new_(STRING).dup().ldc(entry.getKey().token().value())
-                                .invokespecial(STRING,"<init>",MethodTypeDesc.of(VOID,STRING)).putstatic(owner,entry.getValue(),STRING);
-                    }
-                    code.return_();
-                });
+                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_FINAL);
                 for (boolean capture:new boolean[]{false,true}) {
                     var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS) : MethodTypeDesc.of(VOID,CLASS);
                     builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
@@ -254,7 +246,8 @@ public final class ExpressionCompiler {
                         int index=0;
                         for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
                         if (body==null) code.iconst_1(); else code.iconst_0();
-                        code.invokespecial(pathBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN)).return_();
+                        code.invokespecial(pathBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN));
+                        compiler.initializeStrings(code); code.return_();
                     });
                 }
                 builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
@@ -309,7 +302,7 @@ public final class ExpressionCompiler {
     private static long serialVersion(String identity) {
         try {
             var digest=java.security.MessageDigest.getInstance("SHA-256");
-            String key="peano-compiled-value-v2:"+identity;
+            String key="peano-compiled-value-v3:"+identity;
             // Hash UTF-16 code units directly, including unpaired surrogate values.
             for (int i=0;i<key.length();i++) {
                 char unit=key.charAt(i);
@@ -1059,7 +1052,7 @@ public final class ExpressionCompiler {
         catch (ELException failure) { emitNumericFailure(code,failure); return; }
         if (value==null) code.aconst_null();
         else if (value instanceof String text) {
-            if (text.isEmpty()) code.ldc(text); else code.getstatic(owner,strings.get(literal),STRING);
+            if (text.isEmpty()) code.ldc(text); else code.aload(0).getfield(owner,strings.get(literal),STRING);
         }
         else if (value instanceof Long number) {
             number(code,number);

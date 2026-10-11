@@ -93,7 +93,7 @@ Assignments freeze their target before the RHS, honor captured aliases and retur
 the original RHS after typed writes.
 Named callables, mapped functions and constructors remain subsequent P7 slices;
 peano-bench remains planned.
-Regenerate pre-v2 compiled
+Regenerate pre-v3 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 
 ## Build

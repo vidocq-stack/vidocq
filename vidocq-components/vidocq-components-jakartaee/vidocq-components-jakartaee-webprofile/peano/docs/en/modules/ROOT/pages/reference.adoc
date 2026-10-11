@@ -61,9 +61,11 @@ bindingIdentity contributes captured bindings when subclasses need them.
 Emitted serialization UIDs fingerprint normalized structure and the emission-schema
 version. Equivalent templates remain compatible across regenerated classes; changed
 expression bodies reject old streams with InvalidClassException. Artifacts from the
-initial fixed-UID prototype and pre-v2 emission rules must be regenerated. Each nonempty
-parsed text literal has a distinct private static final String to preserve conversion
-effects at equality's identity shortcut. Unary getType reevaluates the body,
+initial fixed-UID prototype and pre-v3 emission rules must be regenerated. Each nonempty
+parsed text literal has a distinct private final instance String to preserve conversion
+effects at equality's identity shortcut, including between captured expression instances.
+Constructors initialize those values; serialization preserves their expression-local scope.
+Unary getType reevaluates the body,
 preserving caller conversion effects. Arithmetic evaluates both operands before math
 coercion and preserves the interpreter's Long/Double domains and error causes for the
 supported scalar trees.

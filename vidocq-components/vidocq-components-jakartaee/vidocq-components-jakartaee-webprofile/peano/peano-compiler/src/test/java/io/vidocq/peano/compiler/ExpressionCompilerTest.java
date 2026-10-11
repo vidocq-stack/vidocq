@@ -82,6 +82,17 @@ class ExpressionCompilerTest {
         var factory=ExpressionFactory.newInstance();
         var oracle=new StandardELContext(factory);
         var expected=new ArrayList<String>();
+        int[] oracleConversions={0};
+        var instanceOracle=new StandardELContext(factory) {
+            public <T> T convertToType(Object value,Class<T> type) {
+                if (type==String.class) return (T)(++oracleConversions[0]==1 ? "left" : "right");
+                return super.convertToType(value,type);
+            }
+        };
+        instanceOracle.getVariableMapper().setVariable("left",factory.createValueExpression(instanceOracle,"${'hello'}",Object.class));
+        instanceOracle.getVariableMapper().setVariable("right",factory.createValueExpression(instanceOracle,"${'hello'}",Object.class));
+        assertEquals(Boolean.FALSE,factory.createValueExpression(instanceOracle,"${left==right}",Object.class).getValue(instanceOracle));
+        assertEquals(2,oracleConversions[0]);
         for (int i=0;i<sources.size();i++) {
             byte[] bytes=ExpressionCompiler.compile("demo.E"+i,sources.get(i));
             assertTrue(ClassFile.of().verify(bytes).isEmpty(),sources.get(i)+": "+ClassFile.of().verify(bytes));
@@ -153,6 +164,33 @@ class ExpressionCompilerTest {
                             throw new AssertionError("Expected type was ignored");
                         if (expressions[7].getValue(context)!=expressions[7].getValue(context))
                             throw new AssertionError("Parsed text literal changed identity across evaluations");
+                        int[] instanceConversions={0};
+                        var instanceContext=new Context() {
+                            public VariableMapper getVariableMapper() {
+                                return new VariableMapper() {
+                                    final ValueExpression left=new E7(Object.class),right=new E7(Object.class);
+                                    public ValueExpression resolveVariable(String name) { return "left".equals(name) ? left : right; }
+                                    public ValueExpression setVariable(String name,ValueExpression value) { throw new UnsupportedOperationException(); }
+                                };
+                            }
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==String.class) return (T)(++instanceConversions[0]==1 ? "left" : "right");
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        var instanceEquality=new InstanceEquality(instanceContext,Object.class);
+                        if (!Boolean.FALSE.equals(instanceEquality.getValue(instanceContext))
+                                || instanceConversions[0]!=2)
+                            throw new AssertionError("Distinct compiled instances shared a text literal: "+instanceConversions[0]);
+                        var instanceBytes=new java.io.ByteArrayOutputStream();
+                        try (var output=new java.io.ObjectOutputStream(instanceBytes)) { output.writeObject(instanceEquality); }
+                        instanceConversions[0]=0;
+                        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(instanceBytes.toByteArray()))) {
+                            var restored=(ValueExpression)input.readObject();
+                            if (!restored.equals(instanceEquality) || !Boolean.FALSE.equals(restored.getValue(instanceContext))
+                                    || instanceConversions[0]!=2)
+                                throw new AssertionError("Serialized expression instances lost distinct literal identities");
+                        }
                         var events=new java.util.ArrayList<String>();
                         context.addEvaluationListener(new EvaluationListener() {
                             public void beforeEvaluation(ELContext c,String source){ events.add("before:"+source); }
@@ -393,7 +431,8 @@ class ExpressionCompilerTest {
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
         for (var entry:java.util.Map.of("OrderedMap","${{-'1':-'2',-'3':-'4'}}",
-                "FreshList","${[1]}", "BadCollectionComparison","${[1]<[2]}").entrySet()) {
+                "FreshList","${[1]}", "BadCollectionComparison","${[1]<[2]}",
+                "InstanceEquality","${left==right}").entrySet()) {
             byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
             assertTrue(ClassFile.of().verify(bytes).isEmpty());
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
@@ -429,12 +468,25 @@ class ExpressionCompilerTest {
                     }
                 }
                 """);
+        Files.writeString(source.resolve("LegacySnapshotMain.java"),"""
+                package demo;
+                public class LegacySnapshotMain {
+                    public static void main(String[] args) throws Exception {
+                        var expression=new E7(Object.class);
+                        if (!"hello".equals(expression.getValue(new Main.Context())))
+                            throw new AssertionError("Legacy fixture value changed");
+                        try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
+                            output.writeObject(expression);
+                        }
+                    }
+                }
+                """);
         Files.writeString(source.resolve("module-info.java"),"module peano.compiledconsumer { requires io.vidocq.peano.api; }");
         String modulePath=String.join(File.pathSeparator,location(ExpressionFactory.class).toString(),location(AccessorTable.class).toString());
         run(List.of(javaBin("javac"),"--module-path",modulePath,"--patch-module",
                 "peano.compiledconsumer="+classes,"-d",classes.toString(),
                 source.resolve("module-info.java").toString(),source.resolve("Main.java").toString(),source.resolve("RestoreMain.java").toString(),
-                source.resolve("CompatibleMain.java").toString()));
+                source.resolve("CompatibleMain.java").toString(),source.resolve("LegacySnapshotMain.java").toString()));
         Path snapshot=temporary.resolve("expression.bin");
         String output=run(List.of(javaBin("java"),"--module-path",
                 modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.Main",snapshot.toString()));
@@ -447,6 +499,18 @@ class ExpressionCompilerTest {
         String rejected=run(List.of(javaBin("java"),"--module-path",
                 modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.RestoreMain",snapshot.toString()));
         assertTrue(rejected.contains("PEANO_STALE_ARTIFACT_REJECTED"),rejected);
+        try (var resource=getClass().getResourceAsStream("/legacy-v2-literal.class.b64")) {
+            byte[] legacy=java.util.Base64.getDecoder().decode(new String(resource.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).trim());
+            assertTrue(ClassFile.of().verify(legacy).isEmpty());
+            Files.write(classes.resolve("demo/E7.class"),legacy);
+        }
+        Path legacySnapshot=temporary.resolve("legacy.bin");
+        run(List.of(javaBin("java"),"--module-path",modulePath+File.pathSeparator+classes,
+                "--module","peano.compiledconsumer/demo.LegacySnapshotMain",legacySnapshot.toString()));
+        Files.write(classes.resolve("demo/E7.class"),ExpressionCompiler.compile("demo.E7","${'hello'}"));
+        String migration=run(List.of(javaBin("java"),"--module-path",modulePath+File.pathSeparator+classes,
+                "--module","peano.compiledconsumer/demo.RestoreMain",legacySnapshot.toString()));
+        assertTrue(migration.contains("PEANO_STALE_ARTIFACT_REJECTED"),migration);
     }
 
     @Test

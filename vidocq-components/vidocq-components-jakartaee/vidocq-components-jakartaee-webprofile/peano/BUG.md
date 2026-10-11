@@ -27,6 +27,19 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## COMP-007 · 2026-10-11 · Expression instances shared nonempty text literals
+
+- Symptom: two instances of the same compiled literal class shared their text value,
+  skipping String conversions when those values were compared through captured bindings.
+- Minimal reproduction: bind left/right to separate instances of a compiled `${'hello'}`
+  expression; evaluate `${left==right}` with String conversion returning different values.
+- Cause: private static constants preserved per-node identity but shared it across instances.
+- Status: resolved by constructor-initialized private final instance literals. Values stay
+  stable per expression and distinct across instances. Emission schema v3 rejects older
+  serialized artifacts; regenerate pre-v3 classes before redeployment.
+- Evidence: interpreter oracle returns false after two conversions; independent emitted
+  consumer failed with true/zero conversions before the fix and now matches the oracle.
+
 ## CI-001 · 2026-10-11 · Runner Docker daemon unavailable at job startup
 
 - Symptom: PR #29 governance and optional-profile jobs failed before checkout or tests.
@@ -64,10 +77,10 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   context conversions performed by the interpreter.
 - Minimal reproduction: evaluate `${'x'=='x'}` with a context recording String conversion.
 - Cause: ldc interned both strings, incorrectly triggering the reference-identity shortcut.
-- Status: resolved by initializing a distinct private static final String for each
-  nonempty parsed literal. Each literal retains its stable identity across evaluations.
-  Emission schema v2 rejects serialized artifacts from earlier emission rules; regenerate
-  those application classes before redeployment.
+- Status: resolved by initializing a distinct String for each nonempty parsed literal.
+  The initial static constants were subsequently scoped per instance (COMP-007).
+  Each literal retains stable identity across evaluations; current emission schema v3
+  rejects older streams and requires regenerating pre-v3 application classes.
 - Evidence: independent consumer checks both String conversions and the no-conversion
   identity shortcut for cached integers; all generated classes pass verification.
 

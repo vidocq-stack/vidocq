@@ -125,6 +125,13 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 literal-instance correction (2026-10-11, COMP-007): nonempty text literals now
+use private final instance fields initialized in every generated constructor. This
+preserves distinct values across expression instances while retaining stable values
+within one instance and across its serialized binding graph. Legal String converters
+exposed incorrect comparisons when static fields shared those values. Emission schema
+v3 rejects older streams, verified with a historical v2 class in independent JVMs.
+
 P7 assignment slice (2026-10-11): assignments prepare root/property writers before
 the RHS, freeze alias references and path locations, then return the original RHS
 after writing. Lambda arguments, readonly captured variables and invalid/null targets
@@ -195,9 +202,9 @@ P7 comparison slice (2026-10-11): scalar equality/ordering, concatenation += and
 sequences compile directly. Comparisons retain reference identity and null shortcuts,
 Double/Long/Boolean/String precedence, NaN rules, conversion order and guarded failures.
 Both operands are evaluated before conversion; sequences always evaluate the left body.
-Each nonempty parsed String literal has its own private static final constant, preserving
-distinct and stable identities (COMP-004). Emission schema v2 requires regenerating older
-compiled classes and rejects their serialized streams. Resolver-backed nodes remain next.
+Each nonempty parsed String literal has its own stable object (COMP-004), now scoped
+to each expression instance (COMP-007). Emission schema v3 requires regenerating older
+compiled classes and rejects their serialized streams.
 
 P7 conditional slice (2026-10-11): inline ?: branches convert the condition through
 the caller and evaluate only the selected result. Nullable getType preserves body
@@ -234,7 +241,7 @@ matching interpreter conversion effects without expected-type conversion or even
 Binary operators and dynamic resolver-backed nodes remain subsequent slices.
 
 Compiled serialization UIDs now fingerprint exact UTF-16 units of canonical parsed
-identity plus the peano-compiled-value-v2 emission-schema tag. The tag must change
+identity plus the peano-compiled-value-v3 emission-schema tag. The tag must change
 when emitted semantics or protocol become serialization-incompatible. Changed AST
 redeployments reject old streams; normalized equivalent forms retain original source
 metadata and remain compatible. This replaces the initial prototype's fixed UID.
