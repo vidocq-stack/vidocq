@@ -91,9 +91,8 @@ public final class ExpressionCompiler {
         if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
                 && evaluation.body() instanceof Ast.Identifier identifier)
             return compileRoot(binaryName,source,identifier.name());
-        if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
-                && evaluation.body() instanceof Ast.Property property)
-            return compileProperty(binaryName,source,template,property);
+        if (template.parts().stream().anyMatch(part->part instanceof Template.Evaluation evaluation
+                && containsResolved(evaluation.body()))) return compileResolved(binaryName,source,template);
         StringBuilder identity=new StringBuilder(template.kind()==Template.Kind.LITERAL ? "literal:" : "expression:");
         ClassDesc rawType=STRING;
         for (Template.Part part:template.parts()) {
@@ -196,20 +195,29 @@ public final class ExpressionCompiler {
         }
     }
 
-    private static void validateProperty(Ast node,StringBuilder identity,String source,java.util.Set<String> names) {
-        if (node instanceof Ast.Identifier identifier) {
-            key(identity,"identifier",identifier.name()); names.add(identifier.name());
-        } else if (node instanceof Ast.Property property) {
-            key(identity,"property","");
-            validateProperty(property.base(),identity,source,names);
-            validateProperty(property.key(),identity,source,names);
-        } else validate(node,identity,source);
+    private static boolean containsResolved(Ast node) {
+        return switch (node) {
+            case Ast.Identifier _, Ast.Property _ -> true;
+            case Ast.Unary unary -> containsResolved(unary.operand());
+            case Ast.Binary binary -> containsResolved(binary.left()) || containsResolved(binary.right());
+            case Ast.Conditional conditional -> containsResolved(conditional.condition())
+                    || containsResolved(conditional.whenTrue()) || containsResolved(conditional.whenFalse());
+            case Ast.ListLiteral list -> list.elements().stream().anyMatch(ExpressionCompiler::containsResolved);
+            case Ast.SetLiteral set -> set.elements().stream().anyMatch(ExpressionCompiler::containsResolved);
+            case Ast.MapLiteral map -> map.entries().stream().anyMatch(entry->containsResolved(entry.key()) || containsResolved(entry.value()));
+            default -> false;
+        };
     }
 
-    private static byte[] compileProperty(String binaryName,String source,Template template,Ast.Property property) {
+    private static byte[] compileResolved(String binaryName,String source,Template template) {
         var identity=new StringBuilder("expression:");
         var names=new java.util.LinkedHashSet<String>();
-        validateProperty(property,identity,source,names);
+        for (var part:template.parts()) {
+            if (part instanceof Template.Text text) key(identity,"text",text.value());
+            else validate(((Template.Evaluation)part).body(),identity,source,names);
+        }
+        Ast body=template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
+                ? evaluation.body() : null;
         var owner=ClassDesc.of(binaryName);
         var compiler=new ExpressionCompiler(owner,template);
         var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
@@ -242,13 +250,28 @@ public final class ExpressionCompiler {
                         code.loadConstant(names.size()).anewarray(STRING);
                         int index=0;
                         for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
-                        code.invokespecial(pathBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType)).return_();
+                        if (body==null) code.iconst_1(); else code.iconst_0();
+                        code.invokespecial(pathBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN)).return_();
                     });
                 }
                 builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
-                    compiler.emit(code,property); code.areturn();
+                    if (body!=null) compiler.emit(code,body);
+                    else {
+                        var buffer=ClassDesc.of("java.lang.StringBuilder");
+                        code.new_(buffer).dup().invokespecial(buffer,"<init>",MethodTypeDesc.of(VOID));
+                        for (var part:template.parts()) {
+                            if (part instanceof Template.Text text) code.ldc(text.value());
+                            else {
+                                code.aload(1); compiler.emit(code,((Template.Evaluation)part).body());
+                                code.ldc(STRING).invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(STRING);
+                            }
+                            code.invokevirtual(buffer,"append",MethodTypeDesc.of(buffer,STRING));
+                        }
+                        code.invokevirtual(buffer,"toString",MethodTypeDesc.of(STRING));
+                    }
+                    code.areturn();
                 });
-                builder.withMethodBody("locate",MethodTypeDesc.of(reference,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
+                if (body instanceof Ast.Property property) builder.withMethodBody("locate",MethodTypeDesc.of(reference,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                     int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
                     compiler.emit(code,property.base()); code.astore(base);
                     compiler.requirePresent(code,base,"null base");
@@ -297,34 +320,47 @@ public final class ExpressionCompiler {
     }
 
     private static void validate(Ast node,StringBuilder identity,String source) {
+        validate(node,identity,source,null);
+    }
+
+    private static void validate(Ast node,StringBuilder identity,String source,java.util.Set<String> names) {
         if (node instanceof Ast.Literal literal) {
             literalKey(identity,literal);
+        } else if (names!=null && node instanceof Ast.Identifier identifier) {
+            key(identity,"identifier",identifier.name()); names.add(identifier.name());
+        } else if (names!=null && node instanceof Ast.Property property) {
+            key(identity,"property","");
+            validate(property.base(),identity,source,names); validate(property.key(),identity,source,names);
         } else if (node instanceof Ast.Unary unary) {
+            if (unary.operator().kind()==TokenKind.MINUS && containsResolved(unary.operand()))
+                throw new ELException("Dynamic numeric operands are not compiled in template: "+source);
             key(identity,"unary",unary.operator().kind().name());
             if (signedInteger(unary)) {
                 literalKey(identity,(Ast.Literal)unary.operand());
-            } else validate(unary.operand(),identity,source);
+            } else validate(unary.operand(),identity,source,names);
         } else if (node instanceof Ast.Binary binary
                 && (arithmetic(binary.operator().kind()) || logical(binary.operator().kind())
                     || comparison(binary.operator().kind()) || binary.operator().kind()==TokenKind.CONCAT
                     || binary.operator().kind()==TokenKind.SEMICOLON)) {
             key(identity,"binary",binary.operator().kind().name());
-            validate(binary.left(),identity,source);
-            validate(binary.right(),identity,source);
+            if ((arithmetic(binary.operator().kind()) || comparison(binary.operator().kind())) && containsResolved(binary))
+                throw new ELException("Dynamic numeric/comparison operands are not compiled in template: "+source);
+            validate(binary.left(),identity,source,names);
+            validate(binary.right(),identity,source,names);
         } else if (node instanceof Ast.Conditional conditional) {
             key(identity,"conditional","");
-            validate(conditional.condition(),identity,source);
-            validate(conditional.whenTrue(),identity,source);
-            validate(conditional.whenFalse(),identity,source);
+            validate(conditional.condition(),identity,source,names);
+            validate(conditional.whenTrue(),identity,source,names);
+            validate(conditional.whenFalse(),identity,source,names);
         } else if (node instanceof Ast.ListLiteral list) {
             key(identity,"list",Integer.toString(list.elements().size()));
-            for (Ast element:list.elements()) validate(element,identity,source);
+            for (Ast element:list.elements()) validate(element,identity,source,names);
         } else if (node instanceof Ast.SetLiteral set) {
             key(identity,"set",Integer.toString(set.elements().size()));
-            for (Ast element:set.elements()) validate(element,identity,source);
+            for (Ast element:set.elements()) validate(element,identity,source,names);
         } else if (node instanceof Ast.MapLiteral map) {
             key(identity,"map",Integer.toString(map.entries().size()));
-            for (var entry:map.entries()) { validate(entry.key(),identity,source); validate(entry.value(),identity,source); }
+            for (var entry:map.entries()) { validate(entry.key(),identity,source,names); validate(entry.value(),identity,source,names); }
         } else throw new ELException("Unsupported compiled expression node "+node.getClass().getSimpleName()
                 +" in template: "+source);
     }
@@ -512,17 +548,23 @@ public final class ExpressionCompiler {
                 emit(code,unary.operand());
                 var absent=code.newLabel();
                 var done=code.newLabel();
-                var collection=code.newLabel(); var map=code.newLabel();
+                var collection=code.newLabel(); var map=code.newLabel(); var array=code.newLabel();
                 code.dup().ifnull(absent);
                 int value=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
                 var collectionType=ClassDesc.of("java.util.Collection"); var mapType=ClassDesc.of("java.util.Map");
                 code.astore(value).aload(value).instanceOf(collectionType).ifne(collection)
                         .aload(value).instanceOf(mapType).ifne(map)
+                        .aload(value).invokevirtual(OBJECT,"getClass",MethodTypeDesc.of(CLASS))
+                        .invokevirtual(CLASS,"isArray",MethodTypeDesc.of(BOOLEAN)).ifne(array)
                         .ldc("").aload(value).invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT))
                         .goto_(done).labelBinding(collection).aload(value).checkcast(collectionType)
                         .invokeinterface(collectionType,"isEmpty",MethodTypeDesc.of(BOOLEAN)).goto_(done)
                         .labelBinding(map).aload(value).checkcast(mapType)
                         .invokeinterface(mapType,"isEmpty",MethodTypeDesc.of(BOOLEAN)).goto_(done)
+                        .labelBinding(array).aload(value).invokestatic(ClassDesc.of("java.lang.reflect.Array"),"getLength",
+                                MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),OBJECT));
+                var emptyArray=code.newLabel();
+                code.ifeq(emptyArray).iconst_0().goto_(done).labelBinding(emptyArray).iconst_1().goto_(done)
                         .labelBinding(absent).pop().iconst_1().labelBinding(done);
                 code.invokestatic(boxedBoolean,"valueOf",MethodTypeDesc.of(boxedBoolean,BOOLEAN));
             }

@@ -85,7 +85,9 @@ Scalar comparisons, concatenation and sequences are compiled. Standalone identif
 support resolver metadata, writes and creation-time VariableMapper capture. Standalone
 property navigation supports nested and indexed paths with getter-free metadata.
 List, set and map literals preserve order, nulls, duplicates and fresh mutable results.
-Dynamic operator operands and calls remain subsequent P7 slices; peano-bench remains planned.
+Captured roots/properties also compose in templates, logic, conditionals, concatenation,
+sequences and collections. Dynamic numeric/comparison operands and calls remain
+subsequent P7 slices; peano-bench remains planned.
 Regenerate pre-v2 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 

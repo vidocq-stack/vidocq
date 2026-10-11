@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 bound-composition slice (2026-10-11): roots and properties now compose in logical,
+conditional, concat, sequence, collection and composite templates. Capture traverses
+every distinct name once, including discarded branches. Readonly bodies use an optional
+locate hook; composite getType returns String without evaluating any template part.
+Existing path constructors, location dispatch and streams remain compatible. Empty
+supports primitive/reference arrays through the documented java.base length operation.
+Dynamic arithmetic and comparison are rejected until full runtime domains are emitted.
+
 P7 collection-literal slice (2026-10-11): lists, sets and maps emit fresh ArrayList,
 LinkedHashSet and LinkedHashMap values. Sets evaluate all elements before deduplication;
 maps evaluate each key and value before insertion, retaining duplicate-key replacement

@@ -47,6 +47,15 @@ class PropertyExpressionCompilerTest {
                             || type.name().stringValue().startsWith("io/vidocq/peano/compiler/"));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("Composite","value=${bean.value};${key}",
+                "Conditional","${true ? bean.value : missing}",
+                "Logical","${true or missing}", "BoundList","${[bean.value,key]}",
+                "BoundEmpty","${empty array}", "BoundConcat","${bean.value += key}",
+                "BoundSequence","${bean.value;key}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
         try (var resource=getClass().getResourceAsStream("/property-app/Main.java")) {
             Files.copy(resource,source.resolve("Main.java"));

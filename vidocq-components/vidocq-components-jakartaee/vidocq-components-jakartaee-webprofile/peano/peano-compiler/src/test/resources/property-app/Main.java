@@ -116,6 +116,25 @@ public class Main {
         check(new LiteralKey(Object.class).getValue(context).equals(9L),"Literal key failed");
         check(property.equals(new LiteralKey(Object.class)),"Equivalent navigation identity changed");
         check(new ComputedKey(Object.class).getValue(context).equals(9L),"Computed key failed");
+        context.calls.clear();
+        var composite=new Composite(Object.class);
+        check(composite.getType(context)==String.class && context.calls.isEmpty(),"Composite metadata evaluated parts");
+        check(composite.getValue(context).equals("value=9;value"),"Composite bound parts failed");
+        context.calls.clear();
+        check(new Conditional(Object.class).getValue(context).equals(9L)
+                && context.calls.equals(List.of("read:bean","read:value")),"Discarded conditional resolved name");
+        context.calls.clear();
+        check(Boolean.TRUE.equals(new Logical(Object.class).getValue(context)) && context.calls.isEmpty(),"Discarded logical resolved name");
+        context.roots.put("array",new int[0]);
+        check(Boolean.TRUE.equals(new BoundEmpty(Object.class).getValue(context)),"Empty primitive array failed");
+        context.roots.put("array",new Object[]{null});
+        check(Boolean.FALSE.equals(new BoundEmpty(Object.class).getValue(context)),"Nonempty reference array failed");
+        check(new BoundList(Object.class).getValue(context).equals(List.of(9L,"value")),"Bound collection failed");
+        check(new BoundConcat(Object.class).getValue(context).equals("9value"),"Bound concat failed");
+        check(new BoundSequence(Object.class).getValue(context).equals("value"),"Bound sequence failed");
+        check(composite.isReadOnly(context) && composite.getValueReference(context)==null,"Readonly body metadata changed");
+        try { composite.setValue(context,0); throw new AssertionError("Composite body writable"); }
+        catch (PropertyNotWritableException expected) {}
         context.bindings.put("bean",new Binding(bean)); context.bindings.put("key",new Binding("value"));
         var captured=new Indexed(context,Object.class);
         check(context.captures.equals(List.of("bean","key")),"Capture order or duplicates: "+context.captures);
@@ -138,6 +157,15 @@ public class Main {
                     && restored.getValue(context).equals(9L),"Path serialization lost");
         }
         check(!captured.equals(new Indexed(Object.class)),"Path binding identity ignored");
+        var capturedComposite=new Composite(context,Object.class);
+        var compositeBytes=new java.io.ByteArrayOutputStream();
+        try (var output=new java.io.ObjectOutputStream(compositeBytes)) { output.writeObject(capturedComposite); }
+        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(compositeBytes.toByteArray()))) {
+            var restored=(ValueExpression)input.readObject(); context.calls.clear();
+            check(restored.equals(capturedComposite) && restored.getType(context)==String.class && context.calls.isEmpty(),
+                    "Serialized composite metadata changed");
+            check(restored.getValue(context).equals("value=9;child"),"Serialized composite bindings lost");
+        }
         var failure=new Context() { public ELResolver getELResolver() { throw new IllegalStateException("resolver"); } };
         try { property.getValue(failure); throw new AssertionError("Path resolver failure swallowed"); }
         catch (ELException expected) { check(expected.getCause() instanceof IllegalStateException,"Path resolver cause lost"); }

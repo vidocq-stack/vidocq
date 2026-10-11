@@ -24,9 +24,10 @@ It supports null, boolean, string, integer and floating values, minus, not/! and
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
 % (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
 sequences are emitted directly. Standalone root identifiers and property navigation are
-also supported; calls and dynamic operator operands are rejected in this slice.
+also supported; calls and dynamic numeric/comparison operands are rejected in this slice.
 List, set and map literals emit fresh mutable JDK collections, preserving order, nulls
-and duplicate handling. Their elements remain supported constant/operator/collection trees.
+and duplicate handling. Their elements can include captured root/property values and
+supported operator/collection trees.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
 
@@ -97,6 +98,9 @@ Nested/indexed paths and scalar computed keys are supported. Resolver flags, cap
 binding identity and serialization follow the root protocol's boundaries.
 Collection literals support nested structures and content equality; empty checks actual
 contents. Ordered comparisons use Comparable fallback or raise ELException when unsupported.
+Captured values also compose in logical/conditional bodies, concat, sequences and templates.
+Readonly bodies return no location; composite metadata remains String without getter reads.
+Empty checks runtime primitive/reference array length through the documented java.base exception.
 
 == Legacy property-editor boundary
 

@@ -34,11 +34,19 @@ import jakarta.el.ValueReference;
 public abstract class CompiledPropertyValueExpression extends CompiledValueExpression {
     private static final long serialVersionUID=1L;
     private final Map<String,ValueExpression> bindings;
+    private final boolean composite;
 
     /** A null creationContext selects resolver lookup without variable capture. */
     protected CompiledPropertyValueExpression(String source,String identity,Class<?> expectedType,
             ELContext creationContext,String[] names) {
-        super(source,identity,expectedType,false,null);
+        this(source,identity,expectedType,creationContext,names,false);
+    }
+
+    /** Composite metadata is String without evaluating template parts. */
+    protected CompiledPropertyValueExpression(String source,String identity,Class<?> expectedType,
+            ELContext creationContext,String[] names,boolean composite) {
+        super(source,identity,expectedType,false,composite ? String.class : null);
+        this.composite=composite;
         var captured=new LinkedHashMap<String,ValueExpression>();
         var mapper=creationContext==null ? null : creationContext.getVariableMapper();
         if (mapper!=null) {
@@ -52,7 +60,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     }
 
     /** Evaluates the final base and key without reading the final property getter. */
-    protected abstract ValueReference locate(ELContext context);
+    protected ValueReference locate(ELContext context) { return null; }
 
     protected final Object readIdentifier(ELContext context,String name) {
         return CompiledRootValueExpression.resolveRoot(context,name,bindings.get(name));
@@ -69,7 +77,12 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
 
     @Override public final Class<?> getType(ELContext context) {
         Objects.requireNonNull(context,"context");
+        if (composite) return String.class;
         var location=locate(context);
+        if (location==null) {
+            Object value=evaluate(context);
+            return value==null ? null : value.getClass();
+        }
         context.setPropertyResolved(false);
         Class<?> type=guarded(()->context.getELResolver().getType(context,location.getBase(),location.getProperty()));
         if (!context.isPropertyResolved()) throw missing(location.getProperty());
@@ -79,6 +92,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     @Override public final boolean isReadOnly(ELContext context) {
         Objects.requireNonNull(context,"context");
         var location=locate(context);
+        if (location==null) return true;
         context.setPropertyResolved(false);
         boolean result=guarded(()->context.getELResolver().isReadOnly(context,location.getBase(),location.getProperty()));
         if (!context.isPropertyResolved()) throw missing(location.getProperty());
@@ -93,6 +107,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     @Override public final void setValue(ELContext context,Object value) {
         Objects.requireNonNull(context,"context");
         var location=locate(context);
+        if (location==null) throw new PropertyNotWritableException("This expression is read-only");
         context.setPropertyResolved(false);
         Class<?> target=guarded(()->context.getELResolver().getType(context,location.getBase(),location.getProperty()));
         Object converted=target!=null && context.isPropertyResolved() ? context.convertToType(value,target) : value;
