@@ -18,7 +18,7 @@ for profile_recording in "$profile_input"/*/profile.jfr; do
     jfr scrub --include-events jdk.ExecutionSample,jdk.ObjectAllocationSample \
         "$profile_recording" "$profile_output/$profile_name/profile.jfr" > /dev/null
     jfr summary "$profile_output/$profile_name/profile.jfr" | awk '
-        $1 ~ /^jdk\./ && $2 > 0 && $1 !~ /^jdk\.(ExecutionSample|ObjectAllocationSample|Checkpoint|Metadata)$/ { rejected=1 }
+        $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $2 > 0 && $1 !~ /^jdk\.(ExecutionSample|ObjectAllocationSample|Checkpoint|Metadata)$/ { rejected=1 }
         END { exit rejected }
     '
     profile_count=$((profile_count+1))

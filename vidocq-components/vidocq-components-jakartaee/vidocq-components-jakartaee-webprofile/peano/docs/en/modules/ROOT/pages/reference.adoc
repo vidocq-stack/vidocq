@@ -198,6 +198,9 @@ required statically and excluded from the copied runtime dependencies and semant
 execution. Trial setup asserts named modules and compiler absence. Install, deploy,
 source/Javadoc packaging, signing and Central publication are disabled for this module.
 JMH owns platform benchmark threads for CPU timing; runtime I/O conventions are unchanged.
+The JDK jdk.jfr module is used only by this non-published module to validate archived
+CPU/allocation profiles. Archive tests reject other event types without printing
+their values; scrub-bench-profiles.sh filters recordings before publication.
 
 Peano's accessor processor also generates the shared public-getter benchmark table.
 Its provider is declared in the benchmark module; the model package is exported only
