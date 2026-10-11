@@ -236,8 +236,9 @@ final class MaterializedDeployment implements AutoCloseable {
             walk.filter(p -> p.toString().endsWith(".class"))
                     .forEach(p -> {
                         String relative = root.relativize(p).toString().replace(File.separatorChar, '/');
-                        if (relative.startsWith("WEB-INF/")) {
-                            return; // only normalized root classes; libs are read below
+                        if (relative.startsWith("WEB-INF/") || relative.startsWith("META-INF/")) {
+                            return; // only normalized root classes; libs are read below, and
+                                    // META-INF/resources holds the WAR's copy as web resources
                         }
                         addClassName(names, relative);
                     });

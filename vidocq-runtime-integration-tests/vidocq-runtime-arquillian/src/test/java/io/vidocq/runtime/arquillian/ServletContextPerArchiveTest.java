@@ -36,6 +36,15 @@ class ServletContextPerArchiveTest {
     }
 
     @Test
+    void aBindFailureAnywhereInTheCausesIsRetried() {
+        Exception bind = new RuntimeException("start failed",
+                new IllegalStateException("wrapped", new RuntimeException("Failed to bind to 127.0.0.1:62753")));
+
+        assertTrue(VidocqEmbeddedContainer.isBindFailure(bind));
+        assertFalse(VidocqEmbeddedContainer.isBindFailure(new RuntimeException("no servlet")));
+    }
+
+    @Test
     void theOptionIsOffByDefault() {
         assertFalse(new VidocqContainerConfig().isServletContextPerArchive());
     }

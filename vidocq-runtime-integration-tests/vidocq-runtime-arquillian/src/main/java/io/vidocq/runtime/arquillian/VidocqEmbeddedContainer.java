@@ -61,6 +61,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
 
     /** Read by the Servlet extension: the context path, and mount prefix, of the application. */
     private static final String SERVLET_CONTEXT_PATH = "vidocq.servlet.context-path";
+    private static final int BIND_ATTEMPTS = 3;
 
     private VidocqContainerConfig config;
     private final Map<Archive<?>, DeploymentState> deployments = new LinkedHashMap<>();
@@ -115,8 +116,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         MaterializedDeployment materialized = null;
         ClassLoader previousTccl = Thread.currentThread().getContextClassLoader();
         try {
-            int port = config.getPort() == 0 ? findFreePort() : config.getPort();
-
             // Surface the archive content (keys, static documents,
             // META-INF/services entries) on a deployment class loader. It stays
             // installed as the context class loader until undeploy: threads the
@@ -138,8 +137,6 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // Set system properties for the Chappe HTTP listener (consumed by
             // ChappeServerBootstrap). Cassini (rest-cassini-extension) mounts
             // on this listener via ChappeMountPoint.
-            System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
-            System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(port));
             String contextPath = "/";
             if (config.isServletContextPerArchive()) {
                 contextPath = contextPathOf(archive.getName());
@@ -158,10 +155,25 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // breaks profile resolution (%dev. keys).
             Thread.currentThread().setContextClassLoader(materialized.classLoader());
 
-            // Boot Vidocq with extracted classes
-            VidocqBootstrap bootstrap = VidocqBootstrap.create();
-            bootstrap.configure(beanClassNames);
-            bootstrap.start();
+            // Boot Vidocq with extracted classes. A free port is probed, then bound by the runtime
+            // a little later: another process may take it in between ("Failed to bind"), which a
+            // run of a few hundred boots meets. Such a boot is retried on another port.
+            VidocqBootstrap bootstrap;
+            int port;
+            for (int attempt = 1; ; attempt++) {
+                port = config.getPort() == 0 ? findFreePort() : config.getPort();
+                System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
+                System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(port));
+                bootstrap = VidocqBootstrap.create();
+                try {
+                    bootstrap.configure(beanClassNames);
+                    bootstrap.start();
+                    break;
+                } catch (RuntimeException e) {
+                    if (config.getPort() != 0 || attempt == BIND_ATTEMPTS || !isBindFailure(e)) throw e;
+                    shutdownQuietly(bootstrap);
+                }
+            }
 
             // In-container tests (Local protocol) run outside any HTTP request,
             // but CDI TCK beans are frequently @RequestScoped. A servlet-based
@@ -214,6 +226,22 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     static String contextPathOf(String archiveName) {
         String name = archiveName.endsWith(".war") ? archiveName.substring(0, archiveName.length() - 4) : archiveName;
         return "/" + name;
+    }
+
+    /** Whether {@code failure} comes from a listener that could not bind its port. */
+    static boolean isBindFailure(Throwable failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t.getMessage() != null && t.getMessage().contains("Failed to bind")) return true;
+        }
+        return false;
+    }
+
+    private static void shutdownQuietly(VidocqBootstrap bootstrap) {
+        try {
+            bootstrap.shutdown();
+        } catch (RuntimeException ignored) {
+            // A boot that failed to start may have nothing to stop.
+        }
     }
 
     private static void closeQuietly(MaterializedDeployment materialized) {

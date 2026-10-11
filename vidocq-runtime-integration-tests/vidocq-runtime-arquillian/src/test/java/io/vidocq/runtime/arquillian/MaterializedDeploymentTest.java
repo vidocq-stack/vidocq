@@ -95,6 +95,8 @@ class MaterializedDeploymentTest {
             assertNotNull(deployment.classLoader().getResource("META-INF/resources/WEB-INF/web.xml"));
             assertNotNull(deployment.classLoader().getResource("META-INF/resources/WEB-INF/classes/"
                     + MaterializedDeploymentTest.class.getName().replace('.', '/') + ".class"));
+            assertEquals(java.util.List.of(MaterializedDeploymentTest.class.getName()), deployment.beanClassNames(),
+                    "the copies under META-INF/resources are no classes of the deployment");
         }
     }
 
