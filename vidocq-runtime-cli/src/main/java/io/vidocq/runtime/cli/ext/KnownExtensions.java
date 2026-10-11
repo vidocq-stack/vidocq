@@ -101,6 +101,10 @@ public final class KnownExtensions {
                     "io.vidocq.runtime.extensions.essentials",
                     "vidocq-runtime-liquibase-migration-extension",
                     "Liquibase schema migrations"),
+            new RegistryEntry("langchain4j-cdi-mcp",
+                    "io.vidocq.runtime.extensions.essentials",
+                    "vidocq-runtime-langchain4j-cdi-mcp-extension",
+                    "langchain4j-cdi MCP server (/mcp)"),
             new RegistryEntry("mansart-transactions",
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-transactions-extension",
@@ -195,6 +199,7 @@ public final class KnownExtensions {
             Map.entry("migration", "io.vidocq.runtime.extensions.essentials.migration"),
             Map.entry("flyway-migration", "io.vidocq.runtime.extensions.essentials.migration.flyway"),
             Map.entry("liquibase-migration", "io.vidocq.runtime.extensions.essentials.migration.liquibase"),
+            Map.entry("langchain4j-cdi-mcp", "io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp"),
             Map.entry("mansart-transactions", "io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions"));
 
     /** The module a catalog extension ships; empty for an id outside the catalog. */
@@ -207,6 +212,8 @@ public final class KnownExtensions {
      * needs to use {@code id}: its module, which re-exports most extension APIs transitively,
      * plus what the extension leaves to the application — Cassini does not re-export
      * Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
+     * The MCP extension is found as a service and never required: the application reads the
+     * langchain4j-cdi MCP server instead, whose annotations and types it compiles against.
      * {@code opens} is added only for an existing {@code applicationPackage}, which JAX-RS,
      * JSON-B and Jakarta Persistence reflect on. Empty for an id outside the catalog.
      */
@@ -227,6 +234,10 @@ public final class KnownExtensions {
             }
             case "mansart-data" -> {
                 directives.addAll(List.of("requires static java.compiler", "requires " + module.get()));
+                opens = true;
+            }
+            case "langchain4j-cdi-mcp" -> {
+                directives.add("requires dev.langchain4j.cdi.mcp.server");
                 opens = true;
             }
             default -> directives.add("requires " + module.get());
