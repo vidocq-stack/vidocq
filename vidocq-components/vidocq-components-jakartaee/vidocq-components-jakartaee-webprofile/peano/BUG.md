@@ -3,6 +3,21 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BENCH-004 · 2026-10-11 · Published JFR files contained environment secrets
+
+- Symptom: raw profiles published with OPT-00 included initial environment records
+  containing GEMINI_API_KEY and SONAR_TOKEN values, as well as process/system metadata.
+- Minimal reproduction: record the default JDK JFR profile in a process inheriting
+  environment variables, then inspect jdk.InitialEnvironmentVariable events.
+- Cause: default JFR profile settings capture metadata beyond CPU/allocation events;
+  the recordings were archived without filtering their contents.
+- Status: current artifacts mitigated by retaining only ExecutionSample and
+  ObjectAllocationSample events. Historical credentials require revocation by the
+  maintainer; deleting current events does not erase previously pushed Git history.
+- Evidence: filtered recordings contain no environment/system-property events or
+  bytes matching the affected values. CPU/allocation event counts remain unchanged.
+  scrub-bench-profiles.sh enforces the event allowlist before future publication.
+
 ## BENCH-003 · 2026-10-11 · Component benchmark forks repeated module patch options
 
 - Symptom: the diagnostic benchmark listed successfully but its first fork failed

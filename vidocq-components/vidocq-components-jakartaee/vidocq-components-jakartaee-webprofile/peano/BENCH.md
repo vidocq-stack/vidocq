@@ -240,7 +240,16 @@ rtk ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBe
 ```
 
 [Raw profiler run JSON](peano-bench/results/2026-10-11-optim-profile.json) and
-[raw JFR recordings](peano-bench/results/2026-10-11-optim-jfr/) preserve the evidence.
+[filtered JFR recordings](peano-bench/results/2026-10-11-optim-jfr/) preserve the CPU
+and allocation evidence. The original archive included sensitive environment metadata
+(BENCH-004); the current files retain only ExecutionSample/ObjectAllocationSample
+events. Raw recordings under target must remain local. Before archiving new profiles:
+
+```bash
+rtk ./scrub-bench-profiles.sh peano-bench/target/optim-jfr peano-bench/target/publishable-jfr
+```
+
+Archive only the filtered output. The output directory must be new for each invocation.
 For inspection, run `jfr print --json --stack-depth 12 --events
 jdk.ExecutionSample,jdk.ObjectAllocationSample <recording>` with the pinned JDK.
 Filter events to the JMH worker thread. Attribute CPU samples to their nearest Peano

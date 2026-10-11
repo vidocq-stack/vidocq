@@ -46,6 +46,12 @@ workloads, not process startup or retained-expression evaluation measurements.
 Use JMH's `-prof gc` and `-prof jfr` in separate diagnostic runs; profiling results
 must be compared under their own unchanged protocol. Stream pipelines and larger
 application corpora remain future measurements.
+
+JFR's default profile captures environment variables and process metadata. Keep its
+raw recordings local under target. Before archiving, run `./scrub-bench-profiles.sh
+<input-directory> <new-output-directory>` and publish only the filtered output. The
+script retains CPU/allocation events and verifies their event allowlist. Filtering
+current files cannot remove values already present in Git history (BENCH-004).
 Every figure is recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.
 
