@@ -24,8 +24,14 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.servlet.ServletContext;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -35,7 +41,7 @@ import java.util.Set;
  * server start (10000). Foy activates the CDI request context itself and, through
  * {@code foy-cdi-vauban}, the session context: the dispatch is not wrapped here.
  */
-public final class FoyExtension implements VidocqExtension {
+public final class FoyExtension implements VidocqExtension, StartupReportContributor {
 
     static final String AUTO_MOUNT = "vidocq.servlet";
     private static final System.Logger LOG = System.getLogger(FoyExtension.class.getName());
@@ -99,6 +105,40 @@ public final class FoyExtension implements VidocqExtension {
     @Override
     public void onStop() {
         FoyDeployments.closeAll();
+    }
+
+    @Override
+    public String id() {
+        return "servlet";
+    }
+
+    @Override
+    public String title() {
+        return "Servlet (Foy)";
+    }
+
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        List<FoyDeployments.Live> live = FoyDeployments.all();
+        if (live.isEmpty()) {
+            section.summary("inactive: no web component");
+            return;
+        }
+        int servlets = 0;
+        int filters = 0;
+        List<String> prefixes = new ArrayList<>();
+        for (FoyDeployments.Live l : live) {
+            ServletContext sc = l.mounted().servletContext();
+            servlets += sc.getServletRegistrations().size();
+            filters += sc.getFilterRegistrations().size();
+            prefixes.add(l.mounted().mountPrefix().isEmpty() ? "/" : l.mounted().mountPrefix());
+        }
+        section.summary(servlets + " servlet(s), " + filters + " filter(s) at " + String.join(", ", prefixes));
+        FoyDeployments.Live first = live.getFirst();
+        // Mounted.servletContext() is typed with a Foy-internal class: read it through the Servlet API.
+        ServletContext firstContext = first.mounted().servletContext();
+        section.row("Listener", first.listener());
+        section.row("Session timeout", firstContext.getSessionTimeout() + " min");
     }
 
     private static boolean hasDeclarativeServletMount(VidocqConfig config) {
