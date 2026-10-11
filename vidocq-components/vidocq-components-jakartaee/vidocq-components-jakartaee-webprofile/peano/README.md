@@ -107,6 +107,10 @@ Chained callable results and lambda construction compile with lexical argument c
 immediate invocation and nested parameter shadowing. The opt-in peano-bench harness
 compares warmed arithmetic evaluation and repeated expression creation with Expressly;
 initial results are recorded in [BENCH.md](BENCH.md).
+The selected optimization campaign is documented in [OPTIMS.md](OPTIMS.md), with
+final comparisons, allocation, concurrent creation and bounded-cache retention in
+[BENCH.md](BENCH.md). Repeated creation reuses factory-local context-free analysis;
+each expression retains its own bindings and nonempty literal values.
 The Vidocq provider extension, CLI entry and accessor codegen integration are delivered
 in [Vidocq #226](https://codefloe.com/Vidocq/vidocq/pulls/226).
 ExpressionCompiler.compileMethod emits MethodExpression classes for literals,

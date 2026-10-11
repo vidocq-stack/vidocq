@@ -202,7 +202,7 @@ Raw scores, nanoseconds per operation:
 
 ```text
 benchmark | engine | fixture | score | error | unit
-+CreationBenchmark.create | peano | arithmetic | 328.230 | 5.489 | ns/op
+CreationBenchmark.create | peano | arithmetic | 328.230 | 5.489 | ns/op
 CreationBenchmark.create | peano | property | 230.416 | 7.302 | ns/op
 CreationBenchmark.create | peano | lambda | 506.053 | 9.804 | ns/op
 CreationBenchmark.create | peano | collection | 378.966 | 2.476 | ns/op
@@ -297,7 +297,7 @@ Raw aggregate scores and allocations:
 
 ```text
 benchmark | fixture/workload | ns/op | error ns/op | B/op
-+EvaluationBenchmark.evaluate | arithmetic | 208.088 | 24.291 | 56.001
+EvaluationBenchmark.evaluate | arithmetic | 208.088 | 24.291 | 56.001
 EvaluationBenchmark.evaluate | property | 73.003 | 3.917 | 24.001
 EvaluationBenchmark.evaluate | lambda | 212.831 | 5.355 | 752.001
 EvaluationBenchmark.evaluate | collection | 72.675 | 1.479 | 80.001
@@ -350,7 +350,7 @@ rtk ./run-analysis-bench.sh -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff p
 
 ```text
 component | fixture | ns/op | error ns/op | B/op
-+captureFunctions | arithmetic | 12.773 | 0.169 | 112.000
+captureFunctions | arithmetic | 12.773 | 0.169 | 112.000
 captureFunctions | lambda | 29.127 | 0.663 | 320.000
 captureVariables | arithmetic | 35.287 | 6.894 | 408.000
 captureVariables | lambda | 52.269 | 3.430 | 616.000
@@ -380,7 +380,7 @@ rtk ./run-bench.sh 'io.vidocq.peano.bench.CreationBenchmark.create$' -p engine=p
 
 ```text
 fixture | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
-+arithmetic | 306.567 | 3.093 | 2304.002 | -6.8% | 56.000
+arithmetic | 306.567 | 3.093 | 2304.002 | -6.8% | 56.000
 lambda | 496.339 | 3.395 | 3256.003 | 0.9% | -208.000
 ```
 
@@ -417,7 +417,7 @@ the matching OPT-00 long-protocol creation result:
 
 ```text
 fixture | ns/op | error ns/op | OPT-00 ns/op | time delta
-+arithmetic | 9.355 | 0.035 | 328.230 | -97.1%
+arithmetic | 9.355 | 0.035 | 328.230 | -97.1%
 property | 31.411 | 0.108 | 230.416 | -86.4%
 lambda | 9.341 | 0.035 | 506.053 | -98.2%
 collection | 9.336 | 0.015 | 378.966 | -97.5%
@@ -427,7 +427,7 @@ GC diagnostics use the same one-fork protocol as the corresponding OPT-00 run:
 
 ```text
 benchmark | fixture/workload | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
-+CreationBenchmark.create | arithmetic | 9.319 | 0.017 | 80.000 | -97.2% | -2168.002
+CreationBenchmark.create | arithmetic | 9.319 | 0.017 | 80.000 | -97.2% | -2168.002
 CreationBenchmark.create | lambda | 9.332 | 0.067 | 80.000 | -98.1% | -3384.003
 SourceCreationBenchmark.create | repeated | 10.822 | 0.112 | 80.000 | -95.0% | -1672.001
 SourceCreationBenchmark.create | rotating | 60.438 | 8.115 | 456.250 | -71.1% | -1295.751
@@ -470,7 +470,7 @@ rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano -p fixture=ar
 
 ```text
 fixture | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
-+arithmetic | 185.329 | 4.501 | 24.001 | -10.9% | -32.000
+arithmetic | 185.329 | 4.501 | 24.001 | -10.9% | -32.000
 property | 71.067 | 5.526 | 24.000 | -2.7% | -0.000
 lambda | 213.299 | 41.373 | 736.001 | 0.2% | -16.000
 collection | 74.778 | 13.166 | 80.001 | 2.9% | 0.000
@@ -511,7 +511,7 @@ rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano,compiled -p f
 
 ```text
 engine | fixture | ns/op | error ns/op | B/op | time delta vs previous matching GC | allocation delta B/op
-+peano | lambda | 219.142 | 11.780 | 640.002 | 2.7% | -96.000
+peano | lambda | 219.142 | 11.780 | 640.002 | 2.7% | -96.000
 peano | nestedLambda | 426.158 | 48.050 | 2064.003 | 3.0% | -104.000
 compiled | lambda | 155.718 | 14.494 | 160.001 | 4.0% | -80.000
 compiled | nestedLambda | 290.022 | 17.905 | 832.002 | 4.4% | -80.000
@@ -538,7 +538,7 @@ rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano,compiled -p f
 
 ```text
 engine | fixture | ns/op | error ns/op | B/op | time delta vs initial OPT-05 | allocation delta B/op
-+peano | lambda | 185.349 | 4.822 | 432.001 | -15.4% | -208.000
+peano | lambda | 185.349 | 4.822 | 432.001 | -15.4% | -208.000
 peano | nestedLambda | 366.577 | 12.870 | 1496.003 | -14.0% | -568.000
 compiled | lambda | 146.611 | 1.447 | 160.001 | -5.8% | -0.000
 compiled | nestedLambda | 278.040 | 14.879 | 832.002 | -4.1% | -0.000
@@ -549,3 +549,164 @@ compiled | nestedLambda | 278.040 | 14.879 | 832.002 | -4.1% | -0.000
 Only the refined implementation is retained. Timing remains diagnostic; the final
 long corpus validates the complete combination. API-004's pre-existing null-shadowing
 limitation is tracked separately and excluded from optimization claims.
+
+## 2026-10-11 · OPT-08 final combined corpus
+
+Measured runtime: `34a748d24ea9eb287270ea0313253b8b1f7192d7`, after merged
+PRs #49/#50/#51, with measurement-only concurrent/retention harness additions on
+`perf/optim-consolidation`. The final long run does not use those added workloads.
+Same Apple M5 Max/Mac17,6, 18 logical CPUs, 128 GiB RAM, macOS 27.0.1,
+Temurin 25+36-LTS, Maven 3.9.16, JMH 1.37, Expressly 6.0.0 and EL API 6.0.1.
+AC power, macOS power mode 0; load and thermal/frequency state remain uncontrolled.
+No local builds or simultaneous measurements ran during the corpus. Documentation
+and source inspection continued. Inputs, provider/context association and timing
+boundaries are unchanged from OPT-00. One thread, three forks, five one-second
+warmups, eight one-second measurements: 24 samples per combination.
+
+Exact commands, with JAVA_HOME and PATH selecting the pinned Temurin 25:
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat clean install
+rtk ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-final.json
+```
+
+Scores and JMH errors in ns/op; deltas compare means with the frozen OPT-00 run:
+
+```text
+benchmark | engine | fixture | before | before error | final | final error | delta
+CreationBenchmark.create | peano | arithmetic | 328.230 | 5.489 | 9.356 | 0.075 | -97.1%
+CreationBenchmark.create | peano | property | 230.416 | 7.302 | 31.103 | 0.088 | -86.5%
+CreationBenchmark.create | peano | lambda | 506.053 | 9.804 | 9.315 | 0.050 | -98.2%
+CreationBenchmark.create | peano | collection | 378.966 | 2.476 | 9.315 | 0.029 | -97.5%
+CreationBenchmark.create | expressly | arithmetic | 26.727 | 0.293 | 25.656 | 0.130 | -4.0%
+CreationBenchmark.create | expressly | property | 25.109 | 0.151 | 24.625 | 0.314 | -1.9%
+CreationBenchmark.create | expressly | lambda | 31.983 | 0.434 | 31.152 | 0.290 | -2.6%
+CreationBenchmark.create | expressly | collection | 25.372 | 0.100 | 24.443 | 0.101 | -3.7%
+EvaluationBenchmark.evaluate | peano | arithmetic | 204.499 | 1.875 | 183.134 | 1.429 | -10.4%
+EvaluationBenchmark.evaluate | peano | property | 71.443 | 0.388 | 69.644 | 0.614 | -2.5%
+EvaluationBenchmark.evaluate | peano | lambda | 216.022 | 1.377 | 183.326 | 3.802 | -15.1%
+EvaluationBenchmark.evaluate | peano | collection | 72.012 | 0.430 | 69.389 | 0.736 | -3.6%
+EvaluationBenchmark.evaluate | expressly | arithmetic | 54.057 | 0.951 | 54.777 | 2.127 | 1.3%
+EvaluationBenchmark.evaluate | expressly | property | 88.762 | 0.744 | 86.084 | 1.007 | -3.0%
+EvaluationBenchmark.evaluate | expressly | lambda | 112.759 | 0.881 | 108.644 | 1.651 | -3.7%
+EvaluationBenchmark.evaluate | expressly | collection | 55.797 | 0.537 | 54.255 | 0.425 | -2.8%
+EvaluationBenchmark.evaluate | compiled | arithmetic | 256.296 | 49.055 | 165.185 | 1.824 | -35.5%
+EvaluationBenchmark.evaluate | compiled | property | 73.458 | 2.153 | 71.162 | 1.023 | -3.1%
+EvaluationBenchmark.evaluate | compiled | lambda | 158.033 | 2.926 | 147.171 | 1.545 | -6.9%
+EvaluationBenchmark.evaluate | compiled | collection | 89.325 | 8.304 | 72.222 | 0.739 | -19.1%
+```
+
+[Final raw JSON](peano-bench/results/2026-10-11-optim-final.json),
+[OPT-00 raw JSON](peano-bench/results/2026-10-11-optim-baseline.json).
+Errors are JMH errors, not standard deviations. Repeated creation strongly benefits
+from bounded reuse; arithmetic and lambda evaluation improvements remain in the long
+combined run. Expressly controls also moved, so small property/collection differences
+are not evidence of a targeted optimization. The compiled arithmetic baseline has
+large error; its mean delta is descriptive, not an
+attributable 35.5% speedup. Compiled collection similarly had a noisier baseline.
+The final compiled arithmetic mean is close to the earlier short corpus's 164.142 ns/op.
+
+The intervening upstream PR #47 adds direct static-function construction and is part
+of the final runtime; these fixtures do not call mapped functions. The archive guard
+adds the build-only jdk.jfr module to the harness graph. These are comparison caveats,
+not optimization claims. Compiler setup remains outside evaluation timing, and
+Peano-generated property access still differs from Expressly's reflective path.
+No unexplained general-path regression appears in this small corpus. This does not
+establish behavior for streams, larger applications or process startup.
+
+### OPT-08 · Allocation and setup outcome
+
+The separately archived GC comparisons above retain their own three-warmup,
+five-measurement, one-fork protocol. Rounded B/op for the chosen changes:
+
+| Workload | Before | Retained result | Delta B/op | Comparison |
+| --- | ---: | ---: | ---: | --- |
+| Repeated arithmetic creation | 2248 | 80 | -2168 | OPT-00 creation GC vs OPT-03 |
+| Repeated lambda creation | 3464 | 80 | -3384 | OPT-00 creation GC vs OPT-03 |
+| Interpreted arithmetic evaluation | 56 | 24 | -32 | OPT-00 evaluation GC vs OPT-04 |
+| Interpreted lambda evaluation | 752 | 432 | -320 | OPT-00 evaluation GC vs refined OPT-05 |
+| Interpreted nested lambda evaluation | 2184 | 1496 | -688 | OPT-00 evaluation GC vs refined OPT-05 |
+| Compiled lambda evaluation | 240 | 160 | -80 | Pre-OPT-05 compiled GC vs refined OPT-05 |
+| Compiled nested lambda evaluation | 912 | 832 | -80 | Pre-OPT-05 compiled GC vs refined OPT-05 |
+
+These are diagnostic allocation comparisons, not allocations derived from the
+unprofiled final corpus. Unique creation pays +48 B/op and +15.5% mean time in the
+paired OPT-03 source diagnostic; factory creation adds 96 B and first evaluation adds
+256 B. Startup timing differences did not establish a gain. The hit benefit, miss
+penalty, fixed replacement behavior and cold allocation are accepted together.
+
+### OPT-08 · Shared-factory concurrent creation
+
+The final runtime and machine above, separate sequential GC diagnostics. The harness
+shares one factory, while every benchmark thread owns its mutable ELContext, source
+sequence and binding snapshots. A setup-only atomic counter assigns disjoint numeric
+ranges for unique sources; timed creation does not increment that counter. Shared
+uses one prebuilt source, rotating uses the same 64 prebuilt sources per caller, and
+unique includes source-string construction in the timer. Different unique ranges
+have different literal lengths; unique is not a pure contention comparison.
+
+```bash
+rtk ./run-bench.sh 'ConcurrentCreationBenchmark.create$' -p engine=peano -t 1 -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-concurrent-1.json
+rtk ./run-bench.sh 'ConcurrentCreationBenchmark.create$' -p engine=peano -t 4 -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-concurrent-4.json
+```
+
+Five samples per combination; JMH average time is the per-thread operation score,
+not aggregate throughput. No pre-change shared-factory run exists, so no concurrent
+optimization speedup is claimed. Delta below is four threads vs one thread:
+
+```text
+workload | 1 thread ns/op | error | B/op | 4 threads ns/op | error | B/op | mean time delta
+shared | 10.710 | 0.038 | 80.000 | 12.680 | 0.349 | 80.000 | +18.4%
+rotating | 59.258 | 1.289 | 456.250 | 84.081 | 6.291 | 363.696 | +41.9%
+unique | 245.061 | 5.625 | 1864.002 | 370.766 | 3.945 | 1875.454 | +51.3%
+```
+
+[One-thread JSON](peano-bench/results/2026-10-11-optim-concurrent-1.json),
+[four-thread JSON](peano-bench/results/2026-10-11-optim-concurrent-4.json).
+The shared hit has a modest per-operation concurrency cost. Rotating allocations
+change because concurrent callers can populate/reuse slots for each other; this is
+not proof of a uniform hit ratio. Existing virtual-thread cache tests verify actual
+race/isolation behavior; the harness test verifies source uniqueness, independent
+contexts and values beyond one rotation. JMH uses its platform CPU benchmark threads.
+
+### OPT-08 · Isolated cache retention control
+
+Same final runtime/JDK/hardware, separate fresh JVMs after JMH completed. The diagnostic
+uses SerialGC and a fixed 128 MiB heap, warms both cache modes and the management API,
+then measures heap used after explicit full GC before/after 4096 distinct small sources.
+The retained cache is held by a static reference. A zero-slot cache is the disabled
+control. The empty cache exists before the baseline; its shell allocation is excluded
+from the delta, which covers added entries/table/payload and diagnostic noise.
+Each command compiles into a fresh temporary directory which is deleted.
+Only this diagnostic adds a read edge to the JDK java.management module; shipped
+descriptors and artifacts do not change.
+
+Exact commands in execution order, pinned JAVA_HOME/PATH as above:
+
+```bash
+rtk ./run-cache-retention.sh 0
+rtk ./run-cache-retention.sh 128
+rtk ./run-cache-retention.sh 0
+rtk ./run-cache-retention.sh 128
+rtk ./run-cache-retention.sh 0
+rtk ./run-cache-retention.sh 128
+```
+
+Raw output (bytes):
+
+```text
+slots=0 entries=0 estimatedBytes=0 retainedHeapDelta=456
+slots=128 entries=128 estimatedBytes=199936 retainedHeapDelta=90512
+slots=0 entries=0 estimatedBytes=0 retainedHeapDelta=456
+slots=128 entries=128 estimatedBytes=199936 retainedHeapDelta=90512
+slots=0 entries=0 estimatedBytes=0 retainedHeapDelta=392
+slots=128 entries=128 estimatedBytes=199936 retainedHeapDelta=90520
+```
+
+Paired deltas vs the disabled control are 90056, 90056 and 90128 bytes. The retained
+delta is about 90 KB for this small-source workload, below the artifact
+estimate. This is a diagnostic heap difference, not exact object sizing or a worst-case
+heap bound. The source/hash distribution, collector and class/JIT bookkeeping affect
+it; fixed 128-entry and 16KiB-per-entry engineering limits remain the design bounds.
+Delta vs a previous equivalent retention run: none; this establishes that diagnostic
+baseline. It does not measure application contexts, class-loader unload or RSS.

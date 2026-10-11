@@ -1,0 +1,1702 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "arithmetic"
+        },
+        "primaryMetric" : {
+            "score" : 9.356189913106638,
+            "scoreError" : 0.07508017872831481,
+            "scoreConfidence" : [
+                9.281109734378322,
+                9.431270091834953
+            ],
+            "scorePercentiles" : {
+                "0.0" : 9.277254022929464,
+                "50.0" : 9.313893303894993,
+                "90.0" : 9.536860579786346,
+                "95.0" : 9.604457169969464,
+                "99.0" : 9.625682234863861,
+                "99.9" : 9.625682234863861,
+                "99.99" : 9.625682234863861,
+                "99.999" : 9.625682234863861,
+                "99.9999" : 9.625682234863861,
+                "100.0" : 9.625682234863861
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    9.386102029191026,
+                    9.540781975286276,
+                    9.519699290742903,
+                    9.32430742158111,
+                    9.301175445985788,
+                    9.277254022929464,
+                    9.278878070821056,
+                    9.301762305388525
+                ],
+                [
+                    9.296948810526995,
+                    9.28951059301266,
+                    9.278847621075702,
+                    9.287435599175712,
+                    9.300429274463188,
+                    9.329613827407012,
+                    9.381120804492223,
+                    9.388940327424232
+                ],
+                [
+                    9.29530690502101,
+                    9.312879528252186,
+                    9.532939184286416,
+                    9.314907079537798,
+                    9.308987346553184,
+                    9.625682234863861,
+                    9.34180159401147,
+                    9.333246622529531
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "property"
+        },
+        "primaryMetric" : {
+            "score" : 31.10257424768501,
+            "scoreError" : 0.08750825611067756,
+            "scoreConfidence" : [
+                31.015065991574332,
+                31.190082503795686
+            ],
+            "scorePercentiles" : {
+                "0.0" : 30.924445332240655,
+                "50.0" : 31.098741990166175,
+                "90.0" : 31.305879158408175,
+                "95.0" : 31.369660001083037,
+                "99.0" : 31.37325907118457,
+                "99.9" : 31.37325907118457,
+                "99.99" : 31.37325907118457,
+                "99.999" : 31.37325907118457,
+                "99.9999" : 31.37325907118457,
+                "100.0" : 31.37325907118457
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    30.955901235205335,
+                    30.948973751994416,
+                    30.924445332240655,
+                    31.03055501296332,
+                    31.202499285107375,
+                    31.02884729582841,
+                    30.994971785451003,
+                    31.039409181156888
+                ],
+                [
+                    31.087299059857564,
+                    31.013697017070626,
+                    31.06642175462846,
+                    31.098211557272037,
+                    31.1609255157124,
+                    31.37325907118457,
+                    31.131134715688574,
+                    31.046094656005863
+                ],
+                [
+                    31.111730093706278,
+                    31.252895526037914,
+                    31.101393124712246,
+                    31.166869794257035,
+                    31.1424402365326,
+                    31.125671727987886,
+                    31.099272423060313,
+                    31.358862790778435
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "lambda"
+        },
+        "primaryMetric" : {
+            "score" : 9.315205810621707,
+            "scoreError" : 0.04957632116993511,
+            "scoreConfidence" : [
+                9.265629489451772,
+                9.364782131791642
+            ],
+            "scorePercentiles" : {
+                "0.0" : 9.283877490542345,
+                "50.0" : 9.292648947244256,
+                "90.0" : 9.412457115921299,
+                "95.0" : 9.531770857551885,
+                "99.0" : 9.54353188960224,
+                "99.9" : 9.54353188960224,
+                "99.99" : 9.54353188960224,
+                "99.999" : 9.54353188960224,
+                "99.9999" : 9.54353188960224,
+                "100.0" : 9.54353188960224
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    9.30195643548859,
+                    9.288042450876285,
+                    9.49648776140082,
+                    9.288034152747924,
+                    9.291270296450044,
+                    9.292714333790025,
+                    9.328426470441777,
+                    9.291493772634619
+                ],
+                [
+                    9.315334081295056,
+                    9.289390441485587,
+                    9.29080667329728,
+                    9.283877490542345,
+                    9.299441740954816,
+                    9.32500211720582,
+                    9.29042472145664,
+                    9.295939934172793
+                ],
+                [
+                    9.54353188960224,
+                    9.296269905575704,
+                    9.300162990012913,
+                    9.291972538974901,
+                    9.298172253209117,
+                    9.28702697352243,
+                    9.286576469084714,
+                    9.292583560698487
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "collection"
+        },
+        "primaryMetric" : {
+            "score" : 9.314815671356898,
+            "scoreError" : 0.02896768872008084,
+            "scoreConfidence" : [
+                9.285847982636817,
+                9.34378336007698
+            ],
+            "scorePercentiles" : {
+                "0.0" : 9.285531410547264,
+                "50.0" : 9.298279896416856,
+                "90.0" : 9.380411979319721,
+                "95.0" : 9.419948575943895,
+                "99.0" : 9.428095849618535,
+                "99.9" : 9.428095849618535,
+                "99.99" : 9.428095849618535,
+                "99.999" : 9.428095849618535,
+                "99.9999" : 9.428095849618535,
+                "100.0" : 9.428095849618535
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    9.286421849778513,
+                    9.285531410547264,
+                    9.29277207713441,
+                    9.286502108189403,
+                    9.395506754919976,
+                    9.297114444664276,
+                    9.362370214958885,
+                    9.365317203719465
+                ],
+                [
+                    9.291709855912375,
+                    9.299006822442475,
+                    9.298072983578436,
+                    9.29899616182766,
+                    9.428095849618535,
+                    9.316464085421588,
+                    9.347915723072205,
+                    9.296150632456458
+                ],
+                [
+                    9.296598826829918,
+                    9.298486809255277,
+                    9.325251197079096,
+                    9.295019865214893,
+                    9.308630629023098,
+                    9.291303529903757,
+                    9.30183495227912,
+                    9.290502124738495
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "arithmetic"
+        },
+        "primaryMetric" : {
+            "score" : 25.655953677629185,
+            "scoreError" : 0.1302291908109797,
+            "scoreConfidence" : [
+                25.525724486818206,
+                25.786182868440164
+            ],
+            "scorePercentiles" : {
+                "0.0" : 25.509984577530407,
+                "50.0" : 25.586636149889564,
+                "90.0" : 25.898659808270203,
+                "95.0" : 26.170264201499116,
+                "99.0" : 26.257978153213987,
+                "99.9" : 26.257978153213987,
+                "99.99" : 26.257978153213987,
+                "99.999" : 26.257978153213987,
+                "99.9999" : 26.257978153213987,
+                "100.0" : 26.257978153213987
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    25.67485006158168,
+                    25.51933999722316,
+                    25.595243862418453,
+                    25.8901972701859,
+                    26.257978153213987,
+                    25.549877737130863,
+                    25.509984577530407,
+                    25.646802295150177
+                ],
+                [
+                    25.57171246409933,
+                    25.819890109878816,
+                    25.578028437360672,
+                    25.56674829411156,
+                    25.56292065825212,
+                    25.622492451599452,
+                    25.63620267909857,
+                    25.56898983010246
+                ],
+                [
+                    25.525526804097346,
+                    25.524629047333384,
+                    25.56313044570859,
+                    25.655572207874272,
+                    25.9071223463545,
+                    25.72956407149911,
+                    25.69899114540859,
+                    25.567093315887107
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "property"
+        },
+        "primaryMetric" : {
+            "score" : 24.625262379742153,
+            "scoreError" : 0.31437463134139626,
+            "scoreConfidence" : [
+                24.310887748400756,
+                24.93963701108355
+            ],
+            "scorePercentiles" : {
+                "0.0" : 24.21506057812008,
+                "50.0" : 24.476384307203546,
+                "90.0" : 25.09798397553798,
+                "95.0" : 25.642847948859274,
+                "99.0" : 25.80203166163375,
+                "99.9" : 25.80203166163375,
+                "99.99" : 25.80203166163375,
+                "99.999" : 25.80203166163375,
+                "99.9999" : 25.80203166163375,
+                "100.0" : 25.80203166163375
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    24.51972768410138,
+                    24.276978477313058,
+                    24.249032236687285,
+                    24.220507381062216,
+                    24.21506057812008,
+                    24.241757701577452,
+                    24.433040930305715,
+                    24.28119497238554
+                ],
+                [
+                    24.953279625075044,
+                    24.955252045462718,
+                    24.955537409424238,
+                    24.95401951588119,
+                    24.959974353244668,
+                    25.165296810535843,
+                    25.030671140540118,
+                    24.961114237674565
+                ],
+                [
+                    24.37002665119494,
+                    24.352636770441944,
+                    25.80203166163375,
+                    24.555081017330014,
+                    24.39114079175108,
+                    24.598773063338438,
+                    24.286722327533063,
+                    24.277439731197305
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "lambda"
+        },
+        "primaryMetric" : {
+            "score" : 31.151753234081017,
+            "scoreError" : 0.28985257812073656,
+            "scoreConfidence" : [
+                30.86190065596028,
+                31.441605812201754
+            ],
+            "scorePercentiles" : {
+                "0.0" : 30.704775140429447,
+                "50.0" : 31.1154047183651,
+                "90.0" : 31.62952394207872,
+                "95.0" : 32.29430913674672,
+                "99.0" : 32.473069106150746,
+                "99.9" : 32.473069106150746,
+                "99.99" : 32.473069106150746,
+                "99.999" : 32.473069106150746,
+                "99.9999" : 32.473069106150746,
+                "100.0" : 32.473069106150746
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    30.874924061767235,
+                    30.88666112900605,
+                    30.807532477285392,
+                    30.75963337789981,
+                    30.704775140429447,
+                    30.823477617161604,
+                    30.784832973948966,
+                    31.50101865562281
+                ],
+                [
+                    31.296283770588758,
+                    31.44091801258923,
+                    31.034385985553516,
+                    31.228984345857445,
+                    31.136899652300553,
+                    31.069182564250223,
+                    31.14636531693499,
+                    31.09390978442965
+                ],
+                [
+                    32.473069106150746,
+                    31.758029228534628,
+                    31.178858766037987,
+                    31.00654948067508,
+                    31.066334587319087,
+                    31.164142839713662,
+                    31.226981548849686,
+                    31.17832719503803
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.CreationBenchmark.create",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "collection"
+        },
+        "primaryMetric" : {
+            "score" : 24.4431570849306,
+            "scoreError" : 0.1007610696719862,
+            "scoreConfidence" : [
+                24.342396015258615,
+                24.543918154602586
+            ],
+            "scorePercentiles" : {
+                "0.0" : 24.252795750907456,
+                "50.0" : 24.450902136520256,
+                "90.0" : 24.591121236364813,
+                "95.0" : 24.690339168187457,
+                "99.0" : 24.720321262852266,
+                "99.9" : 24.720321262852266,
+                "99.99" : 24.720321262852266,
+                "99.999" : 24.720321262852266,
+                "99.9999" : 24.720321262852266,
+                "100.0" : 24.720321262852266
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    24.60039288419303,
+                    24.542532875266573,
+                    24.559584707354883,
+                    24.54368070794242,
+                    24.720321262852266,
+                    24.563762013045473,
+                    24.581849588536592,
+                    24.540437271602993
+                ],
+                [
+                    24.440538520589485,
+                    24.45100260537168,
+                    24.535892134411014,
+                    24.440110201359225,
+                    24.450236059683988,
+                    24.4517690152978,
+                    24.450801667668827,
+                    24.475156068787122
+                ],
+                [
+                    24.34421341288132,
+                    24.269634344368793,
+                    24.25866106552066,
+                    24.325306865853758,
+                    24.256852081612543,
+                    24.312339315556613,
+                    24.26789961766977,
+                    24.252795750907456
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "arithmetic"
+        },
+        "primaryMetric" : {
+            "score" : 183.13355392410594,
+            "scoreError" : 1.4289566176525574,
+            "scoreConfidence" : [
+                181.7045973064534,
+                184.56251054175848
+            ],
+            "scorePercentiles" : {
+                "0.0" : 181.13101088863345,
+                "50.0" : 183.03407101517672,
+                "90.0" : 185.67290763439092,
+                "95.0" : 188.17503264569166,
+                "99.0" : 188.83415215167787,
+                "99.9" : 188.83415215167787,
+                "99.99" : 188.83415215167787,
+                "99.999" : 188.83415215167787,
+                "99.9999" : 188.83415215167787,
+                "100.0" : 188.83415215167787
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    185.14814114104877,
+                    184.50806068900692,
+                    186.19767412773305,
+                    181.83997532153023,
+                    181.68508588607827,
+                    183.43101958604197,
+                    183.1575868686114,
+                    183.47511563911033
+                ],
+                [
+                    183.57856641201155,
+                    183.9166449360773,
+                    183.76802186851464,
+                    181.5165236208854,
+                    181.88689330565938,
+                    181.5436618731195,
+                    181.13101088863345,
+                    181.50865917903317
+                ],
+                [
+                    184.27494051210235,
+                    188.83415215167787,
+                    184.47445221980038,
+                    181.3795743348146,
+                    182.13086720252363,
+                    181.17257133689472,
+                    181.73553991589154,
+                    182.91055516174208
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "property"
+        },
+        "primaryMetric" : {
+            "score" : 69.64376257777165,
+            "scoreError" : 0.6142691314028114,
+            "scoreConfidence" : [
+                69.02949344636885,
+                70.25803170917446
+            ],
+            "scorePercentiles" : {
+                "0.0" : 68.70702129287179,
+                "50.0" : 69.46169996850443,
+                "90.0" : 71.06235640442264,
+                "95.0" : 71.23857399288944,
+                "99.0" : 71.28401527952475,
+                "99.9" : 71.28401527952475,
+                "99.99" : 71.28401527952475,
+                "99.999" : 71.28401527952475,
+                "99.9999" : 71.28401527952475,
+                "100.0" : 71.28401527952475
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    70.45823378413697,
+                    70.99691866896671,
+                    69.54559624231868,
+                    69.59168227685485,
+                    69.60194309695672,
+                    69.37780369469019,
+                    69.37720340826947,
+                    69.72811189232308
+                ],
+                [
+                    69.71723759285997,
+                    71.28401527952475,
+                    68.98809248019275,
+                    69.32645636019284,
+                    69.77627297664458,
+                    71.02246267586176,
+                    68.70702129287179,
+                    68.81465369648794
+                ],
+                [
+                    70.24459799813305,
+                    71.10225013298353,
+                    68.83853966467498,
+                    68.83099528939518,
+                    69.03723413791353,
+                    69.00435491159796,
+                    69.01314920083018,
+                    69.06547511183797
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "lambda"
+        },
+        "primaryMetric" : {
+            "score" : 183.32613102088268,
+            "scoreError" : 3.8018572331357445,
+            "scoreConfidence" : [
+                179.52427378774695,
+                187.12798825401842
+            ],
+            "scorePercentiles" : {
+                "0.0" : 179.650309695031,
+                "50.0" : 182.94233306707525,
+                "90.0" : 185.06920467709386,
+                "95.0" : 200.14232899631517,
+                "99.0" : 205.0659800861031,
+                "99.9" : 205.0659800861031,
+                "99.99" : 205.0659800861031,
+                "99.999" : 205.0659800861031,
+                "99.9999" : 205.0659800861031,
+                "100.0" : 205.0659800861031
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    179.650309695031,
+                    180.34233847498533,
+                    180.27249094151009,
+                    205.0659800861031,
+                    182.3617177463089,
+                    182.66826872644913,
+                    182.9239477485666,
+                    184.76703362723637
+                ],
+                [
+                    180.73751174727101,
+                    180.30506773617964,
+                    184.1218660501923,
+                    183.88874583476203,
+                    185.37137572695133,
+                    183.75949290713945,
+                    184.19138550937578,
+                    183.91105164930212
+                ],
+                [
+                    179.75803779833163,
+                    180.22184954643765,
+                    180.31829833927432,
+                    183.15457769107664,
+                    183.08671916500106,
+                    183.09391819822216,
+                    182.96071838558393,
+                    182.8944411698927
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "peano",
+            "fixture" : "collection"
+        },
+        "primaryMetric" : {
+            "score" : 69.38901332129416,
+            "scoreError" : 0.735754899824251,
+            "scoreConfidence" : [
+                68.6532584214699,
+                70.12476822111842
+            ],
+            "scorePercentiles" : {
+                "0.0" : 68.16868813139475,
+                "50.0" : 69.1034591192825,
+                "90.0" : 70.84514949810483,
+                "95.0" : 71.10909875788303,
+                "99.0" : 71.12797289919888,
+                "99.9" : 71.12797289919888,
+                "99.99" : 71.12797289919888,
+                "99.999" : 71.12797289919888,
+                "99.9999" : 71.12797289919888,
+                "100.0" : 71.12797289919888
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    70.63782266227415,
+                    70.6252881533681,
+                    70.26995989426811,
+                    71.0524763339355,
+                    70.20090258577721,
+                    70.4304478604309,
+                    70.60682762239814,
+                    71.12797289919888
+                ],
+                [
+                    69.22438964013558,
+                    69.22246024091135,
+                    69.27802498814918,
+                    69.20898635354853,
+                    68.99793188501648,
+                    68.94336730938521,
+                    68.81717696315032,
+                    68.98300608617866
+                ],
+                [
+                    68.5579483783736,
+                    68.42611595865579,
+                    68.3824557929775,
+                    68.38536970350833,
+                    68.16868813139475,
+                    68.3817628460713,
+                    68.43511206701781,
+                    68.97182535493465
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "arithmetic"
+        },
+        "primaryMetric" : {
+            "score" : 54.77651966025734,
+            "scoreError" : 2.127194352660055,
+            "scoreConfidence" : [
+                52.64932530759729,
+                56.9037140129174
+            ],
+            "scorePercentiles" : {
+                "0.0" : 50.55615192621953,
+                "50.0" : 55.01917388825781,
+                "90.0" : 58.11007704015103,
+                "95.0" : 58.75498648790945,
+                "99.0" : 58.88825855183059,
+                "99.9" : 58.88825855183059,
+                "99.99" : 58.88825855183059,
+                "99.999" : 58.88825855183059,
+                "99.9999" : 58.88825855183059,
+                "100.0" : 58.88825855183059
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    55.02632396151175,
+                    55.17033245422793,
+                    55.27320871946911,
+                    54.97831486632276,
+                    55.00755670635797,
+                    55.01202381500388,
+                    54.96102892358258,
+                    55.19028829322087
+                ],
+                [
+                    51.02950910347211,
+                    52.64440567382015,
+                    52.85568916311492,
+                    50.90606088724705,
+                    51.767108804959534,
+                    50.71850399472312,
+                    50.55615192621953,
+                    50.68030447409055
+                ],
+                [
+                    57.86498378415604,
+                    57.37740879700304,
+                    57.487989393728014,
+                    57.62387642962019,
+                    58.88825855183059,
+                    57.63787658090289,
+                    58.35517029614603,
+                    57.62409624544557
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "property"
+        },
+        "primaryMetric" : {
+            "score" : 86.08402575492312,
+            "scoreError" : 1.0071546722446323,
+            "scoreConfidence" : [
+                85.07687108267848,
+                87.09118042716776
+            ],
+            "scorePercentiles" : {
+                "0.0" : 84.21003462956409,
+                "50.0" : 86.32520187028837,
+                "90.0" : 88.09333741800269,
+                "95.0" : 88.21269637696551,
+                "99.0" : 88.24480174058948,
+                "99.9" : 88.24480174058948,
+                "99.99" : 88.24480174058948,
+                "99.999" : 88.24480174058948,
+                "99.9999" : 88.24480174058948,
+                "100.0" : 88.24480174058948
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    86.66431875331656,
+                    85.07705515340366,
+                    84.94776743426121,
+                    84.86034747190602,
+                    86.3330402196488,
+                    84.89228623358942,
+                    86.88582672706731,
+                    85.14635164635487
+                ],
+                [
+                    84.62541690033322,
+                    86.75497797278496,
+                    86.31736352092796,
+                    85.46476485876819,
+                    84.40186428786883,
+                    84.4845269536843,
+                    84.21003462956409,
+                    84.89414122049713
+                ],
+                [
+                    86.77401205440874,
+                    87.43523263615727,
+                    86.80283580972637,
+                    88.24480174058948,
+                    87.76384320467554,
+                    88.11638028609359,
+                    88.0702945499118,
+                    86.84913385261545
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "lambda"
+        },
+        "primaryMetric" : {
+            "score" : 108.64351280780632,
+            "scoreError" : 1.6511762170858566,
+            "scoreConfidence" : [
+                106.99233659072046,
+                110.29468902489218
+            ],
+            "scorePercentiles" : {
+                "0.0" : 105.29263107566102,
+                "50.0" : 109.85474281158993,
+                "90.0" : 110.3378103565334,
+                "95.0" : 110.82051717216032,
+                "99.0" : 110.97042316735998,
+                "99.9" : 110.97042316735998,
+                "99.99" : 110.97042316735998,
+                "99.999" : 110.97042316735998,
+                "99.9999" : 110.97042316735998,
+                "100.0" : 110.97042316735998
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    109.8156676388229,
+                    109.81348083582462,
+                    110.97042316735998,
+                    109.92512953656893,
+                    109.974172551081,
+                    109.8510016382923,
+                    109.85848398488756,
+                    109.84931584257001
+                ],
+                [
+                    105.3754459644386,
+                    105.80050032640061,
+                    105.73154495364587,
+                    105.6274075940124,
+                    105.57964375964859,
+                    105.29263107566102,
+                    106.49400436724162,
+                    105.72148076431105
+                ],
+                [
+                    110.23595015717285,
+                    110.17384877671542,
+                    110.20252224115919,
+                    110.08461691891485,
+                    110.21815916623038,
+                    110.37079918656136,
+                    110.30482152650544,
+                    110.17325541332526
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "expressly",
+            "fixture" : "collection"
+        },
+        "primaryMetric" : {
+            "score" : 54.25522748751077,
+            "scoreError" : 0.42506403627795375,
+            "scoreConfidence" : [
+                53.83016345123282,
+                54.680291523788725
+            ],
+            "scorePercentiles" : {
+                "0.0" : 53.41227727301643,
+                "50.0" : 54.3296473373205,
+                "90.0" : 54.96514707099482,
+                "95.0" : 55.52332084590893,
+                "99.0" : 55.70673306839156,
+                "99.9" : 55.70673306839156,
+                "99.99" : 55.70673306839156,
+                "99.999" : 55.70673306839156,
+                "99.9999" : 55.70673306839156,
+                "100.0" : 55.70673306839156
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    54.30698648435215,
+                    54.33026574571224,
+                    54.97308417846104,
+                    54.7867278179322,
+                    54.4504181909727,
+                    54.51769377874038,
+                    54.6282258187573,
+                    54.40755977122981
+                ],
+                [
+                    54.03702426878161,
+                    53.91110919883631,
+                    53.59489430208241,
+                    53.606519035143116,
+                    53.59976726124853,
+                    53.529604584433216,
+                    53.52699729148319,
+                    53.41227727301643
+                ],
+                [
+                    54.957209963528584,
+                    54.329028928928764,
+                    54.36968811915333,
+                    54.07344704322712,
+                    54.49729599624605,
+                    54.38366515453375,
+                    55.70673306839156,
+                    54.18923642506673
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "compiled",
+            "fixture" : "arithmetic"
+        },
+        "primaryMetric" : {
+            "score" : 165.18456941716758,
+            "scoreError" : 1.824453117586454,
+            "scoreConfidence" : [
+                163.36011629958114,
+                167.00902253475402
+            ],
+            "scorePercentiles" : {
+                "0.0" : 162.00832420725635,
+                "50.0" : 164.87559254417306,
+                "90.0" : 168.71978478097935,
+                "95.0" : 168.9411145548849,
+                "99.0" : 168.9452238749827,
+                "99.9" : 168.9452238749827,
+                "99.99" : 168.9452238749827,
+                "99.999" : 168.9452238749827,
+                "99.9999" : 168.9452238749827,
+                "100.0" : 168.9452238749827
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    163.7698957765399,
+                    162.95664758793586,
+                    164.2698345738429,
+                    162.41407095087567,
+                    162.29211114792048,
+                    162.00832420725635,
+                    162.20103583683994,
+                    162.04362501265632
+                ],
+                [
+                    163.81539080159263,
+                    167.93312016078002,
+                    163.99653209448408,
+                    168.51078296736722,
+                    166.9130783455214,
+                    168.9452238749827,
+                    166.38991770705513,
+                    165.4813505145032
+                ],
+                [
+                    168.4908220853342,
+                    165.64836461039246,
+                    168.92878659459146,
+                    167.05772661733107,
+                    166.71746956007846,
+                    166.16413397879705,
+                    163.66235476900886,
+                    163.81906623633458
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "compiled",
+            "fixture" : "property"
+        },
+        "primaryMetric" : {
+            "score" : 71.16226111341055,
+            "scoreError" : 1.0225218369479008,
+            "scoreConfidence" : [
+                70.13973927646265,
+                72.18478295035845
+            ],
+            "scorePercentiles" : {
+                "0.0" : 69.39833758359052,
+                "50.0" : 71.24040721797908,
+                "90.0" : 72.57363024073095,
+                "95.0" : 73.12153878732724,
+                "99.0" : 73.30241863107734,
+                "99.9" : 73.30241863107734,
+                "99.99" : 73.30241863107734,
+                "99.999" : 73.30241863107734,
+                "99.9999" : 73.30241863107734,
+                "100.0" : 73.30241863107734
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    72.4014438066138,
+                    73.30241863107734,
+                    72.45914432485989,
+                    72.56836122538499,
+                    72.5788992560769,
+                    72.49061513457816,
+                    72.45766188522536,
+                    72.5164067541655
+                ],
+                [
+                    71.98497784529415,
+                    71.48837103271967,
+                    72.07889205223096,
+                    71.33398387387203,
+                    71.03107599850709,
+                    70.97638236331161,
+                    70.9853757321457,
+                    71.14683056208612
+                ],
+                [
+                    69.50010839473109,
+                    69.47700820673062,
+                    69.39833758359052,
+                    69.58564388537474,
+                    69.42834610814586,
+                    69.43942908660495,
+                    69.57019850734966,
+                    69.69435447117645
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "compiled",
+            "fixture" : "lambda"
+        },
+        "primaryMetric" : {
+            "score" : 147.17071740200726,
+            "scoreError" : 1.544609914872194,
+            "scoreConfidence" : [
+                145.62610748713507,
+                148.71532731687944
+            ],
+            "scorePercentiles" : {
+                "0.0" : 145.41714202622177,
+                "50.0" : 146.19449651221817,
+                "90.0" : 149.47423764673658,
+                "95.0" : 153.02558014619066,
+                "99.0" : 154.08390159020962,
+                "99.9" : 154.08390159020962,
+                "99.99" : 154.08390159020962,
+                "99.999" : 154.08390159020962,
+                "99.9999" : 154.08390159020962,
+                "100.0" : 154.08390159020962
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    146.19062755595482,
+                    146.15003659422032,
+                    146.1983654684815,
+                    145.7994853009124,
+                    146.98481228985884,
+                    145.9793573039435,
+                    146.73044143617162,
+                    145.41714202622177
+                ],
+                [
+                    145.84753033175411,
+                    145.98383767747495,
+                    145.73976224208963,
+                    145.7177460677185,
+                    145.60733653241704,
+                    145.52682854192477,
+                    145.4190524971695,
+                    147.2555843571737
+                ],
+                [
+                    148.23987077579227,
+                    148.57001103661165,
+                    148.71252617585407,
+                    148.48222657984192,
+                    148.51225997290396,
+                    149.8506158141338,
+                    154.08390159020962,
+                    149.0978594793394
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.vidocq.peano.bench.EvaluationBenchmark.evaluate",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 3,
+        "jvm" : "/Users/yblazart/.sdkman/candidates/java/25-tem/bin/java",
+        "jvmArgs" : [
+            "--module-path=/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules=ALL-MODULE-PATH",
+            "--module-path",
+            "/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/classes:/Users/yblazart/projects/perso/vidocq-workspace/peano/main/peano-bench/target/module-path",
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "-Dpeano.reflection=allow"
+        ],
+        "jdkVersion" : "25",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25+36-LTS",
+        "warmupIterations" : 5,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 8,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "engine" : "compiled",
+            "fixture" : "collection"
+        },
+        "primaryMetric" : {
+            "score" : 72.22226920426498,
+            "scoreError" : 0.738592928291793,
+            "scoreConfidence" : [
+                71.48367627597318,
+                72.96086213255677
+            ],
+            "scorePercentiles" : {
+                "0.0" : 71.36084509000325,
+                "50.0" : 71.57646555721169,
+                "90.0" : 73.80194053304962,
+                "95.0" : 74.01878005785926,
+                "99.0" : 74.020088012498,
+                "99.9" : 74.020088012498,
+                "99.99" : 74.020088012498,
+                "99.999" : 74.020088012498,
+                "99.9999" : 74.020088012498,
+                "100.0" : 74.020088012498
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    73.1222725593095,
+                    74.01485619394307,
+                    74.020088012498,
+                    73.3303004321782,
+                    73.29631991619934,
+                    73.09814095344157,
+                    73.48424697839586,
+                    73.58902487215614
+                ],
+                [
+                    71.52736162193553,
+                    71.52088751599462,
+                    71.36084509000325,
+                    72.34705059706168,
+                    71.53385584871273,
+                    71.53671721667423,
+                    71.89444583224477,
+                    71.5213201189175
+                ],
+                [
+                    71.48631867556992,
+                    71.55962555014953,
+                    71.59330556427385,
+                    71.37241606606531,
+                    71.74478954402468,
+                    71.44447214415831,
+                    71.51341786523206,
+                    71.42238173321996
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]

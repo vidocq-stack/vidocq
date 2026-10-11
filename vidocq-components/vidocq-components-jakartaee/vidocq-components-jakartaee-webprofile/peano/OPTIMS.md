@@ -299,13 +299,12 @@ exception cleanup, mutable collection freshness and class-loader lifecycle.
 
 ## Execution plan
 
-Prepared: 2026-10-11. OPT-00 is merged in PR #45. OPT-02/03 are implemented and pass
-their local semantic/reactor/TCK checks; cache measurements are recorded in BENCH.md.
-Their combined PR #49 is merged. OPT-04's stateless arithmetic experiment passes
-the reactor checks and its allocation criterion; PR #50 is merged. OPT-05's refined
-empty-capture implementation passes its semantic/reactor checks and allocation target.
-Its PR is being prepared. The remaining lots
-are conditional experiments, with one focused PR per independently reviewable change.
+Prepared and executed: 2026-10-11. OPT-00 is merged in PR #45; profile filtering and
+archive guards followed in PRs #46 and #48. OPT-02/03 are merged in PR #49, OPT-04
+in PR #50 and OPT-05 in PR #51. Each production PR passed the full official TCK,
+including signatures, and the required reactor, benchmark and governance checks.
+OPT-08 records the final combined corpus, concurrent creation and retention checks
+in BENCH.md. The unselected candidates remain deferred with reasons below.
 This plan does not select a public SPI change or resolve an open structural question
 in [PLAN.md](PLAN.md).
 
@@ -373,6 +372,13 @@ were measured; compiled construction was not selected for this campaign.
 
 ### OPT-01 — Prepare numeric literals
 
+Deferred. Only 7 of 372 initial arithmetic CPU samples had numeric literal evaluation
+as their nearest Peano frame. This is sampled attribution rather than an exact CPU
+share, but it supports addressing allocation and creation first. Preparing literals
+would add identity and lazy-error risks without a demonstrated benefit after the
+retained changes. The checklist below defines a future experiment, not unfinished
+work in the selected campaign.
+
 - [ ] First write tests for valid integer/floating literals, Long.MIN_VALUE, selected
   and discarded overflow, exception causes/offsets, serialization and custom
   conversion of repeated literals.
@@ -398,17 +404,17 @@ reuse. It supplies immutable syntax/identity and ordered descriptors, with fresh
 single-variable snapshots and separate lookup phases. Six dedicated semantic tests
 passed before integration; the full reactor and TCK passed after cache integration.
 
-- [ ] First test creation-time mapper snapshots, first-occurrence lookup order,
+- [x] First test creation-time mapper snapshots, first-occurrence lookup order,
   duplicate lookup suppression, lexical exclusions and missing-function errors.
-- [ ] Use the OPT-00 breakdown to select normalization or descriptor traversal as
+- [x] Use the OPT-00 breakdown to select normalization or descriptor traversal as
   the first target. Change one source of work per experiment.
-- [ ] Evaluate a context-free artifact containing canonical identity and ordered
+- [x] Evaluate a context-free artifact containing canonical identity and ordered
   binding descriptors, without introducing cross-expression storage yet.
-- [ ] Preserve distinct variable and function capture phases unless tests prove that
+- [x] Preserve distinct variable and function capture phases unless tests prove that
   changing their order is unobservable. Keep bound values outside reusable data.
-- [ ] Verify ValueExpression and MethodExpression equality/hash behavior, diagnostics,
+- [x] Verify ValueExpression and MethodExpression equality/hash behavior, diagnostics,
   serialization and creation with null mappers.
-- [ ] Measure complete creation with repeated and distinct sources, including the
+- [x] Measure complete creation with repeated and distinct sources, including the
   cost of any added analysis or representation.
 
 Exit: either a useful standalone reduction or evidence that reuse is required to
@@ -431,17 +437,17 @@ recorded in BENCH.md. Repeated/rotating creation improves; unique misses pay ext
 analysis/storage cost and cold factory creation allocates additional cache state.
 The implementation preserves AST records and compiled emission schema v3.
 
-- [ ] Decide capacity and retained-weight limits from the recorded source-size and
+- [x] Decide capacity and retained-weight limits from the recorded source-size and
   workload distribution. Define eviction, oversized-entry and concurrent-miss behavior.
-- [ ] First test fresh nonempty String ownership, stable per-expression values,
+- [x] First test fresh nonempty String ownership, stable per-expression values,
   independent mapper bindings, eviction and large/unique-source workloads.
-- [ ] Test concurrent creation with independent contexts and factories, including
+- [x] Test concurrent creation with independent contexts and factories, including
   duplicate misses. Check ownership against class-loader lifecycle and retained data.
-- [ ] Cache only context-free data; materialize expression-owned literals and bindings
+- [x] Cache only context-free data; materialize expression-owned literals and bindings
   according to OPT-02. Never retain a bound Method, mapper or application object.
-- [ ] Measure hit, miss, mixed working-set and capacity-pressure behavior, including
+- [x] Measure hit, miss, mixed working-set and capacity-pressure behavior, including
   allocation, retained heap and concurrency. Keep the uncached creation comparison.
-- [ ] Request the applicable concurrency/module review for implementation changes,
+- [x] Request the applicable concurrency/module review for implementation changes,
   as required by AGENTS.md. No runtime dependency or new package export is assumed.
 
 Exit: a bounded memory footprint, preserved isolation and a useful gain in full
@@ -454,7 +460,7 @@ OPT-04 implementation passes ELContext explicitly through static arithmetic help
 Its baseline allocation profile supplied the performance red criterion; semantic
 conversion/order/failure tests passed before and after the change. The GC comparison
 confirms removal of surviving helper allocations. No conversion is bypassed. Results
-and protocol limits are in BENCH.md; final throughput validation remains OPT-08 scope.
+and protocol limits are in BENCH.md; OPT-08 now validates combined throughput.
 
 For OPT-04, select the conversion/dispatch branch identified by the profile. Write
 tests for compatible-type conversion, custom resolver results, propertyResolved state,
@@ -480,6 +486,14 @@ API-only generated consumers. Each lot exits with differential equivalence and a
 repeatable gain for its target workload without an unexplained general-path regression.
 
 ### OPT-06 and OPT-07 — Conditional workloads
+
+Both are deferred. OPT-00 added set/map and setup diagnostics, but did not establish
+an isolated collection-construction bottleneck or a useful startup optimization.
+Direct set insertion would interleave application hashing with element evaluation;
+map pre-sizing can waste retained storage when keys repeat. Keep fresh mutable
+collections and existing effect order until broader evidence justifies an experiment.
+Startup/catalog reuse also needs provider and class-loader lifecycle evidence; cold
+factory cache allocation is already recorded as a cost rather than a startup gain.
 
 For OPT-06, establish larger list/set/map workloads first. Before direct set insertion,
 write a test with observable element evaluation and hashCode/equals effects: the current
@@ -516,18 +530,43 @@ running the implementation test suite locally.
 
 ### OPT-08 — Consolidate results
 
-- [ ] Mark every selected lot accepted, discarded or deferred, with a reason and
+- [x] Mark every selected lot accepted, discarded or deferred, with a reason and
   links to its PR, raw measurements and semantic validation.
-- [ ] Re-run the accepted corpus on the final combination of changes to detect
+- [x] Re-run the accepted corpus on the final combination of changes to detect
   interactions; compare it with OPT-00 under the same protocol.
-- [ ] Record final creation/evaluation/allocation results, cache retention where
+- [x] Record final creation/evaluation/allocation results, cache retention where
   applicable, and any measured startup tradeoff in BENCH.md.
-- [ ] Update this document with the effective order, final design choices and deferred
+- [x] Update this document with the effective order, final design choices and deferred
   candidates. Update PLAN.md only if an accepted design decision changes its record.
 
 Campaign completion means all chosen lots have a recorded outcome and the retained
 combination has passed its checks. It does not require implementing every candidate,
 matching Expressly on every fixture or reaching an invented percentage improvement.
+
+### Recorded outcomes
+
+| Lot | Outcome | Evidence and reason |
+| --- | --- | --- |
+| OPT-00 | Accepted | [PR #45](https://codefloe.com/Vidocq/peano/pulls/45), baseline, profiles and expanded diagnostics in BENCH.md; profile guards in PRs #46/#48 |
+| OPT-01 | Deferred | Low initial sampled attribution; literal identity and lazy-error risks remain |
+| OPT-02 | Accepted with OPT-03 | Uncached analysis timing alone was inconclusive; reusable context-free analysis supports bounded reuse |
+| OPT-03 | Accepted | [PR #49](https://codefloe.com/Vidocq/peano/pulls/49), ownership/isolation tests, hit/miss/setup results and final concurrency/retention measurements |
+| OPT-04 | Accepted | [PR #50](https://codefloe.com/Vidocq/peano/pulls/50), preserved conversion effects and reduced helper allocation |
+| OPT-05 | Accepted, refined variant | [PR #51](https://codefloe.com/Vidocq/peano/pulls/51), lazy empty captures and small parameter membership; metadata/array reuse deferred |
+| OPT-06 | Deferred | No isolated evidence supporting the collection effect-order and sizing tradeoffs |
+| OPT-07 | Deferred | No demonstrated startup benefit; catalog/provider lifecycle changes need separate evidence |
+| OPT-08 | Measured and documented | Final 24-sample corpus, one/four-thread creation, isolated retention control and Antora reproduction guidance |
+
+The final corpus retains the original fixtures and fixed protocol. Repeated creation
+improves strongly; arithmetic and lambda evaluation also improve. Unchanged Expressly
+controls moved between runs, and the compiled arithmetic baseline was noisy, so small
+differences and compiled deltas must not be attributed mechanically to these changes.
+The unique-source and cold-setup penalties are part of the accepted cache tradeoff.
+All raw data, errors, allocation deltas and comparison limits are in BENCH.md.
+The syntax/public API, generated emission schema and runtime dependency policy are
+unchanged by the selected optimizations; PLAN.md needs no structural revision.
+API-004 remains upstream work. BENCH-004 requires credential revocation outside this
+campaign; filtering current profiles does not remove their historical contents.
 
 ## Decision rules
 
@@ -544,5 +583,6 @@ reflection or package opens. The existing Maven processor-classpath accommodatio
 is build-only. Runtime modules remain named modules. Any unresolved structural choice
 marked for validation in PLAN.md remains subject to its existing decision process.
 
-The next lot is OPT-08 after accepting the capture PR. This plan establishes a sequence and required proof;
-it does not establish a dominant cost or promise a performance target.
+The selected implementation sequence is complete. Future literal, collection,
+metadata or startup work starts from its deferred experiment and fresh evidence;
+this campaign does not promise a general performance target.

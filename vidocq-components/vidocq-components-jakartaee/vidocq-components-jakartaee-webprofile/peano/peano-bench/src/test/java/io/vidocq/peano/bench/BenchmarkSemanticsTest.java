@@ -24,6 +24,22 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BenchmarkSemanticsTest {
+    @Test void concurrentCreationUsesASharedFactoryAndIndependentContexts() {
+        var shared=new ConcurrentCreationBenchmark.SharedFactory(); shared.engine="peano"; shared.setup();
+        for (String workload:new String[]{"shared","rotating","unique"}) {
+            var first=new ConcurrentCreationBenchmark.Caller(); first.workload=workload; first.setup(shared);
+            var second=new ConcurrentCreationBenchmark.Caller(); second.workload=workload; second.setup(shared);
+            assertNotSame(first.context,second.context);
+            var benchmark=new ConcurrentCreationBenchmark();
+            for (int i=0;i<70;i++) {
+                var left=benchmark.create(shared,first); var right=benchmark.create(shared,second);
+                assertEquals(7L+first.operand,left.<Object>getValue(first.context));
+                assertEquals(7L+second.operand,right.<Object>getValue(second.context));
+                if (workload.equals("unique")) assertNotEquals(left.getExpressionString(),right.getExpressionString());
+            }
+        }
+    }
+
     @Test void conversionUsesTheSelectedFactory() {
         for (String engine:new String[]{"peano","expressly"}) {
             var factory=Fixtures.factory(engine);

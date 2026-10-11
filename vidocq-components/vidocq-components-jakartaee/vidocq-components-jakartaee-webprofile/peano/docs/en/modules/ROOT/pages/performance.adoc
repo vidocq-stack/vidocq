@@ -4,7 +4,7 @@
 [.lead]
 The opt-in peano-bench module compares interpreted Peano, build-time compiled Peano
 and Expressly using arithmetic, property, lambda and collection fixtures. Semantic agreement is checked before
-timing. Initial local results and raw samples are recorded in
+timing. Baseline, final combined results and raw samples are recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md]; they are exploratory workstation measurements.
 
 == Run the harness
@@ -30,6 +30,13 @@ bounded analysis reuse. Measurements distinguish repeated hits, a rotating sourc
 set, unique misses and cold factory/context setup. Warm gains must be assessed
 alongside miss penalties and retained estimated weight; no general startup gain is claimed.
 
+The retained changes are factory-local bounded creation analysis, stateless arithmetic
+helpers and lazy empty lambda capture maps. Numeric preparation, collection rebuilding
+and startup/catalog caching remain deferred. The final comparison uses five one-second
+warmups, eight one-second measurements and three forks. The ledger includes errors,
+unchanged comparison controls, allocation reductions and cold/unique-source penalties.
+Its compiled arithmetic baseline was noisy; the reported mean delta is descriptive.
+
 * Interpreted vs compiled evaluation of the same expressions.
 * Generated-accessor resolution vs the spec's reflective `BeanELResolver`.
 * Peano vs Expressly (the Jakarta EE compatible implementation) on the same corpus.
@@ -46,6 +53,13 @@ prebuilt sources and monotonically unique sources. Unique-source construction is
 the timer; `SourceCreationBenchmark.sourceGeneration` is a diagnostic control, not a
 value to subtract from independently measured creation means. Contexts and factories
 are retained per benchmark thread, with independently captured bindings.
+
+`ConcurrentCreationBenchmark.create` instead shares one factory across threads and
+keeps each mutable context caller-owned. Select `-t 1` or `-t 4` with
+`-p workload=shared,rotating,unique`. Unique sources have disjoint per-thread ranges
+and include string construction; differing literal lengths limit contention comparisons.
+The ledger records separate GC diagnostics; there is no pre-change concurrent speedup
+claim. Per-operation JMH average times are not aggregate throughput.
 
 `StartupBenchmark` separates factory discovery/construction, context setup using a
 retained factory, and first evaluation with a new factory/context. These are setup
@@ -77,3 +91,24 @@ and qualified exports only to `jmh.core`. These flags are confined to this comma
 shipped module descriptors, application access and published jars remain unchanged.
 Results diagnose components and must not be summed into a predicted full creation cost.
 The full ExpressionFactory benchmark remains the acceptance workload.
+
+== Cache retention diagnostic
+
+Build the bench profile first, then run the isolated probe with the pinned JDK:
+
+[source,bash]
+----
+./run-cache-retention.sh 0
+./run-cache-retention.sh 128
+----
+
+The probe warms both modes, retains a cache, creates 4096 distinct small sources and
+reports post-full-GC heap differences, entry count and estimated artifact weight.
+The empty cache shell exists before the baseline and is excluded from that difference.
+Repeat in alternating fresh JVMs. Zero slots is the disabled control. These differences
+are collector-dependent diagnostic observations, not exact object sizes or worst-case
+heap limits. The script fixes a 128 MiB heap and SerialGC for reproducibility.
+
+Probe sources stay outside normal Maven roots and compile into a disposable target
+directory. Only the command patches core and adds a read edge to the JDK java.management
+module. Published descriptors and runtime dependencies remain unchanged.

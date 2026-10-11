@@ -220,6 +220,11 @@ JMH owns platform benchmark threads for CPU timing; runtime I/O conventions are 
 The JDK jdk.jfr module is used only by this non-published module to validate archived
 CPU/allocation profiles. Archive tests reject other event types without printing
 their values; scrub-bench-profiles.sh filters recordings before publication.
+The isolated run-cache-retention.sh diagnostic uses JDK java.management through a
+command-local read edge. Its sources are outside Maven's normal roots and are not
+packaged; core does not require java.management. ConcurrentCreationBenchmark shares
+a factory while keeping contexts thread-owned. Reproduction and measurement limits
+are documented in xref:performance.adoc[Performance] and BENCH.md.
 
 Peano's accessor processor also generates the shared public-getter benchmark table.
 Its provider is declared in the benchmark module; the model package is exported only
