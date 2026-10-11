@@ -92,6 +92,16 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 `1800`
 | The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, and session timeout in seconds. See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
+| `vidocq.servlet.users.<name>.password` [.tag-new]#NEW# +
+`vidocq.servlet.users.<name>.roles` +
+`vidocq.servlet.confidential-port` +
+`vidocq.servlet.rotate-session-id-on-login`
+| none +
+none +
+none +
+`true`
+| Servlet security: development users of the in-memory identity store (an `IdentityStore` bean replaces them), the HTTPS port of `CONFIDENTIAL` constraints, and session id rotation on login. See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
+
 | `vidocq.pool.url` +
 `vidocq.pool.username` / `vidocq.pool.password`
 | —

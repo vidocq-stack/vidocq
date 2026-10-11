@@ -141,6 +141,44 @@ The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebL
 | Session timeout in seconds, used when no descriptor declares a `<session-timeout>`. Zero or less: sessions never expire.
 |===
 
+=== Security
+
+Foy enforces the security constraints of `web.xml` and `@ServletSecurity`, with BASIC, FORM or `HttpServletRequest.login`. It checks credentials against a user base, which the extension supplies:
+
+* an application bean that implements `io.vidocq.foy.spi.security.IdentityStore`: `validate(user, password)` returns the caller's `Identity`, with its roles, or empty to refuse;
+* otherwise, users declared in the configuration, for development: `vidocq.servlet.users.<name>.password` and `vidocq.servlet.users.<name>.roles`, a comma-separated list. Foy keeps only a salted digest of each password, but the configuration holds it in clear.
+
+Without either, every login fails. A bean and configured users together fail at startup.
+
+[source,java]
+----
+@ApplicationScoped
+public class Accounts implements IdentityStore {
+    @Override
+    public Optional<Identity> validate(String user, char[] password) {
+        // compare in constant time, never log the password
+    }
+}
+----
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.servlet.users.<name>.password` +
+`vidocq.servlet.users.<name>.roles`
+| none
+| A user of the in-memory store and its comma-separated roles. Not allowed next to an `IdentityStore` bean.
+
+| `vidocq.servlet.confidential-port`
+| none
+| HTTPS port a `CONFIDENTIAL` or `INTEGRAL` constraint redirects plain HTTP to. Unset: such a request gets 403.
+
+| `vidocq.servlet.rotate-session-id-on-login`
+| `true`
+| Whether a successful login changes the session id, against session fixation.
+|===
+
 === Request and session scopes
 
 Foy activates the request context around every request, and the session context with the `HttpSession`: a `@SessionScoped` bean lives as long as its session, `HttpSession.invalidate()` or the timeout destroys it and fires `@Destroyed(SessionScoped.class)`. Passivation of session beans is not supported.

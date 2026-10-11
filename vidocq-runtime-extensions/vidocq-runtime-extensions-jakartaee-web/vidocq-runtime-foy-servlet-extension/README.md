@@ -26,6 +26,13 @@ adds both.
 | `vidocq.servlet.context-path` | the `web.xml` `<default-context-path>`, else `/` | Context path and mount prefix |
 | `vidocq.servlet.listener` | `default` | Chappe listener of the mount |
 | `vidocq.servlet.session-timeout` | `1800` | Session timeout in seconds, when no descriptor sets one |
+| `vidocq.servlet.users.<name>.password`, `.roles` | none | Development users of Foy's in-memory identity store |
+| `vidocq.servlet.confidential-port` | none (403) | HTTPS port of `CONFIDENTIAL`/`INTEGRAL` constraints |
+| `vidocq.servlet.rotate-session-id-on-login` | `true` | Change the session id on login |
+
+Security constraints authenticate against the application's `IdentityStore` bean
+(`io.vidocq.foy.spi.security`) when it has one, else against the configured users; both together
+fail at startup.
 
 `vidocq.http.mount.<name>.type=servlet` mounts the application declaratively instead.
 
