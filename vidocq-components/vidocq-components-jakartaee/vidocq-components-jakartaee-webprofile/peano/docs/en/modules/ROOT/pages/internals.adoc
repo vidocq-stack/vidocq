@@ -282,6 +282,18 @@ the custom resolver path works, and no fallback weakens module boundaries.
 
 == Lambdas and collection construction (implemented)
 
+Capture bookkeeping allocates a mutable map only after finding an actual lexical
+argument. Empty snapshots are immutable and shared; nonempty snapshots preserve null
+values behind an immutable wrapper. Small parameter membership reuses the immutable
+syntax list, while larger/nested scopes use hash membership. Free names still receive
+one lookup per capture and parameter shadowing remains intact. The compiled runtime
+helper uses the same empty-snapshot policy without changing generated class ABI.
+Every invocation still enters and exits its scopes, including empty snapshots, and
+cleanup remains in `finally` (EL 6.0 section 1.20).
+
+API-004 records the API 6.0.1 limitation where an inner null argument can expose an
+outer same-name value. It predates this optimization and remains upstream work.
+
 Lists, sets and maps evaluate their element/key/value expressions left to right and
 return fresh mutable collections. Nulls are retained, sets remove duplicate values
 using Java equality, and later map entries replace earlier values for equal keys.

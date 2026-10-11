@@ -302,7 +302,9 @@ exception cleanup, mutable collection freshness and class-loader lifecycle.
 Prepared: 2026-10-11. OPT-00 is merged in PR #45. OPT-02/03 are implemented and pass
 their local semantic/reactor/TCK checks; cache measurements are recorded in BENCH.md.
 Their combined PR #49 is merged. OPT-04's stateless arithmetic experiment passes
-the reactor checks and its allocation criterion; its PR is being prepared. The remaining lots
+the reactor checks and its allocation criterion; PR #50 is merged. OPT-05's refined
+empty-capture implementation passes its semantic/reactor checks and allocation target.
+Its PR is being prepared. The remaining lots
 are conditional experiments, with one focused PR per independently reviewable change.
 This plan does not select a public SPI change or resolve an open structural question
 in [PLAN.md](PLAN.md).
@@ -460,6 +462,13 @@ operand/conversion ordering, numeric promotion and dynamic types before changing
 Measure both matching and general/fallback paths. Preserve every required conversion
 and evaluation notification. No primitive specialization is assumed safe in advance.
 
+OPT-05 implementation allocates capture maps only after a lexical value is found,
+reuses immutable small parameter lists and avoids unused variable maps. The compiled
+API helper also shares immutable empty snapshots; scopes, null values and ABI remain
+unchanged. The initial membership prototype was refined after allocation measurements;
+only the refined variant is retained. API-004 is a pre-existing API null-shadowing
+limitation, documented with a red repro and a disabled desired-behavior case.
+
 For OPT-05, first test empty and nullable captures, nested/retained closures, shadowing,
 recursion, reentrancy and failure cleanup. Reuse immutable free-variable metadata only
 where its lifetime and API use permit it. Measure immediately invoked and retained
@@ -535,5 +544,5 @@ reflection or package opens. The existing Maven processor-classpath accommodatio
 is build-only. Runtime modules remain named modules. Any unresolved structural choice
 marked for validation in PLAN.md remains subject to its existing decision process.
 
-The next implementation lot is OPT-04 after accepting the creation PR. This plan establishes a sequence and required proof;
+The next lot is OPT-08 after accepting the capture PR. This plan establishes a sequence and required proof;
 it does not establish a dominant cost or promise a performance target.

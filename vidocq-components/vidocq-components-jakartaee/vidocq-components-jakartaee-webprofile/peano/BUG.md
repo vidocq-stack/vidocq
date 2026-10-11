@@ -16,6 +16,19 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   The rebased source tree matches the server merge; no runtime behavior changes.
   Future updates must use a locally signed rebase or the project's signing bot.
 
+## API-004 · 2026-10-11 · Null lambda argument exposes an outer same-name value
+
+- Symptom: a nullable inner lambda argument does not mask a non-null outer argument.
+- Minimal reproduction: on EL API 6.0.1, enter a scope {seed=7}, then {seed=null};
+  getLambdaArgument("seed") returns 7 rather than null while isLambdaArgument is true.
+- Cause: API ELContext lookup continues through outer maps when map.get returns null
+  instead of distinguishing an absent entry from a present null value.
+- Status: upstream limitation, predating OPT-05. No API replacement or reflective
+  access to private scope state is introduced by the allocation optimization.
+- Evidence: the direct API regression failed with expected null / actual 7. The
+  desired-behavior case remains disabled with this id in LambdaCaptureEffectsTest;
+  nullable capture snapshots and scope cleanup otherwise pass their active cases.
+
 ## BENCH-004 · 2026-10-11 · Published JFR files contained environment secrets
 
 - Symptom: raw profiles published with OPT-00 included initial environment records

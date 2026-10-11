@@ -33,10 +33,14 @@ public abstract class CompiledLambdaValueExpression extends CompiledFunctionValu
     }
 
     protected final LambdaExpression createLambda(ELContext context,int ordinal,String[] parameters,String[] freeNames) {
-        var captured=new HashMap<String,Object>();
-        for (String name:freeNames)
-            if (context.isLambdaArgument(name)) captured.put(name,context.getLambdaArgument(name));
-        var body=new Body(this,ordinal,Collections.unmodifiableMap(captured));
+        Map<String,Object> captured=null;
+        for (String name:freeNames) {
+            if (context.isLambdaArgument(name)) {
+                if (captured==null) captured=new HashMap<>();
+                captured.put(name,context.getLambdaArgument(name));
+            }
+        }
+        var body=new Body(this,ordinal,captured==null ? Map.of() : Collections.unmodifiableMap(captured));
         var lambda=new LambdaExpression(List.of(parameters),body);
         lambda.setELContext(context);
         return lambda;

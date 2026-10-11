@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.Collections;
+import java.util.Collection;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import jakarta.el.ELContext;
@@ -90,7 +91,7 @@ public final class Bindings {
     }
 
     private static void visit(Ast ast, VariableMapper mapper, Map<String, ValueExpression> variables,
-            Set<String> visited, Set<String> locals) {
+            Set<String> visited, Collection<String> locals) {
         switch (ast) {
             case Ast.Identifier identifier -> {
                 if (!locals.contains(identifier.name()) && visited.add(identifier.name())) {
@@ -138,21 +139,32 @@ public final class Bindings {
     }
 
     public static Map<String, Object> captureLambdaArguments(Ast.Lambda lambda, ELContext context) {
-        var captured = new HashMap<String, Object>();
-        var mapper = new VariableMapper() {
-            @Override
-            public ValueExpression resolveVariable(String name) {
-                if (context.isLambdaArgument(name)) captured.put(name, context.getLambdaArgument(name));
-                return null;
-            }
+        var mapper = new LambdaCapture(context);
+        Collection<String> parameters = lambda.parameters().size() <= 2
+                ? lambda.parameters() : new HashSet<>(lambda.parameters());
+        visit(lambda.body(), mapper, Map.of(), new HashSet<>(), parameters);
+        return mapper.captured.isEmpty() ? Map.of() : Collections.unmodifiableMap(mapper.captured);
+    }
 
-            @Override
-            public ValueExpression setVariable(String name, ValueExpression expression) {
-                throw new UnsupportedOperationException("Capture mapper is read-only");
+    private static final class LambdaCapture extends VariableMapper {
+        private final ELContext context;
+        private Map<String, Object> captured = Map.of();
+
+        private LambdaCapture(ELContext context) { this.context = context; }
+
+        @Override
+        public ValueExpression resolveVariable(String name) {
+            if (context.isLambdaArgument(name)) {
+                if (captured.isEmpty()) captured = new HashMap<>();
+                captured.put(name, context.getLambdaArgument(name));
             }
-        };
-        visit(lambda.body(), mapper, new HashMap<>(), new HashSet<>(), new HashSet<>(lambda.parameters()));
-        return Collections.unmodifiableMap(captured);
+            return null;
+        }
+
+        @Override
+        public ValueExpression setVariable(String name, ValueExpression expression) {
+            throw new UnsupportedOperationException("Capture mapper is read-only");
+        }
     }
 
     public static Map<String, Method> captureFunctions(Template template, ELContext context) {

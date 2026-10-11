@@ -488,3 +488,64 @@ arithmetic fixture removes the two helper allocations while retaining its evalua
 object. Other allocation deltas depend on operations and JIT escape analysis. General
 numeric values and custom conversion effects remain covered by the semantic tests;
 the final long corpus checks the combined evaluation timing.
+
+## 2026-10-11 · OPT-05 empty capture bookkeeping
+
+Branch perf/lambda-capture, after stateless arithmetic. Interpreted capture now uses
+an immutable unused-variable map, immutable parameter membership and a capture map
+allocated only after a lexical argument is found. Compiled helpers likewise avoid
+empty mutable-map/wrapper allocation. Nonempty nullable snapshots, duplicate-name
+suppression, lexical scope entry/exit and generated helper ABI remain unchanged.
+
+The OPT-00 profile identified capture bookkeeping allocation as the performance red
+criterion. New scope/callback/null/failure tests passed before and after this change;
+the full bench/beans-compatible reactor and codegen review passed. Same hardware,
+context and one-fork GC protocol. Interpreted deltas use OPT-04; compiled deltas use
+the newly recorded pre-change compiled baseline under the same protocol.
+
+```bash
+rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=compiled -p fixture=lambda,nestedLambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-lambda-compiled-before.json
+rtk ./mvnw -ntp -Pbench,beans-compat package
+rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano,compiled -p fixture=lambda,nestedLambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-lambda-gc.json
+```
+
+```text
+engine | fixture | ns/op | error ns/op | B/op | time delta vs previous matching GC | allocation delta B/op
++peano | lambda | 219.142 | 11.780 | 640.002 | 2.7% | -96.000
+peano | nestedLambda | 426.158 | 48.050 | 2064.003 | 3.0% | -104.000
+compiled | lambda | 155.718 | 14.494 | 160.001 | 4.0% | -80.000
+compiled | nestedLambda | 290.022 | 17.905 | 832.002 | 4.4% | -80.000
+```
+
+[Compiled before-change data](peano-bench/results/2026-10-11-optim-lambda-compiled-before.json),
+[after-change data](peano-bench/results/2026-10-11-optim-lambda-gc.json).
+The allocation reduction satisfies this experiment's target; short profiled timing
+deltas remain diagnostic. Fresh LambdaExpression instances, call arguments and scope
+state are not pooled. Free-variable metadata precomputation and generated-name-array
+reuse remain deferred until profiles of the retained change justify their complexity.
+
+### OPT-05 · Refined small-parameter membership
+
+The initial Set.copyOf prototype still built membership storage for every capture.
+Reuse the immutable parameter list for zero, one or two parameters; retain hash-based
+membership for larger lists and nested scopes. Lookup order, duplicate suppression and
+shadowing are unchanged. Same GC protocol and workload as the previous OPT-05 run:
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat package
+rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano,compiled -p fixture=lambda,nestedLambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-lambda-gc-refined.json
+```
+
+```text
+engine | fixture | ns/op | error ns/op | B/op | time delta vs initial OPT-05 | allocation delta B/op
++peano | lambda | 185.349 | 4.822 | 432.001 | -15.4% | -208.000
+peano | nestedLambda | 366.577 | 12.870 | 1496.003 | -14.0% | -568.000
+compiled | lambda | 146.611 | 1.447 | 160.001 | -5.8% | -0.000
+compiled | nestedLambda | 278.040 | 14.879 | 832.002 | -4.1% | -0.000
+```
+
+[Initial membership prototype](peano-bench/results/2026-10-11-optim-lambda-membership-prototype.json),
+[refined data](peano-bench/results/2026-10-11-optim-lambda-gc-refined.json).
+Only the refined implementation is retained. Timing remains diagnostic; the final
+long corpus validates the complete combination. API-004's pre-existing null-shadowing
+limitation is tracked separately and excluded from optimization claims.
