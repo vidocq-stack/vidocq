@@ -52,4 +52,3 @@ public class StartupBenchmark {
         return selected.createValueExpression(context,Fixtures.SOURCE,Object.class).getValue(context);
     }
 }
-

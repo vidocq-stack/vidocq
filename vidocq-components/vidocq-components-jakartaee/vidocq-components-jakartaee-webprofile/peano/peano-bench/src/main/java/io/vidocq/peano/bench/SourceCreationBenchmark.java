@@ -68,4 +68,3 @@ public class SourceCreationBenchmark {
     ELContext context() { return context; }
     long lastOperand() { return operand; }
 }
-

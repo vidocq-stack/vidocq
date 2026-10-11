@@ -61,4 +61,3 @@ public class CreationAnalysisBenchmark {
     @Benchmark public Map<?,?> captureVariables() { return Bindings.capture(template,context); }
     @Benchmark public Map<?,?> captureFunctions() { return Bindings.captureFunctions(template,context); }
 }
-
