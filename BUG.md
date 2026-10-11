@@ -40,8 +40,10 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Symptom**: compiling a REST application warns "[Vauban] 1 Build Compatible Extension(s) present on the
   compile/module path are NOT on the annotation-processor path and will not run:
   [io.vidocq.cassini.cdi.CassiniScopeExtension]". `@Path` classes without a scope do not get their default
-  `@RequestScoped`, and a scoped `Application` is not given one either.
-- **Minimal repro**: any application compiled with the bundle, e.g. `vidocq-runtime-it-foy-servlet`.
+  `@RequestScoped`: under annotated discovery such a resource is no bean, and the REST extension does not serve
+  it; an unscoped `Application` is not discovered either (BUG-20261011-02). Workaround: give resources a scope.
+- **Minimal repro**: `vidocq-runtime-it-foy-servlet` without `@RequestScoped` on `ItemsResource`: `/api/items`
+  answers an empty 404.
 - **Cause**: the bundle only carries `cassini-processor`; the runtime does not run extensions over an application
   the processor already handled (same pattern as BUG-20261008-01).
 - **Why not fixed yet**: adding `cassini-cdi` to the bundle was tried on branch feat/servlet-extension and reverted.

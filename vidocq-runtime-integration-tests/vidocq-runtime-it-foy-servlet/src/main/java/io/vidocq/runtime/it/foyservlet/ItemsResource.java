@@ -19,10 +19,13 @@
  */
 package io.vidocq.runtime.it.foyservlet;
 
+import jakarta.enterprise.context.RequestScoped;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 
+/** Scoped explicitly: without Cassini's extension on the processor path, an unscoped resource is no bean (BUG-20261011-01). */
+@RequestScoped
 @Path("/items")
 public class ItemsResource {
     @GET
