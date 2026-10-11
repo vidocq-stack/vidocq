@@ -1,0 +1,16 @@
+name: bench
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  modular-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+      - name: Verify benchmark semantics and build-time emission
+        run: ./mvnw -ntp -Pbench -pl peano-bench -am clean package
+      - name: Discover modular JMH benchmarks
+        run: ./run-bench.sh -l

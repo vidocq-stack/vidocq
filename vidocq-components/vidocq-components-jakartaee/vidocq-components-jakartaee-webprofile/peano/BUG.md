@@ -40,6 +40,31 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: isolated direct-table allow/deny consumers and an additional core-backed
   fallback consumer verify both boundaries; no alternative member-reflection path is added.
 
+## BENCH-002 · 2026-10-11 · Benchmark conversions could select a global factory
+
+- Symptom: the prototype selected an expression factory per engine but API context
+  conversion could fall back to a different globally discovered provider.
+- Minimal reproduction: create StandardELContext(selectedFactory) and query
+  getContext(ExpressionFactory.class); the prototype returned null with both providers installed.
+- Cause: StandardELContext does not store its constructor factory under the context key
+  used by ELContext.convertToType; absent that key, conversion uses ELManager's factory.
+- Status: resolved before publication by explicitly associating the selected factory.
+  A regression checks both providers. Initial prototype timings are retained as
+  diagnostic artifacts, excluded from the valid baseline; corrected timings are rerun.
+- Evidence: BenchmarkSemanticsTest.conversionUsesTheSelectedFactory red/green and API bytecode.
+
+## BENCH-001 · 2026-10-11 · Modular benchmark prototype lacked launch/readability wiring
+
+- Symptom: expression generation launched Java with an empty module path; after that
+  correction, loading GeneratedArithmetic failed its superclass access check.
+- Minimal reproduction: build the initial peano-bench prototype with the bench profile.
+  The exec step reported "--module-path requires module path specification"; the
+  semantic test then reported that the benchmark module did not read peano-api.
+- Cause: exec-maven-plugin requires its modulepath argument object, and emitted API
+  protocol subclasses require an explicit benchmark module read edge to peano-api.
+- Status: resolved before publication using modulepath and requires io.vidocq.peano.api.
+  Semantic tests and trial assertions verify named modules and compiler absence.
+
 ## COMP-009 · 2026-10-11 · Literal method compilation retained delimiter escapes
 
 - Symptom: a compiled literal MethodExpression returned a backslash that the interpreter removed.

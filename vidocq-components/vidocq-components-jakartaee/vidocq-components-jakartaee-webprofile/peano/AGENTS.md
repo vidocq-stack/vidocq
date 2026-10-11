@@ -78,7 +78,7 @@ peano-api    ← Application-owned accessor tables, exports io.vidocq.peano.spi
 peano-processor ← Build-time APT property tables, module-path processor service
 peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
 peano-compiler ← Build-time Class-File API literal/constant expression compilation
-(planned)    peano-bench (JMH)
+peano-bench  ← Opt-in, non-published modular JMH/Expressly comparison harness
 ```
 
 ## Architecture Constraints Not to Violate

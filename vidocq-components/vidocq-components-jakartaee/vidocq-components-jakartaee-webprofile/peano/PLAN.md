@@ -1,6 +1,6 @@
 # Peano — Design plan
 
-> Status: **implementation in progress (P7)**. This document is the design of record for Peano, the
+> Status: **implementation in progress (P9)**. This document is the design of record for Peano, the
 > Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
 > now implements grammar, evaluation, resolvers, lambdas, collection pipelines,
 > evaluation events, expression serialization and a compiled Predicate adapter.
@@ -124,6 +124,13 @@ prove at test time that Peano's member fallback stays unused — the same "elimi
 fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
+
+P9 benchmark harness (2026-10-11): the opt-in, non-published peano-bench module
+runs JMH 1.37 against Expressly 6.0.0 using named modules, including forks. Initial
+arithmetic evaluation covers interpreted/compiled Peano and Expressly; repeated creation
+includes provider caches. Semantic agreement and compiler absence are enforced before
+timing. Compiled expression emission runs only at process-classes. Raw baseline samples
+and limitations are recorded in BENCH.md; broader corpora and runtime integration remain.
 
 P7 method-expression slice (2026-10-11): compileMethod emits one MethodExpression
 class for literal text, variable delegates and bare/inline property methods. A private

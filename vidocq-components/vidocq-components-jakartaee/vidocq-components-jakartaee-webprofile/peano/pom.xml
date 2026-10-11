@@ -104,6 +104,10 @@
 
     <profiles>
         <profile>
+            <id>bench</id>
+            <modules><module>peano-bench</module></modules>
+        </profile>
+        <profile>
             <id>beans-compat</id>
             <modules>
                 <module>peano-beans-compat</module>

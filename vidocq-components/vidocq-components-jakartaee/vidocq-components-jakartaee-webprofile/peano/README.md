@@ -11,7 +11,7 @@
 
 ## Status
 
-🚧 **Implementation in progress (P7)** — the lexer and recursive-descent parser build
+🚧 **Implementation in progress (P9)** — the lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
@@ -96,7 +96,9 @@ Namespaced mapped functions capture immutable descriptors and use direct accesso
 with the existing policy-controlled API fallback. Named calls prioritize context lambdas,
 then captured default-prefix functions and imported constructors/static methods.
 Chained callable results and lambda construction compile with lexical argument capture,
-immediate invocation and nested parameter shadowing. peano-bench remains planned.
+immediate invocation and nested parameter shadowing. The opt-in peano-bench harness
+compares warmed arithmetic evaluation and repeated expression creation with Expressly;
+initial results are recorded in [BENCH.md](BENCH.md).
 ExpressionCompiler.compileMethod emits MethodExpression classes for literals,
 variables and bare/inline property references, with generated metadata and the existing
 policy-controlled public-member fallback.
