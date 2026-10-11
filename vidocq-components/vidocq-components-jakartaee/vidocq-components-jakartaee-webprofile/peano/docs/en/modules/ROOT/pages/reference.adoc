@@ -19,10 +19,10 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 == Build-time expression compiler
 
 ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class file
-for literal text and templates whose evaluation parts are literal/unary/arithmetic/logical AST trees.
+for literal text and templates whose evaluation parts are scalar literal and operator trees.
 It supports null, boolean, string, integer and floating values, minus, not/! and empty,
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
-% (mod) are emitted directly. Comparisons, conditional operations, concatenation,
+% (mod), logical operators and conditional ?: are emitted directly. Comparisons, concatenation,
 identifiers and calls are rejected in this slice.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
@@ -60,10 +60,12 @@ preserving caller conversion effects. Arithmetic evaluates both operands before 
 coercion and preserves the interpreter's Long/Double domains and error causes for the
 supported scalar trees.
 
-Logical and/&& and or/|| compile to lazy branches. Evaluated operands use the caller's
+Logical and/&&, or/|| and conditional ?: compile to lazy branches. Evaluated operands use the caller's
 boolean conversion; discarded operands remain inactive. Numeric overflow raises
 ELException with a NumberFormatException cause only if its literal is evaluated.
 Operator getType retains the same operand and conversion effects.
+Conditional results can be null or select different scalar types. Numeric operations
+promote from the actual selected values; empty inspects the actual selected value.
 
 == Legacy property-editor boundary
 

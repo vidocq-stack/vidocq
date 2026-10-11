@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 conditional slice (2026-10-11): inline ?: branches convert the condition through
+the caller and evaluate only the selected result. Nullable getType preserves body
+effects and returns null for null results. Conditional operands can select different
+scalar domains; unary minus and arithmetic determine Long/Double promotion from the
+evaluated values, preserving both-null zero, operand order and guarded math failures.
+Empty checks the actual selected scalar value. Runtime tests cover mixed branches,
+numeric strings, null normalization, custom branch selection and exception causes.
+
 P7 logical slice (2026-10-11): inline branches implement and/&& and or/|| over
 supported scalar trees. Each evaluated operand uses the caller's boolean conversion;
 discarded operands perform no evaluation or conversion. getType evaluates the body
@@ -141,7 +149,7 @@ Generated guards wrap arithmetic/coercion RuntimeExceptions with their causes wh
 rethrowing ELException, and leave operand-evaluation failures outside that guard.
 Operator getType reevaluates its body to retain conversion effects. Independent tests
 compare 50 templates and separately check order, metadata effects, division infinities,
-NaN, overflow and modulo-zero errors. Comparisons, conditional operations,
+NaN, overflow and modulo-zero errors. Comparisons,
 concatenation and dynamic resolver-backed nodes remain subsequent slices.
 
 P7 unary slice (2026-10-11): the compiler now emits recursive minus, not/! and empty

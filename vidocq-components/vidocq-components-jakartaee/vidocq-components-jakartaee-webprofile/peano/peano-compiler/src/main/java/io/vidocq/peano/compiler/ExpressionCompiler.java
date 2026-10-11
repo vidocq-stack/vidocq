@@ -48,7 +48,7 @@ public final class ExpressionCompiler {
     /**
      * Emits a public CompiledValueExpression subclass with a public Class constructor.
      * The constructor receives the expected result type; the caller owns output placement.
-     * This slice accepts literal text and templates containing literal, unary, arithmetic and logical AST trees.
+     * This slice accepts literal text and scalar literal, unary, arithmetic, logical and conditional trees.
      * Other nodes fail at build time, with no interpreter fallback.
      *
      * @param binaryName qualified binary name of the application-owned emitted class
@@ -113,8 +113,10 @@ public final class ExpressionCompiler {
                     builder.withMethodBody("getType",MethodTypeDesc.of(CLASS,CONTEXT),ClassFile.ACC_PUBLIC,code-> {
                         code.aload(1).ldc("context").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
                                 MethodTypeDesc.of(OBJECT,OBJECT,STRING)).pop();
+                        var absent=code.newLabel();
                         code.aload(0).aload(1).invokevirtual(owner,"evaluate",MethodTypeDesc.of(OBJECT,CONTEXT))
-                                .invokevirtual(OBJECT,"getClass",MethodTypeDesc.of(CLASS)).areturn();
+                                .dup().ifnull(absent).invokevirtual(OBJECT,"getClass",MethodTypeDesc.of(CLASS))
+                                .areturn().labelBinding(absent).pop().aconst_null().areturn();
                     });
                 }
         });
@@ -162,6 +164,11 @@ public final class ExpressionCompiler {
             key(identity,"binary",binary.operator().kind().name());
             validate(binary.left(),identity,source);
             validate(binary.right(),identity,source);
+        } else if (node instanceof Ast.Conditional conditional) {
+            key(identity,"conditional","");
+            validate(conditional.condition(),identity,source);
+            validate(conditional.whenTrue(),identity,source);
+            validate(conditional.whenFalse(),identity,source);
         } else throw new ELException("Unsupported compiled expression node "+node.getClass().getSimpleName()
                 +" in template: "+source);
     }
@@ -185,8 +192,13 @@ public final class ExpressionCompiler {
 
     private static ClassDesc rawType(Ast node) {
         if (node instanceof Ast.Literal literal) return rawType(literal);
+        if (node instanceof Ast.Conditional conditional) {
+            ClassDesc yes=rawType(conditional.whenTrue());
+            return Objects.equals(yes,rawType(conditional.whenFalse())) ? yes : OBJECT;
+        }
         if (node instanceof Ast.Binary binary) {
             if (logical(binary.operator().kind())) return ClassDesc.of("java.lang.Boolean");
+            if (dynamicNumber(binary.left()) || dynamicNumber(binary.right())) return OBJECT;
             if (rawType(binary.left())==null && rawType(binary.right())==null)
                 return ClassDesc.of("java.lang.Long");
             return ClassDesc.of(binary.operator().kind()==TokenKind.DIVIDE
@@ -196,6 +208,7 @@ public final class ExpressionCompiler {
         if (unary.operator().kind()!=TokenKind.MINUS) return ClassDesc.of("java.lang.Boolean");
         ClassDesc operand=rawType(unary.operand());
         if (operand==null) return ClassDesc.of("java.lang.Long");
+        if (dynamicNumber(unary.operand())) return OBJECT;
         if (operand.equals(STRING)) {
             String text=((Ast.Literal)unary.operand()).token().value();
             return ClassDesc.of(text.indexOf('.')>=0 || text.indexOf('e')>=0 || text.indexOf('E')>=0
@@ -234,6 +247,17 @@ public final class ExpressionCompiler {
 
     private static void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
+        if (node instanceof Ast.Conditional conditional) {
+            var otherwise=code.newLabel();
+            var done=code.newLabel();
+            booleanOperand(code,conditional.condition());
+            code.ifeq(otherwise);
+            emit(code,conditional.whenTrue());
+            code.goto_(done).labelBinding(otherwise);
+            emit(code,conditional.whenFalse());
+            code.labelBinding(done);
+            return;
+        }
         if (node instanceof Ast.Binary binary) {
             if (logical(binary.operator().kind())) emitLogical(code,binary);
             else emitArithmetic(code,binary);
@@ -251,6 +275,7 @@ public final class ExpressionCompiler {
                 ClassDesc operand=rawType(unary.operand());
                 if (operand==null) { emit(code,unary.operand()); code.pop(); number(code,0L); return; }
                 ClassDesc result=rawType(unary);
+                if (result.equals(OBJECT)) { emitDynamicMinus(code,unary.operand()); return; }
                 boolean floating=result.equals(ClassDesc.of("java.lang.Double"));
                 if (operand.equals(STRING)) {
                     code.aload(1);
@@ -282,11 +307,12 @@ public final class ExpressionCompiler {
             }
             case EMPTY -> {
                 emit(code,unary.operand());
-                code.pop();
-                boolean empty=unary.operand() instanceof Ast.Literal literal
-                        && (literal.token().kind()==TokenKind.NULL
-                        || literal.token().kind()==TokenKind.STRING && literal.token().value().isEmpty());
-                if (empty) code.iconst_1(); else code.iconst_0();
+                var absent=code.newLabel();
+                var done=code.newLabel();
+                code.dup().ifnull(absent);
+                int value=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+                code.astore(value).ldc("").aload(value).invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT))
+                        .goto_(done).labelBinding(absent).pop().iconst_1().labelBinding(done);
                 code.invokestatic(boxedBoolean,"valueOf",MethodTypeDesc.of(boxedBoolean,BOOLEAN));
             }
             default -> throw new ELException("Unsupported unary operator");
@@ -296,6 +322,59 @@ public final class ExpressionCompiler {
     private static void number(CodeBuilder code,long value) {
         var boxed=ClassDesc.of("java.lang.Long");
         code.loadConstant(value).invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,LONG));
+    }
+
+    private static void floatingOperand(CodeBuilder code,int slot,java.lang.classfile.Label floating) {
+        var next=code.newLabel();
+        code.aload(slot).instanceOf(ClassDesc.of("java.lang.Double")).ifne(floating)
+                .aload(slot).instanceOf(STRING).ifeq(next);
+        for (char marker:new char[]{'.','e','E'}) {
+            code.aload(slot).checkcast(STRING).loadConstant((int)marker)
+                    .invokevirtual(STRING,"indexOf",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),ClassDesc.ofDescriptor("I")))
+                    .ifge(floating);
+        }
+        code.labelBinding(next);
+    }
+
+    private static void emitDynamicMinus(CodeBuilder code,Ast operand) {
+        int slot=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        emit(code,operand);
+        var present=code.newLabel();
+        var floating=code.newLabel();
+        var text=code.newLabel();
+        var floatingText=code.newLabel();
+        var done=code.newLabel();
+        code.astore(slot).aload(slot).ifnonnull(present);
+        number(code,0L);
+        code.goto_(done).labelBinding(present)
+                .aload(slot).instanceOf(ClassDesc.of("java.lang.Double")).ifne(floating)
+                .aload(slot).instanceOf(STRING).ifne(text);
+        var valid=code.newLabel();
+        code.aload(slot).instanceOf(ClassDesc.of("java.lang.Long")).ifne(valid);
+        var exception=ClassDesc.of("jakarta.el.ELException");
+        code.new_(exception).dup().ldc("Invalid operand for unary minus")
+                .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow().labelBinding(valid);
+        negate(code,slot,false,false);
+        code.goto_(done).labelBinding(floating);
+        negate(code,slot,true,false);
+        code.goto_(done).labelBinding(text);
+        floatingOperand(code,slot,floatingText);
+        negate(code,slot,false,true);
+        code.goto_(done).labelBinding(floatingText);
+        negate(code,slot,true,true);
+        code.labelBinding(done);
+    }
+
+    private static void negate(CodeBuilder code,int slot,boolean floating,boolean convert) {
+        var boxed=ClassDesc.of(floating ? "java.lang.Double" : "java.lang.Long");
+        if (convert) code.aload(1);
+        code.aload(slot);
+        if (convert) code.ldc(boxed).invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS));
+        var number=ClassDesc.of("java.lang.Number");
+        code.checkcast(number).invokevirtual(number,floating ? "doubleValue" : "longValue",
+                MethodTypeDesc.of(floating ? DOUBLE : LONG));
+        if (floating) code.dneg(); else code.lneg();
+        code.invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,floating ? DOUBLE : LONG));
     }
 
     private static boolean logical(TokenKind kind) {
@@ -331,6 +410,11 @@ public final class ExpressionCompiler {
         };
     }
 
+    private static boolean dynamicNumber(Ast node) {
+        ClassDesc type=rawType(node);
+        return OBJECT.equals(type) || STRING.equals(type) && !(node instanceof Ast.Literal);
+    }
+
     private static boolean floating(Ast node) {
         if (ClassDesc.of("java.lang.Double").equals(rawType(node))) return true;
         if (node instanceof Ast.Literal literal && literal.token().kind()==TokenKind.STRING) {
@@ -340,10 +424,13 @@ public final class ExpressionCompiler {
         return false;
     }
 
-    private static void numericOperand(CodeBuilder code,Ast operand,int slot,boolean floating) {
+    private static void numericOperand(CodeBuilder code,int slot,boolean floating) {
         ClassDesc boxed=ClassDesc.of(floating ? "java.lang.Double" : "java.lang.Long");
         code.aload(1);
-        if (rawType(operand)==null) number(code,0L); else code.aload(slot);
+        var present=code.newLabel();
+        code.aload(slot).dup().ifnonnull(present).pop();
+        number(code,0L);
+        code.labelBinding(present);
         code.ldc(boxed).invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS))
                 .checkcast(boxed).invokevirtual(boxed,floating ? "doubleValue" : "longValue",
                         MethodTypeDesc.of(floating ? DOUBLE : LONG));
@@ -357,20 +444,41 @@ public final class ExpressionCompiler {
         int right=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
         emit(code,binary.right());
         code.astore(right);
+        if (OBJECT.equals(rawType(binary))) {
+            var nonnull=code.newLabel();
+            var floating=code.newLabel();
+            var done=code.newLabel();
+            code.aload(left).ifnonnull(nonnull).aload(right).ifnonnull(nonnull);
+            number(code,0L);
+            code.goto_(done).labelBinding(nonnull);
+            floatingOperand(code,left,floating);
+            floatingOperand(code,right,floating);
+            emitMath(code,binary.operator().kind(),left,right,false);
+            code.goto_(done).labelBinding(floating);
+            emitMath(code,binary.operator().kind(),left,right,true);
+            code.labelBinding(done);
+            return;
+        }
         if (rawType(binary.left())==null && rawType(binary.right())==null) {
             number(code,0L);
             return;
         }
         boolean floating=rawType(binary).equals(ClassDesc.of("java.lang.Double"));
+        emitMath(code,binary.operator().kind(),left,right,floating);
+    }
+
+    private static void emitMath(CodeBuilder code,TokenKind operator,int left,int right,boolean floating) {
+        // Division promotes any non-null pair to Double.
+        floating=floating || operator==TokenKind.DIVIDE;
         var start=code.newLabel();
         var end=code.newLabel();
         var handler=code.newLabel();
         var rethrow=code.newLabel();
         var done=code.newLabel();
         code.labelBinding(start);
-        numericOperand(code,binary.left(),left,floating);
-        numericOperand(code,binary.right(),right,floating);
-        switch (binary.operator().kind()) {
+        numericOperand(code,left,floating);
+        numericOperand(code,right,floating);
+        switch (operator) {
             case PLUS -> { if (floating) code.dadd(); else code.ladd(); }
             case MINUS -> { if (floating) code.dsub(); else code.lsub(); }
             case MULTIPLY -> { if (floating) code.dmul(); else code.lmul(); }
@@ -378,13 +486,13 @@ public final class ExpressionCompiler {
             case MODULO -> { if (floating) code.drem(); else code.lrem(); }
             default -> throw new ELException("Unsupported arithmetic operator");
         }
-        var boxed=rawType(binary);
+        var boxed=ClassDesc.of(floating ? "java.lang.Double" : "java.lang.Long");
         code.invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,floating ? DOUBLE : LONG))
                 .labelBinding(end).goto_(done).labelBinding(handler);
         int failure=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
         var exception=ClassDesc.of("jakarta.el.ELException");
         code.astore(failure).aload(failure).instanceOf(exception).ifne(rethrow)
-                .new_(exception).dup().ldc("Arithmetic error for "+binary.operator().kind()).aload(failure)
+                .new_(exception).dup().ldc("Arithmetic error for "+operator).aload(failure)
                 .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING,ClassDesc.of("java.lang.Throwable")))
                 .athrow().labelBinding(rethrow).aload(failure).athrow().labelBinding(done);
         code.exceptionCatch(start,end,handler,ClassDesc.of("java.lang.RuntimeException"));

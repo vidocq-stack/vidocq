@@ -51,7 +51,17 @@ class ExpressionCompilerTest {
                 "${false or true}", "${false || false}", "${null and true}", "${'' or 'true'}",
                 "${'TRUE' and not false}", "${true or (1%0)}", "${false and -true}",
                 "${false or true and false}", "${not (false or true)}", "logic=${true and false}",
-                "${true or 9223372036854775808}", "${false and -9223372036854775809}");
+                "${true or 9223372036854775808}", "${false and -9223372036854775809}",
+                "${true ? 7 : 1%0}", "${false ? -true : 'yes'}", "${null ? 1 : null}",
+                "${true ? null : 7}", "${false ? 7 : 1.5}", "${'true' ? 'yes' : 'no'}",
+                "${false ? 1 : true ? 2 : 3}", "${true ? false or true : false}",
+                "${false ? 9223372036854775808 : 7}", "condition=${true ? null : 1}",
+                "${empty (true ? '' : 'x')}", "${empty (false ? 1 : null)}",
+                "${-(true ? '1.5' : '7')}", "${-(false ? '1.5' : '7')}",
+                "${-(true ? null : 1)}", "${-(false ? 1 : 1.5)}",
+                "${(true ? '1.5' : '7') + 2}", "${(false ? '1.5' : '7') + 2}",
+                "${(true ? null : 1)/null}", "${(false ? 1 : 1.5)%2}",
+                "${1 + (true ? null : 2)}", "${true or (false ? 1 : 7)}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -60,7 +70,7 @@ class ExpressionCompilerTest {
         var expected=new ArrayList<String>();
         for (int i=0;i<sources.size();i++) {
             byte[] bytes=ExpressionCompiler.compile("demo.E"+i,sources.get(i));
-            assertTrue(ClassFile.of().verify(bytes).isEmpty());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),sources.get(i)+": "+ClassFile.of().verify(bytes));
             for (var entry:ClassFile.of().parse(bytes).constantPool()) {
                 if (entry instanceof java.lang.classfile.constantpool.ClassEntry type) {
                     assertFalse(type.name().stringValue().startsWith("io/vidocq/peano/core/"));
@@ -240,6 +250,31 @@ class ExpressionCompilerTest {
                         catch (ELException expected) {
                             if (!(expected.getCause() instanceof NumberFormatException)) throw expected;
                         }
+                        logicalOrder.clear();
+                        var conditional=new AlteredConditional(Object.class);
+                        if (!Long.valueOf(7).equals(conditional.getValue(altered)))
+                            throw new AssertionError("Conditional ignored caller branch selection");
+                        var numericOrder=new java.util.ArrayList<String>();
+                        var numericContext=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==boolean.class || type==Long.class || type==Double.class)
+                                    numericOrder.add(type.getName()+":"+String.valueOf(value));
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        var dynamic=new DynamicArithmetic(Object.class);
+                        if (!Long.valueOf(2).equals(dynamic.getValue(numericContext))
+                                || !numericOrder.equals(java.util.List.of("boolean:true","boolean:false",
+                                    "java.lang.Long:0","java.lang.Long:2")))
+                            throw new AssertionError("Dynamic arithmetic conversion order: "+numericOrder);
+                        try { new BadConditional(Object.class).getValue(context); throw new AssertionError("Invalid condition accepted"); }
+                        catch (ELException expected) {}
+                        try { new BadDynamicArithmetic(Object.class).getValue(context); throw new AssertionError("Dynamic modulo zero accepted"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof ArithmeticException)) throw expected;
+                        }
+                        try { new BadDynamicUnary(Object.class).getValue(context); throw new AssertionError("Dynamic boolean minus accepted"); }
+                        catch (ELException expected) {}
                         try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
                             output.writeObject(new E2(Object.class));
                         }
@@ -259,6 +294,14 @@ class ExpressionCompilerTest {
                 "AlteredLogical","${true and (1%0)}", "BadLogical","${true and 7}",
                 "OverflowLogical","${false or 9223372036854775808}",
                 "OverflowLiteral","${9223372036854775808}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty());
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
+        for (var entry:java.util.Map.of("AlteredConditional","${true ? 1%0 : 7}",
+                "DynamicArithmetic","${(true ? null : 1)+(false ? 1.5 : 2)}",
+                "BadConditional","${7 ? 1 : 2}", "BadDynamicArithmetic","${(true ? 1 : 1.5)%0}",
+                "BadDynamicUnary","${-(true ? true : 1)}").entrySet()) {
             byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
             assertTrue(ClassFile.of().verify(bytes).isEmpty());
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
