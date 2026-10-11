@@ -23,14 +23,17 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261011-02 — `@ApplicationPath` is ignored when the `Application` subclass carries no bean-defining annotation
 
 - **Date**: 2026-10-11
-- **Status**: OPEN
+- **Status**: FIXED (vidocq#219, with cassini branch fix/application-path-index)
 - **Affected module**: vidocq-runtime-cassini-rest-extension (`CassiniExtension.resolveApplicationPath`)
 - **Symptom**: `@ApplicationPath("/api") public class Api extends Application {}` mounts the resources on `/`, not
-  `/api`. Next to a servlet application on `/`, the boot now fails on the duplicate prefix (BUG-20261011-03).
+  `/api`. Next to a servlet application on `/`, the boot fails on the duplicate prefix (BUG-20261011-03).
 - **Minimal repro**: `vidocq-runtime-it-foy-servlet` without `@ApplicationScoped` on `ItemsApplication`.
-- **Cause hypothesis**: the extension looks for the `Application` among the beans. Under annotated discovery a class
-  without a bean-defining annotation is never discovered, so `CassiniScopeExtension`, which gives the `Application`
-  its default `@ApplicationScoped`, never sees it. Workaround: annotate the `Application` with `@ApplicationScoped`.
+- **Cause**: the extension looked for the `Application` among the beans only. Under annotated discovery a class
+  without a bean-defining annotation is never discovered; `CassiniScopeExtension` cannot help, since a build-compatible
+  extension only enhances discovered classes.
+- **Fix**: `cassini-processor` generates an `ApplicationDescriptor` (`<Application>$$CassiniApplication`) per
+  `@ApplicationPath`; the extension reads them through `ServiceLoader` (`ApplicationPaths`), the beans remaining the
+  source for classes compiled without the processor. The IT's `ItemsApplication` has no scope any more.
 
 ## BUG-20261011-01 — the REST codegen bundle leaves Cassini's build-compatible extension out
 
@@ -41,7 +44,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   compile/module path are NOT on the annotation-processor path and will not run:
   [io.vidocq.cassini.cdi.CassiniScopeExtension]". `@Path` classes without a scope do not get their default
   `@RequestScoped`: under annotated discovery such a resource is no bean, and the REST extension does not serve
-  it; an unscoped `Application` is not discovered either (BUG-20261011-02). Workaround: give resources a scope.
+  it. Workaround: give resources a scope.
 - **Minimal repro**: `vidocq-runtime-it-foy-servlet` without `@RequestScoped` on `ItemsResource`: `/api/items`
   answers an empty 404.
 - **Cause**: the bundle only carries `cassini-processor`; the runtime does not run extensions over an application

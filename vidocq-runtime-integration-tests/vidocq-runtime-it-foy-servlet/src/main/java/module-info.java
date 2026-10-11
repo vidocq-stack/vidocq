@@ -31,10 +31,10 @@ module io.vidocq.runtime.it.foyservlet {
     requires io.vidocq.vauban.api;
 
     // No exports, no opens. The processors generate in-module code that ServiceLoader finds: the
-    // web component factories (foy-processor, through the Servlet codegen bundle), the REST adapter
-    // and routes (Cassini codegen bundle) and the instantiation and injection of the beans
-    // (Vauban). The test boots the runtime without the application layer that `Vidocq.run`
-    // creates, so the module declares the providers itself.
+    // web component factories (foy-processor, through the Servlet codegen bundle), the REST adapter,
+    // routes and @ApplicationPath descriptor (Cassini codegen bundle) and the instantiation and
+    // injection of the beans (Vauban). The test boots the runtime without the application layer
+    // that `Vidocq.run` creates, so the module declares the providers itself.
     provides io.vidocq.foy.spi.gen.WebComponent with
             io.vidocq.runtime.it.foyservlet.AccountServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.CartServlet$$FoyComponent,
@@ -44,6 +44,8 @@ module io.vidocq.runtime.it.foyservlet {
             io.vidocq.runtime.it.foyservlet.TicketServlet$$FoyComponent;
     provides io.vidocq.cassini.spi.gen.ResourceAdapter
             with io.vidocq.runtime.it.foyservlet.ItemsResource$$CassiniAdapter;
+    provides io.vidocq.cassini.spi.gen.ApplicationDescriptor
+            with io.vidocq.runtime.it.foyservlet.ItemsApplication$$CassiniApplication;
     provides io.vidocq.cassini.spi.gen.RouteProvider
             with io.vidocq.runtime.it.foyservlet.ItemsResource$$CassiniRoutes;
     provides io.vidocq.vauban.api.VaubanComponentProvider

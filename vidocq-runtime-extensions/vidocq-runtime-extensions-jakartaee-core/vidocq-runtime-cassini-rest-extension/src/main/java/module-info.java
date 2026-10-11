@@ -26,6 +26,8 @@ module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     requires io.vidocq.vauban.core;
 
     requires io.vidocq.cassini.api;
+    // The @ApplicationPath descriptors cassini-processor generates (Vidocq/vidocq#219).
+    uses io.vidocq.cassini.spi.gen.ApplicationDescriptor;
     requires io.vidocq.cassini.chappe;
     requires io.vidocq.cassini.cdi.vauban;
     // Maintenance API only (CassiniMaintenance.resetDiscoveryCaches on hot reload)

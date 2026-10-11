@@ -187,7 +187,7 @@ Foy activates the request context around every request, and the session context 
 
 The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. Two mounts on the same prefix of one listener fail at startup, with the extensions and the keys to change named in the message. Servlet filters and the `HttpSession` do not apply to REST resources; running REST inside Foy instead is tracked by https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215].
 
-NOTE: the REST extension reads `@ApplicationPath` from the `Application` bean. Give the `Application` subclass a scope, such as `@ApplicationScoped`, or set `vidocq.rest.context-path`: without one it is not discovered, and REST lands on `/` (BUG-20261011-02).
+The REST extension mounts its resources on the `@ApplicationPath` of the application's `Application` subclass, which needs no CDI scope: `cassini-processor`, in the REST codegen bundle, records the path at compile time [.tag-new]#NEW#. `vidocq.rest.context-path` wins over it.
 
 === Declarative mount
 

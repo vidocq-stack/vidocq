@@ -19,15 +19,14 @@
  */
 package io.vidocq.runtime.it.foyservlet;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.ApplicationPath;
 import jakarta.ws.rs.core.Application;
 
 /**
- * REST under {@code /api}, next to the servlets on {@code /}. The scope makes the class a bean under
- * annotated discovery: the REST extension reads {@code @ApplicationPath} from the Application bean.
+ * REST under {@code /api}, next to the servlets on {@code /}. No scope on purpose: the class is no
+ * bean under annotated discovery, and the REST extension reads {@code @ApplicationPath} from the
+ * descriptor cassini-processor generates (Vidocq/vidocq#219).
  */
-@ApplicationScoped
 @ApplicationPath("/api")
 public class ItemsApplication extends Application {
 }
