@@ -152,8 +152,9 @@ reference and primitive array targets. This narrow exception requires only
 
 P1 implements scalar and array coercions. P2 routes operand conversion through
 the evaluation context; functional-interface adaptation belongs with lambdas in P4. PropertyEditor
-conversion remains a design question because Peano forbids `java.desktop` and
-`java.beans` introspection. Unsupported conversions raise ELException.
+conversion through an application-owned ELResolver is verified. Automatic registry
+discovery remains the open compatibility issue EL-016 because Peano forbids
+`java.desktop` and `java.beans` introspection. Unsupported conversions raise ELException.
 
 P3 metadata fallback (2026-10-10): ELResolver exposes invocation but no method-metadata
 lookup SPI. MethodInfo/MethodReference temporarily use public method signature and
@@ -365,6 +366,37 @@ non-member reflection exception. Configure the system property before applicatio
 | P7 | `peano-compiler`: Class-File API compiled expressions (build time) | differential tests compiled vs interpreted |
 | P8 | Official TCK through `peano-tck` | 100 % PASS recorded in docs `tck` page |
 | P9 | `peano-bench` (JMH vs Expressly), Vidocq Runtime extension | numbers in `BENCH.md` only |
+
+## PropertyEditor boundary study (2026-10-11)
+
+EL 6.0 section 1.25 permits custom ELResolver conversions; section 1.25.9 specifies
+the legacy editor rules for other types. The release makes java.desktop optional,
+not the editor API independent of java.beans. Sources:
+[EL 6.0 specification](https://jakarta.ee/specifications/expression-language/6.0/jakarta-expression-language-spec-6.0),
+[EL team discussion](https://www.eclipse.org/lists/el-dev/msg00208.html).
+
+Two named-consumer proofs now cover the existing architecture:
+
+- A launcher limited to java.base, Jakarta EL and the Peano/application modules runs
+  generated property/method/callback and collection scenarios in deny mode. The actual
+  boot layer is asserted to exclude java.desktop.
+- A separate test application explicitly requires java.desktop, owns its editor and
+  resolver, and performs text conversion through ELResolver.convertToType. Each call
+  constructs a fresh editor. Failed empty text returns null, invalid nonempty text
+  raises ELException, and the integration works in deny mode without core member lookup.
+
+The core keeps its current dependencies and does not discover PropertyEditorManager
+registrations. The explicit converter is an integration recipe, not automatic editor
+support or proof of full section 1.25.9 conformance when legacy editors are available.
+EL-016 records the remaining limitation.
+
+Automatic compatibility remains **to validate**. An isolated optional resolver module
+could require java.desktop and perform editor-registry discovery only when installed.
+It would need an explicit exception to the project's java.beans prohibition. Covering
+ExpressionFactory.coerceToType as well as contexts would additionally require a
+conversion-provider SPI or a separate compatibility factory. Neither is introduced by
+this boundary study. Prefer the existing application-owned resolver until that choice
+is approved; P7 expression compilation does not depend on it.
 
 ## Open questions
 

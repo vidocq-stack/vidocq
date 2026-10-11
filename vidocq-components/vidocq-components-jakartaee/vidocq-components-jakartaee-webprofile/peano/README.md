@@ -39,6 +39,10 @@ Set `-Dpeano.reflection=deny` to reject Peano's reflective member fallback with 
 diagnostic naming the target type. Generated tables, custom resolvers and collection
 operations remain available. The default is `allow`; captured-function deserialization
 requires that default because restoring its method descriptor uses reflective lookup.
+
+Peano's named-consumer tests also run with java.desktop excluded. Legacy PropertyEditor
+integration is available through an application-owned ELResolver converter; automatic
+PropertyEditorManager discovery remains the documented limitation EL-016.
 The official EL 6.0.1 TCK passes all 361 tests, including signatures; this result
 is not a certification announcement.
 Upstream API limitations and corrected engine regressions are tracked in BUG.md.

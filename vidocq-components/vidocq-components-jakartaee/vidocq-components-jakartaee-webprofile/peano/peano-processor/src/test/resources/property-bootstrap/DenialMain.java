@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public final class DenialMain {
     public static void main(String[] args) throws Exception {
+        if (args.length>0 && "no-desktop".equals(args[0])
+                && ModuleLayer.boot().findModule("java.desktop").isPresent())
+            throw new AssertionError("java.desktop was resolved in the minimal-runtime proof");
         boolean deny="deny".equals(System.getProperty("peano.reflection"));
         var factory=ExpressionFactory.newInstance();
         var context=new StandardELContext(factory);

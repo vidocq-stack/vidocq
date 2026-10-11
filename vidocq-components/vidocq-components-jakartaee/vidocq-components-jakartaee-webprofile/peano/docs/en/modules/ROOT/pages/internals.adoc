@@ -181,7 +181,8 @@ type through `ELContext.convertToType`, allowing the context to override convers
 Operator operand conversions also use the evaluation context.
 
 Java platform conversion uses 46 statically compiled adapters; selected application
-interfaces use generated adapters. PropertyEditor conversion remains undecided.
+interfaces use generated adapters. Application-owned PropertyEditor converters use
+the existing ELResolver hook; automatic editor discovery remains limitation EL-016.
 Evaluation listeners and value/method expression serialization are implemented.
 
 == Resolver-backed values (implemented)

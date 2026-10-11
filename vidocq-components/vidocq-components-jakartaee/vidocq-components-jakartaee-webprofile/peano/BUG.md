@@ -3,6 +3,19 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-016 · 2026-10-11 · Registered legacy property editors are not discovered
+
+- Symptom: factory coercion of nonempty text to a custom target fails even after
+  PropertyEditorManager registers a matching editor and java.desktop is resolved.
+- Minimal reproduction: run the property-editor named-consumer fixture. Register
+  ValueEditor for Value, then call factory.coerceToType("7", Value.class).
+- Cause: Peano intentionally has no java.beans dependency or editor-registry lookup.
+  EL 6.0 section 1.25.9 describes the editor path; section 1.25 permits custom converters.
+- Status: open compatibility limitation. An application-owned ELResolver converter
+  works; automatic discovery needs a separately approved compatibility design.
+- Evidence: PropertyProcessorTest's editor integration scenario verifies the missing
+  factory lookup and the working explicit converter, including empty/invalid input.
+
 ## APT-007 · 2026-10-10 · Unselected child interfaces caused adapter diagnostics
 
 - Symptom: selecting a functional root caused an unrelated unselected child interface

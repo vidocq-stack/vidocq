@@ -14,6 +14,33 @@ enter its reflective member fallback. The default allow mode preserves Jakarta A
 fallback behavior. Custom resolvers, generated tables and direct collection access
 continue to work in deny mode.
 
+== Custom text conversion and legacy editors
+
+Register custom conversions with ELManager.addELResolver or StandardELContext.addELResolver.
+An application's resolver can use its own legacy PropertyEditor when the application
+explicitly requires java.desktop; Peano itself keeps no such dependency.
+Inside that resolver, implement the conversion method with a fresh editor per call:
+
+[source,java]
+----
+public <T> T convertToType(ELContext context, Object value, Class<T> target) {
+    if (target != Value.class || !(value instanceof String text)) return null;
+    context.setPropertyResolved(true);
+    var editor = new ValueEditor();
+    try {
+        editor.setAsText(text);
+        return target.cast(editor.getValue());
+    } catch (RuntimeException failure) {
+        if (text.isEmpty()) return null;
+        throw new ELException("Cannot convert text to Value", failure);
+    }
+}
+----
+
+Value and ValueEditor belong to the application. Other resolver operations remain
+unresolved. Automatic PropertyEditorManager discovery is not implemented (EL-016);
+factory coercion does not inherit a context-local converter.
+
 == Prerequisites
 
 * **Java 25** — Temurin recommended. Module path enabled.

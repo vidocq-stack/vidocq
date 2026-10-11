@@ -72,6 +72,11 @@ class PropertyProcessorTest {
                 String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
                 "--module","peano.propertyconsumer/demo.DenialMain"),1);
         assertTrue(invalid.contains("Invalid peano.reflection value"),invalid);
+        String minimal=run(List.of(javaBin("java"),"-Dpeano.reflection=deny",
+                "--limit-modules","java.base,jakarta.el,io.vidocq.peano.api,io.vidocq.peano.core,peano.propertyconsumer",
+                "--module-path",String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
+                "--module","peano.propertyconsumer/demo.DenialMain","no-desktop"),0);
+        assertTrue(minimal.contains("PEANO_DENIAL_OK"),minimal);
         for (String name : List.of("demo.Bean","demo.Derived","demo.Item","demo.Explicit","demo.exported.PublicBean")) {
             Path fragment = compilation.classes().resolve("META-INF/peano/accessor-providers/"+name+"__PeanoAccessors.txt");
             assertEquals("provides io.vidocq.peano.spi.AccessorProvider with "+name+"__PeanoAccessors;\n",Files.readString(fragment));
@@ -84,6 +89,25 @@ class PropertyProcessorTest {
         var compilation = compile(sources,"-Apeano.accessorTypes=demo.Model");
         assertEquals(0,compilation.status(),compilation.log());
         assertTrue(Files.exists(compilation.generated().resolve("demo/Model__PeanoAccessors.java")));
+    }
+
+    @Test
+    void integratesApplicationOwnedPropertyEditorsThroughTheExistingConversionHook() throws Exception {
+        Path source=temporary.resolve("sources");
+        Files.createDirectories(source);
+        for (String name:List.of("module-info.java","Main.java")) {
+            try (var input=getClass().getResourceAsStream("/property-editor/"+name)) {
+                assertNotNull(input);
+                Files.copy(input,source.resolve(name));
+            }
+        }
+        var compilation=compile(source);
+        assertEquals(0,compilation.status(),compilation.log());
+        Path core=Path.of(ExpressionFactory.newInstance().getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
+        String result=run(List.of(javaBin("java"),"-Dpeano.reflection=deny","--module-path",
+                String.join(File.pathSeparator,el().toString(),api().toString(),core.toString(),compilation.classes().toString()),
+                "--module","peano.editorconsumer/demo.Main"),0);
+        assertTrue(result.contains("PEANO_EDITOR_OK"),result);
     }
 
     @Test

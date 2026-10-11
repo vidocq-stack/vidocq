@@ -16,6 +16,26 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
 |===
 
+== Legacy property-editor boundary
+
+Peano does not require java.desktop and does not discover PropertyEditorManager
+registrations. Nonempty text without a supported converter raises ELException;
+empty text to an otherwise unsupported reference target returns null.
+Automatic legacy editor discovery remains compatibility issue EL-016.
+
+An application that already uses java.beans can explicitly require java.desktop
+and add its own ELResolver converter to the context. Construct an editor for each
+conversion, claim the operation with setPropertyResolved(true), call setAsText,
+then return the typed getValue result. If an editor fails on empty text, return null;
+on other invalid text, raise ELException. This explicit integration is verified in
+a closed application module under reflection-denial mode.
+
+ELContext conversion can use that resolver; ExpressionFactory.coerceToType has no
+caller context and does not inherit context-local converters. The integration does
+not add automatic editor support to the factory.
+
+See https://jakarta.ee/specifications/expression-language/6.0/jakarta-expression-language-spec-6.0[EL 6.0 sections 1.25 and 1.25.9].
+
 == Reflection policy
 
 The system property peano.reflection accepts allow (default) or deny. Other values
