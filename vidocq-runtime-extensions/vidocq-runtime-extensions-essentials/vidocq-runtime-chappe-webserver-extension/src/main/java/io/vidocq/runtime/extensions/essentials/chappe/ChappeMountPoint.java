@@ -265,12 +265,22 @@ public final class ChappeMountPoint {
      * Used by {@code vidocq.http.mount.<n>.priority}.
      */
     void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority) {
+        mount(listenerName, prefix, handler, stripPrefix, priority, caller());
+    }
+
+    /**
+     * Mounts on behalf of {@code owner}, the name a duplicate-prefix error gives the mount: the
+     * declarative mounts are named by their keys ({@code vidocq.http.mount.<n>}), not by the extension
+     * that applies them.
+     */
+    void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority,
+               String owner) {
         Objects.requireNonNull(listenerName, "listenerName");
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(handler, "handler");
+        Objects.requireNonNull(owner, "owner");
         ensureOpen();
         String key = routingKey(prefix);
-        String owner = caller();
         List<PendingMount> listenerMounts = mounts.computeIfAbsent(listenerName, n -> new ArrayList<>());
         for (PendingMount existing : listenerMounts) {
             if (existing.prefix().equals(key)) {

@@ -256,6 +256,15 @@ class ChappeMountPointTest {
     }
 
     @Test
+    void aDeclarativeMountIsNamedByItsKeysInTheDuplicateError() {
+        mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("a"), true, 4, "vidocq.http.mount.web");
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("b")));
+        assertTrue(e.getMessage().contains("by vidocq.http.mount.web and by "), e.getMessage());
+    }
+
+    @Test
     void rootSpelledTwoWaysCollides() {
         mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("a"));
 
