@@ -13,8 +13,42 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | `io.vidocq.peano:peano-core` | `io.vidocq.peano.core` | Engine, `provides jakarta.el.ExpressionFactory`
 | `io.vidocq.peano:peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable SPI, MethodDescriptor/MethodSelection and SOURCE-retained ELAccessible annotation
 | `io.vidocq.peano:peano-processor` | `io.vidocq.peano.processor` | APT property tables, build time only; exports nothing, provides javax.annotation.processing.Processor
-| `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | _planned_ — expression compiler, build time only
+| `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | Literal/constant template compiler, build time only; Java Class-File API
 |===
+
+== Build-time expression compiler
+
+ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class file
+for literal text and templates whose evaluation parts are AST literals. It supports
+null, boolean, string, integer and floating values and composite literal templates.
+Unary signed literals, operators, identifiers and calls are rejected in this slice.
+Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
+qualified binary names raise IllegalArgumentException. The caller owns output placement.
+
+[source,java]
+----
+byte[] bytes = ExpressionCompiler.compile("example.generated.Answer", "${42}");
+Files.write(output.resolve("example/generated/Answer.class"), bytes);
+----
+
+The generated public class extends CompiledValueExpression in peano-api and has
+a public constructor receiving the expected result Class:
+
+[source,java]
+----
+ValueExpression answer = new example.generated.Answer(Long.class);
+Long value = answer.getValue(context);
+----
+
+The application module requires io.vidocq.peano.api. Neither peano-core nor
+peano-compiler is required by the emitted class; the caller supplies an ELContext.
+The compiler itself is build tooling with internal core/API dependencies and
+java.compiler for name validation, without external tooling dependencies.
+Only the compiler can read the core syntax package through its qualified export.
+Generated subclasses evaluate directly; the shared API base owns conversion,
+events, parsed identity, read-only metadata and serialization.
+Identity keys are opaque compiler output and must represent normalized parsed form;
+bindingIdentity contributes captured bindings when subclasses need them.
 
 == Legacy property-editor boundary
 

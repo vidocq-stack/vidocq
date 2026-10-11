@@ -12,10 +12,10 @@ immutable AST, resolver-backed evaluator and API provider; the full design is
 |===
 | Artefact | Java module | Role
 
-| `peano-core` | `io.vidocq.peano.core` | Engine — exports nothing; provides `jakarta.el.ExpressionFactory`, evaluates constants and resolver-backed value expressions
+| `peano-core` | `io.vidocq.peano.core` | Engine — syntax export qualified only to the build-time compiler; provides `jakarta.el.ExpressionFactory`
 | `peano-api` | `io.vidocq.peano.api` | AccessorProvider/AccessorTable contract and SOURCE-retained ELAccessible annotation
 | `peano-processor` | `io.vidocq.peano.processor` | Annotation processor generating property tables — implemented, build time only
-| `peano-compiler` | `io.vidocq.peano.compiler` | AST to Class-File API classes — planned, P7, build time only
+| `peano-compiler` | `io.vidocq.peano.compiler` | AST literal/constant templates to Class-File API classes — implemented, P7, build time only
 | `peano-tck` | — | Official TCK runner, `-Ptck` profile only
 |===
 

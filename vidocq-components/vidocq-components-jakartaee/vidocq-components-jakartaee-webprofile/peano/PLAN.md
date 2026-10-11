@@ -1,6 +1,6 @@
 # Peano — Design plan
 
-> Status: **implementation in progress (P6)**. This document is the design of record for Peano, the
+> Status: **implementation in progress (P7)**. This document is the design of record for Peano, the
 > Jakarta Expression Language 6.0 implementation of the Vidocq ecosystem. The core
 > now implements grammar, evaluation, resolvers, lambdas, collection pipelines,
 > evaluation events, expression serialization and a compiled Predicate adapter.
@@ -8,6 +8,7 @@
 > The peano-api service contract and direct accessor-table resolver are implemented.
 > Property table APT generation is implemented with the approved annotation and explicit-type selection.
 > Direct methods, runtime annotation literals and method metadata are implemented for selected models.
+> Build-time literal/constant template compilation through the Class-File API is implemented.
 > PropertyEditor conversion
 > and certification remain open. Decisions marked
 > **(to validate)** need the maintainer's sign-off before the milestone that
@@ -123,6 +124,31 @@ prove at test time that Peano's member fallback stays unused — the same "elimi
 fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
+
+P7 first slice (2026-10-11): peano-compiler exports ExpressionCompiler.compile(binaryName,
+source), returning a fresh Java 25 class file. The emitted public class extends the
+peano-api CompiledValueExpression protocol base and has a public Class constructor for
+the expected result type. The compiler uses the prescribed qualified core syntax export;
+no syntax is exported to applications and no opens are added. A scoped module-lint
+suppression accounts for the later-built compiler target during core-only javac.
+
+Literal text, null/boolean/string/integer/floating AST literals and composite literal
+templates are supported. Signed literals remain unary nodes and are rejected in this
+slice, as are identifiers, operators, calls and other unsupported ASTs. Invalid names,
+syntax/numeric literals and Class-File size limits receive build-time diagnostics.
+There is no parser or interpreter fallback in emitted classes.
+
+CompiledValueExpression owns expected-type conversion, successful evaluation events,
+read-only metadata and serialization. Its opaque identity key represents normalized
+parsed structure, independent of emitted binary name and immediate/deferred delimiter;
+captured bindings can contribute through bindingIdentity in later slices. Compiled
+instances compare only with other compiled instances, preserving symmetry with the
+interpreter implementation. Generated body bytecode contains literal evaluation and
+per-part context conversion for composites, then calls only API/JDK types.
+Separate-JVM differential tests omit both core and compiler, verify class files and
+constant-pool dependencies, compare values/types/literal flags and check equality,
+custom conversion, events and serialization. Runtime modules require only peano-api
+(transitively Jakarta EL) and the JDK for this slice.
 
 - The **tree-walking interpreter** is the reference implementation and the
   differential-testing oracle. It handles every expression created at run time

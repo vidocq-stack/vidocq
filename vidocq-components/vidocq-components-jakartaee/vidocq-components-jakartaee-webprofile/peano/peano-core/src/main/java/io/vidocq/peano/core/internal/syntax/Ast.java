@@ -23,7 +23,7 @@ import java.util.List;
 
 /**
  * Immutable expression syntax. Numeric literal text remains unconverted until evaluation.
- * All types live in an unexported implementation package.
+ * Types stay in an implementation package visible only to the build-time compiler.
  */
 public sealed interface Ast {
     record Literal(Token token) implements Ast {

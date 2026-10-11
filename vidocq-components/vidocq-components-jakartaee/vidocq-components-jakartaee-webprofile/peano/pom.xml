@@ -76,6 +76,7 @@
         <module>peano-api</module>
         <module>peano-core</module>
         <module>peano-processor</module>
+        <module>peano-compiler</module>
     </modules>
 
     <dependencyManagement>

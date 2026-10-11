@@ -77,7 +77,8 @@ peano-core   ← Engine: parser, AST, interpreter, coercions,
 peano-api    ← Application-owned accessor tables, exports io.vidocq.peano.spi
 peano-processor ← Build-time APT property tables, module-path processor service
 peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
-(planned)    peano-compiler (Class-File API compiled expressions), peano-bench (JMH)
+peano-compiler ← Build-time Class-File API literal/constant expression compilation
+(planned)    peano-bench (JMH)
 ```
 
 ## Architecture Constraints Not to Violate
@@ -104,7 +105,8 @@ peano-tck    ← Official EL 6.0 TCK runner, in-reactor behind `tck`
 
 - **Maven groupId**: `io.vidocq.peano`; version `0.4.0-SNAPSHOT` (workspace dev line,
   parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
-- **Packages**: `io.vidocq.peano.core.internal.*` = implementation, not exported;
+- **Packages**: `io.vidocq.peano.core.internal.*` = implementation, not exported to applications;
+  the syntax package has only the qualified export to the build-time compiler prescribed in PLAN.md.
   discovery only through `provides jakarta.el.ExpressionFactory`.
 - **Records + sealed interfaces** for AST nodes; one test class per grammar production.
 - Licence header from `etc/license-header.txt` on every `.java` file.

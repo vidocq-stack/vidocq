@@ -21,13 +21,16 @@
 /**
  * Peano — Jakarta Expression Language 6.0 implementation.
  *
- * <p>Nothing is exported: {@code io.vidocq.peano.core.internal} is the engine.
+ * <p>The engine stays unexported. Syntax is exported only to the build-time compiler.
  * Discovery happens through the ExpressionFactory service provider,
  * which the module system allows without an export.
  */
+// The qualified target is built later in the Maven reactor and is absent during core compilation.
+@SuppressWarnings("module")
 module io.vidocq.peano.core {
     requires transitive jakarta.el;
     requires io.vidocq.peano.api;
+    exports io.vidocq.peano.core.internal.syntax to io.vidocq.peano.compiler;
     uses io.vidocq.peano.spi.AccessorProvider;
     provides jakarta.el.ExpressionFactory with io.vidocq.peano.core.internal.PeanoExpressionFactory;
 }

@@ -11,7 +11,7 @@
 
 ## Status
 
-🚧 **Implementation in progress (P6)** — the lexer and recursive-descent parser build
+🚧 **Implementation in progress (P7)** — the lexer and recursive-descent parser build
 immutable ASTs for EL 6.0 expression bodies, including navigation, calls, lambdas,
 collections and operator precedence. Literal, immediate, deferred and composite
 expressions are parsed with source offsets and syntax error diagnostics.
@@ -71,10 +71,13 @@ Peano follows the transverse Vidocq philosophy (see the workspace
 | `peano-api` | Application accessor-table service contract and selection annotation | Exports SPI and SOURCE-retained annotation packages |
 | `peano-processor` | Build-time APT property generation | Annotation and explicit-type selection; no runtime dependency on processor |
 | `peano-core` | Engine: parser, AST, coercions, `ExpressionFactory` provider | P6 direct accessor-table dispatch available |
+| `peano-compiler` | Build-time Class-File API compilation | Literal/constant templates; operators and dynamic resolution follow |
 | `peano-tck` | Official EL 6.0 TCK runner (`-Ptck` profile only) | 361/361 tests pass on Temurin 25; full suite runs in CI |
 
-Planned modules (`peano-compiler`, `peano-bench`)
-are described in [PLAN.md](PLAN.md) and created by the milestone that needs them.
+peano-compiler now emits build-time literal/constant expressions through the Java
+Class-File API. Generated application classes extend the API protocol base and do
+not require core or compiler at runtime. Operators and resolver-backed expressions
+remain subsequent P7 slices; peano-bench remains planned.
 
 ## Build
 

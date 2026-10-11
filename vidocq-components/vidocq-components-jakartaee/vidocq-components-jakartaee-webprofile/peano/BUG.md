@@ -3,6 +3,17 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## COMP-001 · 2026-10-11 · Class-File limits leaked generic builder errors
+
+- Symptom: compiling a valid oversized literal template threw IllegalArgumentException
+  without identifying the expression class.
+- Minimal reproduction: compile demo.Large from a 70,000-character literal string.
+- Cause: the Class-File builder's UTF-8 constant limit escaped the compiler boundary.
+- Status: resolved. Builder failures become ELException diagnostics naming the class,
+  retaining the original cause. Invalid binary names retain IllegalArgumentException.
+- Evidence: the oversized-template regression failed before the diagnostic wrapper
+  and now passes.
+
 ## EL-016 · 2026-10-11 · Registered legacy property editors are not discovered
 
 - Symptom: factory coercion of nonempty text to a custom target fails even after

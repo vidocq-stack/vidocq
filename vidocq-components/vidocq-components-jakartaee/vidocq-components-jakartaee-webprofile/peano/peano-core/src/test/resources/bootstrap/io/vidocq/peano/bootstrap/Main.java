@@ -38,7 +38,11 @@ public final class Main {
         var module = factory.getClass().getModule();
         if (!"io.vidocq.peano.core".equals(module.getName())
                 || module.getDescriptor().isAutomatic()
-                || !module.getDescriptor().exports().isEmpty()
+                || module.getDescriptor().exports().stream().anyMatch(export ->
+                        !export.isQualified()
+                        || !"io.vidocq.peano.core.internal.syntax".equals(export.source())
+                        || !export.targets().equals(java.util.Set.of("io.vidocq.peano.compiler")))
+                || module.isExported("io.vidocq.peano.core.internal.syntax",Main.class.getModule())
                 || !module.getDescriptor().opens().isEmpty()) {
             throw new AssertionError("Provider module is not encapsulated");
         }

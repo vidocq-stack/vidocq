@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-/** Public service contract for application-owned direct accessor tables. */
+/** Public contracts for application-owned accessor tables and compiled value expressions. */
 module io.vidocq.peano.api {
     requires transitive jakarta.el;
     exports io.vidocq.peano.spi;
