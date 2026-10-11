@@ -295,24 +295,211 @@ listener ordering, propertyResolved state, creation-time mapper snapshots, lexic
 shadowing, String and numeric identity effects, lazy invalid literals, serialization,
 exception cleanup, mutable collection freshness and class-loader lifecycle.
 
-## Delivery sequence and decision gates
+## Execution plan
 
-Prepare a measurement-only change first, then make one focused implementation change
-per experiment. O1 and O2 are the first candidates after attribution; O3/O4 depend on
-the profiles. O5/O6 need workloads that establish their practical relevance.
+Prepared: 2026-10-11. All lots below are planned; implementation has not started.
+The first deliverable is a reproducible measurement baseline. The subsequent lots
+are conditional experiments, with one focused PR per independently reviewable change.
+This plan does not select a public SPI change or resolve an open structural question
+in [PLAN.md](PLAN.md).
 
-Retain a change only when repeatable results demonstrate a useful benefit on its
-target workload, uncertainty is sufficiently small to assess that benefit, semantic
-checks pass and memory/startup/general-path costs are acceptable. A cache needs both
-hit and miss results; a compiled specialization needs both matching and fallback
-results. Rework or discard candidates whose gains disappear under comparable runs.
+### Sequence and dependencies
+
+| Lot | Scope | Depends on | Deliverable | Exit decision |
+| --- | --- | --- | --- | --- |
+| OPT-00 | Reproducible baseline and profiling (O0) | Existing corpus | Recorded timings, allocation data and profiles | Select supported candidates and comparison workloads |
+| OPT-01 | Numeric literal preparation (O2) | OPT-00 attribution | Interpreter experiment with lazy-failure and identity tests | Keep only if evaluation improves without semantic regressions |
+| OPT-02 | Creation analysis without shared caching (O1) | OPT-00 attribution | Parsing/identity/binding breakdown and focused simplification | Decide whether repeated-source reuse warrants a cache |
+| OPT-03 | Bounded creation cache (O1) | OPT-02; ownership and literal design established | Hit/miss/retention experiment and concurrency tests | Keep only if the complete creation path benefits within memory bounds |
+| OPT-04 | Conversion and arithmetic dispatch (O3) | OPT-00; refresh profiles after earlier retained changes | One supported dispatch experiment per PR | Keep only with unchanged hooks and dynamic fallback behavior |
+| OPT-05 | Lambda metadata and capture (O4) | OPT-00; OPT-02 if it supplies reusable descriptors | Capture/allocation experiment | Keep only with closure, recursion and cleanup equivalence |
+| OPT-06 | Collection construction (O5) | Larger collection baseline from OPT-00 | Separate set/map experiments | Proceed only when allocation or resizing is material |
+| OPT-07 | Startup/catalog lifecycle (O6) | Startup baseline from OPT-00 | Setup/lifecycle experiment | Proceed only when setup cost matters to application use |
+| OPT-08 | Consolidation | Every selected experiment accepted or discarded | Final BENCH.md comparison and updated decisions here | Close the campaign with explicit outcomes and remaining work |
+
+OPT-01 and OPT-02 are the first implementation candidates after OPT-00. Their order
+can change according to attribution. OPT-03 follows OPT-02; a cache is not the first
+change. OPT-04 through OPT-07 may be deferred or discarded when their workloads show
+no material problem. Deferred work does not block acceptance of an independent gain.
+
+### OPT-00 — Establish the measurement baseline
+
+- [ ] Record the source commit, JDK/Maven versions, machine, power/load conditions,
+  JVM arguments, provider setup and exact harness commands in BENCH.md.
+- [ ] Re-run the existing four-fixture corpus under a longer fixed protocol. Use
+  five one-second warmups, eight one-second measurements and three forks as the
+  initial protocol; inspect stability before freezing the comparison protocol.
+- [ ] Add creation workloads that distinguish repeated source, first use, a bounded
+  rotating source set and unique-source misses. Keep setup outside the timer where
+  that is appropriate to the named workload; specify factory/context ownership.
+- [ ] Add targeted inputs outside small boxing caches, nested lambdas and larger
+  sets/maps. Introduce only the cases needed to assess each candidate, rather than
+  multiplying every parameter into one expensive benchmark matrix.
+- [ ] Measure creation components separately: parser, identity normalization and
+  mapper capture. Keep full ExpressionFactory creation as the acceptance benchmark;
+  component results are diagnostic and cannot replace it.
+- [ ] Collect GC/allocation metrics in a separate run and CPU/allocation profiles for
+  creation, arithmetic and lambda evaluation. Verify the modular fork setup still
+  works with the selected profiler. Do not introduce shipped profiling dependencies.
+- [ ] Add separate factory/context initialization and compiled construction measurements
+  if startup or construction is selected for optimization.
+- [ ] Record the attribution, measurement uncertainty and selected workloads here
+  before beginning a production-code experiment.
+
+Commands below describe the planned protocol and do not report a completed run.
+Run from the checkout with the pinned Java 25 and Maven 3.9.16 environment:
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat clean package
+rtk ./run-bench.sh -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-baseline.json
+rtk ./run-bench.sh -wi 5 -w 1s -i 8 -r 1s -f 3 -prof gc -rf json -rff peano-bench/target/optim-baseline-gc.json
+```
+
+Archive accepted raw results under `peano-bench/results/` with a dated name and
+BENCH.md entry. Keep diagnostic profile artifacts outside published runtime jars;
+record their location and reproduction procedure. Retained-memory checks complement
+bytes/op measurements when evaluating a cache.
+
+### OPT-01 — Prepare numeric literals
+
+- [ ] First write tests for valid integer/floating literals, Long.MIN_VALUE, selected
+  and discarded overflow, exception causes/offsets, serialization and custom
+  conversion of repeated literals.
+- [ ] Establish expected numeric wrapper identity across repeated evaluation and
+  separate expression instances. Include equality paths that can skip conversion
+  when operands share identity.
+- [ ] Choose an immutable representation for a prepared primitive value or deferred
+  failure. Preserve original token text and the existing public syntax contract.
+- [ ] Implement only the interpreter literal path first. Do not combine this change
+  with a cache, constant folding or arithmetic conversion bypass.
+- [ ] Compare arithmetic, lambda and collection evaluation, and also expression
+  creation cost: preparation moves work earlier and must be measured there.
+
+Exit: the same lazy error behavior and observable values, with a repeatable evaluation
+gain and a documented creation/memory tradeoff. If no useful gain remains after
+profiling, record the result and discard the experiment.
+
+### OPT-02 — Reduce creation analysis work
+
+- [ ] First test creation-time mapper snapshots, first-occurrence lookup order,
+  duplicate lookup suppression, lexical exclusions and missing-function errors.
+- [ ] Use the OPT-00 breakdown to select normalization or descriptor traversal as
+  the first target. Change one source of work per experiment.
+- [ ] Evaluate a context-free artifact containing canonical identity and ordered
+  binding descriptors, without introducing cross-expression storage yet.
+- [ ] Preserve distinct variable and function capture phases unless tests prove that
+  changing their order is unobservable. Keep bound values outside reusable data.
+- [ ] Verify ValueExpression and MethodExpression equality/hash behavior, diagnostics,
+  serialization and creation with null mappers.
+- [ ] Measure complete creation with repeated and distinct sources, including the
+  cost of any added analysis or representation.
+
+Exit: either a useful standalone reduction or evidence that reuse is required to
+amortize analysis. Before OPT-03, document exact literal ownership, artifact size,
+cache owner, cache key and lookup/materialization responsibilities. Do not retain a
+slower preparatory abstraction solely to make a later cache easier to implement.
+
+### OPT-03 — Add bounded reuse only when justified
+
+- [ ] Decide capacity and retained-weight limits from the recorded source-size and
+  workload distribution. Define eviction, oversized-entry and concurrent-miss behavior.
+- [ ] First test fresh nonempty String ownership, stable per-expression values,
+  independent mapper bindings, eviction and large/unique-source workloads.
+- [ ] Test concurrent creation with independent contexts and factories, including
+  duplicate misses. Check ownership against class-loader lifecycle and retained data.
+- [ ] Cache only context-free data; materialize expression-owned literals and bindings
+  according to OPT-02. Never retain a bound Method, mapper or application object.
+- [ ] Measure hit, miss, mixed working-set and capacity-pressure behavior, including
+  allocation, retained heap and concurrency. Keep the uncached creation comparison.
+- [ ] Request the applicable concurrency/module review for implementation changes,
+  as required by AGENTS.md. No runtime dependency or new package export is assumed.
+
+Exit: a bounded memory footprint, preserved isolation and a useful gain in full
+creation for the selected workload. Report miss/eviction penalties alongside hit
+gains. A failed gate means discarding the cache, not relaxing semantic checks.
+
+### OPT-04 and OPT-05 — Optimize measured evaluation costs
+
+For OPT-04, select the conversion/dispatch branch identified by the profile. Write
+tests for compatible-type conversion, custom resolver results, propertyResolved state,
+operand/conversion ordering, numeric promotion and dynamic types before changing it.
+Measure both matching and general/fallback paths. Preserve every required conversion
+and evaluation notification. No primitive specialization is assumed safe in advance.
+
+For OPT-05, first test empty and nullable captures, nested/retained closures, shadowing,
+recursion, reentrancy and failure cleanup. Reuse immutable free-variable metadata only
+where its lifetime and API use permit it. Measure immediately invoked and retained
+lambdas separately. Keep scope cleanup in `finally`; do not pool mutable call state.
+
+Refresh profiles after retained earlier changes before selecting either lot. Changes
+to Class-File API emission require the applicable codegen/module review and independent
+API-only generated consumers. Each lot exits with differential equivalence and a
+repeatable gain for its target workload without an unexplained general-path regression.
+
+### OPT-06 and OPT-07 — Conditional workloads
+
+For OPT-06, establish larger list/set/map workloads first. Before direct set insertion,
+write a test with observable element evaluation and hashCode/equals effects: the current
+implementation evaluates all elements before set construction. For map sizing, cover
+duplicates, empty/large inputs and safe capacity arithmetic. Preserve fresh mutable
+results, nulls and encounter order. Separate set and map changes into distinct PRs.
+
+For OPT-07, measure first-use and steady factory/context setup separately. First test
+provider isolation, loader-change refresh and custom contexts before reusing metadata.
+Record lifecycle retention as well as setup timing; an evaluation-only benchmark cannot
+accept this change. Preserve existing context ownership and application unload behavior.
+
+### Validation required for implementation PRs
+
+Each PR carries the semantic regression evidence, a before/after comparison using
+the frozen protocol, and the BENCH.md entry with raw results. Reproducible defects
+discovered during an experiment receive a BUG.md entry. Document any harness change
+and re-establish a comparable baseline when necessary.
+
+Run focused tests during TDD, then the appropriate reactor checks. The full official
+TCK, including signatures, is mandatory before merging a retained production change:
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat clean install
+rtk ./run-official-tck-el-6.0.sh all
+```
+
+The bench profile above verifies the harness; it does not run performance comparisons.
+Also verify named-module consumers and the affected allow/deny, API-only compiled and
+desktop-free scenarios. Use the equivalent successful CI checks as proof where they
+execute the same required validation; repeat checks only after relevant changes or
+unresolved failures. The documentation-only preparation of this plan does not require
+running the implementation test suite locally.
+
+### OPT-08 — Consolidate results
+
+- [ ] Mark every selected lot accepted, discarded or deferred, with a reason and
+  links to its PR, raw measurements and semantic validation.
+- [ ] Re-run the accepted corpus on the final combination of changes to detect
+  interactions; compare it with OPT-00 under the same protocol.
+- [ ] Record final creation/evaluation/allocation results, cache retention where
+  applicable, and any measured startup tradeoff in BENCH.md.
+- [ ] Update this document with the effective order, final design choices and deferred
+  candidates. Update PLAN.md only if an accepted design decision changes its record.
+
+Campaign completion means all chosen lots have a recorded outcome and the retained
+combination has passed its checks. It does not require implementing every candidate,
+matching Expressly on every fixture or reaching an invented percentage improvement.
+
+## Decision rules
+
+Before each experiment, name its workload, expected benefit and acceptable tradeoffs.
+Retain it only when comparable repeated runs show a useful benefit, measurement
+uncertainty permits that conclusion, semantic checks pass and memory/startup/general
+path costs are acceptable. Rework or discard gains that disappear under comparable
+runs. Report absolute results and uncertainty alongside deltas.
 
 All implementation remains subject to the project constraints: Java 25, strict Java
 Modules, build-time Class-File API/APT, no additional shipped dependencies beyond the
 permitted APIs, no dynamic proxies or runtime bytecode generation, and no unjustified
 reflection or package opens. The existing Maven processor-classpath accommodation
-is build-only. Runtime modules remain named modules.
+is build-only. Runtime modules remain named modules. Any unresolved structural choice
+marked for validation in PLAN.md remains subject to its existing decision process.
 
-The next concrete deliverable would be profiles and an expanded benchmark baseline,
-followed by a choice of one candidate. This study establishes priorities and required
-proof; it does not establish a dominant cost or promise a performance target.
+The next execution lot is OPT-00. This plan establishes a sequence and required proof;
+it does not establish a dominant cost or promise a performance target.
