@@ -98,6 +98,11 @@ final class MaterializedDeployment implements AutoCloseable {
             }
             if (relative.startsWith("WEB-INF/classes/")) {
                 relative = relative.substring("WEB-INF/classes/".length());
+                if (web && relative.equals("META-INF/web-fragment.xml")) {
+                    // Only WEB-INF/lib jars carry web fragments (Servlet 6.1 §8.2.1): at the
+                    // class path root, this file would pass for one.
+                    continue;
+                }
             }
             if (relative.isEmpty()) {
                 continue;

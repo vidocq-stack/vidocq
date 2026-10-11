@@ -99,6 +99,18 @@ class MaterializedDeploymentTest {
     }
 
     @Test
+    void aWebFragmentInWebInfClassesIsNoFragment() throws Exception {
+        // Servlet 6.1 §8.2.1: only WEB-INF/lib jars carry web fragments. Flattened to the class
+        // path root, WEB-INF/classes/META-INF/web-fragment.xml would pass for one.
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .addAsResource(new StringAsset("<web-fragment/>"), "META-INF/web-fragment.xml");
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            assertNull(deployment.classLoader().getResource("META-INF/web-fragment.xml"));
+        }
+    }
+
+    @Test
     void javaArchiveHasNoWebResources() throws Exception {
         JavaArchive archive = ShrinkWrap.create(JavaArchive.class, "test.jar")
                 .add(new StringAsset("x"), "/publicKey.pem");
