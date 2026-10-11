@@ -88,7 +88,9 @@ List, set and map literals preserve order, nulls, duplicates and fresh mutable r
 Captured roots/properties also compose in templates, logic, conditionals, concatenation,
 sequences and collections. Runtime arithmetic covers BigInteger/BigDecimal promotion
 and wrapper-preserving unary minus. Dynamic comparisons preserve numeric, enum, string
-and Comparable domains. Calls remain subsequent P7 slices; peano-bench remains planned.
+and Comparable domains. Inline member calls delegate to the supplied resolver.
+Named callables, mapped functions and constructors remain subsequent P7 slices;
+peano-bench remains planned.
 Regenerate pre-v2 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 

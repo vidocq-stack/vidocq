@@ -56,6 +56,15 @@ class PropertyExpressionCompilerTest {
             assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("MethodCall","${model.sum(bean.value,2)}",
+                "MethodProperty","${model.box().value}", "NullCall","${nil.sum(1%0)}",
+                "NullCallKey","${model[nil](1%0)}", "DynamicMethod","${model[methodName](1,2)}",
+                "CallNullParent","${model.nothing()[missing]}", "UnclaimedMethod","${model.unclaimed()}",
+                "FailingMethod","${model.boom()}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
         try (var resource=getClass().getResourceAsStream("/property-app/Main.java")) {
             Files.copy(resource,source.resolve("Main.java"));

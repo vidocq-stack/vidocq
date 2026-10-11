@@ -125,6 +125,15 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 resolver-method slice (2026-10-11): property-target inline calls compile through
+the supplied ELResolver.invoke chain. Null bases/keys discard name conversion and
+arguments; otherwise key-to-String conversion precedes left-to-right arguments.
+Resolution resets just before invoke, with null parameter types and no bare-method
+fallback. Calls are readonly and compose in paths/operators/templates/collections.
+Closed-model consumers verify flags, null results, getter-free parent metadata,
+captured arguments, serialization and causes without core/compiler or package opens.
+Bare callables, mapped functions and constructors remain subsequent slices.
+
 P7 runtime-comparison slice (2026-10-11): resolved equality and ordering now select
 BigDecimal, floating, BigInteger, integral/Character, Boolean, Enum and String domains
 in specification order, with Object.equals and Comparable fallback. Equality retains

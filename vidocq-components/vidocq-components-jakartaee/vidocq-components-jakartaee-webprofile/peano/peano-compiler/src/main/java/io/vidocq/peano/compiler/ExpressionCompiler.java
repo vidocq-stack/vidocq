@@ -62,6 +62,8 @@ public final class ExpressionCompiler {
             collectStrings(conditional.condition()); collectStrings(conditional.whenTrue()); collectStrings(conditional.whenFalse());
         } else if (node instanceof Ast.Property property) {
             collectStrings(property.base()); collectStrings(property.key());
+        } else if (node instanceof Ast.Call call) {
+            collectStrings(call.target()); call.arguments().forEach(this::collectStrings);
         } else if (node instanceof Ast.ListLiteral list) list.elements().forEach(this::collectStrings);
         else if (node instanceof Ast.SetLiteral set) set.elements().forEach(this::collectStrings);
         else if (node instanceof Ast.MapLiteral map) {
@@ -197,7 +199,7 @@ public final class ExpressionCompiler {
 
     private static boolean containsResolved(Ast node) {
         return switch (node) {
-            case Ast.Identifier _, Ast.Property _ -> true;
+            case Ast.Identifier _, Ast.Property _, Ast.Call _ -> true;
             case Ast.Unary unary -> containsResolved(unary.operand());
             case Ast.Binary binary -> containsResolved(binary.left()) || containsResolved(binary.right());
             case Ast.Conditional conditional -> containsResolved(conditional.condition())
@@ -331,6 +333,10 @@ public final class ExpressionCompiler {
         } else if (names!=null && node instanceof Ast.Property property) {
             key(identity,"property","");
             validate(property.base(),identity,source,names); validate(property.key(),identity,source,names);
+        } else if (names!=null && node instanceof Ast.Call call && call.target() instanceof Ast.Property) {
+            key(identity,"call",Integer.toString(call.arguments().size()));
+            validate(call.target(),identity,source,names);
+            for (Ast argument:call.arguments()) validate(argument,identity,source,names);
         } else if (node instanceof Ast.Unary unary) {
             key(identity,"unary",unary.operator().kind().name());
             if (signedInteger(unary)) {
@@ -380,7 +386,7 @@ public final class ExpressionCompiler {
 
     private static ClassDesc rawType(Ast node) {
         if (node instanceof Ast.Literal literal) return rawType(literal);
-        if (node instanceof Ast.Identifier || node instanceof Ast.Property) return OBJECT;
+        if (node instanceof Ast.Identifier || node instanceof Ast.Property || node instanceof Ast.Call) return OBJECT;
         if (node instanceof Ast.ListLiteral) return ClassDesc.of("java.util.ArrayList");
         if (node instanceof Ast.SetLiteral) return ClassDesc.of("java.util.LinkedHashSet");
         if (node instanceof Ast.MapLiteral) return ClassDesc.of("java.util.LinkedHashMap");
@@ -462,6 +468,24 @@ public final class ExpressionCompiler {
             code.aload(slot); return;
         }
         var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
+        if (node instanceof Ast.Call call && call.target() instanceof Ast.Property property) {
+            int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            int key=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            int arguments=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            var absent=code.newLabel(); var done=code.newLabel();
+            emit(code,property.base()); code.astore(base).aload(base).ifnull(absent);
+            emit(code,property.key()); code.astore(key).aload(key).ifnull(absent);
+            code.aload(1).aload(key).ldc(STRING)
+                    .invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(STRING).astore(key);
+            code.loadConstant(call.arguments().size()).anewarray(OBJECT);
+            for (int i=0;i<call.arguments().size();i++) {
+                code.dup().loadConstant(i); emit(code,call.arguments().get(i)); code.aastore();
+            }
+            code.astore(arguments).aload(0).aload(1).aload(base).aload(key).aload(arguments)
+                    .invokespecial(pathBase,"invokeProperty",MethodTypeDesc.of(OBJECT,CONTEXT,OBJECT,OBJECT,ClassDesc.ofDescriptor("[Ljava/lang/Object;")))
+                    .goto_(done).labelBinding(absent).aconst_null().labelBinding(done);
+            return;
+        }
         if (node instanceof Ast.Identifier identifier) {
             code.aload(0).aload(1).ldc(identifier.name())
                     .invokespecial(pathBase,"readIdentifier",MethodTypeDesc.of(OBJECT,CONTEXT,STRING));

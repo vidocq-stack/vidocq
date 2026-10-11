@@ -48,6 +48,17 @@ public class Main {
                 if (b instanceof Map m && m.containsKey(p)) { c.setPropertyResolved(b,p); m.put(p,v); }
             }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return Object.class; }
+            public Object invoke(ELContext c,Object base,Object method,Class<?>[] types,Object[] arguments) {
+                calls.add("invoke:"+method);
+                check(!c.isPropertyResolved() && types==null,"Invocation flags or declared parameter types changed");
+                if (base instanceof Model model) {
+                    if ("sum".equals(method)) { c.setPropertyResolved(base,method); return model.sum(arguments); }
+                    if ("box".equals(method)) { c.setPropertyResolved(base,method); return model.box(); }
+                    if ("nothing".equals(method)) { c.setPropertyResolved(base,method); return null; }
+                    if ("boom".equals(method)) { c.setPropertyResolved(base,method); throw new IllegalStateException("model failure"); }
+                }
+                return null;
+            }
         };
         public ELResolver getELResolver() { return resolver; }
         public FunctionMapper getFunctionMapper() { return null; }
@@ -61,9 +72,13 @@ public class Main {
             if (type==Object.class) return (T)value;
             if (type==boolean.class || type==Boolean.class) return (T)Boolean.valueOf(String.valueOf(value));
             if (type==Long.class) { calls.add("convert:"+value); return (T)Long.valueOf(value.toString()); }
-            if (type==String.class) return (T)(value==null ? "" : value.toString());
+            if (type==String.class) { calls.add("string:"+value); return (T)(value==null ? "" : value.toString()); }
             return type.cast(value);
         }
+    }
+    static final class Model {
+        long sum(Object[] values) { return ((Number)values[0]).longValue()+((Number)values[1]).longValue(); }
+        Map<String,Object> box() { return new HashMap<>(Map.of("value",42L)); }
     }
     static final class Binding extends ValueExpression {
         private static final long serialVersionUID=1;
@@ -135,6 +150,34 @@ public class Main {
         check(composite.isReadOnly(context) && composite.getValueReference(context)==null,"Readonly body metadata changed");
         try { composite.setValue(context,0); throw new AssertionError("Composite body writable"); }
         catch (PropertyNotWritableException expected) {}
+        context.roots.put("model",new Model()); context.roots.put("methodName","sum");
+        context.calls.clear();
+        var method=new MethodCall(Object.class);
+        check(method.getValue(context).equals(11L)
+                && context.calls.equals(List.of("read:model","string:sum","read:bean","read:value","invoke:sum")),
+                "Method operand/key/argument order: "+context.calls);
+        context.calls.clear();
+        check(method.getType(context)==Long.class
+                && context.calls.equals(List.of("read:model","string:sum","read:bean","read:value","invoke:sum")),
+                "Method metadata changed effects: "+context.calls);
+        context.calls.clear();
+        check(method.isReadOnly(context) && method.getValueReference(context)==null && context.calls.isEmpty(),"Call location metadata evaluated body");
+        context.calls.clear();
+        check(new MethodProperty(Object.class).getType(context)==Long.class
+                && context.calls.equals(List.of("read:model","string:box","invoke:box","type:value")),"Call parent metadata read getter: "+context.calls);
+        context.calls.clear();
+        check(new NullCall(Object.class).getValue(context)==null && context.calls.equals(List.of("read:nil")),"Null call evaluated discarded arguments");
+        context.calls.clear();
+        check(new NullCallKey(Object.class).getValue(context)==null
+                && context.calls.equals(List.of("read:model","read:nil")),"Null call key evaluated arguments");
+        check(new DynamicMethod(Object.class).getValue(context).equals(3L),"Dynamic method name failed");
+        context.calls.clear();
+        check(new CallNullParent(Object.class).getValue(context)==null
+                && context.calls.equals(List.of("read:model","string:nothing","invoke:nothing")),"Null method parent read key");
+        try { new UnclaimedMethod(Object.class).getValue(context); throw new AssertionError("Unclaimed inline method accepted"); }
+        catch (MethodNotFoundException expected) {}
+        try { new FailingMethod(Object.class).getValue(context); throw new AssertionError("Model failure swallowed"); }
+        catch (ELException expected) { check(expected.getCause() instanceof IllegalStateException,"Method cause lost"); }
         context.bindings.put("bean",new Binding(bean)); context.bindings.put("key",new Binding("value"));
         var captured=new Indexed(context,Object.class);
         check(context.captures.equals(List.of("bean","key")),"Capture order or duplicates: "+context.captures);
@@ -157,6 +200,13 @@ public class Main {
                     && restored.getValue(context).equals(9L),"Path serialization lost");
         }
         check(!captured.equals(new Indexed(Object.class)),"Path binding identity ignored");
+        var capturedMethod=new MethodCall(context,Object.class);
+        var methodBytes=new java.io.ByteArrayOutputStream();
+        try (var output=new java.io.ObjectOutputStream(methodBytes)) { output.writeObject(capturedMethod); }
+        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(methodBytes.toByteArray()))) {
+            var restored=(ValueExpression)input.readObject();
+            check(restored.equals(capturedMethod) && restored.getValue(context).equals(11L),"Method argument bindings lost in serialization");
+        }
         var capturedComposite=new Composite(context,Object.class);
         var compositeBytes=new java.io.ByteArrayOutputStream();
         try (var output=new java.io.ObjectOutputStream(compositeBytes)) { output.writeObject(capturedComposite); }

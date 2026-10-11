@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
+import jakarta.el.MethodNotFoundException;
 import jakarta.el.PropertyNotFoundException;
 import jakarta.el.PropertyNotWritableException;
 import jakarta.el.ValueExpression;
@@ -70,6 +71,13 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
         context.setPropertyResolved(false);
         Object value=guarded(()->context.getELResolver().getValue(context,base,key));
         if (!context.isPropertyResolved()) throw missing(key);
+        return value;
+    }
+
+    protected final Object invokeProperty(ELContext context,Object base,Object key,Object[] arguments) {
+        context.setPropertyResolved(false);
+        Object value=guarded(()->context.getELResolver().invoke(context,base,key,null,arguments));
+        if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved method "+key);
         return value;
     }
 
