@@ -32,5 +32,13 @@
             <artifactId>cassini-processor</artifactId>
             <version>${cassini.version}</version>
         </dependency>
+        <!-- Cassini's build-compatible extension (CassiniScopeExtension): Vauban's processor runs it at
+             compile time, and the runtime skips extensions the processor already ran. Without it here,
+             @Path and @Provider classes without a scope get no default scope and are no beans. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
     </dependencies>
 </project>

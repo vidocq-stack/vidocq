@@ -38,7 +38,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261011-01 — the REST codegen bundle leaves Cassini's build-compatible extension out
 
 - **Date**: 2026-10-11
-- **Status**: OPEN
+- **Status**: FIXED (bundle carries `cassini-cdi` once Vidocq/cassini#59 is merged)
 - **Affected module**: vidocq-runtime-cassini-rest-extension-codegen; cassini-cdi (`CassiniScopeExtension`)
 - **Symptom**: compiling a REST application warns "[Vauban] 1 Build Compatible Extension(s) present on the
   compile/module path are NOT on the annotation-processor path and will not run:
@@ -49,10 +49,12 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   answers an empty 404.
 - **Cause**: the bundle only carries `cassini-processor`; the runtime does not run extensions over an application
   the processor already handled (same pattern as BUG-20261008-01).
-- **Why not fixed yet**: adding `cassini-cdi` to the bundle was tried on branch feat/servlet-extension and reverted.
-  `CassiniScopeExtension` then gives `@RequestScoped` to every `@Path` type, the Rest Client interfaces included:
-  `vidocq-runtime-cyrano-rest-client-example` no longer compiles (`GreetingClient_ClientProxy`,
-  `GreetingClient_Factory`). The extension must skip interfaces first (Cassini), then the bundle can carry it.
+- **First attempt, reverted**: adding `cassini-cdi` to the bundle alone made `CassiniScopeExtension` give
+  `@RequestScoped` to every `@Path` type, the Rest Client interfaces included:
+  `vidocq-runtime-cyrano-rest-client-example` no longer compiled (`GreetingClient_ClientProxy`,
+  `GreetingClient_Factory`).
+- **Fix**: Vidocq/cassini#59 makes the extension skip interfaces; the bundle now carries `cassini-cdi`. The IT's
+  `ItemsResource` has no scope any more.
 
 ## BUG-20261008-01 — `@Inject @RestClient` is unsatisfied, and a Rest Client application cannot be linked
 
