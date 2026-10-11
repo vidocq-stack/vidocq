@@ -125,6 +125,18 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 arithmetic slice (2026-10-11): inline bytecode now implements +, -, *, / (div) and
+% (mod) over scalar literal/unary/arithmetic trees. Numeric domains are known for these
+inputs: Long or Double, including numeric-string floating markers. Both-null operands
+produce Long zero before coercion, including division. Both operands are evaluated and
+stored before either math coercion; null inputs become Long zero before caller conversion.
+Generated guards wrap arithmetic/coercion RuntimeExceptions with their causes while
+rethrowing ELException, and leave operand-evaluation failures outside that guard.
+Operator getType reevaluates its body to retain conversion effects. Independent tests
+compare 50 templates and separately check order, metadata effects, division infinities,
+NaN, overflow and modulo-zero errors. Comparisons, logical/conditional operations,
+concatenation and dynamic resolver-backed nodes remain subsequent slices.
+
 P7 unary slice (2026-10-11): the compiler now emits recursive minus, not/! and empty
 over literal/unary trees, including Long.MIN_VALUE and signed zero. Numeric strings
 are coerced through the caller context before negation; numeric literals do not gain

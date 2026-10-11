@@ -42,7 +42,12 @@ class ExpressionCompilerTest {
                 "${'x'}${'y'}", "\\${escaped}", "${-7}", "#{-9223372036854775808}",
                 "${-(-7)}", "${-1.25}", "${-0.0}", "${-'7'}", "${-'1.5'}", "${-null}",
                 "${not false}", "#{! false}", "${empty ''}", "${empty null}", "${empty -7}",
-                "${not empty ''}", "signed=${-7}");
+                "${not empty ''}", "signed=${-7}", "${1+2*3}", "${7-3}", "${2*4}",
+                "${7/2}", "${7 div 2}", "${7%3}", "${7 mod 3}", "${1.5+2}",
+                "${null+null}", "${null/null}", "${null+7}", "${'1.5'+2}", "${'7'-2}",
+                "${-7%3}", "${1 + -'2'}", "${(-7+3)*2}", "${empty (1+2)}",
+                "${1/0}", "${0/0}", "${9223372036854775807+1}", "${'2e2'*3}",
+                "${null%null}", "result=${1+2}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -156,6 +161,46 @@ class ExpressionCompilerTest {
                             throw new AssertionError("Unary metadata skipped operand conversion");
                         try { new BadUnary(Object.class).getValue(context); throw new AssertionError("Invalid unary input was accepted"); }
                         catch (ELException expected) {}
+                        var order=new java.util.ArrayList<String>();
+                        var ordered=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class) order.add(value.getClass().getSimpleName()+":"+value);
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        var orderedExpression=java.util.Arrays.stream(expressions)
+                                .filter(value->"${1 + -'2'}".equals(value.getExpressionString())).findFirst().orElseThrow();
+                        if (!Long.valueOf(-1).equals(orderedExpression.getValue(ordered))
+                                || !order.equals(java.util.List.of("String:2","Long:1","Long:-2")))
+                            throw new AssertionError("Arithmetic operand/conversion order changed: "+order);
+                        try { new BadArithmetic(Object.class).getValue(context); throw new AssertionError("Modulo zero was accepted"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof ArithmeticException)) throw expected;
+                        }
+                        order.clear();
+                        if (orderedExpression.getType(ordered)!=Long.class
+                                || !order.equals(java.util.List.of("String:2","Long:1","Long:-2")))
+                            throw new AssertionError("Arithmetic metadata changed conversion effects");
+                        var operandFailure=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class && value instanceof String) throw new IllegalArgumentException("operand failure");
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        try { orderedExpression.getValue(operandFailure); throw new AssertionError("Operand failure was swallowed"); }
+                        catch (IllegalArgumentException expected) {}
+                        var arithmeticFailure=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class && value instanceof Long) throw new IllegalArgumentException("arithmetic failure");
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        try { orderedExpression.getValue(arithmeticFailure); throw new AssertionError("Arithmetic failure was swallowed"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof IllegalArgumentException)) throw expected;
+                        }
+                        try { new BadOperand(Object.class).getValue(context); throw new AssertionError("Invalid operand was accepted"); }
+                        catch (ELException expected) {}
                         try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
                             output.writeObject(new E2(Object.class));
                         }
@@ -165,6 +210,12 @@ class ExpressionCompilerTest {
         byte[] invalidUnary=ExpressionCompiler.compile("demo.BadUnary","${-true}");
         assertTrue(ClassFile.of().verify(invalidUnary).isEmpty());
         Files.write(classes.resolve("demo/BadUnary.class"),invalidUnary);
+        byte[] invalidArithmetic=ExpressionCompiler.compile("demo.BadArithmetic","${1%0}");
+        assertTrue(ClassFile.of().verify(invalidArithmetic).isEmpty());
+        Files.write(classes.resolve("demo/BadArithmetic.class"),invalidArithmetic);
+        byte[] invalidOperand=ExpressionCompiler.compile("demo.BadOperand","${(-true)+1}");
+        assertTrue(ClassFile.of().verify(invalidOperand).isEmpty());
+        Files.write(classes.resolve("demo/BadOperand.class"),invalidOperand);
         Path source=temporary.resolve("sources");
         Files.createDirectories(source);
         Files.writeString(source.resolve("Main.java"),main);
@@ -219,7 +270,7 @@ class ExpressionCompilerTest {
     @Test
     void rejectsUnsupportedNodesAndInvalidBinaryNamesAtBuildTime() {
         assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${bean.value}"));
-        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${1+2}"));
+        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${1==2}"));
         assertThrows(IllegalArgumentException.class,()->ExpressionCompiler.compile("demo.bad-name","${7}"));
         assertThrows(NullPointerException.class,()->ExpressionCompiler.compile("demo.Missing",null));
     }
