@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Minimal POM for the TCK's ShrinkWrap Maven resolver: the Servlet TCK (CommonServlets) reads pom.xml
+    from the working directory to build its test archives. Surefire runs in target/tck-workdir, where
+    this file is copied.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.vidocq.runtime.tck</groupId>
+    <artifactId>vidocq-runtime-tck-foy-servlet-workdir</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.16</version>
+        </dependency>
+    </dependencies>
+</project>

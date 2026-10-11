@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tck-foy-servlet</artifactId>
+    <name>Vidocq :: TCK :: Jakarta Servlet 6.1 (Foy)</name>
+    <description>
+        Runs the official Jakarta Servlet 6.1 TCK (jakarta.tck:servlet-tck-runtime) against Foy as the
+        Vidocq runtime assembles it: each test WAR boots VidocqBootstrap, and the Servlet extension
+        deploys it through FoyChappeBoot, with CDI (Vauban), on the shared Chappe server under
+        /&lt;war name&gt;. Foy's own foy-tck certifies the brick alone; this runner certifies the
+        assembly. Gated behind the `tck` profile. The TCK artifacts are not on Maven Central: install
+        them from the Eclipse bundle (see TCK.md).
+    </description>
+
+    <properties>
+        <servlet.tck.version>6.1.0</servlet.tck.version>
+    </properties>
+
+    <!-- No module-info.java (unnamed module): the TCK deployment classes carry no JPMS descriptor,
+         same approach as the other vidocq-runtime-tck-* modules. -->
+
+    <dependencies>
+        <!-- Vidocq runtime under test: Foy through the Servlet extension, on Chappe, with Vauban. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+
+        <!-- Jakarta Servlet 6.1 TCK (installed from the EFTL bundle). It brings Arquillian JUnit 5,
+             JUnit Jupiter and the ShrinkWrap Maven resolver. -->
+        <dependency>
+            <groupId>jakarta.tck</groupId>
+            <artifactId>servlet-tck-runtime</artifactId>
+            <version>${servlet.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.tck</groupId>
+            <artifactId>servlet-tck-util</artifactId>
+            <version>${servlet.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The TCK resolves slf4j-simple 2.0.16, with its slf4j-api, OFFLINE through the workdir pom
+             (CommonServlets): both must already sit in the local repository, so they are declared here
+             with that exact version. -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.16</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.16</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JUnit 4: org.jboss.arquillian.junit.State, Arquillian's result tracker, needs it. -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Test harness: the embedded Vidocq Arquillian container. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-arquillian</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.junit5</groupId>
+            <artifactId>arquillian-junit5-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- No source to process, but vidocq:checkpom asks for the extension's bundle. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                            <type>pom</type>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- The TCK's ShrinkWrap resolver reads pom.xml from the working directory: give it a
+                     minimal one there, as foy-tck does. -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-tck-workdir-pom</id>
+                        <phase>process-test-resources</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/tck-workdir</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/src/test/tck-resources</directory>
+                                    <includes><include>pom.xml</include></includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The TCK test classes live in the TCK jar. Same settings as foy-tck, so the two
+                         runs compare test by test. -->
+                    <useModulePath>false</useModulePath>
+                    <dependenciesToScan>
+                        <dependency>jakarta.tck:servlet-tck-runtime</dependency>
+                    </dependenciesToScan>
+                    <includes>
+                        <include>**/*Tests.class</include>
+                    </includes>
+                    <workingDirectory>${project.build.directory}/tck-workdir</workingDirectory>
+                    <trimStackTrace>false</trimStackTrace>
+                    <systemPropertyVariables>
+                        <webServerHost>127.0.0.1</webServerHost>
+                        <webServerPort>8080</webServerPort>
+                        <ts_home>${project.build.directory}/test-classes</ts_home>
+                        <!-- Users of the security tests, as foy-tck's TckIdentities declares them: the
+                             GlassFish role mapping of the security wars. Nobody holds VP. -->
+                        <user>j2ee</user>
+                        <password>j2ee</password>
+                        <authuser>javajoe</authuser>
+                        <authpassword>javajoe</authpassword>
+                        <vidocq.servlet.users.j2ee.password>j2ee</vidocq.servlet.users.j2ee.password>
+                        <vidocq.servlet.users.j2ee.roles>Administrator,Employee</vidocq.servlet.users.j2ee.roles>
+                        <vidocq.servlet.users.javajoe.password>javajoe</vidocq.servlet.users.javajoe.password>
+                        <vidocq.servlet.users.javajoe.roles>Manager,Employee</vidocq.servlet.users.javajoe.roles>
+                        <!-- HTTP/2 server push is an accepted gap of Foy on Chappe (deprecated in 6.1):
+                             the TCK's own switch skips the tests that need it. -->
+                        <servlet.tck.support.http2Push>false</servlet.tck.support.http2Push>
+                    </systemPropertyVariables>
+                    <!-- Some TCK clients set Cookie, Host and other headers the JDK HttpClient refuses by
+                         default (JDK-8203771); read at class init, so it goes in argLine. -->
+                    <argLine>-Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

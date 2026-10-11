@@ -86,6 +86,7 @@
                 <module>vidocq-runtime-tck-heisenberg-faulttolerance</module>
                 <module>vidocq-runtime-tck-coreprofile</module>
                 <module>vidocq-runtime-tck-annotations</module>
+                <module>vidocq-runtime-tck-foy-servlet</module>
             </modules>
 
             <build>
