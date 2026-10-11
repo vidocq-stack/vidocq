@@ -26,6 +26,7 @@ import io.vidocq.chappe.api.WebSocketHandler;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,8 @@ public final class ChappeMountPoint {
     private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
     private final Map<String, Router.Builder> routers = new LinkedHashMap<>();
+    /** Mounts by listener, applied to the router longest prefix first when the server starts. */
+    private final Map<String, List<PendingMount>> mounts = new LinkedHashMap<>();
     private final Map<String, Declaration> listeners = new LinkedHashMap<>();
     private final List<Runnable> beforeStartHooks = new ArrayList<>();
     private final List<Runnable> afterStopHooks = new ArrayList<>();
@@ -256,7 +259,44 @@ public final class ChappeMountPoint {
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(handler, "handler");
         ensureOpen();
-        routers.computeIfAbsent(listenerName, n -> Router.builder()).mount(prefix, handler, stripPrefix);
+        String owner = caller();
+        List<PendingMount> listenerMounts = mounts.computeIfAbsent(listenerName, n -> new ArrayList<>());
+        for (PendingMount existing : listenerMounts) {
+            if (routingKey(existing.prefix()).equals(routingKey(prefix))) {
+                throw new IllegalStateException("listener '" + listenerName + "': prefix '"
+                        + (routingKey(prefix).isEmpty() ? "/" : prefix) + "' is mounted twice, by "
+                        + existing.owner() + " and by " + owner + "; move one of them "
+                        + "(vidocq.rest.context-path, vidocq.servlet.context-path, vidocq.http.mount.<n>.path)");
+            }
+        }
+        listenerMounts.add(new PendingMount(prefix, handler, stripPrefix, owner));
+        routers.computeIfAbsent(listenerName, n -> Router.builder());
+    }
+
+    private record PendingMount(String prefix, Handler handler, boolean stripPrefix, String owner) {}
+
+    /** The root is spelled {@code ""} or {@code "/"}; a trailing slash never changes the prefix. */
+    private static String routingKey(String prefix) {
+        return prefix.endsWith("/") ? prefix.substring(0, prefix.length() - 1) : prefix;
+    }
+
+    /** The first class outside this one on the stack: the extension that mounted. */
+    private static String caller() {
+        return CALLER.walk(frames -> frames.map(StackWalker.StackFrame::getDeclaringClass)
+                .filter(c -> c != ChappeMountPoint.class)
+                .findFirst().map(Class::getName).orElse("?"));
+    }
+
+    /** Prefixes of a listener's mounts, in routing order (longest first). */
+    List<String> mountPrefixes(String listenerName) {
+        return ordered(listenerName).stream().map(PendingMount::prefix).toList();
+    }
+
+    private List<PendingMount> ordered(String listenerName) {
+        List<PendingMount> list = new ArrayList<>(mounts.getOrDefault(listenerName, List.of()));
+        // Chappe's router takes the first matching mount: the longest prefix must come first. Stable sort.
+        list.sort(Comparator.comparingInt((PendingMount m) -> routingKey(m.prefix()).length()).reversed());
+        return list;
     }
 
     /**
@@ -314,8 +354,14 @@ public final class ChappeMountPoint {
     }
 
     Router buildRouter(String listenerName) {
-        Router.Builder b = routers.get(listenerName);
-        return b == null ? Router.builder().build() : b.build();
+        Router.Builder b = routers.computeIfAbsent(listenerName, n -> Router.builder());
+        // Applied once: the pending mounts move into the router.
+        List<PendingMount> pending = ordered(listenerName);
+        mounts.remove(listenerName);
+        for (PendingMount m : pending) {
+            b.mount(m.prefix(), m.handler(), m.stripPrefix());
+        }
+        return b.build();
     }
 
     List<Runnable> beforeStartHooks() {

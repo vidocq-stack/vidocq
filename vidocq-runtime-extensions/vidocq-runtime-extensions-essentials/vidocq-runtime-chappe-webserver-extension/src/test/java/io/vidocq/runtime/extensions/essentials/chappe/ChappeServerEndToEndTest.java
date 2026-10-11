@@ -79,6 +79,20 @@ class ChappeServerEndToEndTest {
     }
 
     @Test
+    void longerPrefixWinsWhateverTheRegistrationOrder() throws Exception {
+        ChappeMountPoint mp = ChappeMountPoint.instance();
+        mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("servlet"));
+        mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("rest"));
+
+        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
+                "vidocq.chappe.listener.default.port", Integer.toString(port))));
+        bootstrap.onStart(ctx);
+
+        assertEquals("rest", get("http://127.0.0.1:" + port + "/api/items").body());
+        assertEquals("servlet", get("http://127.0.0.1:" + port + "/hello").body());
+    }
+
+    @Test
     void beforeAndAfterHooksExecuted() throws Exception {
         AtomicBoolean before = new AtomicBoolean();
         AtomicBoolean after = new AtomicBoolean();

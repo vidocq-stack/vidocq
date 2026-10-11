@@ -234,4 +234,41 @@ class ChappeMountPointTest {
         mp.freeze();
         assertThrows(IllegalStateException.class, () -> mp.advertise("default", "Late", "/late"));
     }
+
+    @Test
+    void mountsAreRoutedLongestPrefixFirst() {
+        mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("root"));
+        mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("api"));
+        mp.mount(ChappeListener.DEFAULT, "/api/v2", _ -> Response.ok("v2"));
+
+        assertEquals(List.of("/api/v2", "/api", ""), mp.mountPrefixes(ChappeListener.DEFAULT));
+    }
+
+    @Test
+    void samePrefixTwiceOnOneListenerFails() {
+        mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("a"));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("b")));
+        assertTrue(e.getMessage().contains("'/api'"), e.getMessage());
+        assertTrue(e.getMessage().contains("vidocq.servlet.context-path"), e.getMessage());
+        assertTrue(e.getMessage().contains("vidocq.rest.context-path"), e.getMessage());
+    }
+
+    @Test
+    void rootSpelledTwoWaysCollides() {
+        mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("a"));
+
+        assertThrows(IllegalStateException.class,
+                () -> mp.mount(ChappeListener.DEFAULT, "/", _ -> Response.ok("b")));
+    }
+
+    @Test
+    void samePrefixOnTwoListenersIsFine() {
+        mp.mount("admin", "", _ -> Response.ok("a"));
+        mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("d"));
+
+        assertEquals(List.of(""), mp.mountPrefixes("admin"));
+        assertEquals(List.of(""), mp.mountPrefixes(ChappeListener.DEFAULT));
+    }
 }
