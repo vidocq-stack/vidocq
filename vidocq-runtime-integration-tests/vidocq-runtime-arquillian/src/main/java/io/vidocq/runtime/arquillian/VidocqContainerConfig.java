@@ -29,6 +29,11 @@ public class VidocqContainerConfig implements ContainerConfiguration {
 
     private String host = "localhost";
     private int port = 0; // 0 = random port
+    /**
+     * Serves each archive's servlets under {@code /<archive name>}, as a servlet container deploys a
+     * WAR: the Servlet TCK builds its request URIs from that context path. Off by default.
+     */
+    private boolean servletContextPerArchive;
 
     @Override
     public void validate() throws ConfigurationException {
@@ -51,5 +56,13 @@ public class VidocqContainerConfig implements ContainerConfiguration {
 
     public void setPort(int port) {
         this.port = port;
+    }
+
+    public boolean isServletContextPerArchive() {
+        return servletContextPerArchive;
+    }
+
+    public void setServletContextPerArchive(boolean servletContextPerArchive) {
+        this.servletContextPerArchive = servletContextPerArchive;
     }
 }

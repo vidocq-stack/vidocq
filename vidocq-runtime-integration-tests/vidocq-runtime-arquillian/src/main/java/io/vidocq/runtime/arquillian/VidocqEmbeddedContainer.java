@@ -59,6 +59,9 @@ import java.util.Map;
  */
 public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContainerConfig> {
 
+    /** Read by the Servlet extension: the context path, and mount prefix, of the application. */
+    private static final String SERVLET_CONTEXT_PATH = "vidocq.servlet.context-path";
+
     private VidocqContainerConfig config;
     private final Map<Archive<?>, DeploymentState> deployments = new LinkedHashMap<>();
 
@@ -137,6 +140,11 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // on this listener via ChappeMountPoint.
             System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
             System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(port));
+            String contextPath = "/";
+            if (config.isServletContextPerArchive()) {
+                contextPath = contextPathOf(archive.getName());
+                System.setProperty(SERVLET_CONTEXT_PATH, contextPath);
+            }
 
             // The deployment's MicroProfile Config needs no special handling:
             // the archive is materialized on disk, so every
@@ -170,13 +178,14 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
 
             // Return protocol metadata with HTTP context
             HTTPContext httpContext = new HTTPContext(config.getHost(), port);
-            httpContext.add(new Servlet("default", "/"));
+            httpContext.add(new Servlet("default", contextPath));
             ProtocolMetaData metadata = new ProtocolMetaData();
             metadata.addContext(httpContext);
             return metadata;
 
         } catch (Exception e) {
             Thread.currentThread().setContextClassLoader(previousTccl);
+            System.clearProperty(SERVLET_CONTEXT_PATH);
             if (materialized != null) {
                 closeQuietly(materialized);
             }
@@ -196,8 +205,15 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             Thread.currentThread().setContextClassLoader(state.previousContextClassLoader());
             System.clearProperty("vidocq.chappe.listener.default.host");
             System.clearProperty("vidocq.chappe.listener.default.port");
+            System.clearProperty(SERVLET_CONTEXT_PATH);
             closeQuietly(state.materialized());
         }
+    }
+
+    /** The context path a servlet container gives an archive: {@code /<name>}, without {@code .war}. */
+    static String contextPathOf(String archiveName) {
+        String name = archiveName.endsWith(".war") ? archiveName.substring(0, archiveName.length() - 4) : archiveName;
+        return "/" + name;
     }
 
     private static void closeQuietly(MaterializedDeployment materialized) {
