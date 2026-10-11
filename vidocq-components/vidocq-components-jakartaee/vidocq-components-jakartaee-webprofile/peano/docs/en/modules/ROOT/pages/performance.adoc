@@ -13,7 +13,7 @@ link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md]; they are exploratory works
 ----
 sdk env
 ./mvnw -ntp -Pbench -pl peano-bench -am package
-./run-bench.sh -rf json -rff peano-bench/target/results.json
+./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -rf json -rff peano-bench/target/results.json
 ----
 
 Execution and JMH forks stay on the module path. The expression compiler runs during
@@ -30,6 +30,35 @@ Repeated creation includes implementation caches; it does not isolate uncached p
 The corpus includes a shared public-getter model: Peano uses its generated table,
 while Expressly uses reflective BeanELResolver access. The model package has a qualified
 export to jakarta.el for that baseline, with no opens. Creation includes implementation
-caches. Stream pipelines and larger application corpora remain future measurements.
+caches. Optional evaluation fixtures also cover larger integral operands, Double and
+BigDecimal arithmetic, nested closures, 32-element sets/maps and map property access.
+Select them with `-p fixture=arithmeticLarge,arithmeticDouble,arithmeticDecimal,nestedLambda,set,map,mapProperty`.
+
+`SourceCreationBenchmark.create` compares repeated sources, a rotating set of 64
+prebuilt sources and monotonically unique sources. Unique-source construction is inside
+the timer; `SourceCreationBenchmark.sourceGeneration` is a diagnostic control, not a
+value to subtract from independently measured creation means. Contexts and factories
+are retained per benchmark thread, with independently captured bindings.
+
+`StartupBenchmark` separates factory discovery/construction, context setup using a
+retained factory, and first evaluation with a new factory/context. These are setup
+workloads, not process startup or retained-expression evaluation measurements.
+Use JMH's `-prof gc` and `-prof jfr` in separate diagnostic runs; profiling results
+must be compared under their own unchanged protocol. Stream pipelines and larger
+application corpora remain future measurements.
 Every figure is recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.
+
+== Creation component diagnostics
+
+`./run-analysis-bench.sh` measures uncached parsing, identity normalization, variable
+capture and function capture separately. Build the bench profile first. Its sources
+live under `peano-bench/src/analysis`, outside normal Maven source roots. The script
+uses the existing build-only JMH annotation processor and compiles into a fresh
+temporary directory under target for each invocation.
+
+Diagnostic parent and fork JVMs patch those classes into the core module and add reads
+and qualified exports only to `jmh.core`. These flags are confined to this command;
+shipped module descriptors, application access and published jars remain unchanged.
+Results diagnose components and must not be summed into a predicted full creation cost.
+The full ExpressionFactory benchmark remains the acceptance workload.

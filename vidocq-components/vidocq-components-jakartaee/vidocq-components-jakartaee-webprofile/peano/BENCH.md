@@ -173,3 +173,182 @@ without a demonstrated improvement for the property/collection fixtures.
 Delta vs previous comparable corpus run: none; this is the first corpus baseline.
 The earlier arithmetic-only run uses a different context/provider catalogue and a
 longer measurement protocol, so its delta is not an implementation performance comparison.
+
+## 2026-10-11 · OPT-00 long-protocol baseline
+
+Baseline runtime: main `e5055a36d7041bd66b476c2ebd248267f4d8085c`, with the
+measurement-only harness changes of `perf/optim-baseline`. Runtime code is unchanged.
+Same Apple M5 Max/Mac17,6, 18 logical CPUs, 128 GiB RAM, macOS 27.0.1,
+Temurin 25+36-LTS, Maven 3.9.16, JMH 1.37, Expressly 6.0.0 and EL API 6.0.1.
+AC power, macOS power mode 0. Background workstation load and thermal/frequency
+state are not controlled; source inspection occurred during the run, without local
+builds or simultaneous benchmark runs. Treat these as workstation measurements.
+
+Each fixture context now also binds decimal=BigDecimal("7.25") and data={value:7L}
+for the optional expanded fixtures. The original a/model inputs are unchanged.
+Compilation and expected-result checks precede evaluation timing. Runtime dependencies
+remain named modules and exclude the compiler/processor. One benchmark thread,
+three forks, five one-second warmups and eight one-second measurements per fork:
+24 samples per combination. Errors below are JMH reported errors, not standard deviations.
+
+Exact commands from the checkout with JAVA_HOME and PATH selecting Temurin 25:
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat clean package
+rtk ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-baseline.json
+```
+
+Raw scores, nanoseconds per operation:
+
+```text
+benchmark | engine | fixture | score | error | unit
++CreationBenchmark.create | peano | arithmetic | 328.230 | 5.489 | ns/op
+CreationBenchmark.create | peano | property | 230.416 | 7.302 | ns/op
+CreationBenchmark.create | peano | lambda | 506.053 | 9.804 | ns/op
+CreationBenchmark.create | peano | collection | 378.966 | 2.476 | ns/op
+CreationBenchmark.create | expressly | arithmetic | 26.727 | 0.293 | ns/op
+CreationBenchmark.create | expressly | property | 25.109 | 0.151 | ns/op
+CreationBenchmark.create | expressly | lambda | 31.983 | 0.434 | ns/op
+CreationBenchmark.create | expressly | collection | 25.372 | 0.100 | ns/op
+EvaluationBenchmark.evaluate | peano | arithmetic | 204.499 | 1.875 | ns/op
+EvaluationBenchmark.evaluate | peano | property | 71.443 | 0.388 | ns/op
+EvaluationBenchmark.evaluate | peano | lambda | 216.022 | 1.377 | ns/op
+EvaluationBenchmark.evaluate | peano | collection | 72.012 | 0.430 | ns/op
+EvaluationBenchmark.evaluate | expressly | arithmetic | 54.057 | 0.951 | ns/op
+EvaluationBenchmark.evaluate | expressly | property | 88.762 | 0.744 | ns/op
+EvaluationBenchmark.evaluate | expressly | lambda | 112.759 | 0.881 | ns/op
+EvaluationBenchmark.evaluate | expressly | collection | 55.797 | 0.537 | ns/op
+EvaluationBenchmark.evaluate | compiled | arithmetic | 256.296 | 49.055 | ns/op
+EvaluationBenchmark.evaluate | compiled | property | 73.458 | 2.153 | ns/op
+EvaluationBenchmark.evaluate | compiled | lambda | 158.033 | 2.926 | ns/op
+EvaluationBenchmark.evaluate | compiled | collection | 89.325 | 8.304 | ns/op
+```
+
+[Raw JMH JSON](peano-bench/results/2026-10-11-optim-baseline.json) contains all
+samples and JVM arguments. Delta vs previous comparable run: none. The prior corpus
+used a shorter protocol and fewer fixture context bindings. This is the frozen
+baseline for subsequent implementation comparisons; no improvement is claimed here.
+
+### OPT-00 · CPU and allocation profiles
+
+Same runtime and hardware. Separate diagnostic run: one fork, three one-second
+warmups and five one-second measurements, JDK JFR profile configuration, stack depth
+128. Its profiled timings are excluded from the unprofiled comparison baseline.
+
+```bash
+rtk ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -p engine=peano -p fixture=arithmetic,lambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof 'jfr:dir=peano-bench/target/optim-jfr;configName=profile;stackDepth=128' -rf json -rff peano-bench/target/optim-profile.json
+```
+
+[Raw profiler run JSON](peano-bench/results/2026-10-11-optim-profile.json) and
+[raw JFR recordings](peano-bench/results/2026-10-11-optim-jfr/) preserve the evidence.
+For inspection, run `jfr print --json --stack-depth 12 --events
+jdk.ExecutionSample,jdk.ObjectAllocationSample <recording>` with the pinned JDK.
+Filter events to the JMH worker thread. Attribute CPU samples to their nearest Peano
+implementation frame in the displayed stack; these counts are diagnostic samples,
+not percentages of benchmark time or exact exclusive method costs.
+
+| Workload | Worker CPU samples | Representative nearest implementation frames |
+| --- | ---: | --- |
+| Arithmetic creation | 408 | Lexer.scan 129; Parser.binary 72; Bindings.visit 32 |
+| Lambda creation | 405 | Lexer.scan 101; Parser.binary 67; Bindings.visit 39 |
+| Arithmetic evaluation | 372 | Arithmetic.number 142; PeanoValueExpression.getValue 86; Interpreter.literal 7 |
+| Lambda evaluation | 434 | PeanoValueExpression.getValue 114; Arithmetic.number 76; Bindings.captureLambdaArguments 30 |
+
+Allocation samples identify surviving Interpreter and Arithmetic objects during
+arithmetic evaluation. Lambda evaluation allocation samples identify HashMap objects,
+LambdaBody instances, map backing arrays and argument arrays. Sampled allocation
+weights are not bytes/op; the separate GC-profiler run below supplies that metric.
+Stack truncation/inlining and one diagnostic fork limit attribution precision.
+
+These profiles support creation analysis reuse, removal of stateless arithmetic helper
+allocation and reduction of empty lambda-capture bookkeeping as the first experiments.
+Numeric literal parsing has little presence in this arithmetic profile, so preparing
+all numeric tokens is deferred rather than expanding AST state before evidence of
+a useful gain. Conversion hooks remain in place: their observed cost is not permission
+to skip them. Delta vs previous comparable profile: none; these are initial profiles.
+
+### OPT-00 · Expanded GC diagnostics
+
+Same hardware/runtime; one thread, one fork, three one-second warmups and five
+one-second measurements. Each GC-profiler workload has five samples. The short
+single-fork timings are diagnostic and are not substituted for the long unprofiled
+baseline. The normalized allocation metric is bytes per benchmark operation.
+
+```bash
+rtk ./run-bench.sh 'EvaluationBenchmark.evaluate$' -p engine=peano -p fixture=arithmetic,property,lambda,collection,arithmeticLarge,arithmeticDouble,arithmeticDecimal,nestedLambda,set,map,mapProperty -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-evaluation-gc-baseline.json
+rtk ./run-bench.sh 'io.vidocq.peano.bench.CreationBenchmark.create$' -p engine=peano -p fixture=arithmetic,lambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-creation-gc-baseline.json
+rtk ./run-bench.sh 'SourceCreationBenchmark.(create|sourceGeneration)$' -p engine=peano -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-source-gc-baseline.json
+rtk ./run-bench.sh 'StartupBenchmark.*' -p engine=peano -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-startup-gc-baseline.json
+```
+
+Raw aggregate scores and allocations:
+
+```text
+benchmark | fixture/workload | ns/op | error ns/op | B/op
++EvaluationBenchmark.evaluate | arithmetic | 208.088 | 24.291 | 56.001
+EvaluationBenchmark.evaluate | property | 73.003 | 3.917 | 24.001
+EvaluationBenchmark.evaluate | lambda | 212.831 | 5.355 | 752.001
+EvaluationBenchmark.evaluate | collection | 72.675 | 1.479 | 80.001
+EvaluationBenchmark.evaluate | arithmeticLarge | 222.222 | 7.001 | 152.002
+EvaluationBenchmark.evaluate | arithmeticDouble | 214.187 | 9.214 | 232.001
+EvaluationBenchmark.evaluate | arithmeticDecimal | 258.461 | 43.367 | 304.002
+EvaluationBenchmark.evaluate | nestedLambda | 426.689 | 7.043 | 2184.003
+EvaluationBenchmark.evaluate | set | 470.059 | 5.638 | 1832.003
+EvaluationBenchmark.evaluate | map | 1379.183 | 55.407 | 1864.010
+EvaluationBenchmark.evaluate | mapProperty | 78.046 | 5.846 | 24.001
+CreationBenchmark.create | arithmetic | 328.927 | 25.030 | 2248.002
+CreationBenchmark.create | lambda | 492.056 | 12.301 | 3464.003
+SourceCreationBenchmark.create | repeated | 217.012 | 2.434 | 1752.002
+SourceCreationBenchmark.create | rotating | 209.296 | 2.256 | 1752.001
+SourceCreationBenchmark.create | unique | 219.934 | 5.590 | 1816.002
+SourceCreationBenchmark.sourceGeneration | repeated | 1.269 | 0.019 | 0.000
+SourceCreationBenchmark.sourceGeneration | rotating | 1.410 | 0.010 | 0.000
+SourceCreationBenchmark.sourceGeneration | unique | 7.077 | 0.480 | 56.000
+StartupBenchmark.createContext | - | 1280.388 | 13.682 | 3504.009
+StartupBenchmark.createFactory | - | 420.443 | 12.750 | 960.003
+StartupBenchmark.firstEvaluation | - | 2457.806 | 49.940 | 7432.017
+```
+
+Raw JMH data, including samples and secondary-metric errors:
+[evaluation](peano-bench/results/2026-10-11-optim-evaluation-gc-baseline.json),
+[creation](peano-bench/results/2026-10-11-optim-creation-gc-baseline.json),
+[source working sets](peano-bench/results/2026-10-11-optim-source-gc-baseline.json),
+[setup](peano-bench/results/2026-10-11-optim-startup-gc-baseline.json).
+
+Unique creation includes source construction. The separate sourceGeneration result
+is a control and is not subtracted from creation. Setup workloads include fixture
+binding/provider initialization as documented in the harness; they are not process
+startup measurements. Expected-result checks for all expanded evaluation fixtures
+passed before these runs. Delta vs previous comparable expanded GC run: none.
+
+### OPT-00 · Creation components
+
+Same hardware/runtime and GC diagnostic protocol: one fork, three one-second warmups
+and five one-second measurements. Parsing is uncached; other components operate on
+a retained parsed Template. Variable capture sees a=7L; the function mapper is empty.
+These independent benchmark scores cannot be summed to predict full creation time.
+
+The build-only diagnostic sources are patched into core for this command, with reads
+and qualified exports to JMH only. Shipped descriptors and artifacts are unchanged.
+The first attempted fork failed before measurement (BENCH-003) and is excluded.
+
+```bash
+rtk ./run-analysis-bench.sh -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-components-baseline.json
+```
+
+```text
+component | fixture | ns/op | error ns/op | B/op
++captureFunctions | arithmetic | 12.773 | 0.169 | 112.000
+captureFunctions | lambda | 29.127 | 0.663 | 320.000
+captureVariables | arithmetic | 35.287 | 6.894 | 408.000
+captureVariables | lambda | 52.269 | 3.430 | 616.000
+identity | arithmetic | 54.394 | 1.938 | 528.000
+identity | lambda | 78.027 | 6.567 | 752.001
+parse | arithmetic | 211.044 | 21.591 | 1152.001
+parse | lambda | 338.280 | 38.007 | 1728.002
+```
+
+[Raw component JSON](peano-bench/results/2026-10-11-optim-components-baseline.json)
+records samples and diagnostic JVM flags. Delta vs previous comparable component
+run: none. Baseline parsing/normalization/capture all allocate, confirming that a
+full repeated-source creation comparison is needed for reuse experiments.

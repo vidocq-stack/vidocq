@@ -22,18 +22,32 @@ package io.vidocq.peano.bench;
 
 import java.util.ServiceLoader;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.math.BigDecimal;
 import io.vidocq.peano.bench.model.Model;
 import jakarta.el.*;
 
 final class Fixtures {
     static final String SOURCE="${(a+2)*3}";
-    static final List<String> CASES=List.of("arithmetic","property","lambda","collection");
+    static final List<String> CASES=List.of("arithmetic","property","lambda","collection",
+            "arithmeticLarge","arithmeticDouble","arithmeticDecimal","nestedLambda","set","map","mapProperty");
     static String source(String fixture) {
         return switch (fixture) {
             case "arithmetic" -> SOURCE;
             case "property" -> "${model.value}";
             case "lambda" -> "${(x -> x+1)(a)}";
             case "collection" -> "${[a,2,3]}";
+            case "arithmeticLarge" -> "${(a+2000)*3000}";
+            case "arithmeticDouble" -> "${(a+2.5)*3}";
+            case "arithmeticDecimal" -> "${(decimal+2)*3}";
+            case "nestedLambda" -> "${(x -> (y -> x+y))(a)(2000)}";
+            case "set" -> "${{"+IntStream.range(0,32).mapToObj(Integer::toString).collect(Collectors.joining(","))+",a}}";
+            case "map" -> "${{"+IntStream.range(0,32).mapToObj(i->i+":a").collect(Collectors.joining(","))+"}}";
+            case "mapProperty" -> "${data.value}";
             default -> throw new IllegalArgumentException("Unknown fixture "+fixture);
         };
     }
@@ -43,6 +57,17 @@ final class Fixtures {
             case "property" -> 7L;
             case "lambda" -> 8L;
             case "collection" -> List.of(7L,2L,3L);
+            case "arithmeticLarge" -> 6021000L;
+            case "arithmeticDouble" -> 28.5;
+            case "arithmeticDecimal" -> new BigDecimal("27.75");
+            case "nestedLambda" -> 2007L;
+            case "set" -> new LinkedHashSet<>(IntStream.range(0,32).mapToObj(i->(long)i).toList());
+            case "map" -> {
+                var result=new LinkedHashMap<Long,Long>();
+                for (long i=0;i<32;i++) result.put(i,7L);
+                yield result;
+            }
+            case "mapProperty" -> 7L;
             default -> throw new IllegalArgumentException("Unknown fixture "+fixture);
         };
     }
@@ -65,6 +90,8 @@ final class Fixtures {
         context.putContext(ExpressionFactory.class,factory);
         context.getVariableMapper().setVariable("a",factory.createValueExpression(7L,Long.class));
         context.getVariableMapper().setVariable("model",factory.createValueExpression(new Model(7),Model.class));
+        context.getVariableMapper().setVariable("decimal",factory.createValueExpression(new BigDecimal("7.25"),BigDecimal.class));
+        context.getVariableMapper().setVariable("data",factory.createValueExpression(Map.of("value",7L),Map.class));
         return context;
     }
     private Fixtures() {}

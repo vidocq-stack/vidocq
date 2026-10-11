@@ -32,10 +32,33 @@ class BenchmarkSemanticsTest {
     }
     @Test void allEvaluationEnginesProduceTheSameResult() throws Exception {
         for (String engine:new String[]{"peano","expressly","compiled"}) {
-            for (String fixture:new String[]{"arithmetic","property","lambda","collection"}) {
+            for (String fixture:new String[]{"arithmetic","property","lambda","collection",
+                    "arithmeticLarge","arithmeticDouble","arithmeticDecimal","nestedLambda","set","map","mapProperty"}) {
                 var state=new EvaluationBenchmark(); state.engine=engine; state.fixture=fixture; state.setup();
                 assertEquals(Fixtures.expected(fixture),state.evaluate(),engine+":"+fixture);
             }
+        }
+    }
+
+    @Test void creationWorkloadsKeepBindingsAndCreateValidSources() {
+        for (String engine:new String[]{"peano","expressly"}) {
+            for (String workload:new String[]{"repeated","rotating","unique"}) {
+                var state=new SourceCreationBenchmark(); state.engine=engine; state.workload=workload; state.setup();
+                for (int i=0;i<130;i++) {
+                    var expression=state.create();
+                    assertEquals(7L+state.lastOperand(),expression.<Object>getValue(state.context()));
+                }
+            }
+        }
+    }
+
+    @Test void coldCreationIncludesTheCorrectProviderContext() {
+        for (String engine:new String[]{"peano","expressly"}) {
+            var state=new StartupBenchmark(); state.engine=engine; state.setup();
+            var context=state.createContext();
+            assertNotNull(context.getContext(jakarta.el.ExpressionFactory.class));
+            assertNotNull(state.createFactory());
+            assertEquals(27L,state.firstEvaluation());
         }
     }
 }

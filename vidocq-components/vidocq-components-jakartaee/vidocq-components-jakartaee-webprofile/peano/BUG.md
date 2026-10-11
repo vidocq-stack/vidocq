@@ -3,6 +3,20 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## BENCH-003 · 2026-10-11 · Component benchmark forks repeated module patch options
+
+- Symptom: the diagnostic benchmark listed successfully but its first fork failed
+  during boot-layer initialization: core was specified more than once to --patch-module.
+- Minimal reproduction: run run-analysis-bench.sh with a fork after the initial
+  launcher used -jvmArgsAppend to repeat its parent module patch configuration.
+- Cause: JMH inherited the parent's patch option and appended the same patch again.
+- Status: resolved before publication. Explicit -jvmArgs supplies the complete fork
+  configuration once. Each invocation also uses a fresh target directory to prevent
+  stale generated metadata and concurrent compilation contamination.
+- Evidence: the original fork failed before measurement; the corrected component
+  run exercises the patched named module in separate JVMs. Raw successful results
+  are referenced in BENCH.md; the failed run is excluded from performance comparisons.
+
 ## COMP-002 · 2026-10-11 · Serialized expressions accepted changed emitted bodies
 
 - Symptom: a serialized compiled expression could restore its old source metadata

@@ -1,16 +1,18 @@
 # Peano optimization study
 
 Date: 2026-10-11. Implementation baseline: `8a80bf342ac28e817029bc65f5956d447edc1da3`.
-Scope: investigation and proposed experiments only. This document introduces no
-implementation changes and reports no new performance measurements.
+The original study below describes that implementation baseline. Execution was
+authorized on 2026-10-11; measured results and raw artifacts are recorded in BENCH.md.
+The execution status and selected experiments appear in the plan below.
 
 ## Recommendation
 
-Start with reproducible CPU and allocation profiles, then investigate repeated
-expression creation and numeric literal evaluation. These have concrete source-level
-opportunities and directly exercise the existing corpus. Investigate conversion
-dispatch and lambda allocation next, according to the profiles. Keep property access
-and collection construction as lower priorities until broader workloads show a need.
+OPT-00 now supplies CPU/allocation profiles and component measurements. They support
+repeated expression creation, stateless arithmetic helper allocation and empty lambda
+capture bookkeeping as the first experiments. Numeric literal preparation is deferred
+because it has little presence in the initial arithmetic CPU profile. Keep property
+access and collection construction as lower priorities until broader workloads justify
+the semantic and memory tradeoffs.
 
 Build-time compilation already reduces evaluation time for arithmetic and the lambda
 fixture, but it does not remove resolver conversions or dynamic numeric dispatch.
@@ -144,7 +146,7 @@ It is an experiment order, not an authorization to implement these changes.
 | --- | --- | --- | --- | --- |
 | O0 | Extend measurements and profile existing paths | First | Attribute CPU, allocation and retained memory | Misleading fixture or profiling overhead |
 | O1 | Reuse context-free creation analysis with bounded storage | High | Less repeated parsing, normalization and traversal | Literal identity, binding isolation, cache memory |
-| O2 | Prepare numeric literals once | High | Remove repeated numeric text parsing in the interpreter | Lazy errors and observable object identity |
+| O2 | Prepare numeric literals once | Deferred after OPT-00 | Remove repeated numeric text parsing in the interpreter | Lazy errors and observable object identity |
 | O3 | Reduce conversion/dispatch overhead while preserving hooks | Profile-dependent | Improve arithmetic in both execution modes | Skipping converters or changing effect order |
 | O4 | Precompute lambda metadata and simplify empty captures | Profile-dependent | Fewer traversals and temporary allocations | Closures, null captures and reentrancy |
 | O5 | Construct sets directly and size maps appropriately | Lower | Avoid intermediate storage and resizing | Evaluation effects, order and freshness |
@@ -297,8 +299,8 @@ exception cleanup, mutable collection freshness and class-loader lifecycle.
 
 ## Execution plan
 
-Prepared: 2026-10-11. All lots below are planned; implementation has not started.
-The first deliverable is a reproducible measurement baseline. The subsequent lots
+Prepared: 2026-10-11. OPT-00 measurements and diagnostics are complete; the baseline
+PR is being validated. Implementation experiments have not started. The subsequent lots
 are conditional experiments, with one focused PR per independently reviewable change.
 This plan does not select a public SPI change or resolve an open structural question
 in [PLAN.md](PLAN.md).
@@ -317,48 +319,53 @@ in [PLAN.md](PLAN.md).
 | OPT-07 | Startup/catalog lifecycle (O6) | Startup baseline from OPT-00 | Setup/lifecycle experiment | Proceed only when setup cost matters to application use |
 | OPT-08 | Consolidation | Every selected experiment accepted or discarded | Final BENCH.md comparison and updated decisions here | Close the campaign with explicit outcomes and remaining work |
 
-OPT-01 and OPT-02 are the first implementation candidates after OPT-00. Their order
-can change according to attribution. OPT-03 follows OPT-02; a cache is not the first
-change. OPT-04 through OPT-07 may be deferred or discarded when their workloads show
-no material problem. Deferred work does not block acceptance of an independent gain.
+The measured execution order is OPT-02, OPT-03, OPT-04 and OPT-05. OPT-01 is deferred:
+the initial profile gives stronger evidence for other costs, without expanding the
+qualified syntax contract. OPT-04 first targets surviving stateless Arithmetic helpers
+while preserving conversion calls. OPT-05 first targets empty-capture bookkeeping.
+OPT-03 follows OPT-02; a cache is not the first change. OPT-06/07 remain conditional
+on a useful measured benefit with acceptable semantics/lifecycle tradeoffs.
 
 ### OPT-00 — Establish the measurement baseline
 
-- [ ] Record the source commit, JDK/Maven versions, machine, power/load conditions,
+- [x] Record the source commit, JDK/Maven versions, machine, power/load conditions,
   JVM arguments, provider setup and exact harness commands in BENCH.md.
-- [ ] Re-run the existing four-fixture corpus under a longer fixed protocol. Use
+- [x] Re-run the existing four-fixture corpus under a longer fixed protocol. Use
   five one-second warmups, eight one-second measurements and three forks as the
   initial protocol; inspect stability before freezing the comparison protocol.
-- [ ] Add creation workloads that distinguish repeated source, first use, a bounded
+- [x] Add creation workloads that distinguish repeated source, first use, a bounded
   rotating source set and unique-source misses. Keep setup outside the timer where
   that is appropriate to the named workload; specify factory/context ownership.
-- [ ] Add targeted inputs outside small boxing caches, nested lambdas and larger
+- [x] Add targeted inputs outside small boxing caches, nested lambdas and larger
   sets/maps. Introduce only the cases needed to assess each candidate, rather than
   multiplying every parameter into one expensive benchmark matrix.
-- [ ] Measure creation components separately: parser, identity normalization and
+- [x] Measure creation components separately: parser, identity normalization and
   mapper capture. Keep full ExpressionFactory creation as the acceptance benchmark;
   component results are diagnostic and cannot replace it.
-- [ ] Collect GC/allocation metrics in a separate run and CPU/allocation profiles for
+- [x] Collect GC/allocation metrics in a separate run and CPU/allocation profiles for
   creation, arithmetic and lambda evaluation. Verify the modular fork setup still
   works with the selected profiler. Do not introduce shipped profiling dependencies.
-- [ ] Add separate factory/context initialization and compiled construction measurements
+- [x] Add separate factory/context initialization and compiled construction measurements
   if startup or construction is selected for optimization.
-- [ ] Record the attribution, measurement uncertainty and selected workloads here
+- [x] Record the attribution, measurement uncertainty and selected workloads here
   before beginning a production-code experiment.
 
-Commands below describe the planned protocol and do not report a completed run.
+The long corpus protocol below has run; exact selection and raw data are in BENCH.md.
 Run from the checkout with the pinned Java 25 and Maven 3.9.16 environment:
 
 ```bash
 rtk ./mvnw -ntp -Pbench,beans-compat clean package
-rtk ./run-bench.sh -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-baseline.json
-rtk ./run-bench.sh -wi 5 -w 1s -i 8 -r 1s -f 3 -prof gc -rf json -rff peano-bench/target/optim-baseline-gc.json
+rtk ./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-baseline.json
 ```
 
 Archive accepted raw results under `peano-bench/results/` with a dated name and
 BENCH.md entry. Keep diagnostic profile artifacts outside published runtime jars;
 record their location and reproduction procedure. Retained-memory checks complement
 bytes/op measurements when evaluating a cache.
+
+Separate one-fork GC and JFR diagnostics and the component benchmarks are recorded
+in BENCH.md under their own protocols. Factory/context setup and first evaluation
+were measured; compiled construction was not selected for this campaign.
 
 ### OPT-01 — Prepare numeric literals
 
@@ -501,5 +508,5 @@ reflection or package opens. The existing Maven processor-classpath accommodatio
 is build-only. Runtime modules remain named modules. Any unresolved structural choice
 marked for validation in PLAN.md remains subject to its existing decision process.
 
-The next execution lot is OPT-00. This plan establishes a sequence and required proof;
+The next implementation lot is OPT-02. This plan establishes a sequence and required proof;
 it does not establish a dominant cost or promise a performance target.
