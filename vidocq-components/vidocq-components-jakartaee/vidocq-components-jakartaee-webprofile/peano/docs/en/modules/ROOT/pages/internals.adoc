@@ -1,9 +1,9 @@
 = Internals
-:description: Peano's planned architecture — modules, parser, interpreter, build-time code generation.
+:description: Peano architecture — modules, parser, interpreter, build-time code generation.
 
 [.lead]
-How Peano is designed to work inside. `peano-core` now contains the P1 lexer, parser,
-immutable AST, resolver-backed evaluator and API provider; the full design is
+Peano combines a lexer/parser, immutable AST, resolver-backed interpreter and API
+provider with build-time accessor and expression generation. The full design is
 `PLAN.md` in {repo-peano}[the repository].
 
 == Modules
@@ -24,6 +24,28 @@ immutable AST, resolver-backed evaluator and API provider; the full design is
 . A hand-written lexer and recursive-descent parser produce an immutable AST (records and sealed interfaces).
 . A tree-walking interpreter evaluates the AST. It is the reference behaviour and the oracle of every differential test.
 . At build time, `peano-compiler` turns ASTs known in advance into classes; `peano-processor` generates accessor tables in the application's own packages.
+
+== Creation analysis and bounded reuse
+
+ExpressionAnalysis collects canonical identity and ordered variable/function lookup
+descriptors without consulting a context. Creation then captures mapper results in
+separate phases, obtaining the function mapper once per evaluation part, including
+parts with no function descriptors. Lambda parameter names are excluded according
+to lexical scope. Single-variable snapshots avoid an intermediate mutable map.
+
+Each factory owns a ConcurrentHashMap with 128 fixed integer slots. A source hash
+selects a slot; full source equality verifies a hit. A miss returns the locally
+analyzed source even when another thread replaces that slot. Sources exceeding 4096
+characters or a 16KiB estimated artifact weight bypass retention. The estimate counts
+syntax, canonical identity, text/operator/name payloads and descriptor storage; it is
+not an exact heap-size measurement. Collisions trade hit rate for simple bounded storage.
+
+Cached data contains no expected types, contexts, bound values, Method objects or
+throwables. New expressions recapture their mapper bindings. Hits materialize fresh
+nonempty String literal values and their affected AST paths while sharing unaffected
+immutable syntax. The canonical tree remains shared data used for equality/identity;
+it does not supply evaluation values. This preserves the String identity behavior
+documented in COMP-007. Numeric literals retain evaluation-time parsing and lazy failures.
 
 == AOT compatibility
 

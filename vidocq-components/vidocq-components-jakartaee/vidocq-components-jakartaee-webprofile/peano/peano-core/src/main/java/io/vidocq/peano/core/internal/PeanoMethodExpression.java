@@ -39,7 +39,6 @@ import io.vidocq.peano.core.internal.evaluation.MethodMetadata;
 import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
 import io.vidocq.peano.core.internal.evaluation.ResolverAccess;
 import io.vidocq.peano.core.internal.syntax.Ast;
-import io.vidocq.peano.core.internal.syntax.ExpressionParser;
 import io.vidocq.peano.core.internal.syntax.Template;
 
 /** Method expression with parse-time bindings and API-owned method invocation. */
@@ -59,9 +58,14 @@ final class PeanoMethodExpression extends MethodExpression {
     }
 
     PeanoMethodExpression(ELContext context, String source, Class<?> expectedReturnType, Class<?>[] expectedTypes) {
+        this(context, source, expectedReturnType, expectedTypes, ExpressionAnalysis.parse(source));
+    }
+
+    PeanoMethodExpression(ELContext context, String source, Class<?> expectedReturnType, Class<?>[] expectedTypes,
+            ExpressionAnalysis analysis) {
         this.source = source;
-        this.template = ExpressionParser.parse(source);
-        this.identity = ExpressionIdentity.template(template);
+        this.template = analysis.template();
+        this.identity = analysis.identity();
         this.body = template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
                 ? evaluation.body() : null;
         boolean literal = template.kind() == Template.Kind.LITERAL;
@@ -73,8 +77,8 @@ final class PeanoMethodExpression extends MethodExpression {
         if (!parametersProvided) Objects.requireNonNull(expectedTypes, "expectedParamTypes");
         this.expectedReturnType = expectedReturnType;
         this.expectedParameterTypes = parametersProvided ? null : expectedTypes.clone();
-        variables = Bindings.capture(template, context);
-        functions = Bindings.captureFunctions(template, context);
+        variables = Bindings.capture(analysis, context);
+        functions = Bindings.captureFunctions(analysis, context);
     }
 
     @Override

@@ -299,8 +299,9 @@ exception cleanup, mutable collection freshness and class-loader lifecycle.
 
 ## Execution plan
 
-Prepared: 2026-10-11. OPT-00 measurements and diagnostics are complete; the baseline
-PR is being validated. Implementation experiments have not started. The subsequent lots
+Prepared: 2026-10-11. OPT-00 is merged in PR #45. OPT-02/03 are implemented and pass
+their local semantic/reactor/TCK checks; cache measurements are recorded in BENCH.md.
+Their combined PR is being prepared. The remaining lots
 are conditional experiments, with one focused PR per independently reviewable change.
 This plan does not select a public SPI change or resolve an open structural question
 in [PLAN.md](PLAN.md).
@@ -388,6 +389,12 @@ profiling, record the result and discard the experiment.
 
 ### OPT-02 — Reduce creation analysis work
 
+Implemented together with OPT-03. The uncached experiment alone did not demonstrate
+a consistent timing advantage, so the analysis layer is assessed as part of bounded
+reuse. It supplies immutable syntax/identity and ordered descriptors, with fresh
+single-variable snapshots and separate lookup phases. Six dedicated semantic tests
+passed before integration; the full reactor and TCK passed after cache integration.
+
 - [ ] First test creation-time mapper snapshots, first-occurrence lookup order,
   duplicate lookup suppression, lexical exclusions and missing-function errors.
 - [ ] Use the OPT-00 breakdown to select normalization or descriptor traversal as
@@ -407,6 +414,19 @@ cache owner, cache key and lookup/materialization responsibilities. Do not retai
 slower preparatory abstraction solely to make a later cache easier to implement.
 
 ### OPT-03 — Add bounded reuse only when justified
+
+Implemented with fixed integer slots in a factory-local ConcurrentHashMap. Bounds are
+128 entries, 4096 source characters and 16KiB estimated artifact weight per entry.
+This is an engineering bound rather than a measured optimum or exact heap-byte limit.
+The fixed slot replacement policy avoids eviction accounting races; collision misses
+return their caller's own analysis. Oversized entries bypass storage. Values/classes,
+contexts, methods and exceptions are not cached; nonempty literal values are fresh
+on hits. Concurrent/module reviews and collision/isolation tests passed.
+
+Long-protocol creation and separate allocation/working-set/setup measurements are
+recorded in BENCH.md. Repeated/rotating creation improves; unique misses pay extra
+analysis/storage cost and cold factory creation allocates additional cache state.
+The implementation preserves AST records and compiled emission schema v3.
 
 - [ ] Decide capacity and retained-weight limits from the recorded source-size and
   workload distribution. Define eviction, oversized-entry and concurrent-miss behavior.
@@ -508,5 +528,5 @@ reflection or package opens. The existing Maven processor-classpath accommodatio
 is build-only. Runtime modules remain named modules. Any unresolved structural choice
 marked for validation in PLAN.md remains subject to its existing decision process.
 
-The next implementation lot is OPT-02. This plan establishes a sequence and required proof;
+The next implementation lot is OPT-04 after accepting the creation PR. This plan establishes a sequence and required proof;
 it does not establish a dominant cost or promise a performance target.

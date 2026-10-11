@@ -364,3 +364,87 @@ parse | lambda | 338.280 | 38.007 | 1728.002
 records samples and diagnostic JVM flags. Delta vs previous comparable component
 run: none. Baseline parsing/normalization/capture all allocate, confirming that a
 full repeated-source creation comparison is needed for reuse experiments.
+
+## 2026-10-11 · OPT-02 creation analysis experiment
+
+Runtime branch perf/creation-analysis after OPT-00. One pure traversal collects
+ordered binding descriptors, with separate context lookup phases and direct immutable
+single-variable snapshots. No cache is active. Same hardware, inputs and GC protocol
+as the OPT-00 creation diagnostics: one fork, three one-second warmups, five one-second
+measurements, one thread. Full bench/beans-compatible reactor passed before measurement.
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat package
+rtk ./run-bench.sh 'io.vidocq.peano.bench.CreationBenchmark.create$' -p engine=peano -p fixture=arithmetic,lambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-analysis-gc.json
+```
+
+```text
+fixture | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
++arithmetic | 306.567 | 3.093 | 2304.002 | -6.8% | 56.000
+lambda | 496.339 | 3.395 | 3256.003 | 0.9% | -208.000
+```
+
+[Raw experiment JSON](peano-bench/results/2026-10-11-optim-analysis-gc.json).
+The single-fork timing deltas are exploratory; allocation changes are compared under
+the same protocol. The final long-protocol comparison remains required. These results
+also define the uncached reference when assessing the added reuse layer.
+
+## 2026-10-11 · OPT-02/03 factory-owned syntax cache
+
+Branch perf/expression-cache, runtime source includes the analyzed descriptor layer
+and bounded reuse, before arithmetic/capture changes. Same hardware, JVM, factory/context
+inputs and measurement protocols as OPT-00. Full bench/beans-compatible clean install
+and the 361-case official TCK passed before timing. Concurrent/module review passed.
+
+Engineering bounds: 128 direct-mapped slots, sources at most 4096 characters and
+estimated retained artifact weight at most 16KiB per entry. These bound estimated
+retention, not exact heap bytes or transient concurrent parsing. There is no LRU claim.
+Oversized artifacts bypass storage. Nonempty literal values are owned by each expression;
+mapper snapshots and expected types are outside the cache. No AST or emitted-schema
+change is needed.
+
+```bash
+rtk ./mvnw -ntp -Pbench,beans-compat clean install
+rtk ./run-official-tck-el-6.0.sh all
+rtk ./run-bench.sh 'io.vidocq.peano.bench.CreationBenchmark.create$' -p engine=peano -wi 5 -w 1s -i 8 -r 1s -f 3 -rf json -rff peano-bench/target/optim-cache-creation.json
+rtk ./run-bench.sh 'io.vidocq.peano.bench.CreationBenchmark.create$' -p engine=peano -p fixture=arithmetic,lambda -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-cache-creation-gc.json
+rtk ./run-bench.sh 'SourceCreationBenchmark.(create|sourceGeneration)$' -p engine=peano -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-cache-source-gc.json
+rtk ./run-bench.sh 'StartupBenchmark.*' -p engine=peano -wi 3 -w 1s -i 5 -r 1s -f 1 -prof gc -rf json -rff peano-bench/target/optim-cache-startup-gc.json
+```
+
+Long-protocol creation: three forks, 24 samples per fixture, unprofiled. Delta against
+the matching OPT-00 long-protocol creation result:
+
+```text
+fixture | ns/op | error ns/op | OPT-00 ns/op | time delta
++arithmetic | 9.355 | 0.035 | 328.230 | -97.1%
+property | 31.411 | 0.108 | 230.416 | -86.4%
+lambda | 9.341 | 0.035 | 506.053 | -98.2%
+collection | 9.336 | 0.015 | 378.966 | -97.5%
+```
+
+GC diagnostics use the same one-fork protocol as the corresponding OPT-00 run:
+
+```text
+benchmark | fixture/workload | ns/op | error ns/op | B/op | time delta vs OPT-00 GC | allocation delta B/op
++CreationBenchmark.create | arithmetic | 9.319 | 0.017 | 80.000 | -97.2% | -2168.002
+CreationBenchmark.create | lambda | 9.332 | 0.067 | 80.000 | -98.1% | -3384.003
+SourceCreationBenchmark.create | repeated | 10.822 | 0.112 | 80.000 | -95.0% | -1672.001
+SourceCreationBenchmark.create | rotating | 60.438 | 8.115 | 456.250 | -71.1% | -1295.751
+SourceCreationBenchmark.create | unique | 254.121 | 3.324 | 1864.002 | 15.5% | 48.000
+SourceCreationBenchmark.sourceGeneration | repeated | 1.231 | 0.004 | 0.000 | -3.0% | -0.000
+SourceCreationBenchmark.sourceGeneration | rotating | 1.376 | 0.025 | 0.000 | -2.5% | -0.000
+SourceCreationBenchmark.sourceGeneration | unique | 6.923 | 0.409 | 56.000 | -2.2% | -0.000
+StartupBenchmark.createContext | - | 1269.405 | 48.076 | 3504.009 | -0.9% | -0.000
+StartupBenchmark.createFactory | - | 399.766 | 6.076 | 1056.003 | -4.9% | 96.000
+StartupBenchmark.firstEvaluation | - | 2387.058 | 95.778 | 7688.017 | -2.9% | 255.999
+```
+
+Raw data: [long creation](peano-bench/results/2026-10-11-optim-cache-creation.json),
+[creation GC](peano-bench/results/2026-10-11-optim-cache-creation-gc.json),
+[source working sets](peano-bench/results/2026-10-11-optim-cache-source-gc.json),
+[setup](peano-bench/results/2026-10-11-optim-cache-startup-gc.json).
+The cache targets repeated creation, while unique misses include analysis/storage
+overhead. Rotating sources also exercise collision eviction. Setup and miss penalties
+must be assessed alongside the warm results; diagnostic timings have one-fork uncertainty.
+The final long corpus will verify the combined retained changes.

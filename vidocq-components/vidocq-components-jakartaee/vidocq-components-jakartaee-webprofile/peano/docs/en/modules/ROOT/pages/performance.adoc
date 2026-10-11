@@ -21,7 +21,14 @@ process-classes and is absent from benchmark execution. Default builds omit this
 its JMH/Expressly dependencies and artifacts are never published with Peano.
 Repeated creation includes implementation caches; it does not isolate uncached parsing.
 
-== What will be measured
+== Measurement scope
+
+The optimization campaign records a longer baseline and focused comparisons in
+link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md], with its decisions in
+link:{repo-peano}/src/branch/main/OPTIMS.md[OPTIMS.md]. Creation now uses factory-owned
+bounded analysis reuse. Measurements distinguish repeated hits, a rotating source
+set, unique misses and cold factory/context setup. Warm gains must be assessed
+alongside miss penalties and retained estimated weight; no general startup gain is claimed.
 
 * Interpreted vs compiled evaluation of the same expressions.
 * Generated-accessor resolution vs the spec's reflective `BeanELResolver`.

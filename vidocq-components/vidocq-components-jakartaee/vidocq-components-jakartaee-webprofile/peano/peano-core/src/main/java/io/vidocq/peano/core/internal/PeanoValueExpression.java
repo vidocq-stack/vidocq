@@ -30,7 +30,6 @@ import io.vidocq.peano.core.internal.evaluation.Bindings;
 import io.vidocq.peano.core.internal.evaluation.Interpreter;
 import io.vidocq.peano.core.internal.evaluation.ResolverAccess;
 import io.vidocq.peano.core.internal.syntax.Ast;
-import io.vidocq.peano.core.internal.syntax.ExpressionParser;
 import io.vidocq.peano.core.internal.syntax.Template;
 
 /** Value expression with immutable parse-time bindings and context-owned resolution. */
@@ -45,12 +44,12 @@ final class PeanoValueExpression extends ValueExpression {
     private final Map<String, ValueExpression> variables;
     private final Map<String, Method> functions;
 
-    private PeanoValueExpression(Class<?> expectedType, String source, Template template,
+    private PeanoValueExpression(Class<?> expectedType, String source, Template template, Template identity,
             Object instance, boolean objectExpression, Map<String, ValueExpression> variables, Map<String, Method> functions) {
         this.expectedType = expectedType;
         this.source = source;
         this.template = template;
-        this.identity = template == null ? null : ExpressionIdentity.template(template);
+        this.identity = identity;
         this.instance = instance;
         this.objectExpression = objectExpression;
         this.variables = variables;
@@ -58,13 +57,16 @@ final class PeanoValueExpression extends ValueExpression {
     }
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context) {
-        Template template = ExpressionParser.parse(source);
-        return new PeanoValueExpression(expectedType, source, template, null, false,
-                Bindings.capture(template, context), Bindings.captureFunctions(template, context));
+        return text(source, expectedType, context, ExpressionAnalysis.parse(source));
+    }
+
+    static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context, ExpressionAnalysis analysis) {
+        return new PeanoValueExpression(expectedType, source, analysis.template(), analysis.identity(), null, false,
+                Bindings.capture(analysis, context), Bindings.captureFunctions(analysis, context));
     }
 
     static PeanoValueExpression object(Object instance, Class<?> expectedType) {
-        return new PeanoValueExpression(expectedType, null, null, instance, true, Map.of(), Map.of());
+        return new PeanoValueExpression(expectedType, null, null, null, instance, true, Map.of(), Map.of());
     }
 
     @Override

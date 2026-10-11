@@ -33,6 +33,7 @@ import io.vidocq.peano.core.internal.evaluation.ReflectionGuard;
 
 /** Jakarta EL provider, discovered through the core module's service declaration. */
 public final class PeanoExpressionFactory extends ExpressionFactory {
+    private final ParsedExpressionCache expressions = new ParsedExpressionCache();
     public PeanoExpressionFactory() {
         ReflectionGuard.denied();
     }
@@ -51,7 +52,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
         Objects.requireNonNull(expectedType, "expectedType");
-        return PeanoValueExpression.text(expression, expectedType, context);
+        return PeanoValueExpression.text(expression, expectedType, context, expressions.parse(expression));
     }
 
     @Override
@@ -64,7 +65,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
             Class<?> expectedReturnType, Class<?>[] expectedParamTypes) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
-        return new PeanoMethodExpression(context, expression, expectedReturnType, expectedParamTypes);
+        return new PeanoMethodExpression(context, expression, expectedReturnType, expectedParamTypes, expressions.parse(expression));
     }
 
     @Override

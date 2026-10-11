@@ -238,6 +238,24 @@ when automatic registry discovery is needed for factory conversion.
 
 See https://jakarta.ee/specifications/expression-language/6.0/jakarta-expression-language-spec-6.0[EL 6.0 sections 1.25 and 1.25.9].
 
+== Dynamic expression creation reuse
+
+Each Peano ExpressionFactory owns a bounded syntax/analysis cache. Reusing a factory
+allows repeated source creation to reuse parsing, canonical identity and ordered
+binding descriptors. Every new expression still snapshots its own variable/function
+mapper results and expected type; a cache hit does not freeze context state globally.
+
+Retention uses 128 fixed slots with an exact source check, a 4096-character source
+limit and a 16KiB estimated artifact limit per entry. These internal bounds are not
+configuration keys or exact heap-byte measurements. Collisions replace entries,
+and oversized sources/artifacts bypass storage. Unique-source misses incur analysis
+and storage overhead; see BENCH.md for the measured tradeoffs.
+
+Contexts remain caller-owned and must not be shared across concurrent evaluations.
+Nonempty literal values remain owned by each expression. Generated classes and
+serialization schema are unchanged; existing compiled artifacts need no regeneration
+for this creation optimization.
+
 == Reflection policy
 
 The system property peano.reflection accepts allow (default) or deny. Other values

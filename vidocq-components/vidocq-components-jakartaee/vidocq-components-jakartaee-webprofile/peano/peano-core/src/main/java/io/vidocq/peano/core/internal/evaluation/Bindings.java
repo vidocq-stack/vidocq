@@ -31,12 +31,49 @@ import jakarta.el.ELException;
 import jakarta.el.FunctionMapper;
 import jakarta.el.ValueExpression;
 import jakarta.el.VariableMapper;
+import io.vidocq.peano.core.internal.ExpressionAnalysis;
 import io.vidocq.peano.core.internal.syntax.Ast;
 import io.vidocq.peano.core.internal.syntax.Template;
 
 /** Parse-time variable mappings, independent of later mapper mutations (EL 6.0 section 1.19). */
 public final class Bindings {
     private Bindings() {
+    }
+
+    /** Captures caller-owned values from ordered syntax descriptors, never from a shared context. */
+    public static Map<String, ValueExpression> capture(ExpressionAnalysis analysis, ELContext context) {
+        VariableMapper mapper = context.getVariableMapper();
+        if (mapper == null || analysis.variableNames().isEmpty()) return Map.of();
+        if (analysis.variableNames().size() == 1) {
+            String name = analysis.variableNames().getFirst();
+            ValueExpression expression = mapper.resolveVariable(name);
+            return expression == null ? Map.of() : Map.of(name, expression);
+        }
+        Map<String, ValueExpression> variables = null;
+        for (String name : analysis.variableNames()) {
+            ValueExpression expression = mapper.resolveVariable(name);
+            if (expression != null) {
+                if (variables == null) variables = new HashMap<>();
+                variables.put(name, expression);
+            }
+        }
+        return variables == null ? Map.of() : Map.copyOf(variables);
+    }
+
+    /** Retains a separate function phase and one mapper access for every evaluation part. */
+    public static Map<String, Method> captureFunctions(ExpressionAnalysis analysis, ELContext context) {
+        Map<String, Method> functions = null;
+        for (var part : analysis.functionsByPart()) {
+            FunctionMapper mapper = context.getFunctionMapper();
+            for (var name : part) {
+                Method method = resolveFunction(name.prefix(), name.name(), name.key(), mapper);
+                if (method != null) {
+                    if (functions == null) functions = new HashMap<>();
+                    functions.put(name.key(), method);
+                }
+            }
+        }
+        return functions == null ? Map.of() : Map.copyOf(functions);
     }
 
     public static Map<String, ValueExpression> capture(Template template, ELContext context) {
@@ -133,16 +170,21 @@ public final class Bindings {
             Map<String, Method> functions, Set<String> visited) {
         String key = functionKey(prefix, name);
         if (!visited.add(key)) return;
+        Method method = resolveFunction(prefix, name, key, mapper);
+        if (method != null) functions.put(key, method);
+    }
+
+    private static Method resolveFunction(String prefix, String name, String key, FunctionMapper mapper) {
         Method method = mapper == null ? null : mapper.resolveFunction(prefix, name);
         if (method == null) {
             if (!prefix.isEmpty()) throw new ELException("Unmapped function " + key);
-            return;
+            return null;
         }
         if (!Modifier.isPublic(method.getModifiers()) || !Modifier.isStatic(method.getModifiers())
                 || !Modifier.isPublic(method.getDeclaringClass().getModifiers())) {
             throw new ELException("Function must reference a public static method: " + key);
         }
-        functions.put(key, method);
+        return method;
     }
 
     private static void visitFunctions(Ast ast, FunctionMapper mapper, Map<String, Method> functions,
