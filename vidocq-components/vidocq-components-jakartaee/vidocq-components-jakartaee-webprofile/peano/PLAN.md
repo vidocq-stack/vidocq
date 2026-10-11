@@ -125,6 +125,16 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 method-expression slice (2026-10-11): compileMethod emits one MethodExpression
+class for literal text, variable delegates and bare/inline property methods. A private
+precompiled protocol bridge reuses captured bindings and helper contracts without
+retaining contexts or syntax. Generated metadata precedes the existing policy-controlled
+public-member metadata fallback; invocation remains resolver-owned, with API fallback
+only for bare references. Return-type validation, literal conversion, inline argument
+evaluation, defensive parameter copies, listener events and serialization follow the
+interpreter. Inline argument trees can include compiled lambdas. Escaped literal text
+uses decoded Template.Text, with a regression for COMP-009.
+
 P7 lambda slice (2026-10-11): lambda bodies emit into the same application-owned
 class through a protected dispatcher. A precompiled API ValueExpression adapter owns
 the expression, body ordinal and nullable lexical argument snapshot; no runtime AST,

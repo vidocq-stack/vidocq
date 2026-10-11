@@ -154,6 +154,26 @@ fallback needs an ExpressionFactory provider because ELUtil performs provider-ba
 coercion during method matching (EL-017); Peano core supplies that provider when installed.
 Captured owner/parameter/return classes and their modules must remain available on restore.
 
+=== Compiled method expressions
+
+ExpressionCompiler.compileMethod(binaryName, source) emits a public final
+CompiledMethodExpression subclass for literal text, a single variable, a property
+method reference or an inline property call. Other method-expression shapes fail at
+build time. Constructors accept (Class, Class[]) or (ELContext, Class, Class[]) for the
+expected return type, expected parameter types and optional creation-time capture.
+Inline calls provide their own arguments and accept null expected parameter types;
+other forms require a parameter array. Parameter arrays are defensively copied.
+
+The emitted class evaluates its target and inline arguments directly. A private
+precompiled API bridge reuses variable/function capture and lambda support without
+retaining a context or syntax tree. Generated accessor tables supply MethodReference
+metadata first. The existing public-member metadata fallback follows peano.reflection
+and Jakarta API package exportability. Method invocation uses the caller's resolver
+chain; only bare references may use API BeanELResolver/StaticFieldELResolver fallback.
+Return validation, literal conversion, listener callbacks, variable delegates, identity
+and serialization retain the interpreter contracts. Allowed API invocation fallback
+requires an ExpressionFactory provider as described above.
+
 == Legacy property-editor boundary
 
 Core, API, processor and compiler do not require java.desktop. Optional artifact

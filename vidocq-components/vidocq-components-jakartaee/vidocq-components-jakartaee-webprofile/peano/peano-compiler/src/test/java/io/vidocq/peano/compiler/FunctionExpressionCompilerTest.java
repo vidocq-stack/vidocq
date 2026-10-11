@@ -64,6 +64,13 @@ class FunctionExpressionCompilerTest {
             assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("MInline","${owner.sum(1,2)}", "MBare","${owner.sum}",
+                "MVariable","${method}","MLiteral","7","MLiteralEscaped","\\${owner.sum}",
+                "MLambda","${owner.apply(x -> x+1)}","MReflection","${Math.abs}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compileMethod("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
         for (String file:List.of("Main.java","Provider.java","Constructed.java")) {
             try (var resource=getClass().getResourceAsStream("/function-app/"+file)) { Files.copy(resource,source.resolve(file)); }

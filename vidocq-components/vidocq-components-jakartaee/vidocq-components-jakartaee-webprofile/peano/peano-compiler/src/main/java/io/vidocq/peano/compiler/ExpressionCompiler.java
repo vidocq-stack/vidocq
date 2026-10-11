@@ -48,6 +48,7 @@ public final class ExpressionCompiler {
     private final java.util.Set<String> functionKeys=new java.util.LinkedHashSet<>();
     private final java.util.Map<Ast.Lambda,Integer> lambdas=new java.util.LinkedHashMap<>();
     private java.util.Set<String> locals=java.util.Set.of();
+    private boolean methodMode;
 
     private ExpressionCompiler(ClassDesc owner,Template template) {
         this.owner=owner;
@@ -170,6 +171,87 @@ public final class ExpressionCompiler {
         });
         } catch (IllegalArgumentException failure) {
             throw new ELException("Cannot emit compiled expression "+binaryName+": "+failure.getMessage(),failure);
+        }
+    }
+
+    /**
+     * Emits a MethodExpression subclass for literal text, identifiers and property method references.
+     * Public constructors accept (Class, Class[]) or (ELContext, Class, Class[]) for expected
+     * return/parameter types and optional creation-time capture. Inline property calls provide
+     * their own parameters. Runtime evaluation uses the caller's resolver and generated metadata.
+     *
+     * @param binaryName qualified binary name of the emitted class
+     * @param source original method expression
+     * @return a fresh Java 25 class file
+     */
+    public static byte[] compileMethod(String binaryName,String source) {
+        Objects.requireNonNull(binaryName,"binaryName"); Objects.requireNonNull(source,"source");
+        if (!binaryName.contains(".") || !SourceVersion.isName(binaryName,SourceVersion.RELEASE_25))
+            throw new IllegalArgumentException("Expected a qualified Java binary name: "+binaryName);
+        var template=ExpressionParser.parse(source);
+        Ast body=template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
+                ? evaluation.body() : null;
+        boolean literal=template.kind()==Template.Kind.LITERAL;
+        if (!literal && !(body instanceof Ast.Identifier || body instanceof Ast.Property
+                || body instanceof Ast.Call call && call.target() instanceof Ast.Property))
+            throw new ELException("Method expression must reference a method or a single variable");
+        int shape=literal ? 0 : body instanceof Ast.Identifier ? 1 : body instanceof Ast.Call ? 3 : 2;
+        String literalValue=literal ? ((Template.Text)template.parts().getFirst()).value() : null;
+        var identity=new StringBuilder(literal ? "method-literal:" : "method-expression:");
+        var names=new java.util.LinkedHashSet<String>();
+        if (literal) key(identity,"text",literalValue); else validate(body,identity,source,names);
+        var owner=ClassDesc.of(binaryName);
+        var compiler=new ExpressionCompiler(owner,template); compiler.methodMode=true;
+        var parent=ClassDesc.of("io.vidocq.peano.spi.CompiledMethodExpression");
+        var classesType=ClassDesc.ofDescriptor("[Ljava/lang/Class;");
+        var namesType=ClassDesc.ofDescriptor("[Ljava/lang/String;");
+        try {
+            return ClassFile.of().build(owner,builder-> {
+                builder.withFlags(ClassFile.ACC_PUBLIC|ClassFile.ACC_FINAL|ClassFile.ACC_SUPER)
+                        .withVersion(ClassFile.JAVA_25_VERSION,0).withSuperclass(parent);
+                builder.withField("serialVersionUID",LONG,field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
+                        .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
+                for (String field:compiler.strings.values()) builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_FINAL);
+                for (boolean capture:new boolean[]{false,true}) {
+                    var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS,classesType) : MethodTypeDesc.of(VOID,CLASS,classesType);
+                    builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
+                        code.aload(0).ldc(source).ldc(identity.toString());
+                        if (capture) code.aload(1).ldc("creationContext").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
+                                MethodTypeDesc.of(OBJECT,OBJECT,STRING)).checkcast(CONTEXT);
+                        else code.aconst_null();
+                        code.aload(capture ? 2 : 1).aload(capture ? 3 : 2).loadConstant(shape);
+                        compiler.emitNames(code,names); compiler.emitNames(code,compiler.functionKeys);
+                        code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CONTEXT,CLASS,classesType,
+                                ClassDesc.ofDescriptor("I"),namesType,namesType));
+                        compiler.initializeStrings(code); code.return_();
+                    });
+                }
+                builder.withMethodBody("evaluatePart",MethodTypeDesc.of(OBJECT,CONTEXT,ClassDesc.ofDescriptor("I")),ClassFile.ACC_PROTECTED,code-> {
+                    var next=code.newLabel(); code.iload(2).iconst_0().if_icmpne(next);
+                    if (literal) code.ldc(literalValue);
+                    else compiler.emit(code,body instanceof Ast.Call call ? ((Ast.Property)call.target()).base()
+                            : body instanceof Ast.Property property ? property.base() : body);
+                    code.areturn().labelBinding(next);
+                    if (shape>=2) {
+                        var afterKey=code.newLabel(); code.iload(2).iconst_1().if_icmpne(afterKey);
+                        compiler.emit(code,body instanceof Ast.Call call ? ((Ast.Property)call.target()).key() : ((Ast.Property)body).key());
+                        code.areturn().labelBinding(afterKey);
+                    }
+                    if (body instanceof Ast.Call call) {
+                        var afterArguments=code.newLabel(); code.iload(2).iconst_2().if_icmpne(afterArguments);
+                        compiler.emitArguments(code,call.arguments()); code.areturn().labelBinding(afterArguments);
+                    }
+                    for (var entry:compiler.lambdas.entrySet()) {
+                        var afterLambda=code.newLabel(); code.iload(2).loadConstant(entry.getValue()+3).if_icmpne(afterLambda);
+                        compiler.emit(code,entry.getKey().body()); code.areturn().labelBinding(afterLambda);
+                    }
+                    var exception=ClassDesc.of("jakarta.el.ELException");
+                    code.new_(exception).dup().ldc("Unknown compiled method expression part")
+                            .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow();
+                });
+            });
+        } catch (IllegalArgumentException failure) {
+            throw new ELException("Cannot emit compiled method expression "+binaryName+": "+failure.getMessage(),failure);
         }
     }
 
@@ -496,6 +578,11 @@ public final class ExpressionCompiler {
         for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
     }
 
+    private void emitArguments(CodeBuilder code,java.util.List<Ast> arguments) {
+        code.loadConstant(arguments.size()).anewarray(OBJECT);
+        for (int i=0;i<arguments.size();i++) { code.dup().loadConstant(i); emit(code,arguments.get(i)); code.aastore(); }
+    }
+
     private void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
         if (node instanceof Ast.Lambda lambda) {
@@ -503,7 +590,8 @@ public final class ExpressionCompiler {
             validate(lambda.body(),new StringBuilder(),"lambda",excluding(names,lambda.parameters()));
             code.aload(0).aload(1).loadConstant(lambdas.get(lambda));
             emitNames(code,lambda.parameters()); emitNames(code,names);
-            code.invokespecial(ClassDesc.of("io.vidocq.peano.spi.CompiledLambdaValueExpression"),"createLambda",
+            code.invokespecial(ClassDesc.of(methodMode ? "io.vidocq.peano.spi.CompiledMethodExpression"
+                    : "io.vidocq.peano.spi.CompiledLambdaValueExpression"),"createLambda",
                     MethodTypeDesc.of(ClassDesc.of("jakarta.el.LambdaExpression"),CONTEXT,ClassDesc.ofDescriptor("I"),
                             ClassDesc.ofDescriptor("[Ljava/lang/String;"),ClassDesc.ofDescriptor("[Ljava/lang/String;")));
             return;
@@ -527,9 +615,11 @@ public final class ExpressionCompiler {
             }
             code.aload(slot); return;
         }
-        var pathBase=ClassDesc.of(lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledPropertyValueExpression"
+        var pathBase=ClassDesc.of(methodMode ? "io.vidocq.peano.spi.CompiledMethodExpression"
+                : lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledPropertyValueExpression"
                 : "io.vidocq.peano.spi.CompiledLambdaValueExpression");
-        var functionBase=ClassDesc.of(lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledFunctionValueExpression"
+        var functionBase=ClassDesc.of(methodMode ? "io.vidocq.peano.spi.CompiledMethodExpression"
+                : lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledFunctionValueExpression"
                 : "io.vidocq.peano.spi.CompiledLambdaValueExpression");
         if (node instanceof Ast.Function function) {
             int arguments=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);

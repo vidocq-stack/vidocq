@@ -32,6 +32,12 @@ public final class Provider implements AccessorProvider {
         public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
         public void setValue(ELContext c,Object b,Object p,Object v) {}
         public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
+        public MethodReference getMethodReference(ELContext context,Object base,String name,Class<?>[] types,Object[] arguments) {
+            if (!(base instanceof ELClass owner) || owner.getKlass()!=Main.Functions.class || !Set.of("sum","apply").contains(name)) return null;
+            return new MethodReference(base,new MethodInfo(name,long.class,name.equals("sum")
+                    ? new Class<?>[]{long.class,long.class} : new Class<?>[]{LambdaExpression.class}),
+                    new java.lang.annotation.Annotation[0],arguments);
+        }
         public Object invoke(ELContext context,Object base,Object property,Class<?>[] types,Object[] arguments) {
             if (!(base instanceof ELClass owner) || owner.getKlass()!=Main.Functions.class) return null;
             String name=(String)property;

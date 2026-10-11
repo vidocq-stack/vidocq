@@ -40,6 +40,15 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: isolated direct-table allow/deny consumers and an additional core-backed
   fallback consumer verify both boundaries; no alternative member-reflection path is added.
 
+## COMP-009 · 2026-10-11 · Literal method compilation retained delimiter escapes
+
+- Symptom: a compiled literal MethodExpression returned a backslash that the interpreter removed.
+- Minimal reproduction: compile the literal source \\${owner.sum}; invoke with expected String.
+  The prototype returned \\${owner.sum}, while the interpreter returns ${owner.sum}.
+- Cause: literal emission and identity used the raw source instead of parsed Template.Text.
+- Status: resolved before publication; emission and identity now use decoded literal text.
+- Evidence: independent API-only escaped-literal regression fixture.
+
 ## COMP-008 · 2026-10-11 · Mapped function calls recreated accessor providers
 
 - Symptom: repeated mapped-function evaluation recreated providers and their catalogs

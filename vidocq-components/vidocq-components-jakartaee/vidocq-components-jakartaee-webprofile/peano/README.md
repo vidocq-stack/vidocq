@@ -97,6 +97,9 @@ with the existing policy-controlled API fallback. Named calls prioritize context
 then captured default-prefix functions and imported constructors/static methods.
 Chained callable results and lambda construction compile with lexical argument capture,
 immediate invocation and nested parameter shadowing. peano-bench remains planned.
+ExpressionCompiler.compileMethod emits MethodExpression classes for literals,
+variables and bare/inline property references, with generated metadata and the existing
+policy-controlled public-member fallback.
 Regenerate pre-v3 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 

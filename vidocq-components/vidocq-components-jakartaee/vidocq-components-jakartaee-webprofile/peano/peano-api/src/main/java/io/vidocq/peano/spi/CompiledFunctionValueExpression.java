@@ -102,7 +102,7 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         return value;
     }
 
-    private static AccessorTable registered(ELContext context,Class<?> owner) {
+    protected static AccessorTable registered(ELContext context,Class<?> owner) {
         ClassLoader loader=Thread.currentThread().getContextClassLoader();
         Object cached=context.getContext(Registry.class);
         if (cached instanceof Registry registry && registry.loader()==loader) return registry.tables().get(owner);

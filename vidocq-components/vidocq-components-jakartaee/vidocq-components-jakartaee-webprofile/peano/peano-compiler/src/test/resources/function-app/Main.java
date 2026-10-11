@@ -26,6 +26,7 @@ public class Main {
         static final ELException failure=new ELException("original");
         public static long sum(long a,long b) { return a+b; }
         public static long alternate(long a,long b) { return a+b+1000; }
+        public static long apply(LambdaExpression lambda) { return ((Number)lambda.invoke(2L)).longValue(); }
         public static String none() { return null; }
         public static long boom() { throw new IllegalStateException("function failure"); }
         public static void original() { throw failure; }
@@ -48,13 +49,17 @@ public class Main {
             public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
             public void setValue(ELContext c,Object b,Object p,Object value) {}
             public Object invoke(ELContext c,Object b,Object p,Class<?>[] t,Object[] a) {
-                check(!c.isPropertyResolved() && t==null,"Imported invocation flags changed");
+                check(!c.isPropertyResolved(),"Imported invocation flags changed");
                 if (b instanceof ELClass owner && owner.getKlass()==Constructed.class && "<init>".equals(p)) {
                     c.setPropertyResolved(b,p); return new Constructed(c.convertToType(a[0],Long.class));
                 }
                 if (b instanceof ELClass owner && owner.getKlass()==Functions.class && "sum".equals(p)) {
                     c.setPropertyResolved(b,p); return Functions.sum(c.convertToType(a[0],Long.class),c.convertToType(a[1],Long.class));
                 }
+                if (b instanceof ELClass owner && owner.getKlass()==Functions.class && "apply".equals(p)) {
+                    c.setPropertyResolved(b,p); return Functions.apply((LambdaExpression)a[0]);
+                }
+                if (b instanceof ELClass owner && owner.getKlass()==Math.class) return null;
                 throw new AssertionError("Mapped function used custom resolver chain");
             }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
@@ -70,6 +75,9 @@ public class Main {
             if (type==Object.class) return (T)value;
             if (type==boolean.class || type==Boolean.class) return (T)Boolean.valueOf(String.valueOf(value));
             if (type==Long.class || type==long.class) { effects.add("long:"+value); return (T)Long.valueOf(value.toString()); }
+            if (type==Float.class || type==float.class) return (T)Float.valueOf(value.toString());
+            if (type==Double.class || type==double.class) return (T)Double.valueOf(value.toString());
+            if (type==Integer.class || type==int.class) return (T)Integer.valueOf(value.toString());
             if (type==String.class) { effects.add("string:"+value); return (T)(value==null ? "" : value.toString()); }
             return type.cast(value);
         }
@@ -212,6 +220,58 @@ public class Main {
                 Object expected=ExpressionFactory.newInstance().createValueExpression(context,compiled.getExpressionString(),Object.class).getValue(context);
                 check(Objects.equals(compiled.getValue(context),expected),"Lambda differential mismatch: "+compiled.getExpressionString());
             }
+        }
+        context.roots.put("owner",new ELClass(Functions.class));
+        var inline=new MInline(context,Long.class,null);
+        check(inline.isParametersProvided() && inline.invoke(context,new Object[]{99L}).equals(3L),"Inline MethodExpression arguments changed");
+        check(inline.getMethodInfo(context).getReturnType()==long.class
+                && Arrays.equals(inline.getMethodReference(context).getEvaluatedParameters(),new Object[]{1L,2L}),"Inline method metadata failed");
+        var bare=new MBare(context,Long.class,new Class<?>[]{long.class,long.class});
+        check(!bare.isParametersProvided() && bare.invoke(context,new Object[]{4L,5L}).equals(9L),"Bare MethodExpression failed");
+        context.roots.put("method",bare);
+        check(new MVariable(context,Number.class,new Class<?>[]{long.class,long.class}).invoke(context,new Object[]{2L,3L}).equals(5L),"Method variable delegate failed");
+        check(new MLiteral(context,Long.class,new Class<?>[0]).invoke(context,null).equals(7L),"Literal method conversion failed");
+        check(new MLiteralEscaped(context,String.class,new Class<?>[0]).invoke(context,null).equals("${owner.sum}"),"Literal method escape decoding failed");
+        check(new MLambda(context,Long.class,null).invoke(context,null).equals(3L),"Inline lambda method argument failed");
+        Class<?>[] declaredTypes={long.class,long.class};
+        var copiedTypes=new MBare(context,Long.class,declaredTypes); declaredTypes[0]=String.class;
+        check(copiedTypes.equals(bare),"Method parameter types were not defensively copied");
+        var methodBytes=new java.io.ByteArrayOutputStream();
+        try (var output=new java.io.ObjectOutputStream(methodBytes)) { output.writeObject(bare); }
+        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(methodBytes.toByteArray()))) {
+            var restored=(MethodExpression)input.readObject();
+            check(restored.equals(bare) && restored.hashCode()==bare.hashCode()
+                    && restored.invoke(context,new Object[]{4L,5L}).equals(9L),"Method expression restoration failed");
+        }
+        var reflected=new MReflection(context,Long.class,new Class<?>[]{long.class});
+        if ("deny".equals(System.getProperty("peano.reflection"))) {
+            try { reflected.getMethodInfo(context); throw new AssertionError("Unregistered method metadata allowed"); }
+            catch (ELException expected) { check(expected.getMessage().contains("Reflection fallback denied"),"Unexpected method denial"); }
+        } else if (coreFallback) {
+            check(reflected.getMethodInfo(context).getReturnType()==long.class
+                    && reflected.invoke(context,new Object[]{-7L}).equals(7L),"API method reflection fallback failed");
+        }
+        try { new MInline(context,String.class,null).invoke(context,null); throw new AssertionError("Return mismatch accepted"); }
+        catch (MethodNotFoundException expected) {}
+        if (coreFallback) {
+            for (MethodExpression compiled:List.of(inline,bare,new MLambda(context,Long.class,null))) {
+                var interpreted=ExpressionFactory.newInstance().createMethodExpression(context,compiled.getExpressionString(),Long.class,
+                        compiled.isParametersProvided() ? null : new Class<?>[]{long.class,long.class});
+                check(Objects.equals(compiled.invoke(context,new Object[]{4L,5L}),interpreted.invoke(context,new Object[]{4L,5L})),"Method differential failed");
+            }
+            var events=new ArrayList<String>();
+            context.addEvaluationListener(new EvaluationListener() {
+                public void beforeEvaluation(ELContext c,String source) { events.add("before:"+source); }
+                public void afterEvaluation(ELContext c,String source) { events.add("after:"+source); }
+            });
+            var outer=new MVariable(context,Number.class,new Class<?>[]{long.class,long.class});
+            context.roots.put("method",bare); outer.invoke(context,new Object[]{4L,5L});
+            var compiledEvents=List.copyOf(events); events.clear();
+            var factory=ExpressionFactory.newInstance();
+            context.roots.put("method",factory.createMethodExpression(context,bare.getExpressionString(),Long.class,new Class<?>[]{long.class,long.class}));
+            factory.createMethodExpression(context,outer.getExpressionString(),Number.class,new Class<?>[]{long.class,long.class})
+                    .invoke(context,new Object[]{4L,5L});
+            check(events.equals(compiledEvents),"Delegated listener events differ from oracle: "+events+" / "+compiledEvents);
         }
         System.out.println("PEANO_COMPILED_FUNCTION_OK");
     }
