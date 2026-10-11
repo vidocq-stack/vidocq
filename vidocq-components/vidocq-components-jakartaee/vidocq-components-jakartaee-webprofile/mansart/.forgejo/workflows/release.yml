@@ -66,6 +66,9 @@ jobs:
             mansart-data-external-it
             mansart-transactions-cdi-module-it
             mansart-transactions-tests
+            mansart-validation
+            mansart-validation-core
+            mansart-validation-core-module-it
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
