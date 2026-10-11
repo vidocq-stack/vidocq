@@ -33,17 +33,21 @@ import org.openjdk.jmh.annotations.*;
 public class CreationBenchmark {
     @Param({"peano","expressly"})
     public String engine;
+    @Param({"arithmetic","property","lambda","collection"})
+    public String fixture;
     private ExpressionFactory factory;
     private ELContext context;
+    private String source;
 
     @Setup(Level.Trial)
     public void setup() {
         Fixtures.verifyModules();
         factory=Fixtures.factory(engine); context=Fixtures.context(factory);
+        source=Fixtures.source(fixture);
     }
 
     /** Measures repeated creation for one source, including any provider expression cache. */
     @Benchmark public ValueExpression create() {
-        return factory.createValueExpression(context,Fixtures.SOURCE,Object.class);
+        return factory.createValueExpression(context,source,Object.class);
     }
 }

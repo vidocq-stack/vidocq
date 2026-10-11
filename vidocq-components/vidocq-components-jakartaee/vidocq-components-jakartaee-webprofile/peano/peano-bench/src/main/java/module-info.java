@@ -29,4 +29,7 @@ module io.vidocq.peano.bench {
     uses jakarta.el.ExpressionFactory;
     exports io.vidocq.peano.bench to jmh.core;
     exports io.vidocq.peano.bench.jmh_generated to jmh.core;
+    // The reflective Expressly baseline needs access to the public model getter.
+    exports io.vidocq.peano.bench.model to jakarta.el;
+    provides io.vidocq.peano.spi.AccessorProvider with io.vidocq.peano.bench.model.Model__PeanoAccessors;
 }

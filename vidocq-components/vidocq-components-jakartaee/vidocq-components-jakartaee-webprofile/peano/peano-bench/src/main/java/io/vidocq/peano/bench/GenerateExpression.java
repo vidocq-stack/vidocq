@@ -28,8 +28,11 @@ import io.vidocq.peano.compiler.ExpressionCompiler;
 public final class GenerateExpression {
     private GenerateExpression() {}
     public static void main(String[] arguments) throws Exception {
-        Path output=Path.of(arguments[0]).resolve("io/vidocq/peano/bench/GeneratedArithmetic.class");
-        Files.createDirectories(output.getParent());
-        Files.write(output,ExpressionCompiler.compile("io.vidocq.peano.bench.GeneratedArithmetic",Fixtures.SOURCE));
+        for (String fixture:Fixtures.CASES) {
+            String name=Fixtures.binaryName(fixture);
+            Path output=Path.of(arguments[0]).resolve(name.replace('.','/')+".class");
+            Files.createDirectories(output.getParent());
+            Files.write(output,ExpressionCompiler.compile(name,Fixtures.source(fixture)));
+        }
     }
 }

@@ -102,3 +102,74 @@ improves evaluation over its interpreter. No broader performance conclusion foll
 from one arithmetic expression. Repeated creation includes provider caches.
 Delta vs previous comparable run: none; this is the first valid baseline. The earlier
 prototype is excluded because its factory association differed.
+
+## 2026-10-11 · Arithmetic, property, lambda and collection corpus
+
+Same Apple M5 Max/Mac17,6, 18 logical CPUs, 128 GiB RAM, macOS 27.0.1 and Temurin
+25+36-LTS as above. JMH 1.37, Expressly 6.0.0, Jakarta EL API 6.0.1, one thread,
+reflection policy allow, named modules. Workstation load/frequency/thermal state remain
+uncontrolled; these are exploratory measurements.
+
+Fixtures share the same variable/context inputs for all engines:
+
+| Fixture | Expression | Expected result |
+|---|---|---|
+| arithmetic | `${(a+2)*3}` | 27L |
+| property | `${model.value}` | 7L |
+| lambda | `${(x -> x+1)(a)}` | 8L |
+| collection | `${[a,2,3]}` | [7L, 2L, 3L] |
+
+a=7L and model has a public getValue() returning 7L. Peano's property path uses the
+application's APT-generated table; Expressly uses the API BeanELResolver reflective
+getter. The model package is exported only to jakarta.el for that baseline, with no opens.
+Both use the same model. This intentionally compares generated vs reflective access,
+not two reflective engines. Other fixtures have no model property access.
+
+Each context stores its selected factory explicitly. Expression construction, source
+selection, compilation and reflective constructor lookup stay outside evaluation timing.
+Repeated creation still includes provider caches. Semantic checks run before timing.
+The compiler and processor are absent from benchmark runtime dependencies.
+
+Exact command (Java 25 environment above), from the checkout root:
+
+```bash
+./mvnw -ntp -Pbench,beans-compat clean package
+./run-bench.sh -wi 2 -w 500ms -i 3 -r 500ms -f 2 -rf json -rff peano-bench/target/jmh-2026-10-11-corpus.json
+```
+
+Two forks, two 500ms warmups and three 500ms measurements per fork, six samples
+per combination. Raw aggregate values (dot decimal; JMH score/error):
+
+```text
+benchmark | engine | fixture | score | error | unit
+CreationBenchmark.create | peano | arithmetic | 306.893 | 6.745 | ns/op
+CreationBenchmark.create | peano | property | 215.965 | 15.134 | ns/op
+CreationBenchmark.create | peano | lambda | 489.720 | 9.685 | ns/op
+CreationBenchmark.create | peano | collection | 364.113 | 5.567 | ns/op
+CreationBenchmark.create | expressly | arithmetic | 25.525 | 1.095 | ns/op
+CreationBenchmark.create | expressly | property | 24.068 | 0.183 | ns/op
+CreationBenchmark.create | expressly | lambda | 30.798 | 0.510 | ns/op
+CreationBenchmark.create | expressly | collection | 24.417 | 0.638 | ns/op
+EvaluationBenchmark.evaluate | peano | arithmetic | 189.967 | 4.345 | ns/op
+EvaluationBenchmark.evaluate | peano | property | 70.236 | 1.357 | ns/op
+EvaluationBenchmark.evaluate | peano | lambda | 203.987 | 2.353 | ns/op
+EvaluationBenchmark.evaluate | peano | collection | 71.554 | 3.807 | ns/op
+EvaluationBenchmark.evaluate | expressly | arithmetic | 51.717 | 5.370 | ns/op
+EvaluationBenchmark.evaluate | expressly | property | 83.406 | 3.695 | ns/op
+EvaluationBenchmark.evaluate | expressly | lambda | 107.603 | 4.207 | ns/op
+EvaluationBenchmark.evaluate | expressly | collection | 54.065 | 2.359 | ns/op
+EvaluationBenchmark.evaluate | compiled | arithmetic | 164.142 | 1.677 | ns/op
+EvaluationBenchmark.evaluate | compiled | property | 72.776 | 0.669 | ns/op
+EvaluationBenchmark.evaluate | compiled | lambda | 155.380 | 8.539 | ns/op
+EvaluationBenchmark.evaluate | compiled | collection | 74.178 | 7.488 | ns/op
+```
+
+[Complete raw JMH JSON](peano-bench/results/2026-10-11-corpus.json) includes JVM
+arguments and every sample. On these inputs, Peano's generated property access is
+faster than Expressly's reflective property access; Expressly is faster on the other
+evaluated fixtures. Compiled evaluation improves Peano arithmetic/lambda evaluation,
+without a demonstrated improvement for the property/collection fixtures.
+
+Delta vs previous comparable corpus run: none; this is the first corpus baseline.
+The earlier arithmetic-only run uses a different context/provider catalogue and a
+longer measurement protocol, so its delta is not an implementation performance comparison.

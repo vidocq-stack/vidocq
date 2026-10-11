@@ -32,8 +32,10 @@ class BenchmarkSemanticsTest {
     }
     @Test void allEvaluationEnginesProduceTheSameResult() throws Exception {
         for (String engine:new String[]{"peano","expressly","compiled"}) {
-            var state=new EvaluationBenchmark(); state.engine=engine; state.setup();
-            assertEquals(27L,state.evaluate(),engine);
+            for (String fixture:new String[]{"arithmetic","property","lambda","collection"}) {
+                var state=new EvaluationBenchmark(); state.engine=engine; state.fixture=fixture; state.setup();
+                assertEquals(Fixtures.expected(fixture),state.evaluate(),engine+":"+fixture);
+            }
         }
     }
 }

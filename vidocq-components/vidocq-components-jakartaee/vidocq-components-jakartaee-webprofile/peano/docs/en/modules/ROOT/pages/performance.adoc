@@ -3,7 +3,7 @@
 
 [.lead]
 The opt-in peano-bench module compares interpreted Peano, build-time compiled Peano
-and Expressly using the same arithmetic fixture. Semantic agreement is checked before
+and Expressly using arithmetic, property, lambda and collection fixtures. Semantic agreement is checked before
 timing. Initial local results and raw samples are recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md]; they are exploratory workstation measurements.
 
@@ -27,6 +27,9 @@ Repeated creation includes implementation caches; it does not isolate uncached p
 * Generated-accessor resolution vs the spec's reflective `BeanELResolver`.
 * Peano vs Expressly (the Jakarta EE compatible implementation) on the same corpus.
 
-The first arithmetic baseline is available. A broader expression/property corpus and
-generated-accessor comparisons remain planned. Every figure is recorded in
+The corpus includes a shared public-getter model: Peano uses its generated table,
+while Expressly uses reflective BeanELResolver access. The model package has a qualified
+export to jakarta.el for that baseline, with no opens. Creation includes implementation
+caches. Stream pipelines and larger application corpora remain future measurements.
+Every figure is recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.

@@ -21,10 +21,34 @@
 package io.vidocq.peano.bench;
 
 import java.util.ServiceLoader;
+import java.util.List;
+import io.vidocq.peano.bench.model.Model;
 import jakarta.el.*;
 
 final class Fixtures {
     static final String SOURCE="${(a+2)*3}";
+    static final List<String> CASES=List.of("arithmetic","property","lambda","collection");
+    static String source(String fixture) {
+        return switch (fixture) {
+            case "arithmetic" -> SOURCE;
+            case "property" -> "${model.value}";
+            case "lambda" -> "${(x -> x+1)(a)}";
+            case "collection" -> "${[a,2,3]}";
+            default -> throw new IllegalArgumentException("Unknown fixture "+fixture);
+        };
+    }
+    static Object expected(String fixture) {
+        return switch (fixture) {
+            case "arithmetic" -> 27L;
+            case "property" -> 7L;
+            case "lambda" -> 8L;
+            case "collection" -> List.of(7L,2L,3L);
+            default -> throw new IllegalArgumentException("Unknown fixture "+fixture);
+        };
+    }
+    static String binaryName(String fixture) {
+        return "io.vidocq.peano.bench.Generated"+Character.toUpperCase(fixture.charAt(0))+fixture.substring(1);
+    }
     static void verifyModules() {
         Module module=Fixtures.class.getModule();
         if (!module.isNamed() || module.getLayer().findModule("io.vidocq.peano.compiler").isPresent())
@@ -40,6 +64,7 @@ final class Fixtures {
         var context=new StandardELContext(factory);
         context.putContext(ExpressionFactory.class,factory);
         context.getVariableMapper().setVariable("a",factory.createValueExpression(7L,Long.class));
+        context.getVariableMapper().setVariable("model",factory.createValueExpression(new Model(7),Model.class));
         return context;
     }
     private Fixtures() {}

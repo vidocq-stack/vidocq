@@ -137,7 +137,11 @@ runs JMH 1.37 against Expressly 6.0.0 using named modules, including forks. Init
 arithmetic evaluation covers interpreted/compiled Peano and Expressly; repeated creation
 includes provider caches. Semantic agreement and compiler absence are enforced before
 timing. Compiled expression emission runs only at process-classes. Raw baseline samples
-and limitations are recorded in BENCH.md; broader corpora and runtime integration remain.
+and limitations are recorded in BENCH.md. The expanded corpus covers arithmetic,
+generated-vs-reflective properties, lambdas and collections, with semantic agreement
+before timing and raw samples retained. Runtime integration is implemented in Vidocq
+PR #226, including the codegen bundle, CLI and compiled descriptor registration;
+its assembled-runtime checks are monitored separately.
 
 P7 method-expression slice (2026-10-11): compileMethod emits one MethodExpression
 class for literal text, variable delegates and bare/inline property methods. A private

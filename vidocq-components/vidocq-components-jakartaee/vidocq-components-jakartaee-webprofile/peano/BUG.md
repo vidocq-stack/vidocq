@@ -46,7 +46,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Minimal reproduction: push job 81398 at commit 7a6754b reports
   getaddrinfo EAI_AGAIN api.adoptium.net before Maven starts.
 - Cause: external runner DNS availability during the Adoptium API request.
-- Status: retry in progress through a signed branch/PR; no implementation change needed.
+- Status: resolved through signed retry e2710c5 and PR #40; the main optional-profile
+  job, TCK and benchmark checks pass. No implementation change was needed.
   All five PR checks passed, as did main build/deployment, TCK and benchmark validation.
 - Evidence: run 36666 startup log; the published processor snapshot contains the Maven
   service resource and the real named Maven consumer passes allow/deny modes.
@@ -135,6 +136,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Recurrence: PR #34 TCK job 81191 at commit 5edc17a failed with the same Docker
   startup error before tests. Signed retry 27d75be passed all four merge checks;
   PR #34 was then merged. No source change was needed for either incident.
+  PR #40 jobs 81414, 81415 and 81417 hit the same startup failure at e515c80;
+  signed retry e2710c5 passed all five PR checks before merge.
 - Further recurrence: PR #35 TCK job 81224 failed with the same startup error;
   signed retry 8165319 passed all PR checks before merge.
 

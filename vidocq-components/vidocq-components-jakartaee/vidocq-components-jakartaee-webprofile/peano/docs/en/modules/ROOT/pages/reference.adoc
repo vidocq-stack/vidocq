@@ -199,6 +199,11 @@ execution. Trial setup asserts named modules and compiler absence. Install, depl
 source/Javadoc packaging, signing and Central publication are disabled for this module.
 JMH owns platform benchmark threads for CPU timing; runtime I/O conventions are unchanged.
 
+Peano's accessor processor also generates the shared public-getter benchmark table.
+Its provider is declared in the benchmark module; the model package is exported only
+to jakarta.el for Expressly's reflective baseline. No opens are introduced. Compiled
+arithmetic, property, lambda and collection fixtures are emitted at process-classes.
+
 == Legacy property-editor boundary
 
 Core, API, processor and compiler do not require java.desktop. Optional artifact

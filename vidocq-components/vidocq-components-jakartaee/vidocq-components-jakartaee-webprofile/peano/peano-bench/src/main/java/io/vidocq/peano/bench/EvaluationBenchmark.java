@@ -33,6 +33,8 @@ import org.openjdk.jmh.annotations.*;
 public class EvaluationBenchmark {
     @Param({"peano","expressly","compiled"})
     public String engine;
+    @Param({"arithmetic","property","lambda","collection"})
+    public String fixture;
     private ELContext context;
     private ValueExpression expression;
 
@@ -42,12 +44,12 @@ public class EvaluationBenchmark {
         var factory=Fixtures.factory(engine);
         context=Fixtures.context(factory);
         expression=engine.equals("compiled")
-                ? (ValueExpression)Class.forName("io.vidocq.peano.bench.GeneratedArithmetic")
+                ? (ValueExpression)Class.forName(Fixtures.binaryName(fixture))
                     .getConstructor(ELContext.class,Class.class).newInstance(context,Object.class)
-                : factory.createValueExpression(context,Fixtures.SOURCE,Object.class);
+                : factory.createValueExpression(context,Fixtures.source(fixture),Object.class);
         if (!expression.getClass().getModule().isNamed())
             throw new IllegalStateException("Expression implementation must remain on the module path");
-        if (!Long.valueOf(27).equals(expression.getValue(context)))
+        if (!Fixtures.expected(fixture).equals(expression.getValue(context)))
             throw new IllegalStateException("Benchmark engines must agree before measurement");
     }
 
