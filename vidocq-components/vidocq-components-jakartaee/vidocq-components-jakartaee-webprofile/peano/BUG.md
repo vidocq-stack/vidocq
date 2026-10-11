@@ -40,6 +40,17 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: isolated direct-table allow/deny consumers and an additional core-backed
   fallback consumer verify both boundaries; no alternative member-reflection path is added.
 
+## CI-002 · 2026-10-11 · Adoptium DNS failed before optional-profile tests
+
+- Symptom: the main optional-editor-compatibility job failed during JDK setup after PR #39.
+- Minimal reproduction: push job 81398 at commit 7a6754b reports
+  getaddrinfo EAI_AGAIN api.adoptium.net before Maven starts.
+- Cause: external runner DNS availability during the Adoptium API request.
+- Status: retry in progress through a signed branch/PR; no implementation change needed.
+  All five PR checks passed, as did main build/deployment, TCK and benchmark validation.
+- Evidence: run 36666 startup log; the published processor snapshot contains the Maven
+  service resource and the real named Maven consumer passes allow/deny modes.
+
 ## PROC-001 · 2026-10-11 · Maven processor paths did not discover the accessor processor
 
 - Symptom: a Maven application compiled its annotated model without producing accessor tables.
