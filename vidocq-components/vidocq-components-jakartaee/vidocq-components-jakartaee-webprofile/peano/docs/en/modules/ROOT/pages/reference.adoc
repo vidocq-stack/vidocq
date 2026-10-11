@@ -24,7 +24,7 @@ It supports null, boolean, string, integer and floating values, minus, not/! and
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
 % (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
 sequences are emitted directly. Standalone root identifiers and property navigation are
-also supported; calls and dynamic comparison operands are rejected in this slice.
+also supported, including resolved arithmetic and comparisons. Calls are rejected in this slice.
 List, set and map literals emit fresh mutable JDK collections, preserving order, nulls
 and duplicate handling. Their elements can include captured root/property values and
 supported operator/collection trees.
@@ -106,6 +106,10 @@ promotion, floating/integral operations, HALF_UP decimal division and modulo rul
 Unary minus preserves Byte, Short, Integer, Long, Float, Double, BigInteger and BigDecimal
 types. Both operands are read before numeric conversion; null becomes Long zero, and
 math guards preserve ELException or wrap other RuntimeExceptions with their cause.
+Resolved comparisons retain BigDecimal/floating/BigInteger/integral/boolean/enum/string
+precedence, reference/null shortcuts, scale-sensitive decimal equality and NaN ordering.
+Equality passes raw RHS conversion results to equals. Enum conversion targets the
+declaring class; Object.equals and Comparable callbacks remain available as fallbacks.
 
 == Legacy property-editor boundary
 

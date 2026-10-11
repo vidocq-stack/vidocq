@@ -451,7 +451,7 @@ class ExpressionCompilerTest {
 
     @Test
     void rejectsUnsupportedNodesAndInvalidBinaryNamesAtBuildTime() {
-        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${bean.value==1}"));
+        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${bean.call()}"));
         assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${value=2}"));
         assertThrows(IllegalArgumentException.class,()->ExpressionCompiler.compile("demo.bad-name","${7}"));
         assertThrows(NullPointerException.class,()->ExpressionCompiler.compile("demo.Missing",null));

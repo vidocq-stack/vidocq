@@ -41,6 +41,28 @@ class NumericExpressionCompilerTest {
                 Character.valueOf('7'),Character.valueOf('\uffff'),"7","1.5","2e2","","invalid",true,
                 Byte.MIN_VALUE,Short.MIN_VALUE,Integer.MIN_VALUE,-0.0f);
         var bodies=List.of("${a+b}","${a-b}","${a*b}","${a/b}","${a%b}","${-a}");
+        verifyMatrix(values,bodies,true);
+    }
+
+    record Token(int value) {}
+    record AnyComparable(int result) implements Comparable<Object> {
+        public int compareTo(Object other) { return result; }
+    }
+
+    @Test
+    void runtimeComparisonDomainsMatchInterpreterWithoutBuildModules() throws Exception {
+        var values=Arrays.<Object>asList(null,0L,7L,-2L,1.5,-0.0,Double.NaN,Double.POSITIVE_INFINITY,
+                new BigInteger("7"),new BigInteger("123456789012345678901234567890"),
+                new BigDecimal("7.0"),new BigDecimal("7"),new BigDecimal("1.25"),(byte)7,(short)-3,7,1.5f,Float.NaN,
+                Character.valueOf('7'),Character.valueOf('\uffff'),"7","1.5","","true","invalid","HALF_UP",true,false,
+                RoundingMode.HALF_UP,RoundingMode.HALF_DOWN,new ArrayList<>(List.of(1)),new ArrayList<>(List.of(2)),
+                new LinkedHashMap<>(Map.of("x",1)),new LinkedHashMap<>(Map.of("x",2)),
+                java.time.LocalDate.parse("2026-01-01"),java.time.LocalDate.parse("2026-01-02"),
+                new Token(1),new AnyComparable(Integer.MIN_VALUE),new AnyComparable(Integer.MAX_VALUE));
+        verifyMatrix(values,List.of("${a==b}","${a!=b}","${a<b}","${a>b}","${a<=b}","${a>=b}"),false);
+    }
+
+    private void verifyMatrix(List<Object> values,List<String> bodies,boolean numeric) throws Exception {
         Path classes=temporary.resolve("classes"); Files.createDirectories(classes.resolve("demo"));
         for (int i=0;i<bodies.size();i++) {
             byte[] bytes=ExpressionCompiler.compile("demo.N"+i,bodies.get(i));
@@ -63,7 +85,7 @@ class NumericExpressionCompilerTest {
         var cases=new ArrayList<String>();
         for (int op=0;op<bodies.size();op++) {
             var expression=factory.createValueExpression(oracle,bodies.get(op),Object.class);
-            for (int a=0;a<values.size();a++) for (int b=0;b<(op==5 ? 1 : values.size());b++) {
+            for (int a=0;a<values.size();a++) for (int b=0;b<(numeric && op==5 ? 1 : values.size());b++) {
                 roots.put("a",values.get(a)); roots.put("b",values.get(b));
                 cases.add(op+"\t"+a+"\t"+b+"\t"+outcome(()->expression.getValue(oracle))+"\t"+outcome(()->expression.getType(oracle)));
             }
@@ -78,7 +100,9 @@ class NumericExpressionCompilerTest {
                 "-d",classes.toString(),source.resolve("module-info.java").toString(),source.resolve("Main.java").toString()));
         for (String mode:List.of("allow","deny"))
             assertTrue(run(List.of(bin("java"),"-Dpeano.reflection="+mode,"--module-path",modules+File.pathSeparator+classes,
-                    "--module","peano.numericconsumer/demo.Main",temporary.toString())).contains("PEANO_NUMERIC_CASES:"+cases.size()));
+                    "--module","peano.numericconsumer/demo.Main",temporary.toString(),numeric ? "numeric" : "comparison"))
+                    .contains("PEANO_NUMERIC_CASES:"+cases.size()));
+        System.out.println((numeric ? "Numeric" : "Comparison")+" differential cases: "+cases.size());
     }
     private String outcome(java.util.function.Supplier<Object> operation) {
         try {
@@ -91,6 +115,8 @@ class NumericExpressionCompilerTest {
     private String wire(Object value) {
         if (value==null) return "null:";
         String text=value instanceof Character c ? Integer.toString(c) : value.toString();
+        if (value instanceof Token token) text=Integer.toString(token.value());
+        if (value instanceof AnyComparable comparable) text=Integer.toString(comparable.result());
         if (value instanceof String) text=Base64.getEncoder().encodeToString(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return value.getClass().getSimpleName()+":"+text;
     }

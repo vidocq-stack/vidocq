@@ -44,6 +44,13 @@ public class Main {
             if (effects!=null) effects.add("convert:"+type.getName());
             if (type==Object.class || type.isInstance(value)) return (T)value;
             try {
+                if (type==String.class) return (T)(value==null ? "" : value.toString());
+                if (type==Boolean.class || type==boolean.class) {
+                    if (value==null || "".equals(value)) return (T)Boolean.FALSE;
+                    if (value instanceof String s) return (T)Boolean.valueOf(s);
+                    throw new ELException("Cannot coerce to "+type.getTypeName());
+                }
+                if (type.isEnum() && value instanceof String s) return s.isEmpty() ? null : (T)Enum.valueOf((Class)type,s);
                 if (value==null || "".equals(value)) value=0L;
                 if (value instanceof Character c) value=(short)c.charValue();
                 if (value instanceof String s) {
@@ -63,6 +70,10 @@ public class Main {
             catch (RuntimeException failure) { throw new ELException("Cannot coerce to "+type.getTypeName(),failure); }
         }
     }
+    record Token(int value) {}
+    record AnyComparable(int result) implements Comparable<Object> {
+        public int compareTo(Object other) { return result; }
+    }
     static Object decode(String wire) {
         String[] parts=wire.split(":",2); String text=parts[1];
         return switch(parts[0]) {
@@ -71,6 +82,11 @@ public class Main {
             case "Byte"->Byte.valueOf(text); case "Short"->Short.valueOf(text); case "Integer"->Integer.valueOf(text);
             case "Float"->Float.valueOf(text); case "Character"->Character.valueOf((char)Integer.parseInt(text));
             case "Boolean"->Boolean.valueOf(text);
+            case "RoundingMode"->RoundingMode.valueOf(text);
+            case "ArrayList"->new ArrayList<>(List.of(Integer.parseInt(text.substring(1,text.length()-1))));
+            case "LinkedHashMap"->new LinkedHashMap<>(Map.of("x",Integer.parseInt(text.substring(3,text.length()-1))));
+            case "LocalDate"->java.time.LocalDate.parse(text);
+            case "Token"->new Token(Integer.parseInt(text)); case "AnyComparable"->new AnyComparable(Integer.parseInt(text));
             case "String"->new String(Base64.getDecoder().decode(text),java.nio.charset.StandardCharsets.UTF_8);
             default->throw new AssertionError(wire);
         };
@@ -100,6 +116,7 @@ public class Main {
                 throw new AssertionError("Numeric case "+row+"; inputs "+context.a+" / "+context.b+"; actual "+value+" | "+type);
             count++;
         }
+        if (args[1].equals("numeric")) {
         var nullBig=new Context() {
             public <T> T convertToType(Object value,Class<T> type) {
                 if (type==BigDecimal.class) { effects.add("convert:"+type.getName()); return null; }
@@ -125,6 +142,7 @@ public class Main {
             if (!(expected.getCause() instanceof NullPointerException)
                     || !nullDouble.effects.equals(List.of("read:a","read:b","convert:java.lang.Double")))
                 throw new AssertionError("Double conversion effects: "+nullDouble.effects,expected);
+        }
         }
         System.out.println("PEANO_NUMERIC_CASES:"+count);
     }

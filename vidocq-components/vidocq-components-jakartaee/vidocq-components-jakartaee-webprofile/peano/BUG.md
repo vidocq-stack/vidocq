@@ -27,6 +27,16 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## CI-001 · 2026-10-11 · Runner Docker daemon unavailable at job startup
+
+- Symptom: PR #29 governance and optional-profile jobs failed before checkout or tests.
+- Minimal reproduction: jobs 81029, 81031 and 81032 at commit 20ea0b7 report
+  "Cannot connect to the Docker daemon at tcp://[::1]:2376". The TCK job passed.
+- Cause: external runner Docker availability; no repository command had executed.
+- Status: resolved after retrying the same validated tree through signed commit
+  de2b5b8. Governance, full PR validation, optional profile and TCK passed before merge.
+- Evidence: actions runs 36421–36423 startup logs; local reactor and official TCK pass.
+
 ## COMP-006 · 2026-10-11 · Property helper calls needed emitted class loading to verify
 
 - Symptom: standalone Class-File verification could not resolve the unloaded generated

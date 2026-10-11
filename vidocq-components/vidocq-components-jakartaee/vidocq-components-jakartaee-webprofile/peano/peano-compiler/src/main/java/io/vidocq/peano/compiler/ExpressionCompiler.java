@@ -341,8 +341,6 @@ public final class ExpressionCompiler {
                     || comparison(binary.operator().kind()) || binary.operator().kind()==TokenKind.CONCAT
                     || binary.operator().kind()==TokenKind.SEMICOLON)) {
             key(identity,"binary",binary.operator().kind().name());
-            if (comparison(binary.operator().kind()) && containsResolved(binary))
-                throw new ELException("Dynamic comparison operands are not compiled in template: "+source);
             validate(binary.left(),identity,source,names);
             validate(binary.right(),identity,source,names);
         } else if (node instanceof Ast.Conditional conditional) {
@@ -665,7 +663,8 @@ public final class ExpressionCompiler {
 
     private static void converted(CodeBuilder code,int slot,ClassDesc cast,ClassDesc target) {
         code.aload(1).aload(slot).ldc(target).invokevirtual(CONTEXT,"convertToType",
-                MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(cast);
+                MethodTypeDesc.of(OBJECT,OBJECT,CLASS));
+        if (cast!=null) code.checkcast(cast);
     }
 
     private static void orderedBranch(CodeBuilder code,TokenKind operator,java.lang.classfile.Label truth) {
@@ -692,6 +691,7 @@ public final class ExpressionCompiler {
         boolean equality=operator==TokenKind.EQUAL || operator==TokenKind.NOT_EQUAL;
         var truth=code.newLabel(); var falsity=code.newLabel(); var boxed=code.newLabel();
         var floating=code.newLabel(); var integral=code.newLabel(); var bool=code.newLabel(); var text=code.newLabel();
+        var decimal=code.newLabel(); var bigInteger=code.newLabel(); var enumLeft=code.newLabel(); var enumRight=code.newLabel();
         var fallback=code.newLabel();
         var start=code.newLabel(); var end=code.newLabel(); var handler=code.newLabel(); var done=code.newLabel();
         code.labelBinding(start).aload(left).aload(right).if_acmpeq(equality
@@ -700,11 +700,33 @@ public final class ExpressionCompiler {
         var doubleType=ClassDesc.of("java.lang.Double");
         var longType=ClassDesc.of("java.lang.Long");
         var booleanType=ClassDesc.of("java.lang.Boolean");
+        var decimalType=ClassDesc.of("java.math.BigDecimal"); var integerType=ClassDesc.of("java.math.BigInteger");
+        var enumType=ClassDesc.of("java.lang.Enum");
+        pairType(code,left,right,decimalType,decimal);
         pairType(code,left,right,doubleType,floating);
+        pairType(code,left,right,ClassDesc.of("java.lang.Float"),floating);
+        pairType(code,left,right,integerType,bigInteger);
         pairType(code,left,right,longType,integral);
-        if (equality) pairType(code,left,right,booleanType,bool);
+        for (String name:java.util.List.of("Byte","Short","Integer","Character"))
+            pairType(code,left,right,ClassDesc.of("java.lang."+name),integral);
+        if (equality) {
+            pairType(code,left,right,booleanType,bool);
+            code.aload(left).instanceOf(enumType).ifne(enumLeft).aload(right).instanceOf(enumType).ifne(enumRight);
+        }
         pairType(code,left,right,STRING,text);
-        code.goto_(fallback).labelBinding(floating);
+        code.goto_(fallback);
+        for (var entry:java.util.List.of(java.util.Map.entry(decimalType,decimal),java.util.Map.entry(integerType,bigInteger))) {
+            var type=entry.getKey(); code.labelBinding(entry.getValue());
+            converted(code,left,type);
+            converted(code,right,equality ? null : type,type);
+            if (equality) code.invokevirtual(type,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
+            else {
+                code.invokevirtual(type,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),type));
+                orderedBranch(code,operator,truth);
+            }
+            code.goto_(falsity);
+        }
+        code.labelBinding(floating);
         converted(code,left,doubleType);
         code.invokevirtual(doubleType,"doubleValue",MethodTypeDesc.of(DOUBLE));
         converted(code,right,doubleType);
@@ -713,7 +735,7 @@ public final class ExpressionCompiler {
         orderedBranch(code,operator,truth);
         code.goto_(falsity).labelBinding(integral);
         if (equality) {
-            converted(code,left,longType); converted(code,right,longType);
+            converted(code,left,longType); converted(code,right,null,longType);
             code.invokevirtual(longType,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
         } else {
             converted(code,left,longType);
@@ -724,15 +746,26 @@ public final class ExpressionCompiler {
         }
         code.goto_(falsity).labelBinding(bool);
         if (equality) {
-            converted(code,left,booleanType); converted(code,right,booleanType);
+            converted(code,left,booleanType); converted(code,right,null,booleanType);
             code.invokevirtual(booleanType,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
         } else {
             code.aload(left).checkcast(booleanType).aload(right).checkcast(booleanType)
                     .invokevirtual(booleanType,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),booleanType));
             orderedBranch(code,operator,truth);
         }
-        code.goto_(falsity).labelBinding(text);
-        converted(code,left,STRING); converted(code,right,STRING);
+        code.goto_(falsity);
+        if (equality) {
+            for (boolean leftEnum:new boolean[]{true,false}) {
+                int owner=leftEnum ? left : right, other=leftEnum ? right : left;
+                code.labelBinding(leftEnum ? enumLeft : enumRight)
+                        .aload(owner).checkcast(enumType).aload(1).aload(other).aload(owner).checkcast(enumType)
+                        .invokevirtual(enumType,"getDeclaringClass",MethodTypeDesc.of(CLASS))
+                        .invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS))
+                        .invokevirtual(enumType,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth).goto_(falsity);
+            }
+        }
+        code.labelBinding(text);
+        converted(code,left,STRING); converted(code,right,equality ? null : STRING,STRING);
         if (equality) code.invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
         else {
             code.invokevirtual(STRING,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),STRING));

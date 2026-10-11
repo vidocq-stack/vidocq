@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 runtime-comparison slice (2026-10-11): resolved equality and ordering now select
+BigDecimal, floating, BigInteger, integral/Character, Boolean, Enum and String domains
+in specification order, with Object.equals and Comparable fallback. Equality retains
+raw RHS converter results for equals and enum declaring-class conversion targets.
+Identity/null shortcuts, NaN rules, scale-sensitive decimal equality, reversed Comparable
+signs and guarded causes match a 9,126-case independent value/type/error matrix.
+Emission uses fixed block order for reproducible output. Calls remain the next slice.
+
 P7 runtime-numeric slice (2026-10-11): resolved values now participate in arithmetic
 and unary minus. Inline selection covers BigDecimal, BigInteger, floating and integral
 domains, decimal HALF_UP division and modulo promotion. Unary minus preserves every
