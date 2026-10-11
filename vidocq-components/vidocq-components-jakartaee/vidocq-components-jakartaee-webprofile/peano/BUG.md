@@ -27,6 +27,29 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: the oversized-template regression failed before the diagnostic wrapper
   and now passes.
 
+## COMP-005 · 2026-10-11 · Integral equality unboxed custom null conversions
+
+- Symptom: a custom converter returning null for the right Long operand raised an
+  error instead of false; null on the left skipped the right conversion.
+- Minimal reproduction: evaluate `${1==2}` with Long conversion returning null.
+- Cause: emitted equality used primitive lcmp instead of the interpreter's Long.equals.
+- Status: resolved by converting both operands before invoking Long.equals. Ordered
+  comparisons retain primitive comparison and their existing unboxing order.
+- Evidence: independent consumer checks right-null false and left-null error/call order.
+
+## COMP-004 · 2026-10-11 · Interned text operands skipped equality conversions
+
+- Symptom: emitted equality between distinct nonempty string literals skipped the
+  context conversions performed by the interpreter.
+- Minimal reproduction: evaluate `${'x'=='x'}` with a context recording String conversion.
+- Cause: ldc interned both strings, incorrectly triggering the reference-identity shortcut.
+- Status: resolved by initializing a distinct private static final String for each
+  nonempty parsed literal. Each literal retains its stable identity across evaluations.
+  Emission schema v2 rejects serialized artifacts from earlier emission rules; regenerate
+  those application classes before redeployment.
+- Evidence: independent consumer checks both String conversions and the no-conversion
+  identity shortcut for cached integers; all generated classes pass verification.
+
 ## COMP-003 · 2026-10-11 · Discarded numeric overflow failed during compilation
 
 - Symptom: compiling a lazy logical expression rejected an overflowing numeric literal

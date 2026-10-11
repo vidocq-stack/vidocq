@@ -81,8 +81,9 @@ Class-File API, including unary minus, not/! and empty. Generated application cl
 extend the API protocol base and do not require core or compiler at runtime.
 Logical and/&&, or/|| and conditional ?: preserve lazy evaluation and caller conversions.
 Mixed conditional results retain runtime numeric promotion and null metadata.
-Comparisons and resolver-backed expressions
-remain subsequent P7 slices; peano-bench remains planned.
+Scalar comparisons, concatenation and sequences are compiled. Resolver-backed expressions
+remain subsequent P7 slices; peano-bench remains planned. Regenerate pre-v2 compiled
+classes: corrected text-literal identity uses a new serialization emission schema.
 
 ## Build
 

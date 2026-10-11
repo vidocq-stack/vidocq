@@ -22,8 +22,8 @@ ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class fil
 for literal text and templates whose evaluation parts are scalar literal and operator trees.
 It supports null, boolean, string, integer and floating values, minus, not/! and empty,
 including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) and
-% (mod), logical operators and conditional ?: are emitted directly. Comparisons, concatenation,
-identifiers and calls are rejected in this slice.
+% (mod), logical operators, conditional ?:, scalar comparisons, concatenation += and
+sequences are emitted directly. Identifiers and calls are rejected in this slice.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
 
@@ -55,7 +55,9 @@ bindingIdentity contributes captured bindings when subclasses need them.
 Emitted serialization UIDs fingerprint normalized structure and the emission-schema
 version. Equivalent templates remain compatible across regenerated classes; changed
 expression bodies reject old streams with InvalidClassException. Artifacts from the
-initial fixed-UID prototype must be regenerated. Unary getType reevaluates the body,
+initial fixed-UID prototype and pre-v2 emission rules must be regenerated. Each nonempty
+parsed text literal has a distinct private static final String to preserve conversion
+effects at equality's identity shortcut. Unary getType reevaluates the body,
 preserving caller conversion effects. Arithmetic evaluates both operands before math
 coercion and preserves the interpreter's Long/Double domains and error causes for the
 supported scalar trees.
@@ -66,6 +68,9 @@ ELException with a NumberFormatException cause only if its literal is evaluated.
 Operator getType retains the same operand and conversion effects.
 Conditional results can be null or select different scalar types. Numeric operations
 promote from the actual selected values; empty inspects the actual selected value.
+Scalar comparison preserves reference/null shortcuts, numeric/boolean/text precedence,
+NaN behavior and guarded conversion errors. Concatenation evaluates both operands before
+String conversion. Sequences evaluate the left operand before returning the right value.
 
 == Legacy property-editor boundary
 

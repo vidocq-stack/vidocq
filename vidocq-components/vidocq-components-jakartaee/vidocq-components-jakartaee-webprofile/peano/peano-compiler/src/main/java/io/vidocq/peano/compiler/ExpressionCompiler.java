@@ -43,12 +43,30 @@ public final class ExpressionCompiler {
     private static final ClassDesc BOOLEAN=ClassDesc.ofDescriptor("Z");
     private static final ClassDesc LONG=ClassDesc.ofDescriptor("J");
     private static final ClassDesc DOUBLE=ClassDesc.ofDescriptor("D");
-    private ExpressionCompiler() {}
+    private final ClassDesc owner;
+    private final java.util.Map<Ast.Literal,String> strings=new java.util.LinkedHashMap<>();
+
+    private ExpressionCompiler(ClassDesc owner,Template template) {
+        this.owner=owner;
+        for (var part:template.parts())
+            if (part instanceof Template.Evaluation evaluation) collectStrings(evaluation.body());
+    }
+
+    private void collectStrings(Ast node) {
+        if (node instanceof Ast.Literal literal) {
+            if (literal.token().kind()==TokenKind.STRING && !literal.token().value().isEmpty())
+                strings.putIfAbsent(literal,"_literal"+strings.size());
+        } else if (node instanceof Ast.Unary unary) collectStrings(unary.operand());
+        else if (node instanceof Ast.Binary binary) { collectStrings(binary.left()); collectStrings(binary.right()); }
+        else if (node instanceof Ast.Conditional conditional) {
+            collectStrings(conditional.condition()); collectStrings(conditional.whenTrue()); collectStrings(conditional.whenFalse());
+        }
+    }
 
     /**
      * Emits a public CompiledValueExpression subclass with a public Class constructor.
      * The constructor receives the expected result type; the caller owns output placement.
-     * This slice accepts literal text and scalar literal, unary, arithmetic, logical and conditional trees.
+     * This slice accepts scalar literals and operators, including comparisons, concatenation and sequences.
      * Other nodes fail at build time, with no interpreter fallback.
      *
      * @param binaryName qualified binary name of the application-owned emitted class
@@ -74,6 +92,7 @@ public final class ExpressionCompiler {
             }
         }
         ClassDesc owner=ClassDesc.of(binaryName);
+        var compiler=new ExpressionCompiler(owner,template);
         ClassDesc resultType=rawType;
         try {
             return ClassFile.of().build(owner,builder-> {
@@ -82,6 +101,18 @@ public final class ExpressionCompiler {
                 builder.withField("serialVersionUID",LONG,
                         field->field.withFlags(ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL)
                                 .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
+                for (String field:compiler.strings.values())
+                    builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_STATIC|ClassFile.ACC_FINAL);
+                if (!compiler.strings.isEmpty()) {
+                    builder.withMethodBody("<clinit>",MethodTypeDesc.of(VOID),ClassFile.ACC_STATIC,code-> {
+                        for (var entry:compiler.strings.entrySet()) {
+                            code.new_(STRING).dup().ldc(entry.getKey().token().value())
+                                    .invokespecial(STRING,"<init>",MethodTypeDesc.of(VOID,STRING))
+                                    .putstatic(owner,entry.getValue(),STRING);
+                        }
+                        code.return_();
+                    });
+                }
                 builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CLASS),ClassFile.ACC_PUBLIC,code-> {
                     code.aload(0).ldc(source).ldc(identity.toString()).aload(1);
                     if (template.kind()==Template.Kind.LITERAL) code.iconst_1(); else code.iconst_0();
@@ -90,7 +121,7 @@ public final class ExpressionCompiler {
                 });
             builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                 if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation) {
-                        emit(code,evaluation.body());
+                        compiler.emit(code,evaluation.body());
                 } else {
                     var buffer=ClassDesc.of("java.lang.StringBuilder");
                     code.new_(buffer).dup().invokespecial(buffer,"<init>",MethodTypeDesc.of(VOID));
@@ -98,7 +129,7 @@ public final class ExpressionCompiler {
                         if (part instanceof Template.Text text) code.ldc(text.value());
                         else {
                             code.aload(1);
-                                emit(code,((Template.Evaluation)part).body());
+                                compiler.emit(code,((Template.Evaluation)part).body());
                             code.ldc(STRING).invokevirtual(CONTEXT,"convertToType",MethodTypeDesc.of(OBJECT,OBJECT,CLASS))
                                     .checkcast(STRING);
                         }
@@ -138,7 +169,7 @@ public final class ExpressionCompiler {
     private static long serialVersion(String identity) {
         try {
             var digest=java.security.MessageDigest.getInstance("SHA-256");
-            String key="peano-compiled-value-v1:"+identity;
+            String key="peano-compiled-value-v2:"+identity;
             // Hash UTF-16 code units directly, including unpaired surrogate values.
             for (int i=0;i<key.length();i++) {
                 char unit=key.charAt(i);
@@ -160,7 +191,9 @@ public final class ExpressionCompiler {
                 literalKey(identity,(Ast.Literal)unary.operand());
             } else validate(unary.operand(),identity,source);
         } else if (node instanceof Ast.Binary binary
-                && (arithmetic(binary.operator().kind()) || logical(binary.operator().kind()))) {
+                && (arithmetic(binary.operator().kind()) || logical(binary.operator().kind())
+                    || comparison(binary.operator().kind()) || binary.operator().kind()==TokenKind.CONCAT
+                    || binary.operator().kind()==TokenKind.SEMICOLON)) {
             key(identity,"binary",binary.operator().kind().name());
             validate(binary.left(),identity,source);
             validate(binary.right(),identity,source);
@@ -197,7 +230,10 @@ public final class ExpressionCompiler {
             return Objects.equals(yes,rawType(conditional.whenFalse())) ? yes : OBJECT;
         }
         if (node instanceof Ast.Binary binary) {
-            if (logical(binary.operator().kind())) return ClassDesc.of("java.lang.Boolean");
+            if (logical(binary.operator().kind()) || comparison(binary.operator().kind()))
+                return ClassDesc.of("java.lang.Boolean");
+            if (binary.operator().kind()==TokenKind.CONCAT) return STRING;
+            if (binary.operator().kind()==TokenKind.SEMICOLON) return rawType(binary.right());
             if (dynamicNumber(binary.left()) || dynamicNumber(binary.right())) return OBJECT;
             if (rawType(binary.left())==null && rawType(binary.right())==null)
                 return ClassDesc.of("java.lang.Long");
@@ -245,7 +281,7 @@ public final class ExpressionCompiler {
         }
     }
 
-    private static void emit(CodeBuilder code,Ast node) {
+    private void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
         if (node instanceof Ast.Conditional conditional) {
             var otherwise=code.newLabel();
@@ -260,6 +296,11 @@ public final class ExpressionCompiler {
         }
         if (node instanceof Ast.Binary binary) {
             if (logical(binary.operator().kind())) emitLogical(code,binary);
+            else if (comparison(binary.operator().kind())) emitComparison(code,binary);
+            else if (binary.operator().kind()==TokenKind.CONCAT) emitConcat(code,binary);
+            else if (binary.operator().kind()==TokenKind.SEMICOLON) {
+                emit(code,binary.left()); code.pop(); emit(code,binary.right());
+            }
             else emitArithmetic(code,binary);
             return;
         }
@@ -336,7 +377,7 @@ public final class ExpressionCompiler {
         code.labelBinding(next);
     }
 
-    private static void emitDynamicMinus(CodeBuilder code,Ast operand) {
+    private void emitDynamicMinus(CodeBuilder code,Ast operand) {
         int slot=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
         emit(code,operand);
         var present=code.newLabel();
@@ -377,11 +418,120 @@ public final class ExpressionCompiler {
         code.invokestatic(boxed,"valueOf",MethodTypeDesc.of(boxed,floating ? DOUBLE : LONG));
     }
 
+    private static boolean comparison(TokenKind kind) {
+        return switch (kind) {
+            case EQUAL,NOT_EQUAL,LESS,GREATER,LESS_EQUAL,GREATER_EQUAL -> true;
+            default -> false;
+        };
+    }
+
+    private static void converted(CodeBuilder code,int slot,ClassDesc type) {
+        code.aload(1).aload(slot).ldc(type).invokevirtual(CONTEXT,"convertToType",
+                MethodTypeDesc.of(OBJECT,OBJECT,CLASS)).checkcast(type);
+    }
+
+    private static void orderedBranch(CodeBuilder code,TokenKind operator,java.lang.classfile.Label truth) {
+        switch (operator) {
+            case EQUAL,NOT_EQUAL -> code.ifeq(truth);
+            case LESS -> code.iflt(truth);
+            case GREATER -> code.ifgt(truth);
+            case LESS_EQUAL -> code.ifle(truth);
+            case GREATER_EQUAL -> code.ifge(truth);
+            default -> throw new ELException("Invalid comparison operator");
+        }
+    }
+
+    private static void pairType(CodeBuilder code,int left,int right,ClassDesc type,java.lang.classfile.Label match) {
+        code.aload(left).instanceOf(type).ifne(match).aload(right).instanceOf(type).ifne(match);
+    }
+
+    private void emitComparison(CodeBuilder code,Ast.Binary binary) {
+        int left=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        emit(code,binary.left()); code.astore(left);
+        int right=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        emit(code,binary.right()); code.astore(right);
+        TokenKind operator=binary.operator().kind();
+        boolean equality=operator==TokenKind.EQUAL || operator==TokenKind.NOT_EQUAL;
+        var truth=code.newLabel(); var falsity=code.newLabel(); var boxed=code.newLabel();
+        var floating=code.newLabel(); var integral=code.newLabel(); var bool=code.newLabel(); var text=code.newLabel();
+        var start=code.newLabel(); var end=code.newLabel(); var handler=code.newLabel(); var done=code.newLabel();
+        code.labelBinding(start).aload(left).aload(right).if_acmpeq(equality
+                || operator==TokenKind.LESS_EQUAL || operator==TokenKind.GREATER_EQUAL ? truth : falsity);
+        code.aload(left).ifnull(falsity).aload(right).ifnull(falsity);
+        var doubleType=ClassDesc.of("java.lang.Double");
+        var longType=ClassDesc.of("java.lang.Long");
+        var booleanType=ClassDesc.of("java.lang.Boolean");
+        pairType(code,left,right,doubleType,floating);
+        pairType(code,left,right,longType,integral);
+        if (equality) pairType(code,left,right,booleanType,bool);
+        pairType(code,left,right,STRING,text);
+        code.goto_(bool).labelBinding(floating);
+        converted(code,left,doubleType);
+        code.invokevirtual(doubleType,"doubleValue",MethodTypeDesc.of(DOUBLE));
+        converted(code,right,doubleType);
+        code.invokevirtual(doubleType,"doubleValue",MethodTypeDesc.of(DOUBLE));
+        if (operator==TokenKind.LESS || operator==TokenKind.LESS_EQUAL) code.dcmpg(); else code.dcmpl();
+        orderedBranch(code,operator,truth);
+        code.goto_(falsity).labelBinding(integral);
+        if (equality) {
+            converted(code,left,longType); converted(code,right,longType);
+            code.invokevirtual(longType,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
+        } else {
+            converted(code,left,longType);
+            code.invokevirtual(longType,"longValue",MethodTypeDesc.of(LONG));
+            converted(code,right,longType);
+            code.invokevirtual(longType,"longValue",MethodTypeDesc.of(LONG)).lcmp();
+            orderedBranch(code,operator,truth);
+        }
+        code.goto_(falsity).labelBinding(bool);
+        if (equality) {
+            converted(code,left,booleanType); converted(code,right,booleanType);
+            code.invokevirtual(booleanType,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
+        } else {
+            code.aload(left).checkcast(booleanType).aload(right).checkcast(booleanType)
+                    .invokevirtual(booleanType,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),booleanType));
+            orderedBranch(code,operator,truth);
+        }
+        code.goto_(falsity).labelBinding(text);
+        converted(code,left,STRING); converted(code,right,STRING);
+        if (equality) code.invokevirtual(STRING,"equals",MethodTypeDesc.of(BOOLEAN,OBJECT)).ifne(truth);
+        else {
+            code.invokevirtual(STRING,"compareTo",MethodTypeDesc.of(ClassDesc.ofDescriptor("I"),STRING));
+            orderedBranch(code,operator,truth);
+        }
+        code.goto_(falsity).labelBinding(truth).iconst_1().goto_(boxed)
+                .labelBinding(falsity).iconst_0().labelBinding(boxed);
+        if (operator==TokenKind.NOT_EQUAL) code.iconst_1().ixor();
+        code.invokestatic(booleanType,"valueOf",MethodTypeDesc.of(booleanType,BOOLEAN))
+                .labelBinding(end).goto_(done).labelBinding(handler);
+        int failure=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        var exception=ClassDesc.of("jakarta.el.ELException"); var rethrow=code.newLabel();
+        code.astore(failure).aload(failure).instanceOf(exception).ifne(rethrow)
+                .new_(exception).dup().ldc(equality ? "Equality comparison failed" : "Ordered comparison failed")
+                .aload(failure).invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING,ClassDesc.of("java.lang.Throwable")))
+                .athrow().labelBinding(rethrow).aload(failure).athrow().labelBinding(done);
+        code.exceptionCatch(start,end,handler,ClassDesc.of("java.lang.RuntimeException"));
+    }
+
+    private void emitConcat(CodeBuilder code,Ast.Binary binary) {
+        int left=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        emit(code,binary.left()); code.astore(left);
+        int right=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+        emit(code,binary.right()); code.astore(right);
+        var buffer=ClassDesc.of("java.lang.StringBuilder");
+        code.new_(buffer).dup().invokespecial(buffer,"<init>",MethodTypeDesc.of(VOID));
+        converted(code,left,STRING);
+        code.invokevirtual(buffer,"append",MethodTypeDesc.of(buffer,STRING));
+        converted(code,right,STRING);
+        code.invokevirtual(buffer,"append",MethodTypeDesc.of(buffer,STRING))
+                .invokevirtual(buffer,"toString",MethodTypeDesc.of(STRING));
+    }
+
     private static boolean logical(TokenKind kind) {
         return kind==TokenKind.AND || kind==TokenKind.OR;
     }
 
-    private static void booleanOperand(CodeBuilder code,Ast operand) {
+    private void booleanOperand(CodeBuilder code,Ast operand) {
         var boxed=ClassDesc.of("java.lang.Boolean");
         code.aload(1);
         emit(code,operand);
@@ -390,7 +540,7 @@ public final class ExpressionCompiler {
                 .invokevirtual(boxed,"booleanValue",MethodTypeDesc.of(BOOLEAN));
     }
 
-    private static void emitLogical(CodeBuilder code,Ast.Binary binary) {
+    private void emitLogical(CodeBuilder code,Ast.Binary binary) {
         var shortCircuit=code.newLabel();
         var done=code.newLabel();
         boolean and=binary.operator().kind()==TokenKind.AND;
@@ -436,7 +586,7 @@ public final class ExpressionCompiler {
                         MethodTypeDesc.of(floating ? DOUBLE : LONG));
     }
 
-    private static void emitArithmetic(CodeBuilder code,Ast.Binary binary) {
+    private void emitArithmetic(CodeBuilder code,Ast.Binary binary) {
         // Evaluation precedes either numeric conversion, matching the interpreter's effects.
         int left=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
         emit(code,binary.left());
@@ -508,12 +658,14 @@ public final class ExpressionCompiler {
                 .athrow();
     }
 
-    private static void emit(CodeBuilder code,Ast.Literal literal) {
+    private void emit(CodeBuilder code,Ast.Literal literal) {
         Object value;
         try { value=constant(literal); }
         catch (ELException failure) { emitNumericFailure(code,failure); return; }
         if (value==null) code.aconst_null();
-        else if (value instanceof String text) code.ldc(text);
+        else if (value instanceof String text) {
+            if (text.isEmpty()) code.ldc(text); else code.getstatic(owner,strings.get(literal),STRING);
+        }
         else if (value instanceof Long number) {
             number(code,number);
         } else if (value instanceof Double number) {

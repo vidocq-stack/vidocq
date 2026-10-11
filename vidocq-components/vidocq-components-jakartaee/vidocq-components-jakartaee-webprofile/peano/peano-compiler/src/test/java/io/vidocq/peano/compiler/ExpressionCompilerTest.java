@@ -61,7 +61,16 @@ class ExpressionCompilerTest {
                 "${-(true ? null : 1)}", "${-(false ? 1 : 1.5)}",
                 "${(true ? '1.5' : '7') + 2}", "${(false ? '1.5' : '7') + 2}",
                 "${(true ? null : 1)/null}", "${(false ? 1 : 1.5)%2}",
-                "${1 + (true ? null : 2)}", "${true or (false ? 1 : 7)}");
+                "${1 + (true ? null : 2)}", "${true or (false ? 1 : 7)}",
+                "${1==1}", "${1 eq 1.0}", "${1!=2}", "${1 ne 1.0}", "${null==null}",
+                "${null==0}", "${null<=null}", "${null<null}", "${null>=0}",
+                "${'x'=='x'}", "${''==''}", "${'true'==true}", "${'7'==7}",
+                "${'10'<'2'}", "${'7'<8}", "${2>1.5}", "${2 le 2}", "${2 ge 3}",
+                "${false<true}", "${(0/0)==(0/0)}", "${(0/0)<1}", "${(0/0)>=1}",
+                "${1>(0/0)}", "${1<=(0/0)}", "${-0.0==0.0}",
+                "${(true ? '7' : 1.5)==7}", "${(false ? null : 1)<2}",
+                "${'x'+=7}", "${null+=null}", "${'x'+=''=='x'}", "${empty (''+='')}",
+                "${1;2}", "${1;null}", "${-(1;'1.5')}", "${(1;'1.5')+2}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -137,6 +146,8 @@ class ExpressionCompilerTest {
                             throw new AssertionError("Parsed identity was not preserved across emitted classes");
                         if (new E2(String.class).equals(expressions[2]))
                             throw new AssertionError("Expected type was ignored");
+                        if (expressions[7].getValue(context)!=expressions[7].getValue(context))
+                            throw new AssertionError("Parsed text literal changed identity across evaluations");
                         var events=new java.util.ArrayList<String>();
                         context.addEvaluationListener(new EvaluationListener() {
                             public void beforeEvaluation(ELContext c,String source){ events.add("before:"+source); }
@@ -275,6 +286,53 @@ class ExpressionCompilerTest {
                         }
                         try { new BadDynamicUnary(Object.class).getValue(context); throw new AssertionError("Dynamic boolean minus accepted"); }
                         catch (ELException expected) {}
+                        var stringOrder=new java.util.ArrayList<String>();
+                        var stringContext=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==String.class) stringOrder.add(String.valueOf(value));
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        if (!Boolean.TRUE.equals(new StringEquality(Object.class).getValue(stringContext))
+                                || !stringOrder.equals(java.util.List.of("x","x")))
+                            throw new AssertionError("Distinct text operands skipped conversion: "+stringOrder);
+                        numericOrder.clear();
+                        if (!Boolean.TRUE.equals(new OrderedComparison(Object.class).getValue(numericContext))
+                                || !numericOrder.equals(java.util.List.of("java.lang.Long:2","java.lang.Long:3")))
+                            throw new AssertionError("Comparison conversion order: "+numericOrder);
+                        numericOrder.clear();
+                        if (!Boolean.TRUE.equals(new CachedEquality(Object.class).getValue(numericContext)) || !numericOrder.isEmpty())
+                            throw new AssertionError("Reference identity performed extra conversion");
+                        var nullRight=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class && Long.valueOf(2).equals(value)) return null;
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        if (!Boolean.FALSE.equals(new NullEquality(Object.class).getValue(nullRight)))
+                            throw new AssertionError("Right null equality conversion mismatch");
+                        numericOrder.clear();
+                        var nullLeft=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class) { numericOrder.add(String.valueOf(value)); return null; }
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        try { new NullEquality(Object.class).getValue(nullLeft); throw new AssertionError("Left null equality accepted"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof NullPointerException)
+                                    || !numericOrder.equals(java.util.List.of("1","2"))) throw expected;
+                        }
+                        try { new OrderedComparison(Object.class).getValue(arithmeticFailure); throw new AssertionError("Comparison failure swallowed"); }
+                        catch (ELException expected) {
+                            if (!(expected.getCause() instanceof IllegalArgumentException)) throw expected;
+                        }
+                        stringOrder.clear();
+                        if (!"1x2".equals(new OrderedConcat(Object.class).getValue(stringContext))
+                                || !stringOrder.equals(java.util.List.of("x","2","1","x2")))
+                            throw new AssertionError("Concat operand/conversion order: "+stringOrder);
+                        try { new FailingSequence(Object.class).getValue(context); throw new AssertionError("Sequence skipped left failure"); }
+                        catch (ELException expected) {}
                         try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
                             output.writeObject(new E2(Object.class));
                         }
@@ -302,6 +360,13 @@ class ExpressionCompilerTest {
                 "DynamicArithmetic","${(true ? null : 1)+(false ? 1.5 : 2)}",
                 "BadConditional","${7 ? 1 : 2}", "BadDynamicArithmetic","${(true ? 1 : 1.5)%0}",
                 "BadDynamicUnary","${-(true ? true : 1)}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty());
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
+        for (var entry:java.util.Map.of("StringEquality","${'x'=='x'}", "CachedEquality","${1==1}",
+                "OrderedComparison","${2<3}", "OrderedConcat","${1 += ('x'+=2)}",
+                "FailingSequence","${1%0;7}", "NullEquality","${1==2}").entrySet()) {
             byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
             assertTrue(ClassFile.of().verify(bytes).isEmpty());
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
@@ -360,7 +425,7 @@ class ExpressionCompilerTest {
     @Test
     void rejectsUnsupportedNodesAndInvalidBinaryNamesAtBuildTime() {
         assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${bean.value}"));
-        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${1==2}"));
+        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${value=2}"));
         assertThrows(IllegalArgumentException.class,()->ExpressionCompiler.compile("demo.bad-name","${7}"));
         assertThrows(NullPointerException.class,()->ExpressionCompiler.compile("demo.Missing",null));
     }

@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 comparison slice (2026-10-11): scalar equality/ordering, concatenation += and
+sequences compile directly. Comparisons retain reference identity and null shortcuts,
+Double/Long/Boolean/String precedence, NaN rules, conversion order and guarded failures.
+Both operands are evaluated before conversion; sequences always evaluate the left body.
+Each nonempty parsed String literal has its own private static final constant, preserving
+distinct and stable identities (COMP-004). Emission schema v2 requires regenerating older
+compiled classes and rejects their serialized streams. Resolver-backed nodes remain next.
+
 P7 conditional slice (2026-10-11): inline ?: branches convert the condition through
 the caller and evaluate only the selected result. Nullable getType preserves body
 effects and returns null for null results. Conditional operands can select different
@@ -149,8 +157,7 @@ Generated guards wrap arithmetic/coercion RuntimeExceptions with their causes wh
 rethrowing ELException, and leave operand-evaluation failures outside that guard.
 Operator getType reevaluates its body to retain conversion effects. Independent tests
 compare 50 templates and separately check order, metadata effects, division infinities,
-NaN, overflow and modulo-zero errors. Comparisons,
-concatenation and dynamic resolver-backed nodes remain subsequent slices.
+NaN, overflow and modulo-zero errors. Dynamic resolver-backed nodes remain subsequent slices.
 
 P7 unary slice (2026-10-11): the compiler now emits recursive minus, not/! and empty
 over literal/unary trees, including Long.MIN_VALUE and signed zero. Numeric strings
@@ -161,7 +168,7 @@ matching interpreter conversion effects without expected-type conversion or even
 Binary operators and dynamic resolver-backed nodes remain subsequent slices.
 
 Compiled serialization UIDs now fingerprint exact UTF-16 units of canonical parsed
-identity plus the peano-compiled-value-v1 emission-schema tag. The tag must change
+identity plus the peano-compiled-value-v2 emission-schema tag. The tag must change
 when emitted semantics or protocol become serialization-incompatible. Changed AST
 redeployments reject old streams; normalized equivalent forms retain original source
 metadata and remain compatible. This replaces the initial prototype's fixed UID.
