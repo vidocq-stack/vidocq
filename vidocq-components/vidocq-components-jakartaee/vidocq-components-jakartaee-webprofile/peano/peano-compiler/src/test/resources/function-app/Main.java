@@ -34,14 +34,28 @@ public class Main {
     }
     static final class Context extends ELContext {
         final Map<String,Method> functions=new HashMap<>();
+        final Map<String,Object> roots=new HashMap<>();
         final List<String> effects=new ArrayList<>();
         final List<String> captures=new ArrayList<>();
         public ELResolver getELResolver() { return new ELResolver() {
-            public Object getValue(ELContext c,Object b,Object p) { return null; }
+            public Object getValue(ELContext c,Object b,Object p) {
+                effects.add("read:"+p);
+                if (b==null && roots.containsKey(p)) { c.setPropertyResolved(b,p); return roots.get(p); }
+                return null;
+            }
             public Class<?> getType(ELContext c,Object b,Object p) { return null; }
             public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
             public void setValue(ELContext c,Object b,Object p,Object value) {}
-            public Object invoke(ELContext c,Object b,Object p,Class<?>[] t,Object[] a) { throw new AssertionError("Mapped function used custom resolver chain"); }
+            public Object invoke(ELContext c,Object b,Object p,Class<?>[] t,Object[] a) {
+                check(!c.isPropertyResolved() && t==null,"Imported invocation flags changed");
+                if (b instanceof ELClass owner && owner.getKlass()==Constructed.class && "<init>".equals(p)) {
+                    c.setPropertyResolved(b,p); return new Constructed(c.convertToType(a[0],Long.class));
+                }
+                if (b instanceof ELClass owner && owner.getKlass()==Functions.class && "sum".equals(p)) {
+                    c.setPropertyResolved(b,p); return Functions.sum(c.convertToType(a[0],Long.class),c.convertToType(a[1],Long.class));
+                }
+                throw new AssertionError("Mapped function used custom resolver chain");
+            }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
         }; }
         public VariableMapper getVariableMapper() { return null; }
@@ -50,10 +64,26 @@ public class Main {
         }; }
         public <T> T convertToType(Object value,Class<T> type) {
             if (type==Object.class) return (T)value;
+            if (type==boolean.class || type==Boolean.class) return (T)Boolean.valueOf(String.valueOf(value));
             if (type==Long.class || type==long.class) { effects.add("long:"+value); return (T)Long.valueOf(value.toString()); }
             if (type==String.class) { effects.add("string:"+value); return (T)(value==null ? "" : value.toString()); }
             return type.cast(value);
         }
+    }
+    static LambdaExpression lambda(Context context,List<String> names,boolean constant) {
+        var body=new ValueExpression() {
+            public <T> T getValue(ELContext c) { return (T)(names.isEmpty() ? context.roots.get("callable")
+                    : constant ? "lambda" : Long.valueOf(((Number)c.getLambdaArgument("x")).longValue()+10)); }
+            public void setValue(ELContext c,Object value) { throw new PropertyNotWritableException(); }
+            public boolean isReadOnly(ELContext c) { return true; }
+            public Class<?> getType(ELContext c) { return Object.class; }
+            public Class<?> getExpectedType() { return Object.class; }
+            public String getExpressionString() { return "lambda"; }
+            public boolean isLiteralText() { return false; }
+            public boolean equals(Object other) { return this==other; }
+            public int hashCode() { return System.identityHashCode(this); }
+        };
+        var lambda=new LambdaExpression(names,body); lambda.setELContext(context); return lambda;
     }
     static void check(boolean condition,String message) { if (!condition) throw new AssertionError(message); }
     public static void main(String[] args) throws Exception {
@@ -114,6 +144,42 @@ public class Main {
             try { fallback.getValue(context); throw new AssertionError("Unregistered function fallback allowed"); }
             catch (ELException expected) { check(expected.getMessage().contains("Reflection fallback denied"),"Unexpected fallback failure"); }
         } else if (coreFallback) check(fallback.getValue(context).equals(7L),"API static fallback failed");
+        context.roots.put("callable",lambda(context,List.of("x"),false)); context.roots.put("nil",null);
+        context.roots.put("factory",lambda(context,List.of(),false));
+        check(new Named(context,Object.class).getValue(context).equals(12L),"Named lambda callable failed");
+        context.functions.put(":mapped",Functions.class.getMethod("sum",long.class,long.class));
+        var mapped=new Mapped(context,Object.class);
+        context.functions.put(":mapped",Functions.class.getMethod("alternate",long.class,long.class));
+        context.roots.put("mapped",lambda(context,List.of("a","b"),true));
+        check(mapped.getValue(context).equals("lambda"),"Lambda did not precede mapped function");
+        context.roots.put("mapped",0L);
+        check(mapped.getValue(context).equals(3L),"Default-prefix function remapped after creation");
+        check(new GeneralLambda(Object.class).getValue(context).equals(13L),"General lambda target failed");
+        context.getImportHandler().importClass("demo.Constructed");
+        Object constructed=new Construct(Object.class).getValue(context);
+        check(constructed instanceof Constructed object && object.value==7L,"Imported constructor did not use direct resolver");
+        context.getImportHandler().importStatic("demo.Main$Functions.sum");
+        check(new Imported(Object.class).getValue(context).equals(3L),"Imported static callable failed");
+        if (coreFallback) {
+            context.functions.put(":mapped",Functions.class.getMethod("sum",long.class,long.class));
+            var factory=ExpressionFactory.newInstance();
+            for (ValueExpression compiled:List.of(new Named(context,Object.class),new Mapped(context,Object.class),
+                    new GeneralLambda(context,Object.class),new Construct(context,Object.class),new Imported(context,Object.class))) {
+                var interpreted=factory.createValueExpression(context,compiled.getExpressionString(),Object.class);
+                Object actual=compiled.getValue(context),expected=interpreted.getValue(context);
+                check(actual instanceof Constructed object ? expected instanceof Constructed other && object.value==other.value
+                        : Objects.equals(actual,expected),"Named-call differential mismatch: "+compiled.getExpressionString());
+            }
+        }
+        for (ValueExpression expression:List.of(new InvalidCallable(Object.class),new UnresolvedCallable(Object.class),new NullCallable(Object.class))) {
+            try { expression.getValue(context); throw new AssertionError("Noncallable target accepted or evaluated args"); }
+            catch (MethodNotFoundException expected) {}
+            if (coreFallback) {
+                try { ExpressionFactory.newInstance().createValueExpression(context,expression.getExpressionString(),Object.class).getValue(context);
+                    throw new AssertionError("Oracle accepted invalid callable"); }
+                catch (MethodNotFoundException expected) {}
+            }
+        }
         System.out.println("PEANO_COMPILED_FUNCTION_OK");
     }
 }

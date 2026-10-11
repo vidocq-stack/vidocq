@@ -93,8 +93,9 @@ and Comparable domains. Inline member calls delegate to the supplied resolver.
 Assignments freeze their target before the RHS, honor captured aliases and return
 the original RHS after typed writes.
 Namespaced mapped functions capture immutable descriptors and use direct accessor tables,
-with the existing policy-controlled API fallback. Named callables and constructors remain subsequent P7 slices;
-peano-bench remains planned.
+with the existing policy-controlled API fallback. Named calls prioritize context lambdas,
+then captured default-prefix functions and imported constructors/static methods.
+Chained callable results support existing lambdas; lambda construction and peano-bench remain planned.
 Regenerate pre-v3 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 

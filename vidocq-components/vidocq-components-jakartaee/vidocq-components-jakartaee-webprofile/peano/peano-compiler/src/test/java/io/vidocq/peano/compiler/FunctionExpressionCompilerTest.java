@@ -47,8 +47,16 @@ class FunctionExpressionCompilerTest {
                             || type.name().stringValue().startsWith("io/vidocq/peano/compiler/"));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("Named","${callable(2)}", "Mapped","${mapped(1,2)}",
+                "Construct","${Constructed(7)}", "Imported","${sum(1,2)}",
+                "GeneralLambda","${factory()(3)}", "InvalidCallable","${callable(0)(1%0)}",
+                "UnresolvedCallable","${missing(1%0)}", "NullCallable","${nil(1%0)}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
-        for (String file:List.of("Main.java","Provider.java")) {
+        for (String file:List.of("Main.java","Provider.java","Constructed.java")) {
             try (var resource=getClass().getResourceAsStream("/function-app/"+file)) { Files.copy(resource,source.resolve(file)); }
         }
         Files.writeString(source.resolve("module-info.java"),"""
@@ -60,7 +68,7 @@ class FunctionExpressionCompilerTest {
         String modules=location(ExpressionFactory.class)+File.pathSeparator+location(AccessorTable.class);
         run(List.of(bin("javac"),"--module-path",modules,"--patch-module","peano.functionconsumer="+classes,
                 "-d",classes.toString(),source.resolve("module-info.java").toString(),
-                source.resolve("Main.java").toString(),source.resolve("Provider.java").toString()));
+                source.resolve("Main.java").toString(),source.resolve("Provider.java").toString(),source.resolve("Constructed.java").toString()));
         for (String mode:List.of("allow","deny"))
             assertTrue(run(List.of(bin("java"),"-Dpeano.reflection="+mode,"--module-path",
                     modules+File.pathSeparator+classes,"--module","peano.functionconsumer/demo.Main"))

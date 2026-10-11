@@ -64,6 +64,7 @@ public final class ExpressionCompiler {
         } else if (node instanceof Ast.Property property) {
             collectStrings(property.base()); collectStrings(property.key());
         } else if (node instanceof Ast.Call call) {
+            if (call.target() instanceof Ast.Identifier identifier) functionKeys.add(":"+identifier.name());
             collectStrings(call.target()); call.arguments().forEach(this::collectStrings);
         } else if (node instanceof Ast.Function function) {
             functionKeys.add(function.prefix()+":"+function.name()); function.arguments().forEach(this::collectStrings);
@@ -338,7 +339,7 @@ public final class ExpressionCompiler {
         } else if (names!=null && node instanceof Ast.Property property) {
             key(identity,"property","");
             validate(property.base(),identity,source,names); validate(property.key(),identity,source,names);
-        } else if (names!=null && node instanceof Ast.Call call && call.target() instanceof Ast.Property) {
+        } else if (names!=null && node instanceof Ast.Call call) {
             key(identity,"call",Integer.toString(call.arguments().size()));
             validate(call.target(),identity,source,names);
             for (Ast argument:call.arguments()) validate(argument,identity,source,names);
@@ -505,6 +506,34 @@ public final class ExpressionCompiler {
             code.astore(arguments).aload(0).aload(1).aload(base).aload(key).aload(arguments)
                     .invokespecial(pathBase,"invokeProperty",MethodTypeDesc.of(OBJECT,CONTEXT,OBJECT,OBJECT,ClassDesc.ofDescriptor("[Ljava/lang/Object;")))
                     .goto_(done).labelBinding(absent).aconst_null().labelBinding(done);
+            return;
+        }
+        if (node instanceof Ast.Call call) {
+            int target=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            int arguments=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
+            var functionBase=ClassDesc.of("io.vidocq.peano.spi.CompiledFunctionValueExpression");
+            var lambdaType=ClassDesc.of("jakarta.el.LambdaExpression");
+            if (call.target() instanceof Ast.Identifier identifier) {
+                code.aload(0).aload(1).ldc(identifier.name())
+                        .invokespecial(functionBase,"resolveNamedCall",MethodTypeDesc.of(OBJECT,CONTEXT,STRING)).astore(target);
+            } else {
+                emit(code,call.target()); code.astore(target);
+                var callable=code.newLabel(); var failure=ClassDesc.of("jakarta.el.MethodNotFoundException");
+                code.aload(target).instanceOf(lambdaType).ifne(callable).new_(failure).dup()
+                        .ldc("Expression does not resolve to a callable value")
+                        .invokespecial(failure,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow().labelBinding(callable);
+            }
+            code.loadConstant(call.arguments().size()).anewarray(OBJECT);
+            for (int i=0;i<call.arguments().size();i++) {
+                code.dup().loadConstant(i); emit(code,call.arguments().get(i)); code.aastore();
+            }
+            var argumentType=ClassDesc.ofDescriptor("[Ljava/lang/Object;");
+            code.astore(arguments);
+            if (call.target() instanceof Ast.Identifier)
+                code.aload(0).aload(1).aload(target).aload(arguments)
+                        .invokespecial(functionBase,"invokeResolvedCall",MethodTypeDesc.of(OBJECT,CONTEXT,OBJECT,argumentType));
+            else code.aload(target).checkcast(lambdaType).aload(1).aload(arguments)
+                    .invokevirtual(lambdaType,"invoke",MethodTypeDesc.of(OBJECT,CONTEXT,argumentType));
             return;
         }
         if (node instanceof Ast.Identifier identifier) {

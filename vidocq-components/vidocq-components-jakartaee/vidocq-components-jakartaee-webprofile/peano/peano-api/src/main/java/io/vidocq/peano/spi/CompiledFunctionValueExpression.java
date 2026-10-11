@@ -57,6 +57,28 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         return new BindingIdentity(super.bindingIdentity(),functions);
     }
 
+    protected final Object resolveNamedCall(ELContext context,String name) {
+        Object value=readCallable(context,name);
+        if (value instanceof LambdaExpression) return value;
+        String key=":"+name;
+        if (functions.containsKey(key)) return new MappedCall(key);
+        Class<?> type=context.getImportHandler().resolveClass(name);
+        if (type!=null) return new ImportedCall(type,"<init>");
+        type=context.getImportHandler().resolveStatic(name);
+        if (type!=null) return new ImportedCall(type,name);
+        throw new MethodNotFoundException("Unresolved function "+name);
+    }
+
+    protected final Object invokeResolvedCall(ELContext context,Object target,Object[] arguments) {
+        if (target instanceof LambdaExpression lambda) return lambda.invoke(context,arguments);
+        if (target instanceof MappedCall mapped) return invokeFunction(context,mapped.key(),arguments);
+        var imported=(ImportedCall)target;
+        return invokeProperty(context,new ELClass(imported.owner()),imported.name(),arguments);
+    }
+
+    private record MappedCall(String key) {}
+    private record ImportedCall(Class<?> owner,String name) {}
+
     protected final Object invokeFunction(ELContext context,String key,Object[] arguments) {
         FunctionBinding function=functions.get(key);
         if (function==null) throw new MethodNotFoundException("Unmapped function "+key);

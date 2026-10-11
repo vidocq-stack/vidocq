@@ -73,6 +73,9 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Status: resolved after retrying the same validated tree through signed commit
   de2b5b8. Governance, full PR validation, optional profile and TCK passed before merge.
 - Evidence: actions runs 36421–36423 startup logs; local reactor and official TCK pass.
+- Recurrence: PR #34 TCK job 81191 at commit 5edc17a failed with the same Docker
+  startup error before tests. Signed retry 27d75be passed all four merge checks;
+  PR #34 was then merged. No source change was needed for either incident.
 
 ## COMP-006 · 2026-10-11 · Property helper calls needed emitted class loading to verify
 

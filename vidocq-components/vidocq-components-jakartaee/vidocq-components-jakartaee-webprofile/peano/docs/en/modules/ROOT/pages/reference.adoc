@@ -26,7 +26,8 @@ including Long.MIN_VALUE and composite templates. Arithmetic +, -, *, / (div) an
 sequences are emitted directly. Standalone root identifiers and property navigation are
 also supported, including resolved arithmetic/comparisons and inline member calls.
 Assignments compile over supported root/property targets.
-Namespaced mapped functions are supported; bare callables and constructors are rejected in this slice.
+Namespaced/default-prefix mapped functions, named callables and imported constructors/static methods
+are supported. Chained calls invoke existing LambdaExpression values; lambda construction remains planned.
 List, set and map literals emit fresh mutable JDK collections, preserving order, nulls
 and duplicate handling. Their elements can include captured root/property values and
 supported operator/collection trees.
@@ -130,6 +131,12 @@ FunctionMapper bindings. Their context constructor freezes public/static owner, 
 parameter and return descriptors; mapper changes do not remap an existing expression.
 Unmapped namespaced functions fail at creation, including in discarded branches.
 Descriptors serialize without Method objects or member lookup when restoring.
+
+Named calls first consult lambda arguments, captured variables and caller-owned roots.
+Lambda values take precedence over captured default-prefix functions, then imported
+constructors and static methods. Targets resolve before argument evaluation and remain
+fixed while arguments run. Invalid targets fail before argument effects. Imported calls
+use the supplied ELResolver.invoke chain; arbitrary callable results must be lambdas.
 
 Registered static AccessorProvider tables run before the API StaticFieldELResolver
 fallback; the fallback follows peano.reflection. Catalogs are immutable snapshots in

@@ -125,6 +125,14 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 named-callable slice (2026-10-11): identifier calls resolve lambda arguments,
+captured variables and caller-owned roots before captured default-prefix functions,
+imported constructors and static methods. Targets resolve before left-to-right arguments;
+invalid targets fail before argument effects. Imported calls use the caller's resolver
+chain and chained callable results invoke existing LambdaExpression values directly.
+Independent consumers cover allow/deny modes without core/compiler; lambda construction
+remains the next slice.
+
 P7 mapped-function slice (2026-10-11): namespaced FunctionMapper targets are captured
 at creation as immutable owner/name/parameter/return descriptors. Public/static validity
 and unmapped prefixes are checked even in discarded branches. Bindings contribute to
@@ -158,7 +166,7 @@ Resolution resets just before invoke, with null parameter types and no bare-meth
 fallback. Calls are readonly and compose in paths/operators/templates/collections.
 Closed-model consumers verify flags, null results, getter-free parent metadata,
 captured arguments, serialization and causes without core/compiler or package opens.
-Bare callables, mapped functions and constructors remain subsequent slices.
+Named calls and mapped functions are covered by the subsequent slices above.
 
 P7 runtime-comparison slice (2026-10-11): resolved equality and ordering now select
 BigDecimal, floating, BigInteger, integral/Character, Boolean, Enum and String domains

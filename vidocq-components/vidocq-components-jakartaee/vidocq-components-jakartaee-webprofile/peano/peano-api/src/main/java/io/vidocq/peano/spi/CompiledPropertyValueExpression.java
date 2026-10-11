@@ -67,6 +67,14 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
         return CompiledRootValueExpression.resolveRoot(context,name,bindings.get(name));
     }
 
+    protected final Object readCallable(ELContext context,String name) {
+        if (context.isLambdaArgument(name)) return context.getLambdaArgument(name);
+        ValueExpression binding=bindings.get(name);
+        if (binding!=null) return binding.getValue(context);
+        context.setPropertyResolved(false);
+        return guarded(()->context.getELResolver().getValue(context,null,name));
+    }
+
     protected final Object readProperty(ELContext context,Object base,Object key) {
         context.setPropertyResolved(false);
         Object value=guarded(()->context.getELResolver().getValue(context,base,key));
