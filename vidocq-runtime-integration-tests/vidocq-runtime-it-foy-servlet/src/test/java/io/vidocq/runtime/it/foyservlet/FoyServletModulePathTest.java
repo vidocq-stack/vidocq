@@ -78,6 +78,13 @@ class FoyServletModulePathTest {
     }
 
     @Test
+    void theExtensionExportsNothing() {
+        Module extension = ModuleLayer.boot().findModule("io.vidocq.runtime.extensions.jakartaee.web.foy").orElseThrow();
+
+        assertEquals(java.util.Set.of(), extension.getDescriptor().exports());
+    }
+
+    @Test
     void servletAnswersThroughTheFilter() throws Exception {
         HttpResponse<String> r = get(HttpClient.newHttpClient(), "/cart");
 
