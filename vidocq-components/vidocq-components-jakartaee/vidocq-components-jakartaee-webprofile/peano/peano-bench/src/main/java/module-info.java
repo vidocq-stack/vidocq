@@ -25,6 +25,8 @@ module io.vidocq.peano.bench {
     requires io.vidocq.peano.api;
     requires static io.vidocq.peano.compiler;
     requires jmh.core;
+    // Build-only archive validation; peano-bench is never published.
+    requires jdk.jfr;
     requires org.glassfish.expressly;
     uses jakarta.el.ExpressionFactory;
     exports io.vidocq.peano.bench to jmh.core;

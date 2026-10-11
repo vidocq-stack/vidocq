@@ -52,6 +52,8 @@ raw recordings local under target. Before archiving, run `./scrub-bench-profiles
 <input-directory> <new-output-directory>` and publish only the filtered output. The
 script retains CPU/allocation events and verifies their event allowlist. Filtering
 current files cannot remove values already present in Git history (BENCH-004).
+The bench-profile test suite also rejects unapproved archived events without printing
+their values. Its JDK `jdk.jfr` dependency is confined to the non-published benchmark module.
 Every figure is recorded in
 link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.
 

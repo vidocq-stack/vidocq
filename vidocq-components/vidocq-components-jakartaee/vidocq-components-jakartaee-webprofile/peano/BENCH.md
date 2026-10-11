@@ -250,6 +250,9 @@ rtk ./scrub-bench-profiles.sh peano-bench/target/optim-jfr peano-bench/target/pu
 ```
 
 Archive only the filtered output. The output directory must be new for each invocation.
+Bench-profile tests reject archived events outside this allowlist without printing
+event values. The build-only benchmark module reads the JDK jdk.jfr module for that
+validation; no published provider module gains a dependency.
 For inspection, run `jfr print --json --stack-depth 12 --events
 jdk.ExecutionSample,jdk.ObjectAllocationSample <recording>` with the pinned JDK.
 Filter events to the JMH worker thread. Attribute CPU samples to their nearest Peano

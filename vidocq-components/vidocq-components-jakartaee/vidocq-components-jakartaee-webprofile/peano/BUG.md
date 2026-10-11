@@ -17,6 +17,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: filtered recordings contain no environment/system-property events or
   bytes matching the affected values. CPU/allocation event counts remain unchanged.
   scrub-bench-profiles.sh enforces the event allowlist before future publication.
+  Bench-profile tests reject unapproved archive events and report only their types.
 
 ## BENCH-003 · 2026-10-11 · Component benchmark forks repeated module patch options
 
