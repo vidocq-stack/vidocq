@@ -39,7 +39,10 @@ class ExpressionCompilerTest {
     void emitsConstantTemplatesThatRunWithoutCoreOrCompiler() throws Exception {
         var sources=List.of("", "plain text", "${42}", "#{ 42 }", "${true}",
                 "${false}", "${null}", "${'hello'}", "${1.25}", "value=${7};${null}",
-                "${'x'}${'y'}", "\\${escaped}");
+                "${'x'}${'y'}", "\\${escaped}", "${-7}", "#{-9223372036854775808}",
+                "${-(-7)}", "${-1.25}", "${-0.0}", "${-'7'}", "${-'1.5'}", "${-null}",
+                "${not false}", "#{! false}", "${empty ''}", "${empty null}", "${empty -7}",
+                "${not empty ''}", "signed=${-7}");
         Path classes=temporary.resolve("classes");
         Files.createDirectories(classes.resolve("demo"));
         var constructors=new ArrayList<String>();
@@ -74,6 +77,16 @@ class ExpressionCompilerTest {
                         public <T> T convertToType(Object value,Class<T> type) {
                             if (type==Object.class) return (T)value;
                             if (type==String.class) return (T)(value==null ? "" : value.toString());
+                            if (type==boolean.class || type==Boolean.class) {
+                                if (value==null || "".equals(value)) return (T)Boolean.FALSE;
+                                if (value instanceof Boolean b) return (T)b;
+                                if (value instanceof String text) return (T)Boolean.valueOf(text);
+                                throw new ELException("Invalid boolean input");
+                            }
+                            if (type==Long.class) return (T)Long.valueOf(value==null || "".equals(value) ? 0L
+                                    : value instanceof Number n ? n.longValue() : Long.parseLong(value.toString()));
+                            if (type==Double.class) return (T)Double.valueOf(value==null || "".equals(value) ? 0.0
+                                    : value instanceof Number n ? n.doubleValue() : Double.parseDouble(value.toString()));
                             throw new ELException("Unsupported test conversion");
                         }
                     }
@@ -130,26 +143,83 @@ class ExpressionCompilerTest {
                         catch (ELException expected) {}
                         if (!failureEvents.equals(java.util.List.of("before")))
                             throw new AssertionError("Failed-evaluation events differ from interpreter behavior");
+                        if (!expressions[20].equals(expressions[21]))
+                            throw new AssertionError("Unary aliases changed parsed identity");
+                        int[] conversions={0};
+                        var counted=new Context() {
+                            public <T> T convertToType(Object value,Class<T> type) {
+                                if (type==Long.class) conversions[0]++;
+                                return super.convertToType(value,type);
+                            }
+                        };
+                        if (expressions[17].getType(counted)!=Long.class || conversions[0]!=1)
+                            throw new AssertionError("Unary metadata skipped operand conversion");
+                        try { new BadUnary(Object.class).getValue(context); throw new AssertionError("Invalid unary input was accepted"); }
+                        catch (ELException expected) {}
+                        try (var output=new java.io.ObjectOutputStream(java.nio.file.Files.newOutputStream(java.nio.file.Path.of(args[0])))) {
+                            output.writeObject(new E2(Object.class));
+                        }
                     }
                 }
                 """.formatted(String.join(",",constructors));
+        byte[] invalidUnary=ExpressionCompiler.compile("demo.BadUnary","${-true}");
+        assertTrue(ClassFile.of().verify(invalidUnary).isEmpty());
+        Files.write(classes.resolve("demo/BadUnary.class"),invalidUnary);
         Path source=temporary.resolve("sources");
         Files.createDirectories(source);
         Files.writeString(source.resolve("Main.java"),main);
+        Files.writeString(source.resolve("RestoreMain.java"),"""
+                package demo;
+                public class RestoreMain {
+                    public static void main(String[] args) throws Exception {
+                        try (var input=new java.io.ObjectInputStream(java.nio.file.Files.newInputStream(java.nio.file.Path.of(args[0])))) {
+                            var expression=(jakarta.el.ValueExpression)input.readObject();
+                            throw new AssertionError("A stale expression was restored against changed bytecode: "+expression.getExpressionString());
+                        } catch (java.io.InvalidClassException expected) {
+                            System.out.println("PEANO_STALE_ARTIFACT_REJECTED");
+                        }
+                    }
+                }
+                """);
+        Files.writeString(source.resolve("CompatibleMain.java"),"""
+                package demo;
+                public class CompatibleMain {
+                    public static void main(String[] args) throws Exception {
+                        try (var input=new java.io.ObjectInputStream(java.nio.file.Files.newInputStream(java.nio.file.Path.of(args[0])))) {
+                            var expression=(jakarta.el.ValueExpression)input.readObject();
+                            if (!Long.valueOf(42).equals(expression.getValue(new Main.Context()))
+                                    || !expression.equals(new E2(Object.class))
+                                    || !"${42}".equals(expression.getExpressionString()))
+                                throw new AssertionError("Equivalent bytecode changed serialized meaning");
+                            System.out.println("PEANO_EQUIVALENT_ARTIFACT_ACCEPTED");
+                        }
+                    }
+                }
+                """);
         Files.writeString(source.resolve("module-info.java"),"module peano.compiledconsumer { requires io.vidocq.peano.api; }");
         String modulePath=String.join(File.pathSeparator,location(ExpressionFactory.class).toString(),location(AccessorTable.class).toString());
         run(List.of(javaBin("javac"),"--module-path",modulePath,"--patch-module",
                 "peano.compiledconsumer="+classes,"-d",classes.toString(),
-                source.resolve("module-info.java").toString(),source.resolve("Main.java").toString()));
+                source.resolve("module-info.java").toString(),source.resolve("Main.java").toString(),source.resolve("RestoreMain.java").toString(),
+                source.resolve("CompatibleMain.java").toString()));
+        Path snapshot=temporary.resolve("expression.bin");
         String output=run(List.of(javaBin("java"),"--module-path",
-                modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.Main"));
+                modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.Main",snapshot.toString()));
         assertEquals(expected,output.lines().toList(),output);
+        Files.write(classes.resolve("demo/E2.class"),ExpressionCompiler.compile("demo.E2","#{ 42 }"));
+        String compatible=run(List.of(javaBin("java"),"--module-path",
+                modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.CompatibleMain",snapshot.toString()));
+        assertTrue(compatible.contains("PEANO_EQUIVALENT_ARTIFACT_ACCEPTED"),compatible);
+        Files.write(classes.resolve("demo/E2.class"),ExpressionCompiler.compile("demo.E2","${43}"));
+        String rejected=run(List.of(javaBin("java"),"--module-path",
+                modulePath+File.pathSeparator+classes,"--module","peano.compiledconsumer/demo.RestoreMain",snapshot.toString()));
+        assertTrue(rejected.contains("PEANO_STALE_ARTIFACT_REJECTED"),rejected);
     }
 
     @Test
     void rejectsUnsupportedNodesAndInvalidBinaryNamesAtBuildTime() {
         assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${bean.value}"));
-        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${-7}"));
+        assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${1+2}"));
         assertThrows(IllegalArgumentException.class,()->ExpressionCompiler.compile("demo.bad-name","${7}"));
         assertThrows(NullPointerException.class,()->ExpressionCompiler.compile("demo.Missing",null));
     }

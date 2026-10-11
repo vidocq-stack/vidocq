@@ -19,9 +19,10 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 == Build-time expression compiler
 
 ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class file
-for literal text and templates whose evaluation parts are AST literals. It supports
-null, boolean, string, integer and floating values and composite literal templates.
-Unary signed literals, operators, identifiers and calls are rejected in this slice.
+for literal text and templates whose evaluation parts are literal/unary AST trees.
+It supports null, boolean, string, integer and floating values, minus, not/! and empty,
+including Long.MIN_VALUE and composite templates. Binary operators, identifiers and
+calls are rejected in this slice.
 Syntax, unsupported nodes and Class-File size failures raise ELException; invalid
 qualified binary names raise IllegalArgumentException. The caller owns output placement.
 
@@ -49,6 +50,12 @@ Generated subclasses evaluate directly; the shared API base owns conversion,
 events, parsed identity, read-only metadata and serialization.
 Identity keys are opaque compiler output and must represent normalized parsed form;
 bindingIdentity contributes captured bindings when subclasses need them.
+
+Emitted serialization UIDs fingerprint normalized structure and the emission-schema
+version. Equivalent templates remain compatible across regenerated classes; changed
+expression bodies reject old streams with InvalidClassException. Artifacts from the
+initial fixed-UID prototype must be regenerated. Unary getType reevaluates the body,
+preserving caller conversion effects.
 
 == Legacy property-editor boundary
 

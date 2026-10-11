@@ -3,6 +3,19 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## COMP-002 · 2026-10-11 · Serialized expressions accepted changed emitted bodies
+
+- Symptom: a serialized compiled expression could restore its old source metadata
+  against a regenerated class evaluating a different expression.
+- Minimal reproduction: serialize demo.E2 compiled from ${42}; replace E2 with
+  bytecode compiled from ${43}; restore the old stream in a fresh JVM.
+- Cause: every emitted class used the same fixed serialVersionUID value.
+- Status: resolved. Each UID derives from canonical parsed identity and an emission
+  schema tag. Equivalent source forms remain compatible; changed ASTs are rejected
+  by InvalidClassException. The initial fixed-UID prototype artifacts need regeneration.
+- Evidence: the stale-artifact test failed before the fingerprint and now rejects
+  changed bytecode, while a ${42} to #{ 42 } equivalent redeployment succeeds.
+
 ## COMP-001 · 2026-10-11 · Class-File limits leaked generic builder errors
 
 - Symptom: compiling a valid oversized literal template threw IllegalArgumentException

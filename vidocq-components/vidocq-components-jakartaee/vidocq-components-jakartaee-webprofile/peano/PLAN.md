@@ -125,6 +125,21 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 unary slice (2026-10-11): the compiler now emits recursive minus, not/! and empty
+over literal/unary trees, including Long.MIN_VALUE and signed zero. Numeric strings
+are coerced through the caller context before negation; numeric literals do not gain
+extra conversions. Empty preserves operand evaluation even when the empty result
+is statically known. A single unary evaluation's getType reevaluates its body,
+matching interpreter conversion effects without expected-type conversion or events.
+Binary operators and dynamic resolver-backed nodes remain subsequent slices.
+
+Compiled serialization UIDs now fingerprint exact UTF-16 units of canonical parsed
+identity plus the peano-compiled-value-v1 emission-schema tag. The tag must change
+when emitted semantics or protocol become serialization-incompatible. Changed AST
+redeployments reject old streams; normalized equivalent forms retain original source
+metadata and remain compatible. This replaces the initial prototype's fixed UID.
+No runtime parsing or bytecode generation is used for restoration.
+
 P7 first slice (2026-10-11): peano-compiler exports ExpressionCompiler.compile(binaryName,
 source), returning a fresh Java 25 class file. The emitted public class extends the
 peano-api CompiledValueExpression protocol base and has a public Class constructor for
