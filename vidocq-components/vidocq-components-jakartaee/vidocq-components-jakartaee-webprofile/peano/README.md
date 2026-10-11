@@ -95,7 +95,8 @@ the original RHS after typed writes.
 Namespaced mapped functions capture immutable descriptors and use direct accessor tables,
 with the existing policy-controlled API fallback. Named calls prioritize context lambdas,
 then captured default-prefix functions and imported constructors/static methods.
-Chained callable results support existing lambdas; lambda construction and peano-bench remain planned.
+Chained callable results and lambda construction compile with lexical argument capture,
+immediate invocation and nested parameter shadowing. peano-bench remains planned.
 Regenerate pre-v3 compiled
 classes: corrected text-literal identity uses a new serialization emission schema.
 

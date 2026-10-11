@@ -46,6 +46,8 @@ public final class ExpressionCompiler {
     private final ClassDesc owner;
     private final java.util.Map<Ast.Literal,String> strings=new java.util.LinkedHashMap<>();
     private final java.util.Set<String> functionKeys=new java.util.LinkedHashSet<>();
+    private final java.util.Map<Ast.Lambda,Integer> lambdas=new java.util.LinkedHashMap<>();
+    private java.util.Set<String> locals=java.util.Set.of();
 
     private ExpressionCompiler(ClassDesc owner,Template template) {
         this.owner=owner;
@@ -64,10 +66,16 @@ public final class ExpressionCompiler {
         } else if (node instanceof Ast.Property property) {
             collectStrings(property.base()); collectStrings(property.key());
         } else if (node instanceof Ast.Call call) {
-            if (call.target() instanceof Ast.Identifier identifier) functionKeys.add(":"+identifier.name());
+            if (call.target() instanceof Ast.Identifier identifier && !locals.contains(identifier.name()))
+                functionKeys.add(":"+identifier.name());
             collectStrings(call.target()); call.arguments().forEach(this::collectStrings);
         } else if (node instanceof Ast.Function function) {
             functionKeys.add(function.prefix()+":"+function.name()); function.arguments().forEach(this::collectStrings);
+        } else if (node instanceof Ast.Lambda lambda) {
+            lambdas.putIfAbsent(lambda,lambdas.size());
+            var previous=locals;
+            var nested=new java.util.HashSet<>(locals); nested.addAll(lambda.parameters()); locals=nested;
+            try { collectStrings(lambda.body()); } finally { locals=previous; }
         } else if (node instanceof Ast.ListLiteral list) list.elements().forEach(this::collectStrings);
         else if (node instanceof Ast.SetLiteral set) set.elements().forEach(this::collectStrings);
         else if (node instanceof Ast.MapLiteral map) {
@@ -202,7 +210,7 @@ public final class ExpressionCompiler {
 
     private static boolean containsResolved(Ast node) {
         return switch (node) {
-            case Ast.Identifier _, Ast.Property _, Ast.Call _, Ast.Function _ -> true;
+            case Ast.Identifier _, Ast.Property _, Ast.Call _, Ast.Function _, Ast.Lambda _ -> true;
             case Ast.Unary unary -> containsResolved(unary.operand());
             case Ast.Binary binary -> binary.operator().kind()==TokenKind.ASSIGN
                     || containsResolved(binary.left()) || containsResolved(binary.right());
@@ -227,7 +235,8 @@ public final class ExpressionCompiler {
         var owner=ClassDesc.of(binaryName);
         var compiler=new ExpressionCompiler(owner,template);
         var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
-        var parent=compiler.functionKeys.isEmpty() ? pathBase : ClassDesc.of("io.vidocq.peano.spi.CompiledFunctionValueExpression");
+        var parent=!compiler.lambdas.isEmpty() ? ClassDesc.of("io.vidocq.peano.spi.CompiledLambdaValueExpression")
+                : compiler.functionKeys.isEmpty() ? pathBase : ClassDesc.of("io.vidocq.peano.spi.CompiledFunctionValueExpression");
         var reference=ClassDesc.of("jakarta.el.ValueReference");
         var namesType=ClassDesc.ofDescriptor("[Ljava/lang/String;");
         try {
@@ -251,7 +260,7 @@ public final class ExpressionCompiler {
                         int index=0;
                         for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
                         if (body==null) code.iconst_1(); else code.iconst_0();
-                        if (compiler.functionKeys.isEmpty())
+                        if (parent.equals(pathBase))
                             code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN));
                         else {
                             code.loadConstant(compiler.functionKeys.size()).anewarray(STRING);
@@ -278,6 +287,17 @@ public final class ExpressionCompiler {
                         code.invokevirtual(buffer,"toString",MethodTypeDesc.of(STRING));
                     }
                     code.areturn();
+                });
+                if (!compiler.lambdas.isEmpty()) builder.withMethodBody("evaluateLambda",
+                        MethodTypeDesc.of(OBJECT,CONTEXT,ClassDesc.ofDescriptor("I")),ClassFile.ACC_PROTECTED,code-> {
+                    for (var entry:compiler.lambdas.entrySet()) {
+                        var next=code.newLabel();
+                        code.iload(2).loadConstant(entry.getValue()).if_icmpne(next);
+                        compiler.emit(code,entry.getKey().body()); code.areturn().labelBinding(next);
+                    }
+                    var exception=ClassDesc.of("jakarta.el.ELException");
+                    code.new_(exception).dup().ldc("Unknown compiled lambda body")
+                            .invokespecial(exception,"<init>",MethodTypeDesc.of(VOID,STRING)).athrow();
                 });
                 if (body instanceof Ast.Property property) builder.withMethodBody("locate",MethodTypeDesc.of(reference,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                     int base=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
@@ -347,6 +367,10 @@ public final class ExpressionCompiler {
             key(identity,"function",function.prefix()); key(identity,"name",function.name());
             key(identity,"arguments",Integer.toString(function.arguments().size()));
             for (Ast argument:function.arguments()) validate(argument,identity,source,names);
+        } else if (names!=null && node instanceof Ast.Lambda lambda) {
+            key(identity,"lambda",Integer.toString(lambda.parameters().size()));
+            for (String parameter:lambda.parameters()) key(identity,"parameter",parameter);
+            validate(lambda.body(),identity,source,excluding(names,lambda.parameters()));
         } else if (node instanceof Ast.Unary unary) {
             key(identity,"unary",unary.operator().kind().name());
             if (signedInteger(unary)) {
@@ -377,6 +401,14 @@ public final class ExpressionCompiler {
                 +" in template: "+source);
     }
 
+    private static java.util.Set<String> excluding(java.util.Set<String> target,java.util.List<String> locals) {
+        return new java.util.AbstractSet<>() {
+            @Override public boolean add(String value) { return !locals.contains(value) && target.add(value); }
+            @Override public java.util.Iterator<String> iterator() { return target.iterator(); }
+            @Override public int size() { return target.size(); }
+        };
+    }
+
     private static void literalKey(StringBuilder identity,Ast.Literal literal) {
         var token=literal.token();
         key(identity,token.kind().name(),token.value()==null ? token.text() : token.value());
@@ -396,7 +428,8 @@ public final class ExpressionCompiler {
 
     private static ClassDesc rawType(Ast node) {
         if (node instanceof Ast.Literal literal) return rawType(literal);
-        if (node instanceof Ast.Identifier || node instanceof Ast.Property || node instanceof Ast.Call || node instanceof Ast.Function) return OBJECT;
+        if (node instanceof Ast.Identifier || node instanceof Ast.Property || node instanceof Ast.Call || node instanceof Ast.Function
+                || node instanceof Ast.Lambda) return OBJECT;
         if (node instanceof Ast.ListLiteral) return ClassDesc.of("java.util.ArrayList");
         if (node instanceof Ast.SetLiteral) return ClassDesc.of("java.util.LinkedHashSet");
         if (node instanceof Ast.MapLiteral) return ClassDesc.of("java.util.LinkedHashMap");
@@ -457,8 +490,24 @@ public final class ExpressionCompiler {
         }
     }
 
+    private void emitNames(CodeBuilder code,java.util.Collection<String> names) {
+        code.loadConstant(names.size()).anewarray(STRING);
+        int index=0;
+        for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
+    }
+
     private void emit(CodeBuilder code,Ast node) {
         if (node instanceof Ast.Literal literal) { emit(code,literal); return; }
+        if (node instanceof Ast.Lambda lambda) {
+            var names=new java.util.LinkedHashSet<String>();
+            validate(lambda.body(),new StringBuilder(),"lambda",excluding(names,lambda.parameters()));
+            code.aload(0).aload(1).loadConstant(lambdas.get(lambda));
+            emitNames(code,lambda.parameters()); emitNames(code,names);
+            code.invokespecial(ClassDesc.of("io.vidocq.peano.spi.CompiledLambdaValueExpression"),"createLambda",
+                    MethodTypeDesc.of(ClassDesc.of("jakarta.el.LambdaExpression"),CONTEXT,ClassDesc.ofDescriptor("I"),
+                            ClassDesc.ofDescriptor("[Ljava/lang/String;"),ClassDesc.ofDescriptor("[Ljava/lang/String;")));
+            return;
+        }
         if (node instanceof Ast.ListLiteral list) { emitList(code,list.elements()); return; }
         if (node instanceof Ast.SetLiteral set) {
             emitList(code,set.elements());
@@ -478,7 +527,10 @@ public final class ExpressionCompiler {
             }
             code.aload(slot); return;
         }
-        var pathBase=ClassDesc.of("io.vidocq.peano.spi.CompiledPropertyValueExpression");
+        var pathBase=ClassDesc.of(lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledPropertyValueExpression"
+                : "io.vidocq.peano.spi.CompiledLambdaValueExpression");
+        var functionBase=ClassDesc.of(lambdas.isEmpty() ? "io.vidocq.peano.spi.CompiledFunctionValueExpression"
+                : "io.vidocq.peano.spi.CompiledLambdaValueExpression");
         if (node instanceof Ast.Function function) {
             int arguments=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
             code.loadConstant(function.arguments().size()).anewarray(OBJECT);
@@ -486,7 +538,7 @@ public final class ExpressionCompiler {
                 code.dup().loadConstant(i); emit(code,function.arguments().get(i)); code.aastore();
             }
             code.astore(arguments).aload(0).aload(1).ldc(function.prefix()+":"+function.name()).aload(arguments)
-                    .invokespecial(ClassDesc.of("io.vidocq.peano.spi.CompiledFunctionValueExpression"),"invokeFunction",
+                    .invokespecial(functionBase,"invokeFunction",
                             MethodTypeDesc.of(OBJECT,CONTEXT,STRING,ClassDesc.ofDescriptor("[Ljava/lang/Object;")));
             return;
         }
@@ -511,7 +563,6 @@ public final class ExpressionCompiler {
         if (node instanceof Ast.Call call) {
             int target=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
             int arguments=code.allocateLocal(java.lang.classfile.TypeKind.REFERENCE);
-            var functionBase=ClassDesc.of("io.vidocq.peano.spi.CompiledFunctionValueExpression");
             var lambdaType=ClassDesc.of("jakarta.el.LambdaExpression");
             if (call.target() instanceof Ast.Identifier identifier) {
                 code.aload(0).aload(1).ldc(identifier.name())

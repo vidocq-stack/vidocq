@@ -76,8 +76,15 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Recurrence: PR #34 TCK job 81191 at commit 5edc17a failed with the same Docker
   startup error before tests. Signed retry 27d75be passed all four merge checks;
   PR #34 was then merged. No source change was needed for either incident.
+- Further recurrence: PR #35 TCK job 81224 failed with the same startup error;
+  signed retry 8165319 passed all PR checks before merge.
 
 ## COMP-006 · 2026-10-11 · Property helper calls needed emitted class loading to verify
+
+- Lambda follow-up: inherited protected helper calls must name the generated class's
+  immediate API superclass. Naming a more distant superclass caused standalone
+  verification to load the absent generated class. Lambda-bearing expressions now
+  name CompiledLambdaValueExpression; Class-File verification and independent JVMs pass.
 
 - Symptom: standalone Class-File verification could not resolve the unloaded generated
   class while validating invokevirtual calls to its superclass's protected helpers.

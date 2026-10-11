@@ -37,6 +37,7 @@ public class Main {
         final Map<String,Object> roots=new HashMap<>();
         final List<String> effects=new ArrayList<>();
         final List<String> captures=new ArrayList<>();
+        final List<String> variableCaptures=new ArrayList<>();
         public ELResolver getELResolver() { return new ELResolver() {
             public Object getValue(ELContext c,Object b,Object p) {
                 effects.add("read:"+p);
@@ -58,7 +59,10 @@ public class Main {
             }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
         }; }
-        public VariableMapper getVariableMapper() { return null; }
+        public VariableMapper getVariableMapper() { return new VariableMapper() {
+            public ValueExpression resolveVariable(String name) { variableCaptures.add(name); return null; }
+            public ValueExpression setVariable(String name,ValueExpression value) { throw new UnsupportedOperationException(); }
+        }; }
         public FunctionMapper getFunctionMapper() { return new FunctionMapper() {
             public Method resolveFunction(String prefix,String name) { String key=prefix+":"+name; captures.add(key); return functions.get(key); }
         }; }
@@ -178,6 +182,35 @@ public class Main {
                 try { ExpressionFactory.newInstance().createValueExpression(context,expression.getExpressionString(),Object.class).getValue(context);
                     throw new AssertionError("Oracle accepted invalid callable"); }
                 catch (MethodNotFoundException expected) {}
+            }
+        }
+        context.variableCaptures.clear();
+        var lambdaExpression=new Lambda(context,Object.class);
+        check(context.variableCaptures.isEmpty(),"Lambda parameters captured from VariableMapper");
+        var compiledLambda=(LambdaExpression)lambdaExpression.getValue(context);
+        check(compiledLambda.invoke(context,5L).equals(6L),"Compiled lambda body failed");
+        check(new Immediate(Object.class).getValue(context).equals(3L),"Immediate lambda failed");
+        check(new Closure(Object.class).getValue(context).equals(7L),"Lexical closure failed");
+        check(new Shadow(Object.class).getValue(context).equals(3L),"Nested parameter shadow failed");
+        check(new NullableClosure(Object.class).getValue(context)==null,"Nullable capture failed");
+        context.functions.put(":callable",Functions.class.getDeclaredMethod("hidden"));
+        context.captures.clear(); context.variableCaptures.clear();
+        check(new LocalCall(context,Object.class).getValue(context).equals(12L),"Local callable parameter failed");
+        check(context.captures.isEmpty() && context.variableCaptures.equals(List.of("callable")),"Local parameter mapping was captured");
+        var closureExpression=new Closure(context,Object.class);
+        var closureBytes=new java.io.ByteArrayOutputStream();
+        try (var output=new java.io.ObjectOutputStream(closureBytes)) { output.writeObject(closureExpression); }
+        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(closureBytes.toByteArray()))) {
+            var restored=(ValueExpression)input.readObject();
+            check(restored.equals(closureExpression) && restored.getValue(context).equals(7L),"Compiled closure expression restoration failed");
+        }
+        try { new LambdaFailure(Object.class).getValue(context); throw new AssertionError("Lambda failure swallowed"); }
+        catch (ELException expected) { check(!context.isLambdaArgument("x"),"Failed lambda leaked scope"); }
+        if (coreFallback) {
+            for (ValueExpression compiled:List.of(new Immediate(context,Object.class),new Closure(context,Object.class),
+                    new Shadow(context,Object.class),new NullableClosure(context,Object.class),new LocalCall(context,Object.class))) {
+                Object expected=ExpressionFactory.newInstance().createValueExpression(context,compiled.getExpressionString(),Object.class).getValue(context);
+                check(Objects.equals(compiled.getValue(context),expected),"Lambda differential mismatch: "+compiled.getExpressionString());
             }
         }
         System.out.println("PEANO_COMPILED_FUNCTION_OK");

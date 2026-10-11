@@ -55,6 +55,15 @@ class FunctionExpressionCompilerTest {
             assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
             Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
         }
+        for (var entry:Map.of("Lambda","${x -> x+1}","Immediate","${(x -> x+1)(2)}",
+                "Closure","${(x -> y -> x+y)(4)(3)}","Shadow","${(x -> x -> x)(4)(3)}",
+                "NullableClosure","${(x -> y -> x)(null)(3)}",
+                "LocalCall","${(callable -> callable(2))(callable)}",
+                "LambdaFailure","${(x -> 1%0)(2)}").entrySet()) {
+            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),entry.getValue()+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+        }
         Path source=temporary.resolve("sources"); Files.createDirectories(source);
         for (String file:List.of("Main.java","Provider.java","Constructed.java")) {
             try (var resource=getClass().getResourceAsStream("/function-app/"+file)) { Files.copy(resource,source.resolve(file)); }

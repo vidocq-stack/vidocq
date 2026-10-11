@@ -125,13 +125,20 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P7 lambda slice (2026-10-11): lambda bodies emit into the same application-owned
+class through a protected dispatcher. A precompiled API ValueExpression adapter owns
+the expression, body ordinal and nullable lexical argument snapshot; no runtime AST,
+bytecode generation or reflective invocation is introduced. Variable/function capture
+excludes lexical parameters, including nested shadowing. Captured scopes unwind on
+failure. Independent API-only consumers cover immediate/chained invocation, nested/null
+closures, local callables and expression restoration; core supplies differential results.
+
 P7 named-callable slice (2026-10-11): identifier calls resolve lambda arguments,
 captured variables and caller-owned roots before captured default-prefix functions,
 imported constructors and static methods. Targets resolve before left-to-right arguments;
 invalid targets fail before argument effects. Imported calls use the caller's resolver
 chain and chained callable results invoke existing LambdaExpression values directly.
-Independent consumers cover allow/deny modes without core/compiler; lambda construction
-remains the next slice.
+Independent consumers cover allow/deny modes without core/compiler.
 
 P7 mapped-function slice (2026-10-11): namespaced FunctionMapper targets are captured
 at creation as immutable owner/name/parameter/return descriptors. Public/static validity

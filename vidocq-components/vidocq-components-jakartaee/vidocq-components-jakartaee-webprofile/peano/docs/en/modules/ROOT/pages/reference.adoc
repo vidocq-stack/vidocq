@@ -27,7 +27,7 @@ sequences are emitted directly. Standalone root identifiers and property navigat
 also supported, including resolved arithmetic/comparisons and inline member calls.
 Assignments compile over supported root/property targets.
 Namespaced/default-prefix mapped functions, named callables and imported constructors/static methods
-are supported. Chained calls invoke existing LambdaExpression values; lambda construction remains planned.
+are supported. Lambda construction, immediate/chained invocation and lexical closures are supported.
 List, set and map literals emit fresh mutable JDK collections, preserving order, nulls
 and duplicate handling. Their elements can include captured root/property values and
 supported operator/collection trees.
@@ -137,6 +137,14 @@ Lambda values take precedence over captured default-prefix functions, then impor
 constructors and static methods. Targets resolve before argument evaluation and remain
 fixed while arguments run. Invalid targets fail before argument effects. Imported calls
 use the supplied ELResolver.invoke chain; arbitrary callable results must be lambdas.
+
+Lambda-containing expressions extend CompiledLambdaValueExpression. Bodies are emitted
+into the same class, selected through a protected dispatcher. A precompiled API adapter
+retains the expression, body ordinal and lexical argument snapshot, including nulls.
+Parameters are excluded from creation-time variable/function capture; inner parameters
+shadow outer parameters. Captured scopes unwind after success or failure. The API
+LambdaExpression retains its evaluation context, as for interpreted lambdas; the body
+adapter and compiled expression do not retain a context or a runtime syntax tree.
 
 Registered static AccessorProvider tables run before the API StaticFieldELResolver
 fallback; the fallback follows peano.reflection. Catalogs are immutable snapshots in
