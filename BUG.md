@@ -57,6 +57,21 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Evidence**: effective-POM probe red/green; all 275 CLI tests pass, including the
   Peano codegen/directive regression and catalogue/module-info consistency checks.
 
+## BUG-20261011-04 — a servlet application under a context path other than `/` answers 404
+
+- **Date**: 2026-10-11
+- **Status**: FIXED (branch fix/servlet-context-path-mount)
+- **Affected module**: vidocq-runtime-foy-servlet-extension (`FoyExtension`, `FoyMountHandlerProvider`)
+- **Symptom**: with `vidocq.servlet.context-path=/shop`, or a declarative `type=servlet` mount on `/web`, every
+  servlet answers 404; found by the Servlet TCK on the assembled runtime (vidocq#217), whose WARs live under
+  `/<war name>`.
+- **Minimal repro**: `FoyServletContextPathTest` in `vidocq-runtime-it-foy-servlet`.
+- **Cause**: the extension mounted Foy with the prefix stripped, but Foy dispatches on the full request path, its
+  context path included; foy-tck's host passes the request unchanged. The IT only used the root context. #221 had
+  even refused `strip-prefix=false`, the one setting that worked.
+- **Fix**: `MountHandlerProvider.stripPrefix()` gives a provider's default for `strip-prefix`; the servlet provider
+  answers `false` and refuses `strip-prefix=true`; the auto-mount keeps the prefix.
+
 ## BUG-20261011-03 — a mount on `/` hid every mount registered after it, and a duplicate prefix was silent
 
 - **Date**: 2026-10-11

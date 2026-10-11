@@ -55,7 +55,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     public FoyExtension() {
         // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
-        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler),
+        // No prefix stripping: Foy dispatches on the full request path, its context path included.
+        this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler, false),
                 new FoyDeployments());
     }
 

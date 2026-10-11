@@ -31,13 +31,19 @@ import java.util.List;
  * {@code vidocq.http.mount.<n>.type=servlet}: mounts the application's servlets on a declared
  * prefix and listener. The prefix is the context path; {@code vidocq.http.mount.<n>.session-timeout}
  * overrides {@code vidocq.servlet.session-timeout} for this mount. One servlet mount per application,
- * which strips its prefix: {@code strip-prefix=false} and a second {@code type=servlet} mount fail.
+ * which keeps its prefix (Foy dispatches on the full path): {@code strip-prefix=true} and a second
+ * {@code type=servlet} mount fail.
  */
 public final class FoyMountHandlerProvider implements MountHandlerProvider {
 
     @Override
     public String type() {
         return "servlet";
+    }
+
+    @Override
+    public boolean stripPrefix() {
+        return false;
     }
 
     @Override
@@ -48,10 +54,10 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
 
     Handler create(MountConfig cfg, FoyDeployments deployments, BeanManager beanManager, ClassLoader loader) {
         String key = "vidocq.http.mount." + cfg.name();
-        if ("false".equalsIgnoreCase(cfg.property("strip-prefix").map(String::trim).orElse("true"))) {
-            // Foy would see the full path, its context path included: every servlet path would be off.
-            throw new IllegalStateException(key + ".strip-prefix=false: a servlet mount strips its prefix, "
-                    + "which is the context path; remove the key");
+        if ("true".equalsIgnoreCase(cfg.property("strip-prefix").map(String::trim).orElse("false"))) {
+            // Foy dispatches on the full path: without its context path, every request would be a 404.
+            throw new IllegalStateException(key + ".strip-prefix=true: a servlet mount keeps its prefix, "
+                    + "which is the context path Foy dispatches on; remove the key");
         }
         List<FoyDeployments.Live> live = deployments.all();
         if (!live.isEmpty()) {

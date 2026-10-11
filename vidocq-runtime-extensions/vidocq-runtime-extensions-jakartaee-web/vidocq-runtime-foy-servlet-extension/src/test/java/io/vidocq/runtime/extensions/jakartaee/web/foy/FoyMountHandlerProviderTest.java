@@ -45,6 +45,11 @@ class FoyMountHandlerProviderTest {
     }
 
     @Test
+    void keepsTheMountPrefixForFoy() {
+        assertFalse(new FoyMountHandlerProvider().stripPrefix());
+    }
+
+    @Test
     void deploysWithTheMountPrefixAsContextPath(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of());
 
@@ -97,8 +102,8 @@ class FoyMountHandlerProviderTest {
     }
 
     @Test
-    void aServletMountWithoutPrefixStrippingIsRefused(@TempDir Path root) throws Exception {
-        MountConfig cfg = mount(Map.of("vidocq.http.mount.web.strip-prefix", "false"));
+    void aServletMountThatStripsItsPrefixIsRefused(@TempDir Path root) throws Exception {
+        MountConfig cfg = mount(Map.of("vidocq.http.mount.web.strip-prefix", "true"));
 
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> new FoyMountHandlerProvider()
                 .create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));

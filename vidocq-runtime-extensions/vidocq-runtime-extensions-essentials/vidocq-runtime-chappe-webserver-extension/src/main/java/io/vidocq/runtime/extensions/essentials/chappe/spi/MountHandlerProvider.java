@@ -66,4 +66,13 @@ public interface MountHandlerProvider {
      * scoped under {@code vidocq.mount.<name>.}.
      */
     Handler create(MountConfig config);
+
+    /**
+     * Whether the handler expects the mount prefix stripped from the request path: the default of
+     * {@code vidocq.http.mount.<name>.strip-prefix}. A servlet container dispatches on the full path,
+     * its context path included, so it answers {@code false}.
+     */
+    default boolean stripPrefix() {
+        return true;
+    }
 }

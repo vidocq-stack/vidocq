@@ -238,7 +238,7 @@ The REST extension mounts its resources on the `@ApplicationPath` of the applica
 
 === Declarative mount
 
-`vidocq.http.mount.<name>.type=servlet` mounts the application on `vidocq.http.mount.<name>.path`, on `vidocq.http.mount.<name>.listener`; `vidocq.http.mount.<name>.session-timeout` overrides `vidocq.servlet.session-timeout`. With such a mount, the extension does not mount the application on its own. A `servlet` mount on an application without any web component fails at startup, and so do a second `servlet` mount, which would start the application twice, and `strip-prefix=false`, since the prefix is the context path.
+`vidocq.http.mount.<name>.type=servlet` mounts the application on `vidocq.http.mount.<name>.path`, on `vidocq.http.mount.<name>.listener`; `vidocq.http.mount.<name>.session-timeout` overrides `vidocq.servlet.session-timeout`. With such a mount, the extension does not mount the application on its own. A `servlet` mount on an application without any web component fails at startup, and so do a second `servlet` mount, which would start the application twice, and `strip-prefix=true`: the prefix is the context path, and Foy dispatches on the full request path.
 
 === The `servlet` section of the startup report
 

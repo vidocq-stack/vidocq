@@ -142,7 +142,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
             // strip-prefix=false → routing-only mount: the handler sees the full path, so resources
             // with absolute @Path (e.g. MicroProfile Health @Path("/health")) match at the prefix
             // without the path doubling, while sibling prefixes (static /, /api) stay routable.
-            boolean stripPrefix = m.property("strip-prefix", Boolean.class, true);
+            boolean stripPrefix = m.property("strip-prefix", Boolean.class, provider.stripPrefix());
             ChappeMountPoint.instance().mount(m.listener(), m.prefix(), handler, stripPrefix, m.priority(),
                     PREFIX + m.name());
             LOG.log(System.Logger.Level.INFO,
