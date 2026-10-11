@@ -49,8 +49,11 @@ Module `io.vidocq.runtime.extensions.jakartaee.web.foy`.
 
 ### `vidocq-runtime-foy-servlet-extension-codegen`
 
-POM-only bundle that brings `foy-processor` for `<annotationProcessorPaths>`, like
-`vidocq-runtime-cassini-rest-extension-codegen`.
+POM-only bundle for `<annotationProcessorPaths>`, like
+`vidocq-runtime-cassini-rest-extension-codegen`: `foy-processor` (the `$$FoyComponent`
+factories) and `foy-cdi-vauban`, whose build-compatible extensions (`FoyWebExtension`, and
+`WebContextsExtension` through `vauban-webcontexts`) must be on the processor path for
+Vauban's processor to run them.
 
 ### Root POM
 
@@ -63,7 +66,7 @@ reviewed with the `dependency-gatekeeper` agent.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `vidocq.servlet.context-path` | `/` | Prefix of the Foy mount |
+| `vidocq.servlet.context-path` | the `web.xml` `<default-context-path>`, else `/` | Prefix of the Foy mount |
 | `vidocq.servlet.listener` | default listener | Chappe listener the mount goes to |
 | `vidocq.servlet.session-timeout` | the `web.xml` value, else 30 min | Session timeout, in seconds |
 
@@ -90,11 +93,15 @@ context itself (`RequestContextController`) and the session context through
 methods run and `@Destroyed(SessionScoped.class)` is fired. An in-JVM hot reload then
 starts from a fresh deployment on the new class loader.
 
-**Prefix conflict.** If REST and Servlet end up on the same prefix of the same listener
-(both on `/`, no `@ApplicationPath`), startup fails with a message naming
-`vidocq.servlet.context-path` and `vidocq.rest.context-path`. Failing fast is preferred to
-one mount silently shadowing the other. Longest-prefix routing between `/api` (REST) and
-`/` (Servlet) is verified by the IT.
+**Prefix routing and conflicts (shared web server).** Chappe's router tries mounts in
+registration order and takes the first whose prefix matches, so a Foy mount on `/` would
+shadow every mount registered after it (OpenAPI, static files, declarative mounts).
+`ChappeMountPoint` therefore keeps the mounts of each listener and hands them to the router
+**longest prefix first** when the server starts; two mounts on the same prefix of the same
+listener fail at the second `mount` call, with a message naming both owners and the keys
+that move them (`vidocq.rest.context-path`, `vidocq.servlet.context-path`,
+`vidocq.http.mount.<n>.path`). This is a change of the shared web server, made in this PR
+and listed in What's new: before it, a duplicate prefix silently left one mount unreachable.
 
 ## Tests
 
@@ -105,10 +112,13 @@ Unit tests (extension module):
 - no web component: nothing mounted, startup continues;
 - declarative `type=servlet` mount present: auto-mount skipped;
 - `FoyMountHandlerProvider` creates a handler on the configured prefix;
-- prefix conflict with REST: startup fails with the message above.
+- `ChappeMountPoint`: a longer prefix wins over `/` whatever the registration order, and a
+  second mount on the same prefix of the same listener fails with the message above.
 
 IT `vidocq-runtime-it-foy-servlet` in `vidocq-runtime-integration-tests`, modelled on
-`vidocq-runtime-it-cassini-rest`: the assembled runtime, on the module path. Test
+`vidocq-runtime-it-cyrano-jpms`: the application is a named module (`src/main` with a
+`module-info`), the test boots the assembled runtime with `VidocqBootstrap` on the module
+path and talks HTTP to the bound port. Test
 application: a `@WebServlet`, a filter, a listener, a `@SessionScoped` cart, a
 `@RequestScoped` bean and a REST resource under `/api`. Scenarios:
 
