@@ -84,6 +84,16 @@ class FoyMountHandlerProviderTest {
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
     }
 
+    @Test
+    void theServletSecurityConfigurationReachesFoy(@TempDir Path root) throws Exception {
+        MountConfig cfg = mount(Map.of("vidocq.servlet.confidential-port", "70000"));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> new FoyMountHandlerProvider()
+                .create(cfg, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
+
+        assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
+    }
+
     private static MountConfig mount(Map<String, String> values) {
         return new MountConfig("web", "/web", "default", 0, FoyExtensionTest.config(values), null);
     }

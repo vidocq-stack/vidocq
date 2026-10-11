@@ -47,7 +47,7 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
         int timeout = ServletSettings.seconds("vidocq.http.mount." + cfg.name() + ".session-timeout",
                 cfg.property("session-timeout").orElse(null), global);
         String contextPath = cfg.prefix().isEmpty() || "/".equals(cfg.prefix()) ? "/" : cfg.prefix();
-        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(beanManager, loader, contextPath, timeout)
+        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(beanManager, loader, contextPath, timeout, cfg.vidocqConfig())
                 .orElseThrow(() -> new IllegalStateException("vidocq.http.mount." + cfg.name()
                         + ".type=servlet, but the application has no servlet, filter, listener, web.xml "
                         + "nor ServletContainerInitializer"));

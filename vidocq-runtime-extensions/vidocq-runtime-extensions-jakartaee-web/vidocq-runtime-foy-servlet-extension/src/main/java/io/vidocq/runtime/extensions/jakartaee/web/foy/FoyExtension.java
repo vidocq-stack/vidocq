@@ -76,7 +76,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public Set<String> configKeys() {
-        return Set.of(ServletSettings.CONTEXT_PATH, ServletSettings.LISTENER, ServletSettings.SESSION_TIMEOUT);
+        return Set.of(ServletSettings.CONTEXT_PATH, ServletSettings.LISTENER, ServletSettings.SESSION_TIMEOUT,
+                ServletSecurity.USERS + "*", ServletSecurity.CONFIDENTIAL_PORT, ServletSecurity.ROTATE_SESSION_ID);
     }
 
     @Override
@@ -91,7 +92,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
             return;
         }
         Optional<FoyChappeBoot.Mounted> deployed = FoyDeployments.deploy(beanManager, loader,
-                settings.contextPath(), settings.sessionTimeoutSeconds());
+                settings.contextPath(), settings.sessionTimeoutSeconds(), config);
         if (deployed.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "No web component discovered, Foy Servlet extension inactive");
             return;

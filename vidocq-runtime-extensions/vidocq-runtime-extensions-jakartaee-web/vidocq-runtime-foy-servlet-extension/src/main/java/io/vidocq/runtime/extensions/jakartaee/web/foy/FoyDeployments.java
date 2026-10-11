@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.runtime.spi.config.VidocqConfig;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
 
@@ -43,15 +44,18 @@ final class FoyDeployments {
 
     /**
      * @param contextPath {@code null}: the descriptors' {@code <default-context-path>}, else {@code /}
+     * @param config      read for the {@linkplain ServletSecurity security settings}
      * @return empty when the application has no servlet, filter, listener nor initializer
      */
     static Optional<FoyChappeBoot.Mounted> deploy(BeanManager beanManager, ClassLoader loader,
-                                                  String contextPath, int sessionTimeoutSeconds) {
+                                                  String contextPath, int sessionTimeoutSeconds,
+                                                  VidocqConfig config) {
         FoyChappeBoot.Builder builder = FoyChappeBoot.builder()
                 .beanManager(beanManager)
                 .classLoader(loader)
                 .sessionTimeoutSeconds(sessionTimeoutSeconds);
         if (contextPath != null) builder.contextPath(contextPath);
+        ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
         try {
             return builder.build();
         } catch (ServletException e) {

@@ -64,6 +64,7 @@ class ServletSettingsTest {
         assertEquals("servlet-foy", extension.name());
         assertEquals(600, extension.priority());
         assertEquals(Set.of("vidocq.servlet.context-path", "vidocq.servlet.listener",
-                "vidocq.servlet.session-timeout"), extension.configKeys());
+                "vidocq.servlet.session-timeout", "vidocq.servlet.users.*", "vidocq.servlet.confidential-port",
+                "vidocq.servlet.rotate-session-id-on-login"), extension.configKeys());
     }
 }

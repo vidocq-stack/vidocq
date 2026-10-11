@@ -120,6 +120,16 @@ class FoyExtensionTest {
         assertTrue(FoyDeployments.all().isEmpty());
     }
 
+    @Test
+    void theServletSecurityConfigurationReachesFoy(@TempDir Path root) throws Exception {
+        FoyExtension extension = configured(Map.of());
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> extension.start(null,
+                config(Map.of("vidocq.servlet.confidential-port", "70000")), loaderWith(root, WEB_XML)));
+
+        assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
+    }
+
     private FoyExtension configured(Map<String, String> values) {
         FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)));
         extension.configure(new MapConfiguration(values));
