@@ -104,6 +104,10 @@ peano-bench  ← Opt-in, non-published modular JMH/Expressly comparison harness
 8. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
    **English**.
 
+Approved build-tool exception (2026-10-11): peano-processor may also be discovered
+on Maven's annotation processor classpath. Its named-module service remains supported;
+applications, generated tables and runtime modules continue to use Java Modules only.
+
 ## Conventions
 
 - **Maven groupId**: `io.vidocq.peano`; version `0.4.0-SNAPSHOT` (workspace dev line,

@@ -125,6 +125,13 @@ fallbacks" approach Vauban follows.
 
 ### 2. Expression evaluation — interpreter first, compiled when known
 
+P9 Maven APT integration (2026-10-11): the maintainer approved build-only processor
+discovery on Maven's annotation processor classpath. A service resource complements
+the unchanged named-module processor declaration. Modular applications and generated
+tables are retained; the runtime remains module-path only. Real Maven consumer tests
+generate provider fragments and register them through Vidocq's process-classes goal,
+then read a closed model in allow/deny named JVMs (PROC-001 / VIDOCQ-PEANO-003).
+
 P9 benchmark harness (2026-10-11): the opt-in, non-published peano-bench module
 runs JMH 1.37 against Expressly 6.0.0 using named modules, including forks. Initial
 arithmetic evaluation covers interpreted/compiled Peano and Expressly; repeated creation

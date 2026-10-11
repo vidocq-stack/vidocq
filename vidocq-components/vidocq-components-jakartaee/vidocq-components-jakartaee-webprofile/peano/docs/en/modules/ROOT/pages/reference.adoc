@@ -16,6 +16,14 @@ Reference data for Peano `{project-version}`. Entries marked _planned_ do not ex
 | `io.vidocq.peano:peano-compiler` | `io.vidocq.peano.compiler` | Literal/constant template compiler, build time only; Java Class-File API
 |===
 
+== Annotation processor discovery
+
+peano-processor supports both --processor-module-path discovery and Maven's
+annotationProcessorPaths discovery. The latter uses a build-only service resource
+on Maven's processor classpath, approved on 2026-10-11; module-info.java remains
+unchanged. The application being compiled and the generated tables still belong to
+named modules. Runtime classpath execution is not part of this exception.
+
 == Build-time expression compiler
 
 ExpressionCompiler.compile(binaryName, source) returns a fresh Java 25 class file

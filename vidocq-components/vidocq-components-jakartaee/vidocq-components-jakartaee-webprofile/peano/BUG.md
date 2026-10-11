@@ -40,6 +40,20 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Evidence: isolated direct-table allow/deny consumers and an additional core-backed
   fallback consumer verify both boundaries; no alternative member-reflection path is added.
 
+## PROC-001 · 2026-10-11 · Maven processor paths did not discover the accessor processor
+
+- Symptom: a Maven application compiled its annotated model without producing accessor tables.
+- Minimal reproduction: use peano-processor on Maven's annotationProcessorPaths;
+  javac -processorpath with a named @ELAccessible application produces no provider fragment.
+- Cause: the processor service existed only in module-info.java, which Maven's
+  annotation processor classloader ignores.
+- Status: resolved with the maintainer-approved build-only Maven discovery exception.
+  A service resource complements the existing named-module declaration. Runtime
+  applications and generated tables remain modular.
+- Evidence: processor-path discovery regression red/green; modular processor tests
+  continue to verify closed application packages and allow/deny runtime consumers.
+- Related: Vidocq VIDOCQ-PEANO-003.
+
 ## BENCH-002 · 2026-10-11 · Benchmark conversions could select a global factory
 
 - Symptom: the prototype selected an expression factory per engine but API context

@@ -84,6 +84,22 @@ class PropertyProcessorTest {
     }
 
     @Test
+    void discoversProcessorOnMavenProcessorPathWhileApplicationRemainsModular() throws Exception {
+        Path source=sources("package demo; @io.vidocq.peano.annotation.ELAccessible public record Model(String name) {}");
+        Path classes=temporary.resolve("classes"),generated=temporary.resolve("generated");
+        run(List.of(javaBin("javac"),"--module-path",String.join(File.pathSeparator,el().toString(),api().toString()),
+                "-processorpath",String.join(File.pathSeparator,processor().toString(),api().toString(),el().toString()),
+                "-proc:full","-d",classes.toString(),"-s",generated.toString(),
+                source.resolve("module-info.java").toString(),source.resolve("Model.java").toString()),0);
+        assertTrue(Files.exists(generated.resolve("demo/Model__PeanoAccessors.java")));
+        assertEquals("provides io.vidocq.peano.spi.AccessorProvider with demo.Model__PeanoAccessors;\n",
+                Files.readString(classes.resolve("META-INF/peano/accessor-providers/demo.Model__PeanoAccessors.txt")));
+        var module=java.lang.module.ModuleDescriptor.read(java.nio.ByteBuffer.wrap(Files.readAllBytes(classes.resolve("module-info.class"))));
+        assertEquals("peano.propertynegative",module.name());
+        assertTrue(module.exports().isEmpty() && module.opens().isEmpty());
+    }
+
+    @Test
     void discoversExplicitTypesEvenWithoutAnyAnnotations() throws Exception {
         Path sources = sources("package demo; public class Model { public int getValue(){ return 7; } }");
         var compilation = compile(sources,"-Apeano.accessorTypes=demo.Model");
