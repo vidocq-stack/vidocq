@@ -31,4 +31,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.foy {
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with FoyExtension;
+
+    provides io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider
+            with io.vidocq.runtime.extensions.jakartaee.web.foy.FoyMountHandlerProvider;
 }

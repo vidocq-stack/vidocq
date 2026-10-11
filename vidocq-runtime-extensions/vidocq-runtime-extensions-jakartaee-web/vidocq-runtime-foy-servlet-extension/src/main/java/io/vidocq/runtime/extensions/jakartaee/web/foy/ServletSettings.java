@@ -46,12 +46,15 @@ record ServletSettings(String contextPath, String listener, int sessionTimeoutSe
 
     /** {@code null}: the default; otherwise a number of seconds, named by its key when it is not one. */
     static int seconds(String timeout) {
-        if (timeout == null) return DEFAULT_SESSION_TIMEOUT_SECONDS;
+        return seconds(SESSION_TIMEOUT, timeout, DEFAULT_SESSION_TIMEOUT_SECONDS);
+    }
+
+    static int seconds(String key, String timeout, int defaultSeconds) {
+        if (timeout == null) return defaultSeconds;
         try {
             return Integer.parseInt(timeout.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(SESSION_TIMEOUT + " must be a number of seconds, got '"
-                    + timeout + "'", e);
+            throw new IllegalArgumentException(key + " must be a number of seconds, got '" + timeout + "'", e);
         }
     }
 }
