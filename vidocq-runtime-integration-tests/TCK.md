@@ -141,6 +141,54 @@ The former Cassini gaps are closed: the JAX-RS client now serialises/deserialise
 POJO entities through JSON-B (honouring a `ContextResolver<Jsonb>`) and emits a
 single comma-separated `Accept` header — Jakarta REST 4.0 TCK stays at 0 failures.
 
+## Jakarta Servlet 6.1 (Foy, as the runtime assembles it)
+
+`vidocq-runtime-tck-foy-servlet` runs the official Jakarta Servlet 6.1 TCK
+(`jakarta.tck:servlet-tck-runtime:6.1.0`) on the assembled runtime: each test WAR boots
+`VidocqBootstrap`, and the Servlet extension deploys it through `FoyChappeBoot`, with Vauban, on
+the shared Chappe listener under `/<war name>` (`servletContextPerArchive` of the embedded
+container). Foy's own `foy-tck` certifies the brick alone, driving Foy's internals without CDI;
+this runner certifies the assembly a real application gets.
+
+The TCK is **not on Maven Central**: install `servlet-tck-runtime`, `servlet-tck-util` and the
+`servlet-tck` parent pom from the Eclipse bundle (same procedure as `foy/foy-tck/README.md`). It is
+therefore in neither the pull-request list nor the nightly job, like `vidocq-runtime-tck-annotations`.
+
+```bash
+./mvnw -ntp install -DskipTests
+./mvnw -ntp -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet test
+```
+
+**Result (2026-10-11, Foy main `ee6c899`, about 14 min):** 1714 run, **1694 passing**, 13 errors, 7 skipped
+(api 853/859, spec 196/207, pluggability 643/646, common 2/2). No "Failed to bind" on the final run.
+
+`foy-tck` on the same Foy: 1714 run, 1700 passing, 7 errors, 7 skipped. Every difference is
+explained:
+
+| Tests | Cause | Follow-up |
+|-------|-------|-----------|
+| 7 shared with `foy-tck`: `ServletContext40Tests` JSP ×3, CLIENT-CERT ×2, `SecFormTests` `test2`/`test2_anno` | no JSP engine, no TLS client certificates in the harness (`foy/TCK.md`) | none here |
+| `ServletContext30Tests` `getEffectiveMajorVersion`/`MinorVersion` ×4 (api and pluggability) | Foy: `FoyChappeBoot` never applies the `web.xml` version, so every application reports 6.1; only foy-tck's harness set it | fix in progress in Foy (`pr/ybl/effective-version`) |
+| `HttpSessionxTests.expireHttpSessionxTest` | the test drives two WARs on one server; the container boots one runtime per WAR, each on its own port | harness limit |
+| `Aordering4Tests.absoluteOrderingTest` | a `@WebListener` of a fragment that `<absolute-ordering>` excludes is registered: in the runtime every archive class is a CDI bean, and Foy's CDI discovery does not drop the excluded fragments; the harness loads the classes from the TCK jar, so their code source cannot name the fragment either | Vidocq/vidocq#228 |
+
+What the first runs found, all fixed:
+
+- **BUG-20261011-04** (`BUG.md`): the Servlet extension stripped the context path when mounting Foy,
+  which dispatches on the full path: every application under a context path other than `/` answered
+  404. Fixed in Vidocq/vidocq#227.
+- The embedded container served a WAR's document root nowhere: a runtime application keeps its web
+  resources under `META-INF/resources/`, where the materialized deployment now copies every WAR entry
+  but `META-INF` (welcome files, static pages, error pages, `getResource*`).
+- Flattened to the class path root, `WEB-INF/classes/META-INF/web-fragment.xml` passed for a web
+  fragment (duplicate fragment name); only `WEB-INF/lib` jars carry fragments.
+- A probed free port can be taken before the runtime binds it ("Failed to bind"); a run of 207 boots
+  meets it, so the container retries such a boot on another port.
+- The TCK resolves `slf4j-simple` 2.0.16 offline from the local repository: the runner declares
+  `slf4j-api` and `slf4j-simple` 2.0.16 so they are there.
+- Multipart form fields read as parameters (`PartTests`, `Part1Tests`) failed against an older Foy
+  snapshot and pass on `ee6c899`.
+
 ## TCK glue vs. runtime code
 
 Each runner ships only the glue the TCK's own porting SPI requires — never patches to
