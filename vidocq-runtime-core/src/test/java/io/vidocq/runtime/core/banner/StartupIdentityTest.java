@@ -219,6 +219,9 @@ class StartupIdentityTest {
     @Test
     void bricksAreNamedByTheirThirdSegmentOutsideTheRuntime() {
         assertEquals("vauban", StartupIdentity.brickOf("io.vidocq.vauban.core"));
+        assertEquals("noether", StartupIdentity.brickOf("io.vidocq.noether.jpa.core"));
+        assertEquals(List.of("io.vidocq.noether.jpa.core.NoetherPersistenceProvider"),
+                StartupIdentity.CLASS_PATH_ANCHORS.get("noether"));
         assertEquals("foy", StartupIdentity.brickOf("io.vidocq.foy.api"));
         assertNull(StartupIdentity.brickOf("io.vidocq.runtime.cli"));
         assertNull(StartupIdentity.brickOf("io.vidocq.tools.lc4jcdi.mcptimeserver"));

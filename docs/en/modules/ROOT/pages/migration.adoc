@@ -6,6 +6,34 @@
 Vidocq Runtime is at **{project-version}**. Any real-world migration is premature — this page documents the mappings ahead of time.
 ====
 
+== Noether Persistence extraction
+
+Jakarta Persistence is now provided by xref:noether::index.adoc[Noether], independently
+of Mansart Data, Pool and Transactions. Update existing Persistence applications as follows:
+
+[cols="1,1"]
+|===
+| Previous name | Replacement
+| `vidocq-runtime-mansart-persistence-extension`
+| `vidocq-runtime-noether-persistence-extension`
+| `vidocq-runtime-mansart-persistence-extension-codegen`
+| `vidocq-runtime-noether-persistence-extension-codegen`
+| `io.vidocq.mansart:mansart-jpa-*`
+| `io.vidocq.noether:noether-jpa-*`
+| `io.vidocq.mansart.jpa.*`
+| `io.vidocq.noether.jpa.*`
+| `io.vidocq.mansart.jpa.core.MansartPersistenceProvider`
+| `io.vidocq.noether.jpa.core.NoetherPersistenceProvider`
+| `io.vidocq.runtime.extensions.jakartaee.web.mansart.persistence`
+| `io.vidocq.runtime.extensions.jakartaee.web.noether.persistence`
+|===
+
+Recompile entities so the renamed processor regenerates `_NoetherJpaAccess` and its
+`ManagedAccessProvider` service descriptor. Keep `jakarta.persistence.*` annotations,
+standard persistence properties, and all Mansart Data/Pool/Transactions coordinates unchanged.
+The CLI short ID is `noether-persistence`; its codegen companion is added automatically.
+Noether's Validation stopgap is test/TCK-only: do not add it to production applications.
+
 == Side-by-side comparison
 
 [cols="2,1,1,1,1,1,1"]
@@ -107,7 +135,7 @@ Vidocq Runtime explicitly borrows the Quarkus extension pattern.
 | No Vert.x — virtual threads
 
 | Hibernate Reactive / ORM
-| xref:mansart::index.adoc[Mansart]
+| xref:noether::index.adoc[Noether]
 | JDBC + virtual threads, no Vert.x SQL Client
 
 | Jackson

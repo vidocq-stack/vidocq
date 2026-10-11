@@ -35,7 +35,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) — [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` | ✅ |
 | Virtual-thread-native JDBC pool — [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` | ✅ |
 | JTA transactions — [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` | ✅ |
-| Jakarta Persistence 3.2 (JPA) — [mansart-persistence](../mansart) | `vidocq-runtime-mansart-persistence-extension` (not in the reactor) | ⏸️ suspended (M7 Mansart) |
+| Jakarta Persistence 3.2 (JPA) — [Noether](../noether) | `vidocq-runtime-noether-persistence-extension` | 🧪 P9 integration tests green; not TCK-certified |
 | Schema migration (zero-dep SPI + Flyway / Liquibase) | `vidocq-runtime-migration-extension`, `-flyway-`, `-liquibase-migration-extension` | ✅ |
 | Dev console (incl. read-only Dev MCP for coding agents) | `vidocq-runtime-devconsole-extension` | ✅ |
 | langchain4j-cdi MCP server | `vidocq-runtime-langchain4j-cdi-mcp-extension` | ✅ |

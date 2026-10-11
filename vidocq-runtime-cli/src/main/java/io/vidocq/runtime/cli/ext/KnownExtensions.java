@@ -74,6 +74,10 @@ public final class KnownExtensions {
             new RegistryEntry("mansart-data",
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-data-extension",
+                    "Jakarta Data repositories"),
+            new RegistryEntry("noether-persistence",
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-noether-persistence-extension",
                     "Jakarta Persistence (JPA)"),
             new RegistryEntry("mansart-pool",
                     "io.vidocq.runtime.extensions.jakartaee.web",
@@ -142,6 +146,9 @@ public final class KnownExtensions {
             case "mansart-data" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-data-extension-codegen"));
+            case "noether-persistence" -> Optional.of(new ExtensionCoordinate(
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-noether-persistence-extension-codegen"));
             case "mansart-transactions" -> Optional.of(new ExtensionCoordinate(
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-transactions-extension-codegen"));

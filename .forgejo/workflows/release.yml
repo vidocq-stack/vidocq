@@ -84,6 +84,10 @@ on:
         description: "io.vidocq.mansart:* (all artifacts under io.vidocq.mansart) — stable version (must be released on Central first)"
         type: string
         required: true
+      noether_release:
+        description: "io.vidocq.noether:noether-jpa-* — stable version (must be released on Central first; Validation stopgap excluded)"
+        type: string
+        required: true
       ravel_release:
         description: "io.vidocq.ravel:* (all artifacts under io.vidocq.ravel) — stable version (must be released on Central first)"
         type: string
@@ -127,6 +131,7 @@ jobs:
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
             io.vidocq.knock=${{ inputs.knock_release }}
             io.vidocq.mansart=${{ inputs.mansart_release }}
+            io.vidocq.noether=${{ inputs.noether_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |

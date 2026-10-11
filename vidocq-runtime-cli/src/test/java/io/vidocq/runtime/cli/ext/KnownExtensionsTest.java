@@ -63,6 +63,20 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void resolvesNoetherPersistenceAndItsCodegenWithoutRenamingMansartData() {
+        ExtensionCoordinate c = KnownExtensions.resolve("noether-persistence");
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", c.groupId());
+        assertEquals("vidocq-runtime-noether-persistence-extension", c.artifactId());
+        assertTrue(KnownExtensions.isKnown("NOETHER-PERSISTENCE"));
+        ExtensionCoordinate codegen = KnownExtensions.codegenBundle("noether-persistence").orElseThrow();
+        assertEquals(c.groupId(), codegen.groupId());
+        assertEquals(c.artifactId() + "-codegen", codegen.artifactId());
+        assertEquals("Jakarta Data repositories", KnownExtensions.byId("mansart-data").orElseThrow().description());
+        assertEquals("vidocq-runtime-mansart-data-extension",
+                KnownExtensions.resolve("mansart-data").artifactId());
+    }
+
+    @Test
     void resolvesExplicitGav() {
         ExtensionCoordinate c = KnownExtensions.resolve("com.acme:my-ext");
         assertEquals("com.acme", c.groupId());

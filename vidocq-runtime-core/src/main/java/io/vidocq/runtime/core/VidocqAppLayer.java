@@ -266,7 +266,7 @@ public final class VidocqAppLayer {
             "io.vidocq.champollion", "io.vidocq.cyrano", "io.vidocq.cervantes",
             "io.vidocq.knock", "io.vidocq.dirac", "io.vidocq.heisenberg",
             "io.vidocq.grimm", "io.vidocq.ravel", "io.vidocq.humboldt",
-            "io.vidocq.mansart",
+            "io.vidocq.mansart", "io.vidocq.noether",
             "io.vidocq.runtime.core", "io.vidocq.runtime.spi",
             "io.vidocq.runtime.extensions");
 

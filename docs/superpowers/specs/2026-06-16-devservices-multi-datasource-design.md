@@ -37,7 +37,7 @@ the Vidocq extension** (`vidocq-runtime-mansart-pool-extension`), not in mansart
 - No change to the Vauban resolution engine; no runtime-registered/dynamic CDI beans.
 - No enumeration property (`vidocq.pool.datasources=…`): names are **derived** from the
   `vidocq.pool.<name>.*` keys / the annotation.
-- No XA/JTA multi-resource (lands later with `mansart-persistence`).
+- No XA/JTA multi-resource (lands later with Noether Persistence, extracted from Mansart).
 - First cut wires Postgres only (the per-container model leaves other engines open).
 
 ## 4. Declaration model — follow Quarkus

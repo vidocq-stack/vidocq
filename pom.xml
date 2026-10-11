@@ -91,6 +91,7 @@
         <cassini.version>0.4.0-SNAPSHOT</cassini.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
         <mansart.version>0.4.0-SNAPSHOT</mansart.version>
+        <noether.version>0.4.0-SNAPSHOT</noether.version>
         <knock.version>0.4.0-SNAPSHOT</knock.version>
         <dirac.version>0.4.0-SNAPSHOT</dirac.version>
         <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) — aligned on the 0.4.0-SNAPSHOT global
@@ -247,12 +248,12 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
-                <artifactId>vidocq-runtime-mansart-persistence-extension</artifactId>
+                <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
-                <artifactId>vidocq-runtime-mansart-persistence-extension-codegen</artifactId>
+                <artifactId>vidocq-runtime-noether-persistence-extension-codegen</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>
             </dependency>

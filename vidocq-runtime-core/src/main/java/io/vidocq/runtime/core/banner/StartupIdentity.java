@@ -304,6 +304,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
         anchors.put("knock", List.of("io.vidocq.knock.spi.Knock"));
         anchors.put("mansart", List.of("io.vidocq.mansart.data.core.RepositoryRuntime",
                 "io.vidocq.mansart.pool.PoolConfig", "io.vidocq.mansart.transactions.api.MansartTransactions"));
+        anchors.put("noether", List.of("io.vidocq.noether.jpa.core.NoetherPersistenceProvider"));
         anchors.put("ravel", List.of("io.vidocq.ravel.spi.Ravel"));
         anchors.put("vauban", List.of("io.vidocq.vauban.core.weaving.LoadTimeWeaving"));
         return Collections.unmodifiableMap(anchors);

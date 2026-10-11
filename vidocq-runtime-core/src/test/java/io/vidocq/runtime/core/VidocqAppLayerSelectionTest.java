@@ -130,6 +130,17 @@ class VidocqAppLayerSelectionTest {
                 "nothing kept reads them: the trampoline re-layers the MCP server, the case the extension changes");
     }
 
+    @Test
+    void noetherPersistenceStaysInTheRuntimeLayer(@TempDir Path dir) throws Exception {
+        var app = explodedModule(dir, "acme.app", List.of("io.vidocq.noether.jpa.core"), "acme.app.Main");
+        var persistence = explodedModule(dir, "io.vidocq.noether.jpa.core", List.of(),
+                "io.vidocq.noether.jpa.core.NoetherPersistenceProvider");
+        var config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, persistence), ModuleFinder.of(), Set.of("acme.app"));
+
+        assertEquals(Set.of(real(app)), relayered(VidocqAppLayer.applicationPaths(config, "acme.app")));
+    }
+
     // ---------------------------------------------------------------- fixtures
 
     private static final String MCP_SERVER = "dev.langchain4j.cdi.mcp.server";

@@ -138,7 +138,7 @@ The two mechanisms operate at different levels and complement each other:
 
 On Vidocq the classical tension between the two — the CDI container needing reflective access, hence `opens ... to` the container — **does not apply**. Vauban is a CDI 4.1 Lite container that discovers and wires beans through build-time code generation, not runtime introspection. The target is therefore **zero `opens`**: implementation modules export nothing (not even to the container) beyond what the generated wiring requires, and the generated wiring lives inside the module. Any `opens` directive in an application module is a design smell to be justified in review.
 
-The same target applies to persistence: the mansart Jakarta Persistence implementation (in progress) follows the ecosystem's static-generation philosophy, so Entity access is expected to go through generated accessors rather than reflective `opens`. Should a transitional `opens ... to` be required while that implementation matures, it must be scoped to the persistence module and tracked as technical debt.
+The same target applies to persistence: the Noether Jakarta Persistence implementation (extracted from Mansart) follows the ecosystem's static-generation philosophy, so Entity access is expected to go through generated accessors rather than reflective `opens`. Should a transitional `opens ... to` be required while that implementation matures, it must be scoped to the persistence module and tracked as technical debt.
 
 ### Chosen Granularity: One Java Module Pair per BCE Unit
 
@@ -254,7 +254,7 @@ Mapped to the actual Vidocq building blocks:
 | Synchronous and asynchronous events | Core Profile (CDI 4.1 Lite) | vauban |
 | Inbound endpoint | Core Profile (Jakarta REST 4.0) | cassini (over foy/chappe) |
 | Contract serialization | Core Profile (JSON-P 2.1 / JSON-B 3.0) | champollion |
-| Persistence | **Extension — not in Core Profile** (Jakarta Persistence 3.2, Jakarta Data 1.0) | mansart (Persistence implementation in progress) |
+| Persistence | **Extension — not in Core Profile** (Jakarta Persistence 3.2, Jakarta Data 1.0) | Noether (Persistence), Mansart (Data) |
 | Local transactions | **Extension — not in Core Profile** (Jakarta Transactions 2.0, local-only) | mansart-transactions |
 | Outbound REST port | MicroProfile REST Client | cyrano |
 | Fault tolerance on ports | MicroProfile Fault Tolerance 4.1 | heisenberg |

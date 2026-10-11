@@ -19,7 +19,7 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Servlet | 6.1 | `foy` | ✅ delivered, official TCK passes |
 | Jakarta Data | 1.0 | `mansart-jakarta-data` | ✅ delivered |
 | Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | ✅ delivered (minimal JTA) |
-| Jakarta Persistence (JPA) | 3.2 | `mansart-persistence` | ⏸️ suspended (M7, `mansart-data` covers current runtime needs) |
+| Jakarta Persistence (JPA) | 3.2 | `noether-persistence` | 🧪 P9 integration tests green; not TCK-certified |
 | Jakarta Contexts and Dependency Injection | 4.1 **Full** | Vauban | ❌ Vauban implements CDI **Lite** only — see [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vauban/CDI-FULL.md), [vauban#38](https://codefloe.com/Vidocq/vauban/issues/38) |
 | — Portable Extensions (part of CDI Full) | — | Vauban | ❌ isolated legacy module, architecture decided — [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39) |
 | Jakarta Security | 4.0 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) |
@@ -137,8 +137,9 @@ it does not**, because the temptation is to assume it solves more than it does.
    this conflicts with immutable images and with the static-generation philosophy.
    Build-time precompilation is the only sensible path
    ([#73](https://codefloe.com/Vidocq/vidocq/issues/73)).
-5. **Persistence 3.2.** Suspended in `mansart`; probably the largest single chunk of
-   work after CDI Full, and entirely orthogonal to Kubernetes.
+5. **Persistence 3.2.** Implemented in `noether`, extracted from Mansart; container
+   integration is covered, but full Persistence TCK certification remains open and
+   entirely orthogonal to Kubernetes.
 
 ### 5.3 Plausible shape
 
