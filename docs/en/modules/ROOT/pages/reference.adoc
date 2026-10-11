@@ -82,7 +82,15 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.http.mount.<name>.*`
 | —
-| Declarative mounts (static resources, …).
+| Declarative mounts (static resources, `restful`, `servlet` [.tag-new]#NEW#, …). Mounts are routed longest prefix first, and two mounts on the same prefix of one listener fail at startup [.tag-new]#NEW#.
+
+| `vidocq.servlet.context-path` [.tag-new]#NEW# +
+`vidocq.servlet.listener` +
+`vidocq.servlet.session-timeout`
+| `/` +
+`default` +
+`1800`
+| The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, and session timeout in seconds. See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
 | `vidocq.pool.url` +
 `vidocq.pool.username` / `vidocq.pool.password`

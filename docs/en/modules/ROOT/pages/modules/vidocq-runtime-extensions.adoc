@@ -46,6 +46,10 @@
 | `jakartaee-core`
 | Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban. Its `rest` section of the startup report lists every route, and is a live dev console panel [.tag-new]#NEW# (<<cassini-rest-report>>, <<cassini-rest-live>>).
 
+| `vidocq-runtime-foy-servlet-extension` [.tag-new]#NEW#
+| `jakartaee-web`
+| Serves the application's Jakarta Servlet 6.1 components through xref:foy::index.adoc[Foy] on the shared Chappe server, with the request and session scopes. Companion `-codegen` artefact. See <<servlet>>.
+
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
 | JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
@@ -93,7 +97,67 @@
 
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
 
-Planned: a Jakarta Servlet 6.1 extension wiring xref:foy::index.adoc[Foy] on top of Chappe.
+[[servlet]]
+== Servlet (Foy) [.tag-new]#NEW#
+
+`vidocq-runtime-foy-servlet-extension` serves the application's servlets, filters, listeners, `web.xml`, web fragments and `ServletContainerInitializer`s through xref:foy::index.adoc[Foy], mounted on the same Chappe server as the other extensions. An application with none of them gets no mount: the extension stays inactive.
+
+Declare the extension, and its codegen bundle on the processor path:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+</dependency>
+
+<!-- maven-compiler-plugin -->
+<annotationProcessorPaths combine.children="append">
+    <path>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+        <version>${vidocq.version}</version>
+        <type>pom</type>
+    </path>
+</annotationProcessorPaths>
+----
+
+The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebListener` classes, makes them beans (so they take `@Inject`), and registers the session context. `vidocq extension add foy-servlet` adds both, and `vidocq:checkpom` asks for the bundle when the extension is declared. In a named module, the application `requires io.vidocq.foy.api` for the generated code.
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.servlet.context-path`
+| the `web.xml` `<default-context-path>`, else `/`
+| Context path of the application, and prefix of its mount.
+
+| `vidocq.servlet.listener`
+| `default`
+| Chappe listener the application is mounted on.
+
+| `vidocq.servlet.session-timeout`
+| `1800`
+| Session timeout in seconds, used when no descriptor declares a `<session-timeout>`. Zero or less: sessions never expire.
+|===
+
+=== Request and session scopes
+
+Foy activates the request context around every request, and the session context with the `HttpSession`: a `@SessionScoped` bean lives as long as its session, `HttpSession.invalidate()` or the timeout destroys it and fires `@Destroyed(SessionScoped.class)`. Passivation of session beans is not supported.
+
+=== Next to REST
+
+The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. Two mounts on the same prefix of one listener fail at startup, with the extensions and the keys to change named in the message. Servlet filters and the `HttpSession` do not apply to REST resources; running REST inside Foy instead is tracked by https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215].
+
+NOTE: the REST extension reads `@ApplicationPath` from the `Application` bean. Give the `Application` subclass a scope, such as `@ApplicationScoped`, or set `vidocq.rest.context-path`: without one it is not discovered, and REST lands on `/` (BUG-20261011-02).
+
+=== Declarative mount
+
+`vidocq.http.mount.<name>.type=servlet` mounts the application on `vidocq.http.mount.<name>.path`, on `vidocq.http.mount.<name>.listener`; `vidocq.http.mount.<name>.session-timeout` overrides `vidocq.servlet.session-timeout`. With such a mount, the extension does not mount the application on its own. A `servlet` mount on an application without any web component fails at startup.
+
+=== The `servlet` section of the startup report
+
+The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener and the session timeout, or says that the extension is inactive.
 
 == Typical lifecycle — Chappe example
 

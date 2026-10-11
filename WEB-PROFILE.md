@@ -16,7 +16,7 @@ already tracked in `CERTIFICATION.md`) plus:
 
 | Specification | Version | Vidocq brick | Status |
 |---|---|---|---|
-| Jakarta Servlet | 6.1 | `foy` | ✅ delivered, official TCK passes |
+| Jakarta Servlet | 6.1 | `foy` | ✅ delivered, official TCK passes; runtime extension `vidocq-runtime-foy-servlet-extension` |
 | Jakarta Data | 1.0 | `mansart-jakarta-data` | ✅ delivered |
 | Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | ✅ delivered (minimal JTA) |
 | Jakarta Persistence (JPA) | 3.2 | `mansart-persistence` | ⏸️ suspended (M7, `mansart-data` covers current runtime needs) |

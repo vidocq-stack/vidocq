@@ -235,7 +235,7 @@ Metrics 5.1 is a standalone MicroProfile spec, not part of the 7.2 platform; it 
 | Spec | Extension | Status |
 |------|-----------|--------|
 | JAX-RS 4.0 (REST) | `vidocq-runtime-cassini-rest-extension` | Done |
-| Jakarta Servlet 6.1 | Foy (`io.vidocq.foy`, separate repository) | Brick only: no extension in this repository (TCK 921/1714 raw, `api.*` 95.6%) |
+| Jakarta Servlet 6.1 | Foy (`io.vidocq.foy`, separate repository) | `vidocq-runtime-foy-servlet-extension` (+ `-codegen`), request and session scopes, next to REST (brick TCK 921/1714 raw, `api.*` 95.6%) |
 | MicroProfile Config 3.1 | `vidocq-runtime-ravel-config-extension` | Done |
 | MicroProfile Health 4.0 | `vidocq-runtime-knock-health-extension` | Done |
 | MicroProfile Metrics 5.1 (standalone, not in the 7.2 platform) | `vidocq-runtime-dirac-metrics-extension` | Done |
