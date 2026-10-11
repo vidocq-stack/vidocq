@@ -1,6 +1,6 @@
 # Mansart — Roadmap
 
-Stack Jakarta Data 1.0 + Jakarta Persistence 3.2 + virtual-thread-native JDBC pool,
+Stack Jakarta Data 1.0 + Jakarta Transactions 2.0 + virtual-thread-native JDBC pool,
 zero or few external production dependencies. Independent runtime building blocks.
 
 > Vision and structural decisions: see [`PLAN.md`](PLAN.md). Product overview: [`README.md`](README.md).
@@ -12,9 +12,14 @@ zero or few external production dependencies. Independent runtime building block
 | `mansart-jakarta-data` | Jakarta Data 1.0 (repositories) | ✅ M3-M4 delivered, integrated into the Vidocq runtime |
 | `mansart-pool` | — (post-Loom JDBC pool) | ✅ M2 delivered (H2), M5 PostgreSQL delivered |
 | `mansart-dialect-spi` | — (shared SPI) | ✅ M1 delivered (H2 + PostgreSQL) |
-| `mansart-persistence` (`mansart-jpa`) | Jakarta Persistence 3.2 (JPA) | ✅ **P0–P12 delivered, scope-based; no formal certification sought** (TCK evidence and bounded comparative performance/AOT smoke in sub-project docs), see [`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md) |
 | `mansart-transactions` | Minimal JTA | ✅ extension delivered in the runtime |
-| `mansart-validation` | Jakarta Validation 3.1 (Bean Validation) | ✅ V0–V2 stopgap usable by Persistence P11; not a complete Validation implementation, see [`mansart-validation/ROADMAP.md`](mansart-validation/ROADMAP.md) |
+
+Persistence and the provisional Validation provider were extracted on 2026-10-11.
+They are external [Noether](https://codefloe.com/Vidocq/noether) building blocks,
+under `io.vidocq.noether`, not Mansart modules. Their roadmaps are
+[Persistence](https://codefloe.com/Vidocq/noether/src/branch/main/noether-persistence/ROADMAP.md)
+and [Validation](https://codefloe.com/Vidocq/noether/src/branch/main/noether-validation/ROADMAP.md).
+Data remains frozen; a Data/JPA bridge stays deferred.
 
 ## Delivered phases
 
@@ -71,29 +76,12 @@ zero or few external production dependencies. Independent runtime building block
       depending on an EntityManager will be explicitly excluded while M7 is
       suspended)
 
-### M7 — Mansart Persistence (JPA 3.2) ✅ Scope-based delivery
+### M7 — Persistence history and extraction
 
-**Status**: restarted on 2026-10-07 as `mansart-persistence/` (Maven parent `mansart-jpa`);
-P0–P12 delivered on 2026-10-10 within the documented scope.
-The detailed plan — milestones P0 (TCK instrument) to P12 (comparative performance and AOT smoke) — lives in
-[`mansart-persistence/ROADMAP.md`](mansart-persistence/ROADMAP.md); the summary below is kept
-for the overview.
-
-Scope:
-- [x] `EntityManager`, `EntityManagerFactory`, JPQL, native query results and stored procedures (P7)
-- [x] Lifecycle (`@PrePersist`, `@PostLoad`, etc.)
-- [x] `@OneToMany`/`@ManyToOne`/`@ManyToMany` relations (loaded eagerly; `LAZY` remains a hint)
-- [x] Required `SINGLE_TABLE` / `JOINED` inheritance, polymorphic loading and JPQL `TYPE` (P6);
-      optional `TABLE_PER_CLASS` explicitly refused, decision D5 open
-- [x] Runtime/canonical metamodel, Criteria API through the shared JPQL AST, entity graphs (P8);
-      frozen Data-owned incompatible canonical plural fields remain a producer-reconciliation boundary
-- [x] Optional L2 cache (homegrown, opt-in — no external cache library) and optional Bean Validation integration (P11)
-- [x] Jakarta Persistence 3.2 TCK runner outside the reactor (2096 / 2135 untouched baseline; 2131 / 2135 with local fixture patch TCK-BUG-001, zero failures/errors and four official skips)
-- [x] Bounded P12 evidence (TCK, comparative JMH, and Leyden AOT cache smoke); no formal certification or Web Profile target
-
-Remaining boundaries: unsupported relationship mapping shapes, optional `TABLE_PER_CLASS`,
-runtime cache/validation coverage beyond the existing six integration scenarios, and deferred
-Data integration. See the detailed roadmap; a green local patched TCK is not exhaustive spec coverage.
+Persistence P0–P12 was delivered under a scope-based engineering gate in Mansart
+on 2026-10-10 and moved to Noether on 2026-10-11. The implementation, detailed
+roadmap, fixture policy and historical evidence are owned by that separate repo.
+This extraction does not change delivered Data, Pool or Transactions semantics.
 
 ### M8 — Performance & footprint (TBD)
 - [ ] Benchmarks JMH `mansart-jakarta-data` vs Spring Data JDBC, EclipseLink, Hibernate
@@ -124,4 +112,4 @@ the pattern of the other sub-projects: short id, date, symptom, repro, status).
 - **`PLAN.md`** : architecture, structural decisions, overall vision.
 - **`<sous-projet>/PLAN.md`** : specific architecture (exists for `mansart-pool/`).
 - **`TCK.md`** : will be created in M6 (Jakarta Data conformance status).
-- **`BENCH.md`** : reproducible JMH numbers; JPA results are in `mansart-persistence/BENCH.md`.
+- **`BENCH.md`** : reproducible JMH numbers; historical JPA evidence is preserved in [Noether](https://codefloe.com/Vidocq/noether/src/branch/main/noether-persistence/BENCH.md).

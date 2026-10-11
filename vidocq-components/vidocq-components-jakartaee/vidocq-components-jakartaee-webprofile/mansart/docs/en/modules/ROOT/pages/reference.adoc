@@ -1,5 +1,9 @@
 = Reference
+:repo-noether: https://codefloe.com/Vidocq/noether
 :description: Maven artefacts, annotations, configuration, dialects, Java modules.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 
 [.lead]
 Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Getting started]. For everyday patterns, see xref:usage.adoc[Usage].
@@ -43,8 +47,8 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 | `io.vidocq.mansart:mansart-transactions-{api,core,cdi,jdbc}`
 | `mansart-transactions` itself is a POM aggregator — depend on `-cdi` (`@Transactional` interceptor, `@TransactionScoped`, Vauban BCE; pulls `-core`'s `MansartTransactionManager`/`UserTransaction`) and `-jdbc` for the connection bridge.
 
-| `io.vidocq.mansart:mansart-jpa`
-| POM aggregator. Runtime applications use `mansart-jpa-core`, a `mansart-jpa-dialect-*` adapter and, for container injection, `mansart-jpa-cdi`; APT uses `mansart-jpa-processor`. See xref:modules/mansart-persistence.adoc#target-modules[implemented modules].
+| `io.vidocq.noether:noether-jpa`
+| POM aggregator. Runtime applications use `noether-jpa-core`, a `noether-jpa-dialect-*` adapter and, for container injection, `noether-jpa-cdi`; APT uses `noether-jpa-processor`. See xref:noether::index.adoc[implemented modules].
 |===
 
 == Java modules
@@ -62,8 +66,8 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 | `io.vidocq.mansart.transactions.api` / `.core` / `.cdi` / `.jdbc`
 | `…transactions.api` (re-exports `jakarta.transaction`) / `…transactions.core` (`MansartTransactionManager`) / CDI interceptor + BCE / JDBC enlistment bridge.
 
-| `io.vidocq.mansart.jpa.core`, `.dialect.spi`, `.dialect.h2`, `.dialect.postgresql`, `.processor`, `.cdi`
-| The core publicly exports the generated-access SPI; model packages have qualified exports to the processor. Dialects and CDI integration are service-based modules. See xref:modules/mansart-persistence.adoc#target-modules[implemented modules].
+| `io.vidocq.noether.jpa.core`, `.dialect.spi`, `.dialect.h2`, `.dialect.postgresql`, `.processor`, `.cdi`
+| The core publicly exports the generated-access SPI; model packages have qualified exports to the processor. Dialects and CDI integration are service-based modules. See xref:noether::index.adoc[implemented modules].
 |===
 
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.

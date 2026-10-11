@@ -1,3 +1,7 @@
+> Persistence and Validation were extracted to [Noether](https://codefloe.com/Vidocq/noether)
+> on 2026-10-11. Their entries below are historical Mansart evidence;
+> original commands, names and revisions are retained, not new Noether results.
+
 # Mansart — Bug tracker
 
 Reproducible bugs in Mansart (Jakarta Data 1.0 + Persistence 3.2). Format per workspace CLAUDE.md:

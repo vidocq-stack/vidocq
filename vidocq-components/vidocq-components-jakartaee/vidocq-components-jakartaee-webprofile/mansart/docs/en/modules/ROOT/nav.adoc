@@ -1,5 +1,9 @@
 * xref:index.adoc[Mansart]
+:repo-noether: https://codefloe.com/Vidocq/noether
 ** xref:whats-new.adoc[What's new]
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 ** xref:getting-started.adoc[Getting started]
 ** xref:usage.adoc[Usage]
 ** xref:concepts.adoc[Concepts]
@@ -12,4 +16,4 @@
 *** xref:modules/mansart-pool.adoc[mansart-pool]
 *** xref:modules/mansart-transactions.adoc[mansart-transactions]
 *** xref:modules/mansart-jakarta-data.adoc[mansart-jakarta-data]
-*** xref:modules/mansart-persistence.adoc[mansart-persistence]
+** xref:noether::index.adoc[Noether: Persistence and Validation]

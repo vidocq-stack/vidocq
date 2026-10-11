@@ -15,7 +15,7 @@
     <packaging>pom</packaging>
 
     <name>Mansart Root</name>
-    <description>Mansart is a reference implementation for the Jakarta EE platform, focused on Java Modules, virtual threads, and clean architecture.</description>
+    <description>Jakarta Data 1.0, Jakarta Transactions 2.0 and a virtual-thread-native JDBC pool for the Vidocq ecosystem.</description>
     <url>https://codefloe.com/Vidocq/mansart</url>
 
     <scm>
@@ -65,8 +65,6 @@
         <module>mansart-pool</module>
         <module>mansart-transactions</module>
         <module>mansart-jakarta-data</module>
-        <module>mansart-persistence</module>
-        <module>mansart-validation</module>
     </modules>
 
     <properties>

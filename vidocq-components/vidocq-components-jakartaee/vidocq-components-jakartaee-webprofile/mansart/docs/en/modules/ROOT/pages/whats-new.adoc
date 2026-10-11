@@ -1,8 +1,21 @@
 = What's new
-:description: Changes since the {release-version} release — Jakarta Data fixes and tooling, and scope-based delivery of Mansart JPA.
+:repo-noether: https://codefloe.com/Vidocq/noether
+:description: Changes since the {release-version} release — Jakarta Data fixes and tooling, and scope-based delivery of Noether JPA.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
+
+== 2026-10-11 — Persistence and Validation extraction
+
+Persistence and the provisional Validation provider moved to
+xref:noether::index.adoc[Noether]. They are no longer Mansart reactor modules.
+Data, Pool and Transactions remain here with unchanged production semantics.
+See xref:noether::migration.adoc[renamed artifacts, packages and providers].
+Pre-extraction JPA entries below describe historical Mansart delivery.
+
 
 == Jakarta Data
 
@@ -20,4 +33,4 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Jakarta Persistence
 
-* **Mansart JPA P0–P12 delivered within scope** — `mansart-persistence` provides entity lifecycle, JPQL/Criteria, XML mapping, container integration, cache and Validation integration. The locally patched PostgreSQL TCK passes all non-skipped tests; comparative benchmarks and a modular Leyden AOT smoke are recorded. Remaining mapping boundaries and the local TCK patch are explicit; no formal certification or GraalVM native-image support is claimed. See xref:modules/mansart-persistence.adoc#status[implementation status], xref:tck.adoc[TCK evidence] and xref:performance.adoc[performance methodology].
+* **Noether JPA P0–P12 delivered within scope** — `noether-persistence` provides entity lifecycle, JPQL/Criteria, XML mapping, container integration, cache and Validation integration. The locally patched PostgreSQL TCK passes all non-skipped tests; comparative benchmarks and a modular Leyden AOT smoke are recorded. Remaining mapping boundaries and the local TCK patch are explicit; no formal certification or GraalVM native-image support is claimed. See xref:noether::index.adoc[implementation status], xref:tck.adoc[TCK evidence] and xref:performance.adoc[performance methodology].

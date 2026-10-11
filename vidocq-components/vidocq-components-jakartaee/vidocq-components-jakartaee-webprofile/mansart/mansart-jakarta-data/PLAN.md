@@ -399,7 +399,7 @@ Changes:
 - Removal of an entire module (17 classes + module-info + pom + README).
 - No more conceptual duplication between Mansart and JPA.
 - No more "if both annotation sets are present → compile error" rule to maintain.
-- Total interop with Hibernate, EclipseLink, Spring Data, and future `mansart-persistence` (standard JPA 3.2).
+- Total interop with Hibernate, EclipseLink, Spring Data, and external Noether Persistence (standard JPA 3.2).
 - Standard JPA static metamodel (`Author_.id`, `Author_.name`) usable in parallel with rich Mansart (`_Author.$MODEL`).
 - Consistency: `jakarta.data-api` + `jakarta.persistence-api` on API side, Mansart only re-exposes its proprietary extensions (`@MansartDataSource`).
 
@@ -412,9 +412,9 @@ Changes:
 **Locked decision #3 revised**: `~~hybrid Mansart/JPA~~` → **JPA-only** (M7-29). Mansart only re-exposes `@MansartDataSource`.
 
 ### Remaining Work (post-M7-29)
-- [ ] **TCK PersistenceTests / NoSQLTests** — other sub-suites (NoSQL out of scope v1; PersistenceTests depends on `mansart-persistence`).
+- [ ] **TCK PersistenceTests / NoSQLTests** — other sub-suites (NoSQL out of scope v1; PersistenceTests depends on `noether-persistence`).
 - [ ] **JDQL feature gaps**: subqueries, explicit joins, multi-attribute aggregations.
-- [ ] **mansart-persistence** — Jakarta Persistence 3.2 (classic JPA), still a placeholder.
+- [ ] **noether-persistence** — Jakarta Persistence 3.2 (classic JPA), still a placeholder.
 - [ ] **mansart-pool** — virtual-thread-native JDBC pool, under sub-roadmap MP1-MP4 (independent peer).
 - [ ] **vidocq orchestrator** — Quarkus-style extensions SPI, packaging, bootstrap.
 
@@ -509,7 +509,7 @@ public abstract class Book_ {
 }
 ```
 
-Initialized to null (JPA spec expects the JPA provider to set these fields at startup). When `mansart-persistence` arrives (M7), it will be responsible for populating. Meanwhile, `Book_` remains usable for **string column names** (the `ID`, `TITLE`, … constants) — useful for `@Query`.
+Initialized to null (JPA spec expects the JPA provider to set these fields at startup). When the deferred Noether/Data bridge is implemented, it will be responsible for populating. Meanwhile, `Book_` remains usable for **string column names** (the `ID`, `TITLE`, … constants) — useful for `@Query`.
 
 ## Mansart vs JPA Annotations (decision 3 — detailed)
 
@@ -534,7 +534,7 @@ Initialized to null (JPA spec expects the JPA provider to set these fields at st
 2. Otherwise, if `@io.vidocq.mansart.data.Entity` is present → read Mansart annotations.
 3. If both are present → clear compile error ("choose a single annotation set").
 
-**Out of scope v1**: `@OneToMany`/`@ManyToMany` (collections), `@MappedSuperclass`, inheritance (`@Inheritance`), `@Convert`/`AttributeConverter`. Deferred to v1.1 or delegated to `mansart-persistence` (M7).
+**Out of scope v1**: `@OneToMany`/`@ManyToMany` (collections), `@MappedSuperclass`, inheritance (`@Inheritance`), `@Convert`/`AttributeConverter`. Deferred to v1.1 or delegated to `noether-persistence` (M7).
 
 ## SQL Naming Conventions (to validate)
 
@@ -591,7 +591,7 @@ Clear errors emitted by `mansart-data-processor` when:
 6. ~~Separate CDI module or integrated in core?~~ → **separate module** `mansart-data-cdi` (locked — 9 modules in `mansart-jakarta-data` reactor).
 7. ~~Integrated connection pool?~~ → **YES, dedicated Mansart sub-module** but **NOT** under `mansart-jakarta-data`. It's a peer sub-project (`mansart-pool`) in the `mansart/` workspace, optional and independent. `mansart-jakarta-data` continues to only accept a standard `DataSource` — whether it's Hikari, Agroal, or Mansart Pool is invisible on the repository side. See [`../mansart-pool/PLAN.md`](../mansart-pool/PLAN.md).
 
-2. **Metamodel format: Mansart-only or JPA-compatible?** Proposal: generate **two** classes — `_Book` (Mansart, richly typed attributes) and `Book_` (standard JPA static metamodel, `SingularAttribute<Book, String> title`) for interop with existing code and with `mansart-persistence`.
+2. **Metamodel format: Mansart-only or JPA-compatible?** Proposal: generate **two** classes — `_Book` (Mansart, richly typed attributes) and `Book_` (standard JPA static metamodel, `SingularAttribute<Book, String> title`) for interop with existing code and with `noether-persistence`.
 
 3. **Entity detection: `@jakarta.persistence.Entity` or proprietary Mansart annotation?** Proposal: accept both. APT scans `@Entity` (JPA, already standard) AND `@io.vidocq.mansart.data.Entity` (zero-dep if user doesn't want the JPA JAR in compile-only).
 

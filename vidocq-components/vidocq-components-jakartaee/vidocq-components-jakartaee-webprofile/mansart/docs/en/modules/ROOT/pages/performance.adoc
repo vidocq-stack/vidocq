@@ -1,9 +1,13 @@
 = Performance and startup evidence
+:repo-noether: https://codefloe.com/Vidocq/noether
 :description: Reproducible JPA provider comparisons and the bounded Leyden AOT smoke.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 
 == Jakarta Persistence comparative benchmark
 
-`mansart-persistence/mansart-jpa-bench` is a standalone Maven project, intentionally outside the
+`noether-persistence/noether-jpa-bench` is a standalone Maven project, intentionally outside the
 normal reactor. Its classpath-only provider dependencies are test-scoped and isolated by provider
 profiles; none enter a production Mansart module. The runner activates exactly one provider profile
 per run and builds it in its own directory, `target/<provider>` (POM property
@@ -24,18 +28,18 @@ with `-foe true`, so any setup, preflight or benchmark failure stops the run wit
 (JMH's default would only report the error and exit 0). JMH reports throughput, iteration confidence
 intervals and allocation via its GC profiler.
 
-Build/install the provider and processor from the Mansart reactor, then run each provider separately
+Build/install the provider and processor from the separate Noether reactor, then run each provider separately
 with an explicit Temurin 25:
 
 [source,bash]
 ----
 export JAVA_HOME=$HOME/.sdkman/candidates/java/25.0.4-tem
 export PATH=$JAVA_HOME/bin:$PATH
-cd mansart/main
-./mvnw -ntp -pl mansart-persistence/mansart-jpa-processor-module-it -am install -DskipTests
-cd mansart-persistence/mansart-jpa-bench
+cd noether/main
+./mvnw -ntp -pl noether-persistence/noether-jpa-processor-module-it -am install -DskipTests
+cd noether-persistence/noether-jpa-bench
 export BENCH_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)
-./run-bench.sh mansart
+./run-bench.sh noether
 ./run-bench.sh hibernate
 ./run-bench.sh eclipselink
 ----
@@ -48,7 +52,7 @@ three providers of one comparison; it defaults to a UTC timestamp.
 Versions and the full measurement protocol are fixed in the standalone benchmark POM and runner.
 These runs establish comparative observations on Java 25; they are not vendor certification claims.
 Raw scores, hardware, JVM, commands, and comparison notes are recorded in
-`mansart-persistence/BENCH.md`. No performance winner is claimed unless the measured evidence
+`noether-persistence/BENCH.md`. No performance winner is claimed unless the measured evidence
 supports one.
 
 === Limitations
@@ -66,12 +70,12 @@ supports one.
 
 == JDK Leyden AOT cache smoke
 
-Run `mansart-persistence/mansart-jpa-processor-module-it/run-aot-smoke.sh` with Temurin 25 and Maven
+Run `noether-persistence/noether-jpa-processor-module-it/run-aot-smoke.sh` with Temurin 25 and Maven
 to build and launch a small named application module using APT-generated managed access. The smoke
 asserts CRUD and JPQL results, checks the generated service provider is part of the application
 module, and fails if the entity package is opened or exported to Mansart. It creates a JDK Leyden
 AOT cache, reruns the same modular application with that cache, and checks the startup log reports
 cache use. Before recording, the script deletes only its own named cache
-(`target/mansart-jpa-smoke.aot`) and logs, so a stale cache can never satisfy the checks; each JVM
+(`target/noether-jpa-smoke.aot`) and logs, so a stale cache can never satisfy the checks; each JVM
 writes to `target/aot-record.log` or `target/aot-cache-use.log`, and a non-zero JVM exit prints that
 log and fails the script with the same status. Use an explicit Temurin 25 `JAVA_HOME`. This demonstrates a Leyden AOT cache and is **not** a GraalVM `native-image` proof.

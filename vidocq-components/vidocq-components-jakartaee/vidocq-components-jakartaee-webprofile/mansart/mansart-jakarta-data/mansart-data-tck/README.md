@@ -18,7 +18,7 @@ Module in standalone `modelVersion 4.0.0` (without `<parent>`). Reason documente
 | Runtime impl generation (Class-File API) → **73/73 EntityTests PASS on H2** | ✅ M7-25 |
 | **PostgreSQL variant via Testcontainers → 73/73 EntityTests PASS on PG** | ✅ M6.5 |
 | **TCK SignatureTests → 1/1 PASS** (H2 and PG) | ✅ M7-26 |
-| TCK PersistenceTests / NoSQLTests | ⏳ out of scope (needs `mansart-persistence`) |
+| TCK PersistenceTests / NoSQLTests | ⏳ out of scope (needs `noether-persistence`) |
 
 **No more blockers**: the `MansartDataExtension` BCE (`mansart-data-cdi`) now discovers all `@Repository` interfaces in the TCK deployment and registers synthetic `@Singleton` beans typed on the interface. Implementations are **generated at runtime via Class-File API** (`mansart-data-core/RuntimeRepositoryClassGenerator`, M7-25) — no dynamic proxy, AOT-friendly.
 
@@ -131,4 +131,4 @@ The Maven profile `tck-sig` (combinable with `tck-run` and `tck-pg`) activates b
 - **M7-1 → M7-25** ✅ delivered — runtime impl generation + 73/73 PASS on H2.
 - **M6.5** ✅ delivered — PostgreSQL variant via Testcontainers, 73/73 PASS on PG.
 - **TCK SignatureTests** ✅ M7-26 — profile `tck-sig`, 1/1 PASS on H2 and PG.
-- **TCK PersistenceTests / NoSQLTests** ⏳ — blocked by absence of `mansart-persistence` (JPA 3.2) and NoSQL out of scope in v1.
+- **TCK PersistenceTests / NoSQLTests** ⏳ — blocked by the deferred Data/Noether JPA bridge and NoSQL out of scope in v1.

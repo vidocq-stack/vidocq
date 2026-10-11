@@ -1,5 +1,9 @@
 = mansart-jakarta-data
+:repo-noether: https://codefloe.com/Vidocq/noether
 :description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 
 [.lead]
 `mansart-jakarta-data` implements {spec-data-1}[Jakarta Data 1.0] — `@Repository` annotations, query methods, pagination, JDQL — on top of JDBC, with no heavy ORM, no runtime reflection. Every user-defined repository is materialized at compile time by APT. Official TCK: 74/74 PASS (M7, May 2026).
@@ -94,7 +98,7 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 * `@Convert` / `AttributeConverter`.
 * NoSQL (Jakarta Data NoSQL is an extension out of scope for Mansart v1).
 
-Deferred to `mansart-persistence` or v1.1.
+Deferred to `noether-persistence` or v1.1.
 
 == Runtime architecture
 

@@ -1,5 +1,9 @@
 = Migration
+:repo-noether: https://codefloe.com/Vidocq/noether
 :description: From Hibernate, EclipseLink, Spring Data, HikariCP — transition paths to Mansart.
+
+NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
+
 
 [.lead]
 Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2]), not proprietary extensions. Migrating from Spring Data is trivial — the Jakarta Data spec explicitly took Spring Data conventions on board. Hibernate / EclipseLink takes more effort if the application uses out-of-spec features (custom dialects, listeners, events).
@@ -63,11 +67,11 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Hibernate | Mansart | Note
 
 | `SessionFactory` / `EntityManagerFactory`
-| Standard `EntityManagerFactory` from `mansart-persistence`
+| Standard `EntityManagerFactory` from `noether-persistence`
 | Implemented; use Jakarta Data instead when declarative repositories suffice.
 
 | HQL
-| JPQL (`mansart-persistence`) or JDQL (`mansart-jakarta-data`)
+| JPQL (`noether-persistence`) or JDQL (`mansart-jakarta-data`)
 | Mansart targets the spec, not proprietary HQL extensions.
 
 | `@Entity`, `@Id`, `@GeneratedValue`, `@Column`
@@ -75,7 +79,7 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Standard JPA annotations recognized as-is.
 
 | `@OneToMany`, `@ManyToMany`, inheritance
-| Implemented by `mansart-persistence` within its mapping boundaries
+| Implemented by `noether-persistence` within its mapping boundaries
 | Required `SINGLE_TABLE` and `JOINED` are supported; optional `TABLE_PER_CLASS` and some relationship shapes remain refused.
 
 | Hibernate Reactive
@@ -83,11 +87,11 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 | Blocking JDBC under Loom — no Vert.x, no callback.
 
 | JPA listeners (`@PrePersist`, `@PostLoad`)
-| Standard callbacks implemented by `mansart-persistence`
+| Standard callbacks implemented by `noether-persistence`
 | Annotation and XML listener/callback metadata are supported.
 
 | Criteria API
-| Standard Criteria API implemented by `mansart-persistence`
+| Standard Criteria API implemented by `noether-persistence`
 | Shares the JPQL AST and execution path.
 
 | Schema generation (`hibernate.hbm2ddl`)
@@ -97,7 +101,7 @@ Migrating from Spring Data is the shortest path. Derived method names and `@Quer
 
 == From EclipseLink / OpenJPA
 
-Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `mansart-persistence`.
+Less common case; transposition similar to Hibernate. Standard JPA 3.2 annotations are recognized as-is; proprietary extensions (`@CustomConverter`, `@Cache(...)`) must be rewritten as standard equivalents or deferred to `noether-persistence`.
 
 // TODO@user: document an EclipseLink → Mansart real-world experience once a case shows up.
 

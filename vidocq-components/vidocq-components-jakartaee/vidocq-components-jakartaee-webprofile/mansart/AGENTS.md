@@ -2,30 +2,9 @@
 
 Contributor guidance for agents working on this repository. See also the companion `CLAUDE.md` file.
 
-## Persistence implementation
+## Repository ownership
 
-Jakarta Persistence milestones P0–P12 are delivered under a scope-based engineering gate (not a formal certification).
-Read `mansart-persistence/AGENTS.md`,
-`ROADMAP.md` and `TCK.md` before changes. Criteria and JPQL share the same AST and SQL execution path;
-canonical `Entity_` initialization uses application-generated access providers without extra opens.
-P9 includes schema generation, JTA/CDI integration, the Vidocq runtime extension, and Arquillian coverage.
-P10 maps `orm.xml` through an overlay of the class-file annotations (one mapping engine).
-The untouched official standalone score is 2096 / 2135: 10 P11 cache errors, 25 delimited-fixture/unquoted-DDL
-incompatibilities and four official skips. The runner applies by default the local fixture patch TCK-BUG-001
-(upstream jakartaee/persistence#1175, commit `1fea05e`) to a derived jar: 2131 / 2135, no failures/errors and
-four official skips; this is a local result, not an official result or certification. The untouched score remains
-2096 / 2135. No formal certification is sought and the Web Profile is not a target.
-Inherited and entity-owned embedded annotation/XML association overrides are implemented. Embedded relationships
-and collections use dotted execution-state slots composed from generated accesses; unsupported P5 shapes fail explicitly.
-The final full run at 20:43:24Z includes embedded execution, embeddable map keys and query identifier fixes.
-The clean persistence reactor passes 549 tests and the Vidocq Arquillian vehicle passes six tests.
-The runtime checks use the local Vauban snapshot containing the upstream injection fix (pending release).
-See `TCK.md` and `BENCH.md` for TCK and P12 evidence. Do not weaken quotation or edit official DDL to
-restore a score; the only fixture change allowed is the documented TCK-BUG-001 derived copy.
-Jakarta Data remains delivered and frozen: do not overwrite its canonical output or alter its producer
-to reconcile plural field kinds without a maintainer decision. A Data bridge and generation mutualisation remain
-deferred. P12 comparative JMH dependencies stay isolated in the standalone benchmark project; do not add them to
-production modules. Its Leyden AOT smoke does not claim GraalVM native-image support.
+Mansart owns Jakarta Data, the JDBC pool and Jakarta Transactions. Persistence and the provisional Validation provider moved to [Noether](https://codefloe.com/Vidocq/noether) on 2026-10-11. Read its own guidance before changing those implementations; they are no longer part of this reactor. Data production semantics stay unchanged and a Data/JPA bridge remains deferred.
 
 ## Documentation (Antora) conventions
 

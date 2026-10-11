@@ -13,7 +13,7 @@ the first line. Reuses `mansart-pool` for JDBC integration tests.
 - None use `ScopedValue` — all rely on `ThreadLocal`, source of pinning under virtual
   threads as soon as we combine TX + JDBC.
 - The Mansart need: a lightweight TM, which just does what `mansart-jakarta-data` /
-  `mansart-persistence` consume, and which passes the official TCK.
+  `noether-persistence` consume, and which passes the official TCK.
 
 ## Modules
 

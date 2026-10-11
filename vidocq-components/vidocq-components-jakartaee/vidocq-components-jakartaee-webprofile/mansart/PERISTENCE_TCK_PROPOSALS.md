@@ -1,3 +1,7 @@
+> Persistence and Validation were extracted to [Noether](https://codefloe.com/Vidocq/noether)
+> on 2026-10-11. Their entries below are historical Mansart evidence;
+> original commands, names and revisions are retained, not new Noether results.
+
 # Persistence TCK — defects and upstream proposals
 
 Reference suite: Jakarta Persistence TCK **3.2.1**, PostgreSQL 17, executed through

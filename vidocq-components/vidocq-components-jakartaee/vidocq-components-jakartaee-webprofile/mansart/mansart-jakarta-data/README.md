@@ -226,7 +226,7 @@ Mansart uses standard **`jakarta.persistence.*`** annotations (Jakarta Persisten
 | `@jakarta.persistence.Embedded` / `@Embeddable` | Inline mapping. |
 | `@jakarta.data.repository.Repository(dataStore = "name")` | Multi-DataSource selection: Mansart resolves the value as a CDI `@Named` on `DataSource` (`java:` prefix → JNDI). No proprietary annotation. |
 
-Secondary benefit: total interop with Hibernate, EclipseLink, Spring Data, and the future `mansart-persistence` (JPA 3.2). Standard JPA static metamodel (`Author_.id`, `Author_.name`) generated in parallel with the rich Mansart metamodel (`_Author.$MODEL`).
+Secondary benefit: total interop with Hibernate, EclipseLink, Spring Data, and the external Noether Persistence (JPA 3.2). Standard JPA static metamodel (`Author_.id`, `Author_.name`) generated in parallel with the rich Mansart metamodel (`_Author.$MODEL`).
 
 Default conventions (without `@Table` / `@Column`):
 - Table = plural snake_case (`Book` → `books`, `OrderLine` → `order_lines`).

@@ -9,10 +9,8 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 - `mansart-jakarta-data` — Jakarta Data 1.0 (declarative repositories). **Delivered — TCK 74/74 PASS.**
 - `mansart-transactions` — Jakarta Transactions 2.0 (virtual-thread-native TM, `@Transactional`, `@TransactionScoped`). **Delivered — TCK smoke 5/5 PASS.**
 - `mansart-pool` — virtual-thread-native JDBC pool, zero-dep, optional. **Delivered.**
-- `mansart-validation` — Jakarta Validation 3.1 (Bean Validation), needed by `mansart-persistence` (spec §3.7) and usable standalone. **Planned — roadmap only**, see `mansart-validation/ROADMAP.md`. TCK runs out of the Vidocq reactor (`mansart-validation-tck`) and in it (`vidocq-runtime-tck-validation`, `tck` profile).
-- `mansart-persistence` — Jakarta Persistence 3.2 (classic JPA), Maven parent `mansart-jpa`. **P0–P12 delivered under a scope-based engineering gate (2026-10-10)**. The final untouched official PostgreSQL TCK baseline is 2096/2135 passed: 10 P11 cache errors, 25 incompatibilities between two delimited-default fixtures and official unquoted DDL, and four official skips. The default local TCK-BUG-001 fixture patch (byte-exact upstream backport on a derived test jar; provider and official artifacts unchanged) gives 2131/2135 passes, 0 failures/errors and four skips; this is a local result, not an official result or certification. No formal certification is sought and the Web Profile is not a target. P12 adds an isolated comparative JMH harness and a modular JDK Leyden AOT cache smoke, not a GraalVM native-image claim. Runtime checks use the local Vauban snapshot carrying an upstream injection fix (not yet released). See `mansart-persistence/TCK.md`, `BENCH.md`, `ROADMAP.md` and `AGENTS.md`. Data remains frozen; a Data bridge and processor mutualisation are deferred.
 
-`mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; `mansart-persistence` through its own SQL AST and dialects (`mansart-jpa-dialect-*`, decision D4 in `mansart-persistence/ROADMAP.md`). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
+`mansart-jakarta-data` renders its SQL through `mansart-data-dialect-spi`; Noether Persistence through its own SQL AST and dialects (`noether-jpa-dialect-*`, decision D4 in [Noether roadmap](https://codefloe.com/Vidocq/noether/src/branch/main/noether-persistence/ROADMAP.md)). `mansart-pool` is completely decoupled: it only provides a `javax.sql.DataSource` usable by any JDBC client.
 
 ## Prerequisites
 
@@ -72,8 +70,9 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 ### mansart-transactions
 - **T1–T7** ✅ — Full Jakarta Transactions 2.0: local TM, synchronizations, suspend/resume, 2PC + recovery log, CDI `@Transactional` (6 propagation variants), `@TransactionScoped`; TCK smoke **5/5 PASS**. The delivered manager currently associates transactions with `ThreadLocal`; JPA captures the caller's transaction before virtual-thread offload, without adding a new thread-local or changing Transactions.
 
-### mansart-persistence
-- ✅ **P0–P12 delivered under a scope-based engineering gate (2026-10-10)** — detailed outcomes, benchmark evidence and remaining limits are in `mansart-persistence/ROADMAP.md`, `TCK.md` and `BENCH.md`. P12 is comparative performance and JDK Leyden AOT-cache evidence, not formal certification. `TABLE_PER_CLASS` remains explicitly refused; optional decision D5 remains open. Generated entity access (APT / Class-File API) is unchanged; SQL uses the JPA dialect AST (D4), with no runtime bytecode library. Data remains frozen; no JPA bridge or code-generation mutualisation in this phase.
+### External Persistence and Validation
+
+These implementations were extracted to [Noether](https://codefloe.com/Vidocq/noether) on 2026-10-11. Their artifacts/packages use `io.vidocq.noether`; Mansart retains Data, Pool and Transactions unchanged. Data/JPA integration remains deferred.
 
 ## Documentation (Antora) conventions
 
