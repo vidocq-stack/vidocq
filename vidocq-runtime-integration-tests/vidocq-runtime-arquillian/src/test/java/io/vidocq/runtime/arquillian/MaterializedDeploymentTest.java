@@ -80,6 +80,35 @@ class MaterializedDeploymentTest {
     }
 
     @Test
+    void webArchiveDocumentRootBecomesTheWebResourcesOfTheClasspath() throws Exception {
+        // A runtime application serves its web resources from META-INF/resources/ on its class
+        // path: the WAR's content goes there, as a servlet container would see it.
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .addClass(MaterializedDeploymentTest.class)
+                .add(new StringAsset("<html/>"), "/dummy.html")
+                .add(new StringAsset("<html/>"), "/catalog/index.html")
+                .addAsWebInfResource(new StringAsset("<web-app/>"), "web.xml");
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            assertNotNull(deployment.classLoader().getResource("META-INF/resources/dummy.html"));
+            assertNotNull(deployment.classLoader().getResource("META-INF/resources/catalog/index.html"));
+            assertNotNull(deployment.classLoader().getResource("META-INF/resources/WEB-INF/web.xml"));
+            assertNotNull(deployment.classLoader().getResource("META-INF/resources/WEB-INF/classes/"
+                    + MaterializedDeploymentTest.class.getName().replace('.', '/') + ".class"));
+        }
+    }
+
+    @Test
+    void javaArchiveHasNoWebResources() throws Exception {
+        JavaArchive archive = ShrinkWrap.create(JavaArchive.class, "test.jar")
+                .add(new StringAsset("x"), "/publicKey.pem");
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            assertNull(deployment.classLoader().getResource("META-INF/resources/publicKey.pem"));
+        }
+    }
+
+    @Test
     void discoversBuildCompatibleExtensionsVisibleToTheDeploymentClassLoader() throws Exception {
         // Dynamic Arquillian archives are not APT-processed, so the container must
         // hand every ServiceLoader-registered BCE to the CDI boot explicitly for the

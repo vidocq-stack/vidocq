@@ -55,7 +55,9 @@ import java.util.stream.Stream;
  * <p>
  * WebArchive layout is normalized: entries under {@code WEB-INF/classes/} are
  * relocated to the classpath root, and {@code WEB-INF/lib/*.jar} libraries are
- * added to the class loader as separate roots.
+ * added to the class loader as separate roots. Every WAR entry but {@code META-INF}
+ * is also copied under {@code META-INF/resources/}, where a runtime application keeps
+ * its web resources.
  * </p>
  */
 final class MaterializedDeployment implements AutoCloseable {
@@ -77,6 +79,7 @@ final class MaterializedDeployment implements AutoCloseable {
     static MaterializedDeployment of(Archive<?> archive) throws IOException {
         Path root = Files.createTempDirectory("vidocq-deployment-");
         List<Path> libraries = new ArrayList<>();
+        boolean web = archive.getName().endsWith(".war");
 
         for (var entry : archive.getContent().entrySet()) {
             Node node = entry.getValue();
@@ -88,6 +91,11 @@ final class MaterializedDeployment implements AutoCloseable {
                 continue;
             }
             String relative = path.startsWith("/") ? path.substring(1) : path;
+            if (web && isWebResource(relative)) {
+                // A runtime application serves its web resources from META-INF/resources/ on its
+                // class path (Foy's ClassPathResourceProvider): the document root goes there too.
+                copy(node, root, "META-INF/resources/" + relative);
+            }
             if (relative.startsWith("WEB-INF/classes/")) {
                 relative = relative.substring("WEB-INF/classes/".length());
             }
@@ -171,6 +179,25 @@ final class MaterializedDeployment implements AutoCloseable {
          */
         private static String stripLeadingSlash(String name) {
             return name != null && name.startsWith("/") ? name.substring(1) : name;
+        }
+    }
+
+    /**
+     * A WAR entry that is also a web resource: everything but META-INF, as a servlet container sees
+     * a WAR ({@code getResourcePaths("/WEB-INF/classes/...")} lists the class files).
+     */
+    private static boolean isWebResource(String relative) {
+        return !relative.isEmpty() && !relative.startsWith("META-INF/");
+    }
+
+    private static void copy(Node node, Path root, String relative) throws IOException {
+        Path target = root.resolve(relative).normalize();
+        if (!target.startsWith(root)) {
+            return; // defensive: never materialize outside the deployment root
+        }
+        Files.createDirectories(target.getParent());
+        try (InputStream in = node.getAsset().openStream()) {
+            Files.copy(in, target);
         }
     }
 
