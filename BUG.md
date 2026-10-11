@@ -5,6 +5,48 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261011-03 — a mount on `/` hid every mount registered after it, and a duplicate prefix was silent
+
+- **Date**: 2026-10-11
+- **Status**: FIXED (branch feat/servlet-extension)
+- **Affected module**: vidocq-runtime-chappe-webserver-extension (`ChappeMountPoint`)
+- **Symptom**: Chappe's router tries mounts in registration order and takes the first whose prefix matches. A
+  mount on `/` registered before `/api` answered `/api/...` too; two mounts on one prefix left the second one
+  unreachable, without any message.
+- **Minimal repro**: `ChappeServerEndToEndTest#longerPrefixWinsWhateverTheRegistrationOrder` — mount `""` then
+  `/api` on the default listener, `GET /api/items` reached the root mount.
+- **Cause**: `ChappeMountPoint.mount` forwarded each mount to the router at once, in call order.
+- **Correction**: `ChappeMountPoint` keeps the mounts of each listener and hands them to the router longest prefix
+  first when the server starts; a second mount on the same prefix (`""` and `/` are the same) fails with a message
+  naming both extensions and the keys that move them.
+
+## BUG-20261011-02 — `@ApplicationPath` is ignored when the `Application` subclass carries no bean-defining annotation
+
+- **Date**: 2026-10-11
+- **Status**: OPEN
+- **Affected module**: vidocq-runtime-cassini-rest-extension (`CassiniExtension.resolveApplicationPath`)
+- **Symptom**: `@ApplicationPath("/api") public class Api extends Application {}` mounts the resources on `/`, not
+  `/api`. Next to a servlet application on `/`, the boot now fails on the duplicate prefix (BUG-20261011-03).
+- **Minimal repro**: `vidocq-runtime-it-foy-servlet` without `@ApplicationScoped` on `ItemsApplication`.
+- **Cause hypothesis**: the extension looks for the `Application` among the beans. Under annotated discovery a class
+  without a bean-defining annotation is never discovered, so `CassiniScopeExtension`, which gives the `Application`
+  its default `@ApplicationScoped`, never sees it. Workaround: annotate the `Application` with `@ApplicationScoped`.
+
+## BUG-20261011-01 — the REST codegen bundle left Cassini's build-compatible extension out
+
+- **Date**: 2026-10-11
+- **Status**: FIXED (branch feat/servlet-extension)
+- **Affected module**: vidocq-runtime-cassini-rest-extension-codegen
+- **Symptom**: compiling a REST application warns "[Vauban] 1 Build Compatible Extension(s) present on the
+  compile/module path are NOT on the annotation-processor path and will not run:
+  [io.vidocq.cassini.cdi.CassiniScopeExtension]". `@Path` classes without a scope do not get their default
+  `@RequestScoped`, and a scoped `Application` is not given one either.
+- **Minimal repro**: any application compiled with the bundle, e.g. `vidocq-runtime-it-foy-servlet`.
+- **Cause**: the bundle only carried `cassini-processor`; the runtime does not run extensions over an application
+  the processor already handled (same pattern as BUG-20261008-01).
+- **Correction**: the bundle also carries `cassini-cdi`; the warning is gone and the processor logs the default
+  scopes it adds.
+
 ## BUG-20261008-01 — `@Inject @RestClient` is unsatisfied, and a Rest Client application cannot be linked
 
 - **Date**: 2026-10-08
