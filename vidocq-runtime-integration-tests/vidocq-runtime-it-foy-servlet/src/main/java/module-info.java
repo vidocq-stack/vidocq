@@ -36,7 +36,9 @@ module io.vidocq.runtime.it.foyservlet {
     // (Vauban). The test boots the runtime without the application layer that `Vidocq.run`
     // creates, so the module declares the providers itself.
     provides io.vidocq.foy.spi.gen.WebComponent with
+            io.vidocq.runtime.it.foyservlet.AccountServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.CartServlet$$FoyComponent,
+            io.vidocq.runtime.it.foyservlet.LoginServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.PoweredByFilter$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.SessionEventsServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.TicketServlet$$FoyComponent;

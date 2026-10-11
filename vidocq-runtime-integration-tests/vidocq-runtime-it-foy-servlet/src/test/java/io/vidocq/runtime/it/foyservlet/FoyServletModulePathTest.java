@@ -30,7 +30,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -42,7 +44,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * The assembled runtime with the Servlet and REST extensions, on the module path: servlets, a
- * filter, the request and session scopes, and a REST resource share one listener.
+ * filter, the request and session scopes, and a REST resource share one listener; an
+ * {@code IdentityStore} bean authenticates the callers of a role-constrained servlet.
  */
 class FoyServletModulePathTest {
 
@@ -128,6 +131,47 @@ class FoyServletModulePathTest {
 
         assertEquals("rest", get(client, "/api/items").body());
         assertEquals(200, get(client, "/cart").statusCode());
+    }
+
+    @Test
+    void aProtectedServletAsksForCredentials() throws Exception {
+        HttpResponse<String> r = get(HttpClient.newHttpClient(), "/account");
+
+        assertEquals(401, r.statusCode());
+        assertTrue(r.headers().firstValue("WWW-Authenticate").orElse("").startsWith("Basic"));
+    }
+
+    @Test
+    void theIdentityStoreBeanAuthenticatesAUserWithTheRole() throws Exception {
+        HttpResponse<String> r = getAs("alice", "secret", "/account");
+
+        assertEquals(200, r.statusCode());
+        assertEquals("alice", r.body());
+    }
+
+    @Test
+    void aUserWithoutTheRoleIsForbidden() throws Exception {
+        assertEquals(403, getAs("bob", "secret", "/account").statusCode());
+    }
+
+    @Test
+    void aWrongPasswordIsRefused() throws Exception {
+        assertEquals(401, getAs("alice", "nope", "/account").statusCode());
+    }
+
+    @Test
+    void aProgrammaticLoginRotatesTheSessionId() throws Exception {
+        String[] answer = get(cookieClient(), "/login?user=alice&password=secret").body().split(" ");
+
+        assertEquals("alice", answer[0]);
+        assertNotEquals(answer[1], answer[2]);
+        assertEquals("refused", get(cookieClient(), "/login?user=alice&password=nope").body());
+    }
+
+    private static HttpResponse<String> getAs(String user, String password, String path) throws Exception {
+        String credentials = Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(base + path))
+                .header("Authorization", "Basic " + credentials).GET().build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private static HttpClient cookieClient() {
