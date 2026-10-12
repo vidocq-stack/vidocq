@@ -6,7 +6,7 @@ The Jakarta Expression Language concepts Peano is built around. The spec defines
 
 == Immediate and deferred expressions
 
-`${expr}` is evaluated immediately; `#{expr}` yields a `ValueExpression` or `MethodExpression` evaluated later by its owner (a page tag, a framework). Both share one grammar and one parser in Peano.
+`+${expr}+` is evaluated immediately; `+#{expr}+` yields a `ValueExpression` or `MethodExpression` evaluated later by its owner (a page tag, a framework). Both share one grammar and one parser in Peano.
 
 == ExpressionFactory and ELContext
 
