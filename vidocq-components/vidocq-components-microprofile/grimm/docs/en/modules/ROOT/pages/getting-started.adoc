@@ -33,17 +33,12 @@ sdk env
         <artifactId>grimm-cdi-vauban</artifactId>
         <version>{project-version}</version>
     </dependency>
-    <dependency>
-        <groupId>org.eclipse.microprofile.openapi</groupId>
-        <artifactId>microprofile-openapi-api</artifactId>
-        <version>4.2-RC5</version>
-    </dependency>
 </dependencies>
 ----
 
 [NOTE]
 ====
-`microprofile-openapi-api` is a `compile`-scope dependency of `grimm-core`, so it already reaches the application transitively. Declaring it explicitly (as above) simply keeps the annotation dependency direct and visible in the application's own POM.
+The MicroProfile OpenAPI API, which ships the annotations, is a `compile`-scope dependency of `grimm-core`: it reaches the application transitively, at the version Grimm was built against. The application does not declare it.
 ====
 
 == Root annotation on the `Application` class
