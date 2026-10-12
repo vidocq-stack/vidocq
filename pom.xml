@@ -39,11 +39,14 @@
     </developers>
 
     <modules>
+        <!-- First: every module of this reactor has it on its processor path (pluginManagement
+             below), and Maven does not order a reactor by processor paths. A jar since #237, it
+             must be built before the first module compiles. -->
+        <module>vidocq-runtime-core-codegen</module>
         <module>vidocq-runtime-spi</module>
         <module>vidocq-runtime-devconsole-spi</module>
         <module>vidocq-runtime-codegen-commons</module>
         <module>vidocq-runtime-core</module>
-        <module>vidocq-runtime-core-codegen</module>
         <module>vidocq-runtime-extensions</module>
         <module>vidocq-runtime-devservices</module>
         <module>vidocq-runtime-maven-plugin</module>
