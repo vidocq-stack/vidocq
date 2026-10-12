@@ -149,7 +149,7 @@ Endpoints exposed by `vidocq-runtime-knock-health-extension`: `/health`, `/healt
 
 == Metrics
 
-{spec-mp-metrics} is shipped by the `vidocq-runtime-dirac-metrics-extension` extension (127 MicroProfile Metrics TCK tests green). Endpoints: `/metrics`, `/metrics/{scope}` and `/metrics/{scope}/{name}`.
+{spec-mp-metrics} is shipped by the `vidocq-runtime-dirac-metrics-extension` extension (127 MicroProfile Metrics TCK tests green). Endpoints: `/metrics`, `+/metrics/{scope}+` and `+/metrics/{scope}/{name}+`.
 
 == OpenAPI
 
