@@ -32,6 +32,7 @@
         <module>vidocq-runtime-knock-health-example</module>
         <module>vidocq-runtime-mansart-h2-example</module>
         <module>vidocq-runtime-petstore-example</module>
+        <module>vidocq-runtime-foy-servlet-example</module>
     </modules>
 
     <build>

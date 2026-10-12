@@ -1,0 +1,51 @@
+// Vidocq Bistro — start BistroApp, then run these requests from IntelliJ.
+
+### The menu
+GET http://localhost:8080/
+
+> {%
+    client.test("menu answers 200 with a request id", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.headers.valueOf("X-Request-Id") !== null, "No X-Request-Id");
+    });
+%}
+
+### Add a dish to the basket (the session cookie is kept between requests)
+POST http://localhost:8080/basket
+Content-Type: application/x-www-form-urlencoded
+
+add=bourguignon
+
+### The basket
+GET http://localhost:8080/basket
+
+> {%
+    client.test("the basket holds the dish", function () {
+        client.assert(response.body.indexOf("Beef bourguignon") >= 0, "Dish missing");
+    });
+%}
+
+### Send the order to the kitchen
+POST http://localhost:8080/basket
+Content-Type: application/x-www-form-urlencoded
+
+order=1
+
+### The kitchen without credentials
+GET http://localhost:8080/kitchen
+
+> {%
+    client.test("the kitchen asks for BASIC authentication", function () {
+        client.assert(response.status === 401, "Expected 401, got " + response.status);
+    });
+%}
+
+### The kitchen as the chef
+GET http://localhost:8080/kitchen
+Authorization: Basic chef chef
+
+> {%
+    client.test("the chef sees the orders", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}

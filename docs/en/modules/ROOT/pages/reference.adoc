@@ -35,7 +35,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
 | `io.vidocq.runtime:vidocq-runtime-examples:{project-version}`
-| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
+| Examples (`vidocq-runtime-cassini-rest-example`, `vidocq-runtime-cervantes-jwt-example`, `vidocq-runtime-knock-health-example`, `vidocq-runtime-mansart-h2-example`, `vidocq-runtime-petstore-example`, `vidocq-runtime-foy-servlet-example`, plus the `vidocq-runtime-external-rest-lib` helper library)
 
 | `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
 | Multi-extension integration tests
