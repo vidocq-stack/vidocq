@@ -49,7 +49,7 @@ The contract (deliberately identical to Quarkus' `@QuarkusMain`):
 * a plain server without post-boot logic just calls `Vidocq.run(args)`.
 
 `Vidocq.run()` picks the application modules of the boot layer automatically, with the
-policy of Vauban's xref:vauban::se.adoc[Java SE launcher]: every module moves except the
+policy of Vauban's xref:dev@vauban::se.adoc[Java SE launcher]: every module moves except the
 Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
 `sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
 moves. CDI-agnostic libraries move too, so Vauban places the client proxies that must live in
@@ -229,7 +229,7 @@ Endpoints exposed by `vidocq-runtime-knock-health-extension`: `/health`, `/healt
 
 == Metrics
 
-{spec-mp-metrics} is shipped by the `vidocq-runtime-dirac-metrics-extension` extension (127 MicroProfile Metrics TCK tests green). Endpoints: `/metrics`, `/metrics/{scope}` and `/metrics/{scope}/{name}`.
+{spec-mp-metrics} is shipped by the `vidocq-runtime-dirac-metrics-extension` extension (127 MicroProfile Metrics TCK tests green). Endpoints: `/metrics`, `+/metrics/{scope}+` and `+/metrics/{scope}/{name}+`.
 
 == OpenAPI
 

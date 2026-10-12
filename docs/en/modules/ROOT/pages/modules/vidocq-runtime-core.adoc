@@ -677,7 +677,7 @@ When the application has not configured logging, Vidocq prints one aligned line 
 | `class#method`, padded to 45 columns. Packages are always abbreviated to their first letter (`i.v.r.c.VidocqBootstrap#configure`), so a class always looks the same. When that is still too wide, the packages are dropped (`CassiniScopeExtension#addProviderDefaultScope`), then the method is cut with a `~`. A class name that does not fit alone keeps its end after a `~`. The logger name stands in when the class is unknown.
 
 | Message
-| Formatted with its `{0}` parameters. The extra lines of a message and the stack trace follow unchanged.
+| Formatted with its `+{0}+` parameters. The extra lines of a message and the stack trace follow unchanged.
 |===
 
 Every level goes to standard output, flushed after each record: the logs stay in one stream, in order, with what the application prints.
