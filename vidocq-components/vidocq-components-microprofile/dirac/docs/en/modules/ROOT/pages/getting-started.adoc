@@ -38,17 +38,12 @@ sdk env
         <artifactId>dirac-rest</artifactId>
         <version>{project-version}</version>
     </dependency>
-    <dependency>
-        <groupId>org.eclipse.microprofile.metrics</groupId>
-        <artifactId>microprofile-metrics-api</artifactId>
-        <version>5.1.1</version>
-    </dependency>
 </dependencies>
 ----
 
 [NOTE]
 ====
-`microprofile-metrics-api` is `provided` in `dirac-core`: it is the spec that ships the annotations the application code will use (`@Counted`, `@Timed`, `@Gauge`).
+The MicroProfile Metrics API, which ships the annotations the application code uses (`@Counted`, `@Timed`, `@Gauge`), comes transitively through `dirac-api`, repackaged as the named module `microprofile.metrics.api` (`dirac-mp-metrics-api`). Do not add `org.eclipse.microprofile.metrics:microprofile-metrics-api` as well: that jar has no `module-info` and would put a second `microprofile.metrics.api` module on the module path.
 ====
 
 == Annotate a bean

@@ -6,19 +6,7 @@ This page walks through the MP Metrics 5.1.1 instrumentation patterns that come 
 
 == Maven coordinates
 
-Only the MP Metrics spec is compiled by the application:
-
-[source,xml]
-----
-<dependency>
-  <groupId>org.eclipse.microprofile.metrics</groupId>
-  <artifactId>microprofile-metrics-api</artifactId>
-  <version>5.1.1</version>
-  <scope>provided</scope>
-</dependency>
-----
-
-Add `dirac-cdi-vauban` for the interceptors and the BCE, and `dirac-rest` for the `GET /metrics` endpoint.
+Add `dirac-cdi-vauban` for the interceptors and the BCE, and `dirac-rest` for the `GET /metrics` endpoint. The MicroProfile Metrics API comes with them, through `dirac-api` and its repackaged module `dirac-mp-metrics-api`: the application does not declare it, and must not add the upstream `microprofile-metrics-api` jar next to it (see xref:getting-started.adoc[Getting started]).
 
 == Counter — `@Counted`
 
