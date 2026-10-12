@@ -28,17 +28,12 @@ sdk env                              # Java 25 + Maven 3.9.16
         <artifactId>heisenberg-cdi-vauban</artifactId>
         <version>{project-version}</version>
     </dependency>
-    <dependency>
-        <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
-        <artifactId>microprofile-fault-tolerance-api</artifactId>
-        <version>4.1</version>
-    </dependency>
 </dependencies>
 ----
 
 [NOTE]
 ====
-The MicroProfile Fault Tolerance API is declared `provided` in `heisenberg-cdi-vauban`. It ships the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback`, `@Asynchronous` annotations used in application code. The modularised variant `io.vidocq.heisenberg:heisenberg-mp-ft-api` can replace it in a fully jlink-compatible project.
+The MicroProfile Fault Tolerance API, which ships the `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` and `@Asynchronous` annotations used in application code, comes transitively through `heisenberg-api`, repackaged as the named module `microprofile.fault.tolerance.api` (`heisenberg-mp-ft-api`). Do not add `org.eclipse.microprofile.fault-tolerance:microprofile-fault-tolerance-api` as well: that jar has no `module-info` and would put a second `microprofile.fault.tolerance.api` module on the module path.
 ====
 
 == First guarded method
