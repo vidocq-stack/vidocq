@@ -35,10 +35,11 @@ assert Arrays.equals(Files.readAllBytes(debugFile), Files.readAllBytes(root.reso
 
 String devBody = devFile.toFile().text
 assert devBody.contains('type="MavenRunConfiguration" factoryName="Maven"')
-assert devBody.contains('<option value="vidocq:dev" />')
+assert devBody.contains('<option value="process-classes" />\n              <option value="vidocq:dev" />') :
+        'vidocq:dev starts from target/classes as it is: the Dev configuration compiles first (Vidocq/vidocq#237)'
 assert devBody.contains('<option name="pomFileName" value="server/pom.xml" />')
 assert devBody.contains('<option name="workingDirPath" value="$PROJECT_DIR$" />')
-assert !devBody.contains('Maven.BeforeRunTask') : 'vidocq:dev compiles and indexes by itself'
+assert !devBody.contains('Maven.BeforeRunTask') : 'process-classes compiles and indexes before vidocq:dev, no IntelliJ Build step'
 assert !devBody.contains('MAIN_CLASS_NAME') && !devBody.contains('"Make"') : 'the IDE build is not what runs the application'
 
 String packagedBody = packagedFile.toFile().text
