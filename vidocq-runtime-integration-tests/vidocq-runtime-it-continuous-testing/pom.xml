@@ -51,11 +51,12 @@
             <artifactId>vidocq-runtime-devconsole-extension</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- A jar, as the fixture's annotationProcessorPaths entry: a pom-typed dependency stages the pom only,
+             and the fixture's compiler then misses the jar in a build that installs nothing. -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core-codegen</artifactId>
             <version>${project.version}</version>
-            <type>pom</type>
             <scope>test</scope>
         </dependency>
 
