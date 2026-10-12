@@ -548,6 +548,18 @@ The beans of the bean index need load-time weaving, as those of an IDE build do,
 
 Build with Maven or Gradle, which weave at compile time, or launch through a `@VidocqMain` trampoline, whose application layer weaves without an agent.
 
+[#vidocq-gen-001]
+==== VIDOCQ-GEN-001 — bean archives indexed at boot [.tag-new]#NEW#
+
+The application's bean index is not the one `vidocq:generate` left: `META-INF/vidocq/generate.stamp` is missing from the application module, or it records another `META-INF/vauban-beans.list`. An IDE build does the first, since it never runs the goal, and an IDE's incremental build the second, since the annotation processor rewrites the index without the beans of the dependencies. Those beans, in a dependency compiled without Vauban's processor, are then in no index, and the application used to answer 404 with no warning (Vidocq/vidocq#83). The boot now scans the `beans.xml` archives that no Vauban build step indexed, honouring their discovery mode, and names them; their beans run through reflection. The record is logged only when there was such an archive. An embedded deployment, such as the TCK, is never concerned.
+
+[source,text]
+----
+[VIDOCQ-GEN-001] The application's bean index is not the one vidocq:generate left (META-INF/vidocq/generate.stamp missing or stale), as after an IDE build: the boot indexed 1 bean archive(s) that no build step indexed: jar:file:///…/langchain4j-cdi-mcp-server-1.3.0.jar!/. Their beans fall back to reflection. Build with Maven (mvn process-classes) or run the IntelliJ configuration that vidocq:idea writes to index them at build time.
+----
+
+What the boot cannot do: scan a jar without `beans.xml` that only `<scanDependencies>` names, since the pom is not read at runtime, or honour `<scanExcludes>`. Build with Maven for those.
+
 [#vidocq-rpt-001]
 ==== VIDOCQ-RPT-001 — contributor failed
 

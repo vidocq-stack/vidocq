@@ -390,6 +390,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-core.adoc#vauban-009[`VAUBAN-009`]
 | Load-time weaving was needed and could not be prepared.
 
+| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`] [.tag-new]#NEW#
+| The application's bean index is not the one `vidocq:generate` left, as after an IDE build: the boot indexed the bean archives that no build step indexed.
+
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
 

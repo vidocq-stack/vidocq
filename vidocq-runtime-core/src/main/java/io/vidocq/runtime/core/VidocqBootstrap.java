@@ -298,6 +298,22 @@ public final class VidocqBootstrap {
         recorder.begin("scan");
         VaubanContainerBuilder builder = VaubanContainer.builder()
                 .scanClasspath();
+        // An application built without vidocq:generate, as an IDE builds it: the beans of a dependency compiled
+        // without Vauban's processor are in no index, so the boot scans those archives (#241). Never for an
+        // embedded deployment, whose classes come through additionalBeanClassNames.
+        if (!embeddedDeployment && GenerateStamp.staleIn(Vidocq.applicationModule())) {
+            List<String> archives = new ArrayList<>();
+            builder.scanUnprocessedBeanArchives(archive -> archives.add(archive.toString()));
+            if (!archives.isEmpty()) {
+                recorder.anomaly(StartupAnomalies.GENERATE_SKIPPED, "The application's bean index is not the one"
+                        + " vidocq:generate left (" + GenerateStamp.PATH + " missing or stale), as after an IDE build:"
+                        + " the boot indexed "
+                        + archives.size() + " bean archive(s) that no build step indexed: " + String.join(", ", archives)
+                        + ".", "Their beans fall back to reflection. Build with Maven (mvn process-classes) or run"
+                        + " the IntelliJ configuration that vidocq:idea writes to index them at build time.",
+                        StartupRecorder.CORE);
+            }
+        }
 
         // Add extra bean classes (e.g. from Arquillian deployment)
         if (additionalBeanClassNames != null) {

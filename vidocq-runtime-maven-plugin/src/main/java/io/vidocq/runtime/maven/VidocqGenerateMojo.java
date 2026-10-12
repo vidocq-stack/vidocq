@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.GenerateStamp;
 import io.vidocq.vauban.maven.generate.GenerationResult;
 import io.vidocq.vauban.maven.generate.VaubanGenerator;
 import org.apache.maven.plugin.AbstractMojo;
@@ -101,6 +102,20 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
+        generate();
+        // Last, once the index is final, on every path that did not fail: the stamp records that index, and the
+        // boot reads a missing or stale stamp as "built without vidocq:generate" (Vidocq/vidocq#241).
+        Path classesDir = outputDirectory.toPath();
+        if (Files.isDirectory(classesDir)) {
+            try {
+                writeStamp(classesDir);
+            } catch (IOException e) {
+                throw new MojoExecutionException("Cannot write " + classesDir.resolve(GenerateStamp.PATH), e);
+            }
+        }
+    }
+
+    private void generate() throws MojoExecutionException {
         getLog().info("Vidocq - Generating bean index and proxies for dependencies");
 
         Path classesDir = outputDirectory.toPath();
@@ -268,5 +283,16 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     private static List<String> orEmpty(List<String> list) {
         return list == null ? List.of() : list;
+    }
+
+    /**
+     * Writes {@link GenerateStamp#PATH} into {@code classesDir}: the boot of an application that lacks it scans the
+     * bean archives no build step indexed, since nothing else did (Vidocq/vidocq#241).
+     */
+    static void writeStamp(Path classesDir) throws IOException {
+        Path index = classesDir.resolve(GenerateStamp.INDEX);
+        Path stamp = classesDir.resolve(GenerateStamp.PATH);
+        Files.createDirectories(stamp.getParent());
+        Files.writeString(stamp, GenerateStamp.content(Files.isRegularFile(index) ? Files.readAllBytes(index) : null));
     }
 }

@@ -78,6 +78,8 @@ xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-m
 
 Bound to `process-classes`. Besides the application's own bean index, it generates code for the dependency jars it scans, so that their beans run generated code instead of reflection: per package a `_VaubanComponents` that creates the beans, injects their fields and calls their methods, a client proxy per normal-scoped bean, an intercepted subclass per intercepted one — the same code the Vauban annotation processor writes for a project, made with the Class-File API.
 
+Last, it writes `META-INF/vidocq/generate.stamp` [.tag-new]#NEW#, which records the `META-INF/vauban-beans.list` it leaves: at boot, an application module whose stamp is missing or records another index was built without the goal, and the boot indexes the unprocessed bean archives itself (xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`]).
+
 === Which jars it scans
 
 [cols="1,3"]

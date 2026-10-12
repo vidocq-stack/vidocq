@@ -43,6 +43,11 @@ public final class StartupAnomalies {
     /** Load-time weaving was needed and could not be prepared. */
     public static final String WEAVING_FAILED = "VAUBAN-009";
     /**
+     * The application was built without {@code vidocq:generate}, as by an IDE, and the boot indexed at runtime the
+     * bean archives no build step indexed (Vidocq/vidocq#241).
+     */
+    public static final String GENERATE_SKIPPED = "VIDOCQ-GEN-001";
+    /**
      * A startup report contributor could not be loaded, created or identified, or failed while it wrote its
      * section, which is skipped; logged with the stack trace when there is one.
      */
