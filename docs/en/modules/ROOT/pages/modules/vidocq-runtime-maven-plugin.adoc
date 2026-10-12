@@ -906,7 +906,8 @@ project directory, a blank name) and name collisions fail the goal before anythi
 
 When it is launched inside a module of a larger reactor — a directory that an ancestor `pom.xml` lists in its
 `<modules>` — the goal fails: IntelliJ loads `.run` files anywhere in the project content, and paths written
-relative to the module would resolve against the reactor root. Run it from the root, or set
+relative to the module would resolve against the reactor root. Run it from the root, which the error names —
+the outermost aggregator, when the module belongs to a nested one such as `examples/` — or set
 `-Dvidocq.idea.projectDirectory` when IntelliJ really opens the module. A project directory that is not the
 directory of a project of the build is accepted with a warning: IntelliJ only loads `.run` files inside the
 project content.

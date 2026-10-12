@@ -562,7 +562,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
                 if (aggregator != null) {
                     throw new MojoFailureException(PREFIX + directory + " is a module of " + aggregator + ". IntelliJ"
                             + " usually opens the reactor root, where the generated $PROJECT_DIR$ paths would point at"
-                            + " the wrong pom: run vidocq:idea from " + aggregator.getParent() + ", or add"
+                            + " the wrong pom: run vidocq:idea from " + ProjectDirectories.reactorRootOf(directory)
+                            + ", or add"
                             + " -Dvidocq.idea.projectDirectory=" + directory + " if IntelliJ opens " + directory
                             + " itself.");
                 }

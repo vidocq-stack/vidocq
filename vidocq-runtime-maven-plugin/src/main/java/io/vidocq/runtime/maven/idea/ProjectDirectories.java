@@ -64,6 +64,20 @@ final class ProjectDirectories {
         return null;
     }
 
+    /**
+     * The real path of the outermost aggregator directory above {@code directory}, following the chain of
+     * aggregators, or {@code null} when {@code directory} is no module: the reactor root IntelliJ opens, for
+     * a module of a nested aggregator as for a direct one.
+     */
+    static Path reactorRootOf(Path directory) throws IOException {
+        Path root = null;
+        for (Path aggregator = aggregatorOf(directory); aggregator != null;
+                aggregator = aggregatorOf(aggregator.getParent())) {
+            root = aggregator.getParent();
+        }
+        return root;
+    }
+
     /** The {@code <module>} entries of a pom, top-level and in profiles; empty when the pom cannot be read. */
     static List<String> modules(Path pom) {
         List<String> modules = new ArrayList<>();

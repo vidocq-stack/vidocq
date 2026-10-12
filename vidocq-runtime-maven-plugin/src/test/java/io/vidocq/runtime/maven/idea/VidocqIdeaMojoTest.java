@@ -373,6 +373,34 @@ class VidocqIdeaMojoTest {
         assertFalse(Files.exists(alpha.resolve(".run")));
     }
 
+    /**
+     * A module of a nested aggregator, as an example under {@code vidocq-runtime-examples}: the message sends
+     * the developer to the reactor root IntelliJ opens, not to the nested aggregator, itself a module.
+     */
+    @Test
+    void runningInsideAModuleOfANestedAggregatorNamesTheReactorRoot() throws Exception {
+        Files.writeString(root.resolve("pom.xml"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modules><module>alpha</module><module>apps</module><module>library</module></modules>
+                </project>
+                """);
+        Files.writeString(root.resolve("apps/pom.xml"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                  <modules><module>beta</module></modules>
+                </project>
+                """);
+        Path beta = root.resolve("apps/beta");
+
+        MojoFailureException failure = assertThrows(MojoFailureException.class,
+                () -> mojo.run(projects.subList(2, 3), projects.subList(2, 3), new Properties(), beta));
+
+        assertEquals("Vidocq idea: " + beta.toRealPath() + " is a module of "
+                + root.toRealPath().resolve("apps/pom.xml") + ". IntelliJ usually opens the reactor root, where the"
+                + " generated $PROJECT_DIR$ paths would point at the wrong pom: run vidocq:idea from "
+                + root.toRealPath() + ", or add -Dvidocq.idea.projectDirectory=" + beta.toRealPath()
+                + " if IntelliJ opens " + beta.toRealPath() + " itself.", failure.getMessage());
+    }
+
     @Test
     void anExplicitProjectDirectoryIsTheWayOut() throws Exception {
         Path alpha = root.resolve("alpha");

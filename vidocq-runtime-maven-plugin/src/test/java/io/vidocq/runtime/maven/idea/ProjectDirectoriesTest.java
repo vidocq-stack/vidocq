@@ -69,6 +69,22 @@ class ProjectDirectoriesTest {
         assertEquals(root.resolve("pom.xml").toRealPath(), ProjectDirectories.aggregatorOf(b));
     }
 
+    /**
+     * A module of a nested aggregator, as {@code vidocq-runtime-examples/<example>}: the goal must send the
+     * developer to the outermost reactor, the one IntelliJ opens, not to the nested aggregator.
+     */
+    @Test
+    void theReactorRootIsTheOutermostAggregator(@TempDir Path root) throws IOException {
+        pom(root, "<modules><module>examples</module></modules>");
+        pom(root.resolve("examples"), "<modules><module>servlet</module></modules>");
+        Path servlet = pom(root.resolve("examples/servlet"), "");
+
+        assertEquals(root.resolve("examples/pom.xml").toRealPath(), ProjectDirectories.aggregatorOf(servlet));
+        assertEquals(root.toRealPath(), ProjectDirectories.reactorRootOf(servlet));
+        assertEquals(root.toRealPath(), ProjectDirectories.reactorRootOf(root.resolve("examples")));
+        assertNull(ProjectDirectories.reactorRootOf(root));
+    }
+
     @Test
     void theReactorRootAndUnrelatedDirectoriesAreNotModules(@TempDir Path root) throws IOException {
         pom(root, "<modules><module>app</module></modules>");
