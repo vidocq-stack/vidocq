@@ -275,10 +275,12 @@ Add each one to the compiler's `annotationProcessorPaths`, next to the inherited
     <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
     <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
     <version>{project-version}</version>
-    <type>pom</type>
 </path>
 ----
 
+The bundles are jars from 0.4.0: a `<path>` written for 0.3.0 with `<type>pom</type>` still builds, and
+`checkpom` warns about it so that IntelliJ's build runs the processors too; remove the line (see
+xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]).
 `vidocq extension add ravel-config` and `vidocq extension add cyrano-rest-client` write it for you. See
 xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config extension] and
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].

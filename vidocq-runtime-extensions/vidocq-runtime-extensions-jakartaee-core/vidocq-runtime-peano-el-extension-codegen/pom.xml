@@ -8,7 +8,7 @@
         <version>0.4.0-SNAPSHOT</version>
     </parent>
     <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
-    <packaging>pom</packaging>
+    <packaging>jar</packaging>
     <name>Vidocq :: Core Extensions :: Expression Language (Peano) :: Codegen Bundle</name>
     <description>Build-time accessor tables for application types selected with Peano ELAccessible</description>
     <dependencies>
@@ -16,4 +16,19 @@
             <groupId>io.vidocq.peano</groupId><artifactId>peano-processor</artifactId><version>${peano.version}</version>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path, which for core-codegen is this artifact. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

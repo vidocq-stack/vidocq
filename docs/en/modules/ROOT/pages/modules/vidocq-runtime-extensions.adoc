@@ -44,7 +44,7 @@
 
 | `vidocq-runtime-peano-el-extension` [.tag-new]#NEW#
 | `jakartaee-core`
-| Activates xref:peano::index.adoc[Peano] for Jakarta Expression Language 6.0 and reports the selected provider module in the `el` startup section. Companion `-codegen` POM bundle generates application accessor tables. See <<peano-el>>.
+| Activates xref:peano::index.adoc[Peano] for Jakarta Expression Language 6.0 and reports the selected provider module in the `el` startup section. Companion `-codegen` bundle generates application accessor tables. See <<peano-el>>.
 
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
@@ -101,6 +101,13 @@
 
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
 
+[[codegen-bundles]]
+== Codegen bundles are jars [.tag-new]#NEW#
+
+A `-codegen` bundle carries no code: it brings an extension's annotation processors to the compiler's `annotationProcessorPaths`. Up to 0.3.0 each bundle was a pom, declared with `<type>pom</type>`. From 0.4.0 each one is a jar holding only an empty `module-info`, and the `<path>` has no `<type>`: IntelliJ's Maven import ignores a processor path of type pom, so IntelliJ's own build used to compile the application without any processor and drop their output (Vidocq/vidocq#237). With jars, IntelliJ resolves each bundle with its dependencies, exactly as Maven does, and its build runs the same processors. The parent's default `vidocq-runtime-core-codegen` path, `vidocq extension add`, the scaffold and `vidocq:checkpom`'s suggestions all use the jar form.
+
+A `<path>` that still says `<type>pom</type>` keeps working with Maven, since every bundle still publishes its pom, and the parent's `dependencyManagement` keeps a version for it. `vidocq:checkpom` warns about it, never fails: remove the `<type>pom</type>` line for IntelliJ.
+
 [[peano-el]]
 == Expression Language (Peano) [.tag-new]#NEW#
 
@@ -120,7 +127,6 @@ bundle to the inherited compiler configuration:
         <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
         <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
         <version>${vidocq.version}</version>
-        <type>pom</type>
     </path>
 </annotationProcessorPaths>
 ----
@@ -164,7 +170,6 @@ Declare the extension, and its codegen bundle on the processor path:
         <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
         <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
         <version>${vidocq.version}</version>
-        <type>pom</type>
     </path>
 </annotationProcessorPaths>
 ----

@@ -57,7 +57,6 @@
                             <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                             <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
                             <version>${project.version}</version>
-                            <type>pom</type>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

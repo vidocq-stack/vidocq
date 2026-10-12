@@ -108,7 +108,6 @@
                             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
-                            <type>pom</type>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

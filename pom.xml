@@ -471,6 +471,10 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
             </dependency>
 
@@ -615,11 +619,15 @@
                 <artifactId>heisenberg-cdi-vauban</artifactId>
                 <version>${heisenberg.version}</version>
             </dependency>
-            <!-- Codegen bundles — POM-only artifacts referenced from
+            <!-- Codegen bundles — code-free jars referenced from
                  <annotationProcessorPaths>. core-codegen is wired by default
                  through pluginManagement (Vauban indexer is universal). Each
                  *-extension-codegen is opt-in: declare it whenever you depend
-                 on the matching *-extension runtime. -->
+                 on the matching *-extension runtime. Each bundle is listed
+                 twice: as a jar, the form to declare (IntelliJ's Maven import
+                 ignores a pom-type processor path, Vidocq/vidocq#237), and as
+                 a pom, so that a path still declared with <type>pom</type> and
+                 no version keeps its version. -->
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core-codegen</artifactId>
@@ -631,6 +639,11 @@
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
@@ -655,6 +668,11 @@
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
@@ -721,8 +739,9 @@
                                 <artifactId>vidocq-runtime-core-codegen</artifactId>
                                 <!-- No version: the compiler plugin (3.12+) takes it from the
                                      dependencyManagement entry above, which versions:set keeps
-                                     current; it does not rewrite annotationProcessorPaths. -->
-                                <type>pom</type>
+                                     current; it does not rewrite annotationProcessorPaths.
+                                     No <type>pom</type>: IntelliJ's Maven import ignores such a
+                                     path, so its own build would run no processor (#237). -->
                             </path>
                         </annotationProcessorPaths>
                     </configuration>

@@ -226,10 +226,58 @@ class VidocqCheckPomMojoTest {
                     <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                     <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
                     <version>0.4.0</version>
-                    <type>pom</type>
                 </path>""";
         assertTrue(errors.getFirst().contains(expected), errors.getFirst());
         assertFalse(errors.getFirst().contains("reflection"), errors.getFirst());
+    }
+
+    /**
+     * Vidocq/vidocq#237: IntelliJ's Maven import ignores a processor path of type pom, so IntelliJ's own build runs
+     * no processor. Maven still builds such a pom, so checkpom warns, naming the line to remove, and never fails.
+     */
+    @Test
+    void aCodegenPathOfTypePomIsWarnedAboutAndNeverFails(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "cassini.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        Dependency cassini = new Dependency();
+        cassini.setGroupId("io.vidocq.runtime.extensions.jakartaee.core");
+        cassini.setArtifactId("vidocq-runtime-cassini-rest-extension");
+        cassini.setVersion("0.4.0");
+        model.addDependency(cassini);
+        Plugin compiler = new Plugin();
+        compiler.setGroupId("org.apache.maven.plugins");
+        compiler.setArtifactId("maven-compiler-plugin");
+        compiler.setConfiguration(Xpp3DomBuilder.build(new StringReader("<configuration><annotationProcessorPaths>"
+                + "<path><groupId>io.vidocq.runtime</groupId><artifactId>vidocq-runtime-core-codegen</artifactId>"
+                + "<version>0.4.0</version></path>"
+                + "<path><groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>"
+                + "<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId><version>0.4.0</version>"
+                + "<type>pom</type></path></annotationProcessorPaths></configuration>")));
+        Build build = new Build();
+        build.addPlugin(compiler);
+        model.setBuild(build);
+        VidocqCheckPomMojo mojo = strictCheckpom(new MavenProject(model), plain);
+        List<String> warnings = new ArrayList<>();
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void warn(CharSequence content) {
+                warnings.add(content.toString());
+            }
+
+            @Override
+            public void info(CharSequence content) {
+            }
+        });
+
+        assertDoesNotThrow(mojo::execute);
+
+        assertEquals(1, warnings.size(), warnings.toString());
+        String warning = warnings.getFirst();
+        assertTrue(warning.contains("'vidocq-runtime-cassini-rest-extension-codegen'"), warning);
+        assertTrue(warning.contains("<type>pom</type>"), warning);
+        assertTrue(warning.contains("IntelliJ"), warning);
+        assertTrue(warning.contains("Vidocq/vidocq#237"), warning);
     }
 
     /** A checkpom mojo failing on its issues, every codegen bundle published, every dependency resolving to jar. */

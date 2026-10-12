@@ -100,6 +100,15 @@ class PomEditorAptTest {
         assertFalse(r.pom().contains("${project.version}"));
     }
 
+    /** Vidocq/vidocq#237: IntelliJ's Maven import ignores a processor path of type pom. */
+    @Test
+    void theAddedPathHasNoPomType() {
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_BUILD, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.changed());
+        assertFalse(r.pom().contains("<type>pom</type>"), r.pom());
+    }
+
     @Test
     void createsCompilerPluginBlockWhenAbsent() {
         PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_BUILD, CASSINI_CODEGEN, "0.4.0");

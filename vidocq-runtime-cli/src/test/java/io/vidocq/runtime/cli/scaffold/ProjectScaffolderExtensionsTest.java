@@ -86,6 +86,8 @@ class ProjectScaffolderExtensionsTest {
                 "checkpom requires the codegen bundle on the APT path, pom was:\n" + pom);
         assertTrue(pom.contains("combine.children=\"append\""),
                 "the APT path must append to the parent's Vauban indexer entry");
+        assertFalse(pom.contains("<type>pom</type>"),
+                "IntelliJ's Maven import ignores a processor path of type pom (Vidocq/vidocq#237), pom was:\n" + pom);
     }
 
     @Test

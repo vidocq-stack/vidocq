@@ -201,6 +201,13 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         Map<String, String> extensionGroups = new LinkedHashMap<>();
         Map<String, String> extensions = collectExtensions(extensionGroups);
         Map<String, String> codegenPaths = collectCodegenPaths();
+        // A warning, never a failure: Maven builds a pom-typed path, only IntelliJ's own build loses it (#237).
+        for (String codegen : collectPomTypedCodegenPaths()) {
+            getLog().warn("Vidocq checkpom: codegen bundle '" + codegen + "' is declared with <type>pom</type> in"
+                    + " annotationProcessorPaths. Maven runs its processors, but IntelliJ's Maven import ignores a"
+                    + " processor path of type pom, so IntelliJ's own build runs none of them (Vidocq/vidocq#237)."
+                    + " Remove the <type>pom</type> line.");
+        }
 
         // A module that has no extension in its deps and no codegen bundle beyond the
         // core-codegen inherited from the parent has nothing actionable to verify.
@@ -268,7 +275,6 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                     + "    <groupId>" + extensionGroups.get(extName) + "</groupId>\n"
                     + "    <artifactId>" + codegenName + "</artifactId>\n"
                     + "    <version>" + extVer + "</version>\n"
-                    + "    <type>pom</type>\n"
                     + "</path>");
         }
         return result;
@@ -343,30 +349,44 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         return result;
     }
 
-    private Map<String, String> collectCodegenPaths() {
-        Map<String, String> result = new LinkedHashMap<>();
+    /** The Vidocq codegen bundles declared on the processor path with {@code <type>pom</type>}, in order. */
+    private List<String> collectPomTypedCodegenPaths() {
+        List<String> result = new ArrayList<>();
+        for (Xpp3Dom path : codegenPathElements()) {
+            String aid = childText(path, "artifactId");
+            if ("pom".equals(childText(path, "type")) && aid.endsWith("-codegen") && !result.contains(aid)) {
+                result.add(aid);
+            }
+        }
+        return result;
+    }
+
+    /** Every {@code <path>} of a Vidocq runtime group, from the plugin configuration and its executions. */
+    private List<Xpp3Dom> codegenPathElements() {
+        List<Xpp3Dom> result = new ArrayList<>();
         Plugin compiler = project.getPlugin(MAVEN_COMPILER_KEY);
         if (compiler == null) return result;
-
-        // Configuration may live on the plugin itself or inside any <execution>.
-        Stream<Object> configs = Stream.concat(
+        Stream.concat(
                 Stream.ofNullable(compiler.getConfiguration()),
                 compiler.getExecutions().stream().map(PluginExecution::getConfiguration)
-        ).filter(Objects::nonNull);
-
-        configs.forEach(cfg -> {
+        ).filter(Objects::nonNull).forEach(cfg -> {
             if (!(cfg instanceof Xpp3Dom dom)) return;
             Xpp3Dom paths = dom.getChild("annotationProcessorPaths");
             if (paths == null) return;
             for (Xpp3Dom path : paths.getChildren("path")) {
-                String gid = childText(path, "groupId");
-                String aid = childText(path, "artifactId");
-                String ver = childText(path, "version");
-                if (isVidocqRuntimeGroup(gid) && aid != null) {
-                    result.putIfAbsent(aid, ver);
+                if (isVidocqRuntimeGroup(childText(path, "groupId")) && childText(path, "artifactId") != null) {
+                    result.add(path);
                 }
             }
         });
+        return result;
+    }
+
+    private Map<String, String> collectCodegenPaths() {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Xpp3Dom path : codegenPathElements()) {
+            result.putIfAbsent(childText(path, "artifactId"), childText(path, "version"));
+        }
         return result;
     }
 

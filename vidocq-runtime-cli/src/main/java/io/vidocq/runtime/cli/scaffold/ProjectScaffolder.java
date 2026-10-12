@@ -201,7 +201,6 @@ public final class ProjectScaffolder {
                     .append("                        <groupId>").append(coordinate.groupId()).append("</groupId>\n")
                     .append("                        <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
                     .append("                        <version>").append(version).append("</version>\n")
-                    .append("                        <type>pom</type>\n")
                     .append("                    </path>\n"));
         }
         if (paths.isEmpty()) return "";

@@ -245,7 +245,6 @@ public final class PomEditor {
                 + indent + "    <groupId>" + codegen.groupId() + "</groupId>\n"
                 + indent + "    <artifactId>" + codegen.artifactId() + "</artifactId>\n"
                 + indent + "    <version>" + version + "</version>\n"
-                + indent + "    <type>pom</type>\n"
                 + indent + "</path>\n";
     }
 

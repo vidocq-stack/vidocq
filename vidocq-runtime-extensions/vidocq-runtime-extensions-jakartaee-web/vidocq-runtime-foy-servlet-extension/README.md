@@ -16,7 +16,7 @@ every request and, through `foy-cdi-vauban` and `vauban-webcontexts`, the sessio
 ```
 
 and, in `<annotationProcessorPaths>`, the companion bundle
-`vidocq-runtime-foy-servlet-extension-codegen` (type `pom`). `vidocq extension add foy-servlet`
+`vidocq-runtime-foy-servlet-extension-codegen`, without `<type>`: it is a jar since 0.4.0. `vidocq extension add foy-servlet`
 adds both.
 
 ## Configuration

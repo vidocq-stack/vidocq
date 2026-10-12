@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-    <packaging>pom</packaging>
+    <packaging>jar</packaging>
     <name>Vidocq :: Web Extensions :: Servlet (Foy) :: Codegen Bundle</name>
     <description>
         Companion codegen bundle for vidocq-runtime-foy-servlet-extension.
@@ -33,4 +33,19 @@
             <artifactId>foy-cdi-vauban</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path, which for core-codegen is this artifact. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

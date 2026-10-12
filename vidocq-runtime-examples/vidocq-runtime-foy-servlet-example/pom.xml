@@ -52,7 +52,6 @@
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
                             <version>${project.version}</version>
-                            <type>pom</type>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
