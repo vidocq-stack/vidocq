@@ -30,15 +30,8 @@
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
         </dependency>
+        <!-- The Servlet and CDI APIs come transitively with the extension. -->
 
-        <dependency>
-            <groupId>jakarta.servlet</groupId>
-            <artifactId>jakarta.servlet-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.enterprise</groupId>
-            <artifactId>jakarta.enterprise.cdi-api</artifactId>
-        </dependency>
     </dependencies>
 
     <build>
