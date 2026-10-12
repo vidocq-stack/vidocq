@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261012-01 — an IntelliJ build drops the annotation processor output, and Maven does not restore it
+
+- **Date**: 2026-10-12
+- **Status**: OPEN (vidocq#237), fix in progress on `fix/apt-output-clobbered-by-ide`
+- **Symptom**: `vidocq-runtime-foy-servlet-example` started from the IntelliJ Dev run configuration
+  (`vidocq:dev`) mounts no servlet; the Servlet panel of the dev console is empty. `target/classes`
+  holds the hand-written classes only: no `$$FoyComponent`, `_VaubanComponents` or `META-INF/services`.
+- **Minimal repro**: `mvn process-classes` (5 `$$FoyComponent`), then rebuild `target/classes` without
+  processors (`javac -proc:none`, as IntelliJ's build does), then `mvn process-classes` again: "Nothing to
+  compile - all classes are up to date", still 0 `$$FoyComponent`.
+- **Cause**: IntelliJ's Maven import ignores an `annotationProcessorPaths` entry of `<type>pom</type>`, the
+  shape of every `-codegen` bundle, so its build runs no processor. `maven-compiler-plugin` then sees
+  up-to-date classes and never reruns them. `vidocq:dev` starts from `target/classes` as it is, and the
+  IntelliJ Dev configuration ran `vidocq:dev` without `process-classes`, unlike the CLI.
+- **Fix**: the Dev configuration of `vidocq:idea` runs `process-classes vidocq:dev`; `vidocq:dev` and
+  `vidocq:run` compare the compiler's `createdFiles.lst` with `target/classes`, and on a gap reset the
+  compiler's incremental state and recompile once. IntelliJ's own build running the processors: follow-up.
+
 ## VIDOCQ-PEANO-003 — Maven processor paths do not discover Peano's module-only processor
 
 - **Date**: 2026-10-11

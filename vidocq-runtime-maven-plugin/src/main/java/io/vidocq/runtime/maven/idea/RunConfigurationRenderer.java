@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -53,6 +54,15 @@ final class RunConfigurationRenderer {
 
     /** The goal the main, Dev configuration runs: console, reload, continuous testing (Vidocq/vidocq#143). */
     static final String DEV_GOAL = "vidocq:dev";
+
+    /**
+     * The goals of the Dev configuration. {@value #DEV_GOAL} starts from {@code target/classes} as it is, so
+     * {@code process-classes} compiles and indexes first, as {@code vidocq dev} does (Vidocq/vidocq#237).
+     */
+    static final List<String> DEV_GOALS = List.of("process-classes", DEV_GOAL);
+
+    /** The goals of the {@code (packaged)} configuration: {@value #RUN_GOAL} forks {@code process-classes} itself. */
+    static final List<String> RUN_GOALS = List.of(RUN_GOAL);
 
     /** Appended to the configuration name of the packaged-behaviour Maven configuration (Vidocq/vidocq#143). */
     static final String PACKAGED_SUFFIX = " (packaged)";
@@ -119,12 +129,12 @@ final class RunConfigurationRenderer {
     /** The run configuration of that kind; {@code generateBeforeLaunch} only concerns {@link Kind#APPLICATION}. */
     static String body(IdeaApplication application, Kind kind, String jre, boolean generateBeforeLaunch) {
         return kind == Kind.MAVEN
-                ? mavenBody(application, jre, RUN_GOAL, application.configurationName())
+                ? mavenBody(application, jre, RUN_GOALS, application.configurationName())
                 : applicationBody(application, jre, generateBeforeLaunch);
     }
 
     /**
-     * A Maven run configuration of {@code goal} on the application's pom, run in the project directory, named
+     * A Maven run configuration of {@code goals}, in order, on the application's pom, run in the project directory, named
      * {@code name}. {@code jre} becomes the Maven runner JRE, which is also the JDK the application runs on:
      * the goal forks it from the {@code java.home} of the JVM running Maven.
      *
@@ -133,7 +143,7 @@ final class RunConfigurationRenderer {
      * measured): a file it re-serialises to itself is one it never rewrites. IntelliJ disables its Build
      * step for a Maven configuration, so nothing runs before launch — which is the point of this kind.
      */
-    static String mavenBody(IdeaApplication application, String jre, String goal, String name) {
+    static String mavenBody(IdeaApplication application, String jre, List<String> goals, String name) {
         StringBuilder xml = new StringBuilder(1100);
         xml.append("<component name=\"ProjectRunConfigurationManager\">\n");
         xml.append("  <configuration default=\"false\" name=\"").append(escapeAttribute(name))
@@ -169,7 +179,9 @@ final class RunConfigurationRenderer {
         xml.append("          </option>\n");
         xml.append("          <option name=\"goals\">\n");
         xml.append("            <list>\n");
-        xml.append("              <option value=\"").append(goal).append("\" />\n");
+        for (String goal : goals) {
+            xml.append("              <option value=\"").append(escapeAttribute(goal)).append("\" />\n");
+        }
         xml.append("            </list>\n");
         xml.append("          </option>\n");
         xml.append("          <option name=\"multimoduleDir\" />\n");

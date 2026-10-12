@@ -26,6 +26,7 @@ import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.maven.dev.ChildJvm;
+import io.vidocq.runtime.maven.dev.RecompileRunner;
 import io.vidocq.runtime.maven.dev.DevServicesExtensionJar;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
@@ -202,6 +203,9 @@ public class VidocqRunMojo extends AbstractMojo {
         Path projectDir = baseDir.toPath();
         Path build = buildDirPath();
         Path classes = classesDir.toPath();
+        // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
+        CompilerOutput.ensureComplete(build, classes, new RecompileRunner(projectDir)::run,
+                message -> getLog().warn(PREFIX + message));
         // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
         // classes stay off the module path and boot in a Vauban-defined module layer.
         List<Path> modulePath = ApplicationLaunch.modulePath(project, build, classes, true,

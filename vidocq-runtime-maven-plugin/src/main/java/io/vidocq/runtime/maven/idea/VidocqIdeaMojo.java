@@ -61,7 +61,8 @@ import java.util.stream.Stream;
  * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
  * <p>By default each application gets three files (Vidocq/vidocq#143): the <i>Dev</i> configuration, an
- * IntelliJ <b>Maven</b> run of {@code vidocq:dev} (console, reload, continuous testing) on the application's
+ * IntelliJ <b>Maven</b> run of {@code process-classes vidocq:dev} (console, reload, continuous testing), as
+ * {@code vidocq dev} runs it, on the application's
  * own pom, which keeps the file name and the configuration name a developer already uses; a <i>(packaged)</i>
  * configuration, the same Maven run of {@code vidocq:run} instead, as the single file did before this
  * application had a Dev configuration; and a <i>(debug)</i> configuration, a Remote JVM Debug run that
@@ -290,11 +291,11 @@ public class VidocqIdeaMojo extends AbstractMojo {
                 // vidocq:dev; the packaged and debug configurations are new, additional files.
                 addTarget(targets, runDirectory, application, application.configurationName(),
                         candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
-                                RunConfigurationRenderer.DEV_GOAL, application.configurationName()));
+                                RunConfigurationRenderer.DEV_GOALS, application.configurationName()));
                 String packagedName = application.configurationName() + RunConfigurationRenderer.PACKAGED_SUFFIX;
                 addTarget(targets, runDirectory, application, packagedName,
                         candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
-                                RunConfigurationRenderer.RUN_GOAL, packagedName));
+                                RunConfigurationRenderer.RUN_GOALS, packagedName));
                 String debugName = application.configurationName() + RunConfigurationRenderer.DEBUG_SUFFIX;
                 addTarget(targets, runDirectory, application, debugName,
                         candidateJre -> RunConfigurationRenderer.debugBody(debugName, application.debugHost(),

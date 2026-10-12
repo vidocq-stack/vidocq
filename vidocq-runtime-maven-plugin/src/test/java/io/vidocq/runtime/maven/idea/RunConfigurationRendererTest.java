@@ -23,6 +23,7 @@ import io.vidocq.runtime.maven.idea.RunConfigurationRenderer.Kind;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -307,6 +308,8 @@ class RunConfigurationRendererTest {
     @Test
     void constants_haveTheDocumentedValues() {
         assertEquals("vidocq:dev", RunConfigurationRenderer.DEV_GOAL);
+        assertEquals(List.of("process-classes", "vidocq:dev"), RunConfigurationRenderer.DEV_GOALS);
+        assertEquals(List.of("vidocq:run"), RunConfigurationRenderer.RUN_GOALS);
         assertEquals(" (packaged)", RunConfigurationRenderer.PACKAGED_SUFFIX);
         assertEquals(" (debug)", RunConfigurationRenderer.DEBUG_SUFFIX);
     }
@@ -333,12 +336,19 @@ class RunConfigurationRendererTest {
         IdeaApplication application = new IdeaApplication("com.example:app", "com.example.App", "ServerApp", "app",
                 "pom.xml", "vidocq:generate");
 
-        String dev = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.DEV_GOAL,
+        String dev = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.DEV_GOALS,
                 "ServerApp");
-        String packaged = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.RUN_GOAL,
+        String packaged = RunConfigurationRenderer.mavenBody(application, null, RunConfigurationRenderer.RUN_GOALS,
                 "ServerApp (packaged)");
 
-        assertTrue(dev.contains("<option value=\"vidocq:dev\" />"), dev);
+        // vidocq:dev starts from target/classes as it is: the configuration compiles first, as the CLI does
+        // (Vidocq/vidocq#237).
+        assertTrue(dev.contains("""
+                            <list>
+                              <option value="process-classes" />
+                              <option value="vidocq:dev" />
+                            </list>
+                """), dev);
         assertTrue(dev.contains("name=\"ServerApp\""), dev);
         assertTrue(packaged.contains("<option value=\"vidocq:run\" />"), packaged);
         assertTrue(packaged.contains("name=\"ServerApp (packaged)\""), packaged);

@@ -26,6 +26,7 @@ import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.maven.ApplicationLaunch;
+import io.vidocq.runtime.maven.CompilerOutput;
 import io.vidocq.runtime.maven.ConsoleColors;
 import io.vidocq.runtime.maven.JdwpAgent;
 import io.vidocq.runtime.maven.VidocqRunMojo;
@@ -283,6 +284,9 @@ public class VidocqDevMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         Path projectDir = baseDir.toPath();
+        // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
+        CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
+                getLog()::warn);
         List<Path> watch = parseDirs(projectDir, watchDirs);
         List<Path> modulePath = buildModulePath();
         List<Path> appPath = buildAppPath();

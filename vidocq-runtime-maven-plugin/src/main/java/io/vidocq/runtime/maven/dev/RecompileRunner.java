@@ -37,12 +37,12 @@ import java.util.List;
  * <p>The runner inherits stdout/stderr so the user sees compiler errors in the
  * same terminal as the dev-mode banner.</p>
  */
-final class RecompileRunner {
+public final class RecompileRunner {
 
     private final Path projectDir;
     private final String mavenExecutable;
 
-    RecompileRunner(Path projectDir) {
+    public RecompileRunner(Path projectDir) {
         this(projectDir, detectMavenExecutable(projectDir));
     }
 
@@ -55,7 +55,7 @@ final class RecompileRunner {
      * Run {@code mvn process-classes -DskipTests} in the project directory and
      * return the process exit code. {@code 0} means compilation succeeded.
      */
-    int run() throws IOException, InterruptedException {
+    public int run() throws IOException, InterruptedException {
         List<String> cmd = new ArrayList<>();
         cmd.add(mavenExecutable);
         cmd.add("-ntp");

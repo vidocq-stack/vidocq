@@ -670,7 +670,8 @@ class VidocqIdeaMojoTest {
      * which keeps the file name and now runs {@code vidocq:dev}; a {@code (packaged)} one, the Maven run of
      * {@code vidocq:run} the single file ran before; and a {@code (debug)} Remote JVM Debug configuration
      * that attaches to {@code vidocq:dev}'s own debug agent. Both Maven runs compile, index and fork the JVM
-     * exactly as the command line does.
+     * exactly as the command line does: the Dev one runs {@code process-classes} first, since {@code vidocq:dev}
+     * starts from {@code target/classes} as it is (Vidocq/vidocq#237).
      */
     @Test
     void theDefaultKindWritesDevPackagedAndDebugConfigurationsPerApplication() throws Exception {
@@ -689,8 +690,8 @@ class VidocqIdeaMojoTest {
 
         IdeaApplication alpha = new IdeaApplication("com.example:alpha", "com.example.alpha.AlphaApp", "AlphaApp",
                 "alpha", "alpha/pom.xml", "vidocq:generate");
-        String dev = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.DEV_GOAL, "AlphaApp");
-        String packaged = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.RUN_GOAL,
+        String dev = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.DEV_GOALS, "AlphaApp");
+        String packaged = RunConfigurationRenderer.mavenBody(alpha, null, RunConfigurationRenderer.RUN_GOALS,
                 "AlphaApp" + RunConfigurationRenderer.PACKAGED_SUFFIX);
         String debug = RunConfigurationRenderer.debugBody("AlphaApp" + RunConfigurationRenderer.DEBUG_SUFFIX,
                 alpha.debugHost(), alpha.debugPort());
@@ -702,10 +703,11 @@ class VidocqIdeaMojoTest {
 
         String devFile = read("AlphaApp.run.xml");
         assertTrue(devFile.contains("type=\"MavenRunConfiguration\" factoryName=\"Maven\""), devFile);
+        assertTrue(devFile.contains("<option value=\"process-classes\" />"), devFile);
         assertTrue(devFile.contains("<option value=\"vidocq:dev\" />"), devFile);
         assertTrue(devFile.contains("<option name=\"pomFileName\" value=\"alpha/pom.xml\" />"), devFile);
         assertFalse(devFile.contains("MAIN_CLASS_NAME"), "the Maven kind runs a goal, not a main class: " + devFile);
-        assertFalse(devFile.contains("Maven.BeforeRunTask"), "vidocq:dev indexes by itself: " + devFile);
+        assertFalse(devFile.contains("Maven.BeforeRunTask"), "process-classes compiles and indexes before vidocq:dev: " + devFile);
 
         String packagedFile = read("AlphaApp (packaged).run.xml");
         assertTrue(packagedFile.contains("<option value=\"vidocq:run\" />"), packagedFile);

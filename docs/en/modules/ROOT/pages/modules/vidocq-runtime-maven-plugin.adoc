@@ -275,6 +275,9 @@ That forked lifecycle is the reason the goal exists. An IDE that builds with its
 (Vidocq/vidocq#83). A Run in the IDE that is a *Maven* run of this goal cannot — which is what
 <<idea,`vidocq:idea`>> now writes.
 
+[[compiler-output-check]]
+*An output compiled without the processors* [.tag-new]#NEW#. Before launching, `vidocq:run` and `vidocq:dev` check that `target/classes` still holds every file the Maven compiler recorded as created in `target/maven-status/maven-compiler-plugin/compile/*/createdFiles.lst`, the output of the annotation processors included. An IDE build that compiles the same directory without the processors, as IntelliJ's does with a `-codegen` bundle it cannot read, leaves only the hand-written classes, and `maven-compiler-plugin` then answers "Nothing to compile": the application would start without its generated beans, web components and services. On such a gap the goal warns with the count and the first missing files, deletes the compiler's incremental state, so that the next compile is a full one with the processors, and recompiles once with `mvn process-classes`; a failed recompile, or files still missing after it, fails the goal and asks for `mvn clean` (Vidocq/vidocq#237).
+
 The forked JVM is the one `vidocq:dev` forks, without the source watcher, the reload file and
 `-Dvidocq.profile=dev`: the module path of the packaged distribution (every runtime dependency, the enriched
 copy of a scanned jar, else the modularized copy of a jar when `vauban:modularize` produced one, plus the
@@ -617,8 +620,11 @@ temporary configuration, a module IntelliJ split in two — starts an applicatio
 incomplete: the server answers 404 (Vidocq/vidocq#83).
 
 A Maven run configuration has no such hole: `vidocq:run` forks the lifecycle up to `process-classes` itself,
-then forks the JVM exactly as the command line does. IntelliJ also disables its own Build step for a Maven
-configuration, so the IDE build is not even in the picture.
+then forks the JVM exactly as the command line does. `vidocq:dev` starts from `target/classes` as it is, so the
+Dev configuration runs `process-classes vidocq:dev`, as `vidocq dev` does [.tag-new]#NEW# (Vidocq/vidocq#237).
+IntelliJ also disables its own Build step for a Maven configuration. A Build that IntelliJ runs on its own, from
+the Build menu or automatically, still compiles `target/classes` without the processors of a `-codegen` bundle:
+both goals detect it and recompile, see <<compiler-output-check,an output compiled without the processors>>.
 ====
 
 Run it from the command line, in the directory IntelliJ opens as the project — usually the reactor root —
@@ -637,8 +643,9 @@ For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
 | File | Runs
 
 | `.run/McpTimeServerApp.run.xml`
-| A Maven run of `vidocq:dev` — the existing file, and the existing name: this is the configuration a developer
-  already runs.
+| A Maven run of `process-classes vidocq:dev` [.tag-new]#NEW# — the existing file, and the existing name: this is
+  the configuration a developer already runs. `process-classes` compiles and indexes first, as `vidocq dev`
+  does, since `vidocq:dev` starts from `target/classes` as it is (Vidocq/vidocq#237).
 
 | `.run/McpTimeServerApp (packaged).run.xml`
 | A Maven run of `vidocq:run` — what the goal wrote before this repository's #143, unchanged in substance.
@@ -667,6 +674,7 @@ writes them):
         <MavenRunnerParameters>
           <option name="goals">
             <list>
+              <option value="process-classes" />
               <option value="vidocq:dev" />
             </list>
           </option>
@@ -712,8 +720,8 @@ depend on how `vidocq:idea` was invoked. There is no `vidocq.idea.*` prefix on t
 agent itself, which `vidocq:dev` and `vidocq:idea` both read the same way.
 
 * **Before launch** — nothing on any of the three files: IntelliJ disables its Build step for a Maven run
-  configuration, and neither `vidocq:dev` nor `vidocq:run` needs one; the `(debug)` file has no before-launch
-  step of its own; it only attaches.
+  configuration, the Dev file runs `process-classes` as its first goal and `vidocq:run` forks it; the `(debug)`
+  file has no before-launch step of its own; it only attaches.
 * **JDK** — `vidocq.idea.jre` writes an IntelliJ SDK *name* (such as `temurin-25`) as the Maven runner JRE for
   the first two files, which is also the JDK the application runs on: the forked JVM comes from the JVM running
   Maven. Declare it in the top-level pom, since that name must exist on every machine; an absolute path is
