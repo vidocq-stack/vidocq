@@ -54,17 +54,13 @@ Only this optional module requires java.desktop; see xref:reference.adoc[the com
 [source,xml,subs=attributes+]
 ----
 <dependency>
-    <groupId>jakarta.el</groupId>
-    <artifactId>jakarta.el-api</artifactId>
-    <version>6.0.1</version>
-</dependency>
-<dependency>
     <groupId>io.vidocq.peano</groupId>
     <artifactId>peano-core</artifactId>
     <version>{project-version}</version>
-    <scope>runtime</scope>
 </dependency>
 ----
+
+`peano-core` brings the Jakarta Expression Language API (`jakarta.el-api` 6.0.1) transitively: the application does not declare it. To keep application code compiling against the specification alone, declare `peano-core` with `<scope>runtime</scope>` and add `jakarta.el:jakarta.el-api` yourself, since a runtime-scoped dependency hides its own dependencies from the compiler.
 
 Your code compiles against `jakarta.el` only; Peano is found at run time through `ServiceLoader`.
 
