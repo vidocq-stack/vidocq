@@ -58,8 +58,9 @@ builds on merged code:
 
 ## Review Focus
 
-1. A jar that is **not** multi-release, or a directory archive, must read exactly as today: the base entries,
-   no `META-INF/versions/` class in the index. Pinned in Task 1.
+1. A jar that is **not** multi-release, or a directory archive, must read exactly as today: the base entries win,
+   and a raw `META-INF/versions/` entry stays in the index under its raw name, as before, without ever being
+   defined as a class. Pinned in Task 1 (corrected after the final review).
 2. A class that exists **only** under `META-INF/versions/N/` must still be loadable on a JDK ≥ N. Pinned in
    Task 1.
 3. A **resource** under `META-INF/versions/N/` must win over the base one, as `JarFile` does for the module

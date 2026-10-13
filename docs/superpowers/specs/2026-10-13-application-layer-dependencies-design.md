@@ -80,7 +80,9 @@ always lands in the application layer.
 
 One implementation serves every launch shape: a `LayerSplit` helper in `vidocq-runtime-core`, used by the Maven
 plugin at build time and by `VidocqAppLayer` for the trampoline. Vauban's `VaubanLayerFactory.applicationPaths`
-gains the matching option (vauban#154): re-layer automatic modules, and keep the closure of the given roots.
+gains the matching option (vauban#154): keep the closure of the given roots. It still keeps automatic modules: in
+the trampoline they already sit in the boot layer (section 4), and the build-time split handles them for the
+other launch shapes.
 
 ### 2. Escape hatch: modules that must stay in the parent layer
 
@@ -196,7 +198,7 @@ Run in a fresh local Maven repository, with `vidocq.app.layer=all` forced:
 ## Order of work
 
 1. vauban#155 (code source), already in auto-merge.
-2. vauban#154: the policy option (keep the roots' closure, re-layer automatic modules) and multi-release jars,
+2. vauban#154: the policy option (keep the roots' closure) and multi-release jars,
    with tests 4 and 5.
 3. Mansart: the `DriverManager` fix (test 2), and the other lookups of section 5.
 4. vidocq#247: `LayerSplit`, the setting, `run`/`dev`/`package`/trampoline, the escape hatch, the report, and
