@@ -23,6 +23,7 @@
 module io.vidocq.mansart.pool.core {
     requires transitive io.vidocq.mansart.pool.api;
     requires java.sql;          // javax.sql.DataSource, java.sql.Connection, DriverManager
+    uses java.sql.Driver;       // the pool finds its driver through the application's loader (mansart#42)
 
     exports io.vidocq.mansart.pool.core;
 }

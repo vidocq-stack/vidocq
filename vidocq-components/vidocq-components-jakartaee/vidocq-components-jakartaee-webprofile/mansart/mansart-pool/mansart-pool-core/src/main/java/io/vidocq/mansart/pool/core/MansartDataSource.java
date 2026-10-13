@@ -142,8 +142,17 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     }
 
     private static ClassLoader resolveDriverLoader() {
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        return cl != null ? cl : MansartDataSource.class.getClassLoader();
+        return DriverLocator.applicationLoader(MansartDataSource.class);
+    }
+
+    /**
+     * The class of the JDBC driver that a pool built now, on this thread, would use for {@code jdbcUrl}: a
+     * {@code java.sql.Driver} provider visible to the context class loader, else one registered with
+     * {@code DriverManager}. For diagnostics and tests.
+     */
+    public static String driverClassFor(String jdbcUrl) throws SQLException {
+        return DriverLocator.find(jdbcUrl, DriverLocator.applicationLoader(MansartDataSource.class))
+                .getClass().getName();
     }
 
     private static void setBeanProperty(Class<?> type, Object instance,
