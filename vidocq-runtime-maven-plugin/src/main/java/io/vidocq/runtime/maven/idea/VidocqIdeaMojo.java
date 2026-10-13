@@ -60,12 +60,11 @@ import java.util.stream.Stream;
  * mvn vidocq:idea -Dvidocq.idea.check=true
  * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
- * <p>By default each application gets three files (Vidocq/vidocq#143): the <i>Dev</i> configuration, an
- * IntelliJ <b>Maven</b> run of {@code process-classes vidocq:dev} (console, reload, continuous testing), as
- * {@code vidocq dev} runs it, on the application's
- * own pom, which keeps the file name and the configuration name a developer already uses; a <i>(packaged)</i>
- * configuration, the same Maven run of {@code vidocq:run} instead, as the single file did before this
- * application had a Dev configuration; and a <i>(debug)</i> configuration, a Remote JVM Debug run that
+ * <p>By default each application gets three files (Vidocq/vidocq#143), named after the application and
+ * suffixed: a <i>(dev)</i> configuration, an IntelliJ <b>Maven</b> run of {@code process-classes vidocq:dev}
+ * (console, reload, continuous testing) on the application's own pom, as {@code vidocq dev} runs it; a
+ * <i>(run)</i> configuration, the same Maven run of {@code vidocq:run} instead; and a <i>(debug)</i>
+ * configuration, a Remote JVM Debug run that
  * attaches to the debug agent {@code vidocq:dev} starts. A Maven run compiles, indexes and forks the JVM
  * exactly as on the command line, so it can never miss the bean index of the dependency jars
  * (Vidocq/vidocq#83) — the IDE's own build never runs {@code vidocq:generate}.
@@ -126,10 +125,10 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
     /**
      * {@code maven} (default): three IntelliJ Maven/Remote run configurations per application (Vidocq/vidocq#143)
-     * — Dev ({@code vidocq:dev}), {@code (packaged)} ({@code vidocq:run}) and {@code (debug)} (Remote JVM Debug) —
-     * each of which compiles, indexes and forks the JVM as the command line does. {@code application}: a single
-     * IntelliJ Application run configuration of the main class, with Make and {@code vidocq:generate} before
-     * launch.
+     * — {@code (dev)} ({@code vidocq:dev}), {@code (run)} ({@code vidocq:run}) and {@code (debug)} (Remote JVM
+     * Debug) — each of which compiles, indexes and forks the JVM as the command line does. {@code application}:
+     * a single IntelliJ Application run configuration of the main class, with Make and {@code vidocq:generate}
+     * before launch.
      */
     @Parameter(property = "vidocq.idea.kind", defaultValue = "maven")
     private String kind;
@@ -287,15 +286,16 @@ public class VidocqIdeaMojo extends AbstractMojo {
         Map<String, Target> targets = new LinkedHashMap<>();
         for (IdeaApplication application : applications) {
             if (renderKind == Kind.MAVEN) {
-                // Vidocq/vidocq#143: the Dev configuration keeps the existing name and file, and now runs
-                // vidocq:dev; the packaged and debug configurations are new, additional files.
-                addTarget(targets, runDirectory, application, application.configurationName(),
+                // Vidocq/vidocq#143: one configuration per goal, each named after it, so that the IDE's list
+                // tells vidocq:dev from vidocq:run.
+                String devName = application.configurationName() + RunConfigurationRenderer.DEV_SUFFIX;
+                addTarget(targets, runDirectory, application, devName,
                         candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
-                                RunConfigurationRenderer.DEV_GOALS, application.configurationName()));
-                String packagedName = application.configurationName() + RunConfigurationRenderer.PACKAGED_SUFFIX;
-                addTarget(targets, runDirectory, application, packagedName,
+                                RunConfigurationRenderer.DEV_GOALS, devName));
+                String runName = application.configurationName() + RunConfigurationRenderer.RUN_SUFFIX;
+                addTarget(targets, runDirectory, application, runName,
                         candidateJre -> RunConfigurationRenderer.mavenBody(application, candidateJre,
-                                RunConfigurationRenderer.RUN_GOALS, packagedName));
+                                RunConfigurationRenderer.RUN_GOALS, runName));
                 String debugName = application.configurationName() + RunConfigurationRenderer.DEBUG_SUFFIX;
                 addTarget(targets, runDirectory, application, debugName,
                         candidateJre -> RunConfigurationRenderer.debugBody(debugName, application.debugHost(),

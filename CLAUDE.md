@@ -90,8 +90,8 @@ inherited indexer entry is preserved. Canonical example:
 module path only, never packaged: Vidocq/vidocq#143), `run` (one forked run, after a forked lifecycle up to
 `process-classes`: compiles and indexes first), `test` (continuous testing without the application: the tests
 on every change, keys `r`/`f`/`q`), `idea` (experimental, command line only: IntelliJ run configurations in
-`.run/`, never `.idea/`; by default, per application, a Maven run of `vidocq:dev`, one of `vidocq:run` suffixed
-` (packaged)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
+`.run/`, never `.idea/`; by default, per application, a Maven run of `vidocq:dev` suffixed ` (dev)`, one of `vidocq:run`
+suffixed ` (run)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
 Application run of the main class instead, with no console). `package`, `jlink`, `jpackage` and `docker` all
 drop a dev-only jar even if declared, with a warning.
 
