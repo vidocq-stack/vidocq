@@ -18,6 +18,38 @@ application's classes and resources. Vaadin's `ResourceProviderImpl` is one. In 
 (2026-10-13), Vaadin in the boot layer could not find the application's `META-INF/VAADIN/webapp/index.html`. With
 its 68 jars in the application layer, plus the vauban#153 fix, the page answered 200 with no workaround.
 
+## Developer experience: the acceptance criteria
+
+This section comes first because every other choice serves it. It applies to this design and to Vidocq/vidocq#246
+(the bricks' generators on dependency jars). The work is not done until a developer gets exactly this:
+
+1. **Nothing to declare.** I write my application and add dependencies to the pom: Vaadin, a library compiled
+   against Jakarta Data, anything. There is no `<scanDependencies>`, no hand-written `provides` and no workaround
+   class. Those settings stay available as overrides, never as a required step.
+2. **One command.** `mvn vidocq:dev`, or the `(dev)` configuration that `vidocq:idea` writes, compiles, generates
+   and starts:
+   - the bricks' processors run on my classes, as today;
+   - `vidocq:generate` finds the dependencies that need code, through cheap hints, and runs the same processors on
+     them: proxies, Foy components, Mansart repositories, service files and indexes, all in enriched copies;
+   - the application starts with my classes and all my libraries in one layer.
+3. **A fast loop.** Changing a class reloads in place. With the libraries now in the reloaded layer, the archive
+   readers of unchanged jars are cached across reloads. That cache is part of this delivery, not a fallback. The
+   target is set after the first measurement (BENCH.md), for example a reload of the Vaadin example no more than
+   20 % slower than the Servlet example's today.
+4. **Generation once per dependency version.** Today an enriched copy is not rewritten when its inputs are
+   unchanged (`Vidocq-Enriched-Digest`), but the generation pass itself runs on every build. A dependency jar is
+   generated for once, then reused until the jar or the processors' versions change. A first `vidocq:dev` with
+   Vaadin's 92 jars may take a few seconds; the next ones must not.
+5. **One clear line when something cannot be done.** A dependency the build cannot fully process, for example a
+   repository jar compiled without `-parameters`, gives one build message that names the jar, the method and the
+   fix. There is no silent fallback and no stack trace.
+6. **Visible at startup.** The startup report says it in one line, for example `68 libraries in the application
+   layer, 3 enriched (Foy 1, Mansart 2)`. `mvn vidocq:analyze-deps` gives the details: why each jar was selected
+   or left out, and what was generated for it.
+7. **No setting to learn.** `vidocq.app.layer` is an escape hatch for the rollout and for odd cases. `all` becomes
+   the default as soon as the validation campaign is green. The campaign is part of this work, not a later
+   project.
+
 ## Today
 
 | Launch shape | Application layer | Boot module path |
@@ -70,16 +102,17 @@ application module, failing with a message that names both.
 
 - **Step 1**: ship `all` behind the setting, with `classes` as the default.
 - **Step 2**: run the validation campaign (below) with `all`.
-- **Step 3**: make `all` the default in a later release, with an entry in the migration guide.
+- **Step 3**: as soon as the campaign is green, make `all` the default, with an entry in the migration guide.
+  Steps 2 and 3 belong to this work (criterion 7). From then on, `classes` is only an escape hatch.
 
 ### 4. Each launch shape with `all`
 
 - **`vidocq:run` / `vidocq:dev`**: `ApplicationLaunch.appPath` returns `target/classes` plus every
   application-layer jar, enriched copy first. `modulePath` returns the parent-layer jars only.
 - **`vidocq:dev` reload**: the whole application layer is rebuilt, libraries included. The reload time is measured
-  before and after, on the Servlet example and on a Vaadin application, and recorded in BENCH.md. If it is too
-  slow, the next step is to cache the archive readers of unchanged jars across reloads, not a separate loader. A
-  separate loader would bring back the Vaadin problem.
+  before and after, on the Servlet example and on a Vaadin application, and recorded in BENCH.md. The archive
+  readers of unchanged jars are cached across reloads, as part of this delivery (criterion 3). A separate loader
+  is not an option: it would bring back the Vaadin problem.
 - **IDE / trampoline**: `VidocqAppLayer.applicationPaths` uses `LayerSplit` instead of the prefix list. Foy then
   needs no prefix.
 - **`vidocq:package`**: `lib/` holds the parent layer, `app/` the application and its libraries. The layer script
@@ -161,4 +194,7 @@ Run in a fresh local Maven repository, with `vidocq.app.layer=all` forced:
 3. Mansart: the `DriverManager` fix (test 2), and the other lookups of section 5.
 4. vidocq#247: `LayerSplit`, the setting, `run`/`dev`/`package`/trampoline, the escape hatch, the report, and
    tests 1, 3, 6 and 7.
-5. The campaign, then the switch of the default in a later release.
+5. The reload cache, measured against its target (criterion 3).
+6. With Vidocq/vidocq#246: generation on dependency jars, once per jar version (criterion 4), the one-line
+   diagnostics (criterion 5) and the startup report line (criterion 6).
+7. The campaign, then `all` becomes the default (criterion 7).
