@@ -57,13 +57,15 @@ final class DriverLocator {
                 }
                 driver = providers.next();
             } catch (ServiceConfigurationError broken) {
+                // The JDK's lazy iterator has already advanced past the failing entry, so looping again
+                // reaches the next provider, and ends when there is none.
                 continue; // a provider that cannot be loaded does not hide the next one
             }
             try {
                 if (driver.acceptsURL(jdbcUrl)) {
                     return driver;
                 }
-            } catch (SQLException refused) {
+            } catch (SQLException | RuntimeException | LinkageError refused) {
                 // this driver cannot even judge the URL: try the next one
             }
         }
