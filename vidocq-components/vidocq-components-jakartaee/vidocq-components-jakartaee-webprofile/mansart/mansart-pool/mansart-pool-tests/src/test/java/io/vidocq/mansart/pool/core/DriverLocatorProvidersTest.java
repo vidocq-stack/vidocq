@@ -32,11 +32,14 @@ import java.sql.Driver;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.time.Duration;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * How {@code DriverLocator} walks the {@code java.sql.Driver} providers of a class loader (mansart#42): a provider
@@ -64,6 +67,19 @@ class DriverLocatorProvidersTest {
         try (URLClassLoader loader = loaderListing(name(AlsoAccepting.class), name(Accepting.class))) {
             assertThat(DriverLocator.find(JDBC_URL, loader)).isInstanceOf(AlsoAccepting.class);
         }
+    }
+
+    @Test
+    void aLoaderWhoseServiceLookupKeepsFailingFallsBackToDriverManager() {
+        ClassLoader broken = new ClassLoader(DriverLocatorProvidersTest.class.getClassLoader()) {
+            @Override
+            public Enumeration<URL> getResources(String resource) throws IOException {
+                throw new IOException("cannot list " + resource);
+            }
+        };
+        // H2 is on the test class path and registered with DriverManager
+        assertThat(assertTimeoutPreemptively(Duration.ofSeconds(5),
+                () -> DriverLocator.find("jdbc:h2:mem:x", broken))).isNotNull();
     }
 
     private URLClassLoader loaderListing(String... providers) throws IOException {

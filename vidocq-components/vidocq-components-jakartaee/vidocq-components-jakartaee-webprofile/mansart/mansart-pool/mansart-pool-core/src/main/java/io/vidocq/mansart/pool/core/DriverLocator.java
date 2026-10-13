@@ -34,6 +34,13 @@ import java.util.ServiceLoader;
  */
 final class DriverLocator {
 
+    /**
+     * How many provider-loading errors in a row end the provider walk. A loader whose service lookup itself fails
+     * (an {@code IOException} from {@code getResources}) makes the lazy iterator report a next element and fail on
+     * every call, forever.
+     */
+    private static final int MAX_CONSECUTIVE_PROVIDER_ERRORS = 16;
+
     private DriverLocator() {
     }
 
@@ -49,6 +56,7 @@ final class DriverLocator {
      */
     static Driver find(String jdbcUrl, ClassLoader loader) throws SQLException {
         Iterator<Driver> providers = ServiceLoader.load(Driver.class, loader).iterator();
+        int consecutiveErrors = 0;
         while (true) {
             Driver driver;
             try {
@@ -56,10 +64,16 @@ final class DriverLocator {
                     break;
                 }
                 driver = providers.next();
+                consecutiveErrors = 0;
             } catch (ServiceConfigurationError broken) {
-                // The JDK's lazy iterator has already advanced past the failing entry, so looping again
-                // reaches the next provider, and ends when there is none.
-                continue; // a provider that cannot be loaded does not hide the next one
+                // Usually the JDK's lazy iterator has already advanced past the failing entry, so looping again
+                // reaches the next provider and a provider that cannot be loaded does not hide the next one.
+                // But when the lookup itself fails, the iterator fails again on every call: give up on the
+                // providers after a few errors in a row and let DriverManager answer.
+                if (++consecutiveErrors >= MAX_CONSECUTIVE_PROVIDER_ERRORS) {
+                    break;
+                }
+                continue;
             }
             try {
                 if (driver.acceptsURL(jdbcUrl)) {

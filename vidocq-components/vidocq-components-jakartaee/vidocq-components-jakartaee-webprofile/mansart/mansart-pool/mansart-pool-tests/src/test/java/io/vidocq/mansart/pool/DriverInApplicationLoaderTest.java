@@ -23,6 +23,7 @@ import io.vidocq.mansart.pool.core.MansartDataSource;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.sql.Connection;
@@ -63,8 +64,18 @@ class DriverInApplicationLoaderTest {
             try {
                 Object metrics = ds.getClass().getMethod("snapshot").invoke(ds);
                 assertThat(metrics.getClass().getMethod("idle").invoke(metrics)).isEqualTo(2);
-                // borrowed later, on a thread whose context loader cannot see H2
-                assertThat(selectFortyTwo(ClassLoader.getPlatformClassLoader(), ds)).isEqualTo(42);
+                // a third connection while the two idle ones are held: the pool must open() it on a thread
+                // whose context loader cannot see H2
+                assertThat(withContextLoader(ClassLoader.getPlatformClassLoader(), () -> {
+                    Method getConnection = ds.getClass().getMethod("getConnection");
+                    try (Connection first = (Connection) getConnection.invoke(ds);
+                         Connection second = (Connection) getConnection.invoke(ds);
+                         Connection third = (Connection) getConnection.invoke(ds);
+                         Statement s = third.createStatement(); ResultSet rs = s.executeQuery("SELECT 42")) {
+                        rs.next();
+                        return rs.getInt(1);
+                    }
+                })).isEqualTo(42);
             } finally {
                 ds.getClass().getMethod("close").invoke(ds);
             }

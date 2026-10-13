@@ -78,6 +78,25 @@ class XaDataSourceExposureTest {
     }
 
     @Test
+    void xaDataSourceIsBuiltWithTheLoaderCapturedAtConstruction() throws Exception {
+        PoolConfig config = PoolConfig.builder()
+                .jdbcUrl(URL)
+                .username("sa")
+                .xaDataSourceClassName("org.h2.jdbcx.JdbcDataSource")
+                .build();
+        try (MansartDataSource pool = MansartDataSource.of(config)) {
+            Thread thread = Thread.currentThread();
+            ClassLoader previous = thread.getContextClassLoader();
+            thread.setContextClassLoader(ClassLoader.getPlatformClassLoader());
+            try {
+                assertThat(pool.unwrap(XADataSource.class)).isNotNull();
+            } finally {
+                thread.setContextClassLoader(previous);
+            }
+        }
+    }
+
+    @Test
     void plainPoolDoesNotAdvertiseXa() throws Exception {
         PoolConfig config = PoolConfig.builder()
                 .jdbcUrl(URL)

@@ -40,11 +40,14 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
 
     private final PoolConfig     config;
     private final ConnectionPool pool;
+    /** The application's class loader when the pool was built: where the XA data source class is loaded from. */
+    private final ClassLoader    driverLoader;
     /** Built lazily from {@code config.xaDataSourceClassName()} — MANSART-007 phase 2. */
     private volatile javax.sql.XADataSource xaDataSource;
 
     private MansartDataSource(PoolConfig config) {
         this.config = Objects.requireNonNull(config, "config");
+        this.driverLoader = DriverLocator.applicationLoader(MansartDataSource.class);
         this.pool   = new ConnectionPool(config);
     }
 
@@ -125,7 +128,7 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     private javax.sql.XADataSource buildXaDataSource() throws SQLException {
         String className = config.xaDataSourceClassName();
         try {
-            Class<?> type = Class.forName(className, true, resolveDriverLoader());
+            Class<?> type = Class.forName(className, true, driverLoader);
             Object instance = type.getDeclaredConstructor().newInstance();
             setBeanProperty(type, instance, new String[]{"setURL", "setUrl"}, config.jdbcUrl());
             if (config.username() != null) {
@@ -139,10 +142,6 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
             throw new SQLException("Cannot build the XADataSource '" + className
                     + "' configured for this pool (xaDataSourceClassName)", e);
         }
-    }
-
-    private static ClassLoader resolveDriverLoader() {
-        return DriverLocator.applicationLoader(MansartDataSource.class);
     }
 
     /**
