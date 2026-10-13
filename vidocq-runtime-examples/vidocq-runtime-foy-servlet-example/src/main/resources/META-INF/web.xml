@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Only the login configuration: the servlets, the filter and the listener stay annotated.
+    FORM login keeps the identity in the HTTP session, so it ends with the session, after
+    vidocq.servlet.session-timeout of inactivity, or at /logout. Foy reads this file from
+    META-INF/web.xml of the application module.
+-->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_1.xsd"
+         version="6.1">
+    <login-config>
+        <auth-method>FORM</auth-method>
+        <form-login-config>
+            <form-login-page>/login</form-login-page>
+            <form-error-page>/login?error</form-error-page>
+        </form-login-config>
+    </login-config>
+</web-app>

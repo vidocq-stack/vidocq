@@ -30,7 +30,7 @@ import io.vidocq.runtime.spi.VidocqMain;
  * <p>The application shows servlets, a filter and a session listener, all CDI beans: a
  * {@code @RequestScoped} bean shared by the filter and the servlets of one request, a
  * {@code @SessionScoped} basket, {@code @ApplicationScoped} services, and an admin page
- * protected by {@code @ServletSecurity} with BASIC authentication.
+ * protected by {@code @ServletSecurity} with a FORM login and a sign-out.
  *
  * <p>The class is a {@link VidocqMain} trampoline: {@code main} only calls
  * {@code Vidocq.run(...)}, which re-resolves the application in the Vauban layer and calls

@@ -54,13 +54,24 @@ final class Html {
                 + "<nav><span class=\"brand\">Vidocq Bistro</span>"
                 + "<a href=\"" + root + "/\">Menu</a>"
                 + "<a href=\"" + root + "/basket\">Basket (" + basket.count() + ")</a>"
-                + "<a href=\"" + root + "/kitchen\">Kitchen</a></nav>"
+                + "<a href=\"" + root + "/kitchen\">Kitchen</a>" + account(req) + "</nav>"
                 + body
                 + "<footer>Session " + escape(req.getSession().getId().substring(0, 8))
                 + " · request " + ticket.id() + " · " + ticket.elapsedMicros() + " µs"
                 + " · Jakarta Servlet " + req.getServletContext().getMajorVersion() + "."
                 + req.getServletContext().getMinorVersion() + " by Foy on Chappe</footer>"
                 + "</body></html>");
+    }
+
+    /** The signed-in user and a logout button, or a link to the login page. */
+    private static String account(HttpServletRequest req) {
+        String root = req.getContextPath();
+        String user = req.getRemoteUser();
+        if (user == null) {
+            return "<a href=\"" + root + "/login\">Sign in</a>";
+        }
+        return "<span>" + escape(user) + "</span><form method=\"post\" action=\"" + root + "/logout\">"
+                + "<button>Sign out</button></form>";
     }
 
     static String euros(int cents) {

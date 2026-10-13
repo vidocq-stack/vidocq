@@ -31,21 +31,45 @@ Content-Type: application/x-www-form-urlencoded
 
 order=1
 
-### The kitchen without credentials
+### The kitchen without signing in
 GET http://localhost:8080/kitchen
 
 > {%
-    client.test("the kitchen asks for BASIC authentication", function () {
-        client.assert(response.status === 401, "Expected 401, got " + response.status);
+    client.test("the kitchen shows the login form", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.indexOf("j_security_check") >= 0, "Expected the login form");
+    });
+%}
+
+### Sign in as the chef (the client keeps the session cookie)
+# @no-redirect
+POST http://localhost:8080/j_security_check
+Content-Type: application/x-www-form-urlencoded
+
+j_username=chef&j_password=chef
+
+> {%
+    client.test("the login sends back to the kitchen", function () {
+        client.assert(response.status === 302, "Expected 302, got " + response.status);
     });
 %}
 
 ### The kitchen as the chef
 GET http://localhost:8080/kitchen
-Authorization: Basic chef chef
 
 > {%
     client.test("the chef sees the orders", function () {
         client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.indexOf("Signed in as <b>chef</b>") >= 0, "Expected the kitchen");
+    });
+%}
+
+### Sign out
+# @no-redirect
+POST http://localhost:8080/logout
+
+> {%
+    client.test("the sign-out goes back to the menu", function () {
+        client.assert(response.status === 303, "Expected 303, got " + response.status);
     });
 %}

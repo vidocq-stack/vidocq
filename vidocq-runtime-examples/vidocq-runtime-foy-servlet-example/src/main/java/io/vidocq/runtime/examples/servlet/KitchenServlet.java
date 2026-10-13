@@ -31,8 +31,9 @@ import java.io.IOException;
 import java.util.Map;
 
 /**
- * The kitchen page, for the role {@code chef} only. Without a {@code login-config}, Foy asks
- * for BASIC authentication; the user comes from {@code vidocq.servlet.users.*}.
+ * The kitchen page, for the role {@code chef} only. The {@code login-config} of
+ * {@code META-INF/web.xml} sends a visitor to the login form of {@link LoginServlet}; the user
+ * comes from {@code vidocq.servlet.users.*}.
  */
 @WebServlet("/kitchen")
 @ServletSecurity(@HttpConstraint(rolesAllowed = "chef"))
