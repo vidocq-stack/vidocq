@@ -114,7 +114,14 @@ application module, failing with a message that names both.
   readers of unchanged jars are cached across reloads, as part of this delivery (criterion 3). A separate loader
   is not an option: it would bring back the Vaadin problem.
 - **IDE / trampoline**: `VidocqAppLayer.applicationPaths` uses `LayerSplit` instead of the prefix list. Foy then
-  needs no prefix.
+  needs no prefix. **Constraint**: here every dependency was already resolved into the boot layer. An
+  **automatic** module re-created in the child layer would read its own twin in the parent layer, and
+  resolution fails, which is why Vauban keeps automatic modules today. Explicit modules shadow their twins
+  fine. So the trampoline can move an automatic library only once it has an explicit descriptor:
+  `vidocq:generate` gives one to every application-layer automatic jar, in its enriched copy (the
+  `Modularizer.synthesizeOne` path that enriched jars already use). Until then, the docs say that a plain IDE
+  run of `main` keeps automatic libraries in the boot layer, and that the `(dev)` configuration does not have
+  this limit.
 - **`vidocq:package`**: `lib/` holds the parent layer, `app/` the application and its libraries. The layer script
   passes every `app/` entry in `-Dvidocq.app.path`.
 - **`vidocq:jlink`, jpackage, docker**: unchanged in step 1. Every module of an image is served from `jrt:`, and
@@ -195,6 +202,7 @@ Run in a fresh local Maven repository, with `vidocq.app.layer=all` forced:
 4. vidocq#247: `LayerSplit`, the setting, `run`/`dev`/`package`/trampoline, the escape hatch, the report, and
    tests 1, 3, 6 and 7.
 5. The reload cache, measured against its target (criterion 3).
-6. With Vidocq/vidocq#246: generation on dependency jars, once per jar version (criterion 4), the one-line
+6. With Vidocq/vidocq#246: explicit descriptors for application-layer automatic jars (trampoline
+   constraint, section 4), generation on dependency jars, once per jar version (criterion 4), the one-line
    diagnostics (criterion 5) and the startup report line (criterion 6).
 7. The campaign, then `all` becomes the default (criterion 7).
