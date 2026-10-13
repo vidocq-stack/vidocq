@@ -23,18 +23,18 @@ import java.nio.file.Path
 Path root = basedir.toPath()
 
 // Vidocq/vidocq#143: the Maven kind now writes three shared configurations per application.
-Path devFile = root.resolve('.run/ServerApp.run.xml')
-Path packagedFile = root.resolve('.run/ServerApp (packaged).run.xml')
+Path devFile = root.resolve('.run/ServerApp (dev).run.xml')
+Path runFile = root.resolve('.run/ServerApp (run).run.xml')
 Path debugFile = root.resolve('.run/ServerApp (debug).run.xml')
-assert Arrays.equals(Files.readAllBytes(devFile), Files.readAllBytes(root.resolve('expected/ServerApp.txt'))) :
+assert Arrays.equals(Files.readAllBytes(devFile), Files.readAllBytes(root.resolve('expected/ServerApp (dev).txt'))) :
         'the generated Dev configuration differs from its expected/ file:\n' + devFile.toFile().text
-assert Arrays.equals(Files.readAllBytes(packagedFile), Files.readAllBytes(root.resolve('expected/ServerApp (packaged).txt'))) :
-        'the generated packaged configuration differs from its expected/ file:\n' + packagedFile.toFile().text
+assert Arrays.equals(Files.readAllBytes(runFile), Files.readAllBytes(root.resolve('expected/ServerApp (run).txt'))) :
+        'the generated run configuration differs from its expected/ file:\n' + runFile.toFile().text
 assert Arrays.equals(Files.readAllBytes(debugFile), Files.readAllBytes(root.resolve('expected/ServerApp (debug).txt'))) :
         'the generated debug configuration differs from its expected/ file:\n' + debugFile.toFile().text
 
 String devBody = devFile.toFile().text
-assert devBody.contains('type="MavenRunConfiguration" factoryName="Maven"')
+assert devBody.contains('name="ServerApp (dev)" type="MavenRunConfiguration" factoryName="Maven"')
 assert devBody.contains('<option value="process-classes" />\n              <option value="vidocq:dev" />') :
         'vidocq:dev starts from target/classes as it is: the Dev configuration compiles first (Vidocq/vidocq#237)'
 assert devBody.contains('<option name="pomFileName" value="server/pom.xml" />')
@@ -42,9 +42,9 @@ assert devBody.contains('<option name="workingDirPath" value="$PROJECT_DIR$" />'
 assert !devBody.contains('Maven.BeforeRunTask') : 'process-classes compiles and indexes before vidocq:dev, no IntelliJ Build step'
 assert !devBody.contains('MAIN_CLASS_NAME') && !devBody.contains('"Make"') : 'the IDE build is not what runs the application'
 
-String packagedBody = packagedFile.toFile().text
-assert packagedBody.contains('<option value="vidocq:run" />')
-assert packagedBody.contains('name="ServerApp (packaged)" type="MavenRunConfiguration"')
+String runBody = runFile.toFile().text
+assert runBody.contains('<option value="vidocq:run" />')
+assert runBody.contains('name="ServerApp (run)" type="MavenRunConfiguration"')
 
 String debugBody = debugFile.toFile().text
 assert debugBody.contains('name="ServerApp (debug)" type="Remote"')

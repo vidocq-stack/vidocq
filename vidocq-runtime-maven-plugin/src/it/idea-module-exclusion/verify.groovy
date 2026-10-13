@@ -23,14 +23,14 @@ import java.nio.file.Path
 Path root = basedir.toPath()
 List<String> names = Files.list(root.resolve('.run')).withCloseable { s -> s.map { it.fileName.toString() }.sorted().toList() }
 // Vidocq/vidocq#143: the default (Maven) kind writes three files for beta, none for excluded alpha.
-assert names == ['BetaApp (debug).run.xml', 'BetaApp (packaged).run.xml', 'BetaApp.run.xml'] : "files in .run/: $names"
+assert names == ['BetaApp (debug).run.xml', 'BetaApp (dev).run.xml', 'BetaApp (run).run.xml'] : "files in .run/: $names"
 
 String log = root.resolve('build.log').toFile().text
 // 1. alpha is the top-level project and leaves only itself out.
 assert log.contains('[INFO] Vidocq idea: partial build (-pl, -rf or similar)')
 assert log.contains('[INFO] Vidocq idea: com.example.it:alpha excluded (vidocq.idea.exclude=true in its pom)')
 assert log.contains('[WARNING] Vidocq idea: com.example.it:beta sets vidocq.idea.skip=true in its pom, which does not leave a module out')
-assert log.contains('[INFO] Vidocq idea: created .run/BetaApp.run.xml (com.example.it:beta, main class com.example.beta.BetaApp, IntelliJ module beta)')
+assert log.contains('[INFO] Vidocq idea: created .run/BetaApp (dev).run.xml (com.example.it:beta, main class com.example.beta.BetaApp, IntelliJ module beta)')
 // 2. The check from the root.
 assert log.contains('run configuration(s) in ') && log.contains('/.run are up to date.')
 // 3. and 4. Each skip names its source; nothing else was skipped.
