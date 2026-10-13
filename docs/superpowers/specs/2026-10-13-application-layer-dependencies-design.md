@@ -143,6 +143,7 @@ These do not:
 | `MigrationExtension` (`ServiceLoader.load(SchemaMigrator.class, MigrationExtension.class.getClassLoader())`) | a migrator shipped by the application is not found | the TCCL |
 | dev console `CdiInventory` (`ModuleLayer.boot()`) | misses application modules that moved | the installed application layer |
 | `DevServiceManager` (its own loader, host side) | none: runs in the Maven JVM | — |
+| JDBC drivers loaded from the layer (`DriverManager` registration in their static initializer) | each dev reload leaks the old layer: `DriverManager` keeps the driver | at layer shutdown, deregister the drivers the closing layer defined, from code the layer's loader sees (as Tomcat's `JdbcLeakPrevention`); found in the mansart#42 review |
 
 ### 6. Vauban's loader on jars it never saw
 
