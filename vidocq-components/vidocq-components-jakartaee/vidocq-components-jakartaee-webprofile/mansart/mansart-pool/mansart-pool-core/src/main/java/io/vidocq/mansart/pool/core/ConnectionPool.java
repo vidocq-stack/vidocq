@@ -25,7 +25,7 @@ import io.vidocq.mansart.pool.PoolMetrics;
 import io.vidocq.mansart.pool.ValidationMode;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.Driver;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Iterator;
@@ -64,6 +64,10 @@ final class ConnectionPool implements AutoCloseable {
     private final ConcurrentLinkedDeque<PooledEntry> idle  = new ConcurrentLinkedDeque<>();
     private final Set<PooledEntry>                 inUse = ConcurrentHashMap.newKeySet();
     private final Housekeeper                      housekeeper;
+    /** The application's class loader when the pool was built: where its JDBC driver is looked up (mansart#42). */
+    private final ClassLoader                      driverLoader;
+    /** The JDBC driver, resolved at the first {@link #open()} and kept for the pool's lifetime. */
+    private volatile Driver                        driver;
     private final boolean                          leakDetectionEnabled;
     private final long                             leakDetectionThresholdNanos;
 
@@ -80,6 +84,7 @@ final class ConnectionPool implements AutoCloseable {
         this.driverProps  = buildDriverProps(config);
         this.leakDetectionEnabled = !config.leakDetectionThreshold().isZero();
         this.leakDetectionThresholdNanos = config.leakDetectionThreshold().toNanos();
+        this.driverLoader = DriverLocator.applicationLoader(ConnectionPool.class);
         this.housekeeper  = new Housekeeper(this, config);
 
         // Pre-fill minIdle. Best-effort — if the driver is briefly unavailable, the pool still
@@ -204,12 +209,27 @@ final class ConnectionPool implements AutoCloseable {
 
     private PooledEntry open() throws SQLException {
         try {
-            Connection raw = DriverManager.getConnection(config.jdbcUrl(), driverProps);
+            Driver used = driver();
+            Connection raw = used.connect(config.jdbcUrl(), driverProps);
+            if (raw == null) {
+                throw new SQLException("The JDBC driver " + used.getClass().getName() + " accepted "
+                        + config.jdbcUrl() + " but opened no connection", "08001");
+            }
             return new PooledEntry(raw);
         } catch (SQLException e) {
             throw new PoolException(PoolException.Reason.CONNECT_FAILED,
                     "failed to open new connection: " + e.getMessage(), e);
         }
+    }
+
+    /** The pool's JDBC driver, found once through the loader captured at construction. */
+    private Driver driver() throws SQLException {
+        Driver found = driver;
+        if (found == null) {
+            found = DriverLocator.find(config.jdbcUrl(), driverLoader);
+            driver = found;
+        }
+        return found;
     }
 
     /** Called by the {@link Housekeeper} on its own virtual thread. */

@@ -426,3 +426,27 @@ reusable `Query` contract, and copied `NativeQuery` helpers (`List.copyOf`, `fir
 - Verification (2026-10-09, Temurin 25.0.4, PostgreSQL 17): clean JPA reactor 453 tests, 0 failures; full official
   TCK 2135 tests, 1063 passed, 1068 errors, 4 skipped — identical test by test to the preserved 1063 baseline
   (`core.StoredProcedureQuery` 38 / 40, the two XML-override tests wait for P10).
+
+---
+
+## MANSART-009 — Pool: "No suitable driver found" when the driver is in a child class loader
+
+- **Date**: 2026-10-13
+- **Status**: FIXED 2026-10-13 (mansart#42)
+- **Severity**: high (the pool is unusable under Vidocq with the driver in the application layer)
+
+### Symptom
+`MansartDataSource.getConnection()` fails with `PoolException: failed to open new connection: No suitable driver
+found for jdbc:...` when the JDBC driver jar is visible to the application's class loader but not to the pool's, as
+under Vidocq with the driver in the application layer and the pool in the runtime layer.
+
+### Minimal repro
+`DriverInApplicationLoaderTest` (`mansart-pool-tests`): the pool in one `URLClassLoader`, H2 in a child one.
+
+### Cause
+`DriverManager.getConnection` skips a registered driver its caller's class loader cannot load (caller check), and
+the pool's loader cannot see the application's driver.
+
+### Fix
+The pool resolves the driver itself at its first connection: `java.sql.Driver` providers of the context class loader
+captured at construction first, then `DriverManager`, and keeps it (`DriverLocator`, `ConnectionPool.driver()`).

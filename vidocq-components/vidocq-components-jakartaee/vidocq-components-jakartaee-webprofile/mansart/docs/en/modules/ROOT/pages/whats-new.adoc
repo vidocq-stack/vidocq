@@ -17,6 +17,10 @@ See xref:noether::migration.adoc[renamed artifacts, packages and providers].
 Pre-extraction JPA entries below describe historical Mansart delivery.
 
 
+== Pool
+
+* **The pool finds its driver with the application** — the JDBC driver is looked up through the application's class loader, then `DriverManager`, so a driver that only the application sees works; under Vidocq this used to fail with "No suitable driver" (mansart#42). xref:modules/mansart-pool.adoc#finding-the-driver[Finding the JDBC driver].
+
 == Jakarta Data
 
 * **An enum is stored as `@Enumerated` says** (mansart#26) — `@Enumerated` used to be read and then ignored: every enum was stored by its name, `@Enumerated(EnumType.ORDINAL)` included. Now `@Enumerated(EnumType.ORDINAL)`, and a bare `@Enumerated`, store the constant's index in an integer column, and `@Enumerated(EnumType.STRING)` stores its name, in writes, row mapping, projections, `WHERE` bindings and the generated DDL. An enum with **no** `@Enumerated` still stores its name, unlike the Jakarta Persistence default, which is the index. **This changes what an existing application does** if it declares `ORDINAL`: its tables hold names, and Mansart now writes and reads indexes for that attribute. Either switch the attribute to `@Enumerated(EnumType.STRING)` (or drop the annotation) to keep the data as it is, or convert the column to indexes before upgrading. xref:reference.adoc#enum-storage[Enum storage], xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0].

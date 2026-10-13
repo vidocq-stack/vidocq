@@ -57,6 +57,22 @@ PoolMetrics metrics = ((MansartDataSource) ds).snapshot();
 
 See xref:reference.adoc[Reference] for the full property table.
 
+[#finding-the-driver]
+== Finding the JDBC driver [.tag-new]#NEW#
+
+The pool looks its JDBC driver up itself, through the class loader that was the thread's context class loader
+when the pool was built: the first `java.sql.Driver` provider there that accepts the URL wins. Otherwise, the
+pool falls back to a driver registered with `DriverManager`. It resolves the driver at the first connection and
+keeps it.
+
+`DriverManager.getConnection` would refuse a driver that the pool's own class loader cannot load. That is the
+case under Vidocq when the driver jar sits with the application and the pool with the runtime. Before, that
+failed with "No suitable driver" (mansart#42).
+
+When no driver accepts the URL, the pool fails with a message that names the URL and where it looked:
+`No JDBC driver accepts jdbc:... : searched the java.sql.Driver providers visible to ... and the drivers registered
+with DriverManager`. `MansartDataSource.driverClassFor(url)` tells which driver a pool built now would use.
+
 == Runtime architecture
 
 [source,text]
