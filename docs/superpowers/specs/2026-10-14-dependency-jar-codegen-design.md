@@ -71,8 +71,19 @@ For every dependency jar of the project (compile and runtime scopes; a reactor c
 - **signed jar**: skipped with one info line, unless `scanDependencies` names it, in which case its signatures are
   dropped from the enriched copy, as Vauban's enrichment already does.
 
+- **not a candidate**: a jar of the Vidocq runtime itself (`groupId` `io.vidocq` or `io.vidocq.*`), and, for one
+  `class-bytes` hint, a jar that defines classes under that hint (for example `jakarta.servlet-api`, which holds
+  `jakarta/servlet/annotation/WebListener` itself: an API is not a user of its own annotations).
+
+A jar selected by any brick is also scanned by Vauban, as application code always is: several bricks find their
+components among CDI beans (Foy's `WebAppDiscovery`), so a brick's output alone is not enough (found by the
+end-to-end test, 2026-10-14). In `ScanSelection` this is a new source, `selected by a brick (<Brick>)`, after
+`scanDependencies`, the extensions' manifests and the bean-archive detection; `scanExcludes` and the processed
+markers still apply.
+
 `scanDependencies` and `scanExcludes` keep working as manual overrides. The selection does not depend on
-`vidocq.app.layer`: a parent-layer jar is processed too.
+`vidocq.app.layer`: a parent-layer jar is processed too. The startup report counts enriched archives of the
+application layer only, so it shows them under `vidocq.app.layer=all`.
 
 ### 4. Generation
 
