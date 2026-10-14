@@ -92,15 +92,23 @@ For one jar, all the bricks it is a candidate for run together, in one in-proces
 
 1. `-proc:only`, `-processorpath` = the union of the selected bricks' processor classpaths, `-classpath` = the jar
    plus the project's compile and runtime classpath, `-s <gensrc>`, `-d <genres>`, `--release` = the project's
-   release; the class names are every top-level class of the jar (multi-release jars: the base entries).
+   release; the class names are the top-level classes of the jar that contain one of the selected bricks'
+   `class-bytes` hints, plus the classes named in the matched resource hints that are service files (base entries
+   only). Passing every class made javac fail on classes that need an optional API absent from the build, such as
+   atmosphere-runtime's websocket endpoints (found on Vaadin, 2026-10-14).
 2. A second `javac` compiles the generated sources against the same classpath into `<genclasses>`.
 3. Every generated class and resource lands in the patch directory of the jar
    (`target/vidocq-patches/<artifactId>/`), which `EnrichedJars` already turns into the enriched copy. Resources
    named in a brick's `merge` list are merged line by line with the jar's own copy (union, original order first);
    any other generated resource that the jar already has is an error that names both.
-4. The enriched copy's manifest gains `Vidocq-Enriched-By: <brick>, <brick>` (sorted), next to the existing
+4. A jar that has no module descriptor and was selected by a brick stays an automatic module in its copy, even when
+   Vauban also generated providers for it: a synthesized descriptor must list every `uses`, and its detection misses
+   `ServiceLoader.load(Class, ClassLoader)` (Vaadin's `FeatureFlagProvider`, found on Vaadin, 2026-10-14), while an
+   automatic module may use any service and gets its `provides` from `META-INF/services`. Jars Vauban selects by its
+   own rules keep today's synthesized descriptor.
+5. The enriched copy's manifest gains `Vidocq-Enriched-By: <brick>, <brick>` (sorted), next to the existing
    `Vidocq-Enriched-From/-Digest/-Inputs`.
-5. The enrichment inputs digest gains one line per brick: `brick <name> <bundle coordinates> <sha256 of the
+6. The enrichment inputs digest gains one line per brick: `brick <name> <bundle coordinates> <sha256 of the
    processor classpath>`, so that a processor change rewrites the copy.
 
 ### 5. Once per dependency version
