@@ -195,6 +195,56 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void aJarNoLongerProcessedLosesWhatTheBricksWroteButKeepsWhatVaubanParked() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
+        Brick alpha = fakeBrick("Alpha");
+        var generator = fake(Map.of("META-INF/fixture/a.list", "com.acme.Foo\n"), List.of());
+        Path buildDir = dir.resolve("target");
+        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        // What the mojo does on each run: forget the bricks' last output, then run the pass.
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(alpha), generator, lib);
+        assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
+
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(alpha), generator, List.of(lib), List.of(), List.of("com.acme:lib"));
+
+        assertFalse(Files.exists(patch), "the brick files and their emptied patch directory are gone");
+        assertEquals(List.of(), JpmsPatches.patchModuleArgs(buildDir, Map.of("lib", lib)),
+                "run and dev no longer patch the jar");
+
+        // A jar Vauban also parked classes for keeps them.
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(alpha), generator, lib);
+        Path vauban = patch.resolve("com/acme/Foo$$VaubanProxy.class");
+        Files.write(vauban, classBytes("com.acme.Foo$$VaubanProxy"));
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(alpha), generator, List.of(lib), List.of(), List.of("com.acme:lib"));
+
+        assertTrue(Files.isRegularFile(vauban), "what Vauban parked stays");
+        assertFalse(Files.exists(patch.resolve("com/acme/Foo$$Gen.class")));
+        assertFalse(Files.exists(patch.resolve("META-INF/fixture/a.list")));
+    }
+
+    @Test
+    void aJarProcessedAgainGetsOnlyItsNewOutput() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
+        Path buildDir = dir.resolve("target");
+        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(fakeBrick("Alpha")), fake(Map.of("META-INF/fixture/old.list", "x\n"), List.of()), lib);
+
+        DependencyCodegenPass.forgetWritten(buildDir);
+        run(buildDir, List.of(fakeBrick("Beta")), (jar, bricks, cp, release, coordinates, log, logDisplay) ->
+                new DependencyCodegen.Output(Map.of("META-INF/fixture/new.list", "y\n".getBytes(StandardCharsets.UTF_8)),
+                        List.of()), plainJar("lib-1.0", Map.of("META-INF/fixture/beta", "")));
+
+        assertTrue(Files.isRegularFile(patch.resolve("META-INF/fixture/new.list")));
+        assertFalse(Files.exists(patch.resolve("META-INF/fixture/old.list")), "the earlier output is replaced");
+        assertFalse(Files.exists(patch.resolve("com/acme/Foo$$Gen.class")));
+    }
+
+    @Test
     void theFailuresOfEveryJarFailTheBuildTogether() throws Exception {
         Path lib = markedLib("lib-1.0");
         Path other = markedLib("other-1.0");

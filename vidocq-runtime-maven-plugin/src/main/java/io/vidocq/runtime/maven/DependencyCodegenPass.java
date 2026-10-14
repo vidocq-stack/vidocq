@@ -63,6 +63,13 @@ final class DependencyCodegenPass {
     static final String LOG_DIR = "vidocq-depgen";
 
     /**
+     * Under {@link #LOG_DIR}: one {@code <artifactId>.list} per jar, the files the pass wrote into its patch
+     * directory, kept outside it so that the enriched copy never carries it.
+     */
+    static final String WRITTEN_DIR = "written";
+    private static final String WRITTEN_SUFFIX = ".list";
+
+    /**
      * What the pass did.
      *
      * @param processed       one entry per jar that got generated files, with its bricks and their input lines
@@ -142,6 +149,51 @@ final class DependencyCodegenPass {
         return byJar;
     }
 
+    /**
+     * Deletes what the pass wrote into the patch directories on its last run, as {@link #WRITTEN_DIR} records it, and
+     * the records: a jar no longer processed (put in {@code scanExcludes}, upgraded, no longer a candidate) must not
+     * keep its old output, which the enriched copy and {@code --patch-module} would still carry. A patch directory
+     * left empty goes too. What Vauban parked is never recorded, so it stays. {@code vidocq:generate} calls it first
+     * on every run, before Vauban parks its classes; the pass then writes and records the current output.
+     */
+    static void forgetWritten(Path buildDir) throws IOException {
+        Path records = buildDir.resolve(LOG_DIR).resolve(WRITTEN_DIR);
+        if (!Files.isDirectory(records)) {
+            return;
+        }
+        Path patchRoot = JpmsPatches.root(buildDir);
+        try (var lists = Files.list(records)) {
+            for (Path record : lists.filter(p -> p.getFileName().toString().endsWith(WRITTEN_SUFFIX)).toList()) {
+                String name = record.getFileName().toString();
+                Path patchDir = JpmsPatches.patchDirFor(buildDir,
+                        name.substring(0, name.length() - WRITTEN_SUFFIX.length())).normalize();
+                if (patchDir.startsWith(patchRoot) && !patchDir.equals(patchRoot)) {
+                    for (String line : Files.readAllLines(record)) {
+                        Path file = patchDir.resolve(line).normalize();
+                        if (!line.isBlank() && file.startsWith(patchDir) && !file.equals(patchDir)) {
+                            Files.deleteIfExists(file);
+                            pruneEmptyDirs(patchRoot, file.getParent());
+                        }
+                    }
+                }
+                Files.delete(record);
+            }
+        }
+    }
+
+    /** Deletes {@code dir} and its parents while they are empty, up to {@code stopAt} excluded. */
+    private static void pruneEmptyDirs(Path stopAt, Path dir) throws IOException {
+        for (Path current = dir; current != null && current.startsWith(stopAt) && !current.equals(stopAt)
+                && Files.isDirectory(current); current = current.getParent()) {
+            try (var children = Files.list(current)) {
+                if (children.findAny().isPresent()) {
+                    return;
+                }
+            }
+            Files.delete(current);
+        }
+    }
+
     private static boolean isVidocqRuntime(ScanSelection.Dependency dep) {
         return "io.vidocq".equals(dep.groupId()) || dep.groupId().startsWith("io.vidocq.");
     }
@@ -216,14 +268,20 @@ final class DependencyCodegenPass {
                 continue;
             }
             Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
+            List<String> written = new ArrayList<>();
             for (var e : output.files().entrySet()) {
                 Path target = patchDir.resolve(e.getKey()).normalize();
                 if (!target.startsWith(patchDir)) {
                     throw new IOException(file + ": generated entry " + e.getKey() + " escapes " + patchDir);
                 }
+                // A file already there is one Vauban parked this run: the next run must not delete it.
+                if (!Files.exists(target)) {
+                    written.add(e.getKey());
+                }
                 Files.createDirectories(target.getParent());
                 Files.write(target, e.getValue());
             }
+            record(dep.artifactId(), written);
             processed.add(new EnrichedJars.Scanned(jar, dep.artifactId(), dep.coordinates(),
                     selected.stream().map(b -> b.hints().brick()).toList(), DependencyBricks.inputLines(selected)));
         }
@@ -232,6 +290,16 @@ final class DependencyCodegenPass {
             throw new MojoFailureException(String.join("\n", failures));
         }
         return new Result(processed, mergedResources);
+    }
+
+    /** Adds {@code files} to what {@link #forgetWritten} deletes on the next run for {@code artifactId}. */
+    private void record(String artifactId, List<String> files) throws IOException {
+        if (files.isEmpty()) {
+            return;
+        }
+        Path record = buildDir.resolve(LOG_DIR).resolve(WRITTEN_DIR).resolve(artifactId + WRITTEN_SUFFIX);
+        Files.createDirectories(record.getParent());
+        Files.write(record, files, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
     }
 
     /**

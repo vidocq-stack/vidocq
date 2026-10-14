@@ -147,6 +147,13 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     private void generate() throws MojoExecutionException, MojoFailureException {
         getLog().info("Vidocq - Generating bean index and proxies for dependencies");
+        // First, before Vauban parks its classes: the bricks' output of the last run goes, this run writes its own.
+        try {
+            DependencyCodegenPass.forgetWritten(buildDirectory.toPath());
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot delete the earlier dependency codegen output under target/"
+                    + JpmsPatches.DIR_NAME, e);
+        }
 
         Path classesDir = outputDirectory.toPath();
         if (!Files.isDirectory(classesDir)) {
