@@ -24,13 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.classfile.ClassFile;
-import java.lang.classfile.attribute.ModuleAttribute;
-import java.lang.classfile.attribute.ModuleRequireInfo;
-import java.lang.constant.ClassDesc;
-import java.lang.constant.ModuleDesc;
 import java.lang.module.ModuleFinder;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
@@ -50,10 +44,10 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("a CDI-agnostic library the application reads moves with it; a runtime brick and what it reads stay")
     void cdiAgnosticLibrariesMoveRuntimeBricksStay(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "acme.app", List.of("acme.pricing", "io.vidocq.cassini.fake"), "acme.app.Main");
-        var pricing = explodedModule(dir, "acme.pricing", List.of(), "acme.pricing.Price");
-        var brick = explodedModule(dir, "io.vidocq.cassini.fake", List.of("acme.codec"), "io.vidocq.cassini.fake.Rest");
-        var codec = explodedModule(dir, "acme.codec", List.of(), "acme.codec.Codec");
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("acme.pricing", "io.vidocq.cassini.fake"), "acme.app.Main");
+        var pricing = TestModules.explodedModule(dir, "acme.pricing", List.of(), "acme.pricing.Price");
+        var brick = TestModules.explodedModule(dir, "io.vidocq.cassini.fake", List.of("acme.codec"), "io.vidocq.cassini.fake.Rest");
+        var codec = TestModules.explodedModule(dir, "acme.codec", List.of(), "acme.codec.Codec");
 
         var config = ModuleLayer.boot().configuration().resolve(
                 ModuleFinder.of(app, pricing, brick, codec), ModuleFinder.of(), Set.of("acme.app"));
@@ -67,11 +61,11 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("the dev console and its panel SPI stay, so that a panel of the application is the console's type")
     void theDevConsoleAndItsPanelSpiStay(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "acme.app", List.of("io.vidocq.runtime.spi.devconsole",
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("io.vidocq.runtime.spi.devconsole",
                 "io.vidocq.runtime.extensions.essentials.devconsole"), "acme.app.Main");
-        var spi = explodedModule(dir, "io.vidocq.runtime.spi.devconsole", List.of(),
+        var spi = TestModules.explodedModule(dir, "io.vidocq.runtime.spi.devconsole", List.of(),
                 "io.vidocq.runtime.spi.devconsole.Panel");
-        var console = explodedModule(dir, "io.vidocq.runtime.extensions.essentials.devconsole",
+        var console = TestModules.explodedModule(dir, "io.vidocq.runtime.extensions.essentials.devconsole",
                 List.of("io.vidocq.runtime.spi.devconsole"), "io.vidocq.runtime.extensions.essentials.devconsole.Console");
 
         var config = ModuleLayer.boot().configuration().resolve(
@@ -85,8 +79,8 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("the caller's module moves even when its name falls under a runtime prefix, and what it reads moves too")
     void theCallerAlwaysMoves(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "io.vidocq.cassini.demo", List.of("acme.pricing"), "io.vidocq.cassini.demo.Main");
-        var pricing = explodedModule(dir, "acme.pricing", List.of(), "acme.pricing.Price");
+        var app = TestModules.explodedModule(dir, "io.vidocq.cassini.demo", List.of("acme.pricing"), "io.vidocq.cassini.demo.Main");
+        var pricing = TestModules.explodedModule(dir, "acme.pricing", List.of(), "acme.pricing.Price");
 
         var config = ModuleLayer.boot().configuration().resolve(
                 ModuleFinder.of(app, pricing), ModuleFinder.of(), Set.of("io.vidocq.cassini.demo"));
@@ -99,11 +93,11 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("the langchain4j-cdi MCP extension keeps the MCP server and its invoker in the boot layer: only the application moves")
     void theMcpExtensionKeepsTheMcpServerInTheBootLayer(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
-        var server = explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
-        var invoker = explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
+        var app = TestModules.explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
+        var server = TestModules.explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
+        var invoker = TestModules.explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
                 "dev.langchain4j.cdi.mcp.invoker.cdi41.Provider");
-        var extension = explodedModule(dir, MCP_EXTENSION, List.of(MCP_SERVER, MCP_INVOKER),
+        var extension = TestModules.explodedModule(dir, MCP_EXTENSION, List.of(MCP_SERVER, MCP_INVOKER),
                 "io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.McpExtension");
 
         var config = ModuleLayer.boot().configuration().resolve(ModuleFinder.of(app, server, invoker, extension),
@@ -117,9 +111,9 @@ class VidocqAppLayerSelectionTest {
     @Test
     @DisplayName("without the extension, the MCP server and its invoker move with the application")
     void withoutTheExtensionTheMcpServerMovesWithTheApplication(@TempDir Path dir) throws Exception {
-        var app = explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
-        var server = explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
-        var invoker = explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
+        var app = TestModules.explodedModule(dir, "acme.mcp.app", List.of(MCP_SERVER, MCP_INVOKER), "acme.mcp.app.Main");
+        var server = TestModules.explodedModule(dir, MCP_SERVER, List.of(), "dev.langchain4j.cdi.mcp.server.transport.Endpoint");
+        var invoker = TestModules.explodedModule(dir, MCP_INVOKER, List.of(MCP_SERVER),
                 "dev.langchain4j.cdi.mcp.invoker.cdi41.Provider");
 
         var config = ModuleLayer.boot().configuration().resolve(
@@ -146,24 +140,5 @@ class VidocqAppLayerSelectionTest {
         } catch (IOException e) {
             return p.toAbsolutePath().normalize();
         }
-    }
-
-    /** An exploded explicit module: a module-info requiring {@code requires}, and one empty class. */
-    private static Path explodedModule(Path dir, String name, List<String> requires, String className)
-            throws IOException {
-        var root = dir.resolve(name);
-        Files.createDirectories(root);
-        Files.write(root.resolve("module-info.class"), ClassFile.of().buildModule(
-                ModuleAttribute.of(ModuleDesc.of(name), mb -> {
-                    mb.requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null));
-                    for (var required : requires) {
-                        mb.requires(ModuleRequireInfo.of(ModuleDesc.of(required), 0, null));
-                    }
-                })));
-        var classFile = root.resolve(className.replace('.', '/') + ".class");
-        Files.createDirectories(classFile.getParent());
-        Files.write(classFile, ClassFile.of().build(ClassDesc.of(className),
-                cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));
-        return root;
     }
 }

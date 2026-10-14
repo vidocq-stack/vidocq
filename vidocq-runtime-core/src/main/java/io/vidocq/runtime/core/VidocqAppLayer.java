@@ -74,11 +74,14 @@ public final class VidocqAppLayer {
      * @param origin   {@value #APP_PATH_PROPERTY}, or {@code boot-layer detection from <module>}
      * @param archives the archives resolved into the layer, as they were given
      * @param listed   whether {@code origin} is the property that lists {@code archives}
+     * @param pinned   the modules kept in the parent layer by a pin, and why
      */
-    record Installation(String origin, List<String> archives, boolean listed) {
+    record Installation(String origin, List<String> archives, boolean listed,
+            java.util.Map<String, String> pinned) {
 
         Installation {
             archives = List.copyOf(archives);
+            pinned = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(pinned));
         }
     }
 
@@ -132,7 +135,8 @@ public final class VidocqAppLayer {
             parentLayer = ModuleLayer.boot();
         }
         return installLayer(paths, parentLayer, APP_PATH_PROPERTY + "=" + property,
-                new Installation(APP_PATH_PROPERTY, paths.stream().map(Path::toString).toList(), true));
+                new Installation(APP_PATH_PROPERTY, paths.stream().map(Path::toString).toList(), true,
+                        LayerSplit.decodePinned(System.getProperty(LayerSplit.PINNED_PROPERTY))));
     }
 
     /**
@@ -155,15 +159,18 @@ public final class VidocqAppLayer {
         }
         var explicit = System.getProperty("vidocq.app.modules", "").strip();
         var configuration = callerLayer.configuration();
+        var mode = LayerSplit.Mode.of(System.getProperty(LayerSplit.MODE_PROPERTY));
+        var pinned = new java.util.LinkedHashMap<String, String>();
         var paths = explicit.isEmpty()
-                ? applicationPaths(configuration, callerModule.getName())
+                ? applicationPaths(configuration, callerModule.getName(), mode,
+                        LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned)
                 : explicitPaths(configuration, java.util.Set.of(explicit.split("\\s*,\\s*")));
         if (paths.isEmpty()) {
             return false;
         }
         String origin = "boot-layer detection from " + callerModule.getName();
         return installLayer(paths, callerLayer, origin,
-                new Installation(origin, paths.stream().map(Path::toString).toList(), false));
+                new Installation(origin, paths.stream().map(Path::toString).toList(), false, pinned));
     }
 
     /** The {@code file:} locations of the modules named by {@code -Dvidocq.app.modules}. */
@@ -190,6 +197,39 @@ public final class VidocqAppLayer {
     static List<Path> applicationPaths(java.lang.module.Configuration configuration,
             String callerModule) {
         return VaubanLayerFactory.applicationPaths(configuration, RUNTIME_MODULE_PREFIXES,
+                java.util.Set.of(callerModule));
+    }
+
+    /**
+     * The trampoline's re-layer policy under {@code mode}: {@link LayerSplit.Mode#CLASSES} is the policy of
+     * {@link #applicationPaths(java.lang.module.Configuration, String)}; {@link LayerSplit.Mode#ALL} keeps the
+     * {@link LayerSplit} parent layer and Vauban's own rules (automatic modules stay: re-created next to their boot
+     * twin they would not resolve) and moves everything else.
+     *
+     * @param pinnedOut receives the pinned modules and why, under {@code ALL}
+     */
+    static List<Path> applicationPaths(java.lang.module.Configuration configuration, String callerModule,
+            LayerSplit.Mode mode, List<String> keepPatterns, java.util.Map<String, String> pinnedOut) {
+        if (mode == LayerSplit.Mode.CLASSES) {
+            return applicationPaths(configuration, callerModule);
+        }
+        var candidates = new java.util.ArrayList<LayerSplit.Candidate>();
+        for (var resolved : configuration.modules()) {
+            var location = resolved.reference().location()
+                    .filter(uri -> "file".equals(uri.getScheme())).map(Path::of).orElse(null);
+            if (location == null) {
+                continue;
+            }
+            try {
+                candidates.add(LayerSplit.candidate(location, null));
+            } catch (IOException e) {
+                throw new IllegalStateException("Cannot read the module " + resolved.name(), e);
+            }
+        }
+        var split = LayerSplit.split(candidates, java.util.Set.of(callerModule), keepPatterns,
+                java.util.Map.of());
+        pinnedOut.putAll(split.pinned());
+        return VaubanLayerFactory.applicationPaths(configuration, List.of(), split.parentNames(),
                 java.util.Set.of(callerModule));
     }
 
