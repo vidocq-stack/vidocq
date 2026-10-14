@@ -138,6 +138,17 @@ class DependencyCodegenTest {
     }
 
     @Test
+    void aProcessorThatThrowsAMultiLineMessageFailsWithOneLine() throws Exception {
+        var failure = assertThrows(DependencyCodegen.Failure.class, () -> run(acme(), brick("Tau", "ProcessorT")));
+
+        assertEquals(1, failure.lines().size(), () -> failure.lines().toString());
+        String line = failure.lines().getFirst();
+        assertTrue(!line.contains("\n") && !line.contains("second line"), line);
+        assertTrue(line.startsWith("vidocq:generate: lib-1.0.jar — Tau cannot process the jar: a processor threw"
+                + " java.lang.IllegalStateException: broken state. Fix the library"), line);
+    }
+
+    @Test
     void processorWarningsNameTheBrickAndTheElement() throws Exception {
         Path jar = lib(Map.of(
                 "com/acme/Bar.java", "package com.acme; @fixture.Other public class Bar {}",

@@ -268,16 +268,18 @@ public final class DependencyCodegen {
         }
     }
 
-    /** Words the failure and warning lines of one jar. */
+    /** Words the failure and warning lines of one jar: one line each, whatever the message (spec §6). */
     private record Problem(Path jar, String coordinates, String logDisplay) {
         String line(String bricks, String what, String message) {
-            return "vidocq:generate: " + jar.getFileName() + " — " + bricks + " " + what + ": " + message
+            return "vidocq:generate: " + jar.getFileName() + " — " + bricks + " " + what + ": "
+                    + firstLine(message)
                     + ". Fix the library, or leave the jar out with <scanExcludes>" + coordinates
                     + "</scanExcludes>. Full javac output: " + logDisplay;
         }
 
         String warning(String brick, String what, String message) {
-            return "vidocq:generate: " + jar.getFileName() + " — " + brick + " warns about " + what + ": " + message;
+            return "vidocq:generate: " + jar.getFileName() + " — " + brick + " warns about " + what + ": "
+                    + firstLine(message);
         }
     }
 }
