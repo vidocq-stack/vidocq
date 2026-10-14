@@ -49,6 +49,8 @@ class ListenerFromADependencyRunsIT {
         List<String> generated = Fixture.lines(install, "vidocq:generate: ", "weblib", "— Foy (");
         assertEquals(1, generated.size(), Fixture.read(install));
         assertTrue(generated.getFirst().contains("generated)"), generated.getFirst());
+        assertEquals(1, Fixture.lines(install, "Scanning ", "weblib", ": selected by a brick (Foy)").size(),
+                Fixture.read(install));
 
         Path log = Fixture.logs().resolve("runs-run.log");
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", LAYER, cache,
@@ -60,6 +62,19 @@ class ListenerFromADependencyRunsIT {
             assertEquals(1, Fixture.lines(log, "layer ", "1 enriched (Foy 1)").size(), Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
+        }
+
+        // The default layer (classes): the selection does not depend on it, so the listener runs there too. The
+        // library is in the parent layer, which the report does not count.
+        Path classes = Fixture.logs().resolve("runs-run-classes.log");
+        Process defaultLayer = Fixture.start(project.resolve("app"), classes, "vidocq:run", cache,
+                "-Dvidocq.chappe.listener.default.port=" + Fixture.freePort());
+        try {
+            Fixture.awaitLog(defaultLayer, classes, "Vidocq - Started in");
+            assertTrue(Fixture.read(classes).contains("LISTENER-RAN"), Fixture.read(classes));
+            assertEquals(List.of(), Fixture.lines(classes, "enriched ("), Fixture.read(classes));
+        } finally {
+            Fixture.stop(defaultLayer);
         }
     }
 
