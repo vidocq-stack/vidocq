@@ -22,7 +22,11 @@ package io.vidocq.runtime.extensions.essentials.migration.liquibase;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 
 /**
@@ -42,7 +46,20 @@ final class ApplicationDrivers {
         if (password != null) {
             info.setProperty("password", password);
         }
-        for (Driver driver : ServiceLoader.load(Driver.class, loader)) {
+        // A broken provider (missing class, failing constructor) must not hide the next one, as in DriverManager.
+        List<ServiceConfigurationError> broken = new ArrayList<>();
+        Iterator<Driver> drivers = ServiceLoader.load(Driver.class, loader).iterator();
+        while (true) {
+            Driver driver;
+            try {
+                if (!drivers.hasNext()) {
+                    break;
+                }
+                driver = drivers.next();
+            } catch (ServiceConfigurationError e) {
+                broken.add(e);
+                continue;
+            }
             if (driver.acceptsURL(url)) {
                 Connection connection = driver.connect(url, info);
                 if (connection != null) {
@@ -50,7 +67,9 @@ final class ApplicationDrivers {
                 }
             }
         }
-        throw new SQLException("No JDBC driver accepts " + url + " on the application's class path: add the JDBC"
-                + " driver as a dependency of the application");
+        SQLException none = new SQLException("No JDBC driver accepts " + url + " on the application's class path:"
+                + " add the JDBC driver as a dependency of the application");
+        broken.forEach(none::addSuppressed);
+        throw none;
     }
 }
