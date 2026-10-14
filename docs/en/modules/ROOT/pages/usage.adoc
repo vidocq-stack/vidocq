@@ -104,6 +104,8 @@ A pinned module that reads a module of the application fails the build, with bot
 `3 modules, 2 libraries (...)`. The detailed report has one `parent layer` row for each pinned module, with its
 reason. The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
 
+*Enriched libraries.* `vidocq:generate` runs the brick processors (Foy's, for instance) over the dependency jars they select, so a `@WebListener` of a library works without a workaround [.tag-new]#NEW#. The `layer` headline then counts them: `, 1 enriched (Foy 1)`. See xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
