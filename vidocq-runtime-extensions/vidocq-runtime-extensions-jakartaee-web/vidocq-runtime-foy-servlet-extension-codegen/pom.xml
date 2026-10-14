@@ -32,6 +32,11 @@
             <groupId>io.vidocq.foy</groupId>
             <artifactId>foy-cdi-vauban</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -44,6 +49,23 @@
                          inherited core-codegen path, which for core-codegen is this artifact. -->
                     <proc>none</proc>
                     <annotationProcessorPaths combine.self="override" />
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <!-- The module is empty and does not read foy-processor: compile the test on the classpath. -->
+                            <useModulePath>false</useModulePath>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The module is empty and does not read foy-processor: run the test on the classpath. -->
+                    <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>
         </plugins>
