@@ -113,16 +113,32 @@ public final class VidocqAppLayer {
         }
         var threads = LayerThreads.holding(layer.loader());
         if (!threads.isEmpty()) {
-            LOG.log(System.Logger.Level.WARNING, "Hot reload: " + threads.size() + " thread(s) still hold the"
-                    + " previous application layer after shutdown and keep it in memory: "
-                    + String.join(", ", threads) + ". Stop them when the application stops, or keep their library"
-                    + " in the parent layer with vidocq.app.layer.keep.");
+            // The mode the installed layer was built under: the launch sets the property, nothing changes it later.
+            LayerSplit.Mode mode;
+            try {
+                mode = LayerSplit.Mode.of(System.getProperty(LayerSplit.MODE_PROPERTY));
+            } catch (IllegalArgumentException e) {
+                mode = LayerSplit.Mode.CLASSES;
+            }
+            LOG.log(System.Logger.Level.WARNING, leakedThreadsWarning(threads, mode));
         }
         try {
             layer.loader().close();
         } catch (IOException e) {
             LOG.log(System.Logger.Level.DEBUG, "Closing the old layer loader failed: " + e);
         }
+    }
+
+    /**
+     * The reload warning for the threads that still hold the previous layer. The hint to pin their library applies
+     * only to a layer built under {@code all}: under {@code classes} the libraries already live in the parent layer.
+     */
+    static String leakedThreadsWarning(List<String> threads, LayerSplit.Mode mode) {
+        return "Hot reload: " + threads.size() + " thread(s) still hold the previous application layer after"
+                + " shutdown and keep it in memory: " + String.join(", ", threads) + ". Stop them when the application"
+                + " stops" + (mode == LayerSplit.Mode.ALL
+                        ? ", or keep their library in the parent layer with vidocq.app.layer.keep."
+                        : ".");
     }
 
     /**

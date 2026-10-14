@@ -34,11 +34,28 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Vidocq.run from an IDE with vidocq.app.layer=all (spec §4, tests 1 and 6). */
 @DisplayName("Vidocq.run — vidocq.app.layer=all")
 class VidocqAppLayerAllTest {
+
+    @Test
+    @DisplayName("the reload's thread warning suggests vidocq.app.layer.keep only under all")
+    void theThreadWarningSuggestsAPinOnlyUnderAll() {
+        String all = VidocqAppLayer.leakedThreadsWarning(List.of("acme-pages-poller"), LayerSplit.Mode.ALL);
+        String classes = VidocqAppLayer.leakedThreadsWarning(List.of("acme-pages-poller"), LayerSplit.Mode.CLASSES);
+
+        assertTrue(all.contains("acme-pages-poller"), all);
+        assertTrue(all.endsWith("Stop them when the application stops, or keep their library in the parent layer"
+                + " with vidocq.app.layer.keep."), all);
+        assertTrue(classes.contains("1 thread(s) still hold the previous application layer"), classes);
+        assertTrue(classes.contains("acme-pages-poller"), classes);
+        assertTrue(classes.endsWith("Stop them when the application stops."), classes);
+        assertFalse(classes.contains("vidocq.app.layer.keep"), classes);
+    }
 
     @Test
     @DisplayName("a pinned module and what it reads stay; only the application moves")
