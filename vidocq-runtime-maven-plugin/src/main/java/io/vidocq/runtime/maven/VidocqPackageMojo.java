@@ -164,7 +164,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             // copy, under the original file name.
             List<Packaged> packaged = new ArrayList<>();
             var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession,
-                    remoteRepos, getLog()::warn);
+                    remoteRepos, getLog()::warn, false);
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                     if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {

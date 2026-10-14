@@ -551,7 +551,7 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
-    void packagingRebuildsABrickCopyOnTheModularizedJarWithTheSameBricks() throws Exception {
+    void jlinkRebuildsABrickCopyOnTheModularizedJarWithTheSameBricks() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
         Brick alpha = fakeBrick("Alpha");
         Path buildDir = dir.resolve("target");
@@ -566,7 +566,7 @@ class VidocqGenerateDependencyCodegenTest {
             return List.of(alpha);
         };
 
-        new DependencyBricks.Packaging(buildDir, source, List.of(lib), info::add).rebase(bare, info::add);
+        new DependencyBricks.Packaging(buildDir, source, List.of(lib), info::add, true).rebase(bare, info::add);
         assertEquals(0, lookups.get(), "nothing modularized: the bricks are not looked up");
 
         Path modularized = Files.createDirectories(buildDir.resolve("vauban-modularized")).resolve("lib-1.0.jar");
@@ -578,7 +578,7 @@ class VidocqGenerateDependencyCodegenTest {
             out.putNextEntry(new JarEntry(ALPHA_MARKER));
             out.closeEntry();
         }
-        new DependencyBricks.Packaging(buildDir, source, List.of(lib), info::add).rebase(bare, info::add);
+        new DependencyBricks.Packaging(buildDir, source, List.of(lib), info::add, true).rebase(bare, info::add);
 
         assertEquals(1, lookups.get());
         Path copy = EnrichedJars.resolve(buildDir, lib);

@@ -164,20 +164,24 @@ final class DependencyBricks {
     /** The {@link Packaging} of {@code project}, over its dependency jars and directories. */
     static Packaging packaging(MavenProject project, Path buildDir, RepositorySystem system,
                                RepositorySystemSession session, List<RemoteRepository> repositories,
-                               Consumer<String> warn) {
+                               Consumer<String> warn, boolean jlink) {
         List<Path> dependencies = new ArrayList<>();
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
                 dependencies.add(artifact.getFile().toPath());
             }
         }
-        return new Packaging(buildDir, () -> of(project, system, session, repositories), dependencies, warn);
+        return new Packaging(buildDir, () -> of(project, system, session, repositories), dependencies, warn, jlink);
     }
 
     /**
      * The rebase {@code vidocq:package} and {@code vidocq:jlink} run on each dependency after
      * {@code vauban:modularize}: brick-aware for a copy the bricks enriched. The bricks and the modules of the
      * dependencies are looked up once, on the first such copy with a modularized jar to rebase on.
+     *
+     * <p>A copy the bricks enriched whose jar has no descriptor of its own stays automatic, as {@code vidocq:generate}
+     * wrote it, so that it may use any service: the descriptor {@code vauban:modularize} synthesizes can miss a
+     * {@code uses} (vauban#158). Only {@code vidocq:jlink}, which refuses automatic modules, rebases it (vidocq#251).
      */
     static final class Packaging {
 
@@ -185,19 +189,32 @@ final class DependencyBricks {
         private final Source source;
         private final Collection<Path> dependencies;
         private final Consumer<String> warn;
+        private final boolean jlink;
         private List<Brick> bricks;
         private Function<Set<String>, Set<String>> modulesOfPackages;
 
-        Packaging(Path buildDir, Source source, Collection<Path> dependencies, Consumer<String> warn) {
+        /**
+         * @param jlink whether the rebase is for {@code vidocq:jlink}, which needs every copy explicit, rather than
+         *              for {@code vidocq:package}
+         */
+        Packaging(Path buildDir, Source source, Collection<Path> dependencies, Consumer<String> warn,
+                  boolean jlink) {
             this.buildDir = buildDir;
             this.source = source;
             this.dependencies = dependencies;
             this.warn = warn;
+            this.jlink = jlink;
         }
 
         void rebase(EnrichedJars.Scanned dep, Consumer<String> info) throws IOException, MojoExecutionException {
             if (!ModularizedJars.isModularized(buildDir, dep.originalJar())) {
                 return; // nothing to rebase on, whatever the bricks
+            }
+            if (!jlink && !EnrichedJars.enrichedBy(buildDir, dep.originalJar()).isEmpty()
+                    && !EnrichedJars.hasDescriptor(dep.originalJar())) {
+                info.accept("Kept the enriched copy of " + dep.originalJar().getFileName()
+                        + " an automatic module, as vidocq:generate wrote it");
+                return;
             }
             EnrichedJars.Scanned scanned = forPackaging(buildDir, dep, this::bricks);
             if (scanned.bricks().isEmpty()) {

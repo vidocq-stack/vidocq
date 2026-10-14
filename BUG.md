@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261014-01 — `vidocq:package` gives a brick-selected automatic jar a synthesized descriptor again
+
+- **Date**: 2026-10-14
+- **Status**: FIXED on `fix/package-keeps-brick-automatic` (vidocq#251)
+- **Symptom**: `vidocq:generate` keeps a brick-selected jar without a descriptor automatic, as Vaadin's
+  `flow-server` needs, but `vidocq:package` rebuilt its enriched copy on the `vauban:modularize` jar. That
+  descriptor missed `uses FeatureFlagProvider` (vauban#158), so the packaged application would fail at boot
+  with `does not declare uses`, as the dev run did before vidocq#246's fix.
+- **Minimal repro**: `DependencyBricksPackagingTest.packageKeepsABrickSelectedAutomaticCopyAutomatic`.
+- **Cause**: `DependencyBricks.Packaging.rebase` served both `vidocq:package` and `vidocq:jlink` and always
+  rebased a brick copy on the modularized jar. Only jlink needs an explicit module.
+- **Fix**: `Packaging` knows whether it serves jlink. For `vidocq:package`, a brick-enriched copy whose jar
+  has no descriptor is kept as `vidocq:generate` wrote it. `vidocq:jlink` still rebases it; its descriptor
+  is right once vauban#158 (Vidocq/vauban#159) is in the Vauban build.
+
+---
+
 ## BUG-20261012-01 — an IntelliJ build drops the annotation processor output, and Maven does not restore it
 
 - **Date**: 2026-10-12
