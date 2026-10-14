@@ -31,6 +31,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
+import io.vidocq.runtime.maven.depgen.ProcessorPath;
+import io.vidocq.runtime.maven.depgen.ProcessorPaths;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.Artifact;
@@ -84,7 +86,6 @@ public class VidocqCheckPomMojo extends AbstractMojo {
 
     private static final String VIDOCQ_RUNTIME_GROUP = "io.vidocq.runtime";
     private static final String CORE_CODEGEN = "vidocq-runtime-core-codegen";
-    private static final String MAVEN_COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String MAVEN_JAR_KEY = "org.apache.maven.plugins:maven-jar-plugin";
     /** Matches a runtime extension artifact, e.g. {@code vidocq-runtime-cassini-rest-extension}. */
     private static final Pattern EXTENSION_PATTERN =
@@ -352,9 +353,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     /** The Vidocq codegen bundles declared on the processor path with {@code <type>pom</type>}, in order. */
     private List<String> collectPomTypedCodegenPaths() {
         List<String> result = new ArrayList<>();
-        for (Xpp3Dom path : codegenPathElements()) {
-            String aid = childText(path, "artifactId");
-            if ("pom".equals(childText(path, "type")) && aid.endsWith("-codegen") && !result.contains(aid)) {
+        for (ProcessorPath path : codegenPathElements()) {
+            String aid = path.artifactId();
+            if ("pom".equals(path.type()) && aid.endsWith("-codegen") && !result.contains(aid)) {
                 result.add(aid);
             }
         }
@@ -362,37 +363,16 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     }
 
     /** Every {@code <path>} of a Vidocq runtime group, from the plugin configuration and its executions. */
-    private List<Xpp3Dom> codegenPathElements() {
-        List<Xpp3Dom> result = new ArrayList<>();
-        Plugin compiler = project.getPlugin(MAVEN_COMPILER_KEY);
-        if (compiler == null) return result;
-        Stream.concat(
-                Stream.ofNullable(compiler.getConfiguration()),
-                compiler.getExecutions().stream().map(PluginExecution::getConfiguration)
-        ).filter(Objects::nonNull).forEach(cfg -> {
-            if (!(cfg instanceof Xpp3Dom dom)) return;
-            Xpp3Dom paths = dom.getChild("annotationProcessorPaths");
-            if (paths == null) return;
-            for (Xpp3Dom path : paths.getChildren("path")) {
-                if (isVidocqRuntimeGroup(childText(path, "groupId")) && childText(path, "artifactId") != null) {
-                    result.add(path);
-                }
-            }
-        });
-        return result;
+    private List<ProcessorPath> codegenPathElements() {
+        return ProcessorPaths.of(project).stream().filter(p -> isVidocqRuntimeGroup(p.groupId())).toList();
     }
 
     private Map<String, String> collectCodegenPaths() {
         Map<String, String> result = new LinkedHashMap<>();
-        for (Xpp3Dom path : codegenPathElements()) {
-            result.putIfAbsent(childText(path, "artifactId"), childText(path, "version"));
+        for (ProcessorPath path : codegenPathElements()) {
+            result.putIfAbsent(path.artifactId(), path.version());
         }
         return result;
-    }
-
-    private static String childText(Xpp3Dom node, String name) {
-        Xpp3Dom c = node.getChild(name);
-        return c != null ? c.getValue() : null;
     }
 
     // package-private: a test overrides it rather than resolve artifacts.
