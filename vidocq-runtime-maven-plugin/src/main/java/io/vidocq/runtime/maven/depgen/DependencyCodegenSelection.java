@@ -52,6 +52,12 @@ public final class DependencyCodegenSelection {
 
     private static final String VERSIONS = "META-INF/versions/";
 
+    /**
+     * The first line hashed into every memo key. Bump it whenever the selection rules or the memo's content change,
+     * so that the entries older rules wrote are never read again.
+     */
+    static final String MEMO_FORMAT = "selection v2";
+
     private DependencyCodegenSelection() {
     }
 
@@ -167,7 +173,7 @@ public final class DependencyCodegenSelection {
         if (Files.isDirectory(jar) || bricks.isEmpty()) {
             return decide(jar, bricks);
         }
-        Path entry = memo.resolve(memoKey(jar, bricks));
+        Path entry = memo.resolve(memoKey(jar, bricks, MEMO_FORMAT));
         if (Files.isRegularFile(entry)) {
             try {
                 Optional<Decision> memoized = parse(jar, bricks, Files.readAllLines(entry, StandardCharsets.UTF_8));
@@ -185,13 +191,17 @@ public final class DependencyCodegenSelection {
         return decision;
     }
 
-    /** SHA-256 over the jar's SHA-256 and what of the hints decides: name, resources, class bytes, markers. */
-    private static String memoKey(Path jar, List<DependencyCodegenHints> bricks) throws IOException {
+    /**
+     * SHA-256 over {@code format} ({@link #MEMO_FORMAT}), the jar's SHA-256 and what of the hints decides: name,
+     * resources, class bytes, markers.
+     */
+    static String memoKey(Path jar, List<DependencyCodegenHints> bricks, String format) throws IOException {
         MessageDigest jarDigest = sha256();
         try (InputStream in = new DigestInputStream(Files.newInputStream(jar), jarDigest)) {
             in.transferTo(OutputStream.nullOutputStream());
         }
-        StringBuilder text = new StringBuilder("jar ").append(HexFormat.of().formatHex(jarDigest.digest()));
+        StringBuilder text = new StringBuilder(format).append("\njar ")
+                .append(HexFormat.of().formatHex(jarDigest.digest()));
         for (DependencyCodegenHints brick : bricks) {
             text.append("\nbrick ").append(brick.brick())
                     .append("\nresources ").append(String.join(",", brick.resources()))

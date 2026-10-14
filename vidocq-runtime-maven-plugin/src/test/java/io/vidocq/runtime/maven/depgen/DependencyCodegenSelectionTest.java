@@ -219,4 +219,19 @@ class DependencyCodegenSelectionTest {
         assertEquals(DependencyCodegenSelection.decide(jar, List.of(FOY)),
                 DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true));
     }
+
+    @Test
+    void anEntryOfAnotherFormatIsAMiss() throws IOException {
+        var jar = jar("lib.jar", "META-INF/web-fragment.xml", "<x/>");
+        Path memo = Files.createDirectories(dir.resolve("memo"));
+        // What older selection rules memoized for this same jar and hints.
+        Files.writeString(memo.resolve(DependencyCodegenSelection.memoKey(jar, List.of(FOY), "selection v0")),
+                "signed true\n");
+
+        var decision = DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+
+        assertTrue(decision.selected());
+        assertFalse(decision.signed());
+        assertEquals(2, entries(memo));
+    }
 }
