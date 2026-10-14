@@ -6,6 +6,88 @@
 
 ---
 
+## 2026-10-14 — `vidocq:dev` in-JVM reload under `vidocq.app.layer=all` (application layer with its libraries)
+
+This entry sets spec criterion 3 of the application-layer design (Vidocq/vidocq#247). It times the in-JVM hot reload (application-layer re-creation, the default since M2) for three cases:
+the Foy Servlet example under `classes` and under `all`, and a Vaadin 25 on Foy spike under `all`
+(69 archives). The child-side phases were timed with throwaway timers that were reverted afterwards (see the
+measurement report).
+
+### Setup
+
+| Field    | Value |
+|----------|-------|
+| Hardware | Apple M5 Max, 18 cores, 128 GB RAM, macOS 27.0.1 (Darwin 27.0.0) |
+| JVM      | Temurin 25 (`Temurin-25+36-LTS`) |
+| Maven    | 3.9.16 via `./mvnw`, isolated local repository (`MAVEN_ARGS=-Dmaven.repo.local=<scratch>/m2-applayer`) |
+| Code     | vidocq `926f9a28` (origin/main, with vidocq#249), Vauban `172d0e5c` (origin/main) |
+| Command  | `cd vidocq-runtime-examples/vidocq-runtime-foy-servlet-example && ../../mvnw -B -ntp -o vidocq:dev -Dvidocq.dev.debug=false -Dvidocq.dev.continuousTesting=false -Dvidocq.app.layer=<classes\|all>`; Vaadin spike: `./mvnw -B -ntp -o vidocq:dev -Dvidocq.dev.debug=false -Dvidocq.dev.continuousTesting=false -Dvidocq.app.layer=all -Dvidocq.dev.jvmArgs=-Dvaadin.productionMode=true` |
+| Edit     | `echo "// rm-reload N" >> MenuServlet.java` (Vaadin: `MainView.java`), then wait for the child's `target/.vidocq-dev-reload.ready` |
+
+### Results
+
+There were 6 reloads per configuration, and the first is excluded as warm-up. Edit → ready is measured
+externally, from the append to the `.ready` write. The host line `Hot reload signalled after <X> ms (in-JVM layer
+swap)` covers the recompile only: `Reloaded in` is printed only by the respawn path. The child-side figure
+covers `bootstrap.shutdown()` + `resetForReload` + `installIfConfigured` + `configure` + `start`.
+
+Raw (reloads 2–6):
+
+```
+servlet classes  edit->ready ms: 3888 3872 3907 4254 3680   child ms: 26.7 24.8 20.2 21.4 20.8   layer install ms: 4.5 4.1 3.6 3.7 4.3
+servlet all      edit->ready ms: 3911 5529 2250 4076 3855   child ms: 27.4 25.5 22.8 20.8 19.6   layer install ms: 4.7 4.0 4.3 3.6 3.7
+vaadin  all      edit->ready ms: 3796 4227 3981 3796 3982   child ms: 166.4 189.7 166.0 165.5 160.1   layer install ms: 25.6 35.4 27.3 24.8 22.9
+```
+
+| Metric (median, reloads 2–6) | Servlet `classes` | Servlet `all` | Vaadin `all` |
+|---|---:|---:|---:|
+| Archives in layer / class entries | 1 / 39 | 1 / 39 | 69 / 5337 |
+| Edit → ready | 3888 ms | 3911 ms | 3981 ms |
+| ↳ edit → `Changes detected` (macOS polling watcher) | 2057 ms | 2032 ms | 1648 ms |
+| ↳ recompile (`signalled after`) | 1767 ms | 1694 ms | 2040 ms |
+| **Child-side reload** | **21.4 ms** | **22.8 ms** | **166 ms** |
+| ↳ shutdown + reset | 1.3 ms | 1.3 ms | 2.6 ms |
+| ↳ layer install | 4.1 ms | 4.0 ms | 25.6 ms |
+| ↳↳ ModuleFinder + findAll | 1.6 ms | 1.6 ms | 10.1 ms |
+| ↳↳ resolveAndBind | 1.5 ms | 1.5 ms | 7.2 ms |
+| ↳↳ VaubanClassLoader.forLayer (open + index) | 0.8 ms | 0.7 ms | 5.1 ms |
+| ↳↳ defineModules | 0.1 ms | 0.1 ms | 2.8 ms |
+| ↳ configure | 1.3 ms | 1.2 ms | 1.6 ms |
+| ↳ container start | 14.4 ms | 15.4 ms | 135.8 ms |
+| First request after reload | 2.3 ms | 2.4 ms | 27.5 ms |
+
+For the Vaadin case, a JFR recording over 10 reloads (`settings=profile`, stack depth 1024) splits container
+`start` into Vaadin/Atmosphere's own init (~20 %), Foy's run-time Class-File `@HandlesTypes` scan and resolve
+(~18 %), weaving analysis at class definition (~10 %), and `ConfigValues.withoutCredentials` regex masking (~6 %).
+Within the layer, `ModulePath.findAll` (automatic-module package derivation) is the largest item, and
+`promoteServices` runs 283 times for 69 modules.
+
+### Delta vs previous run (2026-05-28, M1 process-restart baseline)
+
+The two runs differ in the reload approach (in-JVM layer swap now, process respawn then), the example (Foy
+Servlet vs Cassini REST), the Maven version (3.9.16 vs 4.0.0-rc-5) and the machine, so only the order of
+magnitude compares:
+
+| | 2026-05-28 (respawn, REST) | 2026-10-14 (in-JVM, Servlet `classes`) |
+|---|---:|---:|
+| Recompile (`mvn process-classes`) | ~1.5 s | 1.77 s |
+| Runtime-side swap (stop + start) | ~320 ms (drain/stop ~150 + new JVM ~170) | **21 ms** (−93 %) |
+| Host total comparable to `Reloaded in` (recompile + signal + child) | 1812 ms p50 | ~1.82 s |
+
+The in-JVM swap removed nearly all of the runtime-side cost. The recompile, and the ~2 s macOS watcher latency
+that the 2026-05-28 entry did not count, now account for more than 99 % of edit → ready.
+
+### Decision (criterion 3)
+
+The archive caches (a descriptor cache with memoized service promotion, JarFile and class-index reuse, and
+`Configuration` reuse when only `target/classes` changed) could recover about 19–21 ms of the Vaadin layer
+install's 25.6 ms. That is about 0.5 % of edit → ready, so the reader cache planned in the spec is dropped.
+Criterion 3 becomes the measured state, which is already met: a Vaadin child-side reload of ≤ 150 ms median, and no
+Servlet regression (≤ 23 ms child-side, ≤ 4.5 ms layer install). Edit → ready is 1.02× between the Vaadin and the
+Servlet cases. The time to win is on the Maven side, in the watcher latency and the recompile.
+
+---
+
 ## 2026-05-28 — `vidocq:dev` reload time (M1 baseline)
 
 Initial measurement after landing the `vidocq:dev` Mojo (Approach A, fast
