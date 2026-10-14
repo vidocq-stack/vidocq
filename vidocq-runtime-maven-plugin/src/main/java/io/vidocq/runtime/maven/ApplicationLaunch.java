@@ -130,6 +130,9 @@ public final class ApplicationLaunch {
      * The launch of {@code vidocq.app.layer=all}: the runtime's closure on the module path, the project's classes
      * and every other dependency on the application path (Vidocq/vidocq#247).
      *
+     * <p>A kept automatic module's own dependencies follow it through {@link #declaredReads}, which has a limit
+     * on dependencies shared with an application library: pin them with {@code vidocq.app.layer.keep}.
+     *
      * @param keepPatterns the patterns of {@code vidocq.app.layer.keep}
      * @throws MojoExecutionException when a jar has no readable module, or a pin reads the application
      */
@@ -146,10 +149,9 @@ public final class ApplicationLaunch {
             try {
                 candidate = LayerSplit.candidate(entry.path(), a.getGroupId() + ":" + a.getArtifactId());
             } catch (IOException e) {
-                throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency, and "
-                        + entry.path().getFileName() + " has none: " + e.getMessage()
-                        + ". Keep it out of the application layer with vidocq.app.layer.keep=" + a.getGroupId()
-                        + ":" + a.getArtifactId() + ", or use vidocq.app.layer=classes.", e);
+                throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency: "
+                        + e.getMessage() + ". Give the jar an Automatic-Module-Name, or use vidocq.app.layer=classes.",
+                        e);
             }
             candidates.add(candidate);
             artifacts.add(a);
@@ -176,6 +178,10 @@ public final class ApplicationLaunch {
      * What each module depends on according to Maven: from an artifact's dependency trail, its direct parent
      * reads it. An automatic module's descriptor names no dependency, so {@link LayerSplit} needs this to keep the
      * libraries a kept automatic module uses beside it.
+     *
+     * <p>Limit: Maven's dependency trails record one path per artifact. When Maven mediates a dependency shared
+     * with an application library through a nearer path, the kept module's read of it is not seen, and that
+     * dependency lands in the application layer: pin it with {@code vidocq.app.layer.keep}.
      *
      * @param artifacts           the jars of the launch
      * @param moduleByCoordinates the module name of each {@code groupId:artifactId}

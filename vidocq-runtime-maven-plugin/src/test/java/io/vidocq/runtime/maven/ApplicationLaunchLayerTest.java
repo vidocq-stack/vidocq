@@ -46,6 +46,7 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,6 +116,25 @@ class ApplicationLaunchLayerTest {
                 build.resolve("classes"), jar -> { }, true, id -> { }, List.of()));
         assertTrue(e.getMessage().contains("1-bad.jar"), e.getMessage());
         assertTrue(e.getMessage().contains("vidocq.app.layer=all"), e.getMessage());
+        assertTrue(e.getMessage().contains("Automatic-Module-Name"), e.getMessage());
+        assertFalse(e.getMessage().contains("vidocq.app.layer.keep"), "a pin cannot help: " + e.getMessage());
+    }
+
+    @Test
+    void aPinThatReadsTheApplicationFailsTheBuild(@TempDir Path dir) throws Exception {
+        Path build = dir.resolve("target");
+        Path classes = Files.createDirectories(build.resolve("classes"));
+        Files.write(classes.resolve("module-info.class"),
+                ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of("acme.app"), mb ->
+                        mb.requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        Path helper = moduleJar(dir, "helper.jar", "acme.helper", true, "acme.app");
+        MavenProject project = project();
+        project.setArtifacts(Set.of(artifact("helper", helper)));
+
+        var e = assertThrows(MojoExecutionException.class, () -> ApplicationLaunch.layered(project, build, classes,
+                jar -> { }, true, id -> { }, List.of("acme.helper")));
+        assertTrue(e.getMessage().contains("acme.helper"), e.getMessage());
+        assertTrue(e.getMessage().contains("acme.app"), e.getMessage());
     }
 
     /** An automatic module declares no dependency: Maven's trail says what the kept {@code liquibase.core} needs. */
