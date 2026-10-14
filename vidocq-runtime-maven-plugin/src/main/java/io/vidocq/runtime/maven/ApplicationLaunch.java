@@ -19,18 +19,26 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.project.MavenProject;
 
 import java.io.IOException;
+import java.lang.module.ModuleFinder;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * What a forked Vidocq JVM is launched against: the module path, the application path and the
@@ -82,10 +90,25 @@ public final class ApplicationLaunch {
      */
     public static List<Path> modulePath(MavenProject project, Path buildDir, Path classesDir, boolean layerMode,
                                         Consumer<Path> modularized, boolean dropDevOnly, Consumer<String> dropped) {
-        List<Path> entries = new ArrayList<>();
+        List<Path> paths = new ArrayList<>();
         if (!layerMode) {
-            entries.add(classesDir);
+            paths.add(classesDir);
         }
+        entries(project, buildDir, modularized, dropDevOnly, dropped).forEach(e -> paths.add(e.path()));
+        return paths;
+    }
+
+    /** Why a jar with classes parked for {@code --patch-module} stays in the parent layer. */
+    public static final String PATCHED_REASON = "classes parked by vidocq:generate need --patch-module";
+
+    /** A launch split by {@link LayerSplit}: the module path, the application path, the pinned modules. */
+    public record Layered(List<Path> modulePath, List<Path> appPath, Map<String, String> pinned) {}
+
+    private record Entry(Artifact artifact, Path path) {}
+
+    private static List<Entry> entries(MavenProject project, Path buildDir, Consumer<Path> modularized,
+                                       boolean dropDevOnly, Consumer<String> dropped) {
+        List<Entry> entries = new ArrayList<>();
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                 Path jar = artifact.getFile().toPath();
@@ -97,10 +120,95 @@ public final class ApplicationLaunch {
                 if (!resolved.equals(jar)) {
                     modularized.accept(jar);
                 }
-                entries.add(resolved);
+                entries.add(new Entry(artifact, resolved));
             }
         }
         return entries;
+    }
+
+    /**
+     * The launch of {@code vidocq.app.layer=all}: the runtime's closure on the module path, the project's classes
+     * and every other dependency on the application path (Vidocq/vidocq#247).
+     *
+     * @param keepPatterns the patterns of {@code vidocq.app.layer.keep}
+     * @throws MojoExecutionException when a jar has no readable module, or a pin reads the application
+     */
+    public static Layered layered(MavenProject project, Path buildDir, Path classesDir, Consumer<Path> modularized,
+                                  boolean dropDevOnly, Consumer<String> dropped, List<String> keepPatterns)
+            throws MojoExecutionException {
+        List<LayerSplit.Candidate> candidates = new ArrayList<>();
+        List<Artifact> artifacts = new ArrayList<>();
+        Map<String, String> moduleByCoordinates = new LinkedHashMap<>();
+        Map<String, String> forced = new LinkedHashMap<>();
+        for (Entry entry : entries(project, buildDir, modularized, dropDevOnly, dropped)) {
+            Artifact a = entry.artifact();
+            LayerSplit.Candidate candidate;
+            try {
+                candidate = LayerSplit.candidate(entry.path(), a.getGroupId() + ":" + a.getArtifactId());
+            } catch (IOException e) {
+                throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency, and "
+                        + entry.path().getFileName() + " has none: " + e.getMessage()
+                        + ". Keep it out of the application layer with vidocq.app.layer.keep=" + a.getGroupId()
+                        + ":" + a.getArtifactId() + ", or use vidocq.app.layer=classes.", e);
+            }
+            candidates.add(candidate);
+            artifacts.add(a);
+            moduleByCoordinates.put(a.getGroupId() + ":" + a.getArtifactId(), candidate.descriptor().name());
+            if (!EnrichedJars.isEnriched(buildDir, a.getFile().toPath())
+                    && Files.isDirectory(JpmsPatches.patchDirFor(buildDir, a.getArtifactId()))) {
+                forced.put(candidate.descriptor().name(), PATCHED_REASON);
+            }
+        }
+        LayerSplit.Result split;
+        try {
+            split = LayerSplit.split(candidates, applicationModules(classesDir), keepPatterns, forced,
+                    declaredReads(artifacts, moduleByCoordinates));
+        } catch (IllegalStateException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        List<Path> appPath = new ArrayList<>();
+        appPath.add(classesDir);
+        appPath.addAll(split.applicationPaths());
+        return new Layered(new ArrayList<>(split.parentPaths()), appPath, split.pinned());
+    }
+
+    /**
+     * What each module depends on according to Maven: from an artifact's dependency trail, its direct parent
+     * reads it. An automatic module's descriptor names no dependency, so {@link LayerSplit} needs this to keep the
+     * libraries a kept automatic module uses beside it.
+     *
+     * @param artifacts           the jars of the launch
+     * @param moduleByCoordinates the module name of each {@code groupId:artifactId}
+     * @return module name to the names of the modules it reads
+     */
+    static Map<String, Set<String>> declaredReads(List<Artifact> artifacts, Map<String, String> moduleByCoordinates) {
+        Map<String, Set<String>> reads = new LinkedHashMap<>();
+        for (Artifact a : artifacts) {
+            List<String> trail = a.getDependencyTrail();
+            String self = moduleByCoordinates.get(a.getGroupId() + ":" + a.getArtifactId());
+            if (trail == null || trail.size() < 3 || self == null) {
+                continue;
+            }
+            // The first element is the project; the last is the artifact itself; its dependent is just before.
+            String[] parent = trail.get(trail.size() - 2).split(":");
+            if (parent.length < 2) {
+                continue;
+            }
+            String parentModule = moduleByCoordinates.get(parent[0] + ":" + parent[1]);
+            if (parentModule != null) {
+                reads.computeIfAbsent(parentModule, k -> new LinkedHashSet<>()).add(self);
+            }
+        }
+        return reads;
+    }
+
+    /** The project's own module name, when its classes have a descriptor. */
+    private static Set<String> applicationModules(Path classesDir) {
+        if (!Files.isRegularFile(classesDir.resolve("module-info.class"))) {
+            return Set.of();
+        }
+        return ModuleFinder.of(classesDir).findAll().stream().map(r -> r.descriptor().name())
+                .collect(Collectors.toSet());
     }
 
     /**
