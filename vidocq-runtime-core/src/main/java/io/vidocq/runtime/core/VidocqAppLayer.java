@@ -298,7 +298,8 @@ public final class VidocqAppLayer {
         if (e instanceof java.lang.module.FindException && missing.find()
                 && java.lang.module.ModuleFinder.ofSystem().find(missing.group(1)).isPresent()) {
             message += ". A JDK module can only be resolved in the boot layer: add --add-modules "
-                    + missing.group(1) + " to the java command";
+                    + missing.group(1) + " to the java command (vidocq:run, vidocq:dev and vidocq:package add it:"
+                    + " after adding such a requires, restart vidocq:dev)";
         }
         return new IllegalStateException(message, e);
     }

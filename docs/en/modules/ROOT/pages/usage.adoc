@@ -124,7 +124,9 @@ application module requires, such as `java.sql` for Vaadin's `flow-data`, must b
 `vidocq:dev` and the `vidocq:package` launchers add these modules to `--add-modules`, read from the descriptors of
 the application path. A `java` command written by hand needs the same option; without it the runtime fails with
 `Cannot create the application layer (...): Module java.sql not found, required by flow.data. A JDK module can
-only be resolved in the boot layer: add --add-modules java.sql to the java command` (Vidocq/vidocq#254).
+only be resolved in the boot layer: add --add-modules java.sql to the java command (...)` (Vidocq/vidocq#254).
+A `requires` on a JDK module added while `vidocq:dev` runs needs a restart of `vidocq:dev`: a hot reload keeps the
+boot layer.
 
 *Known limits.*
 
@@ -133,6 +135,9 @@ only be resolved in the boot layer: add --add-modules java.sql to the java comma
 * `vidocq:jlink`, jpackage and Docker images are unchanged: the application still runs in one layer, with its
   libraries in the image.
 * Jar signatures are not verified in the layer.
+* An automatic module declares no `requires`, so the JDK modules it uses are not added for it. One that needs
+  `java.sql` or `java.desktop` fails with `NoClassDefFoundError`: add the module with `--add-modules` in
+  `vidocq.dev.jvmArgs` or the package's `jvmArgs`, or give the jar a descriptor with `vauban:modularize`.
 
 == Packaging with `vidocq-runtime-maven-plugin`
 
