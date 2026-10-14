@@ -94,7 +94,7 @@ class PluginDescriptorRunTest {
 
         assertEquals(List.of("project", "session", "mainModule", "mainClass", "extraJvmArgs", "appArgs",
                         "extraSystemProperties", "debug", "debugPort", "debugHost", "debugSuspend", "gracePeriodMillis", "skip",
-                        "devServices", "classesDir", "baseDir", "buildDir", "pluginArtifactMap"),
+                        "devServices", "appLayer", "appLayerKeep", "classesDir", "baseDir", "buildDir", "pluginArtifactMap"),
                 new ArrayList<>(parameters.keySet()));
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             Field field = VidocqRunMojo.class.getDeclaredField(parameter.getKey());

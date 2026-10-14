@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
@@ -235,6 +236,18 @@ public class VidocqDevMojo extends AbstractMojo {
     private boolean layerMode;
 
     /**
+     * {@code classes}: the application layer holds the project's classes, its dependencies stay on the module path.
+     * {@code all}: it holds every dependency outside the runtime's closure too (Vidocq/vidocq#247); needs
+     * {@link #layerMode}.
+     */
+    @Parameter(property = "vidocq.app.layer", defaultValue = "classes")
+    private String appLayer;
+
+    /** Comma-separated patterns ({@code module} or {@code groupId:artifactId}) kept in the parent layer under {@code all}. */
+    @Parameter(property = "vidocq.app.layer.keep")
+    private String appLayerKeep;
+
+    /**
      * In-JVM hot reload (default, requires {@link #layerMode}): after a successful
      * recompile the child JVM is signalled (reload file touch) and re-creates its
      * application module layer in place — no process respawn, warm JIT, debugger and
@@ -283,14 +296,32 @@ public class VidocqDevMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
+        LayerSplit.Mode mode;
+        try {
+            mode = LayerSplit.Mode.of(appLayer);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        if (mode == LayerSplit.Mode.ALL && !layerMode) {
+            throw new MojoExecutionException("vidocq.app.layer=all needs vidocq.dev.layer=true");
+        }
         Path projectDir = baseDir.toPath();
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
                 getLog()::warn);
         List<Path> watch = parseDirs(projectDir, watchDirs);
-        List<Path> modulePath = buildModulePath();
-        List<Path> appPath = buildAppPath();
+        ApplicationLaunch.Layered layered = buildLaunch(mode);
+        List<Path> modulePath = layered.modulePath();
+        List<Path> appPath = layered.appPath();
         Map<String, String> sysProps = buildSystemProperties();
+        if (mode == LayerSplit.Mode.ALL) {
+            getLog().info("Application layer: " + (appPath.size() - 1) + " libraries, "
+                    + layered.pinned().size() + " kept in the parent layer by a pin");
+            layered.pinned().forEach((m, why) -> getLog().info("  parent layer: " + m + " (" + why + ")"));
+            if (!layered.pinned().isEmpty()) {
+                sysProps.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(layered.pinned()));
+            }
+        }
         List<String> jvmArgs = buildJvmArgs();
 
         // In-JVM hot reload: the child watches this file's mtime and swaps its
@@ -352,7 +383,9 @@ public class VidocqDevMojo extends AbstractMojo {
             // What the child will see, taken before the dev services extension and the dev tools join the module
             // path (spec 2026-09-29-devservice-postgres-kind §5).
             ApplicationClasspath classpath =
-                    new ApplicationClasspath(ApplicationLaunch.classpathOf(modulePath, classesDir.toPath()));
+                    new ApplicationClasspath(ApplicationLaunch.classpathOf(
+                            java.util.stream.Stream.concat(modulePath.stream(), appPath.stream()).toList(),
+                            classesDir.toPath()));
             try {
                 devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
                         ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
@@ -605,16 +638,38 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
-     * Build the module path the child JVM will be launched against. Layout
+     * The module path and the application path the child JVM is launched against. Layout
      * matches what {@link io.vidocq.runtime.maven.VidocqPackageMojo} ships in
      * {@code lib/}: the freshly compiled project classes plus every resolved
-     * runtime/compile artifact.
+     * runtime/compile artifact. In layer mode the application classes travel through
+     * {@code -Dvidocq.app.path} instead: a module must not be on both paths.
      */
-    private List<Path> buildModulePath() {
-        // In layer mode the application classes travel through -Dvidocq.app.path instead: a module must
-        // not be on both paths.
-        return ApplicationLaunch.modulePath(project, buildDirPath(), classesDir.toPath(), layerMode,
-                jar -> getLog().info("dev: using modularized copy of " + jar.getFileName()));
+    private ApplicationLaunch.Layered buildLaunch(LayerSplit.Mode mode) throws MojoExecutionException {
+        Path build = buildDirPath();
+        Path classes = classesDir.toPath();
+        Consumer<Path> modularized = jar -> getLog().info("dev: using modularized copy of " + jar.getFileName());
+        if (!layerMode) {
+            return new ApplicationLaunch.Layered(ApplicationLaunch.modulePath(project, build, classes, false,
+                    modularized), List.of(), Map.of());
+        }
+        return launchPaths(project, build, classes, mode, LayerSplit.patterns(appLayerKeep), modularized,
+                id -> { /* vidocq:dev keeps a declared dev-only jar, nothing is dropped */ });
+    }
+
+    /**
+     * The module path and the application path of the child, by {@code vidocq.app.layer}. A declared dev-only jar
+     * is kept (a declared console stays), so nothing is ever reported dropped.
+     */
+    // package-private for the unit test.
+    static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
+            LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped)
+            throws MojoExecutionException {
+        if (mode == LayerSplit.Mode.ALL) {
+            return ApplicationLaunch.layered(project, build, classes, modularized, false, dropped, keep);
+        }
+        return new ApplicationLaunch.Layered(
+                ApplicationLaunch.modulePath(project, build, classes, true, modularized, false, dropped),
+                ApplicationLaunch.appPath(classes, true), Map.of());
     }
 
     /**
@@ -624,11 +679,6 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     private Path buildDirPath() {
         return (buildDir != null ? buildDir : classesDir.getParentFile()).toPath();
-    }
-
-    /** The application archives of the layer mode: the project's own build output. */
-    private List<Path> buildAppPath() {
-        return ApplicationLaunch.appPath(classesDir.toPath(), layerMode);
     }
 
     /**
@@ -875,6 +925,8 @@ public class VidocqDevMojo extends AbstractMojo {
 
     // Package-private accessors used in unit tests — keep at the bottom so the
     // execute() flow is the first thing a reader sees.
+    void setAppLayer(String appLayer) { this.appLayer = appLayer; }
+    void setLayerMode(boolean layerMode) { this.layerMode = layerMode; }
     void setProject(MavenProject project) { this.project = project; }
     void setMainModule(String mainModule) { this.mainModule = mainModule; }
     void setMainClass(String mainClass) { this.mainClass = mainClass; }

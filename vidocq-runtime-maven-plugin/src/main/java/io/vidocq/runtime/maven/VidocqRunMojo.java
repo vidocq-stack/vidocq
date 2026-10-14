@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
@@ -52,6 +53,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -171,6 +173,17 @@ public class VidocqRunMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.devServices")
     private Boolean devServices;
 
+    /**
+     * {@code classes}: the application layer holds the project's classes, its dependencies stay on the module path.
+     * {@code all}: it holds every dependency outside the runtime's closure too (Vidocq/vidocq#247).
+     */
+    @Parameter(property = "vidocq.app.layer", defaultValue = "classes")
+    private String appLayer;
+
+    /** Comma-separated patterns ({@code module} or {@code groupId:artifactId}) kept in the parent layer under {@code all}. */
+    @Parameter(property = "vidocq.app.layer.keep")
+    private String appLayerKeep;
+
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
 
@@ -200,6 +213,12 @@ public class VidocqRunMojo extends AbstractMojo {
             getLog().info(PREFIX + "skipped (vidocq.run.skip=true)");
             return;
         }
+        LayerSplit.Mode mode;
+        try {
+            mode = LayerSplit.Mode.of(appLayer);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
         Path projectDir = baseDir.toPath();
         Path build = buildDirPath();
         Path classes = classesDir.toPath();
@@ -208,11 +227,21 @@ public class VidocqRunMojo extends AbstractMojo {
                 message -> getLog().warn(PREFIX + message));
         // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
         // classes stay off the module path and boot in a Vauban-defined module layer.
-        List<Path> modulePath = ApplicationLaunch.modulePath(project, build, classes, true,
-                jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()), true,
+        ApplicationLaunch.Layered launch = launchPaths(project, build, classes, mode,
+                LayerSplit.patterns(appLayerKeep),
+                jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()),
                 id -> getLog().warn(DevOnlyJars.droppedWarning(id)));
-        List<Path> appPath = ApplicationLaunch.appPath(classes, true);
+        List<Path> modulePath = launch.modulePath();
+        List<Path> appPath = launch.appPath();
         Map<String, String> systemProperties = buildSystemProperties();
+        if (mode == LayerSplit.Mode.ALL) {
+            getLog().info(PREFIX + "application layer: " + (appPath.size() - 1) + " libraries, "
+                    + launch.pinned().size() + " kept in the parent layer by a pin");
+            launch.pinned().forEach((m, why) -> getLog().info(PREFIX + "  parent layer: " + m + " (" + why + ")"));
+            if (!launch.pinned().isEmpty()) {
+                systemProperties.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(launch.pinned()));
+            }
+        }
         List<String> jvmArgs = buildJvmArgs();
 
         try {
@@ -239,7 +268,8 @@ public class VidocqRunMojo extends AbstractMojo {
             List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap,
                     ApplicationLaunch.keptArtifacts(project.getArtifacts(), true));
             // What the child will see, taken before the dev services extension joins the module path (spec §5).
-            ApplicationClasspath classpath = new ApplicationClasspath(ApplicationLaunch.classpathOf(modulePath, classes));
+            ApplicationClasspath classpath = new ApplicationClasspath(ApplicationLaunch.classpathOf(
+                    java.util.stream.Stream.concat(modulePath.stream(), appPath.stream()).toList(), classes));
             try {
                 devs = DevServicesSession.open("vidocq:run", projectDir, systemProperties, applicationFiles,
                         ApplicationFiles.allOf(classes), classpath::contains,
@@ -261,6 +291,19 @@ public class VidocqRunMojo extends AbstractMojo {
         } finally {
             closeDevServices();
         }
+    }
+
+    /** The module path and the application path of the child, by {@code vidocq.app.layer}. */
+    // package-private for the unit test.
+    static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
+            LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped)
+            throws MojoExecutionException {
+        if (mode == LayerSplit.Mode.ALL) {
+            return ApplicationLaunch.layered(project, build, classes, modularized, true, dropped, keep);
+        }
+        return new ApplicationLaunch.Layered(
+                ApplicationLaunch.modulePath(project, build, classes, true, modularized, true, dropped),
+                ApplicationLaunch.appPath(classes, true), Map.of());
     }
 
     /**
@@ -451,6 +494,7 @@ public class VidocqRunMojo extends AbstractMojo {
 
     // Package-private accessors used in unit tests — keep at the bottom so the execute() flow is the
     // first thing a reader sees.
+    void setAppLayer(String appLayer) { this.appLayer = appLayer; }
     void setProject(MavenProject project) { this.project = project; }
     void setSession(MavenSession session) { this.session = session; }
     void setMainModule(String mainModule) { this.mainModule = mainModule; }
