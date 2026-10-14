@@ -65,6 +65,9 @@ class VidocqJlinkMojoTest {
         assertTrue(message.contains("kept it automatic on purpose"), message);
         assertTrue(message.contains("module cycle"), message);
         assertFalse(message.contains("run vauban:modularize"), message);
+        // The goal moved to Vauban with its properties: vidocq.modularize.* no longer exists.
+        assertTrue(message.contains("vauban.modularize.forceExplicit=true"), message);
+        assertFalse(message.contains("vidocq.modularize"), message);
     }
 
     @Test

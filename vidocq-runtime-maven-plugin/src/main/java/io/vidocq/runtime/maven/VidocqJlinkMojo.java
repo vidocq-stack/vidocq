@@ -277,7 +277,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (anyKept) {
             sb.append("\n  A jar kept automatic has no legal explicit descriptor, so re-running")
                     .append(" vauban:modularize cannot fix it: exclude the artifact from the image,")
-                    .append(" drop the dependency, or set vidocq.modularize.forceExplicit=true when")
+                    .append(" drop the dependency, or set vauban.modularize.forceExplicit=true when")
                     .append(" you know the failing lookup is one your application never reaches.");
         }
         if (!unexplained.isEmpty()) {
