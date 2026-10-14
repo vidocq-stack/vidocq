@@ -210,10 +210,9 @@ final class DependencyBricks {
             if (!ModularizedJars.isModularized(buildDir, dep.originalJar())) {
                 return; // nothing to rebase on, whatever the bricks
             }
-            if (!jlink && !EnrichedJars.enrichedBy(buildDir, dep.originalJar()).isEmpty()
-                    && !EnrichedJars.hasDescriptor(dep.originalJar())) {
+            if (!jlink && EnrichedJars.keptAutomatic(buildDir, dep.originalJar())) {
                 info.accept("Kept the enriched copy of " + dep.originalJar().getFileName()
-                        + " an automatic module, as vidocq:generate wrote it");
+                        + " as an automatic module, as vidocq:generate wrote it");
                 return;
             }
             EnrichedJars.Scanned scanned = forPackaging(buildDir, dep, this::bricks);

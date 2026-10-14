@@ -86,6 +86,12 @@ public final class EnrichedJars {
 
     /** Names the bricks that enriched a copy, sorted, after the {@code vidocq:generate} dependency codegen pass. */
     static final String ENRICHED_BY = "Vidocq-Enriched-By";
+    /**
+     * Marks a copy {@code vidocq:generate} kept an automatic module because a brick selected its jar, which has no
+     * descriptor: {@code vidocq:package} ships it as it is (vidocq#251).
+     */
+    static final String AUTOMATIC = "Vidocq-Automatic";
+    private static final String AUTOMATIC_BRICK_SELECTED = "brick-selected";
     private static final String SERVICES_DIR = "META-INF/services/";
 
     /**
@@ -150,6 +156,12 @@ public final class EnrichedJars {
         String value = manifestValue(root(buildDir).resolve(originalJar.getFileName().toString()), ENRICHED_BY);
         return value == null ? List.of()
                 : Stream.of(value.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList();
+    }
+
+    /** Whether the enriched copy of {@code originalJar} is one {@code vidocq:generate} kept automatic on purpose. */
+    static boolean keptAutomatic(Path buildDir, Path originalJar) {
+        return AUTOMATIC_BRICK_SELECTED.equals(
+                manifestValue(root(buildDir).resolve(originalJar.getFileName().toString()), AUTOMATIC));
     }
 
     /** Deletes every enriched copy, so a jar no longer scanned is never substituted by a stale one. */
@@ -260,6 +272,8 @@ public final class EnrichedJars {
      * modularized, when there is one, so the module name and openness it was configured with are those shipped. On a
      * clean build {@code vidocq:generate} runs first and synthesizes a descriptor of its own; on a later build it
      * starts from the modularized jar already. Either way the package ends the same. A no-op when nothing changed.
+     * {@code vidocq:package} does not call it for a copy {@link #keptAutomatic kept automatic}: that one ships under
+     * its automatic module name.
      */
     public static void rebaseOnModularized(Path buildDir, Scanned dep, Consumer<String> info) throws IOException {
         rebaseOnModularized(buildDir, dep, Set.of(), packages -> Set.of(), info);
@@ -411,6 +425,11 @@ public final class EnrichedJars {
         if (!bricks.bricks().isEmpty()) {
             main.putValue(ENRICHED_BY, String.join(", ", bricks.bricks()));
         }
+        if (bricks.keepAutomatic()) {
+            main.putValue(AUTOMATIC, AUTOMATIC_BRICK_SELECTED);
+        } else {
+            main.remove(new Attributes.Name(AUTOMATIC));
+        }
 
         Files.createDirectories(out.toAbsolutePath().getParent());
         Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
@@ -457,6 +476,9 @@ public final class EnrichedJars {
         if (dep != null) {
             dep.bricks().forEach(b -> add.accept("brick " + b));
             dep.brickInputs().forEach(add);
+            if (dep.selectedByBrick() && !hasDescriptor(dep.originalJar())) {
+                add.accept("automatic " + AUTOMATIC_BRICK_SELECTED); // a copy stamped before the marker is rewritten
+            }
         }
         patch.keySet().stream().filter(mergedResources::contains).forEach(n -> add.accept("merge " + n));
         return "sha256:" + HexFormat.of().formatHex(digest.digest());

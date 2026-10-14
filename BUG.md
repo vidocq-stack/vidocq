@@ -16,8 +16,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal repro**: `DependencyBricksPackagingTest.packageKeepsABrickSelectedAutomaticCopyAutomatic`.
 - **Cause**: `DependencyBricks.Packaging.rebase` served both `vidocq:package` and `vidocq:jlink` and always
   rebased a brick copy on the modularized jar. Only jlink needs an explicit module.
-- **Fix**: `Packaging` knows whether it serves jlink. For `vidocq:package`, a brick-enriched copy whose jar
-  has no descriptor is kept as `vidocq:generate` wrote it. `vidocq:jlink` still rebases it; its descriptor
+- **Fix**: `vidocq:generate` stamps a copy it keeps automatic with `Vidocq-Automatic: brick-selected` (also
+  when the brick produced nothing and only Vauban generated providers). `Packaging` knows whether it serves
+  jlink; for `vidocq:package`, a stamped copy is kept as `vidocq:generate` wrote it. `vidocq:jlink` still rebases it; its descriptor
   is right once vauban#158 (Vidocq/vauban#159) is in the Vauban build.
 
 ---

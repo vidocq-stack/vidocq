@@ -94,6 +94,49 @@ class DependencyBricksPackagingTest {
         assertTrue(info.stream().anyMatch(l -> l.contains("flow-1.0.jar") && l.contains("automatic")), info.toString());
     }
 
+    /** The brick processors produced nothing, Vauban generated providers: generate still kept it automatic. */
+    @Test
+    void packageKeepsABrickSelectedCopyWithVaubanProvidersOnlyAutomatic() throws Exception {
+        Path build = tmp.resolve("target");
+        Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+                "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
+        EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0", true)),
+                List.of("org.dep._VaubanComponents"), List.of(auto), line -> { }, line -> { });
+        jar(build.resolve("vauban-modularized/flow-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.flow"),
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+        Path copy = EnrichedJars.resolve(build, auto);
+        String inputs = manifestOf(copy).getValue("Vidocq-Enriched-Inputs");
+
+        new DependencyBricks.Packaging(build, () -> List.of(FOY), List.of(auto), line -> { }, false)
+                .rebase(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0"), line -> { });
+
+        assertNull(entry(copy, "module-info.class"), "kept as generate wrote it");
+        assertEquals(inputs, manifestOf(copy).getValue("Vidocq-Enriched-Inputs"), "left untouched");
+    }
+
+    @Test
+    void packageStillRebasesACopyNoBrickSelected() throws Exception {
+        Path build = tmp.resolve("target");
+        Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
+        EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")),
+                List.of("org.dep._VaubanComponents"), List.of(lib), line -> { }, line -> { });
+        jar(build.resolve("vauban-modularized/lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.lib"),
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+
+        new DependencyBricks.Packaging(build, () -> List.of(FOY), List.of(lib), line -> { }, false)
+                .rebase(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0"), line -> { });
+
+        assertEquals("org.lib", descriptorOf(EnrichedJars.resolve(build, lib)).name(),
+                "a jar no brick selected ships with the name vauban:modularize gave it");
+    }
+
     @Test
     void jlinkRebasesABrickSelectedAutomaticCopyOnTheModularizedJar() throws Exception {
         Path build = tmp.resolve("target");
