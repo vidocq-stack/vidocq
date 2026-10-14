@@ -52,6 +52,7 @@
             </activation>
             <modules>
                 <module>vidocq-runtime-it-continuous-testing</module>
+                <module>vidocq-runtime-it-app-layer</module>
             </modules>
         </profile>
         <!--

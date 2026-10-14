@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Vidocq/vidocq#247: vidocq:run, vidocq:dev and vidocq:package with vidocq.app.layer=all on a fixture whose
+    flat-classpath library looks up an application resource through its own loader.
+
+    The fixture resolves this build's artifacts from target/it-repo, which maven-invoker-plugin:install stages at
+    pre-integration-test; anything else comes from the outer local repository through it-settings.xml, which
+    Fixture writes from src/it/it-settings.xml with the outer repository's URL (resource filtering cannot
+    read ${settings.localRepository}). Its .mvn/maven.config points the ITs' mvn at them.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-it-app-layer</artifactId>
+    <name>Vidocq Runtime :: IT :: Application layer (vidocq.app.layer=all)</name>
+
+    <properties>
+        <it.repo>${project.build.directory}/it-repo</it.repo>
+        <it.settings>${project.build.directory}/it-settings.xml</it.settings>
+        <!-- maven-invoker-plugin reads invoker.skip only; -DskipTests skips the staging too. -->
+        <invoker.skip>${skipTests}</invoker.skip>
+    </properties>
+
+    <dependencies>
+        <!-- What the fixture uses from this build: invoker:install stages them, and every reactor module and
+             parent POM they need, in target/it-repo. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            <version>${project.version}</version>
+            <type>maven-plugin</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- A jar, as the fixture's annotationProcessorPaths entry: a pom-typed dependency stages the pom only,
+             and the fixture's compiler then misses the jar in a build that installs nothing. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <!-- The fixture project, its pom.xml and .mvn/ filtered with @…@ only. -->
+                    <execution>
+                        <id>fixture</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/fixture</outputDirectory>
+                            <useDefaultDelimiters>false</useDefaultDelimiters>
+                            <delimiters>
+                                <delimiter>@</delimiter>
+                            </delimiters>
+                            <resources>
+                                <resource>
+                                    <directory>src/it/fixture</directory>
+                                    <filtering>true</filtering>
+                                    <includes>
+                                        <include>pom.xml</include>
+                                        <include>*/pom.xml</include>
+                                        <include>.mvn/**</include>
+                                    </includes>
+                                </resource>
+                                <resource>
+                                    <directory>src/it/fixture</directory>
+                                    <filtering>false</filtering>
+                                    <excludes>
+                                        <exclude>pom.xml</exclude>
+                                        <exclude>*/pom.xml</exclude>
+                                        <exclude>.mvn/**</exclude>
+                                    </excludes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-invoker-plugin</artifactId>
+                <version>3.10.1</version>
+                <configuration>
+                    <localRepositoryPath>${it.repo}</localRepositoryPath>
+                    <!-- The fixture's artifacts are test-scope dependencies here. -->
+                    <scope>test</scope>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>stage</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>install</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <it.fixture>${project.build.directory}/fixture</it.fixture>
+                        <it.logs>${project.build.directory}/it-logs</it.logs>
+                        <it.settings>${it.settings}</it.settings>
+                        <it.settings.template>${project.basedir}/src/it/it-settings.xml</it.settings.template>
+                        <it.outerRepository>${settings.localRepository}</it.outerRepository>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
