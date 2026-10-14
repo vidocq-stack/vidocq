@@ -77,14 +77,22 @@ public final class DependencyCodegenCache {
         return Path.of(userHome, ".cache", "vidocq", "depgen");
     }
 
-    /** SHA-256 over the jar's digest, each brick ("name processorPathDigest", sorted), the release and the JDK. */
-    public static String key(Path jar, List<Brick> bricks, int release) throws IOException {
+    /**
+     * SHA-256 over the jar's digest, each brick ("name processorPathDigest", sorted), the jar's compile classpath as
+     * sorted coordinates, the release and the JDK. A processor's output can depend on the types it resolves on the
+     * classpath (Foy's {@code class-index.list} records resolved supertypes), so the same jar on another classpath is
+     * another entry.
+     *
+     * @param classpath the {@code groupId:artifactId:version} of every jar of the classpath, resolved versions
+     */
+    public static String key(Path jar, List<Brick> bricks, int release, List<String> classpath) throws IOException {
         List<String> lines = new java.util.ArrayList<>();
         lines.add("jar " + sha256(jar));
         for (Brick brick : bricks) {
             lines.add("brick " + brick.hints().brick() + " " + classpathDigest(brick.processorPath()));
         }
         lines.subList(1, lines.size()).sort(Comparator.naturalOrder());
+        classpath.stream().sorted().distinct().forEach(c -> lines.add("classpath " + c));
         lines.add("release " + release);
         lines.add("jdk " + Runtime.version().feature());
         return hex(digest().digest(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));

@@ -86,25 +86,39 @@ class DependencyCodegenCacheTest {
     }
 
     @Test
+    void theKeyChangesWithTheVersionOfAClasspathDependency() throws IOException {
+        Path jar = file("a.jar", "jar-1");
+        Path cp = file("p.jar", "proc-1");
+        List<Brick> bricks = List.of(brick("b", cp));
+        String base = DependencyCodegenCache.key(jar, bricks, 25, List.of("org.x:api:1.0", "org.y:util:2.0"));
+
+        assertEquals(base, DependencyCodegenCache.key(jar, bricks, 25, List.of("org.y:util:2.0", "org.x:api:1.0")),
+                "the coordinates are sorted");
+        assertNotEquals(base, DependencyCodegenCache.key(jar, bricks, 25,
+                List.of("org.x:api:1.1", "org.y:util:2.0")));
+        assertNotEquals(base, DependencyCodegenCache.key(jar, bricks, 25, List.of("org.y:util:2.0")));
+    }
+
+    @Test
     void theKeyChangesWithTheJarTheProcessorsTheRelease() throws IOException {
         Path jar = file("a.jar", "jar-1");
         Path cp = file("p.jar", "proc-1");
-        String base = DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25);
-        assertEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25));
-        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 24));
-        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("c", cp)), 25));
+        String base = DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25, List.of());
+        assertEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25, List.of()));
+        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 24, List.of()));
+        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("c", cp)), 25, List.of()));
         Path other = file("o.jar", "jar-2");
-        assertNotEquals(base, DependencyCodegenCache.key(other, List.of(brick("b", cp)), 25));
+        assertNotEquals(base, DependencyCodegenCache.key(other, List.of(brick("b", cp)), 25, List.of()));
         Files.writeString(cp, "proc-2");
-        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25));
+        assertNotEquals(base, DependencyCodegenCache.key(jar, List.of(brick("b", cp)), 25, List.of()));
     }
 
     @Test
     void theKeyIgnoresTheOrderOfBricks() throws IOException {
         Path jar = file("a.jar", "j");
         Path cp = file("p.jar", "p");
-        assertEquals(DependencyCodegenCache.key(jar, List.of(brick("a", cp), brick("b", cp)), 25),
-                DependencyCodegenCache.key(jar, List.of(brick("b", cp), brick("a", cp)), 25));
+        assertEquals(DependencyCodegenCache.key(jar, List.of(brick("a", cp), brick("b", cp)), 25, List.of()),
+                DependencyCodegenCache.key(jar, List.of(brick("b", cp), brick("a", cp)), 25, List.of()));
     }
 
     @Test

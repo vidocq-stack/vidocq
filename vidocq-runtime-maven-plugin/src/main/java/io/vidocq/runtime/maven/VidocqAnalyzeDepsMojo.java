@@ -82,7 +82,8 @@ public class VidocqAnalyzeDepsMojo extends AbstractMojo {
             var cache = new DependencyCodegenCache(DependencyCodegenCache.directory(cacheDir, System.getenv(),
                     System.getProperty("user.home")));
             var bricks = AnalyzeReport.brickDecisions(selections, cache,
-                    DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")));
+                    DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
+                    DependencyCodegenPass.coordinatesOf(dependencies));
             AnalyzeReport.render(decisions, bricks).lines().forEach(getLog()::info);
         } catch (IOException e) {
             throw new MojoExecutionException("Cannot read the dependency jars", e);

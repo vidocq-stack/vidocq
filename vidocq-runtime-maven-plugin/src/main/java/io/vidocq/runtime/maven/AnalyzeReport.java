@@ -45,9 +45,12 @@ final class AnalyzeReport {
     /**
      * The bricks' decision for each jar of {@code selections} ({@link DependencyCodegenPass#select}), with what the
      * cache holds for it. Reads the cache, never runs a processor.
+     *
+     * @param classpath the project's dependencies as {@code groupId:artifactId:version}, for the cache key
      */
     static List<BrickLine> brickDecisions(List<DependencyCodegenPass.Selection> selections,
-                                          DependencyCodegenCache cache, int release) throws IOException {
+                                          DependencyCodegenCache cache, int release, List<String> classpath)
+            throws IOException {
         List<BrickLine> lines = new ArrayList<>();
         for (DependencyCodegenPass.Selection selection : selections) {
             ScanSelection.Dependency dep = selection.dependency();
@@ -67,7 +70,8 @@ final class AnalyzeReport {
                 if (decision.signed()) {
                     text.append(", signed: processed only when named in scanDependencies");
                 }
-                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release));
+                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release,
+                        classpath));
                 if (cached.isPresent()) {
                     long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();
                     text.append(", cached (").append(classes).append(classes == 1 ? " class)" : " classes)");

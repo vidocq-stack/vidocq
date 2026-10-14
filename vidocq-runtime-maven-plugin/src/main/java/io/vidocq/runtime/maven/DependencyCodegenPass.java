@@ -205,18 +205,20 @@ final class DependencyCodegenPass {
      */
     Result run(List<ScanSelection.Dependency> dependencies, List<Path> classpath, int release,
                List<String> scanDependencies, List<String> scanExcludes) throws MojoFailureException, IOException {
-        return generate(select(bricks, dependencies, scanExcludes), classpath, release, scanDependencies);
+        return generate(select(bricks, dependencies, scanExcludes), classpath, coordinatesOf(dependencies), release,
+                scanDependencies);
     }
 
     /**
      * Generates for the jars of {@code selections} that a brick selects. The problems of every jar are collected
      * first, then fail the build together, one line each.
      *
-     * @param classpath        the jars' compile classpath: every dependency jar or directory of the project
-     * @param scanDependencies patterns naming the signed jars to process anyway
+     * @param classpath            the jars' compile classpath: every dependency jar or directory of the project
+     * @param classpathCoordinates that classpath as {@code groupId:artifactId:version}, for the cache key
+     * @param scanDependencies     patterns naming the signed jars to process anyway
      */
-    Result generate(List<Selection> selections, List<Path> classpath, int release, List<String> scanDependencies)
-            throws MojoFailureException, IOException {
+    Result generate(List<Selection> selections, List<Path> classpath, List<String> classpathCoordinates, int release,
+                    List<String> scanDependencies) throws MojoFailureException, IOException {
         if (bricks.isEmpty()) {
             return new Result(List.of(), Set.of());
         }
@@ -238,7 +240,7 @@ final class DependencyCodegenPass {
                         + " (name it in scanDependencies to process it)");
                 continue;
             }
-            String key = DependencyCodegenCache.key(jar, selected, release);
+            String key = DependencyCodegenCache.key(jar, selected, release, classpathCoordinates);
             Optional<DependencyCodegen.Output> cached = cache.get(key);
             DependencyCodegen.Output output;
             if (cached.isPresent()) {
@@ -338,6 +340,11 @@ final class DependencyCodegenPass {
         vauban.forEach(s -> byJar.put(s.originalJar(), s));
         bricks.forEach(s -> byJar.put(s.originalJar(), s));
         return List.copyOf(byJar.values());
+    }
+
+    /** The {@code groupId:artifactId:version} of each of {@code dependencies}: the classpath of the cache key. */
+    static List<String> coordinatesOf(List<ScanSelection.Dependency> dependencies) {
+        return dependencies.stream().map(ScanSelection.Dependency::coordinates).toList();
     }
 
     /** The {@code --release} of the pass: the project's {@code maven.compiler.release}, else the running JDK's. */

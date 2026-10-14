@@ -245,6 +245,25 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void anotherVersionOfAClasspathDependencyMissesTheCache() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
+        Path api = plainJar("api-1.0", Map.of());
+        Brick alpha = fakeBrick("Alpha");
+        var generator = fake(Map.of(), List.of());
+        var withApi10 = List.of(dep(lib), new ScanSelection.Dependency("org.x", "api", "1.0", api));
+        var withApi11 = List.of(dep(lib), new ScanSelection.Dependency("org.x", "api", "1.1", api));
+
+        pass(dir.resolve("a"), List.of(alpha), generator).run(withApi10, List.of(lib, api), RELEASE, List.of(),
+                List.of());
+        pass(dir.resolve("b"), List.of(alpha), generator).run(withApi10, List.of(lib, api), RELEASE, List.of(),
+                List.of());
+        pass(dir.resolve("c"), List.of(alpha), generator).run(withApi11, List.of(lib, api), RELEASE, List.of(),
+                List.of());
+
+        assertEquals(2, generated.get(), "same classpath: a hit; another version on it: a miss");
+    }
+
+    @Test
     void theFailuresOfEveryJarFailTheBuildTogether() throws Exception {
         Path lib = markedLib("lib-1.0");
         Path other = markedLib("other-1.0");

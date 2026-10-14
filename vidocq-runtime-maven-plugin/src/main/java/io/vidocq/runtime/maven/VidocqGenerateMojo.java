@@ -184,7 +184,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
                     closure.add(artifact.getFile().toPath());
                 }
             }
-            DependencyCodegenPass.Result bricks = generateForBricks(brickList, brickSelection, closure);
+            DependencyCodegenPass.Result bricks = generateForBricks(brickList, brickSelection, closure,
+                    DependencyCodegenPass.coordinatesOf(dependencies));
             if (scannedByArtifactId.isEmpty() && bricks.processed().isEmpty()) {
                 clearEnrichedCopies();
                 return;
@@ -303,7 +304,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
     /** The bricks' part: their processors over the dependency jars they select, into the jars' patch directories. */
     private DependencyCodegenPass.Result generateForBricks(List<Brick> bricks,
                                                            List<DependencyCodegenPass.Selection> selections,
-                                                           List<Path> closure)
+                                                           List<Path> closure, List<String> coordinates)
             throws IOException, MojoFailureException {
         if (bricks.isEmpty()) {
             return new DependencyCodegenPass.Result(List.of(), Set.of());
@@ -312,7 +313,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 System.getProperty("user.home")));
         var pass = new DependencyCodegenPass(bricks, cache, DependencyCodegenPass.JAVAC, buildDirectory.toPath(),
                 project.getBasedir().toPath(), getLog()::info, getLog()::warn, getLog()::error);
-        return pass.generate(selections, closure,
+        return pass.generate(selections, closure, coordinates,
                 DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
                 orEmpty(scanDependencies));
     }

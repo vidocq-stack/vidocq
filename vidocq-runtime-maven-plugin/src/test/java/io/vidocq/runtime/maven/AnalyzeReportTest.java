@@ -114,11 +114,11 @@ class AnalyzeReportTest {
         var done = jar("done", "META-INF/web-fragment.xml", "META-INF/io.vidocq.foy/generated");
         var plain = jar("plain", "a.txt");
         var cache = new DependencyCodegenCache(tmp.resolve("cache"));
-        cache.put(DependencyCodegenCache.key(cachedJar.jar(), List.of(FOY), 25), new DependencyCodegen.Output(
-                Map.of("a/B.class", new byte[] {1}, "c.list", new byte[] {2}), List.of()));
+        cache.put(DependencyCodegenCache.key(cachedJar.jar(), List.of(FOY), 25, List.of()),
+                new DependencyCodegen.Output(Map.of("a/B.class", new byte[] {1}, "c.list", new byte[] {2}), List.of()));
 
         var lines = AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(FOY),
-                List.of(vaadin, cachedJar, done, plain), List.of()), cache, 25);
+                List.of(vaadin, cachedJar, done, plain), List.of()), cache, 25, List.of());
         String report = AnalyzeReport.render(List.of(), lines);
 
         assertEquals("""
@@ -136,9 +136,9 @@ class AnalyzeReportTest {
         var cache = new DependencyCodegenCache(tmp.resolve("cache"));
 
         assertTrue(AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(FOY), List.of(vaadin),
-                List.of("org.x:vaadin")), cache, 25).isEmpty());
+                List.of("org.x:vaadin")), cache, 25, List.of()).isEmpty());
         assertTrue(AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(), List.of(vaadin), List.of()),
-                cache, 25).isEmpty());
+                cache, 25, List.of()).isEmpty());
         assertTrue(!AnalyzeReport.render(List.of(), List.of()).contains("Brick codegen"));
     }
 }
