@@ -235,6 +235,36 @@ class EnrichedJarsBrickTest {
                 .filter(p -> p.service().equals(WEB)).findFirst().orElseThrow().providers());
     }
 
+    /** A multi-release jar whose only descriptor is {@code META-INF/versions/9/module-info.class}. */
+    Path versionedDescriptorJar() throws Exception {
+        return jar(tmp.resolve("m2/mr-lib-1.0.jar"), Map.of(
+                "META-INF/versions/9/module-info.class", descriptor("org.dep"),
+                "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
+                "org/dep/api/Marker.class", emptyClass("org.dep.api.Marker")), Map.of("Multi-Release", "true"));
+    }
+
+    @Test
+    void aMultiReleaseJarWithAVersionedDescriptorIsAnExplicitModule() throws Exception {
+        Path build = tmp.resolve("target");
+        Path lib = versionedDescriptorJar();
+        patch(JpmsPatches.patchDirFor(build, "mr-lib"), Map.of(
+                "org/dep/Servlet$$FoyComponent.class", foyComponent("org.dep.Servlet$$FoyComponent"),
+                WEB_FILE, text("org.dep.Servlet$$FoyComponent\n")));
+
+        enrich(build, foy(lib, "mr-lib", FOY_INPUTS), List.of());
+
+        Path copy = EnrichedJars.resolve(build, lib);
+        assertNull(entry(copy, "module-info.class"), "no root descriptor is added");
+        ModuleDescriptor md = descriptorOf(copy);
+        assertFalse(md.isAutomatic());
+        assertEquals("org.dep", md.name());
+        assertEquals(List.of("org.dep.Servlet$$FoyComponent"), md.provides().stream()
+                .filter(p -> p.service().equals(WEB)).findFirst().orElseThrow().providers(),
+                "the versioned descriptor the JDK reads declares the generated provider");
+        assertTrue(md.requires().stream().anyMatch(r -> r.name().equals("io.vidocq.foy")), md::toString);
+        assertFalse(ScanSelection.inspect(lib).automatic(), "the selection does not take it for automatic");
+    }
+
     @Test
     void aVaubanOnlyCopyGetsNoRequiresFromTheBricks() throws Exception {
         Path build = tmp.resolve("target");

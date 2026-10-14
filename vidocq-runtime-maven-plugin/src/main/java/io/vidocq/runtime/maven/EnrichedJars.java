@@ -49,6 +49,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -80,6 +81,8 @@ public final class EnrichedJars {
     /** A digest of everything the copy was written from, so a run with the same inputs leaves it alone. */
     static final String ENRICHED_INPUTS = "Vidocq-Enriched-Inputs";
     private static final String PROVIDER_CLASS_FILE = "_VaubanComponents.class";
+    private static final Pattern VERSIONED_DESCRIPTOR =
+            Pattern.compile("META-INF/versions/[1-9][0-9]*/module-info\\.class");
 
     /** Names the bricks that enriched a copy, sorted, after the {@code vidocq:generate} dependency codegen pass. */
     static final String ENRICHED_BY = "Vidocq-Enriched-By";
@@ -199,7 +202,7 @@ public final class EnrichedJars {
             List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
             // Only Vauban's providers need a descriptor on an automatic jar: the JDK derives an automatic module's
             // provides from its service files, which is all a brick's output asks.
-            boolean automatic = !hasRootDescriptor(source);
+            boolean automatic = !hasDescriptor(source);
             boolean synthesize = automatic && (!own.isEmpty() || !providersIn(patchDir).isEmpty());
             BrickOutput brickOutput = new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages);
             Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
@@ -260,7 +263,7 @@ public final class EnrichedJars {
             return;
         }
         Path source = ModularizedJars.resolve(buildDir, dep.originalJar());
-        if (!hasRootDescriptor(source)) {
+        if (!hasDescriptor(source)) {
             return;
         }
         if (dep.bricks().isEmpty() && manifestValue(out, ENRICHED_BY) != null) {
@@ -323,8 +326,14 @@ public final class EnrichedJars {
                 }
             }
         }
-        byte[] base = entries.containsKey(MODULE_INFO) ? entries.get(MODULE_INFO) : moduleInfo;
-        if (base == null && !providers.isEmpty()) {
+        // The root descriptor and those of a multi-release jar's versions: whichever the JDK reads must declare
+        // the output. Without any, a synthesized descriptor goes at the root.
+        List<String> descriptors = entries.keySet().stream().filter(EnrichedJars::isDescriptor).toList();
+        if (descriptors.isEmpty() && moduleInfo != null) {
+            entries.put(MODULE_INFO, moduleInfo);
+            descriptors = List.of(MODULE_INFO);
+        }
+        if (descriptors.isEmpty() && !providers.isEmpty()) {
             throw new IllegalArgumentException(source.getFileName() + " has no module descriptor to enrich");
         }
         // service → the providers the parked service files add to the jar's: an explicit module declares them.
@@ -347,13 +356,10 @@ public final class EnrichedJars {
                 addedProviders.put(name.substring(SERVICES_DIR.length()), added);
             }
         }
-        if (base != null) {
-            byte[] descriptor = ModuleInfoRewriter.addComponentProvider(base, providers, requires);
+        if (!descriptors.isEmpty()) {
             // Only a copy a brick processed requires for the bricks: a Vauban-only copy stays as Vauban writes it.
-            Set<String> brickRequires = bricks.bricks().isEmpty() ? new TreeSet<>() : new TreeSet<>(
-                    bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses)));
-            brickRequires.remove("java.base");
-            brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));
+            Set<String> referenced = bricks.bricks().isEmpty() ? Set.of()
+                    : bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses));
             // A descriptor that lists its packages must list those of the added classes and providers too.
             Set<String> addedPackages = new TreeSet<>();
             patch.keySet().stream().filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
@@ -361,8 +367,14 @@ public final class EnrichedJars {
                             : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
             providers.forEach(p -> addedPackages.add(packageOf(p)));
             addedProviders.values().forEach(impls -> impls.forEach(p -> addedPackages.add(packageOf(p))));
-            entries.put(MODULE_INFO, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires,
-                    addedPackages));
+            for (String name : descriptors) {
+                byte[] descriptor = ModuleInfoRewriter.addComponentProvider(entries.get(name), providers, requires);
+                Set<String> brickRequires = new TreeSet<>(referenced);
+                brickRequires.remove("java.base");
+                brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));
+                entries.put(name, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires,
+                        addedPackages));
+            }
         }
         if (!providers.isEmpty()) {
             Set<String> services = new LinkedHashSet<>();
@@ -482,10 +494,29 @@ public final class EnrichedJars {
                 .sorted().toList();
     }
 
-    private static boolean hasRootDescriptor(Path jar) throws IOException {
+    /**
+     * Whether the JDK reads {@code jar} as an explicit module: a descriptor at its root, or, in a multi-release jar,
+     * under {@code META-INF/versions/<n>/}.
+     */
+    static boolean hasDescriptor(Path jar) throws IOException {
         try (JarFile in = new JarFile(jar.toFile(), false)) {
-            return in.getEntry(MODULE_INFO) != null;
+            return hasDescriptor(in);
         }
+    }
+
+    /** {@link #hasDescriptor(Path)} on an open jar. */
+    static boolean hasDescriptor(JarFile in) throws IOException {
+        if (in.getEntry(MODULE_INFO) != null) {
+            return true;
+        }
+        Manifest manifest = in.getManifest();
+        return manifest != null && "true".equalsIgnoreCase(manifest.getMainAttributes().getValue("Multi-Release"))
+                && in.stream().anyMatch(e -> isDescriptor(e.getName()));
+    }
+
+    /** {@code module-info.class}, or {@code META-INF/versions/<n>/module-info.class}. */
+    private static boolean isDescriptor(String name) {
+        return name.equals(MODULE_INFO) || VERSIONED_DESCRIPTOR.matcher(name).matches();
     }
 
     private static Map<String, byte[]> readTree(Path dir) throws IOException {

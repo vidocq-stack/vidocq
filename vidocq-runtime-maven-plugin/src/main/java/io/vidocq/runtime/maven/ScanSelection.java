@@ -88,7 +88,8 @@ public final class ScanSelection {
      *
      * @param discoveryMode the {@code bean-discovery-mode} of its {@code beans.xml}, {@code annotated} when absent
      * @param processed     it already carries Vauban-generated code (APT marker, bean list or provider service)
-     * @param automatic     it has no module descriptor at its root
+     * @param automatic     it has no module descriptor, at its root or, in a multi-release jar, under
+     *                      {@code META-INF/versions/<n>/}
      * @param scanPatterns  the patterns its manifest asks to scan
      */
     public record JarFacts(boolean beansXml, String discoveryMode, boolean processed, boolean signed,
@@ -210,7 +211,7 @@ public final class ScanSelection {
                     .anyMatch(e -> EnrichedJars.isSignature(e.getName()) && !e.getName().toUpperCase(Locale.ROOT)
                             .startsWith("META-INF/SIG-"));
             return new JarFacts(beansXml != null, discoveryMode(beansXml), processed, signed,
-                    jar.getEntry(EnrichedJars.MODULE_INFO) == null,
+                    !EnrichedJars.hasDescriptor(jar),
                     jar.getManifest() == null ? List.of() : patterns(jar.getManifest()));
         }
     }

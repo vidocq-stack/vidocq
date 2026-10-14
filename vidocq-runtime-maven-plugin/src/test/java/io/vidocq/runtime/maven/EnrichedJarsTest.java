@@ -293,7 +293,7 @@ class EnrichedJarsTest {
     }
 
     @Test
-    void aJarWithOnlyAVersionedDescriptorIsLeftToPatching() throws Exception {
+    void aJarWithOnlyAVersionedDescriptorIsEnrichedThroughThatDescriptor() throws Exception {
         Path build = tmp.resolve("target");
         Path mr = jar(tmp.resolve("m2/mr-lib-1.0.jar"), Map.of(
                 "META-INF/versions/11/module-info.class", descriptor("org.mr"),
@@ -306,8 +306,11 @@ class EnrichedJarsTest {
                 List.of(new EnrichedJars.Scanned(mr, "mr-lib", "org.mr:mr-lib:1.0")),
                 List.of("org.mr._VaubanComponents"), List.of(mr), line -> { }, warnings::add);
 
-        assertEquals(List.of(), enriched);
-        assertEquals(1, warnings.size());
-        assertTrue(warnings.getFirst().contains("mr-lib"), warnings.getFirst());
+        assertEquals(List.of(mr), enriched);
+        assertEquals(List.of(), warnings);
+        ModuleDescriptor md = descriptorOf(EnrichedJars.resolve(build, mr));
+        assertEquals("org.mr", md.name(), "the versioned descriptor the JDK reads, not a synthesized one");
+        assertEquals(List.of("org.mr._VaubanComponents"), md.provides().stream()
+                .filter(p -> p.service().equals(SPI)).findFirst().orElseThrow().providers());
     }
 }
