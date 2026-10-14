@@ -53,6 +53,7 @@
             <modules>
                 <module>vidocq-runtime-it-continuous-testing</module>
                 <module>vidocq-runtime-it-app-layer</module>
+                <module>vidocq-runtime-it-dependency-codegen</module>
             </modules>
         </profile>
         <!--

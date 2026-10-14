@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The runtime's own parent: its dependencyManagement and its Vauban indexer APT, as an example has. -->
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-parent</artifactId>
+        <version>@project.version@</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>dependency-codegen-app</artifactId>
+    <!-- No version of its own: the parent's dependencyManagement pins the runtime's modules to ${project.version}. -->
+
+    <properties>
+        <vidocq.mainModule>acme.app</vidocq.mainModule>
+        <vidocq.mainClass>acme.app.DependencyCodegenApp</vidocq.mainClass>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <!-- The library of ../lib, whose @WebListener only vidocq:generate can make visible to Foy. -->
+        <dependency>
+            <groupId>io.vidocq.it</groupId>
+            <artifactId>dependency-codegen-weblib</artifactId>
+            <version>1.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- The Foy codegen bundle: vidocq:generate runs its processor over the library's classes. The
+                         discrimination IT deletes this block. -->
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                            <version>@project.version@</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
