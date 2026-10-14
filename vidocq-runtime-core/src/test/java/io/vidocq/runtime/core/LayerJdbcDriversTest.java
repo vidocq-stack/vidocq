@@ -63,6 +63,48 @@ class LayerJdbcDriversTest {
         }
     }
 
+    @Test
+    @DisplayName("a layer class that fails to link is skipped, and the driver is still deregistered")
+    void skipsAClassThatFailsToLink(@TempDir Path dir) throws Exception {
+        Path module = driverModule(dir);
+        // Bad0..Bad9 extend a class no module defines: loading one throws NoClassDefFoundError. Several of them, so
+        // that one comes first whatever the archive order.
+        for (int i = 0; i < 10; i++) {
+            var bad = ClassDesc.of("acme.driver.Bad" + i);
+            Files.write(module.resolve("acme/driver/Bad" + i + ".class"), ClassFile.of().build(bad, cb -> cb
+                    .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)
+                    .withSuperclass(ClassDesc.of("acme.gone.Missing"))));
+        }
+        var layer = VaubanLayerFactory.createAppLayer(List.of(module), ModuleLayer.boot(),
+                ClassLoader.getSystemClassLoader(), PluginContext.empty());
+        try {
+            Class.forName("acme.driver.FakeDriver", true, layer.loader());
+
+            assertEquals(1, LayerJdbcDrivers.deregister(layer));
+        } finally {
+            layer.loader().close();
+        }
+    }
+
+    @Test
+    @DisplayName("a layer whose modules do not read java.sql has no driver: nothing is defined, 0 is returned")
+    void returnsZeroWhenNoModuleReadsJavaSql(@TempDir Path dir) throws Exception {
+        Path root = dir.resolve("acme.plain");
+        Files.createDirectories(root.resolve("acme/plain"));
+        Files.write(root.resolve("module-info.class"), ClassFile.of().buildModule(
+                ModuleAttribute.of(ModuleDesc.of("acme.plain"), mb ->
+                        mb.requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        Files.write(root.resolve("acme/plain/Plain.class"), ClassFile.of().build(ClassDesc.of("acme.plain.Plain"), cb -> cb
+                .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));
+        var layer = VaubanLayerFactory.createAppLayer(List.of(root), ModuleLayer.boot(),
+                ClassLoader.getSystemClassLoader(), PluginContext.empty());
+        try {
+            assertEquals(0, LayerJdbcDrivers.deregister(layer));
+        } finally {
+            layer.loader().close();
+        }
+    }
+
     /** acme.driver: requires java.sql; FakeDriver implements Driver and registers itself in its static initializer. */
     private static Path driverModule(Path dir) throws Exception {
         Path root = dir.resolve("acme.driver");

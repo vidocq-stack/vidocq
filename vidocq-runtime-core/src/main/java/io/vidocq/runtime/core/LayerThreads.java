@@ -28,7 +28,8 @@ final class LayerThreads {
 
     private LayerThreads() {}
 
-    /** The names of the live threads, other than the current one, whose context or own class loader is {@code loader}. */
+    /** The names of the live threads, other than the current one, whose context or own class loader is {@code loader}.
+     * Virtual threads are not listed: {@code Thread.getAllStackTraces()} only returns platform threads. */
     static List<String> holding(ClassLoader loader) {
         List<String> names = new ArrayList<>();
         for (Thread t : Thread.getAllStackTraces().keySet()) {

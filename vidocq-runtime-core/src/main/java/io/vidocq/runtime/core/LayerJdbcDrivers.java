@@ -29,6 +29,8 @@ import java.lang.classfile.ClassTransform;
 import java.lang.constant.ClassDesc;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Deregisters the JDBC drivers a closing application layer defined, so that {@code DriverManager} does not keep the
@@ -37,6 +39,7 @@ import java.lang.invoke.MethodType;
 final class LayerJdbcDrivers {
 
     private static final String HELPER = "JdbcLeakPrevention.class";
+    private static final AtomicLong HELPER_COUNT = new AtomicLong();
 
     private LayerJdbcDrivers() {}
 
@@ -46,7 +49,12 @@ final class LayerJdbcDrivers {
         if (javaSql.isEmpty()) {
             return 0;
         }
-        Class<?> host = anyClassOf(layer);
+        // Only a module that reads java.sql can define a Driver: nothing to do (and nothing defined) otherwise.
+        var readers = layer.layer().modules().stream().filter(m -> m.canRead(javaSql.get())).toList();
+        if (readers.isEmpty()) {
+            return 0;
+        }
+        Class<?> host = anyClassOf(layer, readers);
         if (host == null) {
             return 0;
         }
@@ -73,23 +81,27 @@ final class LayerJdbcDrivers {
             var model = ClassFile.of().parse(in.readAllBytes());
             // A fresh name per call: a second definition in the same package would fail with a duplicate class.
             return ClassFile.of().transformClass(model,
-                    ClassDesc.of(pkg + ".VidocqJdbcLeakPrevention" + System.nanoTime()), ClassTransform.ACCEPT_ALL);
+                    ClassDesc.of(pkg + ".VidocqJdbcLeakPrevention" + HELPER_COUNT.incrementAndGet()), ClassTransform.ACCEPT_ALL);
         }
     }
 
-    /** A class of the layer, loaded without initialization, to host the helper's package; null when none loads. */
-    private static Class<?> anyClassOf(VaubanLayerFactory.AppLayer layer) {
+    /** A class of a module that reads java.sql, loaded without initialization, to host the helper's package; null when none loads. */
+    private static Class<?> anyClassOf(VaubanLayerFactory.AppLayer layer, List<Module> readers) {
         for (String name : layer.loader().managedClassNames()) {
             int dot = name.lastIndexOf('.');
             if (dot < 0 || name.endsWith("module-info")) {
                 continue;
             }
             String pkg = name.substring(0, dot);
-            for (Module m : layer.layer().modules()) {
+            for (Module m : readers) {
                 if (m.getPackages().contains(pkg)) {
-                    Class<?> c = Class.forName(m, name);
-                    if (c != null) {
-                        return c;
+                    try {
+                        Class<?> c = Class.forName(m, name);
+                        if (c != null) {
+                            return c;
+                        }
+                    } catch (LinkageError e) {
+                        // an optional dependency of this class is absent: try another class of the layer
                     }
                 }
             }

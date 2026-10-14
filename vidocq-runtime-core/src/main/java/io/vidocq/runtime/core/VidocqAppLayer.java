@@ -107,14 +107,14 @@ public final class VidocqAppLayer {
                 LOG.log(System.Logger.Level.INFO, "Hot reload: deregistered " + drivers
                         + " JDBC driver(s) of the previous application layer");
             }
-        } catch (ReflectiveOperationException | IOException | RuntimeException e) {
+        } catch (ReflectiveOperationException | IOException | RuntimeException | LinkageError e) {
             LOG.log(System.Logger.Level.WARNING, "Hot reload: the JDBC drivers of the previous application layer"
                     + " could not be deregistered, and keep it in memory: " + e);
         }
         var threads = LayerThreads.holding(layer.loader());
         if (!threads.isEmpty()) {
-            LOG.log(System.Logger.Level.WARNING, "Hot reload: " + threads.size() + " thread(s) started by the"
-                    + " previous application layer still run after shutdown and keep it in memory: "
+            LOG.log(System.Logger.Level.WARNING, "Hot reload: " + threads.size() + " thread(s) still hold the"
+                    + " previous application layer after shutdown and keep it in memory: "
                     + String.join(", ", threads) + ". Stop them when the application stops, or keep their library"
                     + " in the parent layer with vidocq.app.layer.keep.");
         }
