@@ -115,9 +115,15 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
     public MigrationExtension() {
         this(() -> {
             List<SchemaMigrator> found = new ArrayList<>();
-            ServiceLoader.load(SchemaMigrator.class, MigrationExtension.class.getClassLoader()).forEach(found::add);
+            ServiceLoader.load(SchemaMigrator.class, backendLoader()).forEach(found::add);
             return found;
         });
+    }
+
+    /** Where migrators are looked up: the context loader, the application layer's; the extension's own without one. */
+    static ClassLoader backendLoader() {
+        ClassLoader context = Thread.currentThread().getContextClassLoader();
+        return context != null ? context : MigrationExtension.class.getClassLoader();
     }
 
     /** With the backends given, for the tests. */

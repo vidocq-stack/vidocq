@@ -23,6 +23,8 @@ module io.vidocq.runtime.extensions.essentials.migration.liquibase {
     requires liquibase.core;
     requires java.sql;
 
+    uses java.sql.Driver;
+
     provides io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator
             with io.vidocq.runtime.extensions.essentials.migration.liquibase.LiquibaseSchemaMigrator;
 }

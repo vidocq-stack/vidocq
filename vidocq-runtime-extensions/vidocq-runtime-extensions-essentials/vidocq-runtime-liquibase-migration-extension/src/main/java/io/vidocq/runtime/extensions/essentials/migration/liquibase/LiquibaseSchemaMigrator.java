@@ -38,7 +38,6 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.ResourceAccessor;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -137,7 +136,7 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
         String changelog = t.locations().isEmpty() ? DEFAULT_CHANGELOG : t.locations().get(0);
         try {
             return withoutAnalyticsByDefault(() -> {
-                try (Connection conn = DriverManager.getConnection(t.jdbcUrl(), t.username(), t.password())) {
+                try (Connection conn = ApplicationDrivers.connect(t.jdbcUrl(), t.username(), t.password(), applicationLoader())) {
                     Database database = DatabaseFactory.getInstance()
                             .findCorrectDatabaseImplementation(new JdbcConnection(conn));
                     try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {

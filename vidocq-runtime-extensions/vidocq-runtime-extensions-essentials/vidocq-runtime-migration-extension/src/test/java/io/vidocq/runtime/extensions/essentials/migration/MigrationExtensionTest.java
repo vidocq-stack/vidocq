@@ -488,4 +488,28 @@ class MigrationExtensionTest {
         @Override public <T> Optional<T> lookup(Class<T> type) { return Optional.empty(); }
         @Override public List<String> routeUrls(String handlerClassName) { return List.of(); }
     }
+
+    @Test
+    void migratorsAreLookedUpThroughTheContextLoader() {
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        ClassLoader application = new ClassLoader(previous) { };
+        Thread.currentThread().setContextClassLoader(application);
+        try {
+            assertSame(application, MigrationExtension.backendLoader(),
+                    "a migrator shipped in the application layer is only visible through it");
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
+
+    @Test
+    void withoutAContextLoaderTheExtensionsOwnIsUsed() {
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(null);
+        try {
+            assertSame(MigrationExtension.class.getClassLoader(), MigrationExtension.backendLoader());
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
 }
