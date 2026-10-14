@@ -118,6 +118,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "false", property = "vidocq.jlink.skip")
     private boolean skip;
 
+    /**
+     * Move the files of a resource directory several staged jars hold into one module of the image (default: false).
+     * Such a directory is a split package that jlink refuses; Vaadin's {@code flow-server} and {@code flow-react}
+     * share {@code com/vaadin/flow/server/frontend/} (vidocq#256). Only the staged copies change. Without it, the goal
+     * fails before jlink, naming the jars and the directory.
+     */
+    @Parameter(defaultValue = "false", property = "vidocq.jlink.mergeSharedResources")
+    private boolean mergeSharedResources;
+
     /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")
     private String compress;
@@ -225,6 +234,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         if (!automatic.isEmpty()) {
             throw new IOException(automaticModulesMessage(automatic, buildDir.toPath()));
+        }
+
+        // Check: no resource directory held by several jars, a split package jlink refuses.
+        List<SharedResources.Shared> shared = SharedResources.find(stage);
+        if (!shared.isEmpty()) {
+            if (!mergeSharedResources) {
+                throw new IOException(SharedResources.failureMessage(shared));
+            }
+            SharedResources.merge(stage, shared).forEach(getLog()::info);
         }
     }
 

@@ -1110,6 +1110,7 @@ Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and pr
 == Prerequisites and limitations
 
 * **Strict Java Modules** — every dependency must be a named module; `jlink` rejects every automatic module. Give the non-modular jars a descriptor with <<modularize,`vauban:modularize`>> in `all-automatic` mode.
+* [[jlink-shared-resources]][.tag-new]#NEW# **Resource directories several jars share** — a directory that two jars both hold files in is a split package, which `jlink` refuses. Vaadin's `flow-server` and `flow-react` share `com/vaadin/flow/server/frontend/` (Vidocq/vidocq#256). `vidocq:jlink` stops before `jlink` with one line naming the jars and the directory. `-Dvidocq.jlink.mergeSharedResources=true` moves those files into one module of the image instead: the jar with classes in that package, else the one holding most files there, logged as `merged <dir> into <jar> (N files from <jars>)`. Only the staged copies change; `vidocq:package` and `target/` keep the jars as they are. Two files of one path with different contents, or classes in several jars, stop the build.
 * **Records serialised over REST** — Champollion handles them via APT, not reflection. If an external dependency exposes records that are not generated, declare a JSON-B `Converter<T>`.
 * **Custom `java.util.logging` Handler** — declare the module in `logging.properties` so `jlink` embeds it (`handlers=com.example.MyHandler`).
 * **macOS app-image** — the bundle requires a valid `--app-version`; the plugin defaults to the project Maven version.

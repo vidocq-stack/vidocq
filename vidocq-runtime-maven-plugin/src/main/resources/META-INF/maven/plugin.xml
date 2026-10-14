@@ -612,6 +612,13 @@
                     <description>Skip jlink execution entirely (useful in CI to bypass automatic-modules issues)</description>
                 </parameter>
                 <parameter>
+                    <name>mergeSharedResources</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Move the files of a resource directory several staged jars hold (a split package jlink refuses) into one module of the image. Only the staged copies change (vidocq#256).</description>
+                </parameter>
+                <parameter>
                     <name>repoSession</name>
                     <type>org.eclipse.aether.RepositorySystemSession</type>
                     <required>true</required>
@@ -648,6 +655,7 @@
                 <includeResources implementation="java.util.List"/>
                 <skip implementation="boolean"
                       default-value="false">${vidocq.jlink.skip}</skip>
+                <mergeSharedResources implementation="boolean" default-value="false">${vidocq.jlink.mergeSharedResources}</mergeSharedResources>
                 <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
                              default-value="${repositorySystemSession}"/>
                 <remoteRepos implementation="java.util.List"
