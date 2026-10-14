@@ -273,6 +273,15 @@ final class DependencyCodegenPass {
                 }
                 cache.put(key, output);
             }
+            // What describes every class of the jar would be partial, the processors having seen only the hinted
+            // ones: dropped here, not before caching, so that a change of the hints needs no new cache entry.
+            Set<String> wholeJar = selected.stream().flatMap(b -> b.hints().wholeJar().stream())
+                    .collect(Collectors.toSet());
+            if (output.files().keySet().stream().anyMatch(wholeJar::contains)) {
+                Map<String, byte[]> kept = new LinkedHashMap<>(output.files());
+                kept.keySet().removeAll(wholeJar);
+                output = new DependencyCodegen.Output(kept, output.warnings());
+            }
             output.warnings().forEach(warn);
             List<String> clashes = clashes(jar, output, mergedResources, names, dep);
             if (!clashes.isEmpty()) {

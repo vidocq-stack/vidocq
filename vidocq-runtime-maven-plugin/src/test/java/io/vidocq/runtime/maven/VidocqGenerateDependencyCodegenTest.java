@@ -326,6 +326,30 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void aWholeJarResourceIsDroppedFromThePatchButCachedRaw() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
+        Path processor = Files.writeString(dir.resolve("alpha-codegen-1.0.jar"), "alpha");
+        Brick alpha = new Brick(new DependencyCodegenHints("Alpha", List.of(ALPHA_MARKER), List.of(), List.of(),
+                List.of(), List.of("META-INF/fixture/whole.list")), "io.vidocq:alpha-codegen:1.0", List.of(processor));
+        var generator = fake(Map.of("META-INF/fixture/whole.list", "com.acme.Foo\n"), List.of());
+
+        run(dir.resolve("first"), List.of(alpha), generator, lib);
+        run(dir.resolve("second"), List.of(alpha), generator, lib);
+
+        for (String build : List.of("first", "second")) {
+            Path patch = JpmsPatches.patchDirFor(dir.resolve(build), "lib");
+            assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")), build);
+            assertFalse(Files.exists(patch.resolve("META-INF/fixture/whole.list")),
+                    build + ": it would describe only the hinted classes");
+        }
+        assertEquals(1, generated.get(), "the second build is a hit: the raw output is cached");
+        try (var entries = Files.walk(dir.resolve("cache"))) {
+            assertTrue(entries.anyMatch(p -> p.endsWith("META-INF/fixture/whole.list")),
+                    "the cache keeps it, so a hints change needs no new entry");
+        }
+    }
+
+    @Test
     void theFailuresOfEveryJarFailTheBuildTogether() throws Exception {
         Path lib = markedLib("lib-1.0");
         Path other = markedLib("other-1.0");

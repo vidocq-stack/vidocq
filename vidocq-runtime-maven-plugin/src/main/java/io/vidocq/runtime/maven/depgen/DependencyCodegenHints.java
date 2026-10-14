@@ -42,20 +42,30 @@ import java.util.jar.JarFile;
  * @param classBytes strings (UTF-8) whose presence in a class file selects the jar
  * @param markers    jar entries that mark the jar as already processed by the brick
  * @param merge      jar entries merged across the jars the brick processes
+ * @param wholeJar   generated entries that describe every class of the jar: the processors see only the hinted
+ *                   classes, so these would be partial, and the pass drops them
  */
 public record DependencyCodegenHints(String brick, List<String> resources, List<String> classBytes,
-                                     List<String> markers, List<String> merge) {
+                                     List<String> markers, List<String> merge, List<String> wholeJar) {
 
     /** Where a bundle declares its hints. */
     public static final String PATH = "META-INF/vidocq/dependency-codegen.properties";
 
-    private static final Set<String> KEYS = Set.of("brick", "resources", "class-bytes", "markers", "merge");
+    private static final Set<String> KEYS = Set.of("brick", "resources", "class-bytes", "markers", "merge",
+            "whole-jar");
 
     public DependencyCodegenHints {
         resources = List.copyOf(resources);
         classBytes = List.copyOf(classBytes);
         markers = List.copyOf(markers);
         merge = List.copyOf(merge);
+        wholeJar = List.copyOf(wholeJar);
+    }
+
+    /** Hints without {@code whole-jar} entries. */
+    public DependencyCodegenHints(String brick, List<String> resources, List<String> classBytes,
+                                  List<String> markers, List<String> merge) {
+        this(brick, resources, classBytes, markers, merge, List.of());
     }
 
     /**
@@ -68,7 +78,7 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
         for (String key : p.stringPropertyNames()) {
             if (!KEYS.contains(key)) {
                 throw new IllegalArgumentException(origin + ": unknown key '" + key + "' in " + PATH
-                        + " (allowed: brick, resources, class-bytes, markers, merge)");
+                        + " (allowed: brick, resources, class-bytes, markers, merge, whole-jar)");
             }
         }
         String brick = p.getProperty("brick");
@@ -82,7 +92,7 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
                     + " declares neither 'resources' nor 'class-bytes': nothing would select a jar");
         }
         return new DependencyCodegenHints(brick.strip(), resources, classBytes, list(p.getProperty("markers")),
-                list(p.getProperty("merge")));
+                list(p.getProperty("merge")), list(p.getProperty("whole-jar")));
     }
 
     /** The hints file of a bundle jar or directory; empty when it has none. */

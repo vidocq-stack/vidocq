@@ -57,12 +57,14 @@ class DependencyCodegenHintsTest {
                 "resources", " META-INF/web-fragment.xml , META-INF/web.xml,, ",
                 "class-bytes", "jakarta/servlet/annotation/Web",
                 "markers", "META-INF/vidocq/foy-processed",
-                "merge", "META-INF/vidocq/foy.index"), "foy-bundle");
+                "merge", "META-INF/vidocq/foy.index",
+                "whole-jar", "META-INF/foy/class-index.list"), "foy-bundle");
         assertEquals("foy", hints.brick());
         assertEquals(List.of("META-INF/web-fragment.xml", "META-INF/web.xml"), hints.resources());
         assertEquals(List.of("jakarta/servlet/annotation/Web"), hints.classBytes());
         assertEquals(List.of("META-INF/vidocq/foy-processed"), hints.markers());
         assertEquals(List.of("META-INF/vidocq/foy.index"), hints.merge());
+        assertEquals(List.of("META-INF/foy/class-index.list"), hints.wholeJar());
     }
 
     @Test
@@ -80,7 +82,7 @@ class DependencyCodegenHintsTest {
         var e = assertThrows(IllegalArgumentException.class,
                 () -> DependencyCodegenHints.parse(props("brick", "foy", "resources", "a", "bogus", "1"), "foy-bundle"));
         assertEquals("foy-bundle: unknown key 'bogus' in META-INF/vidocq/dependency-codegen.properties "
-                + "(allowed: brick, resources, class-bytes, markers, merge)", e.getMessage());
+                + "(allowed: brick, resources, class-bytes, markers, merge, whole-jar)", e.getMessage());
     }
 
     @Test
