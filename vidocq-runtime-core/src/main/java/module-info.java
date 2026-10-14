@@ -29,6 +29,8 @@ module io.vidocq.runtime.core {
     // Console logging (io.vidocq.runtime.core.console): one aligned line per record on stdout,
     // installed over the JDK default console handler only.
     requires java.logging;
+    // LayerJdbcDrivers: the helper whose bytes are defined in a closing layer references java.sql; it never runs in this module.
+    requires static java.sql;
 
     exports io.vidocq.runtime.core;
     exports io.vidocq.runtime.core.config;
