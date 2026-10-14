@@ -126,7 +126,7 @@ The dev console's CDI panel shows the result: a scanned jar's beans read `Class-
 
 Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time.
 
-A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`.
+A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`.
 
 *Not candidates.* The `io.vidocq*` jars, which are built with the processors already. For a `class-bytes` hint, a jar that itself defines the hinted classes, as the API jars do (`jakarta.servlet-api` defines `jakarta/servlet/annotation/WebListener`: it mentions it but is not a library that uses it).
 
@@ -187,6 +187,11 @@ A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its code
 | Entries that several jars produce and that are merged into one, such as a `META-INF/services` file. Any other generated entry that the jar already has fails the build.
 |===
 
+Two limits apply to the processors of a bundle:
+
+* They are loaded with the platform class loader as parent, so they cannot use the `jdk.compiler` internals (`com.sun.source.*`); only the `javax.annotation.processing` and `javax.lang.model` APIs are there.
+* Every annotation processor in the bundle's transitive closure runs over the selected jars. A bundle must not bring other processors along, for instance `vauban-processor` at compile scope.
+
 Foy's file:
 
 [source,properties]
@@ -197,6 +202,8 @@ class-bytes=jakarta/servlet/annotation/Web,jakarta/servlet/annotation/HandlesTyp
 markers=META-INF/io.vidocq.foy/generated,META-INF/foy/class-index.list,META-INF/services/io.vidocq.foy.spi.gen.WebComponent
 merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent,META-INF/foy/class-index.list
 ----
+
+Foy's `merge` files are also among its `markers`: a jar that already has them was built with Foy's processor, so it is skipped rather than merged.
 
 [#analyze-deps]
 == `vidocq:analyze-deps` goal [.tag-new]#NEW#
