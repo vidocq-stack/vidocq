@@ -167,7 +167,7 @@ The whole javac output is in `target/vidocq-depgen/<artifactId>.log`. A generate
 [#brick-authors]
 ==== For brick authors [.tag-new]#NEW#
 
-A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its codegen bundle, next to its processors. The keys are `brick`, `resources`, `class-bytes`, `markers` and `merge`; any other key fails the build. Lists are comma-separated.
+A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its codegen bundle, next to its processors. The keys are `brick`, `resources`, `class-bytes`, `markers`, `merge` and `whole-jar`; any other key fails the build. Lists are comma-separated.
 
 [cols="1,3"]
 |===
@@ -187,6 +187,9 @@ A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its code
 
 | `merge`
 | Entries that several jars produce and that are merged into one, such as a `META-INF/services` file. Any other generated entry that the jar already has fails the build.
+
+| `whole-jar`
+| Generated entries that describe every class of the jar, such as an index of its classes. The processors see only the hinted classes of a dependency jar, so such an entry would be partial: it is dropped from the output, and the brick's run-time fallback covers the jar.
 |===
 
 Two limits apply to the processors of a bundle:
@@ -202,10 +205,11 @@ brick=Foy
 resources=META-INF/services/jakarta.servlet.ServletContainerInitializer,META-INF/web-fragment.xml
 class-bytes=jakarta/servlet/annotation/Web,jakarta/servlet/annotation/HandlesTypes
 markers=META-INF/io.vidocq.foy/generated,META-INF/foy/class-index.list,META-INF/services/io.vidocq.foy.spi.gen.WebComponent
-merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent,META-INF/foy/class-index.list
+merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent
+whole-jar=META-INF/foy/class-index.list
 ----
 
-Foy's `merge` files are also among its `markers`: a jar that already has them was built with Foy's processor, so it is skipped rather than merged.
+Foy's `merge` file is also among its `markers`: a jar that already has it was built with Foy's processor, so it is skipped rather than merged. Its `class-index.list` is a marker too, and `whole-jar`: Foy scans a jar without one for `@HandlesTypes` at run time, which a partial index would prevent.
 
 [#analyze-deps]
 == `vidocq:analyze-deps` goal [.tag-new]#NEW#

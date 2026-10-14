@@ -60,6 +60,16 @@ class FoyDependencyHintsTest {
     }
 
     @Test
+    void theClassIndexIsWholeJarNotMerged() throws IOException {
+        Properties props = load();
+        // The processors see only the hinted classes of a dependency jar: an index of them would be partial, and
+        // Foy's run-time scanner skips a jar that ships one.
+        assertTrue(list(props, "whole-jar").contains("META-INF/foy/class-index.list"));
+        assertTrue(!list(props, "merge").contains("META-INF/foy/class-index.list"));
+        assertTrue(list(props, "markers").contains("META-INF/foy/class-index.list"));
+    }
+
+    @Test
     void mergedResourcesAreAlsoMarkers() throws IOException {
         Properties props = load();
         assertTrue(list(props, "markers").containsAll(list(props, "merge")));
