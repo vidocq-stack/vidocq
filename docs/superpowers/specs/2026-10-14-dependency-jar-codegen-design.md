@@ -108,7 +108,10 @@ For one jar, all the bricks it is a candidate for run together, in one in-proces
 The output of step 4.1–4.2 for one jar is cached under the user's cache directory,
 `${user.home}/.cache/vidocq/depgen/<key>/` (`XDG_CACHE_HOME` when set; `vidocq.generate.cacheDir` overrides it).
 The key is the SHA-256 of: the jar's SHA-256, each selected brick's name and processor-classpath SHA-256, the
-`--release` value and the running JDK's feature version. A hit copies the cached files into the patch directory and
+jar's compile classpath as sorted `groupId:artifactId:version` coordinates (a processor's output can depend on the
+types it resolves there, such as Foy's `class-index.list` of resolved supertypes), the `--release` value and the
+running JDK's feature version. The selection decision of a jar no brick wants is memoized the same way (jar SHA-256
+and the hints' digest), so that a build does not search every class of every jar again. A hit copies the cached files into the patch directory and
 runs no `javac`. The cache is content-addressed, so it is shared safely between projects and survives
 `mvn clean`. Entries are written to a temporary directory and moved into place atomically; a damaged entry (missing
 its completion file) is ignored and rewritten.
