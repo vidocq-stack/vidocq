@@ -116,4 +116,50 @@ class DependencyCodegenCacheTest {
         assertEquals(Path.of("/home/u/.cache/vidocq/depgen"),
                 DependencyCodegenCache.directory("", Map.of(), "/home/u"));
     }
+
+    @Test
+    void putKeepsACompleteEntry() throws IOException {
+        DependencyCodegenCache cache = new DependencyCodegenCache(tmp.resolve("cache"));
+        cache.put("k", new DependencyCodegen.Output(Map.of("A.class", new byte[] {1}), List.of()));
+        cache.put("k", new DependencyCodegen.Output(Map.of("B.class", new byte[] {2}), List.of()));
+        assertEquals(java.util.Set.of("A.class"), cache.get("k").orElseThrow().files().keySet());
+        try (var siblings = Files.list(tmp.resolve("cache"))) {
+            assertEquals(1, siblings.count());
+        }
+    }
+
+    @Test
+    void aVanishingEntryIsAMiss() throws IOException {
+        Path dir = tmp.resolve("cache");
+        new DependencyCodegenCache(dir)
+                .put("k", new DependencyCodegen.Output(Map.of("A.class", new byte[] {1}), List.of()));
+        var racing = new DependencyCodegenCache(dir, file -> {
+            try {
+                Files.deleteIfExists(file);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        });
+        assertTrue(racing.get("k").isEmpty());
+    }
+
+    @Test
+    void anEscapingFileNameIsRejected() {
+        DependencyCodegenCache cache = new DependencyCodegenCache(tmp.resolve("cache"));
+        var output = new DependencyCodegen.Output(Map.of("../evil", new byte[] {1}), List.of());
+        org.junit.jupiter.api.Assertions.assertThrows(IOException.class, () -> cache.put("k", output));
+        assertFalse(Files.exists(tmp.resolve("evil")));
+    }
+
+    @Test
+    void putSweepsOldTemporaryDirectories() throws IOException {
+        Path dir = Files.createDirectories(tmp.resolve("cache"));
+        Path old = Files.createDirectories(dir.resolve("abc.tmp123"));
+        Files.writeString(old.resolve("x"), "x");
+        Files.setLastModifiedTime(old, java.nio.file.attribute.FileTime.from(java.time.Instant.now().minusSeconds(7200)));
+        Path fresh = Files.createDirectories(dir.resolve("def.tmp456"));
+        new DependencyCodegenCache(dir).put("k", new DependencyCodegen.Output(Map.of(), List.of()));
+        assertFalse(Files.exists(old));
+        assertTrue(Files.exists(fresh));
+    }
 }

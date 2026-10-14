@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -48,10 +49,20 @@ public final class DependencyCodegenCache {
     private static final String FILES = "files";
     private static final String WARNINGS = "warnings.txt";
 
+    private static final java.time.Duration STALE_TEMP = java.time.Duration.ofHours(1);
+
     private final Path directory;
+    private final java.util.function.Consumer<Path> beforeRead;
 
     public DependencyCodegenCache(Path directory) {
+        this(directory, file -> {
+        });
+    }
+
+    /** Test seam: {@code beforeRead} runs just before each cached file is read. */
+    DependencyCodegenCache(Path directory, java.util.function.Consumer<Path> beforeRead) {
         this.directory = directory;
+        this.beforeRead = beforeRead;
     }
 
     /** {@code cacheDir} property, else {@code $XDG_CACHE_HOME/vidocq/depgen}, else {@code ${user.home}/.cache/vidocq/depgen}. */
@@ -89,6 +100,15 @@ public final class DependencyCodegenCache {
     }
 
     public Optional<DependencyCodegen.Output> get(String key) throws IOException {
+        try {
+            return read(key);
+        } catch (NoSuchFileException vanished) {
+            // Another build is replacing or discarding the entry: a miss, not a failure.
+            return Optional.empty();
+        }
+    }
+
+    private Optional<DependencyCodegen.Output> read(String key) throws IOException {
         Path entry = directory.resolve(key);
         if (!Files.exists(entry)) {
             return Optional.empty();
@@ -102,6 +122,7 @@ public final class DependencyCodegenCache {
         if (Files.isDirectory(root)) {
             try (Stream<Path> walk = Files.walk(root)) {
                 for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                    beforeRead.accept(file);
                     files.put(root.relativize(file).toString().replace('\\', '/'), Files.readAllBytes(file));
                 }
             }
@@ -115,7 +136,11 @@ public final class DependencyCodegenCache {
     /** Writes the entry to a temporary directory, marks it complete, then moves it into place atomically. */
     public void put(String key, DependencyCodegen.Output output) throws IOException {
         Files.createDirectories(directory);
+        sweepStaleTemps();
         Path target = directory.resolve(key);
+        if (Files.isRegularFile(target.resolve(COMPLETE))) {
+            return;
+        }
         deleteTree(target);
         Path temp = Files.createTempDirectory(directory, key + ".tmp");
         try {
@@ -150,6 +175,24 @@ public final class DependencyCodegenCache {
         }
     }
 
+    /** Best effort: removes {@code <key>.tmp*} leftovers of crashed builds. */
+    private void sweepStaleTemps() {
+        java.time.Instant limit = java.time.Instant.now().minus(STALE_TEMP);
+        try (Stream<Path> children = Files.list(directory)) {
+            for (Path child : (Iterable<Path>) children.filter(c -> c.getFileName().toString().contains(".tmp"))::iterator) {
+                try {
+                    if (Files.getLastModifiedTime(child).toInstant().isBefore(limit)) {
+                        deleteTree(child);
+                    }
+                } catch (IOException | RuntimeException ignored) {
+                    // another build may be sweeping the same directory
+                }
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // nothing to sweep
+        }
+    }
+
     private static void move(Path from, Path to) throws IOException {
         try {
             Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
@@ -166,10 +209,14 @@ public final class DependencyCodegenCache {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
                 try {
                     Files.deleteIfExists(p);
+                } catch (NoSuchFileException gone) {
+                    // a racing delete got there first
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
             });
+        } catch (NoSuchFileException gone) {
+            // a racing delete got there first
         } catch (UncheckedIOException e) {
             throw e.getCause();
         }
