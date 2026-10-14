@@ -32,6 +32,7 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -74,13 +75,16 @@ public class VidocqAnalyzeDepsMojo extends AbstractMojo {
         try {
             var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
             List<String> excludes = scanExcludes == null ? List.of() : scanExcludes;
+            Path cacheDirectory = DependencyCodegenCache.directory(cacheDir, System.getenv(),
+                    System.getProperty("user.home"));
+            // Read-only: the memo of the selection is read, never written.
             var selections = DependencyCodegenPass.select(
-                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos), dependencies, excludes);
+                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos), dependencies, excludes,
+                    DependencyCodegenPass.selectionMemo(cacheDirectory), false);
             var decisions = ScanSelection.decide(dependencies,
                     scanDependencies == null ? List.of() : scanDependencies, excludes, autoScan,
                     DependencyCodegenPass.bricksByJar(selections));
-            var cache = new DependencyCodegenCache(DependencyCodegenCache.directory(cacheDir, System.getenv(),
-                    System.getProperty("user.home")));
+            var cache = new DependencyCodegenCache(cacheDirectory);
             var bricks = AnalyzeReport.brickDecisions(selections, cache,
                     DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
                     DependencyCodegenPass.coordinatesOf(dependencies));

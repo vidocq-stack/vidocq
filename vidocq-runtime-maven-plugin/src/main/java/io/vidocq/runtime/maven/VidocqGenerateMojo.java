@@ -168,7 +168,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
             // The bricks select first: a jar a brick selects is scanned by Vauban too, its components being CDI beans.
             List<Brick> brickList = DependencyBricks.of(project, repoSystem, repoSession, remoteRepos);
             var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
-            var brickSelection = DependencyCodegenPass.select(brickList, dependencies, orEmpty(scanExcludes));
+            var brickSelection = DependencyCodegenPass.select(brickList, dependencies, orEmpty(scanExcludes),
+                    DependencyCodegenPass.selectionMemo(cacheDirectory()), true);
             Map<Path, String> scannedByArtifactId = collectScannedDependencies(dependencies,
                     DependencyCodegenPass.bricksByJar(brickSelection));
             List<String> providers = List.of();
@@ -309,13 +310,16 @@ public class VidocqGenerateMojo extends AbstractMojo {
         if (bricks.isEmpty()) {
             return new DependencyCodegenPass.Result(List.of(), Set.of());
         }
-        var cache = new DependencyCodegenCache(DependencyCodegenCache.directory(cacheDir, System.getenv(),
-                System.getProperty("user.home")));
+        var cache = new DependencyCodegenCache(cacheDirectory());
         var pass = new DependencyCodegenPass(bricks, cache, DependencyCodegenPass.JAVAC, buildDirectory.toPath(),
                 project.getBasedir().toPath(), getLog()::info, getLog()::warn, getLog()::error);
         return pass.generate(selections, closure, coordinates,
                 DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
                 orEmpty(scanDependencies));
+    }
+
+    private Path cacheDirectory() {
+        return DependencyCodegenCache.directory(cacheDir, System.getenv(), System.getProperty("user.home"));
     }
 
     /** Nothing is scanned this run: no earlier enriched copy may still stand in for its jar. */

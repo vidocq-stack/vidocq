@@ -152,3 +152,46 @@ ScopedValue pinning, is comfortably good enough for an MVP dev mode. Approach
 B (in-VM `ModuleLayer`) would only become attractive once we hit ~500 ms, and
 the obvious next stop is `mvnd` (Maven Daemon) which historically cuts the CLI
 overhead by ~10×. That experiment is the next milestone, not B.
+
+---
+
+## 2026-10-14 — dependency codegen selection, with and without the memo (#246)
+
+`vidocq:generate` decides, for every dependency jar, which bricks want it
+(`DependencyCodegenSelection.decide`): resource lookups, then a byte search of
+every class file when no resource hint matches. That ran on every build and
+every `vidocq:dev` recompile. The memo (`<cacheDir>/selection/<sha256>`, keyed
+on the jar's SHA-256 and the hints' digest) stores the decision, so a jar is
+searched once per (jar, hints); a memoized build still hashes each jar.
+
+### Setup
+
+| Field    | Value |
+|----------|-------|
+| Hardware | Apple M5 Max, 128 GB, macOS 27.0.1 (Darwin 27.0.0) |
+| JVM      | Temurin 25 (`Temurin-25+36-LTS`) |
+| Jars     | the 72 jars under `com/vaadin` of the Vaadin spike's local repository (22.6 MB in total; 2 selected by Foy) |
+| Hints    | Foy's `dependency-codegen.properties` |
+| Harness  | throwaway `SelectionBench.java` (not committed): walks the jars, calls `decide` per jar, times each full pass; fresh JVM per run, 3 runs per mode |
+| Command  | `java -cp vidocq-runtime-maven-plugin/target/classes:<plugin classpath> SelectionBench.java <m2>/com/vaadin <baseline\|memo\|memowarm> <passes> <memo dir>` |
+
+Modes: `baseline` = `decide(jar, hints)`; `memo` = memoized lookup on an empty
+memo (pass 0 searches and writes); `memowarm` = memoized lookup on the memo the
+previous runs wrote, in a fresh JVM: what every build after the first sees.
+
+### Results (ms per pass over the 72 jars)
+
+```
+baseline  run1: 94 65 65 64 65   run2: 77 65 65 65 63   run3: 78 65 65 65 64
+baseline  run4: 83 70 70 69 69   run5: 76 65 64 64 64   run6: 75 65 64 64 64
+memo      run1: 140 19 15 14 13  run2: 129 19 15 14 13  run3: 129 18 15 14 13
+memowarm  run1: 31 18 14         run2: 31 18 14         run3: 31 18 14
+```
+
+Per build (fresh JVM, first pass): 75–94 ms searched, 31 ms memoized (about
+2.5–3× less); the first build of a new jar set pays 129–140 ms once (search +
+hash + write). Later passes in the same JVM: 64–70 ms → 13–19 ms. The remaining cost is the jars' SHA-256.
+
+### Delta vs previous run
+
+First measurement — no previous data.

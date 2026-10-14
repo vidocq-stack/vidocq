@@ -118,6 +118,19 @@ final class DependencyCodegenPass {
      */
     static List<Selection> select(List<Brick> bricks, List<ScanSelection.Dependency> dependencies,
                                   List<String> scanExcludes) throws IOException {
+        return select(bricks, dependencies, scanExcludes, null, false);
+    }
+
+    /**
+     * {@link #select(List, List, List)} with each jar's decision memoized in {@code memo}
+     * ({@link DependencyCodegenSelection#decide(Path, List, Path, boolean)}), so that a jar is searched once per
+     * jar and hints, not on every build.
+     *
+     * @param memo  the memo directory, or {@code null} for none
+     * @param store whether new decisions are written to it
+     */
+    static List<Selection> select(List<Brick> bricks, List<ScanSelection.Dependency> dependencies,
+                                  List<String> scanExcludes, Path memo, boolean store) throws IOException {
         List<Selection> selections = new ArrayList<>();
         if (bricks.isEmpty()) {
             return selections;
@@ -127,7 +140,8 @@ final class DependencyCodegenPass {
             if (!Files.isRegularFile(dep.jar()) || isVidocqRuntime(dep) || matchesAny(scanExcludes, dep)) {
                 continue;
             }
-            var decision = DependencyCodegenSelection.decide(dep.jar(), hints);
+            var decision = memo == null ? DependencyCodegenSelection.decide(dep.jar(), hints)
+                    : DependencyCodegenSelection.decide(dep.jar(), hints, memo, store);
             if (decision.matches().isEmpty() && decision.skips().isEmpty()) {
                 continue;
             }
@@ -340,6 +354,11 @@ final class DependencyCodegenPass {
         vauban.forEach(s -> byJar.put(s.originalJar(), s));
         bricks.forEach(s -> byJar.put(s.originalJar(), s));
         return List.copyOf(byJar.values());
+    }
+
+    /** Under the cache directory: the memoized selection decisions. */
+    static Path selectionMemo(Path cacheDir) {
+        return cacheDir.resolve("selection");
     }
 
     /** The {@code groupId:artifactId:version} of each of {@code dependencies}: the classpath of the cache key. */

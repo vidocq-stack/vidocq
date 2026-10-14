@@ -23,14 +23,23 @@ import io.vidocq.runtime.maven.EnrichedJars;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.jar.JarFile;
 
 /**
@@ -142,6 +151,112 @@ public final class DependencyCodegenSelection {
             });
         }
         return new Decision(jar, ordered, skips, signed);
+    }
+
+    /**
+     * {@link #decide(Path, List)}, memoized in {@code memo}: one small file per (jar, hints), named by the SHA-256 of
+     * the jar's SHA-256 and the hints' digest, holding the decision. A jar is so searched once per machine for given
+     * hints, instead of on every build and every {@code vidocq:dev} recompile; the memo is content-addressed, so it
+     * never needs invalidating. A damaged entry is searched again.
+     *
+     * @param memo  the memo directory, {@code <cacheDir>/selection}
+     * @param store whether a decision searched now is written; {@code false} for a read-only lookup
+     */
+    public static Decision decide(Path jar, List<DependencyCodegenHints> bricks, Path memo, boolean store)
+            throws IOException {
+        if (Files.isDirectory(jar) || bricks.isEmpty()) {
+            return decide(jar, bricks);
+        }
+        Path entry = memo.resolve(memoKey(jar, bricks));
+        if (Files.isRegularFile(entry)) {
+            try {
+                Optional<Decision> memoized = parse(jar, bricks, Files.readAllLines(entry, StandardCharsets.UTF_8));
+                if (memoized.isPresent()) {
+                    return memoized.get();
+                }
+            } catch (NoSuchFileException vanished) {
+                // another build replaced it meanwhile: search
+            }
+        }
+        Decision decision = decide(jar, bricks);
+        if (store) {
+            write(entry, format(decision, bricks));
+        }
+        return decision;
+    }
+
+    /** SHA-256 over the jar's SHA-256 and what of the hints decides: name, resources, class bytes, markers. */
+    private static String memoKey(Path jar, List<DependencyCodegenHints> bricks) throws IOException {
+        MessageDigest jarDigest = sha256();
+        try (InputStream in = new DigestInputStream(Files.newInputStream(jar), jarDigest)) {
+            in.transferTo(OutputStream.nullOutputStream());
+        }
+        StringBuilder text = new StringBuilder("jar ").append(HexFormat.of().formatHex(jarDigest.digest()));
+        for (DependencyCodegenHints brick : bricks) {
+            text.append("\nbrick ").append(brick.brick())
+                    .append("\nresources ").append(String.join(",", brick.resources()))
+                    .append("\nclass-bytes ").append(String.join(",", brick.classBytes()))
+                    .append("\nmarkers ").append(String.join(",", brick.markers()));
+        }
+        return HexFormat.of().formatHex(sha256().digest(text.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** {@code signed true|false}, then {@code match <brick index> <reason>} and {@code skip <brick index> <marker>}. */
+    private static List<String> format(Decision decision, List<DependencyCodegenHints> bricks) {
+        List<String> lines = new ArrayList<>();
+        lines.add("signed " + decision.signed());
+        decision.matches().forEach(m -> lines.add("match " + bricks.indexOf(m.brick()) + " " + m.reason()));
+        decision.skips().forEach(k -> lines.add("skip " + bricks.indexOf(k.brick()) + " " + k.marker()));
+        return lines;
+    }
+
+    /** The decision {@link #format} wrote, with the bricks' own hints; empty when the lines are not such a file. */
+    private static Optional<Decision> parse(Path jar, List<DependencyCodegenHints> bricks, List<String> lines) {
+        if (lines.isEmpty() || !lines.getFirst().matches("signed (true|false)")) {
+            return Optional.empty();
+        }
+        boolean signed = lines.getFirst().equals("signed true");
+        var matches = new ArrayList<Match>();
+        var skips = new ArrayList<Skip>();
+        for (String line : lines.subList(1, lines.size())) {
+            String[] parts = line.split(" ", 3);
+            if (parts.length < 3 || !parts[1].matches("[0-9]{1,6}") || Integer.parseInt(parts[1]) >= bricks.size()) {
+                return Optional.empty();
+            }
+            DependencyCodegenHints brick = bricks.get(Integer.parseInt(parts[1]));
+            switch (parts[0]) {
+                case "match" -> matches.add(new Match(brick, parts[2]));
+                case "skip" -> skips.add(new Skip(brick, parts[2]));
+                default -> {
+                    return Optional.empty();
+                }
+            }
+        }
+        return Optional.of(new Decision(jar, matches, skips, signed));
+    }
+
+    /** Writes {@code entry} through a temporary file and an atomic move, so a reader never sees half of it. */
+    private static void write(Path entry, List<String> lines) throws IOException {
+        Files.createDirectories(entry.getParent());
+        Path temp = Files.createTempFile(entry.getParent(), entry.getFileName().toString(), ".tmp");
+        try {
+            Files.write(temp, lines, StandardCharsets.UTF_8);
+            try {
+                Files.move(temp, entry, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, entry, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static int indexOf(byte[] haystack, byte[] needle) {

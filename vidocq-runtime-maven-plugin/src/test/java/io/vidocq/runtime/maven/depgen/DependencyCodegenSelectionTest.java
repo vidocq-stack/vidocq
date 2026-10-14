@@ -152,4 +152,71 @@ class DependencyCodegenSelectionTest {
         assertFalse(d.selected());
         assertFalse(d.signed());
     }
+
+    // --- memo -------------------------------------------------------------------------------------------------
+
+    private static final DependencyCodegenHints FOY = brick("Foy", List.of("META-INF/web-fragment.xml"),
+            List.of("jakarta/servlet/annotation/Web"), List.of("META-INF/foy/done"));
+    private static final DependencyCodegenHints OTHER = brick("Other", List.of("META-INF/other"), List.of(),
+            List.of("META-INF/other-done"));
+
+    private static long entries(Path memo) throws IOException {
+        if (!Files.isDirectory(memo)) {
+            return 0;
+        }
+        try (var files = Files.list(memo)) {
+            return files.filter(p -> !p.getFileName().toString().contains(".tmp")).count();
+        }
+    }
+
+    @Test
+    void aMemoizedDecisionIsTheSameAsTheSearchedOne() throws IOException {
+        var jar = jar("lib.jar", "com/acme/Boot.class", "..jakarta/servlet/annotation/WebListener..",
+                "META-INF/other-done", "", "META-INF/LIB.SF", "x");
+        Path memo = dir.resolve("memo");
+        var searched = DependencyCodegenSelection.decide(jar, List.of(OTHER, FOY));
+
+        var first = DependencyCodegenSelection.decide(jar, List.of(OTHER, FOY), memo, true);
+        var second = DependencyCodegenSelection.decide(jar, List.of(OTHER, FOY), memo, true);
+
+        assertEquals(1, entries(memo), "one entry per (jar, hints)");
+        assertEquals(searched, first);
+        assertEquals(searched, second, "the memo gives back the bricks' own hints, the reasons and the signature");
+        assertTrue(second.matches().getFirst().brick() == FOY && second.skips().getFirst().brick() == OTHER);
+    }
+
+    @Test
+    void aJarIsSearchedOncePerJarAndHints() throws IOException {
+        var jar = jar("lib.jar", "com/acme/Boot.class", "..jakarta/servlet/annotation/WebListener..");
+        Path memo = dir.resolve("memo");
+        DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+        // What the memo says is what the next build gets: the jar is not searched again.
+        try (var files = Files.list(memo)) {
+            Files.writeString(files.findFirst().orElseThrow(), "signed true\n");
+        }
+
+        var memoized = DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+
+        assertFalse(memoized.selected());
+        assertTrue(memoized.signed());
+        assertTrue(DependencyCodegenSelection.decide(jar, List.of(FOY, OTHER), memo, true).selected(),
+                "other hints, another entry");
+        assertEquals(2, entries(memo));
+    }
+
+    @Test
+    void aReadOnlyLookupWritesNothingAndADamagedEntryIsSearchedAgain() throws IOException {
+        var jar = jar("lib.jar", "META-INF/web-fragment.xml", "<x/>");
+        Path memo = dir.resolve("memo");
+
+        assertTrue(DependencyCodegenSelection.decide(jar, List.of(FOY), memo, false).selected());
+        assertEquals(0, entries(memo));
+
+        DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+        try (var files = Files.list(memo)) {
+            Files.writeString(files.findFirst().orElseThrow(), "match 7 nonsense\n");
+        }
+        assertEquals(DependencyCodegenSelection.decide(jar, List.of(FOY)),
+                DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true));
+    }
 }
