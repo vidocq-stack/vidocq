@@ -67,11 +67,11 @@ public class VidocqPackageMojo extends AbstractMojo {
 
     /**
      * Java module of the application's {@code @VidocqMain} trampoline. When set together
-     * with a non-default {@link #mainClass}, the layer-mode scripts launch the trampoline
-     * directly ({@code --module <mainModule>/<mainClass>} with {@code app/} on the module
-     * path) — {@code Vidocq.run()} then re-layers the application through the Vauban
-     * class loader; otherwise the scripts boot the runtime with
-     * {@code -Dvidocq.app.path}.
+     * with a non-default {@link #mainClass} under {@code vidocq.app.layer=classes}, the
+     * layer-mode scripts launch the trampoline directly ({@code --module <mainModule>/<mainClass>}
+     * with {@code app/} on the module path) — {@code Vidocq.run()} then re-layers the
+     * application through the Vauban class loader; otherwise (and always under {@code all}) the
+     * scripts boot the runtime with {@code -Dvidocq.app.path} and {@code -Dvidocq.app.main}.
      */
     @Parameter(property = "vidocq.mainModule")
     private String mainModule;
@@ -288,7 +288,7 @@ public class VidocqPackageMojo extends AbstractMojo {
     void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
-        if (layerMode && trampolineRef() != null) {
+        if (trampolineLaunch()) {
             // @VidocqMain trampoline launch: the app rides the module path; Vidocq.run()
             // re-layers it through the Vauban class loader — one launch shape for the
             // IDE, the dev mode and the distribution.
@@ -333,7 +333,7 @@ public class VidocqPackageMojo extends AbstractMojo {
     void generateCmdScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
-        if (layerMode && trampolineRef() != null) {
+        if (trampolineLaunch()) {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
@@ -390,6 +390,15 @@ public class VidocqPackageMojo extends AbstractMojo {
                     + mainClass + "), or write vidocq.mainClass as <module>/" + mainClass + ".");
         }
         return mainModule + "/" + mainClass;
+    }
+
+    /**
+     * Whether the layer scripts launch the application trampoline: a trampoline main is known and the mode is
+     * {@code classes}. Under {@code all} the scripts always pass {@code app/} through {@code -Dvidocq.app.path}: the
+     * trampoline's module path would keep the automatic libraries in the boot layer (Vidocq/vidocq#247).
+     */
+    private boolean trampolineLaunch() {
+        return layerMode && trampolineRef() != null && LayerSplit.Mode.of(appLayer) != LayerSplit.Mode.ALL;
     }
 
     /**

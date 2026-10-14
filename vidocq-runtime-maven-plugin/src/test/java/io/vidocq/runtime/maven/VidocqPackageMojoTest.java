@@ -193,19 +193,81 @@ class VidocqPackageMojoTest {
         assertFalse(Files.exists(dist.resolve("app/flow-server.jar")));
     }
 
+    /**
+     * Under {@code all} the scripts hand {@code app/} to the runtime through {@code -Dvidocq.app.path} even when a
+     * trampoline main is known: the trampoline's module path would keep the automatic libraries in the boot layer.
+     */
     @Test
-    void allTrampolineScriptSetsTheMode(@TempDir Path binDir) throws Exception {
-        VidocqPackageMojo mojo = mojoWith(null);
-        setBoolean(mojo, "layerMode", true);
-        set(mojo, "mainClass", "io.repro.app.Main");
-        set(mojo, "mainModule", "io.repro.app");
-        set(mojo, "appLayer", "all");
+    void allLaunchesThroughTheAppPathEvenWithATrampolineMain(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = trampolineMojo("all");
 
         mojo.generateShScript(binDir);
         mojo.generateCmdScript(binDir);
 
-        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer=all \\"));
-        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer=all ^"));
+        String sh = Files.readString(binDir.resolve("app.sh"));
+        assertTrue(sh.contains("--module-path \"$BASEDIR/lib\" \\"), sh);
+        assertTrue(sh.contains("-Dvidocq.app.path=\"$BASEDIR/app\" \\"), sh);
+        assertTrue(sh.contains("-Dvidocq.app.main=io.repro.app.Main \\"), sh);
+        assertTrue(sh.contains("-Dvidocq.app.layer=all \\"), sh);
+        assertTrue(sh.contains("--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\"), sh);
+        assertFalse(sh.contains("$BASEDIR/lib:$BASEDIR/app"), sh);
+        String cmd = Files.readString(binDir.resolve("app.cmd"));
+        assertTrue(cmd.contains("--module-path \"%BASEDIR%\\lib\" ^"), cmd);
+        assertTrue(cmd.contains("-Dvidocq.app.path=\"%BASEDIR%\\app\" ^"), cmd);
+        assertTrue(cmd.contains("-Dvidocq.app.main=io.repro.app.Main ^"), cmd);
+        assertTrue(cmd.contains("-Dvidocq.app.layer=all ^"), cmd);
+        assertFalse(cmd.contains("%BASEDIR%\\lib;%BASEDIR%\\app"), cmd);
+    }
+
+    /** {@code classes} keeps today's trampoline scripts byte for byte, without any {@code -Dvidocq.app.layer} line. */
+    @Test
+    void classesKeepsTheTrampolineScripts(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = trampolineMojo("classes");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertEquals("""
+                #!/bin/sh
+                BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
+                exec java \\
+                  --module-path "$BASEDIR/lib:$BASEDIR/app" \\
+                  --add-modules ALL-MODULE-PATH \\
+                  --module io.repro.app/io.repro.app.Main \\
+                  "$@"
+                """, Files.readString(binDir.resolve("app.sh")));
+        assertEquals("""
+                @echo off
+                set BASEDIR=%~dp0..
+                java ^
+                  --module-path "%BASEDIR%\\lib;%BASEDIR%\\app" ^
+                  --add-modules ALL-MODULE-PATH ^
+                  --module io.repro.app/io.repro.app.Main ^
+                  %*
+                """, Files.readString(binDir.resolve("app.cmd")));
+    }
+
+    /** {@code classes} adds no {@code -Dvidocq.app.layer} line to the runtime-main scripts either. */
+    @Test
+    void classesAddsNoModeLineToTheAppPathScripts(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        setBoolean(mojo, "layerMode", true);
+        set(mojo, "appLayer", "classes");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer"));
+        assertFalse(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer"));
+    }
+
+    private static VidocqPackageMojo trampolineMojo(String appLayer) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        setBoolean(mojo, "layerMode", true);
+        set(mojo, "mainClass", "io.repro.app.Main");
+        set(mojo, "mainModule", "io.repro.app");
+        set(mojo, "appLayer", appLayer);
+        return mojo;
     }
 
     @Test
