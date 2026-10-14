@@ -72,15 +72,16 @@ public class VidocqAnalyzeDepsMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         try {
-            var decisions = ScanSelection.decide(ScanSelection.dependenciesOf(project.getArtifacts()),
-                    scanDependencies == null ? List.of() : scanDependencies,
-                    scanExcludes == null ? List.of() : scanExcludes, autoScan);
+            var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
+            List<String> excludes = scanExcludes == null ? List.of() : scanExcludes;
+            var selections = DependencyCodegenPass.select(
+                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos), dependencies, excludes);
+            var decisions = ScanSelection.decide(dependencies,
+                    scanDependencies == null ? List.of() : scanDependencies, excludes, autoScan,
+                    DependencyCodegenPass.bricksByJar(selections));
             var cache = new DependencyCodegenCache(DependencyCodegenCache.directory(cacheDir, System.getenv(),
                     System.getProperty("user.home")));
-            var bricks = AnalyzeReport.brickDecisions(
-                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos),
-                    ScanSelection.dependenciesOf(project.getArtifacts()),
-                    scanExcludes == null ? List.of() : scanExcludes, cache,
+            var bricks = AnalyzeReport.brickDecisions(selections, cache,
                     DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")));
             AnalyzeReport.render(decisions, bricks).lines().forEach(getLog()::info);
         } catch (IOException e) {

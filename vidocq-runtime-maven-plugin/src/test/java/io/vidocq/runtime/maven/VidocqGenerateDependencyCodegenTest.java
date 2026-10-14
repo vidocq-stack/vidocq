@@ -167,7 +167,7 @@ class VidocqGenerateDependencyCodegenTest {
         assertEquals(List.of(new EnrichedJars.Scanned(lib, "lib", "com.acme:lib:1.0", List.of("Alpha"),
                 List.of(brickInput(alpha)))), result.processed());
         assertEquals(Set.of("META-INF/fixture/a.list"), result.mergedResources());
-        assertTrue(info.contains("vidocq:generate: lib-1.0.jar — Alpha (1 classes, generated)"), info::toString);
+        assertTrue(info.contains("vidocq:generate: lib-1.0.jar — Alpha (1 class, generated)"), info::toString);
         assertTrue(Files.isRegularFile(buildDir.resolve("vidocq-depgen/lib.log")));
     }
 
@@ -185,8 +185,8 @@ class VidocqGenerateDependencyCodegenTest {
         var result = run(second, List.of(alpha), generator, lib);
 
         assertEquals(1, generated.get(), "the second run is a cache hit");
-        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Alpha (1 classes, generated)",
-                "vidocq:generate: lib-1.0.jar — Alpha (1 classes, cached)"), info);
+        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Alpha (1 class, generated)",
+                "vidocq:generate: lib-1.0.jar — Alpha (1 class, cached)"), info);
         Path patch = JpmsPatches.patchDirFor(second, "lib");
         assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
         assertEquals("com.acme.Foo\n", Files.readString(patch.resolve("META-INF/fixture/a.list")));
@@ -293,6 +293,49 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void theLineCountsTwoClassesInThePlural() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
+        DependencyCodegenPass.Generator two = (jar, bricks, classpath, release, coordinates, log, display) ->
+                new DependencyCodegen.Output(Map.of("com/acme/Foo$$A.class", classBytes("com.acme.Foo$$A"),
+                        "com/acme/Foo$$B.class", classBytes("com.acme.Foo$$B")), List.of());
+
+        run(dir.resolve("target"), List.of(fakeBrick("Alpha")), two, lib);
+
+        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Alpha (2 classes, generated)"), info);
+    }
+
+    @Test
+    void aJarOfTheVidocqRuntimeIsNoBrickCandidate() throws Exception {
+        Path own = plainJar("foy-core-1.0", Map.of(ALPHA_MARKER, ""));
+        Path sub = plainJar("ext-1.0", Map.of(ALPHA_MARKER, ""));
+        Path lookalike = plainJar("lookalike-1.0", Map.of(ALPHA_MARKER, ""));
+        var deps = List.of(new ScanSelection.Dependency("io.vidocq", "foy-core", "1.0", own),
+                new ScanSelection.Dependency("io.vidocq.ext", "ext", "1.0", sub),
+                new ScanSelection.Dependency("io.vidocqx", "lookalike", "1.0", lookalike));
+
+        var result = pass(dir.resolve("target"), List.of(fakeBrick("Alpha")), fake(Map.of(), List.of()))
+                .run(deps, List.of(own, sub, lookalike), RELEASE, List.of(), List.of());
+
+        assertEquals(List.of("lookalike"), result.processed().stream().map(EnrichedJars.Scanned::artifactId).toList());
+    }
+
+    @Test
+    void theSelectionNamesTheBricksOfEachJarItKeeps() throws Exception {
+        Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, "", "META-INF/fixture/beta", ""));
+        Path done = plainJar("done-1.0", Map.of(ALPHA_MARKER, "", "META-INF/fixture/alpha-done", ""));
+        Path excluded = plainJar("excluded-1.0", Map.of(ALPHA_MARKER, ""));
+        Path plain = plainJar("plain-1.0", Map.of());
+        var bricks = List.of(fakeBrick("Beta"), fakeBrick("Alpha"));
+
+        var selection = DependencyCodegenPass.select(bricks, List.of(lib, done, excluded, plain).stream()
+                .map(VidocqGenerateDependencyCodegenTest::dep).toList(), List.of("com.acme:excluded"));
+
+        assertEquals(List.of("lib", "done"), selection.stream().map(s -> s.dependency().artifactId()).toList(),
+                "a jar a brick skips for its marker stays, to be reported");
+        assertEquals(Map.of(lib, List.of("Beta", "Alpha")), DependencyCodegenPass.bricksByJar(selection));
+    }
+
+    @Test
     void withoutABrickNothingRuns() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
 
@@ -315,7 +358,7 @@ class VidocqGenerateDependencyCodegenTest {
         var scanned = result.processed().getFirst();
         assertEquals(List.of("Alpha", "Beta"), scanned.bricks());
         assertEquals(List.of(brickInput(alpha), brickInput(beta)), scanned.brickInputs());
-        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Beta, Alpha (1 classes, generated)"), info);
+        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Beta, Alpha (1 class, generated)"), info);
     }
 
     @Test

@@ -85,6 +85,21 @@ class DependencyCodegenSelectionTest {
     }
 
     @Test
+    void aJarThatDefinesTheHintedClassesIsNotAUserOfThem() throws IOException {
+        var api = jar("api.jar", "jakarta/servlet/annotation/WebListener.class",
+                "Êþ..jakarta/servlet/annotation/WebListener..", "jakarta/servlet/Filter.class",
+                "Êþ..jakarta/servlet/annotation/HandlesTypes..");
+        var hint = brick("foy", List.of(), List.of("jakarta/servlet/annotation/Web"), List.of());
+        var both = brick("foy", List.of(), List.of("jakarta/servlet/annotation/Web",
+                "jakarta/servlet/annotation/HandlesTypes"), List.of());
+
+        assertFalse(DependencyCodegenSelection.decide(api, List.of(hint)).selected());
+        var d = DependencyCodegenSelection.decide(api, List.of(both));
+        assertEquals("class bytes jakarta/servlet/annotation/HandlesTypes in jakarta/servlet/Filter.class",
+                d.matches().getFirst().reason(), "the other hint still matches");
+    }
+
+    @Test
     void aVersionedClassDoesNotMatch() throws IOException {
         var jar = jar("a.jar", "META-INF/versions/21/com/acme/Boot.class", "jakarta/servlet/annotation/Web");
         var foy = brick("foy", List.of(), List.of("jakarta/servlet/annotation/Web"), List.of());

@@ -71,7 +71,8 @@ import java.util.Set;
  * <p>
  * Then runs the processors of every brick on the compiler's {@code annotationProcessorPaths} over the dependency
  * jars their hints select ({@link DependencyCodegenPass}); what they generate joins the jar's enriched copy, next to
- * Vauban's output (Vidocq/vidocq#246).
+ * Vauban's output (Vidocq/vidocq#246). The bricks select before Vauban runs: a jar a brick selects is scanned by
+ * Vauban too, since several bricks find their components among CDI beans.
  * </p>
  */
 @Mojo(name = "generate",
@@ -157,7 +158,12 @@ public class VidocqGenerateMojo extends AbstractMojo {
         try {
             int peanoProviders=PeanoAccessorRegistration.apply(classesDir);
             if (peanoProviders>0) getLog().info("Peano accessor providers registered: "+peanoProviders);
-            Map<Path, String> scannedByArtifactId = collectScannedDependencies();
+            // The bricks select first: a jar a brick selects is scanned by Vauban too, its components being CDI beans.
+            List<Brick> brickList = DependencyBricks.of(project, repoSystem, repoSession, remoteRepos);
+            var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
+            var brickSelection = DependencyCodegenPass.select(brickList, dependencies, orEmpty(scanExcludes));
+            Map<Path, String> scannedByArtifactId = collectScannedDependencies(dependencies,
+                    DependencyCodegenPass.bricksByJar(brickSelection));
             List<String> providers = List.of();
             if (scannedByArtifactId.isEmpty()) {
                 getLog().info("No dependencies to process (scanDependencies empty or all pre-processed)");
@@ -165,14 +171,13 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 providers = generateVauban(classesDir, scannedByArtifactId);
             }
 
-            // The bricks' processors run whatever Vauban selected: a jar no CDI scan names can still need them.
             List<Path> closure = new ArrayList<>();
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
                     closure.add(artifact.getFile().toPath());
                 }
             }
-            DependencyCodegenPass.Result bricks = generateForBricks(closure);
+            DependencyCodegenPass.Result bricks = generateForBricks(brickList, brickSelection, closure);
             if (scannedByArtifactId.isEmpty() && bricks.processed().isEmpty()) {
                 clearEnrichedCopies();
                 return;
@@ -289,9 +294,10 @@ public class VidocqGenerateMojo extends AbstractMojo {
     }
 
     /** The bricks' part: their processors over the dependency jars they select, into the jars' patch directories. */
-    private DependencyCodegenPass.Result generateForBricks(List<Path> closure)
-            throws IOException, MojoExecutionException, MojoFailureException {
-        List<Brick> bricks = DependencyBricks.of(project, repoSystem, repoSession, remoteRepos);
+    private DependencyCodegenPass.Result generateForBricks(List<Brick> bricks,
+                                                           List<DependencyCodegenPass.Selection> selections,
+                                                           List<Path> closure)
+            throws IOException, MojoFailureException {
         if (bricks.isEmpty()) {
             return new DependencyCodegenPass.Result(List.of(), Set.of());
         }
@@ -299,9 +305,9 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 System.getProperty("user.home")));
         var pass = new DependencyCodegenPass(bricks, cache, DependencyCodegenPass.JAVAC, buildDirectory.toPath(),
                 project.getBasedir().toPath(), getLog()::info, getLog()::warn, getLog()::error);
-        return pass.run(ScanSelection.dependenciesOf(project.getArtifacts()), closure,
+        return pass.generate(selections, closure,
                 DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
-                orEmpty(scanDependencies), orEmpty(scanExcludes));
+                orEmpty(scanDependencies));
     }
 
     /** Nothing is scanned this run: no earlier enriched copy may still stand in for its jar. */
@@ -324,14 +330,15 @@ public class VidocqGenerateMojo extends AbstractMojo {
         return new URLClassLoader(urls.toArray(new URL[0]), getClass().getClassLoader());
     }
 
-    /** Scanned dependency jar → artifactId, in dependency order. */
-    private Map<Path, String> collectScannedDependencies() throws IOException {
+    /** Scanned dependency jar → artifactId, in dependency order; {@code bricksByJar}: the jars the bricks select. */
+    private Map<Path, String> collectScannedDependencies(List<ScanSelection.Dependency> dependencies,
+                                                         Map<Path, List<String>> bricksByJar) throws IOException {
         Map<Path, String> deps = new LinkedHashMap<>();
-        for (var d : ScanSelection.decide(ScanSelection.dependenciesOf(project.getArtifacts()),
-                orEmpty(scanDependencies), orEmpty(scanExcludes), autoScan)) {
+        for (var d : ScanSelection.decide(dependencies, orEmpty(scanDependencies), orEmpty(scanExcludes), autoScan,
+                bricksByJar)) {
             if (d.selected()) {
                 deps.put(d.dependency().jar(), d.dependency().artifactId());
-                getLog().info("Scanning " + d.dependency().coordinates() + ": " + d.source().label());
+                getLog().info("Scanning " + d.dependency().coordinates() + ": " + d.sourceLabel());
             } else if (d.excludedBecause() != null) {
                 if (d.facts().processed()) {
                     getLog().debug("Skipping " + d.dependency().coordinates() + ": " + d.excludedBecause());

@@ -71,6 +71,15 @@ final class DependencyCodegenPass {
     record Result(List<EnrichedJars.Scanned> processed, Set<String> mergedResources) {
     }
 
+    /**
+     * What the bricks decide for one dependency jar that one of them wants or skips.
+     *
+     * @param bricks the bricks that select it, in their order; empty when every concerned brick skips it
+     */
+    record Selection(ScanSelection.Dependency dependency, DependencyCodegenSelection.Decision decision,
+                     List<Brick> bricks) {
+    }
+
     private final List<Brick> bricks;
     private final DependencyCodegenCache cache;
     private final Generator generator;
@@ -96,33 +105,80 @@ final class DependencyCodegenPass {
     }
 
     /**
-     * Runs the pass over {@code dependencies}. The problems of every jar are collected first, then fail the build
-     * together, one line each.
-     *
-     * @param classpath        the jars' compile classpath: every dependency jar or directory of the project
-     * @param scanDependencies patterns naming the signed jars to process anyway
-     * @param scanExcludes     patterns of jars never processed
+     * The bricks' decision for each of {@code dependencies} that one of them wants or skips, in their order: the one
+     * place that selects jars for the bricks. A jar of the Vidocq runtime itself (group {@code io.vidocq} or
+     * {@code io.vidocq.*}) is no candidate, nor is a jar in {@code scanExcludes} or a reactor classes directory.
      */
-    Result run(List<ScanSelection.Dependency> dependencies, List<Path> classpath, int release,
-               List<String> scanDependencies, List<String> scanExcludes) throws MojoFailureException, IOException {
+    static List<Selection> select(List<Brick> bricks, List<ScanSelection.Dependency> dependencies,
+                                  List<String> scanExcludes) throws IOException {
+        List<Selection> selections = new ArrayList<>();
         if (bricks.isEmpty()) {
-            return new Result(List.of(), Set.of());
+            return selections;
         }
-        Set<String> mergedResources = DependencyBricks.mergedResources(bricks);
         List<DependencyCodegenHints> hints = bricks.stream().map(Brick::hints).toList();
-        List<EnrichedJars.Scanned> processed = new ArrayList<>();
-        List<String> failures = new ArrayList<>();
         for (ScanSelection.Dependency dep : dependencies) {
-            Path jar = dep.jar();
-            if (!Files.isRegularFile(jar) || matchesAny(scanExcludes, dep)) {
+            if (!Files.isRegularFile(dep.jar()) || isVidocqRuntime(dep) || matchesAny(scanExcludes, dep)) {
                 continue;
             }
-            var decision = DependencyCodegenSelection.decide(jar, hints);
-            if (!decision.selected()) {
+            var decision = DependencyCodegenSelection.decide(dep.jar(), hints);
+            if (decision.matches().isEmpty() && decision.skips().isEmpty()) {
                 continue;
             }
             List<Brick> selected = bricks.stream()
                     .filter(b -> decision.matches().stream().anyMatch(m -> m.brick() == b.hints())).toList();
+            selections.add(new Selection(dep, decision, selected));
+        }
+        return selections;
+    }
+
+    /** The jars some brick selects, with the names of those bricks: what Vauban scans for them too. */
+    static Map<Path, List<String>> bricksByJar(List<Selection> selections) {
+        Map<Path, List<String>> byJar = new LinkedHashMap<>();
+        for (Selection s : selections) {
+            if (!s.bricks().isEmpty()) {
+                byJar.put(s.dependency().jar(), s.bricks().stream().map(b -> b.hints().brick()).toList());
+            }
+        }
+        return byJar;
+    }
+
+    private static boolean isVidocqRuntime(ScanSelection.Dependency dep) {
+        return "io.vidocq".equals(dep.groupId()) || dep.groupId().startsWith("io.vidocq.");
+    }
+
+    /**
+     * Runs the pass over {@code dependencies}: {@link #select} then {@link #generate}.
+     *
+     * @param scanExcludes patterns of jars never processed
+     */
+    Result run(List<ScanSelection.Dependency> dependencies, List<Path> classpath, int release,
+               List<String> scanDependencies, List<String> scanExcludes) throws MojoFailureException, IOException {
+        return generate(select(bricks, dependencies, scanExcludes), classpath, release, scanDependencies);
+    }
+
+    /**
+     * Generates for the jars of {@code selections} that a brick selects. The problems of every jar are collected
+     * first, then fail the build together, one line each.
+     *
+     * @param classpath        the jars' compile classpath: every dependency jar or directory of the project
+     * @param scanDependencies patterns naming the signed jars to process anyway
+     */
+    Result generate(List<Selection> selections, List<Path> classpath, int release, List<String> scanDependencies)
+            throws MojoFailureException, IOException {
+        if (bricks.isEmpty()) {
+            return new Result(List.of(), Set.of());
+        }
+        Set<String> mergedResources = DependencyBricks.mergedResources(bricks);
+        List<EnrichedJars.Scanned> processed = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        for (Selection selection : selections) {
+            if (selection.bricks().isEmpty()) {
+                continue;
+            }
+            ScanSelection.Dependency dep = selection.dependency();
+            Path jar = dep.jar();
+            var decision = selection.decision();
+            List<Brick> selected = selection.bricks();
             String names = selected.stream().map(b -> b.hints().brick()).collect(Collectors.joining(", "));
             String file = jar.getFileName().toString();
             if (decision.signed() && !matchesAny(scanDependencies, dep)) {
@@ -153,7 +209,8 @@ final class DependencyCodegenPass {
                 continue;
             }
             long classes = output.files().keySet().stream().filter(n -> n.endsWith(".class")).count();
-            info.accept("vidocq:generate: " + file + " — " + names + " (" + classes + " classes, "
+            info.accept("vidocq:generate: " + file + " — " + names + " (" + classes
+                    + (classes == 1 ? " class, " : " classes, ")
                     + (cached.isPresent() ? "cached" : "generated") + ")");
             if (output.files().isEmpty()) {
                 continue;

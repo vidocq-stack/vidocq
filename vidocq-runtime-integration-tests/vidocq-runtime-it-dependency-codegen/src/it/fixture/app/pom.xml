@@ -32,7 +32,7 @@
         </dependency>
         <!-- The library of ../lib, whose @WebListener only vidocq:generate can make visible to Foy. -->
         <dependency>
-            <groupId>io.vidocq.it</groupId>
+            <groupId>com.acme</groupId>
             <artifactId>dependency-codegen-weblib</artifactId>
             <version>1.0</version>
         </dependency>

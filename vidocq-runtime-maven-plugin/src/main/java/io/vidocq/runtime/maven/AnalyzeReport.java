@@ -19,12 +19,9 @@
  */
 package io.vidocq.runtime.maven;
 
-import io.vidocq.runtime.maven.depgen.Brick;
 import io.vidocq.runtime.maven.depgen.DependencyCodegenCache;
-import io.vidocq.runtime.maven.depgen.DependencyCodegenSelection;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,23 +43,15 @@ final class AnalyzeReport {
     }
 
     /**
-     * The bricks' decision for each of {@code dependencies} that a brick wants or skips, with what the cache holds
-     * for it. Reads the jars and the cache, never runs a processor.
+     * The bricks' decision for each jar of {@code selections} ({@link DependencyCodegenPass#select}), with what the
+     * cache holds for it. Reads the cache, never runs a processor.
      */
-    static List<BrickLine> brickDecisions(List<Brick> bricks, List<ScanSelection.Dependency> dependencies,
-                                          List<String> scanExcludes, DependencyCodegenCache cache, int release)
-            throws IOException {
+    static List<BrickLine> brickDecisions(List<DependencyCodegenPass.Selection> selections,
+                                          DependencyCodegenCache cache, int release) throws IOException {
         List<BrickLine> lines = new ArrayList<>();
-        if (bricks.isEmpty()) {
-            return lines;
-        }
-        var hints = bricks.stream().map(Brick::hints).toList();
-        for (ScanSelection.Dependency dep : dependencies) {
-            if (!Files.isRegularFile(dep.jar())
-                    || scanExcludes.stream().anyMatch(p -> ScanSelection.matches(p, dep.groupId(), dep.artifactId()))) {
-                continue;
-            }
-            var decision = DependencyCodegenSelection.decide(dep.jar(), hints);
+        for (DependencyCodegenPass.Selection selection : selections) {
+            ScanSelection.Dependency dep = selection.dependency();
+            var decision = selection.decision();
             List<String> parts = new ArrayList<>();
             for (var match : decision.matches()) {
                 parts.add(match.brick().brick() + " (" + match.reason() + ")");
@@ -78,9 +67,7 @@ final class AnalyzeReport {
                 if (decision.signed()) {
                     text.append(", signed: processed only when named in scanDependencies");
                 }
-                List<Brick> selected = bricks.stream()
-                        .filter(b -> decision.matches().stream().anyMatch(m -> m.brick() == b.hints())).toList();
-                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selected, release));
+                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release));
                 if (cached.isPresent()) {
                     long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();
                     text.append(", cached (").append(classes).append(classes == 1 ? " class)" : " classes)");
@@ -107,7 +94,7 @@ final class AnalyzeReport {
                     .append(f.signed() ? ", signed" : "").append('\n');
             out.append("    ");
             if (d.selected()) {
-                out.append("scanned: ").append(d.source().label()).append(" → ")
+                out.append("scanned: ").append(d.sourceLabel()).append(" → ")
                         .append(f.automatic() ? "open module synthesized, then enriched copy" : "enriched copy");
                 if (d.source() == ScanSelection.Source.AUTOMATIC) {
                     block.append("    <scanDependency>").append(d.dependency().groupId()).append(':')

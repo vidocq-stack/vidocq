@@ -4,8 +4,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <!-- A plain library shipping a @WebListener, as Vaadin does: no parent, no module-info, no Foy processor of
-         its own, an Automatic-Module-Name. -->
-    <groupId>io.vidocq.it</groupId>
+         its own, an Automatic-Module-Name. A third-party groupId: vidocq:generate never processes io.vidocq jars. -->
+    <groupId>com.acme</groupId>
     <artifactId>dependency-codegen-weblib</artifactId>
     <version>1.0</version>
     <properties>

@@ -153,6 +153,47 @@ class ScanSelectionTest {
     }
 
     @Test
+    void aJarABrickSelectsIsScannedAfterTheOtherSources() throws Exception {
+        var lib = dep("org.l", "lib", jar("l.jar", Map.of("org/l/L.class", "x"), null));
+        var archive = dep("org.a", "archive", jar("a.jar", Map.of("META-INF/beans.xml", ""), null));
+        var named = dep("org.n", "named", jar("n.jar", Map.of("org/n/N.class", "x"), null));
+        var plain = dep("org.p", "plain", jar("p.jar", Map.of("org/p/P.class", "x"), null));
+        Map<Path, List<String>> bricks = Map.of(lib.jar(), List.of("Foy", "Mansart"), archive.jar(), List.of("Foy"),
+                named.jar(), List.of("Foy"));
+
+        var d = byArtifact(ScanSelection.decide(List.of(lib, archive, named, plain), List.of("org.n:named"),
+                List.of(), true, bricks));
+
+        assertTrue(d.get("lib").selected());
+        assertEquals(ScanSelection.Source.BRICK, d.get("lib").source());
+        assertEquals("selected by a brick (Foy, Mansart)", d.get("lib").sourceLabel());
+        assertEquals(ScanSelection.Source.AUTOMATIC, d.get("archive").source());
+        assertEquals("a CDI bean archive", d.get("archive").sourceLabel());
+        assertEquals(ScanSelection.Source.APPLICATION, d.get("named").source());
+        assertFalse(d.get("plain").selected());
+        assertTrue(byArtifact(ScanSelection.decide(List.of(lib), List.of(), List.of(), false, bricks))
+                .get("lib").selected(), "the bean-archive detection does not gate it");
+    }
+
+    @Test
+    void aJarABrickSelectsStillHonoursExcludesMarkersAndSignatures() throws Exception {
+        var excluded = dep("org.x", "excluded", jar("x.jar", Map.of("org/x/X.class", "x"), null));
+        var processed = dep("org.p", "processed", jar("p.jar", Map.of("META-INF/vauban-beans.list", ""), null));
+        var signed = dep("org.s", "signed", jar("s.jar", Map.of("META-INF/SIGNER.SF", "Signature-Version: 1.0\n"),
+                null));
+        Map<Path, List<String>> bricks = Map.of(excluded.jar(), List.of("Foy"), processed.jar(), List.of("Foy"),
+                signed.jar(), List.of("Foy"));
+
+        var d = byArtifact(ScanSelection.decide(List.of(excluded, processed, signed), List.of(), List.of("org.x:*"),
+                true, bricks));
+
+        assertTrue(d.get("excluded").excludedBecause().contains("scanExcludes"));
+        assertTrue(d.get("processed").excludedBecause().contains("already carries generated code"));
+        assertTrue(d.get("signed").excludedBecause().contains("signed"));
+        d.values().forEach(decision -> assertEquals(ScanSelection.Source.BRICK, decision.source()));
+    }
+
+    @Test
     void aReactorDirectoryIsInspectedLikeAJar() throws Exception {
         Path dir = tmp.resolve("reactor/target/classes");
         Files.createDirectories(dir.resolve("META-INF"));

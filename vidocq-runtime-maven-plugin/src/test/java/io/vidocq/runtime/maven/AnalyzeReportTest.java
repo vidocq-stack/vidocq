@@ -95,6 +95,19 @@ class AnalyzeReportTest {
     }
 
     @Test
+    void aJarABrickSelectedNamesTheBricks() {
+        var plain = new ScanSelection.JarFacts(false, null, false, false, true, List.of());
+        var weblib = new ScanSelection.Decision(new ScanSelection.Dependency("org.x", "weblib", "1.0",
+                Path.of("weblib.jar")), plain, ScanSelection.Source.BRICK, null, List.of("Foy"));
+
+        assertEquals("""
+                Dependencies vidocq:generate scans for CDI beans:
+                  org.x:weblib:1.0 — not a bean archive, automatic module
+                    scanned: selected by a brick (Foy) → open module synthesized, then enriched copy
+                """, AnalyzeReport.render(List.of(weblib)));
+    }
+
+    @Test
     void theBrickSectionNamesTheMatchTheSkipAndTheCache() throws Exception {
         var vaadin = jar("vaadin", "META-INF/web-fragment.xml");
         var cachedJar = jar("cached", "META-INF/web-fragment.xml", "x.txt");
@@ -104,8 +117,8 @@ class AnalyzeReportTest {
         cache.put(DependencyCodegenCache.key(cachedJar.jar(), List.of(FOY), 25), new DependencyCodegen.Output(
                 Map.of("a/B.class", new byte[] {1}, "c.list", new byte[] {2}), List.of()));
 
-        var lines = AnalyzeReport.brickDecisions(List.of(FOY), List.of(vaadin, cachedJar, done, plain), List.of(),
-                cache, 25);
+        var lines = AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(FOY),
+                List.of(vaadin, cachedJar, done, plain), List.of()), cache, 25);
         String report = AnalyzeReport.render(List.of(), lines);
 
         assertEquals("""
@@ -122,9 +135,10 @@ class AnalyzeReportTest {
         var vaadin = jar("vaadin", "META-INF/web-fragment.xml");
         var cache = new DependencyCodegenCache(tmp.resolve("cache"));
 
-        assertTrue(AnalyzeReport.brickDecisions(List.of(FOY), List.of(vaadin), List.of("org.x:vaadin"), cache, 25)
-                .isEmpty());
-        assertTrue(AnalyzeReport.brickDecisions(List.of(), List.of(vaadin), List.of(), cache, 25).isEmpty());
+        assertTrue(AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(FOY), List.of(vaadin),
+                List.of("org.x:vaadin")), cache, 25).isEmpty());
+        assertTrue(AnalyzeReport.brickDecisions(DependencyCodegenPass.select(List.of(), List.of(vaadin), List.of()),
+                cache, 25).isEmpty());
         assertTrue(!AnalyzeReport.render(List.of(), List.of()).contains("Brick codegen"));
     }
 }

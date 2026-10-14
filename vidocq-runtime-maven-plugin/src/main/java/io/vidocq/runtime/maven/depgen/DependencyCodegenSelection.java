@@ -35,7 +35,9 @@ import java.util.jar.JarFile;
 
 /**
  * Decides which bricks must run their code generation on a dependency jar, from the hints they declare. Reads the jar
- * once. A directory (a reactor module, compiled by the build itself) is never selected.
+ * once. A directory (a reactor module, compiled by the build itself) is never selected. A {@code class-bytes} hint
+ * does not match a jar that defines classes under it: an API ({@code jakarta.servlet-api} holding
+ * {@code jakarta/servlet/annotation/WebListener}) is not a user of its own annotations.
  */
 public final class DependencyCodegenSelection {
 
@@ -77,7 +79,7 @@ public final class DependencyCodegenSelection {
         var skips = new ArrayList<Skip>();
         boolean signed = false;
         var names = new HashSet<String>();
-        var pending = new ArrayList<DependencyCodegenHints>();
+        var pending = new LinkedHashMap<DependencyCodegenHints, List<String>>();
         var classMatches = new LinkedHashMap<DependencyCodegenHints, String>();
         try (var file = new JarFile(jar.toFile())) {
             for (var e : Collections.list(file.entries())) {
@@ -93,8 +95,12 @@ public final class DependencyCodegenSelection {
                 String resource = brick.resources().stream().filter(names::contains).findFirst().orElse(null);
                 if (resource != null) {
                     matches.add(new Match(brick, "resource " + resource));
-                } else if (!brick.classBytes().isEmpty()) {
-                    pending.add(brick);
+                } else {
+                    List<String> needles = brick.classBytes().stream()
+                            .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
+                    if (!needles.isEmpty()) {
+                        pending.put(brick, needles);
+                    }
                 }
             }
             if (!pending.isEmpty()) {
@@ -107,11 +113,12 @@ public final class DependencyCodegenSelection {
                     try (InputStream in = file.getInputStream(e)) {
                         bytes = in.readAllBytes();
                     }
-                    for (var brick : pending) {
+                    for (var p : pending.entrySet()) {
+                        var brick = p.getKey();
                         if (classMatches.containsKey(brick)) {
                             continue;
                         }
-                        for (String needle : brick.classBytes()) {
+                        for (String needle : p.getValue()) {
                             if (indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0) {
                                 classMatches.put(brick, "class bytes " + needle + " in " + name);
                                 break;

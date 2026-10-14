@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -41,9 +42,10 @@ import java.util.stream.Stream;
 
 /**
  * Which dependency jars {@code vidocq:generate} scans for CDI beans to generate code for, and why each other is left
- * out. Three sources select a jar: an extension that ships it, naming it in its manifest
- * ({@value #MANIFEST_ATTRIBUTE}); the application, in {@code <scanDependencies>}; and, unless turned off, any CDI
- * bean archive — a {@code META-INF/beans.xml} whose discovery mode is not {@code none}. A selected jar is left out
+ * out. Four sources select a jar: an extension that ships it, naming it in its manifest
+ * ({@value #MANIFEST_ATTRIBUTE}); the application, in {@code <scanDependencies>}; unless turned off, any CDI
+ * bean archive — a {@code META-INF/beans.xml} whose discovery mode is not {@code none}; and a brick whose dependency
+ * codegen selects it, since several bricks find their components among CDI beans. A selected jar is left out
  * when it already carries generated code, when {@code <scanExcludes>} names it, or when it is signed and the
  * application did not name it: enriching it would break its signature.
  */
@@ -60,7 +62,8 @@ public final class ScanSelection {
     public enum Source {
         EXTENSION("declared by an extension"),
         APPLICATION("named in scanDependencies"),
-        AUTOMATIC("a CDI bean archive");
+        AUTOMATIC("a CDI bean archive"),
+        BRICK("selected by a brick");
 
         private final String label;
 
@@ -96,10 +99,25 @@ public final class ScanSelection {
      *
      * @param source          what selected it, or {@code null} when nothing did
      * @param excludedBecause why it is left out although selected, or {@code null}
+     * @param bricks          the bricks that selected it, when {@code source} is {@link Source#BRICK}
      */
-    public record Decision(Dependency dependency, JarFacts facts, Source source, String excludedBecause) {
+    public record Decision(Dependency dependency, JarFacts facts, Source source, String excludedBecause,
+                           List<String> bricks) {
+        public Decision {
+            bricks = List.copyOf(bricks);
+        }
+
+        public Decision(Dependency dependency, JarFacts facts, Source source, String excludedBecause) {
+            this(dependency, facts, source, excludedBecause, List.of());
+        }
+
         public boolean selected() {
             return source != null && excludedBecause == null;
+        }
+
+        /** What selected it, as the build prints it: {@code selected by a brick (Foy, Mansart)} for the bricks. */
+        public String sourceLabel() {
+            return source == Source.BRICK ? source.label() + " (" + String.join(", ", bricks) + ")" : source.label();
         }
     }
 
@@ -121,9 +139,20 @@ public final class ScanSelection {
         return Files.isDirectory(file) || file.getFileName().toString().endsWith(".jar");
     }
 
-    /** One decision per dependency, in their order. */
+    /** One decision per dependency, in their order, no brick selecting any. */
     public static List<Decision> decide(List<Dependency> dependencies, List<String> scanDependencies,
                                         List<String> scanExcludes, boolean autoScan) throws IOException {
+        return decide(dependencies, scanDependencies, scanExcludes, autoScan, Map.of());
+    }
+
+    /**
+     * One decision per dependency, in their order.
+     *
+     * @param bricksByJar the jars the bricks' dependency codegen selects, with the names of those bricks
+     */
+    public static List<Decision> decide(List<Dependency> dependencies, List<String> scanDependencies,
+                                        List<String> scanExcludes, boolean autoScan,
+                                        Map<Path, List<String>> bricksByJar) throws IOException {
         List<JarFacts> facts = new ArrayList<>();
         Set<String> extensionPatterns = new LinkedHashSet<>();
         for (Dependency dep : dependencies) {
@@ -135,9 +164,11 @@ public final class ScanSelection {
         for (int i = 0; i < dependencies.size(); i++) {
             Dependency dep = dependencies.get(i);
             JarFacts f = facts.get(i);
+            List<String> bricks = bricksByJar.getOrDefault(dep.jar(), List.of());
             Source source = anyMatch(scanDependencies, dep) ? Source.APPLICATION
                     : anyMatch(extensionPatterns, dep) ? Source.EXTENSION
                     : autoScan && f.beansXml() && !"none".equals(f.discoveryMode()) ? Source.AUTOMATIC
+                    : !bricks.isEmpty() ? Source.BRICK
                     : null;
             String excluded = null;
             if (source != null) {
@@ -150,7 +181,7 @@ public final class ScanSelection {
                             + " enrich it anyway";
                 }
             }
-            decisions.add(new Decision(dep, f, source, excluded));
+            decisions.add(new Decision(dep, f, source, excluded, source == Source.BRICK ? bricks : List.of()));
         }
         return decisions;
     }
