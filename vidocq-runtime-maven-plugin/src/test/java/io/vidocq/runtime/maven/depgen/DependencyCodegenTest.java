@@ -148,6 +148,29 @@ class DependencyCodegenTest {
                 + " java.lang.IllegalStateException: broken state. Fix the library"), line);
     }
 
+    private static Set<Path> depgenTempDirs() throws IOException {
+        try (var dirs = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return dirs.filter(p -> p.getFileName().toString().startsWith("vidocq-depgen-"))
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+    }
+
+    @Test
+    void anErrorFromAProcessorFailsWithOneLineAndLeavesNoTemporaryDirectory() throws Exception {
+        Path jar = acme();
+        Brick broken = brick("Xi", "ProcessorX");
+        Set<Path> before = depgenTempDirs();
+
+        var failure = assertThrows(DependencyCodegen.Failure.class, () -> run(jar, broken));
+
+        assertEquals(1, failure.lines().size(), () -> failure.lines().toString());
+        assertTrue(failure.lines().getFirst().contains("Xi cannot process the jar: a processor threw"
+                + " java.lang.StackOverflowError: processor recursion"), failure.lines()::toString);
+        Set<Path> leaked = new java.util.HashSet<>(depgenTempDirs());
+        leaked.removeAll(before);
+        assertEquals(Set.of(), leaked, "the temporary directory of the run is deleted");
+    }
+
     @Test
     void processorWarningsNameTheBrickAndTheElement() throws Exception {
         Path jar = lib(Map.of(

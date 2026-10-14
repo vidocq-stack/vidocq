@@ -183,8 +183,9 @@ public final class DependencyCodegen {
                 }
             }
             output = new Output(files, warnings);
-        } catch (Failure | IOException | RuntimeException e) {
-            // The temporary directory must not hide why the run failed.
+        } catch (Throwable e) {
+            // Whatever ends the run, an Error included, the temporary directory goes; its deletion must not hide
+            // why the run failed.
             try {
                 delete(tmp);
             } catch (IOException | RuntimeException cleanup) {
