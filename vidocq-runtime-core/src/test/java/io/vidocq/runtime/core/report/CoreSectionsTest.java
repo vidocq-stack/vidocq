@@ -77,6 +77,23 @@ class CoreSectionsTest {
     }
 
     @Test
+    void theHeadlineCountsTheEnrichedLibrariesPerBrick() {
+        var modules = List.of(new LayerModule("acme.app", "/p/target/classes", "directory"),
+                new LayerModule("flow.server", "/p/libs/flow-server.jar", "jar", List.of("Foy")),
+                new LayerModule("acme.repo", "/p/libs/acme-repo.jar", "jar", List.of("Foy", "Mansart")),
+                new LayerModule("flow.commons", "/p/libs/flow-commons.jar", "jar"));
+        Section section = CoreSections.layer("vidocq.app.path", List.of(), modules, 3, Map.of(), null, PATHS);
+
+        assertTrue(section.summary().startsWith("4 modules, 3 libraries, 2 enriched (Foy 2, Mansart 1) ("),
+                section.summary());
+        assertTrue(section.headline().startsWith("4 modules, 3 libraries, 2 enriched (Foy 2, Mansart 1) ("),
+                section.headline());
+        assertEquals(new Cells(List.of("acme.repo", "/p/libs/acme-repo.jar", "jar", "enriched by Foy, Mansart")),
+                section.lines().get(2));
+        assertEquals(new Cells(List.of("flow.commons", "/p/libs/flow-commons.jar", "jar")), section.lines().get(3));
+    }
+
+    @Test
     void oneLibraryIsSingular() {
         var modules = List.of(new LayerModule("acme.app", "/p/target/classes", "directory"),
                 new LayerModule("flow.server", "/p/libs/flow-server.jar", "jar"));

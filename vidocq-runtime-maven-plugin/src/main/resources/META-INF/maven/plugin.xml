@@ -299,7 +299,7 @@
         <!-- vidocq:analyze-deps -->
         <mojo>
             <goal>analyze-deps</goal>
-            <description>Print which dependencies vidocq:generate scans for CDI beans, why, and the scanDependencies block that makes the detected bean archives explicit. Changes nothing.</description>
+            <description>Print which dependencies vidocq:generate scans for CDI beans, why, and the scanDependencies block that makes the detected bean archives explicit, then what the project's codegen bricks would do per dependency and whether the cache holds it. Runs no processor and changes nothing.</description>
             <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -338,6 +338,27 @@
                     <editable>true</editable>
                     <description>Same as vidocq:generate</description>
                 </parameter>
+                <parameter>
+                    <name>cacheDir</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Same as vidocq:generate: the directory caching the bricks' processor output</description>
+                </parameter>
+                <parameter>
+                    <name>repoSession</name>
+                    <type>org.eclipse.aether.RepositorySystemSession</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The repository session, to resolve the bricks' codegen bundles</description>
+                </parameter>
+                <parameter>
+                    <name>remoteRepos</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>The project's remote repositories</description>
+                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
@@ -345,7 +366,18 @@
                 <scanDependencies implementation="java.util.List"/>
                 <scanExcludes implementation="java.util.List"/>
                 <autoScan implementation="boolean" default-value="true">${vidocq.generate.autoScan}</autoScan>
+                <cacheDir implementation="java.lang.String">${vidocq.generate.cacheDir}</cacheDir>
+                <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
+                             default-value="${repositorySystemSession}"/>
+                <remoteRepos implementation="java.util.List"
+                             default-value="${project.remoteProjectRepositories}"/>
             </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.eclipse.aether.RepositorySystem</role>
+                    <field-name>repoSystem</field-name>
+                </requirement>
+            </requirements>
         </mojo>
 
         <!-- vidocq:package -->

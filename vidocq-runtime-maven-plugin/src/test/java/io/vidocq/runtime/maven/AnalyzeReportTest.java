@@ -19,14 +19,44 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.maven.depgen.Brick;
+import io.vidocq.runtime.maven.depgen.DependencyCodegen;
+import io.vidocq.runtime.maven.depgen.DependencyCodegenCache;
+import io.vidocq.runtime.maven.depgen.DependencyCodegenHints;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnalyzeReportTest {
+
+    @TempDir
+    Path tmp;
+
+    private static final Brick FOY = new Brick(new DependencyCodegenHints("Foy",
+            List.of("META-INF/web-fragment.xml"), List.of(), List.of("META-INF/io.vidocq.foy/generated"), List.of()),
+            "g:foy-codegen:1", List.of());
+
+    private ScanSelection.Dependency jar(String artifactId, String... entries) throws IOException {
+        Path file = tmp.resolve(artifactId + ".jar");
+        try (var out = new JarOutputStream(Files.newOutputStream(file))) {
+            for (String entry : entries) {
+                out.putNextEntry(new JarEntry(entry));
+                out.closeEntry();
+            }
+        }
+        return new ScanSelection.Dependency("org.x", artifactId, "1.0", file);
+    }
 
     static ScanSelection.Decision decision(String artifactId, ScanSelection.JarFacts facts,
                                            ScanSelection.Source source, String excluded) {
@@ -62,5 +92,39 @@ class AnalyzeReportTest {
                     <scanDependency>org.x:auto</scanDependency>
                 </scanDependencies>
                 """, report);
+    }
+
+    @Test
+    void theBrickSectionNamesTheMatchTheSkipAndTheCache() throws Exception {
+        var vaadin = jar("vaadin", "META-INF/web-fragment.xml");
+        var cachedJar = jar("cached", "META-INF/web-fragment.xml", "x.txt");
+        var done = jar("done", "META-INF/web-fragment.xml", "META-INF/io.vidocq.foy/generated");
+        var plain = jar("plain", "a.txt");
+        var cache = new DependencyCodegenCache(tmp.resolve("cache"));
+        cache.put(DependencyCodegenCache.key(cachedJar.jar(), List.of(FOY), 25), new DependencyCodegen.Output(
+                Map.of("a/B.class", new byte[] {1}, "c.list", new byte[] {2}), List.of()));
+
+        var lines = AnalyzeReport.brickDecisions(List.of(FOY), List.of(vaadin, cachedJar, done, plain), List.of(),
+                cache, 25);
+        String report = AnalyzeReport.render(List.of(), lines);
+
+        assertEquals("""
+                Dependencies vidocq:generate scans for CDI beans:
+                Brick codegen:
+                  vaadin: Foy (resource META-INF/web-fragment.xml)
+                  cached: Foy (resource META-INF/web-fragment.xml), cached (1 class)
+                  done: Foy skipped (marker META-INF/io.vidocq.foy/generated)
+                """, report);
+    }
+
+    @Test
+    void anExcludedJarIsNotACandidateAndNoBrickMeansNoSection() throws Exception {
+        var vaadin = jar("vaadin", "META-INF/web-fragment.xml");
+        var cache = new DependencyCodegenCache(tmp.resolve("cache"));
+
+        assertTrue(AnalyzeReport.brickDecisions(List.of(FOY), List.of(vaadin), List.of("org.x:vaadin"), cache, 25)
+                .isEmpty());
+        assertTrue(AnalyzeReport.brickDecisions(List.of(), List.of(vaadin), List.of(), cache, 25).isEmpty());
+        assertTrue(!AnalyzeReport.render(List.of(), List.of()).contains("Brick codegen"));
     }
 }

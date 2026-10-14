@@ -56,8 +56,19 @@ public final class CoreSections {
      * @param name     the module name
      * @param location the absolute path of its archive, or {@code null} when it has no file
      * @param kind     {@code directory}, {@code jar}, or the extension of another file
+     * @param enrichedBy the bricks that generated code into this archive at build time, from its
+     *                 {@code Vidocq-Enriched-By} manifest attribute; empty for an archive no brick enriched
      */
-    public record LayerModule(String name, String location, String kind) {}
+    public record LayerModule(String name, String location, String kind, List<String> enrichedBy) {
+
+        public LayerModule {
+            enrichedBy = List.copyOf(enrichedBy);
+        }
+
+        public LayerModule(String name, String location, String kind) {
+            this(name, location, kind, List.of());
+        }
+    }
 
     /**
      * One extension, in the order it started.
@@ -116,8 +127,12 @@ public final class CoreSections {
                                 Map<String, String> pinned, String weaving, DisplayPaths paths) {
         List<Line> lines = new ArrayList<>();
         for (LayerModule module : modules) {
-            lines.add(new Cells(List.of(module.name(),
-                    module.location() == null ? "-" : paths.detailed(module.location()), module.kind())));
+            List<String> cells = new ArrayList<>(List.of(module.name(),
+                    module.location() == null ? "-" : paths.detailed(module.location()), module.kind()));
+            if (!module.enrichedBy().isEmpty()) {
+                cells.add("enriched by " + String.join(", ", module.enrichedBy()));
+            }
+            lines.add(new Cells(cells));
         }
         for (Map.Entry<String, String> pin : pinned.entrySet()) {
             lines.add(new Row("parent layer", pin.getKey() + " (" + pin.getValue() + ")"));
@@ -129,11 +144,29 @@ public final class CoreSections {
             return new Section(LAYER, "no application layer", "no application layer", lines, -1);
         }
         String count = count(modules.size(), "module", "modules")
-                + (libraries > 0 ? ", " + count(libraries, "library", "libraries") : "");
+                + (libraries > 0 ? ", " + count(libraries, "library", "libraries") : "")
+                + enriched(modules);
         String detailed = originPaths.isEmpty() ? origin
                 : origin + ", " + count(originPaths.size(), "archive", "archives");
         return new Section(LAYER, count + " (" + detailed + ")",
                 count + " (" + summaryOrigin(origin, originPaths, paths) + ")", lines, -1);
+    }
+
+    /** {@code , 2 enriched (Foy 1, Mansart 2)}: the archives a brick enriched, per brick; empty when none. */
+    private static String enriched(List<LayerModule> modules) {
+        Map<String, Integer> perBrick = new java.util.TreeMap<>();
+        int total = 0;
+        for (LayerModule module : modules) {
+            if (!module.enrichedBy().isEmpty()) {
+                total++;
+                module.enrichedBy().forEach(brick -> perBrick.merge(brick, 1, Integer::sum));
+            }
+        }
+        if (total == 0) {
+            return "";
+        }
+        return ", " + total + " enriched (" + perBrick.entrySet().stream()
+                .map(e -> e.getKey() + " " + e.getValue()).collect(java.util.stream.Collectors.joining(", ")) + ")";
     }
 
     /**

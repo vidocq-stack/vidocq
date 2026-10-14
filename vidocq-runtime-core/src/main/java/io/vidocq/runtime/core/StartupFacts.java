@@ -29,7 +29,9 @@ import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.lang.module.ResolvedModule;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -105,10 +107,32 @@ final class StartupFacts {
             String kind = file != null ? kind(location, file) : location == null ? "-" : location.getScheme();
             int rank = resolved.name().equals(application) ? -1 : index < 0 ? Integer.MAX_VALUE : index;
             placed.add(new Placed(rank,
-                    new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind)));
+                    new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind,
+                            enrichedBy(file))));
         }
         placed.sort(Comparator.comparingInt(Placed::index).thenComparing(p -> p.module().name()));
         return placed.stream().map(Placed::module).toList();
+    }
+
+    /**
+     * The bricks named by the {@code Vidocq-Enriched-By} manifest attribute of {@code file}, empty for a directory,
+     * a jar without it, or one that cannot be read. The attribute is the plugin's {@code EnrichedJars.ENRICHED_BY};
+     * the core cannot depend on the plugin, so the literal is repeated here.
+     */
+    static List<String> enrichedBy(Path file) {
+        if (file == null || !Files.isRegularFile(file)) {
+            return List.of();
+        }
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(file.toFile())) {
+            java.util.jar.Manifest manifest = jar.getManifest();
+            String value = manifest == null ? null : manifest.getMainAttributes().getValue("Vidocq-Enriched-By");
+            if (value == null || value.isBlank()) {
+                return List.of();
+            }
+            return java.util.Arrays.stream(value.split(",")).map(String::strip).filter(b -> !b.isEmpty()).toList();
+        } catch (IOException | RuntimeException unreadable) {
+            return List.of();
+        }
     }
 
     /**

@@ -110,6 +110,43 @@ class StartupFactsTest {
     }
 
     @Test
+    void aJarOfTheLayerNamesTheBricksThatEnrichedIt() throws Exception {
+        Path plain = jar("plain.lib", null);
+        Path enriched = jar("rich.lib", "Foy, Mansart");
+        var layer = layerOf(plain, enriched);
+
+        var modules = StartupFacts.modules(layer, List.of(plain.toString(), enriched.toString()), null);
+
+        assertEquals(List.of(), modules.get(0).enrichedBy());
+        assertEquals(List.of("Foy", "Mansart"), modules.get(1).enrichedBy());
+    }
+
+    private Path jar(String name, String enrichedBy) throws Exception {
+        Path jar = dir.resolve(name + ".jar");
+        var manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (enrichedBy != null) {
+            manifest.getMainAttributes().putValue("Vidocq-Enriched-By", enrichedBy);
+        }
+        try (var out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            out.putNextEntry(new java.util.zip.ZipEntry("module-info.class"));
+            out.write(ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of(name), m -> m.requires(
+                    ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+            out.closeEntry();
+        }
+        return jar;
+    }
+
+    private static java.lang.ModuleLayer layerOf(Path... jars) {
+        var finder = java.lang.module.ModuleFinder.of(jars);
+        var names = finder.findAll().stream().map(r -> r.descriptor().name()).toList();
+        var cf = java.lang.ModuleLayer.boot().configuration().resolve(finder, java.lang.module.ModuleFinder.of(),
+                names);
+        return java.lang.ModuleLayer.defineModulesWithOneLoader(cf, List.of(java.lang.ModuleLayer.boot()),
+                ClassLoader.getSystemClassLoader()).layer();
+    }
+
+    @Test
     void librariesAreTheModulesOtherThanTheApplication() {
         var modules = List.of(new CoreSections.LayerModule("acme.app", null, "directory"),
                 new CoreSections.LayerModule("flow.server", null, "jar"));

@@ -19,6 +19,13 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.maven.depgen.Brick;
+import io.vidocq.runtime.maven.depgen.DependencyCodegenCache;
+import io.vidocq.runtime.maven.depgen.DependencyCodegenSelection;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 
 /** The text {@code vidocq:analyze-deps} prints: per concerned dependency, what it is and what generate does. */
@@ -26,7 +33,65 @@ final class AnalyzeReport {
 
     private AnalyzeReport() {}
 
+    /**
+     * What the bricks decide for one dependency jar, as {@code vidocq:generate} would.
+     *
+     * @param text the rest of the line after {@code <artifactId>: }
+     */
+    record BrickLine(String artifactId, String text) {
+    }
+
     static String render(List<ScanSelection.Decision> decisions) {
+        return render(decisions, List.of());
+    }
+
+    /**
+     * The bricks' decision for each of {@code dependencies} that a brick wants or skips, with what the cache holds
+     * for it. Reads the jars and the cache, never runs a processor.
+     */
+    static List<BrickLine> brickDecisions(List<Brick> bricks, List<ScanSelection.Dependency> dependencies,
+                                          List<String> scanExcludes, DependencyCodegenCache cache, int release)
+            throws IOException {
+        List<BrickLine> lines = new ArrayList<>();
+        if (bricks.isEmpty()) {
+            return lines;
+        }
+        var hints = bricks.stream().map(Brick::hints).toList();
+        for (ScanSelection.Dependency dep : dependencies) {
+            if (!Files.isRegularFile(dep.jar())
+                    || scanExcludes.stream().anyMatch(p -> ScanSelection.matches(p, dep.groupId(), dep.artifactId()))) {
+                continue;
+            }
+            var decision = DependencyCodegenSelection.decide(dep.jar(), hints);
+            List<String> parts = new ArrayList<>();
+            for (var match : decision.matches()) {
+                parts.add(match.brick().brick() + " (" + match.reason() + ")");
+            }
+            for (var skip : decision.skips()) {
+                parts.add(skip.brick().brick() + " skipped (marker " + skip.marker() + ")");
+            }
+            if (parts.isEmpty()) {
+                continue;
+            }
+            StringBuilder text = new StringBuilder(String.join(", ", parts));
+            if (decision.selected()) {
+                if (decision.signed()) {
+                    text.append(", signed: processed only when named in scanDependencies");
+                }
+                List<Brick> selected = bricks.stream()
+                        .filter(b -> decision.matches().stream().anyMatch(m -> m.brick() == b.hints())).toList();
+                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selected, release));
+                if (cached.isPresent()) {
+                    long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();
+                    text.append(", cached (").append(classes).append(classes == 1 ? " class)" : " classes)");
+                }
+            }
+            lines.add(new BrickLine(dep.artifactId(), text.toString()));
+        }
+        return lines;
+    }
+
+    static String render(List<ScanSelection.Decision> decisions, List<BrickLine> bricks) {
         StringBuilder out = new StringBuilder("Dependencies vidocq:generate scans for CDI beans:\n");
         int others = 0;
         StringBuilder block = new StringBuilder();
@@ -63,6 +128,10 @@ final class AnalyzeReport {
         if (!block.isEmpty()) {
             out.append("\nTo make the detected bean archives explicit:\n<scanDependencies>\n").append(block)
                     .append("</scanDependencies>\n");
+        }
+        if (!bricks.isEmpty()) {
+            out.append("Brick codegen:\n");
+            bricks.forEach(b -> out.append("  ").append(b.artifactId()).append(": ").append(b.text()).append('\n'));
         }
         return out.toString();
     }
