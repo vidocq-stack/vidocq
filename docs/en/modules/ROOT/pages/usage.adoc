@@ -111,7 +111,8 @@ are not detected. A library with native code (JNI) cannot be loaded twice by the
 with `vidocq.app.layer.keep`.
 
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
-libraries. Both launchers carry `-Dvidocq.app.layer=all` and the pinned list. `all` requires the layer mode
+libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a
+main class, and carry `-Dvidocq.app.layer=all` and the pinned list. `all` requires the layer mode
 (`vidocq.dev.layer`, `vidocq.package.layer`), otherwise the goal fails. A dependency whose module name cannot be
 derived fails the build under `all`, with a message that names the jar: add an `Automatic-Module-Name` to it, or
 use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the plugin properties].

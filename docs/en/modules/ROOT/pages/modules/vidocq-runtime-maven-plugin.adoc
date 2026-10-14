@@ -176,7 +176,10 @@ artifact, so a dependency shared with an application library and reached by a ne
 application layer: pin it with `vidocq.app.layer.keep`.
 
 Under `vidocq:package` with `all`, `lib/` holds the parent layer and `app/` holds the application jar and its
-libraries. Both launchers carry `-Dvidocq.app.layer=all`, and the pinned list when there is one. The rule and the
+libraries. Both launchers boot the runtime with `-Dvidocq.app.path` pointing at `app/` and
+`-Dvidocq.app.main` naming the main class, also when `vidocq.mainModule` is set: the trampoline launch would keep the
+automatic libraries in the boot layer. They carry `-Dvidocq.app.layer=all`, and the pinned list when there is one.
+A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
 [#modularize]
