@@ -64,7 +64,7 @@ class StartupFactsTest {
             assertTrue(VidocqAppLayer.installIfConfigured());
             DisplayPaths paths = new DisplayPaths(dir, null);
 
-            Section layer = StartupFacts.layer("none", paths);
+            Section layer = StartupFacts.layer("none", paths, StartupFacts::enrichedBy);
 
             assertEquals("2 modules (vidocq.app.path=..." + File.separator + "zeta.app" + File.pathSeparator + "..."
                     + File.separator + "alpha.lib)", layer.summary());
@@ -81,7 +81,8 @@ class StartupFactsTest {
             }
         }
         assertNull(VidocqAppLayer.installation(), "a reload forgets the layer it tears down");
-        assertEquals("no application layer", StartupFacts.layer("none", new DisplayPaths(dir, null)).summary());
+        assertEquals("no application layer",
+                StartupFacts.layer("none", new DisplayPaths(dir, null), StartupFacts::enrichedBy).summary());
     }
 
     @Test
@@ -96,12 +97,14 @@ class StartupFactsTest {
         try {
             assertTrue(VidocqAppLayer.installIfConfigured());
             DisplayPaths paths = new DisplayPaths(dir, null);
-            assertEquals(List.of("alpha.lib", "zeta.app", "beta.lib"), names(StartupFacts.layer(null, paths)),
+            assertEquals(List.of("alpha.lib", "zeta.app", "beta.lib"),
+                    names(StartupFacts.layer(null, paths, StartupFacts::enrichedBy)),
                     "no application module known: the order of the archives");
 
             System.setProperty(VidocqAppLayer.APP_MAIN_PROPERTY, "zeta.app.Main");
 
-            assertEquals(List.of("zeta.app", "alpha.lib", "beta.lib"), names(StartupFacts.layer(null, paths)));
+            assertEquals(List.of("zeta.app", "alpha.lib", "beta.lib"),
+                    names(StartupFacts.layer(null, paths, StartupFacts::enrichedBy)));
         } finally {
             VidocqAppLayer.resetForReload();
             restore(VidocqAppLayer.APP_PATH_PROPERTY, previousPath);

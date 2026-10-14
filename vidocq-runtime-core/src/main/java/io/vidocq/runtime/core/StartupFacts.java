@@ -70,14 +70,6 @@ final class StartupFacts {
     }
 
     /**
-     * The application layer Vidocq installed, if any: the application's module first, then the others in the order
-     * of their archives.
-     */
-    static Section layer(String weaving, DisplayPaths paths) {
-        return layer(weaving, paths, StartupFacts::enrichedBy);
-    }
-
-    /**
      * The reader of the bricks that enriched an archive: {@code raw} behind a memory, so each archive is read at
      * most once per boot, or a reader that opens nothing when no report shows the layer ({@code shown} is false).
      */
@@ -89,7 +81,10 @@ final class StartupFacts {
         return file -> read.computeIfAbsent(file, raw);
     }
 
-    /** {@link #layer(String, DisplayPaths)}, reading the bricks of each archive with {@code enriched}. */
+    /**
+     * The application layer Vidocq installed, if any: the application's module first, then the others in the order
+     * of their archives, reading the bricks of each archive with {@code enriched} ({@link #enrichedReader}).
+     */
     static Section layer(String weaving, DisplayPaths paths, Function<Path, List<String>> enriched) {
         VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
         ModuleLayer layer = VidocqAppLayer.installedLayer();
