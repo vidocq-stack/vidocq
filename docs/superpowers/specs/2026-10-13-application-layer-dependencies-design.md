@@ -32,10 +32,12 @@ This section comes first because every other choice serves it. It applies to thi
    - `vidocq:generate` finds the dependencies that need code, through cheap hints, and runs the same processors on
      them: proxies, Foy components, Mansart repositories, service files and indexes, all in enriched copies;
    - the application starts with my classes and all my libraries in one layer.
-3. **A fast loop.** Changing a class reloads in place. With the libraries now in the reloaded layer, the archive
-   readers of unchanged jars are cached across reloads. That cache is part of this delivery, not a fallback. The
-   target is set after the first measurement (BENCH.md), for example a reload of the Vaadin example no more than
-   20 % slower than the Servlet example's today.
+3. **A fast loop.** Changing a class reloads in place, and the libraries in the reloaded layer do not make it
+   noticeably slower. Measured on 2026-10-14 (BENCH.md): edit → ready is 3.9 s on the Servlet example and 4.0 s on a
+   Vaadin application with 69 jars in the layer, 1.02×. The in-JVM part is 21 ms and 166 ms, and the layer build
+   26 ms of it. Nearly all the time is the Maven side (watcher latency and recompile). Target, already met: a
+   Vaadin in-JVM reload ≤ 150 ms median, and no regression of the Servlet example (≤ 23 ms in-JVM, ≤ 4.5 ms layer
+   build). The archive-reader cache first planned here is dropped: it would recover about 20 ms of 4 s.
 4. **Generation once per dependency version.** Today an enriched copy is not rewritten when its inputs are
    unchanged (`Vidocq-Enriched-Digest`), but the generation pass itself runs on every build. A dependency jar is
    generated for once, then reused until the jar or the processors' versions change. A first `vidocq:dev` with
@@ -111,10 +113,10 @@ application module, failing with a message that names both.
 
 - **`vidocq:run` / `vidocq:dev`**: `ApplicationLaunch.appPath` returns `target/classes` plus every
   application-layer jar, enriched copy first. `modulePath` returns the parent-layer jars only.
-- **`vidocq:dev` reload**: the whole application layer is rebuilt, libraries included. The reload time is measured
-  before and after, on the Servlet example and on a Vaadin application, and recorded in BENCH.md. The archive
-  readers of unchanged jars are cached across reloads, as part of this delivery (criterion 3). A separate loader
-  is not an option: it would bring back the Vaadin problem.
+- **`vidocq:dev` reload**: the whole application layer is rebuilt, libraries included. The reload time was
+  measured on the Servlet example and on a Vaadin application and recorded in BENCH.md (criterion 3). The layer
+  build is not where the time goes, so no reader cache is added. A separate loader is not an option: it would
+  bring back the Vaadin problem.
 - **IDE / trampoline**: `VidocqAppLayer.applicationPaths` uses `LayerSplit` instead of the prefix list. Foy then
   needs no prefix. **Constraint**: here every dependency was already resolved into the boot layer. An
   **automatic** module re-created in the child layer would read its own twin in the parent layer, and
@@ -204,7 +206,8 @@ Run in a fresh local Maven repository, with `vidocq.app.layer=all` forced:
 3. Mansart: the `DriverManager` fix (test 2), and the other lookups of section 5.
 4. vidocq#247: `LayerSplit`, the setting, `run`/`dev`/`package`/trampoline, the escape hatch, the report, and
    tests 1, 3, 6 and 7.
-5. The reload cache, measured against its target (criterion 3).
+5. ~~The reload cache~~ — dropped after the 2026-10-14 measurement (criterion 3, BENCH.md): the layer build is
+   26 ms of a 4 s reload.
 6. With Vidocq/vidocq#246: explicit descriptors for application-layer automatic jars (trampoline
    constraint, section 4), generation on dependency jars, once per jar version (criterion 4), the one-line
    diagnostics (criterion 5) and the startup report line (criterion 6).
