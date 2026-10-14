@@ -128,7 +128,7 @@ Besides Vauban's own code, `vidocq:generate` runs the annotation processors of e
 
 The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, and the classes listed in the service files among its matched `resources`. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
 
-A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`.
+A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`. Such a jar, when it has no module descriptor, stays an automatic module in its enriched copy even when Vauban generates providers for it: the providers are listed in its `META-INF/services` files, and an automatic module may use any service, which a synthesized descriptor cannot guarantee.
 
 *Not candidates.* The `io.vidocq*` jars, which are built with the processors already. For a `class-bytes` hint, a jar that itself defines the hinted classes, as the API jars do (`jakarta.servlet-api` defines `jakarta/servlet/annotation/WebListener`: it mentions it but is not a library that uses it).
 

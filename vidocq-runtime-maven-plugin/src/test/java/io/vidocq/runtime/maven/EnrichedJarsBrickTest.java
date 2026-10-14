@@ -283,6 +283,34 @@ class EnrichedJarsBrickTest {
     }
 
     @Test
+    void aBrickSelectedAutomaticJarStaysAutomaticWithVaubanProviders() throws Exception {
+        Path build = tmp.resolve("target");
+        Path auto = jar(tmp.resolve("m2/flow-1.0.jar"), Map.of(
+                "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "flow"), Map.of(
+                "org/dep/_VaubanComponents.class", emptyClass("org.dep._VaubanComponents")));
+        // vauban:modularize of an earlier build left a copy with a synthesized descriptor: not the source here.
+        jar(build.resolve("vauban-modularized/flow-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.flow"),
+                "org/dep/Servlet.class", emptyClass("org.dep.Servlet"),
+                "org/dep/Bean.class", emptyClass("org.dep.Bean")), Map.of());
+
+        List<Path> enriched = EnrichedJars.enrichAll(build,
+                List.of(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0", true)),
+                List.of("org.dep._VaubanComponents"), List.of(auto), MERGED, MODULES, line -> { }, line -> { });
+
+        assertEquals(List.of(auto), enriched);
+        Path copy = EnrichedJars.resolve(build, auto);
+        assertNull(entry(copy, "module-info.class"), "no synthesized descriptor: it would miss uses");
+        assertEquals("org.dep._VaubanComponents\n", entry(copy, EnrichedJars.SERVICE_FILE));
+        ModuleDescriptor md = descriptorOf(copy);
+        assertTrue(md.isAutomatic());
+        assertEquals(List.of("org.dep._VaubanComponents"), md.provides().stream()
+                .filter(p -> p.service().equals(EnrichedJarsTest.SPI)).findFirst().orElseThrow().providers());
+    }
+
+    @Test
     void vaubanAndBrickOutputShareOneCopy() throws Exception {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"), Map.of(
@@ -298,7 +326,8 @@ class EnrichedJarsBrickTest {
         assertEquals(List.of(auto), enriched);
         Path copy = EnrichedJars.resolve(build, auto);
         ModuleDescriptor md = descriptorOf(copy);
-        assertFalse(md.isAutomatic(), "Vauban providers need a synthesized descriptor");
+        assertTrue(md.isAutomatic(), "a brick selected it: it stays automatic, Vauban providers included");
+        assertNull(entry(copy, "module-info.class"));
         Map<String, List<String>> provides = md.provides().stream()
                 .collect(Collectors.toMap(ModuleDescriptor.Provides::service, ModuleDescriptor.Provides::providers));
         assertEquals(List.of("org.dep._VaubanComponents"), provides.get(EnrichedJarsTest.SPI));

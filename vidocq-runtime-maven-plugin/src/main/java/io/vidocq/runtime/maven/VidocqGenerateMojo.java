@@ -170,8 +170,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
             var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
             var brickSelection = DependencyCodegenPass.select(brickList, dependencies, orEmpty(scanExcludes),
                     DependencyCodegenPass.selectionMemo(cacheDirectory()), true);
-            Map<Path, String> scannedByArtifactId = collectScannedDependencies(dependencies,
-                    DependencyCodegenPass.bricksByJar(brickSelection));
+            Map<Path, List<String>> bricksByJar = DependencyCodegenPass.bricksByJar(brickSelection);
+            Map<Path, String> scannedByArtifactId = collectScannedDependencies(dependencies, bricksByJar);
             List<String> providers = List.of();
             if (scannedByArtifactId.isEmpty()) {
                 getLog().info("No dependencies to process (scanDependencies empty or all pre-processed)");
@@ -198,8 +198,10 @@ public class VidocqGenerateMojo extends AbstractMojo {
             for (var artifact : project.getArtifacts()) {
                 Path jar = artifact.getFile() == null ? null : artifact.getFile().toPath();
                 if (jar != null && scannedByArtifactId.containsKey(jar) && Files.isRegularFile(jar)) {
+                    // A jar a brick selected stays automatic in its copy even when only Vauban generated for it.
                     scanned.add(new EnrichedJars.Scanned(jar, artifact.getArtifactId(),
-                            artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()));
+                            artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion(),
+                            bricksByJar.containsKey(jar)));
                 }
             }
             EnrichedJars.enrichAll(buildDirectory.toPath(), DependencyCodegenPass.onePerJar(scanned,

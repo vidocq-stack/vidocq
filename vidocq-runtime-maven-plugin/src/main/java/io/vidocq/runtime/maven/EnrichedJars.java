@@ -97,22 +97,34 @@ public final class EnrichedJars {
      *                    {@code brick Foy io.vidocq.foy:foy-codegen:0.4.0 sha256:<processor classpath>}
      */
     public record Scanned(Path originalJar, String artifactId, String coordinates, List<String> bricks,
-                          List<String> brickInputs) {
+                          List<String> brickInputs, boolean selectedByBrick) {
         public Scanned {
             bricks = bricks == null ? List.of() : bricks.stream().distinct().sorted().toList();
             brickInputs = brickInputs == null ? List.of() : List.copyOf(brickInputs);
+            selectedByBrick |= !bricks.isEmpty();
         }
 
-        /** A jar only Vauban generated code for. */
+        /** A jar bricks processed, so a brick selected it. */
+        public Scanned(Path originalJar, String artifactId, String coordinates, List<String> bricks,
+                       List<String> brickInputs) {
+            this(originalJar, artifactId, coordinates, bricks, brickInputs, false);
+        }
+
+        /** A jar only Vauban generated code for; {@code selectedByBrick} when a brick selected it all the same. */
+        public Scanned(Path originalJar, String artifactId, String coordinates, boolean selectedByBrick) {
+            this(originalJar, artifactId, coordinates, List.of(), List.of(), selectedByBrick);
+        }
+
+        /** A jar only Vauban selected and generated code for. */
         public Scanned(Path originalJar, String artifactId, String coordinates) {
-            this(originalJar, artifactId, coordinates, List.of(), List.of());
+            this(originalJar, artifactId, coordinates, false);
         }
     }
 
     /** What the bricks' output needs to be merged and declared, beyond the parked files themselves. */
     private record BrickOutput(List<String> bricks, Set<String> mergedResources,
-                               Function<Set<String>, Set<String>> modulesOfPackages) {
-        static final BrickOutput NONE = new BrickOutput(List.of(), Set.of(), packages -> Set.of());
+                               Function<Set<String>, Set<String>> modulesOfPackages, boolean keepAutomatic) {
+        static final BrickOutput NONE = new BrickOutput(List.of(), Set.of(), packages -> Set.of(), false);
     }
 
     private EnrichedJars() {}
@@ -197,14 +209,20 @@ public final class EnrichedJars {
             if (!Files.isDirectory(patchDir)) {
                 continue;
             }
-            Path source = ModularizedJars.resolve(buildDir, dep.originalJar());
+            // A jar without a descriptor that a brick selected stays automatic, Vauban providers included (spec §4.4):
+            // a synthesized descriptor must list every uses, and its detection misses ServiceLoader.load(Class,
+            // ClassLoader), while an automatic module may use any service and gets its provides from its service
+            // files. So its copy starts from the original jar, never from a vauban:modularize copy.
+            boolean keepAutomatic = dep.selectedByBrick() && !hasDescriptor(dep.originalJar());
+            Path source = keepAutomatic ? dep.originalJar() : ModularizedJars.resolve(buildDir, dep.originalJar());
             Set<String> packages = JpmsPatches.packagesOf(source);
             List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
             // Only Vauban's providers need a descriptor on an automatic jar: the JDK derives an automatic module's
             // provides from its service files, which is all a brick's output asks.
             boolean automatic = !hasDescriptor(source);
-            boolean synthesize = automatic && (!own.isEmpty() || !providersIn(patchDir).isEmpty());
-            BrickOutput brickOutput = new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages);
+            boolean synthesize = automatic && !keepAutomatic && (!own.isEmpty() || !providersIn(patchDir).isEmpty());
+            BrickOutput brickOutput = new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages,
+                    keepAutomatic);
             Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
             String inputs = inputs(source, patchDir, own, dep.coordinates(), synthesize ? closure : List.of(),
                     dep, mergedResources);
@@ -277,7 +295,7 @@ public final class EnrichedJars {
             return;
         }
         write(source, null, patchDir, providers, dep.coordinates(), dep.originalJar(), out, inputs,
-                new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages));
+                new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages, false));
         info.accept("Rebuilt the enriched copy of " + dep.originalJar().getFileName()
                 + " on the module descriptor vauban:modularize generated");
     }
@@ -333,7 +351,7 @@ public final class EnrichedJars {
             entries.put(MODULE_INFO, moduleInfo);
             descriptors = List.of(MODULE_INFO);
         }
-        if (descriptors.isEmpty() && !providers.isEmpty()) {
+        if (descriptors.isEmpty() && !providers.isEmpty() && !bricks.keepAutomatic()) {
             throw new IllegalArgumentException(source.getFileName() + " has no module descriptor to enrich");
         }
         // service → the providers the parked service files add to the jar's: an explicit module declares them.
