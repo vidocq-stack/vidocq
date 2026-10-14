@@ -19,13 +19,32 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
+import org.apache.maven.model.Build;
+import org.apache.maven.model.Model;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.MavenProjectHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.classfile.attribute.ModuleRequireInfo;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ModuleDesc;
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -145,6 +164,187 @@ class VidocqPackageMojoTest {
 
         var failure = assertThrows(MojoExecutionException.class, () -> mojo.generateShScript(binDir));
         assertTrue(failure.getMessage().contains("vidocq.mainModule"), failure.getMessage());
+    }
+
+    /** {@code vidocq.app.layer=all}: the parent layer stays in {@code lib/}, the rest ships in {@code app/} (#247). */
+    @Test
+    void allPutsTheLibrariesInApp(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "all", null);
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/vidocq-runtime-core.jar")));
+        assertFalse(Files.exists(dist.resolve("lib/flow-server.jar")));
+        assertTrue(Files.exists(dist.resolve("app/flow-server.jar")));
+        assertTrue(Files.exists(dist.resolve("app/app-1.0.jar")), "the application jar rides in app/");
+        assertFalse(Files.exists(dist.resolve("lib/app-1.0.jar")));
+    }
+
+    @Test
+    void classesKeepsTodaysLayout(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, null, null);
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/vidocq-runtime-core.jar")));
+        assertTrue(Files.exists(dist.resolve("lib/flow-server.jar")));
+        assertFalse(Files.exists(dist.resolve("app/flow-server.jar")));
+    }
+
+    @Test
+    void allTrampolineScriptSetsTheMode(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        setBoolean(mojo, "layerMode", true);
+        set(mojo, "mainClass", "io.repro.app.Main");
+        set(mojo, "mainModule", "io.repro.app");
+        set(mojo, "appLayer", "all");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer=all \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer=all ^"));
+    }
+
+    @Test
+    void pinnedListGoesToTheScripts(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "all", "flow.server");
+
+        mojo.execute();
+
+        Path bin = dir.resolve("target/app-1.0/bin");
+        String expected = "\"-Dvidocq.app.layer.pinned=flow.server=vidocq.app.layer.keep\"";
+        assertTrue(Files.readString(bin.resolve("app.sh")).contains(expected));
+        assertTrue(Files.readString(bin.resolve("app.cmd")).contains(expected));
+        assertTrue(Files.exists(dir.resolve("target/app-1.0/lib/flow-server.jar")), "a pin keeps the jar in lib/");
+    }
+
+    /** The real dependencies of a kept automatic module follow it into {@code lib/} (mirrors ApplicationLaunch#layered). */
+    @Test
+    void allKeepsTheDependenciesOfAKeptAutomaticModuleInLib(@TempDir Path dir) throws Exception {
+        Path extension = moduleJar(dir, "liquibase-extension.jar",
+                "io.vidocq.runtime.extensions.essentials.migration.liquibase", true, "liquibase.core");
+        Path liquibase = moduleJar(dir, "liquibase-core.jar", "liquibase.core", false);
+        Path opencsv = moduleJar(dir, "opencsv.jar", "opencsv", false);
+        Path flow = moduleJar(dir, "flow-server.jar", "flow.server", false);
+        Artifact extensionArtifact = artifact("vidocq-runtime-liquibase-extension", extension);
+        Artifact liquibaseArtifact = artifact("liquibase-core", liquibase);
+        Artifact opencsvArtifact = artifact("opencsv", opencsv);
+        Artifact flowArtifact = artifact("flow-server", flow);
+        extensionArtifact.setDependencyTrail(List.of(PROJECT, coordinates(extensionArtifact)));
+        liquibaseArtifact.setDependencyTrail(
+                List.of(PROJECT, coordinates(extensionArtifact), coordinates(liquibaseArtifact)));
+        opencsvArtifact.setDependencyTrail(List.of(PROJECT, coordinates(extensionArtifact),
+                coordinates(liquibaseArtifact), coordinates(opencsvArtifact)));
+        flowArtifact.setDependencyTrail(List.of(PROJECT, coordinates(flowArtifact)));
+        VidocqPackageMojo mojo = packageMojo(dir, "all", null,
+                extensionArtifact, liquibaseArtifact, opencsvArtifact, flowArtifact);
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/liquibase-core.jar")));
+        assertTrue(Files.exists(dist.resolve("lib/opencsv.jar")), "a dependency of a kept automatic module stays");
+        assertTrue(Files.exists(dist.resolve("app/flow-server.jar")));
+    }
+
+    @Test
+    void allFailsOnADependencyWithoutAModule(@TempDir Path dir) throws Exception {
+        Path bad = dir.resolve("1-bad.jar");
+        try (var out = new JarOutputStream(Files.newOutputStream(bad))) {
+            out.putNextEntry(new ZipEntry("x/Y.class"));
+            out.write(new byte[] {(byte) 0xCA});
+            out.closeEntry();
+        }
+        VidocqPackageMojo mojo = packageMojo(dir, "all", null, artifact("bad", bad));
+
+        var e = assertThrows(MojoExecutionException.class, mojo::execute);
+        assertTrue(e.getMessage().contains("vidocq.app.layer=all reads the module of every dependency: "), e.getMessage());
+        assertTrue(e.getMessage().contains("1-bad.jar"), e.getMessage());
+        assertFalse(e.getMessage().contains("vidocq.app.layer.keep"), e.getMessage());
+    }
+
+    private static final String PROJECT = "com.example:app:jar:1.0";
+
+    private static String coordinates(Artifact a) {
+        return a.getGroupId() + ":" + a.getArtifactId() + ":" + a.getType() + ":" + a.getVersion();
+    }
+
+    /** A packaging mojo over a project with the runtime core (explicit module) and {@code flow-server} (automatic). */
+    private static VidocqPackageMojo packageMojo(Path dir, String appLayer, String keep) throws Exception {
+        return packageMojo(dir, appLayer, keep,
+                artifact("vidocq-runtime-core", moduleJar(dir, "vidocq-runtime-core.jar", "io.vidocq.runtime.core", true)),
+                artifact("flow-server", moduleJar(dir, "flow-server.jar", "flow.server", false)));
+    }
+
+    private static VidocqPackageMojo packageMojo(Path dir, String appLayer, String keep, Artifact... artifacts)
+            throws Exception {
+        Model model = new Model();
+        model.setGroupId("com.example");
+        model.setArtifactId("app");
+        model.setVersion("1.0");
+        model.setBuild(new Build());
+        MavenProject project = new MavenProject(model);
+        Artifact main = new DefaultArtifact("com.example", "app", "1.0", "runtime", "jar", "",
+                new DefaultArtifactHandler("jar"));
+        main.setFile(moduleJar(dir, "app-1.0.jar", "io.repro.app", true).toFile());
+        project.setArtifact(main);
+        project.setArtifacts(new LinkedHashSet<>(List.of(artifacts)));
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "distName", "app-1.0");
+        set(mojo, "appLayer", appLayer);
+        set(mojo, "appLayerKeep", keep);
+        setBoolean(mojo, "layerMode", true);
+        setField(mojo, "project", project);
+        setField(mojo, "buildDir", dir.resolve("target").toFile());
+        setField(mojo, "projectHelper", Proxy.newProxyInstance(VidocqPackageMojoTest.class.getClassLoader(),
+                new Class<?>[] {MavenProjectHelper.class}, (proxy, method, args) -> null));
+        Files.createDirectories(dir.resolve("target"));
+        return mojo;
+    }
+
+    private static Artifact artifact(String artifactId, Path file) {
+        Artifact artifact = new DefaultArtifact("io.vidocq.runtime", artifactId, "0.4.0-SNAPSHOT", "runtime", "jar",
+                "", new DefaultArtifactHandler("jar"));
+        artifact.setFile(file.toFile());
+        return artifact;
+    }
+
+    private static void setField(Object target, String field, Object value) throws Exception {
+        Field f = target.getClass().getDeclaredField(field);
+        f.setAccessible(true);
+        f.set(target, value);
+    }
+
+    /** A jar with an explicit descriptor requiring {@code requires}, or an automatic one when {@code explicit} is false. */
+    private static Path moduleJar(Path dir, String fileName, String module, boolean explicit, String... requires)
+            throws Exception {
+        Path jar = dir.resolve(fileName);
+        var manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (!explicit) {
+            manifest.getMainAttributes().putValue("Automatic-Module-Name", module);
+        }
+        try (var out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            if (explicit) {
+                out.putNextEntry(new ZipEntry("module-info.class"));
+                out.write(ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of(module), mb -> {
+                    mb.requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null));
+                    for (String r : requires) {
+                        mb.requires(ModuleRequireInfo.of(ModuleDesc.of(r), 0, null));
+                    }
+                })));
+                out.closeEntry();
+            }
+            String pkg = module.replace('.', '/');
+            out.putNextEntry(new ZipEntry(pkg + "/Marker.class"));
+            out.write(ClassFile.of().build(ClassDesc.of(module + ".Marker"),
+                    cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));
+            out.closeEntry();
+        }
+        return jar;
     }
 
     private static VidocqPackageMojo mojoWith(String jvmArgs) throws Exception {

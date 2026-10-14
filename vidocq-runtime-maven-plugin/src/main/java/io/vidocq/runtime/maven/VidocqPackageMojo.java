@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -30,6 +32,12 @@ import org.apache.maven.project.MavenProjectHelper;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -79,6 +87,21 @@ public class VidocqPackageMojo extends AbstractMojo {
     @Parameter(defaultValue = "true", property = "vidocq.package.layer")
     private boolean layerMode;
 
+    /**
+     * {@code classes} (default): the application layer holds the project's classes; {@code all}: it holds every
+     * dependency outside the runtime's closure too (Vidocq/vidocq#247). Under {@code all}, {@code lib/} keeps the
+     * parent layer and {@code app/} the application jar with its libraries.
+     */
+    @Parameter(property = "vidocq.app.layer", defaultValue = "classes")
+    private String appLayer;
+
+    /** Comma-separated patterns ({@code module} or {@code groupId:artifactId}) kept in the parent layer under {@code all}. */
+    @Parameter(property = "vidocq.app.layer.keep")
+    private String appLayerKeep;
+
+    /** The modules kept in the parent layer by a pin, with the reason: set by {@link #execute()} under {@code all}. */
+    private Map<String, String> pinned = Map.of();
+
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.scriptName")
     private String scriptName;
 
@@ -126,6 +149,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             // no --patch-module needed at launch. A dependency patched with a generated
             // module-info by vauban:modularize (target/vauban-modularized/) ships as that
             // copy, under the original file name.
+            List<Packaged> packaged = new ArrayList<>();
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                     if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
@@ -145,15 +169,22 @@ public class VidocqPackageMojo extends AbstractMojo {
                         getLog().info("Packaging modularized copy of " + original.getFileName()
                                 + " (vauban:modularize generated its module descriptor)");
                     }
-                    Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
-                    if (!enriched && Files.isDirectory(patchDir)) {
-                        JpmsPatches.enrich(src, patchDir, libDir.resolve(src.getFileName().toString()));
-                        getLog().info("Enriched " + src.getFileName()
-                                + " with its generated classes (JPMS cross-module)");
-                    } else {
-                        Files.copy(src, libDir.resolve(src.getFileName()),
-                                StandardCopyOption.REPLACE_EXISTING);
-                    }
+                    packaged.add(new Packaged(artifact, src, enriched,
+                            JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId())));
+                }
+            }
+
+            // vidocq.app.layer=all: the parent layer stays in lib/, the other libraries ship in app/.
+            Set<Path> toApp = splitForAppLayer(packaged);
+            for (Packaged p : packaged) {
+                Path destDir = toApp.contains(p.src()) ? appDir : libDir;
+                if (!p.enriched() && Files.isDirectory(p.patchDir())) {
+                    JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
+                    getLog().info("Enriched " + p.src().getFileName()
+                            + " with its generated classes (JPMS cross-module)");
+                } else {
+                    Files.copy(p.src(), destDir.resolve(p.src().getFileName()),
+                            StandardCopyOption.REPLACE_EXISTING);
                 }
             }
 
@@ -183,6 +214,77 @@ public class VidocqPackageMojo extends AbstractMojo {
         return jvmArgs == null || jvmArgs.isBlank() ? "" : " " + jvmArgs.strip();
     }
 
+    /** A dependency jar to ship: the file to copy ({@code src}), whether it is an enriched copy, its parked classes. */
+    private record Packaged(Artifact artifact, Path src, boolean enriched, Path patchDir) {}
+
+    /**
+     * The jars that ship in {@code app/}: none unless {@code vidocq.app.layer=all}, where every dependency outside the
+     * runtime's closure and the pins goes there, and {@link #pinned} records what stays in {@code lib/} by a pin. The
+     * application jar is the application module, not a candidate. The reads come from Maven, as
+     * {@link ApplicationLaunch#layered} computes them, so that a kept automatic module keeps its dependencies.
+     */
+    private Set<Path> splitForAppLayer(List<Packaged> packaged) throws MojoExecutionException {
+        LayerSplit.Mode mode;
+        try {
+            mode = LayerSplit.Mode.of(appLayer);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        pinned = Map.of();
+        if (mode != LayerSplit.Mode.ALL) {
+            return Set.of();
+        }
+        if (!layerMode) {
+            throw new MojoExecutionException("vidocq.app.layer=all needs vidocq.package.layer=true");
+        }
+        List<LayerSplit.Candidate> candidates = new ArrayList<>();
+        List<Artifact> artifacts = new ArrayList<>();
+        Map<String, String> moduleByCoordinates = new LinkedHashMap<>();
+        Map<String, String> forced = new LinkedHashMap<>();
+        for (Packaged p : packaged) {
+            Artifact a = p.artifact();
+            LayerSplit.Candidate candidate;
+            try {
+                candidate = LayerSplit.candidate(p.src(), a.getGroupId() + ":" + a.getArtifactId());
+            } catch (IOException e) {
+                throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency: "
+                        + e.getMessage() + ". Give the jar an Automatic-Module-Name, or use vidocq.app.layer=classes.",
+                        e);
+            }
+            candidates.add(candidate);
+            artifacts.add(a);
+            moduleByCoordinates.put(a.getGroupId() + ":" + a.getArtifactId(), candidate.descriptor().name());
+            if (!p.enriched() && Files.isDirectory(p.patchDir())) {
+                forced.put(candidate.descriptor().name(), ApplicationLaunch.PATCHED_REASON);
+            }
+        }
+        LayerSplit.Result split;
+        try {
+            split = LayerSplit.split(candidates, Set.of(), LayerSplit.patterns(appLayerKeep), forced,
+                    ApplicationLaunch.declaredReads(artifacts, moduleByCoordinates));
+        } catch (IllegalStateException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        pinned = split.pinned();
+        Set<Path> toApp = new HashSet<>(split.applicationPaths());
+        getLog().info("Application layer: " + toApp.size() + " libraries in app/, " + pinned.size()
+                + " kept in lib/ by a pin");
+        return toApp;
+    }
+
+    /** The JVM options the {@code all} mode adds to a launcher, each followed by the line continuation. */
+    private String appLayerOptions(String continuation) {
+        if (LayerSplit.Mode.of(appLayer) != LayerSplit.Mode.ALL) {
+            return "";
+        }
+        String options = "\n  -Dvidocq.app.layer=all " + continuation;
+        if (!pinned.isEmpty()) {
+            options += "\n  \"-D" + LayerSplit.PINNED_PROPERTY + "=" + LayerSplit.encodePinned(pinned) + "\" "
+                    + continuation;
+        }
+        return options;
+    }
+
     void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
@@ -195,10 +297,10 @@ public class VidocqPackageMojo extends AbstractMojo {
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
                     exec java%s \\
                       --module-path "$BASEDIR/lib:$BASEDIR/app" \\
-                      --add-modules ALL-MODULE-PATH \\
+                      --add-modules ALL-MODULE-PATH \\%s
                       --module %s \\
                       "$@"
-                    """.formatted(jvmArgsLine, trampolineRef());
+                    """.formatted(jvmArgsLine, appLayerOptions("\\"), trampolineRef());
         } else if (layerMode) {
             String appMain = appMainProperty();
             script = """
@@ -206,11 +308,11 @@ public class VidocqPackageMojo extends AbstractMojo {
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
                     exec java%s \\
                       --module-path "$BASEDIR/lib" \\
-                      --add-modules ALL-MODULE-PATH \\
+                      --add-modules ALL-MODULE-PATH \\%s
                       -Dvidocq.app.path="$BASEDIR/app" \\%s
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
                       "$@"
-                    """.formatted(jvmArgsLine,
+                    """.formatted(jvmArgsLine, appLayerOptions("\\"),
                     appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " \\");
         } else {
             script = """
@@ -237,10 +339,10 @@ public class VidocqPackageMojo extends AbstractMojo {
                     set BASEDIR=%%~dp0..
                     java%s ^
                       --module-path "%%BASEDIR%%\\lib;%%BASEDIR%%\\app" ^
-                      --add-modules ALL-MODULE-PATH ^
+                      --add-modules ALL-MODULE-PATH ^%s
                       --module %s ^
                       %%*
-                    """.formatted(jvmArgsLine, trampolineRef());
+                    """.formatted(jvmArgsLine, appLayerOptions("^"), trampolineRef());
         } else if (layerMode) {
             String appMain = appMainProperty();
             script = """
@@ -248,11 +350,11 @@ public class VidocqPackageMojo extends AbstractMojo {
                     set BASEDIR=%%~dp0..
                     java%s ^
                       --module-path "%%BASEDIR%%\\lib" ^
-                      --add-modules ALL-MODULE-PATH ^
+                      --add-modules ALL-MODULE-PATH ^%s
                       -Dvidocq.app.path="%%BASEDIR%%\\app" ^%s
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
                       %%*
-                    """.formatted(jvmArgsLine,
+                    """.formatted(jvmArgsLine, appLayerOptions("^"),
                     appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " ^");
         } else {
             script = """
