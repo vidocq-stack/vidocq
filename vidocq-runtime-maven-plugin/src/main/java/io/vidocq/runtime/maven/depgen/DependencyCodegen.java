@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.depgen;
 
+import javax.annotation.processing.Processor;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -45,7 +46,8 @@ import java.util.stream.Stream;
 /**
  * Runs the annotation processors of the bricks that want a dependency jar over that jar's compiled classes, the way
  * they run over the project's sources: an in-process {@code javac -proc:only} given the jar's top-level class names,
- * then a second {@code javac} that compiles the sources they generated.
+ * then a second {@code javac} that compiles the sources they generated. Each brick's processors are loaded from
+ * its own processor path and wrapped, so that an error or warning names the brick that reported it and the element.
  */
 public final class DependencyCodegen {
 
@@ -53,8 +55,9 @@ public final class DependencyCodegen {
      * What one jar produced: generated class files and resources, relative path → bytes, sorted by path; empty when
      * nothing.
      */
-    public record Output(Map<String, byte[]> files) {
+    public record Output(Map<String, byte[]> files, List<String> warnings) {
         public Output {
+            warnings = List.copyOf(warnings);
             files = Collections.unmodifiableSortedMap(new TreeMap<>(files));
         }
     }
@@ -82,20 +85,21 @@ public final class DependencyCodegen {
      * @param classpath   the jar's compile classpath: the project's dependency jars (the jar itself included)
      * @param release     the {@code --release} value
      * @param coordinates {@code groupId:artifactId} of the jar, for the {@code scanExcludes} hint of a failure line
-     * @param artifactId  for the log file name
-     * @param logDir      {@code target/vidocq-depgen/}, where {@code <artifactId>.log} receives javac's full output
+     * @param log         the file that receives javac's full output, {@code target/vidocq-depgen/<artifactId>.log}
+     * @param logDisplay  {@code log} as a failure line prints it, relative to the project's base directory
      */
     public static Output run(Path jar, List<Brick> bricks, List<Path> classpath, int release, String coordinates,
-                             String artifactId, Path logDir) throws Failure, IOException {
+                             Path log, String logDisplay) throws Failure, IOException {
         if (bricks.isEmpty()) {
             throw new IllegalArgumentException("no brick for " + jar);
         }
         List<String> classNames = topLevelClasses(jar);
         if (classNames.isEmpty()) {
-            return new Output(Map.of());
+            return new Output(Map.of(), List.of());
         }
-        var problem = new Problem(jar, bricks, coordinates, artifactId);
-        var log = new StringBuilder();
+        var problem = new Problem(jar, coordinates, logDisplay);
+        String allBricks = bricks.stream().map(b -> b.hints().brick()).distinct().collect(Collectors.joining(", "));
+        var javacOutput = new StringBuilder();
         Path tmp = Files.createTempDirectory("vidocq-depgen-");
         try {
             Path src = Files.createDirectories(tmp.resolve("src"));
@@ -105,25 +109,44 @@ public final class DependencyCodegen {
             if (javac == null) {
                 throw new IllegalStateException("vidocq:generate needs a JDK: no system Java compiler");
             }
-            List<Path> processorPath = bricks.stream().flatMap(b -> b.processorPath().stream()).distinct().toList();
 
-            var diagnostics = new DiagnosticCollector<JavaFileObject>();
             List<String> lines = new ArrayList<>();
-            try (StandardJavaFileManager fm = javac.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
-                fm.setLocationFromPaths(StandardLocation.ANNOTATION_PROCESSOR_PATH, processorPath);
+            List<String> warnings = new ArrayList<>();
+            var diagnostics = new DiagnosticCollector<JavaFileObject>();
+            try (var processors = new AttributedProcessors(bricks);
+                 StandardJavaFileManager fm = javac.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
                 fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
                 fm.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(src));
                 fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(res));
-                boolean ok = compile(javac, fm, diagnostics, log, "annotation processing",
-                        List.of("-proc:only", "-implicit:none", "--release", Integer.toString(release), "-Xlint:none"),
-                        classNames, null, problem, lines);
-                for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
-                    if (d.getKind() == Diagnostic.Kind.ERROR) {
-                        lines.add(problem.line("cannot process " + source(fm, d), message(d)));
+                Result result = processors.reports().isEmpty()
+                        ? compile(javac, fm, diagnostics, javacOutput, "annotation processing",
+                                List.of("-proc:only", "-implicit:none", "--release", Integer.toString(release),
+                                        "-Xlint:none"),
+                                classNames, null, processors.processors())
+                        : new Result(false, null);
+                // What a processor reported names its brick and the element; javac shows it again as a diagnostic
+                // without a source, so those diagnostics are skipped once each.
+                List<String> reported = new ArrayList<>();
+                for (AttributedProcessors.Report report : processors.reports()) {
+                    if (report.isError()) {
+                        reported.add(report.message());
+                        lines.add(problem.line(report.brick(), "cannot process " + report.what(),
+                                firstLine(report.message())));
+                    } else {
+                        warnings.add(problem.warning(report.brick(), report.what(), firstLine(report.message())));
                     }
                 }
-                if (!ok && lines.isEmpty()) {
-                    lines.add(problem.line("cannot process the jar", "javac failed"));
+                for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
+                    if (d.getKind() == Diagnostic.Kind.ERROR && !reported.remove(d.getMessage(Locale.ROOT))) {
+                        lines.add(problem.line(allBricks, "cannot process the jar", message(d)));
+                    }
+                }
+                if (result.thrown() != null) {
+                    String brick = processors.thrownBy() != null ? processors.thrownBy() : allBricks;
+                    lines.add(problem.line(brick, "cannot process the jar", "a processor threw " + result.thrown()));
+                }
+                if (!result.ok() && lines.isEmpty()) {
+                    lines.add(problem.line(allBricks, "cannot process the jar", "javac failed"));
                 }
             }
             if (lines.isEmpty()) {
@@ -133,21 +156,22 @@ public final class DependencyCodegen {
                     try (StandardJavaFileManager fm = javac.getStandardFileManager(second, null, StandardCharsets.UTF_8)) {
                         fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
                         fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
-                        boolean ok = compile(javac, fm, second, log, "compilation of the generated sources",
+                        Result result = compile(javac, fm, second, javacOutput, "compilation of the generated sources",
                                 List.of("-proc:none", "--release", Integer.toString(release), "-Xlint:none"),
-                                null, fm.getJavaFileObjectsFromPaths(generated), problem, lines);
-                        if (lines.isEmpty() && !ok) {
+                                null, fm.getJavaFileObjectsFromPaths(generated), null);
+                        if (!result.ok()) {
                             String first = second.getDiagnostics().stream()
                                     .filter(d -> d.getKind() == Diagnostic.Kind.ERROR)
                                     .map(DependencyCodegen::message)
-                                    .findFirst().orElse("javac failed");
-                            lines.add(problem.line("generated code that does not compile", first));
+                                    .findFirst()
+                                    .orElse(result.thrown() != null ? "javac threw " + result.thrown() : "javac failed");
+                            lines.add(problem.line(allBricks, "generated code that does not compile", first));
                         }
                     }
                 }
             }
-            Files.createDirectories(logDir);
-            Files.writeString(logDir.resolve(artifactId + ".log"), log, StandardCharsets.UTF_8);
+            Files.createDirectories(log.toAbsolutePath().getParent());
+            Files.writeString(log, javacOutput, StandardCharsets.UTF_8);
             if (!lines.isEmpty()) {
                 throw new Failure(lines);
             }
@@ -157,30 +181,37 @@ public final class DependencyCodegen {
                     files.put(root.relativize(file).toString().replace('\\', '/'), Files.readAllBytes(file));
                 }
             }
-            return new Output(files);
+            return new Output(files, warnings);
         } finally {
             delete(tmp);
         }
     }
 
+    /** How one javac task ended: whether it succeeded, and what a processor (or javac) threw, if anything. */
+    private record Result(boolean ok, Throwable thrown) {
+    }
+
     /**
-     * Runs one javac task, appends its whole output to {@code log}; a processor that throws becomes a failure line.
+     * Runs one javac task and appends its whole output to {@code log}.
      *
-     * @return whether javac succeeded
+     * @param processors the processors to run, or {@code null} for none
      */
-    private static boolean compile(JavaCompiler javac, StandardJavaFileManager fm,
-                                   DiagnosticCollector<JavaFileObject> diagnostics, StringBuilder log, String phase,
-                                   List<String> options, List<String> classNames,
-                                   Iterable<? extends JavaFileObject> sources, Problem problem, List<String> lines) {
+    private static Result compile(JavaCompiler javac, StandardJavaFileManager fm,
+                                  DiagnosticCollector<JavaFileObject> diagnostics, StringBuilder log, String phase,
+                                  List<String> options, List<String> classNames,
+                                  Iterable<? extends JavaFileObject> sources, List<Processor> processors) {
         var out = new StringWriter();
-        boolean ok;
+        Result result;
         try {
-            ok = javac.getTask(out, fm, diagnostics, options, classNames, sources).call();
+            JavaCompiler.CompilationTask task = javac.getTask(out, fm, diagnostics, options, classNames, sources);
+            if (processors != null) {
+                task.setProcessors(processors);
+            }
+            result = new Result(task.call(), null);
         } catch (RuntimeException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            out.append("processor threw ").append(cause.toString()).append('\n');
-            lines.add(problem.line("cannot process the jar", "a processor threw " + cause));
-            ok = false;
+            out.append("threw ").append(cause.toString()).append('\n');
+            result = new Result(false, cause);
         }
         log.append("== ").append(phase).append(": javac ").append(String.join(" ", options));
         if (classNames != null) {
@@ -195,7 +226,7 @@ public final class DependencyCodegen {
             log.append(d.getMessage(Locale.ROOT)).append('\n');
         }
         log.append(out);
-        return ok;
+        return result;
     }
 
     /** The binary names of the jar's top-level classes, base entries only, without module and package infos. */
@@ -214,18 +245,11 @@ public final class DependencyCodegen {
         }
     }
 
-    /** The class a diagnostic is about, or "the jar". */
-    private static String source(StandardJavaFileManager fm, Diagnostic<? extends JavaFileObject> d) {
-        JavaFileObject source = d.getSource();
-        if (source == null) {
-            return "the jar";
-        }
-        String name = fm.inferBinaryName(StandardLocation.CLASS_PATH, source);
-        return name != null ? name : source.getName();
+    private static String message(Diagnostic<?> d) {
+        return firstLine(d.getMessage(Locale.ROOT));
     }
 
-    private static String message(Diagnostic<?> d) {
-        String message = d.getMessage(Locale.ROOT);
+    private static String firstLine(String message) {
         int eol = message.indexOf('\n');
         return (eol < 0 ? message : message.substring(0, eol)).strip();
     }
@@ -244,14 +268,16 @@ public final class DependencyCodegen {
         }
     }
 
-    /** Words the failure lines of one jar. */
-    private record Problem(Path jar, List<Brick> bricks, String coordinates, String artifactId) {
-        String line(String what, String message) {
-            String names = bricks.stream().map(b -> b.hints().brick())
-                    .distinct().collect(Collectors.joining(", "));
-            return "vidocq:generate: " + jar.getFileName() + " — " + names + " " + what + ": " + message
+    /** Words the failure and warning lines of one jar. */
+    private record Problem(Path jar, String coordinates, String logDisplay) {
+        String line(String bricks, String what, String message) {
+            return "vidocq:generate: " + jar.getFileName() + " — " + bricks + " " + what + ": " + message
                     + ". Fix the library, or leave the jar out with <scanExcludes>" + coordinates
-                    + "</scanExcludes>. Full javac output: target/vidocq-depgen/" + artifactId + ".log";
+                    + "</scanExcludes>. Full javac output: " + logDisplay;
+        }
+
+        String warning(String brick, String what, String message) {
+            return "vidocq:generate: " + jar.getFileName() + " — " + brick + " warns about " + what + ": " + message;
         }
     }
 }

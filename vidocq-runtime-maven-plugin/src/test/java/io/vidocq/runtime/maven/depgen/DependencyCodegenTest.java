@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.stream.Stream;
@@ -132,8 +133,8 @@ class DependencyCodegenTest {
     }
 
     private DependencyCodegen.Output run(Path jar, Brick... bricks) throws Exception {
-        return DependencyCodegen.run(jar, List.of(bricks), List.of(jar), RELEASE, "com.acme:lib", "lib",
-                dir.resolve("target/vidocq-depgen"));
+        return DependencyCodegen.run(jar, List.of(bricks), List.of(jar), RELEASE, "com.acme:lib",
+                dir.resolve("target/vidocq-depgen/lib.log"), "shown/lib.log");
     }
 
     private static String text(DependencyCodegen.Output output, String path) {
@@ -177,15 +178,45 @@ class DependencyCodegenTest {
 
         assertEquals(1, failure.lines().size(), () -> failure.lines().toString());
         String line = failure.lines().getFirst();
-        // An element read from a class file carries no source, so javac's diagnostic cannot name the type: the
-        // processor's message does.
-        assertTrue(line.startsWith("vidocq:generate: lib-1.0.jar — Epsilon cannot process the jar: "), line);
-        assertTrue(line.contains("cannot handle com.acme.Foo"), line);
-        assertTrue(line.contains("<scanExcludes>com.acme:lib</scanExcludes>"), line);
-        assertTrue(line.endsWith("Full javac output: target/vidocq-depgen/lib.log"), line);
-        assertTrue(!line.contains("\n"), line);
+        assertEquals("vidocq:generate: lib-1.0.jar — Epsilon cannot process com.acme.Foo: cannot handle com.acme.Foo."
+                + " Fix the library, or leave the jar out with <scanExcludes>com.acme:lib</scanExcludes>."
+                + " Full javac output: shown/lib.log", line);
         Path log = dir.resolve("target/vidocq-depgen/lib.log");
         assertTrue(Files.readString(log).contains("cannot handle com.acme.Foo"), log::toString);
+    }
+
+    @Test
+    void aBrickErrorNamesOnlyThatBrick() throws Exception {
+        var failure = assertThrows(DependencyCodegen.Failure.class,
+                () -> run(acme(), brick("Alpha", "ProcessorA"), brick("Epsilon", "ProcessorE")));
+
+        assertEquals(1, failure.lines().size(), () -> failure.lines().toString());
+        String line = failure.lines().getFirst();
+        assertTrue(line.startsWith("vidocq:generate: lib-1.0.jar — Epsilon cannot process com.acme.Foo: "), line);
+        assertTrue(!line.contains("Alpha"), line);
+    }
+
+    @Test
+    void processorWarningsNameTheBrickAndTheElement() throws Exception {
+        Path jar = lib(Map.of(
+                "com/acme/Bar.java", "package com.acme; @fixture.Other public class Bar {}",
+                "com/acme/Baz.java", """
+                        package com.acme;
+                        public class Baz {
+                            @fixture.Other public String name;
+                            @fixture.Other public void run() {}
+                            @fixture.Other public static class Deep {}
+                        }
+                        """));
+
+        var output = run(jar, brick("Omega", "ProcessorW"));
+
+        String prefix = "vidocq:generate: lib-1.0.jar — Omega warns about ";
+        assertEquals(Set.of(prefix + "com.acme.Bar: looks odd", prefix + "com.acme.Baz.name: looks odd",
+                        prefix + "com.acme.Baz.run: looks odd", prefix + "com.acme.Baz$Deep: looks odd"),
+                Set.copyOf(output.warnings()));
+        assertEquals(4, output.warnings().size(), () -> output.warnings().toString());
+        assertEquals(Map.of(), output.files());
     }
 
     @Test
