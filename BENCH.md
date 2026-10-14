@@ -6,6 +6,47 @@
 
 ---
 
+## 2026-10-15 — Vaadin 25 on Foy: startup of a `vidocq:package` distribution and of a `vidocq:jlink` image
+
+Startup of the Vaadin 25 spike (one `@Route` view, `vaadin-core` + `vaadin-prod-bundle`, production mode), quoted
+in the Vaadin guide of the docs and in the blog post. It is the first time a Vaadin application links with `vidocq:jlink`.
+
+### Setup
+
+| Field    | Value |
+|----------|-------|
+| Hardware | Apple M5 Max, 18 cores, 128 GB RAM, macOS 27.0.1 |
+| JVM      | Temurin 25 (`Temurin-25+36-LTS`); the jlink image embeds the same JDK, stripped |
+| Maven    | 3.9.16 via `./mvnw`, isolated local repository |
+| Code     | vidocq `9cb111ef` (origin/main), Vauban `61e7e404` (vauban#168), Foy `c8d5f724` (origin/main, with foy#50), Vaadin BOM 25.3.2 (`flow-*` 25.3.3) |
+| App      | `vidocq.app.layer=all`; `vauban:modularize` in `all-automatic` mode over the whole closure (62 jars patched) |
+| Package  | `./mvnw -o clean package vidocq:package -Dvidocq.app.layer=all -Dvaadin.productionMode=true`, then `bin/spike-vaadin.sh` |
+| jlink    | `./mvnw -o clean package vidocq:jlink -Dvaadin.productionMode=true -Dvidocq.jlink.mergeSharedResources=true -Dvauban.modularize.forceExplicit=true`, then `target/dist/bin/spike-vaadin` |
+| Run      | `JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true`; one start per run, `GET /` checked (200) after `Started in`, then stopped |
+
+### Results
+
+`Started in` is the runtime's own line (bootstrap to ready); `process` is the JVM uptime it prints beside it.
+
+| Run | package `Started in` | package process | jlink `Started in` | jlink process |
+|-----|----------------------|-----------------|--------------------|---------------|
+| 1   | 307.1 ms | 454 ms | 335.3 ms | 500 ms |
+| 2   | 306.6 ms | 454 ms | 331.2 ms | 510 ms |
+| 3   | 308.1 ms | 462 ms | 329.9 ms | 506 ms |
+| 4   | 309.4 ms | 465 ms | 333.1 ms | 505 ms |
+| 5   | 310.0 ms | 461 ms | 333.6 ms | 509 ms |
+| **median** | **308.1 ms** | **461 ms** | **333.1 ms** | **506 ms** |
+
+Size: the distribution is 19 MB without a JDK (69 jars in `app/`), the jlink image 68 MB with its JDK.
+
+The first start of a freshly built jlink image took 537 ms (`Started in`); it is excluded, as the five above follow
+it. The image starts about 25 ms slower than the distribution, most likely from reading compressed resources out of
+the `jimage` (`vidocq.compress` defaults to `zip-6`); not investigated further.
+
+Delta: no previous run of these two shapes.
+
+---
+
 ## 2026-10-14 — `vidocq:dev` in-JVM reload under `vidocq.app.layer=all` (application layer with its libraries)
 
 This entry sets spec criterion 3 of the application-layer design (Vidocq/vidocq#247). It times the in-JVM hot reload (application-layer re-creation, the default since M2) for three cases:

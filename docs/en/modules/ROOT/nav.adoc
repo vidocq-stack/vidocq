@@ -6,6 +6,7 @@
 *** xref:dev-console-panels.adoc[Writing a dev console panel]
 *** xref:continuous-testing.adoc[Continuous testing]
 ** xref:dev-services.adoc[Dev services]
+** xref:vaadin.adoc[Vaadin]
 ** xref:concepts.adoc[Concepts]
 ** xref:internals.adoc[Internals]
 ** xref:tck.adoc[TCK status]

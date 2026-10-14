@@ -1,0 +1,328 @@
+= Vaadin [.tag-new]#NEW#
+:description: Run a Vaadin Flow application on the Vidocq runtime, with Foy as the servlet container: in development, as a packaged distribution, and as a jlink image.
+
+[.lead]
+A Vaadin Flow application runs on Vidocq with Foy, Vidocq's Servlet 6.1 container, as its servlet engine. It runs
+under `vidocq:run` and `vidocq:dev`, ships as a `vidocq:package` distribution, and links into a self-contained
+`vidocq:jlink` image. Vaadin needs no workaround class: the build processes the Vaadin jars as if they were your
+code. This page covers the setup and each way to run it. Vaadin 25 in production mode was checked.
+
+[#at-a-glance]
+== At a glance [.tag-new]#NEW#
+
+[cols="1,2,1,2"]
+|===
+| Goal | What you get | Start | What it needs
+
+| `vidocq:dev`
+| The application in a child JVM, reloaded on every change
+| ~330 ms
+| `vidocq.app.layer=all`
+
+| `vidocq:run`
+| The application in a child JVM, as in production
+| ~310 ms
+| `vidocq.app.layer=all`
+
+| `vidocq:package`
+| `target/<app>/` with `lib/`, `app/` and launch scripts, 19 MB without a JDK
+| ~310 ms
+| `vidocq.app.layer=all`
+
+| `vidocq:jlink`
+| `target/dist/`, a 68 MB image with its own JDK
+| ~330 ms
+| `vauban:modularize` in `all-automatic` mode and two flags, see <<jlink>>
+|===
+
+The start times are the runtime's `Started in` line on an Apple M5 Max with Temurin 25, median of five runs for the
+distribution and the image (BENCH.md, 2026-10-15). The JVM itself adds about 150 ms.
+
+[#setup]
+== Setup [.tag-new]#NEW#
+
+The project is an ordinary Vidocq application with the Servlet extension, the Vaadin BOM and two build plugins:
+`vaadin-maven-plugin` builds the frontend, and `vidocq-runtime-maven-plugin` generates the application's and the
+Vaadin jars' glue.
+
+[source,xml]
+----
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>com.vaadin</groupId>
+      <artifactId>vaadin-bom</artifactId>
+      <version>${vaadin.version}</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <dependency>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-core</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>com.vaadin</groupId>
+    <artifactId>vaadin-core</artifactId>
+  </dependency>
+  <!-- The precompiled frontend of the core components: production mode without Node. -->
+  <dependency>
+    <groupId>com.vaadin</groupId>
+    <artifactId>vaadin-prod-bundle</artifactId>
+    <version>${vaadin.version}</version>
+  </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-compiler-plugin</artifactId>
+      <configuration>
+        <annotationProcessorPaths combine.children="append">
+          <!-- Foy's processors: they also run over the Vaadin jars at vidocq:generate. -->
+          <path>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+            <version>${vidocq.version}</version>
+          </path>
+        </annotationProcessorPaths>
+      </configuration>
+    </plugin>
+    <plugin>
+      <groupId>com.vaadin</groupId>
+      <artifactId>vaadin-maven-plugin</artifactId>
+      <version>${vaadin.version}</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>prepare-frontend</goal>
+            <goal>build-frontend</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+    <plugin>
+      <groupId>io.vidocq.runtime</groupId>
+      <artifactId>vidocq-runtime-maven-plugin</artifactId>
+      <version>${vidocq.version}</version>
+      <executions>
+        <execution>
+          <id>generate</id>
+          <goals>
+            <goal>generate</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+----
+
+The application is a named module. The Vaadin jars have no `module-info`: their module names come from their file
+names (`flow.server`, `vaadin.button.flow`, …). Vaadin creates the routes by reflection, so the package that holds them
+is open.
+
+[source,java]
+----
+module com.example.app {
+    requires io.vidocq.runtime.core;
+    requires io.vidocq.runtime.spi;
+    requires io.vidocq.runtime.extensions.jakartaee.web.foy;
+    requires io.vidocq.foy.api;
+    requires io.vidocq.vauban.api;
+    requires jakarta.servlet;
+    requires flow.server;
+    requires flow.html.components;
+    requires vaadin.button.flow;
+    requires vaadin.text.field.flow;
+    requires vaadin.ordered.layout.flow;
+    opens com.example.app;
+}
+----
+
+The entry point is the usual `@VidocqMain` class, and a view is plain Vaadin:
+
+[source,java]
+----
+@VidocqMain
+public class App implements VidocqApp {
+    static void main(String[] args) {
+        Vidocq.run(App.class, args);
+    }
+
+    @Override
+    public int run(String... args) throws Exception {
+        Vidocq.waitForExit();
+        return 0;
+    }
+}
+
+@Route("")
+public class MainView extends VerticalLayout {
+    public MainView() {
+        TextField name = new TextField("Your name");
+        Paragraph greeting = new Paragraph();
+        add(new H1("Vidocq + Vaadin"), name,
+                new Button("Say hello", e -> greeting.setText("Hello " + name.getValue())), greeting);
+    }
+}
+----
+
+`src/main/resources/vidocq.properties` sets the listener and the context path:
+
+[source,properties]
+----
+vidocq.chappe.listener.default.port=8080
+vidocq.servlet.context-path=/
+----
+
+[#app-layer]
+=== Why `vidocq.app.layer=all` [.tag-new]#NEW#
+
+Vaadin looks the application's resources up, `META-INF/VAADIN/webapp/index.html` first, through the class loader
+that loaded Vaadin. Under the default `vidocq.app.layer=classes`, Vaadin stays in the parent layer and the application
+sits in a child layer, so Vaadin does not find them. Every request then answers 500 with _Unable to find index.html_.
+
+`vidocq.app.layer=all` puts the libraries outside the runtime in the application layer too, the way `WEB-INF/lib`
+works in a servlet container. Set it in the pom so that every goal uses it:
+
+[source,xml]
+----
+<properties>
+  <vidocq.app.layer>all</vidocq.app.layer>
+</properties>
+----
+
+See xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]. Asking Vaadin to use the context
+class loader instead is tracked in Vidocq/vidocq#256.
+
+[#what-the-build-does]
+=== What the build does with the Vaadin jars [.tag-new]#NEW#
+
+`vidocq:generate` runs Foy's annotation processors over the jars Foy selects. For Vaadin, these are `flow-server` (its
+`@WebListener` and `ServletContainerInitializer` classes) and `atmosphere-runtime`. The output goes into enriched
+copies under `target/vidocq-enriched/`, and the startup report counts them:
+
+----
+layer       69 modules, 68 libraries, 2 enriched (Foy 2) (vidocq.app.path, 69 archives)
+----
+
+The output is cached in `~/.cache/vidocq/depgen`, so only the first build pays for it. Without this step,
+`flow-server`'s listener is never registered and the application answers 404. See
+xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
+
+[#production-mode]
+=== Production mode [.tag-new]#NEW#
+
+`vaadin-prod-bundle` and `build-frontend` give a production build without Node. Start the application with
+`-Dvaadin.productionMode=true`:
+
+[cols="1,3"]
+|===
+| Goal | How to pass it
+
+| `vidocq:dev` | `-Dvidocq.dev.jvmArgs=-Dvaadin.productionMode=true`
+| `vidocq:run` | `-Dvidocq.run.jvmArgs=-Dvaadin.productionMode=true`
+| `vidocq:package` | `-Dvidocq.jvmArgs=-Dvaadin.productionMode=true`, written into the launch scripts
+| `vidocq:jlink` | `JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true` in the environment of `bin/<app>`
+|===
+
+Vaadin's own development mode, with Node and hot frontend reload, was not tried on Vidocq.
+
+[#dev-and-run]
+== `vidocq:dev` and `vidocq:run` [.tag-new]#NEW#
+
+[source,bash]
+----
+./mvnw vidocq:dev -Dvidocq.dev.jvmArgs=-Dvaadin.productionMode=true
+./mvnw vidocq:run -Dvidocq.run.jvmArgs=-Dvaadin.productionMode=true
+----
+
+Both fork a JVM with the runtime on the module path and the application, with its libraries, in the application
+layer. `vidocq:dev` reloads the application layer in place on each change; BENCH.md (2026-10-14) records the reload
+times, Vaadin included.
+
+[#package]
+== `vidocq:package` [.tag-new]#NEW#
+
+[source,bash]
+----
+./mvnw clean package vidocq:package -Dvidocq.jvmArgs=-Dvaadin.productionMode=true
+target/<app>-<version>/bin/<app>.sh
+----
+
+The distribution keeps the runtime in `lib/` and the application with its libraries in `app/`, and the script starts
+the runtime with `-Dvidocq.app.path="$BASEDIR/app"`. `flow-server` ships as the automatic module `vidocq:generate`
+wrote, marked `Vidocq-Automatic: brick-selected`, so that it may use any service. See
+xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
+
+[#jlink]
+== `vidocq:jlink` [.tag-new]#NEW#
+
+`jlink` accepts named modules only, and Vaadin ships none, so every jar of the closure needs a descriptor. Add
+`vauban:modularize` in `all-automatic` mode:
+
+[source,xml]
+----
+<plugin>
+  <groupId>io.vidocq.vauban</groupId>
+  <artifactId>vauban-maven-plugin</artifactId>
+  <version>${vidocq.version}</version>
+  <executions>
+    <execution>
+      <id>modularize</id>
+      <goals>
+        <goal>modularize</goal>
+      </goals>
+      <configuration>
+        <mode>all-automatic</mode>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+----
+
+Then link with two flags:
+
+[source,bash]
+----
+./mvnw clean package vidocq:jlink \
+    -Dvidocq.jlink.mergeSharedResources=true \
+    -Dvauban.modularize.forceExplicit=true
+JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true target/dist/bin/<app>
+----
+
+Each flag works around a Vaadin layout that the module system does not allow. Without it, the build stops with a
+message that names the jars.
+
+* **`vidocq.jlink.mergeSharedResources`.** `flow-server` and `flow-react` both hold files under
+  `com/vaadin/flow/server/frontend/`. To the module system, two modules that hold one package are a split package, and
+  `jlink` refuses them. The flag moves the files into one module of the image, and only the copies staged for `jlink`
+  change. The files are frontend templates that only Vaadin's build tooling reads. See
+  xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-shared-resources[Resource directories several jars share].
+* **`vauban.modularize.forceExplicit`.** `flow-server`'s `Lookup.lookupAll` calls `ServiceLoader` on behalf of other
+  jars: `collaboration-engine` and `flow-lit-template` pass their own service types to it. `ServiceLoader` checks
+  the module of its caller, so `flow.server` would need `uses` directives for types defined in modules that require
+  it. That is a cycle, and no legal descriptor exists, so `vauban:modularize` keeps `flow-server` automatic, which
+  `jlink` refuses. The flag gives `flow-server` a descriptor anyway and drops the directives it cannot declare. The
+  image then works as long as the application does not use Collaboration Engine or LitTemplate.
+
+The resulting image is about 68 MB with its JDK, and starts in about 330 ms.
+
+[#limits]
+== Known limits [.tag-new]#NEW#
+
+* Only production mode was checked, on one view: the bootstrap page and the frontend bundles are served. Server
+  round-trips, push, websockets and the routes of a real application were not exercised in this setup.
+* `vidocq.app.layer=classes` does not work for Vaadin: see <<app-layer>>.
+* In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
+* What only Vaadin can change (the shared resource directory, stable module names, the `Lookup` cycle, resource lookups
+  through the context class loader) is collected in Vidocq/vidocq#256.
