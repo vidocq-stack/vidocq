@@ -23,11 +23,15 @@ import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import io.vidocq.vauban.maven.modularize.Modularizer;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.repository.RemoteRepository;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -126,6 +130,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(property = "vidocq.includeResources")
     private List<String> includeResources;
 
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
+
+    @Component
+    private RepositorySystem repoSystem;
+
     @Override
     public void execute() throws MojoExecutionException {
         if (skip) {
@@ -145,7 +158,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
     }
 
-    private void stageModules() throws IOException {
+    private void stageModules() throws IOException, MojoExecutionException {
         Path stage = modsDir.toPath();
         deleteRecursive(stage);
         Files.createDirectories(stage);
@@ -153,6 +166,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
         Path appJar = project.getArtifact().getFile().toPath();
         Files.copy(appJar, stage.resolve(appJar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
 
+        var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession, remoteRepos,
+                getLog()::debug);
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {
@@ -174,9 +189,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
                 // descriptor), else the copy patched with a generated module-info by vauban:modularize:
                 // jlink rejects automatic modules, so this is what makes a non-modular
                 // dependency stageable at all.
-                EnrichedJars.rebaseOnModularized(buildDir.toPath(), new EnrichedJars.Scanned(f.toPath(),
-                        artifact.getArtifactId(), artifact.getGroupId() + ":" + artifact.getArtifactId() + ":"
-                                + artifact.getVersion()), getLog()::info);
+                packaging.rebase(new EnrichedJars.Scanned(f.toPath(), artifact.getArtifactId(),
+                        artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
+                        getLog()::info);
                 Path modularized = EnrichedJars.resolve(buildDir.toPath(), f.toPath());
                 if (!modularized.equals(f.toPath())) {
                     src = modularized;

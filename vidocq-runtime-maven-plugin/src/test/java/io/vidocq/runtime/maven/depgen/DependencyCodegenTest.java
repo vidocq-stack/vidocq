@@ -22,26 +22,14 @@ package io.vidocq.runtime.maven.depgen;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import javax.tools.ToolProvider;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -51,17 +39,7 @@ class DependencyCodegenTest {
 
     private static final int RELEASE = Runtime.version().feature();
 
-    private static final Map<String, String> ANNOTATIONS = Map.of(
-            "fixture/Marked.java", """
-                    package fixture;
-                    import java.lang.annotation.*;
-                    @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE)
-                    public @interface Marked {}
-                    """,
-            "fixture/Other.java", """
-                    package fixture;
-                    public @interface Other {}
-                    """);
+    private static final Map<String, String> ANNOTATIONS = DepgenFixtures.ANNOTATIONS;
 
     @TempDir
     Path dir;
@@ -71,51 +49,14 @@ class DependencyCodegenTest {
     /** Compiles {@code sources} (relative path → content) and jars the classes plus {@code extra} entries. */
     private Path jar(String name, Map<String, String> sources, List<Path> classpath, Map<String, String> extra)
             throws IOException {
-        Path src = Files.createDirectories(dir.resolve(name + "-src"));
-        Path classes = Files.createDirectories(dir.resolve(name + "-classes"));
-        List<Path> files = new ArrayList<>();
-        for (var e : sources.entrySet()) {
-            Path file = src.resolve(e.getKey());
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, e.getValue());
-            files.add(file);
-        }
-        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
-        var diagnostics = new DiagnosticCollector<JavaFileObject>();
-        try (StandardJavaFileManager fm = javac.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
-            fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
-            fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
-            boolean ok = javac.getTask(null, fm, diagnostics, List.of("-proc:none"), null,
-                    fm.getJavaFileObjectsFromPaths(files)).call();
-            assertTrue(ok, () -> "fixture does not compile: " + diagnostics.getDiagnostics());
-        }
-        Path jar = dir.resolve(name + ".jar");
-        try (OutputStream os = Files.newOutputStream(jar); var out = new JarOutputStream(os);
-             Stream<Path> walk = Files.walk(classes)) {
-            for (Path p : walk.filter(Files::isRegularFile).sorted().toList()) {
-                out.putNextEntry(new JarEntry(classes.relativize(p).toString().replace('\\', '/')));
-                out.write(Files.readAllBytes(p));
-                out.closeEntry();
-            }
-            for (var e : extra.entrySet()) {
-                out.putNextEntry(new JarEntry(e.getKey()));
-                out.write(e.getValue().getBytes(StandardCharsets.UTF_8));
-                out.closeEntry();
-            }
-        }
-        return jar;
+        return DepgenFixtures.jar(dir, name, sources, classpath, extra);
     }
 
     /** A brick whose processor is the fixture {@code fixture.proc.<processor>}, compiled from the test resources. */
     private Brick brick(String name, String processor) throws IOException {
-        String source;
-        try (InputStream in = getClass().getResourceAsStream("/depgen/processors/" + processor + ".java")) {
-            source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        Path jar = jar(processor, Map.of("fixture/proc/" + processor + ".java", source), List.of(),
-                Map.of("META-INF/services/javax.annotation.processing.Processor", "fixture.proc." + processor + "\n"));
         return new Brick(new DependencyCodegenHints(name, List.of(), List.of(), List.of(), List.of()),
-                "io.vidocq:" + name.toLowerCase() + "-codegen:1.0", List.of(jar));
+                "io.vidocq:" + name.toLowerCase() + "-codegen:1.0",
+                List.of(DepgenFixtures.processorJar(dir, processor)));
     }
 
     private Path lib(Map<String, String> classes) throws IOException {

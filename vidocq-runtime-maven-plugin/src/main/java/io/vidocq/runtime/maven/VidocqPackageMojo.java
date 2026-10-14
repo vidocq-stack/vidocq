@@ -23,12 +23,16 @@ import io.vidocq.runtime.core.LayerSplit;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.repository.RemoteRepository;
 
 import java.io.*;
 import java.nio.file.*;
@@ -122,6 +126,15 @@ public class VidocqPackageMojo extends AbstractMojo {
     @javax.inject.Inject
     private MavenProjectHelper projectHelper;
 
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
+
+    @Component
+    private RepositorySystem repoSystem;
+
     @Override
     public void execute() throws MojoExecutionException {
         getLog().info("Vidocq - Packaging distribution: " + distName);
@@ -150,6 +163,8 @@ public class VidocqPackageMojo extends AbstractMojo {
             // module-info by vauban:modularize (target/vauban-modularized/) ships as that
             // copy, under the original file name.
             List<Packaged> packaged = new ArrayList<>();
+            var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession,
+                    remoteRepos, getLog()::debug);
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
                     if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
@@ -157,9 +172,9 @@ public class VidocqPackageMojo extends AbstractMojo {
                         continue;
                     }
                     Path original = artifact.getFile().toPath();
-                    EnrichedJars.rebaseOnModularized(buildDir.toPath(), new EnrichedJars.Scanned(original,
-                            artifact.getArtifactId(), artifact.getGroupId() + ":" + artifact.getArtifactId() + ":"
-                                    + artifact.getVersion()), getLog()::info);
+                    packaging.rebase(new EnrichedJars.Scanned(original, artifact.getArtifactId(),
+                            artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
+                            getLog()::info);
                     Path src = EnrichedJars.resolve(buildDir.toPath(), original);
                     boolean enriched = EnrichedJars.isEnriched(buildDir.toPath(), original);
                     if (enriched) {

@@ -30,6 +30,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -93,6 +94,39 @@ class PluginDescriptorScanTest {
         assertEquals(parameterNames(analyze).keySet(), configuration(analyze).keySet(),
                 "every configuration entry names a declared parameter");
         assertEquals("true", configuration(analyze).get("autoScan").getAttribute("default-value"));
+    }
+
+    /** Vidocq/vidocq#246: generate caches the bricks' output per jar, under a directory a property can move. */
+    @Test
+    void generateDeclaresTheCacheDirectory() {
+        Element generate = mojos.get("generate");
+        assertTrue(parameterNames(generate).containsKey("cacheDir"), parameterNames(generate).keySet().toString());
+        assertEquals("java.lang.String", text(parameterNames(generate).get("cacheDir"), "type"));
+        Element cacheDir = configuration(generate).get("cacheDir");
+        assertNotNull(cacheDir, "cacheDir has a configuration entry");
+        assertEquals("${vidocq.generate.cacheDir}", cacheDir.getTextContent().strip());
+        assertEquals(parameterNames(generate).keySet(), configuration(generate).keySet(),
+                "every configuration entry names a declared parameter");
+    }
+
+    /**
+     * Vidocq/vidocq#246: generate resolves the codegen bundles of the annotationProcessorPaths, and package and jlink
+     * look up the bricks of the copies generate wrote, so all three get Maven's resolver objects.
+     */
+    @Test
+    void generatePackageAndJlinkGetTheResolver() {
+        for (String goal : List.of("generate", "package", "jlink")) {
+            Element mojo = mojos.get(goal);
+            assertTrue(parameterNames(mojo).keySet().containsAll(Set.of("repoSession", "remoteRepos")),
+                    goal + ": " + parameterNames(mojo).keySet());
+            assertEquals("${repositorySystemSession}",
+                    configuration(mojo).get("repoSession").getAttribute("default-value"), goal);
+            assertEquals("${project.remoteProjectRepositories}",
+                    configuration(mojo).get("remoteRepos").getAttribute("default-value"), goal);
+            Element requirement = child(child(mojo, "requirements"), "requirement");
+            assertEquals("org.eclipse.aether.RepositorySystem", text(requirement, "role"), goal);
+            assertEquals("repoSystem", text(requirement, "field-name"), goal);
+        }
     }
 
     private static Map<String, Element> parameterNames(Element mojo) {

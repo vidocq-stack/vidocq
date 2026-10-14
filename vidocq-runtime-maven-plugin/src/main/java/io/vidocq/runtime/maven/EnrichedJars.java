@@ -130,6 +130,13 @@ public final class EnrichedJars {
         return Files.isRegularFile(root(buildDir).resolve(originalJar.getFileName().toString()));
     }
 
+    /** The bricks the enriched copy of {@code originalJar} names in {@code Vidocq-Enriched-By}; empty when none. */
+    static List<String> enrichedBy(Path buildDir, Path originalJar) {
+        String value = manifestValue(root(buildDir).resolve(originalJar.getFileName().toString()), ENRICHED_BY);
+        return value == null ? List.of()
+                : Stream.of(value.split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList();
+    }
+
     /** Deletes every enriched copy, so a jar no longer scanned is never substituted by a stale one. */
     public static void clear(Path buildDir) throws IOException {
         Path root = root(buildDir);

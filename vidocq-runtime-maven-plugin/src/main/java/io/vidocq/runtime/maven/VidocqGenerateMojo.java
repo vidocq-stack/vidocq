@@ -20,15 +20,22 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.core.GenerateStamp;
+import io.vidocq.runtime.maven.depgen.Brick;
+import io.vidocq.runtime.maven.depgen.DependencyCodegenCache;
 import io.vidocq.vauban.maven.generate.GenerationResult;
 import io.vidocq.vauban.maven.generate.VaubanGenerator;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.repository.RemoteRepository;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +48,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Generates the CDI bean index and pre-generates the proxies/interceptors
@@ -59,6 +67,11 @@ import java.util.Map;
  * Resolves the runtime scope too: a build-compatible extension that reaches the application at runtime scope —
  * Cassini's, through its REST extension — is on the module path at run time, so the generator must run it as well,
  * or the classes it alone makes beans keep the reflection fallback (Vidocq/vidocq#188).
+ * </p>
+ * <p>
+ * Then runs the processors of every brick on the compiler's {@code annotationProcessorPaths} over the dependency
+ * jars their hints select ({@link DependencyCodegenPass}); what they generate joins the jar's enriched copy, next to
+ * Vauban's output (Vidocq/vidocq#246).
  * </p>
  */
 @Mojo(name = "generate",
@@ -100,8 +113,24 @@ public class VidocqGenerateMojo extends AbstractMojo {
     @Parameter(property = "vidocq.generate.autoScan", defaultValue = "true")
     private boolean autoScan;
 
+    /**
+     * Where the output of the bricks' processors is cached per dependency jar, shared between projects. Default
+     * {@code $XDG_CACHE_HOME/vidocq/depgen}, else {@code ~/.cache/vidocq/depgen}.
+     */
+    @Parameter(property = "vidocq.generate.cacheDir")
+    private String cacheDir;
+
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+    private List<RemoteRepository> remoteRepos;
+
+    @Component
+    private RepositorySystem repoSystem;
+
     @Override
-    public void execute() throws MojoExecutionException {
+    public void execute() throws MojoExecutionException, MojoFailureException {
         generate();
         // Last, once the index is final, on every path that did not fail: the stamp records that index, and the
         // boot reads a missing or stale stamp as "built without vidocq:generate" (Vidocq/vidocq#241).
@@ -115,7 +144,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
     }
 
-    private void generate() throws MojoExecutionException {
+    private void generate() throws MojoExecutionException, MojoFailureException {
         getLog().info("Vidocq - Generating bean index and proxies for dependencies");
 
         Path classesDir = outputDirectory.toPath();
@@ -129,117 +158,150 @@ public class VidocqGenerateMojo extends AbstractMojo {
             int peanoProviders=PeanoAccessorRegistration.apply(classesDir);
             if (peanoProviders>0) getLog().info("Peano accessor providers registered: "+peanoProviders);
             Map<Path, String> scannedByArtifactId = collectScannedDependencies();
-            List<Path> vidocqDeps = new ArrayList<>(scannedByArtifactId.keySet());
-            if (vidocqDeps.isEmpty()) {
+            List<String> providers = List.of();
+            if (scannedByArtifactId.isEmpty()) {
                 getLog().info("No dependencies to process (scanDependencies empty or all pre-processed)");
+            } else {
+                providers = generateVauban(classesDir, scannedByArtifactId);
+            }
+
+            // The bricks' processors run whatever Vauban selected: a jar no CDI scan names can still need them.
+            List<Path> closure = new ArrayList<>();
+            for (var artifact : project.getArtifacts()) {
+                if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
+                    closure.add(artifact.getFile().toPath());
+                }
+            }
+            DependencyCodegenPass.Result bricks = generateForBricks(closure);
+            if (scannedByArtifactId.isEmpty() && bricks.processed().isEmpty()) {
                 clearEnrichedCopies();
                 return;
             }
 
-            boolean aptProcessed = Files.exists(classesDir.resolve("META-INF/vauban-bce-processed"));
-            if (aptProcessed) {
-                getLog().info("APT already processed project classes (vauban-bce-processed found)");
-            }
-
-            URLClassLoader classLoader = buildClassLoader(classesDir);
-
-            var config = new VaubanGenerator.Config(
-                    vidocqDeps,
-                    aptProcessed ? null : classesDir,
-                    classesDir,
-                    classLoader,
-                    true
-            );
-
-            // Save the existing beans.list (generated by APT)
-            Path beansListPath = classesDir.resolve("META-INF/vauban-beans.list");
-            List<String> existingBeans = new ArrayList<>();
-            if (Files.exists(beansListPath)) {
-                existingBeans = Files.readAllLines(beansListPath).stream()
-                        .filter(l -> !l.isBlank() && !l.startsWith("#"))
-                        .toList();
-            }
-
-            GenerationResult result;
-            try {
-                result = VaubanGenerator.generate(config);
-            } finally {
-                classLoader.close();
-            }
-
-            // Merge APT beans with dependency beans
-            if (!existingBeans.isEmpty()) {
-                var merged = new java.util.TreeSet<>(existingBeans);
-                merged.addAll(result.discoveredBeanClasses());
-                Files.createDirectories(beansListPath.getParent());
-                var lines = new ArrayList<String>();
-                lines.add("# Vauban discovered beans — APT + vidocq-runtime-maven-plugin");
-                lines.addAll(merged);
-                Files.write(beansListPath, lines);
-                getLog().info("Bean index (merged): " + merged.size() + " class(es)");
-            } else {
-                getLog().info("Bean index: " + result.discoveredBeanClasses().size() + " class(es)");
-            }
-
-            for (String cls : result.discoveredBeanClasses()) {
-                getLog().info("  - " + cls);
-            }
-
-            if (!result.generatedProxies().isEmpty()) {
-                getLog().info("Proxies: " + result.generatedProxies().size() + " generated");
-                for (String proxy : result.generatedProxies()) {
-                    getLog().info("  - " + proxy);
-                }
-            }
-
-            if (!result.generatedInterceptors().isEmpty()) {
-                getLog().info("Interceptors: " + result.generatedInterceptors().size() + " generated");
-                for (String interceptor : result.generatedInterceptors()) {
-                    getLog().info("  - " + interceptor);
-                }
-            }
-
-            for (String warning : result.warnings()) {
-                getLog().warn(warning);
-            }
-
-            // Classes generated for a scanned dependency live in packages owned by that
-            // dependency's module: leaving them in target/classes would create a JPMS
-            // split package. Park them in target/vidocq-patches/<artifactId>/; the
-            // packaging goals re-attach them by enriching the dependency jar copies.
-            List<String> generated = new ArrayList<>();
-            generated.addAll(result.generatedProxies());
-            generated.addAll(result.generatedInterceptors());
-            generated.addAll(result.generatedProviders());
-            var relocated = JpmsPatches.relocate(
-                    classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
-            for (var e : relocated.entrySet()) {
-                getLog().info("JPMS: parked " + e.getValue() + " generated class(es) of '" + e.getKey()
-                        + "' in target/" + JpmsPatches.DIR_NAME + "/" + e.getKey()
-                        + " — packaging goals will enrich that jar");
-            }
-
-            // One enriched copy per scanned jar: its generated classes inside, its descriptor declaring the
+            // One enriched copy per processed jar: its generated code inside, its descriptor declaring the
             // providers, substituted for the original by dev, run, package and jlink.
             List<EnrichedJars.Scanned> scanned = new ArrayList<>();
-            List<Path> closure = new ArrayList<>();
             for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() == null || !ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
-                    continue;
-                }
-                Path jar = artifact.getFile().toPath();
-                closure.add(jar);
-                if (scannedByArtifactId.containsKey(jar) && Files.isRegularFile(jar)) {
+                Path jar = artifact.getFile() == null ? null : artifact.getFile().toPath();
+                if (jar != null && scannedByArtifactId.containsKey(jar) && Files.isRegularFile(jar)) {
                     scanned.add(new EnrichedJars.Scanned(jar, artifact.getArtifactId(),
                             artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()));
                 }
             }
-            EnrichedJars.enrichAll(buildDirectory.toPath(), scanned, result.generatedProviders(), closure,
+            EnrichedJars.enrichAll(buildDirectory.toPath(), DependencyCodegenPass.onePerJar(scanned,
+                            bricks.processed()), providers, closure, bricks.mergedResources(),
+                    bricks.processed().isEmpty() ? packages -> Set.of()
+                            : DependencyBricks.modulesOfPackages(closure, getLog()::debug),
                     getLog()::info, getLog()::warn);
 
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to generate bean index", e);
         }
+    }
+
+    /** Vauban's part: the bean index, proxies and interceptors of the scanned jars. Returns the providers written. */
+    private List<String> generateVauban(Path classesDir, Map<Path, String> scannedByArtifactId)
+            throws IOException {
+        List<Path> vidocqDeps = new ArrayList<>(scannedByArtifactId.keySet());
+        boolean aptProcessed = Files.exists(classesDir.resolve("META-INF/vauban-bce-processed"));
+        if (aptProcessed) {
+            getLog().info("APT already processed project classes (vauban-bce-processed found)");
+        }
+
+        URLClassLoader classLoader = buildClassLoader(classesDir);
+
+        var config = new VaubanGenerator.Config(
+                vidocqDeps,
+                aptProcessed ? null : classesDir,
+                classesDir,
+                classLoader,
+                true
+        );
+
+        // Save the existing beans.list (generated by APT)
+        Path beansListPath = classesDir.resolve("META-INF/vauban-beans.list");
+        List<String> existingBeans = new ArrayList<>();
+        if (Files.exists(beansListPath)) {
+            existingBeans = Files.readAllLines(beansListPath).stream()
+                    .filter(l -> !l.isBlank() && !l.startsWith("#"))
+                    .toList();
+        }
+
+        GenerationResult result;
+        try {
+            result = VaubanGenerator.generate(config);
+        } finally {
+            classLoader.close();
+        }
+
+        // Merge APT beans with dependency beans
+        if (!existingBeans.isEmpty()) {
+            var merged = new java.util.TreeSet<>(existingBeans);
+            merged.addAll(result.discoveredBeanClasses());
+            Files.createDirectories(beansListPath.getParent());
+            var lines = new ArrayList<String>();
+            lines.add("# Vauban discovered beans — APT + vidocq-runtime-maven-plugin");
+            lines.addAll(merged);
+            Files.write(beansListPath, lines);
+            getLog().info("Bean index (merged): " + merged.size() + " class(es)");
+        } else {
+            getLog().info("Bean index: " + result.discoveredBeanClasses().size() + " class(es)");
+        }
+
+        for (String cls : result.discoveredBeanClasses()) {
+            getLog().info("  - " + cls);
+        }
+
+        if (!result.generatedProxies().isEmpty()) {
+            getLog().info("Proxies: " + result.generatedProxies().size() + " generated");
+            for (String proxy : result.generatedProxies()) {
+                getLog().info("  - " + proxy);
+            }
+        }
+
+        if (!result.generatedInterceptors().isEmpty()) {
+            getLog().info("Interceptors: " + result.generatedInterceptors().size() + " generated");
+            for (String interceptor : result.generatedInterceptors()) {
+                getLog().info("  - " + interceptor);
+            }
+        }
+
+        for (String warning : result.warnings()) {
+            getLog().warn(warning);
+        }
+
+        // Classes generated for a scanned dependency live in packages owned by that
+        // dependency's module: leaving them in target/classes would create a JPMS
+        // split package. Park them in target/vidocq-patches/<artifactId>/; the
+        // packaging goals re-attach them by enriching the dependency jar copies.
+        List<String> generated = new ArrayList<>();
+        generated.addAll(result.generatedProxies());
+        generated.addAll(result.generatedInterceptors());
+        generated.addAll(result.generatedProviders());
+        var relocated = JpmsPatches.relocate(
+                classesDir, buildDirectory.toPath(), scannedByArtifactId, generated);
+        for (var e : relocated.entrySet()) {
+            getLog().info("JPMS: parked " + e.getValue() + " generated class(es) of '" + e.getKey()
+                    + "' in target/" + JpmsPatches.DIR_NAME + "/" + e.getKey()
+                    + " — packaging goals will enrich that jar");
+        }
+        return result.generatedProviders();
+    }
+
+    /** The bricks' part: their processors over the dependency jars they select, into the jars' patch directories. */
+    private DependencyCodegenPass.Result generateForBricks(List<Path> closure)
+            throws IOException, MojoExecutionException, MojoFailureException {
+        List<Brick> bricks = DependencyBricks.of(project, repoSystem, repoSession, remoteRepos);
+        if (bricks.isEmpty()) {
+            return new DependencyCodegenPass.Result(List.of(), Set.of());
+        }
+        var cache = new DependencyCodegenCache(DependencyCodegenCache.directory(cacheDir, System.getenv(),
+                System.getProperty("user.home")));
+        var pass = new DependencyCodegenPass(bricks, cache, DependencyCodegenPass.JAVAC, buildDirectory.toPath(),
+                project.getBasedir().toPath(), getLog()::info, getLog()::warn, getLog()::error);
+        return pass.run(ScanSelection.dependenciesOf(project.getArtifacts()), closure,
+                DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
+                orEmpty(scanDependencies), orEmpty(scanExcludes));
     }
 
     /** Nothing is scanned this run: no earlier enriched copy may still stand in for its jar. */

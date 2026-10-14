@@ -250,6 +250,27 @@
                     <editable>false</editable>
                     <description>Project build directory (hosts vidocq-patches/ for cross-module generated classes)</description>
                 </parameter>
+                <parameter>
+                    <name>cacheDir</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Directory caching the bricks' processor output per dependency jar, shared between projects (default $XDG_CACHE_HOME/vidocq/depgen, else ~/.cache/vidocq/depgen)</description>
+                </parameter>
+                <parameter>
+                    <name>repoSession</name>
+                    <type>org.eclipse.aether.RepositorySystemSession</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>Aether repository session, for resolving the codegen bundles of the annotationProcessorPaths</description>
+                </parameter>
+                <parameter>
+                    <name>remoteRepos</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Remote project repositories</description>
+                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
@@ -261,7 +282,18 @@
                 <autoScan implementation="boolean" default-value="true">${vidocq.generate.autoScan}</autoScan>
                 <buildDirectory implementation="java.io.File"
                                 default-value="${project.build.directory}"/>
+                <cacheDir implementation="java.lang.String">${vidocq.generate.cacheDir}</cacheDir>
+                <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
+                             default-value="${repositorySystemSession}"/>
+                <remoteRepos implementation="java.util.List"
+                             default-value="${project.remoteProjectRepositories}"/>
             </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.eclipse.aether.RepositorySystem</role>
+                    <field-name>repoSystem</field-name>
+                </requirement>
+            </requirements>
         </mojo>
 
         <!-- vidocq:analyze-deps -->
@@ -401,6 +433,20 @@
                     <editable>false</editable>
                     <description>Build output directory</description>
                 </parameter>
+                <parameter>
+                    <name>repoSession</name>
+                    <type>org.eclipse.aether.RepositorySystemSession</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>Aether repository session, for resolving the codegen bundles of the bricks that enriched a dependency copy</description>
+                </parameter>
+                <parameter>
+                    <name>remoteRepos</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Remote project repositories</description>
+                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
@@ -421,7 +467,17 @@
                 <appLayerKeep implementation="java.lang.String">${vidocq.app.layer.keep}</appLayerKeep>
                 <buildDir implementation="java.io.File"
                           default-value="${project.build.directory}"/>
+                <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
+                             default-value="${repositorySystemSession}"/>
+                <remoteRepos implementation="java.util.List"
+                             default-value="${project.remoteProjectRepositories}"/>
             </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.eclipse.aether.RepositorySystem</role>
+                    <field-name>repoSystem</field-name>
+                </requirement>
+            </requirements>
         </mojo>
 
         <!-- vidocq:jlink -->
@@ -523,6 +579,20 @@
                     <editable>true</editable>
                     <description>Skip jlink execution entirely (useful in CI to bypass automatic-modules issues)</description>
                 </parameter>
+                <parameter>
+                    <name>repoSession</name>
+                    <type>org.eclipse.aether.RepositorySystemSession</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>Aether repository session, for resolving the codegen bundles of the bricks that enriched a dependency copy</description>
+                </parameter>
+                <parameter>
+                    <name>remoteRepos</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Remote project repositories</description>
+                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
@@ -546,7 +616,17 @@
                 <includeResources implementation="java.util.List"/>
                 <skip implementation="boolean"
                       default-value="false">${vidocq.jlink.skip}</skip>
+                <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
+                             default-value="${repositorySystemSession}"/>
+                <remoteRepos implementation="java.util.List"
+                             default-value="${project.remoteProjectRepositories}"/>
             </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.eclipse.aether.RepositorySystem</role>
+                    <field-name>repoSystem</field-name>
+                </requirement>
+            </requirements>
         </mojo>
 
         <!-- vidocq:jpackage -->
