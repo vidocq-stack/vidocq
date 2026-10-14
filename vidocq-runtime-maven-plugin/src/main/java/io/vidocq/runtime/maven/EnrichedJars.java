@@ -349,7 +349,8 @@ public final class EnrichedJars {
         }
         if (base != null) {
             byte[] descriptor = ModuleInfoRewriter.addComponentProvider(base, providers, requires);
-            Set<String> brickRequires = new TreeSet<>(
+            // Only a copy a brick processed requires for the bricks: a Vauban-only copy stays as Vauban writes it.
+            Set<String> brickRequires = bricks.bricks().isEmpty() ? new TreeSet<>() : new TreeSet<>(
                     bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses)));
             brickRequires.remove("java.base");
             brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));

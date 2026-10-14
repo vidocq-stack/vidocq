@@ -203,7 +203,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
             EnrichedJars.enrichAll(buildDirectory.toPath(), DependencyCodegenPass.onePerJar(scanned,
                             bricks.processed()), providers, closure, bricks.mergedResources(),
                     bricks.processed().isEmpty() ? packages -> Set.of()
-                            : DependencyBricks.modulesOfPackages(closure, getLog()::debug),
+                            : DependencyBricks.modulesOfPackages(closure, getLog()::warn),
                     getLog()::info, getLog()::warn);
 
         } catch (IOException e) {

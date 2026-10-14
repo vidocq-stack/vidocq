@@ -100,27 +100,41 @@ final class DependencyBricks {
     }
 
     /**
-     * The modules, among {@code dependencies} read as a module path, that hold any of the given packages. When they
-     * do not resolve as modules, no package has one, and {@code debug} says why.
+     * The modules, among {@code dependencies}, that hold any of the given packages. Each dependency is read as a
+     * module on its own, so that one that is not a valid module (an automatic name that cannot be derived, a broken
+     * descriptor) loses only its own packages; {@code warn} names it.
      */
     static Function<Set<String>, Set<String>> modulesOfPackages(Collection<Path> dependencies,
-                                                               Consumer<String> debug) {
-        Path[] entries = dependencies.stream()
-                .filter(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(".jar")
-                        || Files.isRegularFile(p.resolve(EnrichedJars.MODULE_INFO)))
-                .toArray(Path[]::new);
+                                                               Consumer<String> warn) {
         Map<String, String> owners = new HashMap<>();
-        try {
-            for (ModuleReference ref : ModuleFinder.of(entries).findAll()) {
-                ref.descriptor().packages().forEach(p -> owners.putIfAbsent(p, ref.descriptor().name()));
+        for (Path entry : dependencies) {
+            boolean module = Files.isRegularFile(entry) && entry.getFileName().toString().endsWith(".jar")
+                    || Files.isRegularFile(entry.resolve(EnrichedJars.MODULE_INFO));
+            if (!module) {
+                continue;
             }
-        } catch (FindException e) {
-            debug.accept("The dependencies do not resolve as modules (" + e.getMessage()
-                    + "): the enriched copies require no module for their generated classes");
-            return packages -> Set.of();
+            try {
+                for (ModuleReference ref : ModuleFinder.of(entry).findAll()) {
+                    ref.descriptor().packages().forEach(p -> owners.putIfAbsent(p, ref.descriptor().name()));
+                }
+            } catch (FindException e) {
+                warn.accept(entry.getFileName() + " is not a valid module (" + firstLine(e)
+                        + "): a copy whose generated classes use its packages does not require it");
+            }
         }
         return packages -> packages.stream().map(owners::get).filter(Objects::nonNull)
                 .collect(Collectors.toCollection(TreeSet::new));
+    }
+
+    /** The first line of the deepest message of {@code e}. */
+    private static String firstLine(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        String message = String.valueOf(cause.getMessage());
+        int eol = message.indexOf('\n');
+        return (eol < 0 ? message : message.substring(0, eol)).strip();
     }
 
     /**
@@ -150,14 +164,14 @@ final class DependencyBricks {
     /** The {@link Packaging} of {@code project}, over its dependency jars and directories. */
     static Packaging packaging(MavenProject project, Path buildDir, RepositorySystem system,
                                RepositorySystemSession session, List<RemoteRepository> repositories,
-                               Consumer<String> debug) {
+                               Consumer<String> warn) {
         List<Path> dependencies = new ArrayList<>();
         for (var artifact : project.getArtifacts()) {
             if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
                 dependencies.add(artifact.getFile().toPath());
             }
         }
-        return new Packaging(buildDir, () -> of(project, system, session, repositories), dependencies, debug);
+        return new Packaging(buildDir, () -> of(project, system, session, repositories), dependencies, warn);
     }
 
     /**
@@ -170,15 +184,15 @@ final class DependencyBricks {
         private final Path buildDir;
         private final Source source;
         private final Collection<Path> dependencies;
-        private final Consumer<String> debug;
+        private final Consumer<String> warn;
         private List<Brick> bricks;
         private Function<Set<String>, Set<String>> modulesOfPackages;
 
-        Packaging(Path buildDir, Source source, Collection<Path> dependencies, Consumer<String> debug) {
+        Packaging(Path buildDir, Source source, Collection<Path> dependencies, Consumer<String> warn) {
             this.buildDir = buildDir;
             this.source = source;
             this.dependencies = dependencies;
-            this.debug = debug;
+            this.warn = warn;
         }
 
         void rebase(EnrichedJars.Scanned dep, Consumer<String> info) throws IOException, MojoExecutionException {
@@ -191,7 +205,7 @@ final class DependencyBricks {
                 return;
             }
             if (modulesOfPackages == null) {
-                modulesOfPackages = modulesOfPackages(dependencies, debug);
+                modulesOfPackages = modulesOfPackages(dependencies, warn);
             }
             EnrichedJars.rebaseOnModularized(buildDir, scanned, mergedResources(bricks()), modulesOfPackages, info);
         }

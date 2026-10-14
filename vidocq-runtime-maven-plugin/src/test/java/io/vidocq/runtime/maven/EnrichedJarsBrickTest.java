@@ -236,6 +236,23 @@ class EnrichedJarsBrickTest {
     }
 
     @Test
+    void aVaubanOnlyCopyGetsNoRequiresFromTheBricks() throws Exception {
+        Path build = tmp.resolve("target");
+        Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.dep"),
+                "org/dep/Service.class", emptyClass("org.dep.Service")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/_VaubanComponents.class", foyComponent("org.dep._VaubanComponents")));
+
+        EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")),
+                List.of("org.dep._VaubanComponents"), List.of(lib), MERGED, MODULES, line -> { }, line -> { });
+
+        Set<String> requires = descriptorOf(EnrichedJars.resolve(build, lib)).requires().stream()
+                .map(ModuleDescriptor.Requires::name).collect(Collectors.toSet());
+        assertFalse(requires.contains("io.vidocq.foy"), "only a copy a brick processed requires for it: " + requires);
+    }
+
+    @Test
     void vaubanAndBrickOutputShareOneCopy() throws Exception {
         Path build = tmp.resolve("target");
         Path auto = jar(tmp.resolve("m2/auto-lib-1.0.jar"), Map.of(

@@ -167,7 +167,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         Files.copy(appJar, stage.resolve(appJar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
 
         var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession, remoteRepos,
-                getLog()::debug);
+                getLog()::warn);
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {

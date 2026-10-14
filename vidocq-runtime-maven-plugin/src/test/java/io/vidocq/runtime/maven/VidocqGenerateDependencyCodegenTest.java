@@ -507,6 +507,19 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void oneDependencyThatIsNotAModuleDoesNotHideTheOthers() throws Exception {
+        Path invalid = plainJar("1-1.0", Map.of());
+        Path other = DepgenFixtures.jar(Files.createDirectories(dir.resolve("repo")), "other-1.0",
+                Map.of("org/other/Thing.java", "package org.other; public class Thing {}"), List.of(), Map.of());
+        List<String> warnings = new ArrayList<>();
+
+        assertEquals(Set.of("other"), DependencyBricks.modulesOfPackages(List.of(invalid, other), warnings::add)
+                .apply(Set.of("org.other", "com.acme")));
+        assertEquals(1, warnings.size(), warnings::toString);
+        assertTrue(warnings.getFirst().contains("1-1.0.jar"), warnings::toString);
+    }
+
+    @Test
     void theReleaseIsTheProjectsElseTheRunningJdks() {
         assertEquals(21, DependencyCodegenPass.release("21"));
         assertEquals(RELEASE, DependencyCodegenPass.release(null));
