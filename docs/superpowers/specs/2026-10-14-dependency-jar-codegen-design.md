@@ -47,7 +47,12 @@ class-bytes=jakarta/servlet/annotation/Web,jakarta/servlet/annotation/HandlesTyp
 # A jar holding one of these resources was already processed by this brick: it is skipped.
 markers=META-INF/io.vidocq.foy/generated,META-INF/foy/class-index.list,META-INF/services/io.vidocq.foy.spi.gen.WebComponent
 # Generated resources merged line by line with the jar's own copy, instead of replacing it.
-merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent,META-INF/foy/class-index.list
+merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent
+# Generated resources that describe every class of the jar. The processors see only the hinted classes (section 4),
+# so these would be partial: they are dropped from the output, and the brick's run-time fallback covers the jar
+# (Foy scans a jar without class-index.list for @HandlesTypes itself; a partial index made it skip Vaadin's
+# LookupInitializer, found on Vaadin, 2026-10-14).
+whole-jar=META-INF/foy/class-index.list
 ```
 
 It is data, not code: the plugin never loads a brick's classes to decide. The values come from the brick
