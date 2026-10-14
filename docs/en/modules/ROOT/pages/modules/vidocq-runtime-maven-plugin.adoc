@@ -143,6 +143,42 @@ A plain `vidocq.mainClass` without `vidocq.mainModule` fails the build, with a m
 other. The launchers used to pass the class name alone to `--module`, and the JVM stopped on a
 `FindException` before `main` (Vidocq/vidocq#198).
 
+[#app-layer-property]
+=== The `vidocq.app.layer` property [.tag-new]#NEW#
+
+`vidocq:run`, `vidocq:dev` and `vidocq:package` read the same two properties (Vidocq/vidocq#247).
+
+[cols="2,1,3"]
+|===
+| Property | Default | Meaning
+
+| `vidocq.app.layer`
+| `classes`
+| `classes`: the application layer holds the project's classes, its dependencies stay on the module path. `all`: it
+  also holds every dependency outside the runtime's closure, as `WEB-INF/lib` does in a servlet container.
+
+| `vidocq.app.layer.keep`
+| _(empty)_
+| Under `all`, comma-separated patterns kept in the parent layer: a module name or `groupId:artifactId`, `*` alone
+  or as a suffix.
+|===
+
+`all` needs the layer mode: `vidocq.dev.layer` for `vidocq:dev`, `vidocq.package.layer` for `vidocq:package`
+(both `true` by default). With the layer mode off, the goal fails.
+
+The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`. A dependency whose
+module name cannot be derived fails the build under `all`, with a message that names the jar: give it an
+`Automatic-Module-Name`, or set `vidocq.app.layer=classes`.
+
+The parent layer also keeps the dependencies that a kept module declares in Maven: the Liquibase extension keeps
+`liquibase.core` and, through Maven's dependency trails, its own dependencies. Maven records one path per
+artifact, so a dependency shared with an application library and reached by a nearer path can land in the
+application layer: pin it with `vidocq.app.layer.keep`.
+
+Under `vidocq:package` with `all`, `lib/` holds the parent layer and `app/` holds the application jar and its
+libraries. Both launchers carry `-Dvidocq.app.layer=all`, and the pinned list when there is one. The rule and the
+limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
+
 [#modularize]
 == `modularize` moved to the Vauban plugin [.tag-new]#NEW#
 
@@ -346,6 +382,17 @@ run always uses.
 | `vidocq.run.gracePeriodMillis`
 | `5000`
 | How long the application has to stop after Ctrl+C before it is force-killed.
+
+| `vidocq.app.layer` [.tag-new]#NEW#
+| `classes`
+| `classes`: the application layer holds the project's classes, its dependencies stay on the module path. `all`: it
+  also holds every dependency outside the runtime's closure, as `WEB-INF/lib` does in a servlet container. Needs the
+  layer mode. See <<app-layer-property,the `vidocq.app.layer` property>>.
+
+| `vidocq.app.layer.keep` [.tag-new]#NEW#
+| _(empty)_
+| Under `all`, comma-separated patterns kept in the parent layer: a module name or `groupId:artifactId`, `*` alone
+  or as a suffix.
 
 | `vidocq.run.skip`
 | `false`

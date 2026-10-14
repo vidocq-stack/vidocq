@@ -79,6 +79,51 @@ NOTE: custom JUL log handlers declared in the application's `logging.properties`
 live on the module path — `LogManager` instantiates handlers through the system class
 loader, which cannot see the layer.
 
+[#app-layer-dependencies]
+=== Dependencies in the application layer [.tag-new]#NEW#
+
+By default (`vidocq.app.layer=classes`) the application layer holds the project's classes, and the project's
+dependencies stay on the module path. `-Dvidocq.app.layer=all` moves them into the application layer as well,
+the way `WEB-INF/lib` works in a servlet container. A framework that looks up its resources through its own class
+loader, Vaadin for instance, then sees the whole application. `classes` is still the default; `all` becomes the
+default once the validation campaign is green (Vidocq/vidocq#247).
+
+*The rule.* The parent layer is the closure of the runtime: the Jakarta and MicroProfile APIs, the Vidocq
+modules, the modules that provide a Vidocq extension, the modules with a `javax.`, `sun.` or `com.sun.` package,
+the pinned modules, and what all of them require. Everything else belongs to the application, automatic modules
+included. A module that is kept also keeps the dependencies it declares in Maven. Maven records one path per
+artifact, so a dependency shared with an application library and reached by a nearer path can land in the
+application layer: pin it.
+
+*Pinning.* `-Dvidocq.app.layer.keep=<patterns>` keeps modules in the parent layer. A pattern is a module name or
+`groupId:artifactId`; `*` alone, or as a suffix (`org.acme.*`), matches several. A brick pins its own modules with
+the `Vidocq-Parent-Layer` attribute of its manifest. A pinned module drags what it requires into the parent layer.
+A pinned module that reads a module of the application fails the build, with both names.
+
+*The startup report.* The `layer` headline counts the libraries, for instance
+`3 modules, 2 libraries (...)`. The detailed report has one `parent layer` row for each pinned module, with its
+reason. The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
+
+*Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
+deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
+such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
+are not detected. A library with native code (JNI) cannot be loaded twice by the JVM: keep it in the parent layer
+with `vidocq.app.layer.keep`.
+
+*Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
+libraries. Both launchers carry `-Dvidocq.app.layer=all` and the pinned list. `all` requires the layer mode
+(`vidocq.dev.layer`, `vidocq.package.layer`), otherwise the goal fails. A dependency whose module name cannot be
+derived fails the build under `all`, with a message that names the jar: add an `Automatic-Module-Name` to it, or
+use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the plugin properties].
+
+*Known limits.*
+
+* A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer. The
+  `(dev)` configuration that `vidocq:idea` writes has no such limit.
+* `vidocq:jlink`, jpackage and Docker images are unchanged: the application still runs in one layer, with its
+  libraries in the image.
+* Jar signatures are not verified in the layer.
+
 == Packaging with `vidocq-runtime-maven-plugin`
 
 The Maven plugin exposes three packaging targets. See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details.
