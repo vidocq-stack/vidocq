@@ -261,7 +261,7 @@ public final class EnrichedJars {
     }
 
     /** {@code META-INF/*.SF}, {@code *.RSA}, {@code *.DSA}, {@code *.EC}, {@code SIG-*}: a signature. */
-    static boolean isSignature(String name) {
+    public static boolean isSignature(String name) {
         if (!name.startsWith("META-INF/") || name.indexOf('/', "META-INF/".length()) >= 0) {
             return false;
         }
