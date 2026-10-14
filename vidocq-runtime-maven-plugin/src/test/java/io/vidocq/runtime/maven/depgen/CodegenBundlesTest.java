@@ -147,6 +147,22 @@ class CodegenBundlesTest {
     }
 
     @Test
+    void aMalformedHintsFileFailsNamingTheBundle(@TempDir Path dir) throws Exception {
+        Path broken = bundle(dir, "broken", false);
+        Path file = broken.resolve(DependencyCodegenHints.PATH);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "brick=Broken\nresources=META-INF/x\nflavour=sweet\n");
+        Fake resolver = new Fake(dir, Map.of("g:broken", broken));
+
+        MojoExecutionException e = assertThrows(MojoExecutionException.class,
+                () -> CodegenBundles.of(project(path("broken", "1.0", null), null), resolver));
+
+        assertTrue(e.getMessage().startsWith("The codegen bundle g:broken:1.0 declares malformed hints: "),
+                e.getMessage());
+        assertTrue(e.getMessage().contains("flavour"), e.getMessage());
+    }
+
+    @Test
     void aPomTypedPathIsSkipped(@TempDir Path dir) throws Exception {
         Fake resolver = new Fake(dir, Map.of("g:twin", bundle(dir, "twin", true)));
 

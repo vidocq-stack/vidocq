@@ -59,6 +59,9 @@ public final class CodegenBundles {
             } catch (IOException e) {
                 throw new MojoExecutionException("Cannot read the codegen bundle " + coordinates + ": "
                         + e.getMessage(), e);
+            } catch (IllegalArgumentException e) {
+                throw new MojoExecutionException("The codegen bundle " + coordinates + " declares malformed hints: "
+                        + e.getMessage(), e);
             }
         }
         return bricks;

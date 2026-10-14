@@ -70,7 +70,7 @@ final class AnalyzeReport {
                 if (decision.signed()) {
                     text.append(", signed: processed only when named in scanDependencies");
                 }
-                var cached = cache.get(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release,
+                var cached = cache.peek(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release,
                         classpath));
                 if (cached.isPresent()) {
                     long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();

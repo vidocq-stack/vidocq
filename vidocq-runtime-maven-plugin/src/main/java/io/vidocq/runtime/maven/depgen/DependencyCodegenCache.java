@@ -107,22 +107,36 @@ public final class DependencyCodegenCache {
         return hex(md.digest());
     }
 
+    /**
+     * {@link #get} for a read-only caller ({@code vidocq:analyze-deps}): a damaged entry is a miss, left as it is.
+     */
+    public Optional<DependencyCodegen.Output> peek(String key) throws IOException {
+        try {
+            return read(key, false);
+        } catch (NoSuchFileException vanished) {
+            return Optional.empty();
+        }
+    }
+
     public Optional<DependencyCodegen.Output> get(String key) throws IOException {
         try {
-            return read(key);
+            return read(key, true);
         } catch (NoSuchFileException vanished) {
             // Another build is replacing or discarding the entry: a miss, not a failure.
             return Optional.empty();
         }
     }
 
-    private Optional<DependencyCodegen.Output> read(String key) throws IOException {
+    /** @param discardDamaged whether an entry without its completion marker is deleted */
+    private Optional<DependencyCodegen.Output> read(String key, boolean discardDamaged) throws IOException {
         Path entry = directory.resolve(key);
         if (!Files.exists(entry)) {
             return Optional.empty();
         }
         if (!Files.isRegularFile(entry.resolve(COMPLETE))) {
-            deleteTree(entry);
+            if (discardDamaged) {
+                deleteTree(entry);
+            }
             return Optional.empty();
         }
         Map<String, byte[]> files = new TreeMap<>();

@@ -539,6 +539,14 @@ class VidocqGenerateDependencyCodegenTest {
     }
 
     @Test
+    void aLogPathThatCannotBeRelativizedIsShownAbsolute() {
+        Path log = dir.resolve("target/vidocq-depgen/lib.log");
+
+        assertEquals("target/vidocq-depgen/lib.log", DependencyCodegenPass.display(dir, log));
+        assertEquals(log.toString(), DependencyCodegenPass.display(Path.of("relative/base"), log));
+    }
+
+    @Test
     void theReleaseIsTheProjectsElseTheRunningJdks() {
         assertEquals(21, DependencyCodegenPass.release("21"));
         assertEquals(RELEASE, DependencyCodegenPass.release(null));

@@ -209,7 +209,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
                     getLog()::info, getLog()::warn);
 
         } catch (IOException e) {
-            throw new MojoExecutionException("Failed to generate bean index", e);
+            throw new MojoExecutionException("vidocq:generate failed: " + e.getMessage(), e);
         }
     }
 

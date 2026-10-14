@@ -86,6 +86,19 @@ class DependencyCodegenCacheTest {
     }
 
     @Test
+    void aPeekReadsWithoutDiscardingADamagedEntry() throws IOException {
+        Path dir = tmp.resolve("cache");
+        DependencyCodegenCache cache = new DependencyCodegenCache(dir);
+        cache.put("k", new DependencyCodegen.Output(Map.of("A.class", new byte[] {9}), List.of()));
+        assertEquals(java.util.Set.of("A.class"), cache.peek("k").orElseThrow().files().keySet());
+        Files.delete(dir.resolve("k").resolve("complete"));
+
+        assertTrue(cache.peek("k").isEmpty());
+        assertTrue(Files.isDirectory(dir.resolve("k")), "a read-only lookup changes nothing");
+        assertTrue(cache.peek("absent").isEmpty());
+    }
+
+    @Test
     void theKeyChangesWithTheVersionOfAClasspathDependency() throws IOException {
         Path jar = file("a.jar", "jar-1");
         Path cp = file("p.jar", "proc-1");

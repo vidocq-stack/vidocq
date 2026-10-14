@@ -101,6 +101,7 @@ public final class DependencyCodegen {
         String allBricks = bricks.stream().map(b -> b.hints().brick()).distinct().collect(Collectors.joining(", "));
         var javacOutput = new StringBuilder();
         Path tmp = Files.createTempDirectory("vidocq-depgen-");
+        Output output;
         try {
             Path src = Files.createDirectories(tmp.resolve("src"));
             Path res = Files.createDirectories(tmp.resolve("res"));
@@ -181,10 +182,18 @@ public final class DependencyCodegen {
                     files.put(root.relativize(file).toString().replace('\\', '/'), Files.readAllBytes(file));
                 }
             }
-            return new Output(files, warnings);
-        } finally {
-            delete(tmp);
+            output = new Output(files, warnings);
+        } catch (Failure | IOException | RuntimeException e) {
+            // The temporary directory must not hide why the run failed.
+            try {
+                delete(tmp);
+            } catch (IOException | RuntimeException cleanup) {
+                e.addSuppressed(cleanup);
+            }
+            throw e;
         }
+        delete(tmp);
+        return output;
     }
 
     /** How one javac task ended: whether it succeeded, and what a processor (or javac) threw, if anything. */

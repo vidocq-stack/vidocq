@@ -263,7 +263,7 @@ final class DependencyCodegenPass {
                 Path log = buildDir.resolve(LOG_DIR).resolve(dep.artifactId() + ".log");
                 try {
                     output = generator.generate(jar, selected, classpath, release,
-                            dep.groupId() + ":" + dep.artifactId(), log, baseDir.relativize(log).toString());
+                            dep.groupId() + ":" + dep.artifactId(), log, display(baseDir, log));
                 } catch (DependencyCodegen.Failure f) {
                     failures.addAll(f.lines());
                     continue;
@@ -364,6 +364,15 @@ final class DependencyCodegenPass {
     /** The {@code groupId:artifactId:version} of each of {@code dependencies}: the classpath of the cache key. */
     static List<String> coordinatesOf(List<ScanSelection.Dependency> dependencies) {
         return dependencies.stream().map(ScanSelection.Dependency::coordinates).toList();
+    }
+
+    /** {@code log} relative to {@code baseDir}, as a failure line shows it; absolute when they share no root. */
+    static String display(Path baseDir, Path log) {
+        try {
+            return baseDir.relativize(log).toString();
+        } catch (IllegalArgumentException differentRoots) {
+            return log.toString();
+        }
     }
 
     /** The {@code --release} of the pass: the project's {@code maven.compiler.release}, else the running JDK's. */
