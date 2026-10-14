@@ -28,31 +28,66 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** vidocq:package under all: the library ships in app/, and the script's launch finds the resource. */
+/**
+ * vidocq:package: under all the library ships in app/ and the packaged launch resolves it into the application
+ * layer, where it sees the application's resource; under classes it stays in lib/, outside that layer. The fixture
+ * sets vidocq.mainModule and vidocq.mainClass, the shape most applications have.
+ */
 class AppLayerPackageIT {
 
+    private static final String STARTED = "Vidocq - Started in";
+
     @Test
-    void theDistributionShipsTheLibraryInApp(@TempDir Path dir) throws Exception {
+    void allShipsTheLibraryInAppAndLaunchesItInTheApplicationLayer(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
         Fixture.install(project, Fixture.logs().resolve("package-install.log"));
         Path log = Fixture.logs().resolve("package-all.log");
 
-        Process mvn = Fixture.start(project.resolve("app"), log, "package", "vidocq:package",
-                "-Dvidocq.app.layer=all", "-DskipTests");
-        assertEquals(0, mvn.waitFor(), () -> Fixture.read(log));
+        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package",
+                "-Dvidocq.app.layer=all", "-DskipTests"), log, "vidocq:package");
 
         Path script = script(project.resolve("app/target"));
         Path dist = script.getParent().getParent();
         assertTrue(Files.exists(dist.resolve("app/app-layer-pages-1.0.jar")), "the library is the application's");
         assertTrue(Files.notExists(dist.resolve("lib/app-layer-pages-1.0.jar")));
+        assertTrue(Files.readString(script).contains("-Dvidocq.app.path="), Files.readString(script));
 
         Path runLog = Fixture.logs().resolve("package-run.log");
+        String out = run(script, runLog);
+        assertTrue(out.contains("LOOKUP-FOUND vauban:"), "the library's loader is the application layer's:\n" + out);
+        assertTrue(out.contains("2 modules, 1 library"), "the report counts the library in the layer:\n" + out);
+    }
+
+    @Test
+    void classesIsTheControl(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.install(project, Fixture.logs().resolve("package-classes-install.log"));
+        Path log = Fixture.logs().resolve("package-classes.log");
+
+        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package", "-DskipTests"),
+                log, "vidocq:package");
+
+        Path script = script(project.resolve("app/target"));
+        Path dist = script.getParent().getParent();
+        assertTrue(Files.exists(dist.resolve("lib/app-layer-pages-1.0.jar")), "the library stays in lib/");
+        assertTrue(Files.notExists(dist.resolve("app/app-layer-pages-1.0.jar")));
+
+        Path runLog = Fixture.logs().resolve("package-classes-run.log");
+        String out = run(script, runLog);
+        assertFalse(out.contains("LOOKUP-FOUND vauban:"), out);
+        assertTrue(out.contains("1 module ("), "the library is outside the layer:\n" + out);
+    }
+
+    /** Launches the distribution's script until the runtime has started; returns what it printed. */
+    private static String run(Path script, Path runLog) throws Exception {
         Process run = new ProcessBuilder("sh", script.toString()).redirectErrorStream(true)
                 .redirectOutput(runLog.toFile()).start();
         try {
-            Fixture.awaitLog(run, runLog, "LOOKUP-FOUND");
+            Fixture.awaitLog(run, runLog, STARTED);
+            return Fixture.read(runLog);
         } finally {
             Fixture.stop(run);
         }

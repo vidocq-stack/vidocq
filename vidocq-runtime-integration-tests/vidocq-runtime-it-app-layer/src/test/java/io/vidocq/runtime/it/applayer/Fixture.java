@@ -75,12 +75,16 @@ final class Fixture {
 
     /** Builds the library and the application into the fixture's repository, online, once per IT. */
     static void install(Path project, Path log) throws Exception {
-        Process process = start(project, log, "install", "-DskipTests");
+        awaitSuccess(start(project, log, "install", "-DskipTests"), log, "the fixture build");
+    }
+
+    /** Waits for a build to end with 0 within {@link #TIMEOUT}; fails with its log otherwise. */
+    static void awaitSuccess(Process process, Path log, String what) throws Exception {
         if (!process.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
             stop(process);
-            fail("the fixture build did not end within " + TIMEOUT + ":\n" + read(log));
+            fail(what + " did not end within " + TIMEOUT + ":\n" + read(log));
         }
-        assertEquals(0, process.exitValue(), () -> "the fixture build failed:\n" + read(log));
+        assertEquals(0, process.exitValue(), () -> what + " failed:\n" + read(log));
     }
 
     static Process start(Path project, Path log, String... args) throws IOException {
