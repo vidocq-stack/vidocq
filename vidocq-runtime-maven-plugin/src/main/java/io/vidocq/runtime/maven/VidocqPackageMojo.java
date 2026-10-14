@@ -240,7 +240,8 @@ public class VidocqPackageMojo extends AbstractMojo {
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
         List<Artifact> artifacts = new ArrayList<>();
         Map<String, String> moduleByCoordinates = new LinkedHashMap<>();
-        Map<String, String> forced = new LinkedHashMap<>();
+        // No jar is forced into lib/ for its parked classes, unlike run and dev: the package ships it enriched with
+        // them, so no --patch-module is needed at launch.
         for (Packaged p : packaged) {
             Artifact a = p.artifact();
             LayerSplit.Candidate candidate;
@@ -254,13 +255,10 @@ public class VidocqPackageMojo extends AbstractMojo {
             candidates.add(candidate);
             artifacts.add(a);
             moduleByCoordinates.put(a.getGroupId() + ":" + a.getArtifactId(), candidate.descriptor().name());
-            if (!p.enriched() && Files.isDirectory(p.patchDir())) {
-                forced.put(candidate.descriptor().name(), ApplicationLaunch.PATCHED_REASON);
-            }
         }
         LayerSplit.Result split;
         try {
-            split = LayerSplit.split(candidates, Set.of(), LayerSplit.patterns(appLayerKeep), forced,
+            split = LayerSplit.split(candidates, Set.of(), LayerSplit.patterns(appLayerKeep), Map.of(),
                     ApplicationLaunch.declaredReads(artifacts, moduleByCoordinates));
         } catch (IllegalStateException e) {
             throw new MojoExecutionException(e.getMessage(), e);

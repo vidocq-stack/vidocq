@@ -261,6 +261,27 @@ class VidocqPackageMojoTest {
         assertFalse(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer"));
     }
 
+    /**
+     * The package enriches a jar whose classes vidocq:generate parked (no {@code --patch-module} at launch), so under
+     * {@code all} it moves to {@code app/} like any other library, without a pin.
+     */
+    @Test
+    void allMovesAJarWithParkedClassesToApp(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "all", null);
+        Path parked = dir.resolve("target/vidocq-patches/flow-server/flow/server/Generated.class");
+        Files.createDirectories(parked.getParent());
+        Files.write(parked, ClassFile.of().build(ClassDesc.of("flow.server.Generated"),
+                cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("app/flow-server.jar")), "the enriched copy rides in app/");
+        assertFalse(Files.exists(dist.resolve("lib/flow-server.jar")));
+        String sh = Files.readString(dist.resolve("bin/app.sh"));
+        assertFalse(sh.contains("vidocq.app.layer.pinned"), sh);
+    }
+
     private static VidocqPackageMojo trampolineMojo(String appLayer) throws Exception {
         VidocqPackageMojo mojo = mojoWith(null);
         setBoolean(mojo, "layerMode", true);
