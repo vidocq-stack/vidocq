@@ -208,7 +208,8 @@ Run in a fresh local Maven repository, with `vidocq.app.layer=all` forced:
    tests 1, 3, 6 and 7.
 5. ~~The reload cache~~ — dropped after the 2026-10-14 measurement (criterion 3, BENCH.md): the layer build is
    26 ms of a 4 s reload.
-6. With Vidocq/vidocq#246: explicit descriptors for application-layer automatic jars (trampoline
-   constraint, section 4), generation on dependency jars, once per jar version (criterion 4), the one-line
-   diagnostics (criterion 5) and the startup report line (criterion 6).
+6. With Vidocq/vidocq#246, designed in `2026-10-14-dependency-jar-codegen-design.md`: generation on dependency
+   jars, once per jar version (criterion 4), the one-line diagnostics (criterion 5) and the startup report line
+   (criterion 6). The explicit descriptors for application-layer automatic jars are dropped (see that design,
+   section 8).
 7. The campaign, then `all` becomes the default (criterion 7).
