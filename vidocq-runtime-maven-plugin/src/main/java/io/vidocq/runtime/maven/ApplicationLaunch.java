@@ -101,6 +101,15 @@ public final class ApplicationLaunch {
     /** Why a jar with classes parked for {@code --patch-module} stays in the parent layer. */
     public static final String PATCHED_REASON = "classes parked by vidocq:generate need --patch-module";
 
+    /**
+     * The line vidocq:run, vidocq:dev and vidocq:package log under {@code all}: how many libraries the application
+     * layer holds and how many modules a pin keeps in the parent layer.
+     */
+    public static String layerSummary(int libraries, int pinned) {
+        return "application layer: " + libraries + (libraries == 1 ? " library, " : " libraries, ") + pinned
+                + " kept in the parent layer by a pin";
+    }
+
     /** A launch split by {@link LayerSplit}: the module path, the application path, the pinned modules. */
     public record Layered(List<Path> modulePath, List<Path> appPath, Map<String, String> pinned) {}
 

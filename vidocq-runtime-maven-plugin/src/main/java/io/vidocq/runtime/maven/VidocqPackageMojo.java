@@ -265,8 +265,8 @@ public class VidocqPackageMojo extends AbstractMojo {
         }
         pinned = split.pinned();
         Set<Path> toApp = new HashSet<>(split.applicationPaths());
-        getLog().info("Application layer: " + toApp.size() + " libraries in app/, " + pinned.size()
-                + " kept in lib/ by a pin");
+        getLog().info(ApplicationLaunch.layerSummary(toApp.size(), pinned.size())
+                + " (the libraries ship in app/, the parent layer in lib/)");
         return toApp;
     }
 

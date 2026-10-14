@@ -53,6 +53,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** {@link ApplicationLaunch#layered}: the build-time split into a module path and an application path (#247). */
 class ApplicationLaunchLayerTest {
 
+    /** One summary line for run, dev and package, singular for one library. */
+    @Test
+    void theSummaryCountsTheLibrariesInTheSingularAndThePlural() {
+        assertEquals("application layer: 1 library, 0 kept in the parent layer by a pin",
+                ApplicationLaunch.layerSummary(1, 0));
+        assertEquals("application layer: 0 libraries, 2 kept in the parent layer by a pin",
+                ApplicationLaunch.layerSummary(0, 2));
+        assertEquals("application layer: 3 libraries, 1 kept in the parent layer by a pin",
+                ApplicationLaunch.layerSummary(3, 1));
+    }
+
     @Test
     void aFlatLibraryGoesToTheApplicationLayerAndTheRuntimeStays(@TempDir Path dir) throws Exception {
         Path core = moduleJar(dir, "vidocq-runtime-core.jar", "io.vidocq.runtime.core", true, "acme.codec");

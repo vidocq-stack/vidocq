@@ -39,7 +39,7 @@ class AppLayerRunIT {
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", "-Dvidocq.app.layer=all");
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-FOUND");
-            assertTrue(Fixture.read(log).contains("application layer: 1 libraries"), Fixture.read(log));
+            assertTrue(Fixture.read(log).contains("application layer: 1 library,"), Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
         }
