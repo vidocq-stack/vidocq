@@ -353,7 +353,15 @@ public final class EnrichedJars {
                     bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses)));
             brickRequires.remove("java.base");
             brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));
-            entries.put(MODULE_INFO, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires));
+            // A descriptor that lists its packages must list those of the added classes and providers too.
+            Set<String> addedPackages = new TreeSet<>();
+            patch.keySet().stream().filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
+                    .forEach(n -> addedPackages.add(n.lastIndexOf('/') < 0 ? ""
+                            : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
+            providers.forEach(p -> addedPackages.add(packageOf(p)));
+            addedProviders.values().forEach(impls -> impls.forEach(p -> addedPackages.add(packageOf(p))));
+            entries.put(MODULE_INFO, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires,
+                    addedPackages));
         }
         if (!providers.isEmpty()) {
             Set<String> services = new LinkedHashSet<>();

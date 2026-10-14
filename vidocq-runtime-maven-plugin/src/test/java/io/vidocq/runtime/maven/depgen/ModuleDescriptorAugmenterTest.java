@@ -123,6 +123,13 @@ class ModuleDescriptorAugmenterTest {
     }
 
     @Test
+    void aDescriptorWithoutModulePackagesIsNotGivenOne() {
+        byte[] original = descriptor();
+
+        assertEquals(original, ModuleDescriptorAugmenter.augment(original, Map.of(), Set.of(), Set.of("org.new")));
+    }
+
+    @Test
     void readsTheModuleName() {
         assertEquals("org.dep", ModuleDescriptorAugmenter.moduleName(descriptor()));
     }

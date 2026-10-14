@@ -25,6 +25,7 @@ import java.lang.classfile.ClassModel;
 import java.lang.classfile.FieldModel;
 import java.lang.classfile.MethodModel;
 import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.classfile.attribute.ModulePackagesAttribute;
 import java.lang.classfile.attribute.ModuleProvideInfo;
 import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.classfile.constantpool.ClassEntry;
@@ -33,12 +34,14 @@ import java.lang.classfile.constantpool.NameAndTypeEntry;
 import java.lang.classfile.constantpool.PoolEntry;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ModuleDesc;
+import java.lang.constant.PackageDesc;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -61,6 +64,18 @@ public final class ModuleDescriptorAugmenter {
      * @param requires module names
      */
     public static byte[] augment(byte[] moduleInfo, Map<String, List<String>> provides, Set<String> requires) {
+        return augment(moduleInfo, provides, requires, Set.of());
+    }
+
+    /**
+     * {@link #augment(byte[], Map, Set)}, and when the descriptor lists its packages in a {@code ModulePackages}
+     * attribute (the {@code jar} tool, moditect and bnd write one), each of {@code packages} it lacks is added to it:
+     * the JDK trusts that list, so a generated class in a package it misses is not in the module.
+     *
+     * @param packages the packages of the classes added to the module, as dotted names
+     */
+    public static byte[] augment(byte[] moduleInfo, Map<String, List<String>> provides, Set<String> requires,
+                                 Set<String> packages) {
         ClassFile cf = ClassFile.of();
         ClassModel model = cf.parse(moduleInfo);
         ModuleAttribute module = model.findAttribute(Attributes.module())
@@ -85,7 +100,13 @@ public final class ModuleDescriptorAugmenter {
             providesChanged |= merged.computeIfAbsent(e.getKey(), s -> new LinkedHashSet<>()).addAll(e.getValue());
         }
 
-        if (!providesChanged && newRequires.size() == module.requires().size()) {
+        Optional<ModulePackagesAttribute> listed = model.findAttribute(Attributes.modulePackages());
+        Set<String> modulePackages = new TreeSet<>();
+        listed.ifPresent(a -> a.packages().forEach(p -> modulePackages.add(p.name().stringValue().replace('/', '.'))));
+        boolean packagesChanged = listed.isPresent() && modulePackages.addAll(packages.stream()
+                .filter(p -> !p.isEmpty()).toList());
+
+        if (!providesChanged && !packagesChanged && newRequires.size() == module.requires().size()) {
             return moduleInfo;
         }
         List<ModuleProvideInfo> newProvides = merged.entrySet().stream()
@@ -98,6 +119,8 @@ public final class ModuleDescriptorAugmenter {
         return cf.transformClass(model, (cb, ce) -> {
             if (ce instanceof ModuleAttribute) {
                 cb.with(updated);
+            } else if (ce instanceof ModulePackagesAttribute && packagesChanged) {
+                cb.with(ModulePackagesAttribute.ofNames(modulePackages.stream().map(PackageDesc::of).toList()));
             } else {
                 cb.with(ce);
             }

@@ -23,7 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.classfile.attribute.ModulePackagesAttribute;
+import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.constant.ClassDesc;
+import java.lang.constant.ModuleDesc;
+import java.lang.constant.PackageDesc;
 import java.lang.module.ModuleDescriptor;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -206,6 +211,28 @@ class EnrichedJarsBrickTest {
         assertFalse(requires.contains("org.dep"), "never itself");
         assertEquals(1, md.requires().stream().filter(r -> r.name().equals("java.base")).count());
         assertEquals("Foy", manifestOf(copy).getValue("Vidocq-Enriched-By"));
+    }
+
+    @Test
+    void aModulePackagesAttributeGainsThePackagesOfTheGeneratedClasses() throws Exception {
+        Path build = tmp.resolve("target");
+        // As the jar tool, moditect or bnd write it: the descriptor lists the module's packages.
+        byte[] withPackages = ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of("org.dep"), mb -> mb
+                        .requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null))),
+                cb -> cb.with(ModulePackagesAttribute.ofNames(PackageDesc.of("org.dep"))));
+        Path lib = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "module-info.class", withPackages,
+                "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());
+        patch(JpmsPatches.patchDirFor(build, "lib"), Map.of(
+                "org/dep/gen/Servlet$$FoyComponent.class", foyComponent("org.dep.gen.Servlet$$FoyComponent"),
+                WEB_FILE, text("org.dep.gen.Servlet$$FoyComponent\n")));
+
+        enrich(build, foy(lib, "lib", FOY_INPUTS), List.of());
+
+        ModuleDescriptor md = descriptorOf(EnrichedJars.resolve(build, lib));
+        assertEquals(Set.of("org.dep", "org.dep.gen"), md.packages());
+        assertEquals(List.of("org.dep.gen.Servlet$$FoyComponent"), md.provides().stream()
+                .filter(p -> p.service().equals(WEB)).findFirst().orElseThrow().providers());
     }
 
     @Test
