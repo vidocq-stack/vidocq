@@ -35,11 +35,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.jar.JarFile;
 
 /**
@@ -50,7 +52,7 @@ import java.util.jar.JarFile;
  */
 public final class DependencyCodegenSelection {
 
-    private static final String VERSIONS = "META-INF/versions/";
+    private static final String SERVICES = "META-INF/services/";
 
     /**
      * The first line hashed into every memo key. Bump it whenever the selection rules or the memo's content change,
@@ -61,8 +63,20 @@ public final class DependencyCodegenSelection {
     private DependencyCodegenSelection() {
     }
 
-    /** Why a brick wants a jar, e.g. {@code resource META-INF/web-fragment.xml}. */
-    public record Match(DependencyCodegenHints brick, String reason) {
+    /**
+     * Why a brick wants a jar, e.g. {@code resource META-INF/web-fragment.xml}.
+     *
+     * @param classes the binary names of the top-level classes its processors must see, sorted
+     */
+    public record Match(DependencyCodegenHints brick, String reason, List<String> classes) {
+        public Match {
+            classes = List.copyOf(classes);
+        }
+
+        /** A match with no class to process. */
+        public Match(DependencyCodegenHints brick, String reason) {
+            this(brick, reason, List.of());
+        }
     }
 
     /** A brick skipped because the jar carries its marker. */
@@ -86,16 +100,22 @@ public final class DependencyCodegenSelection {
         }
     }
 
+    /**
+     * The bricks' decision for {@code jar}, with the classes each selecting brick's processors must see: the
+     * top-level classes whose class file holds one of its {@code class-bytes} hints, and those named in the service
+     * files among its matched {@code resources} (spec §4.1). Base entries only.
+     */
     public static Decision decide(Path jar, List<DependencyCodegenHints> bricks) throws IOException {
         if (Files.isDirectory(jar)) {
             return new Decision(jar, List.of(), List.of(), false);
         }
-        var matches = new ArrayList<Match>();
         var skips = new ArrayList<Skip>();
         boolean signed = false;
-        var names = new HashSet<String>();
-        var pending = new LinkedHashMap<DependencyCodegenHints, List<String>>();
-        var classMatches = new LinkedHashMap<DependencyCodegenHints, String>();
+        var names = new LinkedHashSet<String>();
+        var resourceReasons = new LinkedHashMap<DependencyCodegenHints, String>();
+        var needles = new LinkedHashMap<DependencyCodegenHints, List<String>>();
+        var classReasons = new LinkedHashMap<DependencyCodegenHints, String>();
+        var classes = new LinkedHashMap<DependencyCodegenHints, TreeSet<String>>();
         try (var file = new JarFile(jar.toFile())) {
             for (var e : Collections.list(file.entries())) {
                 names.add(e.getName());
@@ -107,41 +127,39 @@ public final class DependencyCodegenSelection {
                     skips.add(new Skip(brick, marker));
                     continue;
                 }
-                String resource = brick.resources().stream().filter(names::contains).findFirst().orElse(null);
-                if (resource != null) {
-                    matches.add(new Match(brick, "resource " + resource));
-                } else {
-                    List<String> needles = brick.classBytes().stream()
-                            .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
-                    if (!needles.isEmpty()) {
-                        pending.put(brick, needles);
+                classes.put(brick, new TreeSet<>());
+                brick.resources().stream().filter(names::contains).findFirst()
+                        .ifPresent(resource -> resourceReasons.put(brick, "resource " + resource));
+                for (String resource : brick.resources()) {
+                    if (names.contains(resource) && resource.startsWith(SERVICES)) {
+                        classes.get(brick).addAll(listedClasses(file, resource, names));
                     }
                 }
+                List<String> own = brick.classBytes().stream()
+                        .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
+                if (!own.isEmpty()) {
+                    needles.put(brick, own);
+                }
             }
-            if (!pending.isEmpty()) {
+            if (!needles.isEmpty()) {
                 for (var e : Collections.list(file.entries())) {
                     String name = e.getName();
-                    if (e.isDirectory() || !name.endsWith(".class") || name.startsWith(VERSIONS)) {
+                    String topLevel = topLevelClass(name);
+                    if (e.isDirectory() || topLevel == null) {
                         continue;
                     }
                     byte[] bytes;
                     try (InputStream in = file.getInputStream(e)) {
                         bytes = in.readAllBytes();
                     }
-                    for (var p : pending.entrySet()) {
-                        var brick = p.getKey();
-                        if (classMatches.containsKey(brick)) {
-                            continue;
-                        }
-                        for (String needle : p.getValue()) {
+                    for (var n : needles.entrySet()) {
+                        for (String needle : n.getValue()) {
                             if (indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0) {
-                                classMatches.put(brick, "class bytes " + needle + " in " + name);
+                                classReasons.putIfAbsent(n.getKey(), "class bytes " + needle + " in " + name);
+                                classes.get(n.getKey()).add(topLevel);
                                 break;
                             }
                         }
-                    }
-                    if (classMatches.size() == pending.size()) {
-                        break;
                     }
                 }
             }
@@ -149,14 +167,49 @@ public final class DependencyCodegenSelection {
         // keep the bricks' declaration order whatever the kind of hint that matched
         var ordered = new ArrayList<Match>();
         for (var brick : bricks) {
-            matches.stream().filter(m -> m.brick() == brick).findFirst().ifPresentOrElse(ordered::add, () -> {
-                String reason = classMatches.get(brick);
-                if (reason != null) {
-                    ordered.add(new Match(brick, reason));
-                }
-            });
+            String reason = resourceReasons.containsKey(brick) ? resourceReasons.get(brick) : classReasons.get(brick);
+            if (reason != null) {
+                ordered.add(new Match(brick, reason, List.copyOf(classes.get(brick))));
+            }
         }
         return new Decision(jar, ordered, skips, signed);
+    }
+
+    /**
+     * The binary name of the top-level class of a base class entry, e.g. {@code com.acme.Outer} for
+     * {@code com/acme/Outer$Inner.class}; {@code null} for anything else, versioned entries and module or package
+     * infos included.
+     */
+    private static String topLevelClass(String entry) {
+        if (!entry.endsWith(".class") || entry.startsWith("META-INF/")) {
+            return null;
+        }
+        String binary = entry.substring(0, entry.length() - ".class".length());
+        int slash = binary.lastIndexOf('/');
+        String simple = binary.substring(slash + 1);
+        if (simple.equals("module-info") || simple.equals("package-info")) {
+            return null;
+        }
+        int dollar = simple.indexOf('$');
+        String top = dollar > 0 ? binary.substring(0, slash + 1 + dollar) : binary;
+        return top.replace('/', '.');
+    }
+
+    /** The top-level classes of the jar that a service file lists, one binary name per non-comment line. */
+    private static List<String> listedClasses(JarFile file, String resource, Set<String> names) throws IOException {
+        String text;
+        try (InputStream in = file.getInputStream(file.getEntry(resource))) {
+            text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        List<String> listed = new ArrayList<>();
+        for (String line : text.lines().toList()) {
+            int hash = line.indexOf('#');
+            String name = (hash >= 0 ? line.substring(0, hash) : line).strip();
+            if (!name.isEmpty() && names.contains(name.replace('.', '/') + ".class")) {
+                listed.add(topLevelClass(name.replace('.', '/') + ".class"));
+            }
+        }
+        return listed;
     }
 
     /**
@@ -211,11 +264,17 @@ public final class DependencyCodegenSelection {
         return HexFormat.of().formatHex(sha256().digest(text.toString().getBytes(StandardCharsets.UTF_8)));
     }
 
-    /** {@code signed true|false}, then {@code match <brick index> <reason>} and {@code skip <brick index> <marker>}. */
+    /**
+     * {@code signed true|false}, then {@code match <brick index> <reason>}, each of its classes as
+     * {@code class <brick index> <binary name>}, and {@code skip <brick index> <marker>}.
+     */
     private static List<String> format(Decision decision, List<DependencyCodegenHints> bricks) {
         List<String> lines = new ArrayList<>();
         lines.add("signed " + decision.signed());
-        decision.matches().forEach(m -> lines.add("match " + bricks.indexOf(m.brick()) + " " + m.reason()));
+        for (Match m : decision.matches()) {
+            lines.add("match " + bricks.indexOf(m.brick()) + " " + m.reason());
+            m.classes().forEach(c -> lines.add("class " + bricks.indexOf(m.brick()) + " " + c));
+        }
         decision.skips().forEach(k -> lines.add("skip " + bricks.indexOf(k.brick()) + " " + k.marker()));
         return lines;
     }
@@ -228,6 +287,7 @@ public final class DependencyCodegenSelection {
         boolean signed = lines.getFirst().equals("signed true");
         var matches = new ArrayList<Match>();
         var skips = new ArrayList<Skip>();
+        var classes = new LinkedHashMap<DependencyCodegenHints, List<String>>();
         for (String line : lines.subList(1, lines.size())) {
             String[] parts = line.split(" ", 3);
             if (parts.length < 3 || !parts[1].matches("[0-9]{1,6}") || Integer.parseInt(parts[1]) >= bricks.size()) {
@@ -237,12 +297,15 @@ public final class DependencyCodegenSelection {
             switch (parts[0]) {
                 case "match" -> matches.add(new Match(brick, parts[2]));
                 case "skip" -> skips.add(new Skip(brick, parts[2]));
+                case "class" -> classes.computeIfAbsent(brick, b -> new ArrayList<>()).add(parts[2]);
                 default -> {
                     return Optional.empty();
                 }
             }
         }
-        return Optional.of(new Decision(jar, matches, skips, signed));
+        List<Match> withClasses = matches.stream()
+                .map(m -> new Match(m.brick(), m.reason(), classes.getOrDefault(m.brick(), List.of()))).toList();
+        return Optional.of(new Decision(jar, withClasses, skips, signed));
     }
 
     /** Writes {@code entry} through a temporary file and an atomic move, so a reader never sees half of it. */

@@ -112,4 +112,20 @@ public final class DepgenFixtures {
         return jar(dir, processor, Map.of("fixture/proc/" + processor + ".java", source), List.of(),
                 Map.of("META-INF/services/javax.annotation.processing.Processor", "fixture.proc." + processor + "\n"));
     }
+
+    /** Every top-level class of {@code jar}, base entries only, without module and package infos. */
+    public static List<String> topLevelClasses(Path jar) throws IOException {
+        try (var file = new java.util.jar.JarFile(jar.toFile())) {
+            return file.stream()
+                    .map(java.util.jar.JarEntry::getName)
+                    .filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
+                    .filter(n -> {
+                        String simple = n.substring(n.lastIndexOf('/') + 1, n.length() - ".class".length());
+                        return !simple.contains("$") && !simple.equals("module-info") && !simple.equals("package-info");
+                    })
+                    .map(n -> n.substring(0, n.length() - ".class".length()).replace('/', '.'))
+                    .sorted()
+                    .toList();
+        }
+    }
 }

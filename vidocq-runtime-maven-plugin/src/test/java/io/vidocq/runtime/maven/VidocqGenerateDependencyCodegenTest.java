@@ -66,7 +66,10 @@ class VidocqGenerateDependencyCodegenTest {
     // --- fixtures ---------------------------------------------------------------------------------------------
 
     private static DependencyCodegenHints hints(String name) {
-        return new DependencyCodegenHints(name, List.of("META-INF/fixture/" + name.toLowerCase()), List.of(),
+        // The class-bytes hint is the annotation's descriptor: the fixture jars hold fixture.Marked itself, and a hint
+        // that prefixes one of a jar's own classes would not count there.
+        return new DependencyCodegenHints(name, List.of("META-INF/fixture/" + name.toLowerCase()),
+                List.of("Lfixture/Marked;"),
                 List.of("META-INF/fixture/" + name.toLowerCase() + "-done"), List.of("META-INF/fixture/a.list"));
     }
 
@@ -120,7 +123,7 @@ class VidocqGenerateDependencyCodegenTest {
 
     /** A generator that counts its runs and generates {@code com.acme.Foo$$Gen} and the given resources. */
     private DependencyCodegenPass.Generator fake(Map<String, String> resources, List<String> warnings) {
-        return (jar, bricks, classpath, release, coordinates, log, logDisplay) -> {
+        return (jar, bricks, classes, classpath, release, coordinates, log, logDisplay) -> {
             generated.incrementAndGet();
             Map<String, byte[]> files = new LinkedHashMap<>();
             files.put("com/acme/Foo$$Gen.class", classBytes("com.acme.Foo$$Gen"));
@@ -235,7 +238,7 @@ class VidocqGenerateDependencyCodegenTest {
         run(buildDir, List.of(fakeBrick("Alpha")), fake(Map.of("META-INF/fixture/old.list", "x\n"), List.of()), lib);
 
         DependencyCodegenPass.forgetWritten(buildDir);
-        run(buildDir, List.of(fakeBrick("Beta")), (jar, bricks, cp, release, coordinates, log, logDisplay) ->
+        run(buildDir, List.of(fakeBrick("Beta")), (jar, bricks, classes, cp, release, coordinates, log, logDisplay) ->
                 new DependencyCodegen.Output(Map.of("META-INF/fixture/new.list", "y\n".getBytes(StandardCharsets.UTF_8)),
                         List.of()), plainJar("lib-1.0", Map.of("META-INF/fixture/beta", "")));
 
@@ -261,6 +264,65 @@ class VidocqGenerateDependencyCodegenTest {
                 List.of());
 
         assertEquals(2, generated.get(), "same classpath: a hit; another version on it: a miss");
+    }
+
+    @Test
+    void onlyTheHintedClassesAreProcessedSoAnUnrelatedClassMissingAnApiDoesNotFail() throws Exception {
+        Path repo = Files.createDirectories(dir.resolve("repo"));
+        Path annotations = DepgenFixtures.jar(repo, "annotations-1.0", DepgenFixtures.ANNOTATIONS, List.of(),
+                Map.of());
+        Path optionalApi = DepgenFixtures.jar(repo, "optional-api-1.0",
+                Map.of("missing/Api.java", "package missing; public class Api {}"), List.of(), Map.of());
+        // Endpoint needs an optional API the build does not have, as atmosphere-runtime needs jakarta.websocket.
+        Path lib = DepgenFixtures.jar(repo, "lib-1.0", Map.of(
+                "com/acme/Foo.java", "package com.acme; @fixture.Marked public class Foo {}",
+                "com/acme/Endpoint.java", "package com.acme; public class Endpoint extends missing.Api {}"),
+                List.of(annotations, optionalApi), Map.of());
+        Brick marked = new Brick(new DependencyCodegenHints("Alpha", List.of(), List.of("fixture/Marked"),
+                List.of(), List.of("META-INF/fixture/a.list")), "io.vidocq:alpha-codegen:1.0",
+                List.of(DepgenFixtures.processorJar(dir.resolve("bricks"), "ProcessorA")));
+        Path buildDir = dir.resolve("target");
+
+        pass(buildDir, List.of(marked), DependencyCodegenPass.JAVAC).run(List.of(dep(lib),
+                new ScanSelection.Dependency("org.x", "annotations", "1.0", annotations)),
+                List.of(lib, annotations), RELEASE, List.of(), List.of());
+
+        assertEquals(List.of(), error);
+        Path patch = JpmsPatches.patchDirFor(buildDir, "lib");
+        assertTrue(Files.isRegularFile(patch.resolve("com/acme/Foo$$Gen.class")));
+        assertEquals("com.acme.Foo\n", Files.readString(patch.resolve("META-INF/fixture/a.list")));
+    }
+
+    @Test
+    void aJarSelectedByAServiceFileGetsTheListedClassProcessed() throws Exception {
+        String sci = "META-INF/services/jakarta.servlet.ServletContainerInitializer";
+        Path lib = plainJar("lib-1.0", Map.of(sci, "com.acme.Foo\n"));
+        Brick foy = new Brick(new DependencyCodegenHints("Foy", List.of(sci), List.of(), List.of(), List.of()),
+                "io.vidocq:foy-codegen:1.0", List.of(Files.writeString(dir.resolve("foy.jar"), "foy")));
+        List<List<String>> passed = new ArrayList<>();
+
+        run(dir.resolve("target"), List.of(foy), (jar, bricks, classes, cp, release, coordinates, log, display) -> {
+            passed.add(classes);
+            return new DependencyCodegen.Output(Map.of(), List.of());
+        }, lib);
+
+        assertEquals(List.of(List.of("com.acme.Foo")), passed);
+    }
+
+    @Test
+    void aSelectedJarWithNoClassToProcessRunsNothingAndIsCached() throws Exception {
+        String fragment = "META-INF/web-fragment.xml";
+        Path lib = plainJar("lib-1.0", Map.of(fragment, "<web-fragment/>"));
+        Brick foy = new Brick(new DependencyCodegenHints("Foy", List.of(fragment), List.of("jakarta/servlet/x"),
+                List.of(), List.of()), "io.vidocq:foy-codegen:1.0",
+                List.of(Files.writeString(dir.resolve("foy.jar"), "foy")));
+
+        run(dir.resolve("a"), List.of(foy), DependencyCodegenPass.JAVAC, lib);
+        run(dir.resolve("b"), List.of(foy), DependencyCodegenPass.JAVAC, lib);
+
+        assertEquals(List.of("vidocq:generate: lib-1.0.jar — Foy (0 classes, generated)",
+                "vidocq:generate: lib-1.0.jar — Foy (0 classes, cached)"), info);
+        assertFalse(Files.exists(dir.resolve("a/vidocq-depgen/lib.log")), "no javac ran");
     }
 
     @Test
@@ -350,7 +412,7 @@ class VidocqGenerateDependencyCodegenTest {
     @Test
     void anEmptyOutputLeavesTheJarAsItIs() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
-        DependencyCodegenPass.Generator nothing = (jar, bricks, classpath, release, coordinates, log, display) ->
+        DependencyCodegenPass.Generator nothing = (jar, bricks, classes, classpath, release, coordinates, log, display) ->
                 new DependencyCodegen.Output(Map.of(), List.of());
         Path buildDir = dir.resolve("target");
 
@@ -364,7 +426,7 @@ class VidocqGenerateDependencyCodegenTest {
     @Test
     void theLineCountsTwoClassesInThePlural() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
-        DependencyCodegenPass.Generator two = (jar, bricks, classpath, release, coordinates, log, display) ->
+        DependencyCodegenPass.Generator two = (jar, bricks, classes, classpath, release, coordinates, log, display) ->
                 new DependencyCodegen.Output(Map.of("com/acme/Foo$$A.class", classBytes("com.acme.Foo$$A"),
                         "com/acme/Foo$$B.class", classBytes("com.acme.Foo$$B")), List.of());
 

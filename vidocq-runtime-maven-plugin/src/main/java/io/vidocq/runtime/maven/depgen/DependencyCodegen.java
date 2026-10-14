@@ -39,13 +39,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
  * Runs the annotation processors of the bricks that want a dependency jar over that jar's compiled classes, the way
- * they run over the project's sources: an in-process {@code javac -proc:only} given the jar's top-level class names,
+ * they run over the project's sources: an in-process {@code javac -proc:only} given the top-level class names the
+ * selection found for them,
  * then a second {@code javac} that compiles the sources they generated. Each brick's processors are loaded from
  * its own processor path and wrapped, so that an error or warning names the brick that reported it and the element.
  */
@@ -82,18 +82,22 @@ public final class DependencyCodegen {
     /**
      * @param jar         the dependency jar
      * @param bricks      the bricks that want it (non-empty)
+     * @param classNames  the binary names of the top-level classes the processors see: those the selection found
+     *                    for the bricks ({@code DependencyCodegenSelection.Match#classes}); none runs nothing
      * @param classpath   the jar's compile classpath: the project's dependency jars (the jar itself included)
      * @param release     the {@code --release} value
      * @param coordinates {@code groupId:artifactId} of the jar, for the {@code scanExcludes} hint of a failure line
      * @param log         the file that receives javac's full output, {@code target/vidocq-depgen/<artifactId>.log}
      * @param logDisplay  {@code log} as a failure line prints it, relative to the project's base directory
      */
-    public static Output run(Path jar, List<Brick> bricks, List<Path> classpath, int release, String coordinates,
-                             Path log, String logDisplay) throws Failure, IOException {
+    public static Output run(Path jar, List<Brick> bricks, List<String> classNames, List<Path> classpath,
+                             int release, String coordinates, Path log, String logDisplay)
+            throws Failure, IOException {
         if (bricks.isEmpty()) {
             throw new IllegalArgumentException("no brick for " + jar);
         }
-        List<String> classNames = topLevelClasses(jar);
+        // Only the classes the hints point at: passing every class made javac fail on classes that need an optional
+        // API absent from the build, such as atmosphere-runtime's websocket endpoints (spec §4.1).
         if (classNames.isEmpty()) {
             return new Output(Map.of(), List.of());
         }
@@ -237,22 +241,6 @@ public final class DependencyCodegen {
         }
         log.append(out);
         return result;
-    }
-
-    /** The binary names of the jar's top-level classes, base entries only, without module and package infos. */
-    static List<String> topLevelClasses(Path jar) throws IOException {
-        try (var file = new JarFile(jar.toFile())) {
-            return file.stream()
-                    .map(e -> e.getName())
-                    .filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
-                    .filter(n -> {
-                        String simple = n.substring(n.lastIndexOf('/') + 1, n.length() - ".class".length());
-                        return !simple.contains("$") && !simple.equals("module-info") && !simple.equals("package-info");
-                    })
-                    .map(n -> n.substring(0, n.length() - ".class".length()).replace('/', '.'))
-                    .sorted()
-                    .toList();
-        }
     }
 
     private static String message(Diagnostic<?> d) {

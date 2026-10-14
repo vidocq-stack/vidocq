@@ -234,4 +234,50 @@ class DependencyCodegenSelectionTest {
         assertFalse(decision.signed());
         assertEquals(2, entries(memo));
     }
+
+    // --- the classes to process -------------------------------------------------------------------------------
+
+    @Test
+    void theMatchNamesTheTopLevelClassesThatHoldAHint() throws IOException {
+        var jar = jar("lib.jar",
+                "com/acme/Listener.class", "..jakarta/servlet/annotation/WebListener..",
+                "com/acme/Outer$Inner.class", "..jakarta/servlet/annotation/WebServlet..",
+                "com/acme/Outer.class", "plain",
+                "com/acme/Endpoint.class", "..jakarta/websocket/server/ServerEndpointConfig..",
+                "com/acme/package-info.class", "..jakarta/servlet/annotation/WebListener..",
+                "META-INF/versions/11/com/acme/Listener.class", "..jakarta/servlet/annotation/WebListener..");
+
+        var d = DependencyCodegenSelection.decide(jar, List.of(FOY));
+
+        assertEquals(List.of("com.acme.Listener", "com.acme.Outer"), d.matches().getFirst().classes());
+    }
+
+    @Test
+    void aServiceFileHintNamesTheClassesItLists() throws IOException {
+        var sci = brick("Foy", List.of("META-INF/services/jakarta.servlet.ServletContainerInitializer"),
+                List.of("jakarta/servlet/annotation/Web"), List.of());
+        var jar = jar("lib.jar",
+                "META-INF/services/jakarta.servlet.ServletContainerInitializer",
+                "# the initializer\ncom.acme.Init$Nested\n\ncom.acme.Missing\n",
+                "com/acme/Init.class", "plain",
+                "com/acme/Init$Nested.class", "plain",
+                "com/acme/Other.class", "plain");
+
+        var d = DependencyCodegenSelection.decide(jar, List.of(sci));
+
+        assertEquals(List.of("com.acme.Init"), d.matches().getFirst().classes(),
+                "the top-level class of each listed class the jar holds");
+    }
+
+    @Test
+    void theMemoKeepsTheClasses() throws IOException {
+        var jar = jar("lib.jar", "com/acme/Listener.class", "..jakarta/servlet/annotation/WebListener..",
+                "com/acme/Plain.class", "plain");
+        Path memo = dir.resolve("memo");
+        DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+
+        var memoized = DependencyCodegenSelection.decide(jar, List.of(FOY), memo, true);
+
+        assertEquals(List.of("com.acme.Listener"), memoized.matches().getFirst().classes());
+    }
 }

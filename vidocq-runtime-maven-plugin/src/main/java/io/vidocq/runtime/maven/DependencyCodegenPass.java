@@ -52,8 +52,8 @@ final class DependencyCodegenPass {
     /** Runs the bricks over one jar; {@link DependencyCodegen#run} outside tests. */
     @FunctionalInterface
     interface Generator {
-        DependencyCodegen.Output generate(Path jar, List<Brick> bricks, List<Path> classpath, int release,
-                                          String coordinates, Path log, String logDisplay)
+        DependencyCodegen.Output generate(Path jar, List<Brick> bricks, List<String> classes, List<Path> classpath,
+                                          int release, String coordinates, Path log, String logDisplay)
                 throws DependencyCodegen.Failure, IOException;
     }
 
@@ -262,7 +262,10 @@ final class DependencyCodegenPass {
             } else {
                 Path log = buildDir.resolve(LOG_DIR).resolve(dep.artifactId() + ".log");
                 try {
-                    output = generator.generate(jar, selected, classpath, release,
+                    List<String> classes = decision.matches().stream()
+                            .filter(m -> selected.stream().anyMatch(b -> b.hints() == m.brick()))
+                            .flatMap(m -> m.classes().stream()).distinct().sorted().toList();
+                    output = generator.generate(jar, selected, classes, classpath, release,
                             dep.groupId() + ":" + dep.artifactId(), log, display(baseDir, log));
                 } catch (DependencyCodegen.Failure f) {
                     failures.addAll(f.lines());
