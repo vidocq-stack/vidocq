@@ -237,9 +237,7 @@ public class VidocqRunMojo extends AbstractMojo {
         if (mode == LayerSplit.Mode.ALL) {
             getLog().info(PREFIX + ApplicationLaunch.layerSummary(appPath.size() - 1, launch.pinned().size()));
             launch.pinned().forEach((m, why) -> getLog().info(PREFIX + "  parent layer: " + m + " (" + why + ")"));
-            if (!launch.pinned().isEmpty()) {
-                systemProperties.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(launch.pinned()));
-            }
+            systemProperties.putAll(ApplicationLaunch.layerProperties(launch.pinned()));
         }
         List<String> jvmArgs = buildJvmArgs();
 

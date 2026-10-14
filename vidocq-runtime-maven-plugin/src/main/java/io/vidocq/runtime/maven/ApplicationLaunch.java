@@ -110,6 +110,19 @@ public final class ApplicationLaunch {
                 + " kept in the parent layer by a pin";
     }
 
+    /**
+     * The system properties vidocq:run and vidocq:dev hand to the application under {@code all}: the mode, which the
+     * runtime reads back (the dev reload's thread warning), and the pinned modules when there are some.
+     */
+    public static Map<String, String> layerProperties(Map<String, String> pinned) {
+        Map<String, String> properties = new java.util.LinkedHashMap<>();
+        properties.put(LayerSplit.MODE_PROPERTY, "all");
+        if (!pinned.isEmpty()) {
+            properties.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(pinned));
+        }
+        return properties;
+    }
+
     /** A launch split by {@link LayerSplit}: the module path, the application path, the pinned modules. */
     public record Layered(List<Path> modulePath, List<Path> appPath, Map<String, String> pinned) {}
 

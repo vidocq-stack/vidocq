@@ -64,6 +64,17 @@ class ApplicationLaunchLayerTest {
                 ApplicationLaunch.layerSummary(3, 1));
     }
 
+    /**
+     * run and dev hand the mode to the application, also when it comes from the POM configuration rather than the
+     * command line: the dev reload's thread warning reads it (#247).
+     */
+    @Test
+    void theChildGetsTheModeAndThePins() {
+        assertEquals(Map.of("vidocq.app.layer", "all"), ApplicationLaunch.layerProperties(Map.of()));
+        assertEquals(Map.of("vidocq.app.layer", "all", "vidocq.app.layer.pinned", "flow.server=vidocq.app.layer.keep"),
+                ApplicationLaunch.layerProperties(Map.of("flow.server", "vidocq.app.layer.keep")));
+    }
+
     @Test
     void aFlatLibraryGoesToTheApplicationLayerAndTheRuntimeStays(@TempDir Path dir) throws Exception {
         Path core = moduleJar(dir, "vidocq-runtime-core.jar", "io.vidocq.runtime.core", true, "acme.codec");
