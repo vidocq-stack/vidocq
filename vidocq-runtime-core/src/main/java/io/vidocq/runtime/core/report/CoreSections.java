@@ -28,6 +28,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The sections the core writes itself, {@code layer}, {@code configuration} and {@code extensions}, from
@@ -81,7 +82,7 @@ public final class CoreSections {
 
     /**
      * The {@value #LAYER} section: how many modules the application layer has and how it was found; in the
-     * detailed report, one line per module (name, archive, kind), then the load-time weaving.
+     * detailed report, one line per module (name, archive, kind), then one {@code parent layer} row per pinned module, then the load-time weaving.
      *
      * <p>The archives {@code vidocq.app.path} lists are named in the summary, by file name only:
      * {@code 2 modules (vidocq.app.path=.../app:.../lib.jar)}. The detailed headline only counts them,
@@ -99,10 +100,27 @@ public final class CoreSections {
      */
     public static Section layer(String origin, List<String> originPaths, List<LayerModule> modules, String weaving,
                                 DisplayPaths paths) {
+        return layer(origin, originPaths, modules, 0, Map.of(), weaving, paths);
+    }
+
+    /**
+     * The {@value #LAYER} section as {@link #layer(String, List, List, String, DisplayPaths)} writes it, plus what
+     * the layer holds besides the application: the headline counts the libraries
+     * ({@code 69 modules, 68 libraries (...)}) and one {@code parent layer} row per module pinned to the parent
+     * layer gives its reason.
+     *
+     * @param libraries the modules of the layer other than the application's; not counted when 0
+     * @param pinned    the modules pinned to the parent layer, with the reason of each, in order
+     */
+    public static Section layer(String origin, List<String> originPaths, List<LayerModule> modules, int libraries,
+                                Map<String, String> pinned, String weaving, DisplayPaths paths) {
         List<Line> lines = new ArrayList<>();
         for (LayerModule module : modules) {
             lines.add(new Cells(List.of(module.name(),
                     module.location() == null ? "-" : paths.detailed(module.location()), module.kind())));
+        }
+        for (Map.Entry<String, String> pin : pinned.entrySet()) {
+            lines.add(new Row("parent layer", pin.getKey() + " (" + pin.getValue() + ")"));
         }
         if (weaving != null) {
             lines.add(new Row("weaving", weaving));
@@ -110,7 +128,8 @@ public final class CoreSections {
         if (origin == null) {
             return new Section(LAYER, "no application layer", "no application layer", lines, -1);
         }
-        String count = count(modules.size(), "module", "modules");
+        String count = count(modules.size(), "module", "modules")
+                + (libraries > 0 ? ", " + count(libraries, "library", "libraries") : "");
         String detailed = originPaths.isEmpty() ? origin
                 : origin + ", " + count(originPaths.size(), "archive", "archives");
         return new Section(LAYER, count + " (" + detailed + ")",

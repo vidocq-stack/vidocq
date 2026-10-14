@@ -20,6 +20,7 @@
 package io.vidocq.runtime.core;
 
 import io.vidocq.runtime.core.config.VidocqConfigImpl;
+import io.vidocq.runtime.core.report.CoreSections;
 import io.vidocq.runtime.core.report.DisplayPaths;
 import io.vidocq.runtime.core.report.Section;
 import io.vidocq.runtime.core.report.Section.Cells;
@@ -106,6 +107,14 @@ class StartupFactsTest {
             restore(VidocqAppLayer.APP_PATH_PROPERTY, previousPath);
             restore(VidocqAppLayer.APP_MAIN_PROPERTY, previousMain);
         }
+    }
+
+    @Test
+    void librariesAreTheModulesOtherThanTheApplication() {
+        var modules = List.of(new CoreSections.LayerModule("acme.app", null, "directory"),
+                new CoreSections.LayerModule("flow.server", null, "jar"));
+        assertEquals(1, StartupFacts.libraries(modules, "acme.app"));
+        assertEquals(0, StartupFacts.libraries(modules, null));
     }
 
     @Test

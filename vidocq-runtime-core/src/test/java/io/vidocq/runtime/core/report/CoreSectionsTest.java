@@ -30,7 +30,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,6 +63,37 @@ class CoreSectionsTest {
                 new Cells(List.of("com.acme.lib", local("~/.m2/.../lib-1.0.jar"), "jar")),
                 new Cells(List.of("com.acme.image", "-", "jrt")),
                 new Row("weaving", "none")), layer.lines());
+    }
+
+    @Test
+    void theHeadlineCountsTheLibraries() {
+        var modules = List.of(new LayerModule("acme.app", "/p/target/classes", "directory"),
+                new LayerModule("flow.server", "/p/libs/flow-server.jar", "jar"),
+                new LayerModule("flow.commons", "/p/libs/flow-commons.jar", "jar"));
+        Section section = CoreSections.layer("vidocq.app.path", List.of(), modules, 2, Map.of(), null, PATHS);
+
+        assertTrue(section.summary().startsWith("3 modules, 2 libraries ("), section.summary());
+        assertTrue(section.headline().startsWith("3 modules, 2 libraries ("), section.headline());
+    }
+
+    @Test
+    void oneLibraryIsSingular() {
+        var modules = List.of(new LayerModule("acme.app", "/p/target/classes", "directory"),
+                new LayerModule("flow.server", "/p/libs/flow-server.jar", "jar"));
+        Section section = CoreSections.layer("vidocq.app.path", List.of(), modules, 1, Map.of(), null, PATHS);
+
+        assertTrue(section.summary().startsWith("2 modules, 1 library ("), section.summary());
+    }
+
+    @Test
+    void pinnedModulesAreRowsWithTheirReason() {
+        var modules = List.of(new LayerModule("acme.app", "/p/target/classes", "directory"));
+        var pinned = new LinkedHashMap<String, String>();
+        pinned.put("flow.server", "Vidocq-Parent-Layer of io.vidocq.foy.core");
+        Section section = CoreSections.layer("vidocq.app.path", List.of(), modules, 0, pinned, null, PATHS);
+
+        assertTrue(section.lines().contains(new Row("parent layer",
+                "flow.server (Vidocq-Parent-Layer of io.vidocq.foy.core)")), section.lines().toString());
     }
 
     @Test

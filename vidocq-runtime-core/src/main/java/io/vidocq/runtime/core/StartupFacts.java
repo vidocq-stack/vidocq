@@ -71,8 +71,18 @@ final class StartupFacts {
         if (installation == null || layer == null) {
             return CoreSections.layer(null, List.of(), List.of(), weaving, paths);
         }
+        String application = applicationName();
+        List<CoreSections.LayerModule> modules = modules(layer, installation.archives(), application);
         return CoreSections.layer(installation.origin(), installation.listed() ? installation.archives() : List.of(),
-                modules(layer, installation.archives(), applicationName()), weaving, paths);
+                modules, libraries(modules, application), installation.pinned(), weaving, paths);
+    }
+
+    /** The modules of the layer other than the application's; 0 when the application is unknown. */
+    static int libraries(List<CoreSections.LayerModule> modules, String application) {
+        if (application == null) {
+            return 0;
+        }
+        return (int) modules.stream().filter(m -> !m.name().equals(application)).count();
     }
 
     /**
