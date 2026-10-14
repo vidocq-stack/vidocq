@@ -115,7 +115,8 @@ class StartupFactsTest {
         Path enriched = jar("rich.lib", "Foy, Mansart");
         var layer = layerOf(plain, enriched);
 
-        var modules = StartupFacts.modules(layer, List.of(plain.toString(), enriched.toString()), null);
+        var modules = StartupFacts.modules(layer, List.of(plain.toString(), enriched.toString()), null,
+                StartupFacts::enrichedBy);
 
         assertEquals(List.of(), modules.get(0).enrichedBy());
         assertEquals(List.of("Foy", "Mansart"), modules.get(1).enrichedBy());
@@ -144,6 +145,25 @@ class StartupFactsTest {
                 names);
         return java.lang.ModuleLayer.defineModulesWithOneLoader(cf, List.of(java.lang.ModuleLayer.boot()),
                 ClassLoader.getSystemClassLoader()).layer();
+    }
+
+    @Test
+    void noManifestIsOpenedWhenNoReportShowsTheLayer() throws Exception {
+        Path enriched = jar("rich.lib", "Foy");
+        var opened = new java.util.ArrayList<Path>();
+        java.util.function.Function<Path, List<String>> counting = file -> {
+            opened.add(file);
+            return StartupFacts.enrichedBy(file);
+        };
+
+        var off = StartupFacts.enrichedReader(false, counting);
+        assertEquals(List.of(), off.apply(enriched));
+        assertEquals(List.of(), opened, "report off: nothing opened");
+
+        var shown = StartupFacts.enrichedReader(true, counting);
+        assertEquals(List.of("Foy"), shown.apply(enriched));
+        assertEquals(List.of("Foy"), shown.apply(enriched));
+        assertEquals(List.of(enriched), opened, "report shown: each archive read once");
     }
 
     @Test

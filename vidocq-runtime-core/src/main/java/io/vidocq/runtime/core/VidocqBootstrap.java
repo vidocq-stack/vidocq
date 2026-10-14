@@ -48,6 +48,7 @@ import io.vidocq.runtime.spi.report.Verbosity;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -57,6 +58,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -135,6 +137,8 @@ public final class VidocqBootstrap {
     private StartupBanner.Launch launch;
     /** How much the startup report of this boot shows, resolved by {@link #configure()}; nothing before. */
     private Verbosity verbosity = Verbosity.OFF;
+    /** {@link #enrichedReader()}, built on first use. */
+    private Function<Path, List<String>> enrichedReader;
     /** What this boot records for its report, from {@link #configure()} on. */
     private StartupRecorder recorder;
     /** The report of this boot, once {@link #start()} ended or a phase failed; read by the extensions' threads. */
@@ -363,6 +367,14 @@ public final class VidocqBootstrap {
         recorder.end();
     }
 
+    /** The reader of the bricks that enriched the layer's archives: one per boot, opening nothing when the report is off. */
+    private Function<Path, List<String>> enrichedReader() {
+        if (enrichedReader == null) {
+            enrichedReader = StartupFacts.enrichedReader(collected() != Verbosity.OFF, StartupFacts::enrichedBy);
+        }
+        return enrichedReader;
+    }
+
     /**
      * Has the contributors write their sections, at every level, then assembles the report of this boot and logs
      * it, unless its level is {@code off}; the report of a boot that went well never fails it. When it cannot be
@@ -376,7 +388,7 @@ public final class VidocqBootstrap {
                     recorder);
             reportContributors = contributed.contributors();
             List<Section> sections = new ArrayList<>(StartupFacts.coreSections(recorder.weaving(), config, extensions,
-                    recorder.onStartNanos(), null, DisplayPaths.current()));
+                    recorder.onStartNanos(), null, DisplayPaths.current(), enrichedReader()));
             sections.addAll(contributed.sections());
             String runtime = runtime();
             recorder.end();
@@ -446,7 +458,7 @@ public final class VidocqBootstrap {
         try {
             String failed = recorder.failing();
             List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
-                    recorder.onStartNanos(), failed, DisplayPaths.current());
+                    recorder.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
             StartupReport partial = recorder.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
             this.startupReport = partial;
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);

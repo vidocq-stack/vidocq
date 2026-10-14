@@ -122,6 +122,12 @@ class EnrichedJarsBrickTest {
                 line -> { }, line -> { });
     }
 
+    /** The core reads this same literal in {@code StartupFacts.enrichedBy} (it cannot depend on the plugin). */
+    @Test
+    void theEnrichedByAttributeIsTheOneTheCoreReads() {
+        org.junit.jupiter.api.Assertions.assertEquals("Vidocq-Enriched-By", EnrichedJars.ENRICHED_BY);
+    }
+
     @Test
     void anAutomaticJarStaysAutomatic() throws Exception {
         Path build = tmp.resolve("target");

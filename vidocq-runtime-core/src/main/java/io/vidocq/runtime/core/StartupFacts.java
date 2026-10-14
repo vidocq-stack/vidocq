@@ -37,11 +37,16 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Reads what the core knows about a boot into the strings and numbers of its report sections: the
- * application layer, the configuration sources, the extensions. Only memory is read (the layer's resolved
- * configuration, the loaded extensions), never a file; nothing here throws, what cannot be read is left out.
+ * application layer, the configuration sources, the extensions. Memory is read (the layer's resolved
+ * configuration, the loaded extensions), plus the manifest of each archive of the layer, only when the caller's
+ * {@link #enrichedReader reader} is allowed to ({@link #enrichedReader(boolean, Function)}); nothing here throws,
+ * what cannot be read is left out.
  */
 final class StartupFacts {
 
@@ -58,8 +63,9 @@ final class StartupFacts {
      * @param paths        how files are written
      */
     static List<Section> coreSections(String weaving, VidocqConfig config, List<VidocqExtension> extensions,
-                                      List<Long> onStartNanos, String failed, DisplayPaths paths) {
-        return List.of(layer(weaving, paths), configuration(config, extensions, paths),
+                                      List<Long> onStartNanos, String failed, DisplayPaths paths,
+                                      Function<Path, List<String>> enriched) {
+        return List.of(layer(weaving, paths, enriched), configuration(config, extensions, paths),
                 extensions(extensions, onStartNanos, failed));
     }
 
@@ -68,13 +74,30 @@ final class StartupFacts {
      * of their archives.
      */
     static Section layer(String weaving, DisplayPaths paths) {
+        return layer(weaving, paths, StartupFacts::enrichedBy);
+    }
+
+    /**
+     * The reader of the bricks that enriched an archive: {@code raw} behind a memory, so each archive is read at
+     * most once per boot, or a reader that opens nothing when no report shows the layer ({@code shown} is false).
+     */
+    static Function<Path, List<String>> enrichedReader(boolean shown, Function<Path, List<String>> raw) {
+        if (!shown) {
+            return file -> List.of();
+        }
+        Map<Path, List<String>> read = new ConcurrentHashMap<>();
+        return file -> read.computeIfAbsent(file, raw);
+    }
+
+    /** {@link #layer(String, DisplayPaths)}, reading the bricks of each archive with {@code enriched}. */
+    static Section layer(String weaving, DisplayPaths paths, Function<Path, List<String>> enriched) {
         VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
         ModuleLayer layer = VidocqAppLayer.installedLayer();
         if (installation == null || layer == null) {
             return CoreSections.layer(null, List.of(), List.of(), weaving, paths);
         }
         String application = applicationName();
-        List<CoreSections.LayerModule> modules = modules(layer, installation.archives(), application);
+        List<CoreSections.LayerModule> modules = modules(layer, installation.archives(), application, enriched);
         return CoreSections.layer(installation.origin(), installation.listed() ? installation.archives() : List.of(),
                 modules, libraries(modules, application), installation.pinned(), weaving, paths);
     }
@@ -93,7 +116,8 @@ final class StartupFacts {
      *
      * @param application the name of the application module, or {@code null} when there is none to name
      */
-    static List<CoreSections.LayerModule> modules(ModuleLayer layer, List<String> archives, String application) {
+    static List<CoreSections.LayerModule> modules(ModuleLayer layer, List<String> archives, String application,
+                                                  Function<Path, List<String>> enriched) {
         List<Path> order = new ArrayList<>();
         for (String archive : archives) {
             order.add(absolute(archive));
@@ -108,7 +132,7 @@ final class StartupFacts {
             int rank = resolved.name().equals(application) ? -1 : index < 0 ? Integer.MAX_VALUE : index;
             placed.add(new Placed(rank,
                     new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind,
-                            enrichedBy(file))));
+                            file == null ? List.of() : enriched.apply(file))));
         }
         placed.sort(Comparator.comparingInt(Placed::index).thenComparing(p -> p.module().name()));
         return placed.stream().map(Placed::module).toList();
