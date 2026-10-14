@@ -112,15 +112,31 @@ public final class LayerSplit {
     private LayerSplit() {}
 
     /**
+     * Splits {@code candidates}, with no declared dependencies for the automatic modules.
+     *
+     * @see #split(List, Set, List, Map, Map)
+     */
+    public static Result split(List<Candidate> candidates, Set<String> applicationModules,
+                               List<String> keepPatterns, Map<String, String> forced) {
+        return split(candidates, applicationModules, keepPatterns, forced, Map.of());
+    }
+
+    /**
      * Splits {@code candidates}.
      *
      * @param applicationModules the application's own modules: never kept by a rule
      * @param keepPatterns       the patterns of {@value #KEEP_PROPERTY}
      * @param forced             modules the caller must keep, with the reason
+     * @param declaredReads      for a module name, the names of the modules it depends on according to the build
+     *                           tool (Maven). An automatic module's descriptor names no dependency, so without
+     *                           this a kept automatic module would lose the libraries it needs; every kept module's
+     *                           declared reads are followed, in addition to the {@code requires} of an explicit one.
+     *                           Names that are not candidates are ignored.
      * @throws IllegalStateException when a kept module reads a module of {@code applicationModules}
      */
     public static Result split(List<Candidate> candidates, Set<String> applicationModules,
-                               List<String> keepPatterns, Map<String, String> forced) {
+                               List<String> keepPatterns, Map<String, String> forced,
+                               Map<String, Set<String>> declaredReads) {
         Map<String, Candidate> byName = new LinkedHashMap<>();
         candidates.forEach(c -> byName.put(c.descriptor().name(), c));
         Map<String, String> pinned = new LinkedHashMap<>();
@@ -145,14 +161,19 @@ public final class LayerSplit {
         while (!queue.isEmpty()) {
             Visit visit = queue.poll();
             ModuleDescriptor d = byName.get(visit.module()).descriptor();
-            if (d.isAutomatic()) {
-                continue;
+            Set<String> reads = new LinkedHashSet<>();
+            if (!d.isAutomatic()) {
+                d.requires().forEach(r -> reads.add(r.name()));
             }
-            for (ModuleDescriptor.Requires r : d.requires()) {
-                String read = r.name();
+            reads.addAll(declaredReads.getOrDefault(visit.module(), Set.of()));
+            for (String read : reads) {
                 if (applicationModules.contains(read)) {
-                    throw new IllegalStateException(visit.seed() + " is kept in the parent layer ("
-                            + seedReason.get(visit.seed()) + ") but reads " + read
+                    String reason = seedReason.get(visit.seed());
+                    if (!visit.module().equals(visit.seed())) {
+                        reason += ", through " + visit.seed();
+                    }
+                    throw new IllegalStateException(visit.module() + " is kept in the parent layer (" + reason
+                            + ") but reads " + read
                             + ", a module of the application: a parent-layer module cannot read the application"
                             + " layer. Remove the pin, or move the code it needs out of " + read + ".");
                 }
@@ -266,6 +287,9 @@ public final class LayerSplit {
             return false;
         }
         int own = c.coordinates().indexOf(':');
+        if (own < 0) {
+            return false;
+        }
         String group = c.coordinates().substring(0, own);
         String artifact = c.coordinates().substring(own + 1);
         String a = pattern.substring(colon + 1).strip();

@@ -140,6 +140,58 @@ class LayerSplitTest {
     }
 
     @Test
+    @DisplayName("a kept automatic module keeps the dependencies the build declares for it")
+    void aKeptAutomaticModuleKeepsItsDeclaredDependencies() {
+        var ext = explicit("io.vidocq.runtime.extensions.essentials.migration.liquibase", "liquibase.core");
+        var liquibase = automatic("liquibase.core");
+        var snakeyaml = automatic("snakeyaml");
+        var opencsv = automatic("opencsv");
+        var lang3 = automatic("commons.lang3");
+        var other = automatic("acme.other");
+        var result = LayerSplit.split(List.of(ext, liquibase, snakeyaml, opencsv, lang3, other), Set.of(),
+                List.of(), Map.of(), Map.of(
+                        "liquibase.core", Set.of("snakeyaml", "opencsv", "absent.module"),
+                        "opencsv", Set.of("commons.lang3")));
+
+        assertEquals(List.of(ext.descriptor().name(), "liquibase.core", "snakeyaml", "opencsv", "commons.lang3"),
+                names(result.parent()));
+        assertEquals(List.of("acme.other"), names(result.application()));
+    }
+
+    @Test
+    @DisplayName("a declared read of an application module fails, naming the reader")
+    void aDeclaredReadOfTheApplicationFails() {
+        var ext = explicit("io.vidocq.runtime.extensions.x", "lib.a");
+        var lib = automatic("lib.a");
+        var app = explicit("acme.app");
+        var e = assertThrows(IllegalStateException.class, () -> LayerSplit.split(List.of(ext, lib, app),
+                Set.of("acme.app"), List.of(), Map.of(), Map.of("lib.a", Set.of("acme.app"))));
+
+        assertTrue(e.getMessage().startsWith("lib.a is kept in the parent layer (a runtime module, through "
+                + "io.vidocq.runtime.extensions.x) but reads acme.app"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("an indirect read of the application names the module that reads it")
+    void anIndirectReadNamesTheReader() {
+        var helper = explicit("acme.helper", "acme.util");
+        var util = explicit("acme.util", "acme.app");
+        var app = explicit("acme.app");
+        var e = assertThrows(IllegalStateException.class, () -> LayerSplit.split(List.of(helper, util, app),
+                Set.of("acme.app"), List.of("acme.helper"), Map.of()));
+
+        assertTrue(e.getMessage().startsWith("acme.util is kept in the parent layer "
+                + "(vidocq.app.layer.keep, through acme.helper) but reads acme.app"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("coordinates without a colon never match an artifact pattern")
+    void malformedCoordinatesNeverMatch() {
+        assertTrue(!LayerSplit.matches("a:b", new LayerSplit.Candidate(
+                ModuleDescriptor.newModule("m").build(), Path.of("/m.jar"), "nocolon", List.of())));
+    }
+
+    @Test
     @DisplayName("the mode accepts classes and all, nothing else")
     void mode() {
         assertEquals(LayerSplit.Mode.CLASSES, LayerSplit.Mode.of(null));
