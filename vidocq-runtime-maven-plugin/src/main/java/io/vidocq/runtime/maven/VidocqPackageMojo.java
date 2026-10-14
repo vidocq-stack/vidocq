@@ -106,6 +106,9 @@ public class VidocqPackageMojo extends AbstractMojo {
     /** The modules kept in the parent layer by a pin, with the reason: set by {@link #execute()} under {@code all}. */
     private Map<String, String> pinned = Map.of();
 
+    /** The distribution's {@code app/} directory under the layer launch, whose modules may require JDK modules. */
+    private Path appDir;
+
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.scriptName")
     private String scriptName;
 
@@ -153,6 +156,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             Path appJar = project.getArtifact().getFile().toPath();
             Path appDir = layerMode ? distRoot.resolve("app") : libDir;
             Files.createDirectories(appDir);
+            this.appDir = layerMode ? appDir : null;
             Files.copy(appJar, appDir.resolve(appJar.getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
 
@@ -298,6 +302,20 @@ public class VidocqPackageMojo extends AbstractMojo {
         return options;
     }
 
+    /**
+     * The {@code --add-modules} value of the layer scripts: the module path, plus the JDK modules the modules of
+     * {@code app/} require, which only the boot layer can define (vidocq#254).
+     */
+    private String addModules() throws IOException {
+        if (appDir == null || !Files.isDirectory(appDir)) {
+            return "ALL-MODULE-PATH";
+        }
+        try (var files = Files.list(appDir)) {
+            return ApplicationLaunch.addModules(files.filter(f -> f.getFileName().toString().endsWith(".jar"))
+                    .sorted().toList());
+        }
+    }
+
     void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
@@ -321,11 +339,11 @@ public class VidocqPackageMojo extends AbstractMojo {
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
                     exec java%s \\
                       --module-path "$BASEDIR/lib" \\
-                      --add-modules ALL-MODULE-PATH \\%s
+                      --add-modules %s \\%s
                       -Dvidocq.app.path="$BASEDIR/app" \\%s
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
                       "$@"
-                    """.formatted(jvmArgsLine, appLayerOptions("\\"),
+                    """.formatted(jvmArgsLine, addModules(), appLayerOptions("\\"),
                     appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " \\");
         } else {
             script = """
@@ -363,11 +381,11 @@ public class VidocqPackageMojo extends AbstractMojo {
                     set BASEDIR=%%~dp0..
                     java%s ^
                       --module-path "%%BASEDIR%%\\lib" ^
-                      --add-modules ALL-MODULE-PATH ^%s
+                      --add-modules %s ^%s
                       -Dvidocq.app.path="%%BASEDIR%%\\app" ^%s
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
                       %%*
-                    """.formatted(jvmArgsLine, appLayerOptions("^"),
+                    """.formatted(jvmArgsLine, addModules(), appLayerOptions("^"),
                     appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " ^");
         } else {
             script = """

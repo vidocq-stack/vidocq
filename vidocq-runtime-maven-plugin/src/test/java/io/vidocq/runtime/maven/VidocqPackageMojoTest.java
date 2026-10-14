@@ -219,6 +219,28 @@ class VidocqPackageMojoTest {
         assertFalse(cmd.contains("%BASEDIR%\\lib;%BASEDIR%\\app"), cmd);
     }
 
+    /**
+     * A JDK module an {@code app/} module requires must be in the boot layer, the only one that can define it: the
+     * layer scripts add it to {@code --add-modules} (vidocq#254, Vaadin's flow-data requires java.sql).
+     */
+    @Test
+    void layerLaunchersAddTheJdkModulesTheAppModulesRequire(@TempDir Path dir) throws Exception {
+        Path app = Files.createDirectories(dir.resolve("app"));
+        moduleJar(app, "flow-data-1.0.jar", "flow.data", true, "java.sql");
+        moduleJar(app, "auto-1.0.jar", "org.auto", false);
+        VidocqPackageMojo mojo = trampolineMojo("all");
+        setField(mojo, "appDir", app);
+        Path binDir = Files.createDirectories(dir.resolve("bin"));
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        String sh = Files.readString(binDir.resolve("app.sh"));
+        assertTrue(sh.contains("--add-modules ALL-MODULE-PATH,java.sql \\"), sh);
+        String cmd = Files.readString(binDir.resolve("app.cmd"));
+        assertTrue(cmd.contains("--add-modules ALL-MODULE-PATH,java.sql ^"), cmd);
+    }
+
     /** {@code classes} keeps today's trampoline scripts byte for byte, without any {@code -Dvidocq.app.layer} line. */
     @Test
     void classesKeepsTheTrampolineScripts(@TempDir Path binDir) throws Exception {

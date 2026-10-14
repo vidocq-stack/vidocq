@@ -113,7 +113,7 @@ public final class ChildJvm {
         // modules loaded reflectively (JDBC drivers, Flyway → Jackson, …) are otherwise absent from the
         // module graph and fail at runtime. Mirrors the production launcher (Dockerfile / jlink image).
         command.add("--add-modules");
-        command.add("ALL-MODULE-PATH");
+        command.add(layerMode ? io.vidocq.runtime.maven.ApplicationLaunch.addModules(appPath) : "ALL-MODULE-PATH");
         command.add("--module");
         String moduleRef;
         if (layerMode) {

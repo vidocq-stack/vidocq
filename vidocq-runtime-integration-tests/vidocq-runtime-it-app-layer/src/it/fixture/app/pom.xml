@@ -32,6 +32,12 @@
             <artifactId>app-layer-pages</artifactId>
             <version>1.0</version>
         </dependency>
+        <!-- An explicit module that requires java.sql (vidocq#254). -->
+        <dependency>
+            <groupId>io.vidocq.it</groupId>
+            <artifactId>app-layer-sql</artifactId>
+            <version>1.0</version>
+        </dependency>
     </dependencies>
 
     <build>

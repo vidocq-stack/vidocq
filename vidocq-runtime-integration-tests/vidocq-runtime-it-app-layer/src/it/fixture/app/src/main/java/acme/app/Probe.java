@@ -12,6 +12,7 @@ public class Probe {
     void onStart(@Observes Startup startup) {
         var found = Pages.find("index.html");
         System.out.println(found != null ? "LOOKUP-FOUND " + found : "LOOKUP-MISSING");
+        System.out.println(acme.sql.Sql.probe());
         Pages.startPoller();
     }
 }

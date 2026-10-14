@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261014-02 — an application-layer module requiring a JDK module missing from the boot layer fails
+
+- **Date**: 2026-10-14
+- **Status**: FIXED on `fix/app-layer-system-modules` (vidocq#254)
+- **Symptom**: `FindException: Module java.sql not found, required by flow.data` at launch, under
+  `vidocq.app.layer=all` (and for the application's own module under the layer mode), once
+  `vauban:modularize` made Vaadin's `flow-data` an explicit module that `requires java.sql`.
+- **Minimal repro**: `ChildJvmTest.layer_mode_adds_the_jdk_modules_the_application_requires`,
+  `VidocqPackageMojoTest.layerLaunchersAddTheJdkModulesTheAppModulesRequire`; IT `vidocq-runtime-it-app-layer`
+  (fixture module `acme.sql`).
+- **Cause**: the application layer is a child of the boot layer, and only the boot layer can define a JDK module.
+  The launches resolved the boot layer from the runtime's modules only (`--add-modules ALL-MODULE-PATH`), so a JDK
+  module that only an application module requires was never there.
+- **Fix**: `ApplicationLaunch.addModules` reads the descriptors of the application path and adds the JDK modules
+  they require (`requires static` aside); `vidocq:run`, `vidocq:dev` (`ChildJvm`) and the package scripts use it.
+  The runtime names `--add-modules <module>` when a hand-written launch misses one.
+
+---
+
 ## BUG-20261014-01 — `vidocq:package` gives a brick-selected automatic jar a synthesized descriptor again
 
 - **Date**: 2026-10-14

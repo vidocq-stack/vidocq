@@ -119,6 +119,13 @@ main class, and carry `-Dvidocq.app.layer=all` and the pinned list. `all` requir
 derived fails the build under `all`, with a message that names the jar: add an `Automatic-Module-Name` to it, or
 use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the plugin properties].
 
+[[app-layer-jdk-modules]]*JDK modules.* [.tag-new]#NEW# Only the boot layer can define a JDK module, so a JDK module that only an
+application module requires, such as `java.sql` for Vaadin's `flow-data`, must be resolved there. `vidocq:run`,
+`vidocq:dev` and the `vidocq:package` launchers add these modules to `--add-modules`, read from the descriptors of
+the application path. A `java` command written by hand needs the same option; without it the runtime fails with
+`Cannot create the application layer (...): Module java.sql not found, required by flow.data. A JDK module can
+only be resolved in the boot layer: add --add-modules java.sql to the java command` (Vidocq/vidocq#254).
+
 *Known limits.*
 
 * A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer. The

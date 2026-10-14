@@ -9,6 +9,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>lib</module>
+        <module>sql</module>
         <module>app</module>
     </modules>
 </project>

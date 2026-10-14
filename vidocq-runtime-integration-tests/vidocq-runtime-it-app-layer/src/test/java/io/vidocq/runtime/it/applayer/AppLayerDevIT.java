@@ -40,6 +40,7 @@ class AppLayerDevIT {
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:dev", "-Dvidocq.app.layer=all");
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-FOUND");
+            Fixture.awaitLog(mvn, log, "SQL-OK");
             Path probe = project.resolve("app/src/main/java/acme/app/Probe.java");
             Files.writeString(probe, Files.readString(probe) + "\n// changed by AppLayerDevIT\n");
             Fixture.awaitLog(mvn, log, "acme-pages-poller");

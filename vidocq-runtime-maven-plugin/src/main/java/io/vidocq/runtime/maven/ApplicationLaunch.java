@@ -98,6 +98,44 @@ public final class ApplicationLaunch {
         return paths;
     }
 
+    /**
+     * The {@code --add-modules} value of a launch whose application path is {@code appPath}: every module of the
+     * module path, plus the JDK modules the application modules require. The application layer is a child of the
+     * boot layer, and a JDK module can only be defined in the boot layer, so one only an application module
+     * requires must be resolved there (vidocq#254: Vaadin's {@code flow-data} requires {@code java.sql}).
+     */
+    public static String addModules(Collection<Path> appPath) {
+        Set<String> system = systemModulesRequiredBy(appPath);
+        return system.isEmpty() ? "ALL-MODULE-PATH" : "ALL-MODULE-PATH," + String.join(",", system);
+    }
+
+    /**
+     * The JDK modules, {@code java.base} aside, that the explicit modules of {@code appPath} require, sorted.
+     * {@code requires static} is left out, as it resolves nothing. An entry no module can be read from is skipped:
+     * the runtime reports it when it builds the layer.
+     */
+    static Set<String> systemModulesRequiredBy(Collection<Path> appPath) {
+        ModuleFinder system = ModuleFinder.ofSystem();
+        Set<String> required = new java.util.TreeSet<>();
+        for (Path entry : appPath) {
+            Set<java.lang.module.ModuleReference> modules;
+            try {
+                modules = ModuleFinder.of(entry).findAll();
+            } catch (java.lang.module.FindException e) {
+                continue;
+            }
+            for (var module : modules) {
+                for (var requires : module.descriptor().requires()) {
+                    if (!requires.modifiers().contains(java.lang.module.ModuleDescriptor.Requires.Modifier.STATIC)
+                            && !"java.base".equals(requires.name()) && system.find(requires.name()).isPresent()) {
+                        required.add(requires.name());
+                    }
+                }
+            }
+        }
+        return required;
+    }
+
     /** Why a jar with classes parked for {@code --patch-module} stays in the parent layer. */
     public static final String PATCHED_REASON = "classes parked by vidocq:generate need --patch-module";
 

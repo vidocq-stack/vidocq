@@ -58,7 +58,8 @@ class AppLayerPackageIT {
         Path runLog = Fixture.logs().resolve("package-run.log");
         String out = run(script, runLog);
         assertTrue(out.contains("LOOKUP-FOUND vauban:"), "the library's loader is the application layer's:\n" + out);
-        assertTrue(out.contains("2 modules, 1 library"), "the report counts the library in the layer:\n" + out);
+        assertTrue(out.contains("3 modules, 2 libraries"), "the report counts the libraries in the layer:\n" + out);
+        assertTrue(out.contains("SQL-OK"), "a JDK module only an app/ module requires is resolved (vidocq#254):\n" + out);
     }
 
     @Test
@@ -78,7 +79,9 @@ class AppLayerPackageIT {
         Path runLog = Fixture.logs().resolve("package-classes-run.log");
         String out = run(script, runLog);
         assertFalse(out.contains("LOOKUP-FOUND vauban:"), out);
-        assertTrue(out.contains("1 module ("), "the library is outside the layer:\n" + out);
+        // acme.sql, an explicit module the application reads, moves with it; the automatic library stays out.
+        assertTrue(out.contains("2 modules, 1 library (boot-layer"), "the automatic library is outside the layer:\n" + out);
+        assertTrue(out.contains("SQL-OK"), out);
     }
 
     /** Launches the distribution's script until the runtime has started; returns what it printed. */

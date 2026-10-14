@@ -23,6 +23,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.constant.ModuleDesc;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -88,6 +92,36 @@ class ChildJvmTest {
         int mp = command.indexOf("--module-path");
         assertEquals(tmp.resolve("libs").toString(), command.get(mp + 1),
                 "the module path carries only the dependencies");
+    }
+
+    /** An exploded module whose descriptor requires {@code required}, besides java.base. */
+    static Path moduleRequiring(Path dir, String name, String... required) throws Exception {
+        Files.createDirectories(dir);
+        Files.write(dir.resolve("module-info.class"), ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of(name),
+                mb -> {
+                    mb.requires(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null);
+                    for (String r : required) {
+                        mb.requires(ModuleDesc.of(r), 0, null);
+                    }
+                })));
+        return dir;
+    }
+
+    /**
+     * The application layer is a child of the boot layer, and a JDK module can only be defined in the boot layer:
+     * one an application module requires must be resolved there (vidocq#254, Vaadin's flow-data needs java.sql).
+     */
+    @Test
+    void layer_mode_adds_the_jdk_modules_the_application_requires(@TempDir Path tmp) throws Exception {
+        Path classes = moduleRequiring(tmp.resolve("classes"), "com.example.app", "java.sql");
+        Path lib = moduleRequiring(tmp.resolve("flow-data"), "flow.data", "java.sql", "java.desktop");
+
+        ChildJvm jvm = ChildJvm.of(List.of(tmp.resolve("libs")), List.of(classes, lib), "com.example.app",
+                "com.example.app.Main", List.of(), Map.of(), tmp);
+
+        var command = jvm.command();
+        int add = command.indexOf("--add-modules");
+        assertEquals("ALL-MODULE-PATH,java.desktop,java.sql", command.get(add + 1), command.toString());
     }
 
     @Test

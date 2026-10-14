@@ -39,7 +39,8 @@ class AppLayerRunIT {
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", "-Dvidocq.app.layer=all");
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-FOUND");
-            assertTrue(Fixture.read(log).contains("application layer: 1 library,"), Fixture.read(log));
+            assertTrue(Fixture.read(log).contains("application layer: 2 libraries,"), Fixture.read(log));
+            Fixture.awaitLog(mvn, log, "SQL-OK"); // acme.sql requires java.sql, which only it needs (vidocq#254)
         } finally {
             Fixture.stop(mvn);
         }

@@ -279,10 +279,28 @@ public final class VidocqAppLayer {
             LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
                     appLayer.moduleNames(), origin);
             return true;
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                    "Cannot create the application layer (" + origin + ")", e);
+        } catch (IOException | java.lang.module.FindException e) {
+            throw layerFailure(origin, e);
         }
+    }
+
+    private static final java.util.regex.Pattern MISSING_MODULE =
+            java.util.regex.Pattern.compile("Module (\\S+) not found");
+
+    /**
+     * Why the application layer could not be created. A JDK module the application requires, missing from the boot
+     * layer, cannot be defined in a child layer: the message names the {@code --add-modules} that fixes a launch
+     * written by hand ({@code vidocq:run}, {@code vidocq:dev} and {@code vidocq:package} add it, vidocq#254).
+     */
+    static IllegalStateException layerFailure(String origin, Exception e) {
+        String message = "Cannot create the application layer (" + origin + "): " + e.getMessage();
+        var missing = MISSING_MODULE.matcher(String.valueOf(e.getMessage()));
+        if (e instanceof java.lang.module.FindException && missing.find()
+                && java.lang.module.ModuleFinder.ofSystem().find(missing.group(1)).isPresent()) {
+            message += ". A JDK module can only be resolved in the boot layer: add --add-modules "
+                    + missing.group(1) + " to the java command";
+        }
+        return new IllegalStateException(message, e);
     }
 
     /** The application layer installed by this JVM, or {@code null}. */
