@@ -7,6 +7,9 @@ under `vidocq:run` and `vidocq:dev`, ships as a `vidocq:package` distribution, a
 `vidocq:jlink` image. Vaadin needs no workaround class: the build processes the Vaadin jars as if they were your
 code. This page covers the setup and each way to run it. Vaadin 25 in production mode was checked.
 
+The example project https://codefloe.com/VidocqTools/vaadin-on-vidocq[VidocqTools/vaadin-on-vidocq] puts all of it
+together: the pom below with production mode set, and a `jlink` profile with the two flags of <<jlink>>.
+
 [#at-a-glance]
 == At a glance [.tag-new]#NEW#
 
