@@ -41,12 +41,25 @@ distribution and the image (BENCH.md, 2026-10-15). The JVM itself adds about 150
 [#setup]
 == Setup [.tag-new]#NEW#
 
-The project is an ordinary Vidocq application with the Servlet extension, the Vaadin BOM and two build plugins:
-`vaadin-maven-plugin` builds the frontend, and `vidocq-runtime-maven-plugin` generates the application's and the
-Vaadin jars' glue.
+The project is an ordinary Vidocq application, with `vidocq-runtime-parent` as its parent, the Servlet extension, the
+Vaadin BOM and two build plugins: `vaadin-maven-plugin` builds the frontend, and `vidocq-runtime-maven-plugin`
+generates the application's and the Vaadin jars' glue. The parent manages the versions of the Vidocq artefacts and
+plugin, and `combine.children="append"` keeps the processors it already declares (`vidocq-runtime-core-codegen`)
+next to Foy's.
 
 [source,xml]
 ----
+<parent>
+  <groupId>io.vidocq.runtime</groupId>
+  <artifactId>vidocq-runtime-parent</artifactId>
+  <version>0.4.0-SNAPSHOT</version>
+</parent>
+
+<properties>
+  <vaadin.version>25.3.2</vaadin.version>
+  <vidocq.app.layer>all</vidocq.app.layer>
+</properties>
+
 <dependencyManagement>
   <dependencies>
     <dependency>
@@ -91,7 +104,6 @@ Vaadin jars' glue.
           <path>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-            <version>${vidocq.version}</version>
           </path>
         </annotationProcessorPaths>
       </configuration>
@@ -112,7 +124,6 @@ Vaadin jars' glue.
     <plugin>
       <groupId>io.vidocq.runtime</groupId>
       <artifactId>vidocq-runtime-maven-plugin</artifactId>
-      <version>${vidocq.version}</version>
       <executions>
         <execution>
           <id>generate</id>
@@ -275,7 +286,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors 
 <plugin>
   <groupId>io.vidocq.vauban</groupId>
   <artifactId>vauban-maven-plugin</artifactId>
-  <version>${vidocq.version}</version>
+  <version>${vauban.version}</version>
   <executions>
     <execution>
       <id>modularize</id>
