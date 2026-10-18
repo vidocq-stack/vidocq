@@ -159,19 +159,21 @@ therefore in neither the pull-request list nor the nightly job, like `vidocq-run
 ./mvnw -ntp -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet test
 ```
 
-**Result (2026-10-11, Foy main `8b0b81d`, about 14 min):** 1714 run, **1698 passing**, 9 errors, 7 skipped
-(api 855/859, spec 196/207, pluggability 645/646, common 2/2). The first measure, on Foy `ee6c899`, was 1694:
-Foy's effective-version fix (foy#33) brought the four `getEffectiveMajor/MinorVersion` tests back.
+**Result (2026-10-18, Foy main `826672b`, 14 min 21 s):** 1714 run, **1699 passing**, 8 errors, 7 skipped
+(api 855/859, spec 196/207, pluggability 646/646, compat 2/2). `Aordering4Tests` passes since vidocq#228
+(BUG-20261018-01); no other class changed. The 2026-10-11 run, on Foy `8b0b81d`, was 1698; the first measure, on
+Foy `ee6c899`, 1694: Foy's effective-version fix (foy#33) brought the four `getEffectiveMajor/MinorVersion` tests back.
 
-`foy-tck` on Foy `ee6c899`: 1714 run, 1700 passing, 7 errors, 7 skipped. Every difference is
-explained:
+`foy-tck` on Foy `826672b`: 1714 run, 1707 passing, 0 errors, 7 skipped (it runs the TCK's JSP pages with
+Ibarra since foy#52). Every difference is explained:
 
 | Tests | Cause | Follow-up |
 |-------|-------|-----------|
-| 7 shared with `foy-tck`: `ServletContext40Tests` JSP ×3, CLIENT-CERT ×2, `SecFormTests` `test2`/`test2_anno` | no JSP engine, no TLS client certificates in the harness (`foy/TCK.md`) | none here |
+| `ServletContext40Tests` JSP ×3, `SecFormTests` `test2`/`test2_anno` | the runtime has no JSP engine yet; `foy-tck` passes them with Ibarra | Vidocq/vidocq#232 (Ibarra extension) |
+| `ClientCertTests`, `ClientCertAnnoTests` | the embedded container has no `https` container; `foy-tck` passes them with a TLS one | harness |
 | ~~`ServletContext30Tests` `getEffectiveMajorVersion`/`MinorVersion` ×4~~ | Foy: `FoyChappeBoot` never applied the `web.xml` version; only foy-tck's harness set it | fixed in Foy (foy#33, `8b0b81d`): pass |
 | `HttpSessionxTests.expireHttpSessionxTest` | the test drives two WARs on one server; the container boots one runtime per WAR, each on its own port | harness limit |
-| `Aordering4Tests.absoluteOrderingTest` | a `@WebListener` of a fragment that `<absolute-ordering>` excludes is registered: in the runtime every archive class is a CDI bean, and Foy's CDI discovery does not drop the excluded fragments; the harness loads the classes from the TCK jar, so their code source cannot name the fragment either | Vidocq/vidocq#228 |
+| ~~`Aordering4Tests.absoluteOrderingTest`~~ | a `@WebListener` of a fragment that `<absolute-ordering>` excludes was registered: the harness loads the classes from the TCK jar, so their code source never named the fragment | fixed (vidocq#228, BUG-20261018-01): the Servlet extension attributes a class to the jar its class file resolves to; pass |
 
 What the first runs found, all fixed:
 

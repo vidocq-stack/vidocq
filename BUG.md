@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261018-01 — the `@WebListener` of a web fragment an absolute ordering excludes is registered
+
+- **Date**: 2026-10-18
+- **Status**: FIXED on `fix/228-excluded-fragment-listener` (vidocq#228)
+- **Symptom**: `servlet.tck.pluggability.aordering4.Aordering4Tests.absoluteOrderingTest` fails on the assembled
+  runtime: the WAR's `<absolute-ordering>` excludes `fragment-7.jar`, Foy merges fragments 1 to 5 only, yet
+  `RequestListener7`, a `@WebListener` packaged in the excluded jar, is registered.
+- **Minimal repro**: `ComponentSourcesTest` (Servlet extension); `-Ptck -pl
+  vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet test -Dtest=Aordering4Tests` fails without the fix.
+- **Cause**: Foy attributes a component to the code source its class was defined from. The TCK harness loads the
+  archive's classes parent-first from the TCK jar, so `RequestListener7`'s code source names the TCK jar, never
+  `fragment-7.jar`, and the exclusion cannot match it.
+- **Fix**: the Servlet extension hands Foy a `componentSource` (foy, BUG-20261012-01): a class is attributed to the
+  root of its class file as the application's loader resolves it (`ComponentSources.classFile`). The harness resolves
+  resources from the WAR's own jars first, so the listener is attributed to `fragment-7.jar` and dropped with it. In
+  a deployed application the class file and the code source agree, and nothing changes.
+
 ## BUG-20261014-02 — an application-layer module requiring a JDK module missing from the boot layer fails
 
 - **Date**: 2026-10-14

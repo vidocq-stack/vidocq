@@ -84,6 +84,8 @@ final class FoyDeployments {
         FoyChappeBoot.Builder builder = FoyChappeBoot.builder()
                 .beanManager(beanManager)
                 .classLoader(loader)
+                // vidocq#228: the components of a fragment the ordering excludes stay out.
+                .componentSource(type -> ComponentSources.classFile(loader, type))
                 .sessionTimeoutSeconds(sessionTimeoutSeconds);
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
