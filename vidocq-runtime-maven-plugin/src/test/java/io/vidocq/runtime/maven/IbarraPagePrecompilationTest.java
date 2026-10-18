@@ -104,6 +104,18 @@ class IbarraPagePrecompilationTest {
         assertTrue(Files.isRegularFile(classes().resolve(index.iterator().next().replace('.', '/') + ".class")));
     }
 
+    /** A forward target kept under the classes root's WEB-INF, out of the client's reach, is a page too. */
+    @Test
+    void a_page_under_web_inf_is_compiled_too() throws Exception {
+        module("io.vidocq.ibarra.api");
+        resource("WEB-INF/views/greet.jsp", "<%= \"greet\" %>");
+
+        assertEquals(1, IbarraPagePrecompilation.apply(classes(), modulePath(), warnings::add));
+
+        assertEquals(List.of(), warnings);
+        assertFalse(providers(descriptor(), PAGE_INDEX).isEmpty());
+    }
+
     @Test
     void pages_without_the_ibarra_api_requirement_are_not_compiled_and_named_in_a_warning() throws Exception {
         module();

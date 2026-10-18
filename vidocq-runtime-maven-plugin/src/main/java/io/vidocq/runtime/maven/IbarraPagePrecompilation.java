@@ -44,7 +44,8 @@ import java.util.stream.Stream;
  * Compiles the application's JSP pages with Ibarra during {@code vidocq:generate} (vidocq#232).
  *
  * <p>A runtime application keeps its pages where Foy serves its web resources, under
- * {@code META-INF/resources/}, and its descriptor at {@code WEB-INF/web.xml} (else {@code META-INF/web.xml}).
+ * {@code META-INF/resources/}, the pages only a forward reaches under {@code WEB-INF/}, and its descriptor at
+ * {@code WEB-INF/web.xml} (else {@code META-INF/web.xml}).
  * They are staged as a web root under {@code target/ibarra-web} and compiled into the application module,
  * whose descriptor Ibarra completes with {@code provides io.vidocq.ibarra.spi.PageIndex}. It runs before
  * {@link PeanoAccessorRegistration}, which keeps that service when it rewrites the descriptor.
@@ -65,11 +66,12 @@ final class IbarraPagePrecompilation {
      */
     static int apply(Path classes, List<Path> modulePath, Consumer<String> warn) throws IOException {
         Path resources = classes.resolve(RESOURCES);
-        List<String> pages = pages(resources);
+        var pages = new ArrayList<>(pages(resources, ""));
+        pages.addAll(pages(classes.resolve("WEB-INF"), "/WEB-INF"));
         if (pages.isEmpty()) return 0;
         Path descriptorFile = classes.resolve("module-info.class");
         if (!Files.isRegularFile(descriptorFile)) {
-            warn.accept(pages.size() + " JSP page(s) under " + RESOURCES + " are not compiled: the application has no "
+            warn.accept(pages.size() + " JSP page(s) are not compiled: the application has no "
                     + "module-info; Ibarra compiles pages into a named module that requires " + API);
             return 0;
         }
@@ -80,7 +82,7 @@ final class IbarraPagePrecompilation {
         boolean readsApi = descriptor.requires().stream().anyMatch(r -> r.name().equals(API)
                 && !r.modifiers().contains(ModuleDescriptor.Requires.Modifier.STATIC));
         if (!readsApi) {
-            warn.accept(pages.size() + " JSP page(s) under " + RESOURCES + " are not compiled, and Foy serves no JSP "
+            warn.accept(pages.size() + " JSP page(s) are not compiled, and Foy serves no JSP "
                     + "engine for them: add the Ibarra extension and `requires " + API + ";` to module "
                     + descriptor.name() + " (first: " + pages.getFirst() + ")");
             return 0;
@@ -100,13 +102,13 @@ final class IbarraPagePrecompilation {
         }
     }
 
-    /** The JSP pages under {@code resources}, as web paths. */
-    private static List<String> pages(Path resources) throws IOException {
-        if (!Files.isDirectory(resources)) return List.of();
-        try (Stream<Path> files = Files.walk(resources)) {
+    /** The JSP pages under {@code root}, as web paths under {@code prefix}. */
+    private static List<String> pages(Path root, String prefix) throws IOException {
+        if (!Files.isDirectory(root)) return List.of();
+        try (Stream<Path> files = Files.walk(root)) {
             return files.filter(Files::isRegularFile)
                     .filter(f -> f.toString().endsWith(".jsp") || f.toString().endsWith(".jspx"))
-                    .map(f -> "/" + resources.relativize(f).toString().replace('\\', '/'))
+                    .map(f -> prefix + "/" + root.relativize(f).toString().replace('\\', '/'))
                     .sorted().toList();
         }
     }
@@ -118,7 +120,8 @@ final class IbarraPagePrecompilation {
     private static Path stage(Path classes, Path resources) throws IOException {
         Path web = classes.toAbsolutePath().getParent().resolve("ibarra-web");
         delete(web);
-        copyTree(resources, web);
+        Files.createDirectories(web);
+        if (Files.isDirectory(resources)) copyTree(resources, web);
         Path webInf = classes.resolve("WEB-INF");
         if (Files.isDirectory(webInf)) copyTree(webInf, web.resolve("WEB-INF"));
         Path metaWebXml = classes.resolve("META-INF/web.xml");
