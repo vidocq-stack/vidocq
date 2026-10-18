@@ -11,5 +11,6 @@
         <module>lib</module>
         <module>sql</module>
         <module>app</module>
+        <module>jsp</module>
     </modules>
 </project>

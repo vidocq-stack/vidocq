@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <!-- vidocq#232: an application made of JSP pages only, its module in the application layer. -->
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-parent</artifactId>
+        <version>@project.version@</version>
+        <relativePath/>
+    </parent>
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>app-layer-jsp</artifactId>
+    <properties>
+        <vidocq.mainModule>acme.jsp</vidocq.mainModule>
+        <vidocq.mainClass>acme.jsp.JspApp</vidocq.mainClass>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+        </dependency>
+    </dependencies>
+    <build>
+        <plugins>
+            <!-- vidocq:generate compiles the pages; vidocq:run reaches it through process-classes. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

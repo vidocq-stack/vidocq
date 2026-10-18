@@ -54,6 +54,10 @@
 | `jakartaee-web`
 | Serves the application's Jakarta Servlet 6.1 components through xref:foy::index.adoc[Foy] on the shared Chappe server, with the request and session scopes. Companion `-codegen` artefact. See <<servlet>>.
 
+| `vidocq-runtime-ibarra-pages-extension` [.tag-new]#NEW#
+| `jakartaee-web`
+| Serves the application's JSP pages, compiled at build time by xref:ibarra::index.adoc[Ibarra], through the Servlet extension, with Jakarta EL from Peano. See <<ibarra-pages>>.
+
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
 | JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
@@ -250,6 +254,46 @@ The REST extension mounts its resources on the `@ApplicationPath` of the applica
 The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener, the context path and the session timeout, then every servlet and filter with what it is mapped to, and the listeners in registration order [.tag-new]#NEW#; or it says that the extension is inactive.
 
 [.tag-new]#NEW# Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
+
+[[ibarra-pages]]
+== Jakarta Pages (Ibarra) [.tag-new]#NEW#
+
+`vidocq-runtime-ibarra-pages-extension` serves the application's JSP pages through the Servlet extension. xref:ibarra::index.adoc[Ibarra] compiles them at build time, inside `vidocq:generate`: no page is translated or compiled while the application runs, and the runtime holds no Java compiler. The extension brings the Servlet extension and the Expression Language extension (<<peano-el>>) with it.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+</dependency>
+----
+
+The application module reads the APIs its compiled pages use:
+
+[source,java]
+----
+module com.acme.shop {
+    requires io.vidocq.runtime.extensions.jakartaee.web.ibarra;
+    requires io.vidocq.ibarra.api;
+    requires io.vidocq.peano.api;   // pages with expressions
+}
+----
+
+`vidocq extension add ibarra-pages` adds the dependency and these directives.
+
+Where the pages go, as Foy serves the web resources of a runtime application:
+
+* pages the client requests under `src/main/resources/META-INF/resources/`: `META-INF/resources/hello.jsp` answers `/hello.jsp`;
+* pages only a forward or an include reaches under `src/main/resources/WEB-INF/`: `WEB-INF/views/greet.jsp` is `/WEB-INF/views/greet.jsp` for `getRequestDispatcher`, and a client request for it answers `404`;
+* tag library descriptors under `WEB-INF/` (for example `WEB-INF/tlds/strings.tld`), or in the `META-INF/` of a module the application reads; `jsp-config` in `WEB-INF/web.xml`, else `META-INF/web.xml`.
+
+At process-classes, `vidocq:generate` stages them as a web root under `target/ibarra-web` and compiles every page into the application module, whose descriptor gains `provides io.vidocq.ibarra.spi.PageIndex`. A page that does not translate or compile fails the build, with the page named. Pages in a module that does not require `io.vidocq.ibarra.api` are not compiled: the build warns and names the first one. The precompilation runs before the Peano accessor registration, which keeps the page index when it rewrites the descriptor. Bind the generate goal in the build, as Vidocq's generated projects do: `vidocq:run` and `vidocq:dev` then reach it through `process-classes`. Without it, no page is compiled, and the startup report says so.
+
+At run time, Foy finds Ibarra's JSP engine and the compiled pages in the application layer. An application made of pages only, with no servlet, filter or listener of its own, is deployed.
+
+The `pages` section of the startup report counts the compiled pages and lists their paths; when none was compiled, it reports an anomaly with the steps above.
+
+Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named` bean) need an EL resolver from Vauban (Vidocq/vauban#150); a page reads request, session and application attributes.
 
 == Typical lifecycle — Chappe example
 

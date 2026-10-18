@@ -31,6 +31,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}` [.tag-new]#NEW#
 | Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion POM bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
 
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}` [.tag-new]#NEW#
+| Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
+
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
@@ -223,6 +226,9 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Generates the CDI bean index and pre-generates proxies/interceptors (compile-time codegen).
   Also registers Peano APT accessor-provider fragments in the compiled application
   module descriptor; existing access directives are preserved.
+  [.tag-new]#NEW# Compiles the application's JSP pages with Ibarra first, when its module requires
+  `io.vidocq.ibarra.api` (xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)]).
+  The plugin depends on `io.vidocq.ibarra:ibarra-compiler` for it: build tooling, never in the application.
 
 | `vidocq:package`
 | Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers, `lib/*.jar` (application + module-path closure), attached as a `-dist.zip`.

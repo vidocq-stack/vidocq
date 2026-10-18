@@ -44,6 +44,12 @@
             <artifactId>vidocq-runtime-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- The JSP-only application of the fixture (vidocq#232). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- A jar, as the fixture's annotationProcessorPaths entry: a pom-typed dependency stages the pom only,
              and the fixture's compiler then misses the jar in a build that installs nothing. -->
         <dependency>
