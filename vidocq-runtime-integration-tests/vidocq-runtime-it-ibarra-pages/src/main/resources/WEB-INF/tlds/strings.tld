@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<taglib xmlns="https://jakarta.ee/xml/ns/jakartaee"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-jsptaglibrary_3_0.xsd"
+        version="3.0">
+    <tlib-version>1.0</tlib-version>
+    <short-name>strings</short-name>
+    <uri>https://vidocq.io/it/strings</uri>
+    <function>
+        <name>upper</name>
+        <function-class>io.vidocq.runtime.it.ibarrapages.Strings</function-class>
+        <function-signature>java.lang.String upper(java.lang.String)</function-signature>
+    </function>
+</taglib>
