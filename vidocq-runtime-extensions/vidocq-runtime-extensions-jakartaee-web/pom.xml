@@ -28,6 +28,7 @@
         <module>vidocq-runtime-foy-servlet-extension</module>
         <module>vidocq-runtime-foy-servlet-extension-codegen</module>
         <module>vidocq-runtime-foy-servlet-extension-dev</module>
+        <module>vidocq-runtime-ibarra-pages-extension</module>
     </modules>
 
     <build>

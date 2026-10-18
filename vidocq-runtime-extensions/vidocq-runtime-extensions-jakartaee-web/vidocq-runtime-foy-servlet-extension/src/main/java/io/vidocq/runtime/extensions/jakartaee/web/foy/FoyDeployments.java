@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
+import io.vidocq.runtime.spi.ApplicationLayer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
@@ -86,6 +87,8 @@ final class FoyDeployments {
                 .classLoader(loader)
                 // vidocq#228: the components of a fragment the ordering excludes stay out.
                 .componentSource(type -> ComponentSources.classFile(loader, type))
+                // The JSP engine and its compiled pages are looked up in the application layer (vidocq#232).
+                .applicationLayer(ApplicationLayer.current().orElse(ModuleLayer.boot()))
                 .sessionTimeoutSeconds(sessionTimeoutSeconds);
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));

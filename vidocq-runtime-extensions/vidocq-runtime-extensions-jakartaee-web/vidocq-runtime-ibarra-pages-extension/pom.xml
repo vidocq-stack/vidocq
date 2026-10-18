@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Jakarta Pages (Ibarra)</name>
+    <description>Vidocq Runtime extension that serves the application's JSP pages, compiled at build time by
+        Ibarra, through the Servlet extension, with Jakarta Expression Language from Peano</description>
+
+    <properties>
+        <!--
+            checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
+            The Servlet and EL extensions are aggregated here for the applications' run time only; this module has
+            no source for their processors to process.
+        -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Foy finds Ibarra's JSP engine with ServiceLoader in the application layer. -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-foy</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-peano-el-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

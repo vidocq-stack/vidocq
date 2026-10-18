@@ -89,6 +89,10 @@ public final class KnownExtensions {
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-foy-servlet-extension",
                     "Jakarta Servlet (servlets, filters, HTTP sessions)"),
+            new RegistryEntry("ibarra-pages",
+                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    "vidocq-runtime-ibarra-pages-extension",
+                    "Jakarta Pages (JSP), compiled at build time"),
             new RegistryEntry("mansart-data",
                     "io.vidocq.runtime.extensions.jakartaee.web",
                     "vidocq-runtime-mansart-data-extension",
@@ -206,6 +210,7 @@ public final class KnownExtensions {
             Map.entry("dirac-metrics", "io.vidocq.runtime.extensions.microprofile.dirac"),
             Map.entry("heisenberg-fault-tolerance", "io.vidocq.runtime.extensions.microprofile.heisenberg"),
             Map.entry("foy-servlet", "io.vidocq.runtime.extensions.jakartaee.web.foy"),
+            Map.entry("ibarra-pages", "io.vidocq.runtime.extensions.jakartaee.web.ibarra"),
             Map.entry("mansart-data", "io.vidocq.runtime.extensions.jakartaee.web.mansart.data"),
             Map.entry("mansart-pool", "io.vidocq.runtime.extensions.jakartaee.web.mansart.pool"),
             Map.entry("migration", "io.vidocq.runtime.extensions.essentials.migration"),
@@ -235,6 +240,9 @@ public final class KnownExtensions {
         boolean opens = false;
         switch (id.trim().toLowerCase()) {
             case "peano-el" -> directives.addAll(List.of("requires " + module.get(),"requires io.vidocq.peano.api"));
+            // vidocq:generate compiles the pages into the application module, which must read these APIs itself.
+            case "ibarra-pages" -> directives.addAll(List.of("requires " + module.get(),
+                    "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"));
             case "cassini-rest" -> {
                 directives.addAll(List.of("requires static java.compiler", "requires jakarta.cdi",
                         "requires jakarta.inject", "requires jakarta.ws.rs", "requires jakarta.json.bind",

@@ -94,6 +94,17 @@ class KnownExtensionsTest {
         assertEquals("vidocq-runtime-foy-servlet-extension", KnownExtensions.resolve("foy-servlet").artifactId());
     }
 
+    /** vidocq#232: the module compiles its pages into itself, so it requires the Ibarra and Peano APIs directly. */
+    @Test
+    void ibarraPagesRequiresTheApisItsCompiledPagesUse() {
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("ibarra-pages").groupId());
+        assertEquals("vidocq-runtime-ibarra-pages-extension", KnownExtensions.resolve("ibarra-pages").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("ibarra-pages"));
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.ibarra",
+                        "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"),
+                KnownExtensions.moduleDirectives("ibarra-pages", "consumer"));
+    }
+
     @Test
     void peanoElShipsItsAccessorCodegenBundle() {
         assertEquals("io.vidocq.runtime.extensions.jakartaee.core",KnownExtensions.resolve("peano-el").groupId());
