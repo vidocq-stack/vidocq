@@ -32,7 +32,7 @@ import java.util.Set;
  * supported in M5-1:
  *
  * <pre>
- *   FROM &lt;EntitySimpleName&gt; [WHERE &lt;expr&gt;] [ORDER BY &lt;orderItem&gt; (, &lt;orderItem&gt;)*]
+ *   [FROM &lt;EntitySimpleName&gt;] [WHERE &lt;expr&gt;] [ORDER BY &lt;orderItem&gt; (, &lt;orderItem&gt;)*]
  *
  *   expr    := orExpr
  *   orExpr  := andExpr ('OR' andExpr)*
@@ -60,7 +60,7 @@ final class JdqlParser {
                                boolean isCursoredPageReturn) {
         Map<String, Integer> nameToIdx = new HashMap<>();
         for (int i = 0; i < method.getParameters().size(); i++) {
-            nameToIdx.put(method.getParameters().get(i).getSimpleName().toString(), i);
+            nameToIdx.put(queryParameterName(method.getParameters().get(i)), i);
         }
 
         // M8-1f — pre-validate via the runtime AST parser, which supports the full grammar
@@ -634,6 +634,23 @@ final class JdqlParser {
         };
     }
 
+    /**
+     * The name a query refers to {@code parameter} by: the value of its {@code @jakarta.data.repository.Param}, else
+     * its Java name, which needs {@code -parameters} on a class file (mansart#41).
+     */
+    static String queryParameterName(javax.lang.model.element.VariableElement parameter) {
+        for (var mirror : parameter.getAnnotationMirrors()) {
+            if (mirror.getAnnotationType().toString().equals("jakarta.data.repository.Param")) {
+                for (var entry : mirror.getElementValues().entrySet()) {
+                    if (entry.getKey().getSimpleName().contentEquals("value")) {
+                        return String.valueOf(entry.getValue().getValue());
+                    }
+                }
+            }
+        }
+        return parameter.getSimpleName().toString();
+    }
+
     private static String resolveArg(ArgRef ref, Map<String, Integer> nameToIdx, ExecutableElement m) {
         int idx;
         if (ref.named != null) {
@@ -641,7 +658,7 @@ final class JdqlParser {
             if (mapped == null) {
                 throw new ParseException("@Query references :" + ref.named
                         + " but method " + m.getSimpleName() + " has no parameter with that name. "
-                        + "Compile with `-parameters` so APT can see the names, or use ?N.");
+                        + "Name it with @Param, compile with `-parameters` so APT can see the names, or use ?N.");
             }
             idx = mapped;
         } else {
@@ -1012,10 +1029,13 @@ final class JdqlParser {
                 expectEof();
                 return s;
             }
-            expectKw("FROM");
-            String from = expectIdent();
-            if (!from.equals(entityName)) {
-                throw new ParseException("@Query FROM " + from + " does not match repository entity " + entityName);
+            // JDQL leaves FROM out when the repository has a primary entity: the query targets it (mansart#41).
+            if (peekKw("FROM")) {
+                lex.consume();
+                String from = expectIdent();
+                if (!from.equals(entityName)) {
+                    throw new ParseException("@Query FROM " + from + " does not match repository entity " + entityName);
+                }
             }
             if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
             if (peekKw("ORDER")) {

@@ -9,6 +9,29 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-008 — The annotation processor ignored `@Param`, did not compile `@Find`, and required `FROM`
+
+- **Date**: 2026-10-18
+- **Status**: FIXED on `fix/41-param-find-from` (mansart#41)
+- **Module**: `mansart-data-processor` (`JdqlParser`, `RepositoryWriter`)
+- **Symptom**: in a repository compiled by the APT (from sources or, through `vidocq:generate`, from class files):
+  `@Query("… :title") byTitle(@Param("title") String t)` failed with "has no parameter with that name"; a `@Find`
+  method got a warning and a body throwing `UnsupportedOperationException`; `@Query("WHERE title = :title")` failed
+  with `Expected FROM, got: WHERE`.
+- **Minimal reproduction**: `JdqlQueryTest` (`paramAnnotationNamesTheParameter`, `queryWithoutFromTargetsThePrimaryEntity`,
+  `findMatchesParametersToAttributes`, `findWithoutParametersHonoursOrderBy`) with the matching `AuthorRepository` methods:
+  the first two fail the compilation, the `@Find` ones throw.
+- **Cause**: the processor's parser mapped `:name` to Java parameter names only, required `FROM`, and had no `@Find`
+  rule. The run-time path (`RuntimeRepositoryProxy`, `JdqlAst`) already handled all three.
+- **TCK**: the Jakarta Data TCK runner (73/73 + signature) generates its repositories at run time, so it never ran the
+  processor on these shapes; it stays 73/73 with the fix.
+- **Fix**: `JdqlParser.queryParameterName` reads `@Param`; `FROM` is optional in the processor's grammar; a `@Find` method
+  declared by the application becomes the JDQL `WHERE a = ?1 AND …` from `@By` (else the parameter name) and
+  `@OrderBy`, then goes through the `@Query` path (a trailing `PageRequest` included; `Sort`, `Order` and `Limit`
+  parameters warn). The processor's warnings name the type and the method.
+
+---
+
 ## MANSART-006 — `@TransactionScoped` beans empty on the module path (context never installed)
 - **Date**: 2026-07-14 — **Status**: FIXED (root cause upstream in Vauban, VAU-CTX-001)
 - **Severity**: high (any `@TransactionScoped` state silently lost — one fresh instance per proxy call)

@@ -104,6 +104,42 @@ class JdqlQueryTest {
         assertThat(n).isEqualTo(4L);
     }
 
+    /** mansart#41: {@code @Param} names a parameter independently of {@code -parameters}. */
+    @Test
+    void paramAnnotationNamesTheParameter() {
+        assertThat(repo.jdqlByParamName("Émile Zola")).extracting(Author::getName).containsExactly("Émile Zola");
+    }
+
+    /** mansart#41: a query without {@code FROM} targets the repository's primary entity. */
+    @Test
+    void queryWithoutFromTargetsThePrimaryEntity() {
+        assertThat(repo.jdqlWithoutFrom("Victor%")).extracting(Author::getName)
+                .containsExactly("Victor Hugo", "Victor Segalen");
+    }
+
+    /** mansart#41: {@code @Find} matches its parameters to attributes, by {@code @By} or by name. */
+    @Test
+    void findMatchesParametersToAttributes() {
+        assertThat(repo.findNamed("Marcel Proust")).extracting(Author::getName).containsExactly("Marcel Proust");
+        assertThat(repo.lookup("Victor Hugo")).map(Author::getName).contains("Victor Hugo");
+        assertThat(repo.lookup("Nobody")).isEmpty();
+    }
+
+    /** mansart#41: {@code @Find} without parameters returns every entity, in the {@code @OrderBy} order. */
+    @Test
+    void findWithoutParametersHonoursOrderBy() {
+        assertThat(repo.everyoneByNameDescending()).extracting(Author::getName)
+                .containsExactly("Émile Zola", "Victor Segalen", "Victor Hugo", "Marcel Proust");
+    }
+
+    /** mansart#41: a {@code @Find} method with a trailing {@code PageRequest} returns one page. */
+    @Test
+    void findPagesWithATrailingPageRequest() {
+        var page = repo.everyonePaged(jakarta.data.page.PageRequest.ofSize(2));
+        assertThat(page.content()).extracting(Author::getName).containsExactly("Marcel Proust", "Victor Hugo");
+        assertThat(page.hasNext()).isTrue();
+    }
+
     private static Author named(String name) {
         Author a = new Author();
         a.setName(name);

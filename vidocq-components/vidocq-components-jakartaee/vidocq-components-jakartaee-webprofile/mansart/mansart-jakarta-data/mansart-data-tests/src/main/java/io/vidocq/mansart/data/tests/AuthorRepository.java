@@ -182,4 +182,32 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     AuthorView jdqlAuthorViewById(long id);
 
     record AuthorView(Long id, String name) {}
+
+    /* ---- mansart#41 ---- */
+
+    /** {@code @Param} names the query parameter, whatever the Java parameter is called. */
+    @jakarta.data.repository.Query("FROM Author WHERE name = :who")
+    java.util.List<Author> jdqlByParamName(@jakarta.data.repository.Param("who") String someName);
+
+    /** JDQL may leave {@code FROM} out when the repository has a primary entity. */
+    @jakarta.data.repository.Query("WHERE name LIKE ?1 ORDER BY name ASC")
+    java.util.List<Author> jdqlWithoutFrom(String pattern);
+
+    /** {@code @Find}: a parameter matches the attribute {@code @By} names. */
+    @jakarta.data.repository.Find
+    java.util.List<Author> findNamed(@jakarta.data.repository.By("name") String wanted);
+
+    /** {@code @Find}: without {@code @By}, the parameter's own name is the attribute. */
+    @jakarta.data.repository.Find
+    java.util.Optional<Author> lookup(String name);
+
+    /** {@code @Find} without parameters: every entity, in the {@code @OrderBy} order. */
+    @jakarta.data.repository.Find
+    @jakarta.data.repository.OrderBy(value = "name", descending = true)
+    java.util.List<Author> everyoneByNameDescending();
+
+    /** {@code @Find} with a trailing {@code PageRequest}: one page, in the {@code @OrderBy} order. */
+    @jakarta.data.repository.Find
+    @jakarta.data.repository.OrderBy("name")
+    jakarta.data.page.Page<Author> everyonePaged(jakarta.data.page.PageRequest page);
 }

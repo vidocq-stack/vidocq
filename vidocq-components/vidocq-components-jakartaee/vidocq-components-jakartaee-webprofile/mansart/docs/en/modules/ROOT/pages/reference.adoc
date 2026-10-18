@@ -98,10 +98,10 @@ The storage applies wherever Mansart knows which attribute a value belongs to: i
 | On the interface — triggers APT generation.
 
 | `@Find`
-| Finder method by typed parameters (Java parameter = entity attribute).
+| Finder method by typed parameters: each one matches the attribute `@By` names, else the attribute of its name. Compiled by the APT, with `@OrderBy` and a trailing `PageRequest`.
 
 | `@Query("...")`
-| JDQL — SELECT/UPDATE/DELETE with named parameters (`:name`).
+| JDQL — SELECT/UPDATE/DELETE with named parameters (`:name`, named by `@Param` or by the Java parameter) or positional ones (`?1`); `FROM` may be left out.
 
 | `@Insert`, `@Update`, `@Delete`, `@Save`
 | Lifecycle annotations — parameter = entity, collection or varargs; return `void`/`T`/`Iterable<T>`/`int`/`long`/`boolean`.

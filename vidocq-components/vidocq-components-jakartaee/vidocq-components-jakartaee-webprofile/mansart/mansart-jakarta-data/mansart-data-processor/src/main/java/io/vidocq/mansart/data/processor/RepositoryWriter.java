@@ -275,7 +275,8 @@ final class RepositoryWriter {
             // unresolved derived query (typo, unsupported keyword) is seen now, not on first invocation.
             if (messager != null) {
                 messager.printMessage(Diagnostic.Kind.WARNING,
-                        "Mansart could not derive a query for '" + name
+                        "Mansart could not derive a query for '"
+                                + ((TypeElement) m.getEnclosingElement()).getQualifiedName() + "." + name
                                 + "'; the generated method will throw UnsupportedOperationException at runtime."
                                 + " Check the method name and attribute spelling.", m);
             }
@@ -292,6 +293,9 @@ final class RepositoryWriter {
     private String jdqlBody(ExecutableElement m, TypeMirror returnType, String metamodel,
                             java.util.Set<String> attributeNames, List<? extends TypeMirror> paramTypes) {
         String jdql = readQueryAnnotation(m);
+        // The built-in repositories' @Find methods (findById, findAll…) have their own bodies (bodyFor).
+        boolean builtIn = ((TypeElement) m.getEnclosingElement()).getQualifiedName().toString().startsWith("jakarta.data.");
+        if (jdql == null && !builtIn && hasAnnotation(m, "jakarta.data.repository.Find")) jdql = findQuery(m, paramTypes);
         if (jdql == null) return null;
 
         TypeElement entityType = entityForRepo(m);
@@ -305,9 +309,83 @@ final class RepositoryWriter {
             return JdqlParser.generateBody(jdql, m, metamodel, entitySimple, attributeNames,
                     returnType, trailingPageRequest, cursoredPage);
         } catch (JdqlParser.ParseException e) {
-            throw new IllegalStateException("@Query parse error on " + m.getSimpleName()
+            throw new IllegalStateException((readQueryAnnotation(m) == null ? "@Find" : "@Query")
+                    + " parse error on " + m.getSimpleName()
                     + ": " + e.getMessage() + " — JDQL: " + jdql, e);
         }
+    }
+
+    /**
+     * The JDQL a {@code @Find} method stands for (mansart#41): each parameter equals the attribute its {@code @By}
+     * names, else the attribute of its own name, all of them combined with {@code AND}; a trailing
+     * {@code PageRequest} is left to the paging path; {@code @OrderBy} gives the {@code ORDER BY}. {@code null}, with
+     * a warning, for a {@code Sort}, {@code Order} or {@code Limit} parameter, not supported yet.
+     */
+    private String findQuery(ExecutableElement m, List<? extends TypeMirror> paramTypes) {
+        var where = new StringBuilder();
+        var params = m.getParameters();
+        for (int i = 0; i < params.size(); i++) {
+            String type = paramTypes.get(i).toString().replaceAll("<.*", "");
+            if (i == params.size() - 1 && isPageRequest(paramTypes.get(i))) continue;
+            if (type.equals("jakarta.data.Sort") || type.equals("jakarta.data.Order") || type.equals("jakarta.data.Limit")
+                    || type.equals("jakarta.data.Sort[]")) {
+                if (messager != null) {
+                    messager.printMessage(Diagnostic.Kind.WARNING, "Mansart does not support a " + type
+                            + " parameter on a @Find method yet ("
+                            + ((TypeElement) m.getEnclosingElement()).getQualifiedName() + "." + m.getSimpleName()
+                            + "); use @OrderBy, or @Query with ORDER BY.", m);
+                }
+                return null;
+            }
+            String attribute = annotationValue(params.get(i), "jakarta.data.repository.By");
+            if (attribute == null) attribute = params.get(i).getSimpleName().toString();
+            if (!where.isEmpty()) where.append(" AND ");
+            where.append(attribute).append(" = ?").append(i + 1);
+        }
+        var orderBy = new StringBuilder();
+        for (var a : m.getAnnotationMirrors()) {
+            String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
+            if (fqn.equals("jakarta.data.repository.OrderBy")) {
+                appendOrder(orderBy, a);
+            } else if (fqn.equals("jakarta.data.repository.OrderBy.List")) {
+                for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
+                    if (!entry.getKey().getSimpleName().contentEquals("value")) continue;
+                    for (Object item : (List<?>) entry.getValue().getValue()) {
+                        appendOrder(orderBy, (javax.lang.model.element.AnnotationMirror)
+                                ((javax.lang.model.element.AnnotationValue) item).getValue());
+                    }
+                }
+            }
+        }
+        var jdql = new StringBuilder();
+        if (!where.isEmpty()) jdql.append("WHERE ").append(where);
+        if (!orderBy.isEmpty()) jdql.append(jdql.isEmpty() ? "" : " ").append("ORDER BY ").append(orderBy);
+        return jdql.toString();
+    }
+
+    private void appendOrder(StringBuilder orderBy, javax.lang.model.element.AnnotationMirror a) {
+        String attribute = null;
+        boolean descending = false;
+        for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
+            String key = entry.getKey().getSimpleName().toString();
+            if (key.equals("value")) attribute = String.valueOf(entry.getValue().getValue());
+            if (key.equals("descending")) descending = Boolean.TRUE.equals(entry.getValue().getValue());
+        }
+        if (attribute == null) return;
+        if (!orderBy.isEmpty()) orderBy.append(", ");
+        orderBy.append(attribute).append(descending ? " DESC" : " ASC");
+    }
+
+    /** The {@code value} of {@code element}'s annotation {@code annotationFqn}, or {@code null} without one. */
+    private String annotationValue(javax.lang.model.element.Element element, String annotationFqn) {
+        for (var a : element.getAnnotationMirrors()) {
+            String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
+            if (!fqn.equals(annotationFqn)) continue;
+            for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
+                if (entry.getKey().getSimpleName().contentEquals("value")) return String.valueOf(entry.getValue().getValue());
+            }
+        }
+        return null;
     }
 
     private String readQueryAnnotation(ExecutableElement m) {
