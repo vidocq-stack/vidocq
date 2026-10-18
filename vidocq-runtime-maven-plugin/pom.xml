@@ -99,6 +99,10 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- Build tooling: vidocq:generate compiles the application's JSP pages with Ibarra (vidocq#232). -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId><artifactId>ibarra-compiler</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId><scope>test</scope>
         </dependency>

@@ -145,6 +145,15 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
     }
 
+    /** The files of the project's resolved dependencies, the module path the JSP pages compile against. */
+    private List<Path> artifactFiles() {
+        var files = new ArrayList<Path>();
+        for (var artifact : project.getArtifacts()) {
+            if (artifact.getFile() != null && artifact.getFile().isFile()) files.add(artifact.getFile().toPath());
+        }
+        return files;
+    }
+
     private void generate() throws MojoExecutionException, MojoFailureException {
         getLog().info("Vidocq - Generating bean index and proxies for dependencies");
         // First, before Vauban parks its classes: the bricks' output of the last run goes, this run writes its own.
@@ -163,6 +172,9 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
 
         try {
+            // Ibarra first: it completes the module descriptor, which Peano then rewrites keeping its services.
+            int pages = IbarraPagePrecompilation.apply(classesDir, artifactFiles(), getLog()::warn);
+            if (pages > 0) getLog().info("JSP pages compiled by Ibarra: " + pages);
             int peanoProviders=PeanoAccessorRegistration.apply(classesDir);
             if (peanoProviders>0) getLog().info("Peano accessor providers registered: "+peanoProviders);
             // The bricks select first: a jar a brick selects is scanned by Vauban too, its components being CDI beans.
