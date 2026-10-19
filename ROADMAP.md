@@ -7,6 +7,50 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 > Product view: see [`README.md`](README.md). User documentation: `docs/`.
 
+## Release plan
+
+Decided on 2026-10-19. Each version has a milestone on
+[Vidocq/vidocq](https://codefloe.com/Vidocq/vidocq/milestones), which gathers its issues,
+those of the bricks included. Production readiness — performance, robustness, security —
+comes **before** the Web Profile work.
+
+| Version | Content | Estimate |
+|---|---|---|
+| **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano) | end of October 2026 |
+| **0.4.0** | MicroProfile 7.2 on the final artifacts; Persistence 3.2 (Antoine's project); security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a CycloneDX SBOM per release | end of November 2026 |
+| **0.5.0 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks and a performance regression gate in CI; threat model, internal audit, external security audit and its fixes | end of January 2027 |
+| **0.6.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0 | early April 2027 |
+| **0.7.0 — Web Profile, part 2** | CDI 4.1 Full, Enterprise Beans Lite 4.0 | July 2027 |
+| **0.8.0 — Web Profile, part 3** | Faces 4.1, written from scratch | October 2027 |
+| **1.0.0** | Jakarta EE Web Profile 11 certification, on a proven production baseline | end of 2027 |
+
+The 0.4.0 dates depend on two outside events: the MicroProfile 7.2 platform ballot and the
+first Persistence release. Gap analysis and per-spec status of the Web Profile:
+[`WEB-PROFILE.md`](WEB-PROFILE.md).
+
+### How the estimates are made
+
+Measured on the 31 workspace repositories on 2026-10-19: a release every eight weeks (0.2.0
+on 2026-07-04, 0.3.0 on 2026-08-30), and 13 merged work items a week over the last eight
+weeks, 21 over the last four (a floor: many commits cite no issue). Sizes: S about a week,
+M one to two weeks, L about three weeks, XL six to nine weeks; L and XL carry a 50 % margin,
+CDI Full and Faces having the most design risk. The dates are revisited at each release.
+
+### 0.5.0 — production readiness, in detail
+
+- **Robustness.** Fuzzing (Jazzer) of the parsers exposed to the network: HTTP/1.1, HTTP/2
+  frames and HPACK, TLS record handling, JSON (Champollion), multipart and `web.xml` (Foy),
+  JDQL (Mansart). Soak tests of 24 hours under load; chaos tests: slow and stalled clients,
+  dropped connections, resets mid-stream, exhausted pools. Today: two slowloris tests in
+  Chappe, nothing else.
+- **Performance.** End-to-end benchmarks of the assembled runtime (cold start, throughput
+  across extensions, memory footprint), compared with other runtimes, recorded in
+  `BENCH.md`; a CI job that fails on a regression beyond an agreed threshold. Today: per-brick
+  benchmarks only (`BENCH.md` of chappe, champollion, vauban, cassini, cervantes…).
+- **Security.** A threat model of the runtime and of each network-facing brick; an internal
+  audit against it; an external audit, scoped and time-boxed; every finding fixed or
+  documented. Today: signed releases and signed commits, no threat model, no scanning, no SBOM.
+
 ## Status of MicroProfile 7.2 specs (and Metrics, a standalone spec)
 
 | MicroProfile spec | Implementation | Vidocq extension | Status |
@@ -32,7 +76,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
-| Jakarta Persistence 3.2 (JPA) | [mansart-persistence](../mansart) | ❌ M7 Mansart pending |
+| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0; the TCK runs, the first release is pending |
 
 ## Jakarta EE Core Profile 11 certification
 
@@ -51,9 +95,9 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 | Public results summary page | ✅ live at [vidocq.dev/certification](https://vidocq.dev/certification/) (`Vidocq/pages` PR #11, merged 2026-08-31) |
 | Certification issue on `jakartaee/platform` | ✅ **filed** — [`jakartaee/platform#1351`](https://github.com/jakartaee/platform/issues/1351) (2026-08-31); labeled `accepted` and closed on 2026-09-09 |
 
-## Jakarta EE Web Profile 11 (planning)
+## Jakarta EE Web Profile 11
 
-Beyond Core Profile 11, going toward **Jakarta EE Web Profile 11** is being planned.
+Planned across 0.6.0, 0.7.0 and 0.8.0, certification for 1.0.0 (see the release plan above).
 Gap analysis, per-spec status, and tracking issues: [`WEB-PROFILE.md`](WEB-PROFILE.md)
 (umbrella issue [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67)). The pivotal
 gap is CDI 4.1 **Full** (Vauban implements Lite only), whose Portable Extensions
@@ -107,7 +151,8 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
       re-run, public results page, and `jakartaee/platform#1351` filed
       (2026-08-31), accepted and closed on 2026-09-09.
 - [ ] End-to-end JMH benchmarks (cold start, cross-extension throughput, memory
-      footprint vs Quarkus/Helidon). No perf number in docs without a `BENCH.md` entry.
+      footprint vs Quarkus/Helidon): planned for 0.5.0, see the release plan.
+      No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any
       extension. Incremental validation (Chappe + Cassini first).
 - [ ] **Cross-brick codegen rationalisation study** (tracked in #70) — the ecosystem carries 9
