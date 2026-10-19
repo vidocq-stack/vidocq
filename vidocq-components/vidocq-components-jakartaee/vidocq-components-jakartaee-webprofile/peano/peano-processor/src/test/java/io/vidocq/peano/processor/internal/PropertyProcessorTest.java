@@ -99,6 +99,46 @@ class PropertyProcessorTest {
         assertTrue(module.exports().isEmpty() && module.opens().isEmpty());
     }
 
+    private static final String SERVICES = "META-INF/services/io.vidocq.peano.spi.AccessorProvider";
+
+    /**
+     * The providers are also listed in META-INF/services: a container that promotes the services files of an
+     * application module to provides directives (Vauban's application layer) finds them without vidocq:generate,
+     * as an IDE build leaves them (Vidocq/vidocq#241).
+     */
+    @Test
+    void listsEveryProviderInTheServicesFile() throws Exception {
+        Path sources = sources("package demo; public class Model { public int getValue(){ return 7; } }");
+        Files.writeString(sources.resolve("Other.java"), "package demo; public class Other { public String getName(){ return \"x\"; } }");
+        var compilation = compile(sources, "-Apeano.accessorTypes=demo.Model,demo.Other");
+        assertEquals(0, compilation.status(), compilation.log());
+        assertEquals(List.of("demo.Model__PeanoAccessors", "demo.Other__PeanoAccessors"),
+                Files.readAllLines(compilation.classes().resolve(SERVICES)).stream().filter(l -> !l.isBlank()).sorted().toList());
+    }
+
+    /**
+     * An incremental build compiles some sources only: the providers of the others, whose classes are still in the
+     * output, stay listed; a provider whose class is gone is dropped, so ServiceLoader never meets a missing class.
+     */
+    @Test
+    void anIncrementalBuildKeepsTheProvidersStillCompiledAndDropsTheMissingOnes() throws Exception {
+        Path sources = sources("package demo; public class Model { public int getValue(){ return 7; } }");
+        Files.writeString(sources.resolve("Other.java"), "package demo; public class Other { public String getName(){ return \"x\"; } }");
+        assertEquals(0, compile(sources, "-Apeano.accessorTypes=demo.Model,demo.Other").status());
+
+        Files.delete(sources.resolve("Other.java"));
+        var partial = compile(sources, "-Apeano.accessorTypes=demo.Model");
+        assertEquals(0, partial.status(), partial.log());
+        assertEquals(List.of("demo.Model__PeanoAccessors", "demo.Other__PeanoAccessors"),
+                Files.readAllLines(partial.classes().resolve(SERVICES)).stream().filter(l -> !l.isBlank()).sorted().toList());
+
+        Files.delete(partial.classes().resolve("demo/Other__PeanoAccessors.class"));
+        var pruned = compile(sources, "-Apeano.accessorTypes=demo.Model");
+        assertEquals(0, pruned.status(), pruned.log());
+        assertEquals(List.of("demo.Model__PeanoAccessors"),
+                Files.readAllLines(pruned.classes().resolve(SERVICES)).stream().filter(l -> !l.isBlank()).sorted().toList());
+    }
+
     @Test
     void discoversExplicitTypesEvenWithoutAnyAnnotations() throws Exception {
         Path sources = sources("package demo; public class Model { public int getValue(){ return 7; } }");

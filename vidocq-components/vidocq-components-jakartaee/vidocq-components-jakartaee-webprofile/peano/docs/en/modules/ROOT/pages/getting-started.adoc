@@ -266,6 +266,10 @@ To select unannotated owned types, pass
 Names produced by another annotation processor can resolve in later processing rounds.
 Each generated provider has a matching registration fragment under
 META-INF/peano/accessor-providers in the class output directory.
+[.tag-new]#NEW# The providers are also listed in `META-INF/services/io.vidocq.peano.spi.AccessorProvider`,
+so a container that turns an application module's services files into `provides` directives, such as
+the Vidocq application layer, or the class path, finds them when no build step merged the fragments
+(an IDE build). An incremental build keeps the providers whose class is still in the output.
 The processor itself is needed only at compilation.
 
 Public getters/setters, primitive boolean is-getter precedence, acronym properties,
