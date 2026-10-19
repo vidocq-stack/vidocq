@@ -11,7 +11,8 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 Decided on 2026-10-19. Each version has a milestone on
 [Vidocq/vidocq](https://codefloe.com/Vidocq/vidocq/milestones), which gathers its issues,
-those of the bricks included. Production readiness — performance, robustness, security —
+those of the bricks included; the board of all of them is the
+[ROADMAP 1.0 project](https://codefloe.com/Vidocq/-/projects/890). Production readiness — performance, robustness, security —
 comes **before** the Web Profile work.
 
 | Version | Content | Estimate |
