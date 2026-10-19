@@ -40,10 +40,12 @@ CDI Full and Faces having the most design risk. The dates are revisited at each 
 ### CDI 4.1 Full
 
 Decided on 2026-10-19: Vauban implements **CDI 4.1 Full**, the version Jakarta EE Web Profile 11
-requires; **no move to CDI 5 for now** (CDI 5 belongs to Jakarta EE 12). The Full work follows
-the stages of the Vauban study [`2026-10-19-cdi-5-full-migration-study.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-5-full-migration-study.md)
-([vauban#171](https://codefloe.com/Vidocq/vauban/pulls/171)), which hold for 4.1 as well: one shared
-engine with an optional `vauban-full` module. Its CDI 5 Lite stages are left for later.
+requires; **no move to CDI 5 for now** (CDI 5 belongs to Jakarta EE 12, and its API is not a
+superset of 4.1's). Study: [`vauban/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md)
+([vauban#172](https://codefloe.com/Vidocq/vauban/pulls/172)): one shared engine with an optional
+`vauban-full` module, portable extensions in an opt-in module generating at run time with the
+Class-File API. The CDI 5 study ([vauban#171](https://codefloe.com/Vidocq/vauban/pulls/171)) stays
+for later.
 
 | Stage | Content | Engineer-days | Version |
 |---|---|---|---|
