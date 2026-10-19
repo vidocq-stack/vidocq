@@ -20,13 +20,13 @@ comes **before** the Web Profile work.
 | **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano) | end of October 2026 |
 | **0.4.0** | MicroProfile 7.2 on the final artifacts; Persistence 3.2 (Antoine's project); security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a CycloneDX SBOM per release | end of November 2026 |
 | **0.5.0 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks and a performance regression gate in CI; threat model, internal audit, external security audit and its fixes | end of January 2027 |
-| **0.6.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0; **CDI 5.0 Lite** (Vauban) | April 2027 |
-| **0.7.0 — Web Profile, part 2** | **CDI 5.0 Full**, Enterprise Beans Lite | October 2027 |
-| **0.8.0 — Web Profile, part 3** | Faces, written from scratch | January 2028 |
-| **1.0.0** | Jakarta EE Web Profile certification, on a proven production baseline (target version: see the open decision below) | spring 2028 |
+| **0.6.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | April 2027 |
+| **0.7.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | October 2027 |
+| **0.8.0 — Web Profile, part 3** | Faces 4.1, written from scratch | January 2028 |
+| **1.0.0** | Jakarta EE Web Profile 11 certification, on a proven production baseline | spring 2028 |
 
 The 0.4.0 dates depend on two outside events: the MicroProfile 7.2 platform ballot and the
-first Persistence release. From 0.6.0 on, the dates follow the CDI 5 migration study (below). Gap analysis and per-spec status of the Web Profile:
+first Persistence release. From 0.6.0 on, the dates follow the CDI Full estimates of the Vauban study (below). Gap analysis and per-spec status of the Web Profile:
 [`WEB-PROFILE.md`](WEB-PROFILE.md).
 
 ### How the estimates are made
@@ -37,32 +37,25 @@ weeks, 21 over the last four (a floor: many commits cite no issue). Sizes: S abo
 M one to two weeks, L about three weeks, XL six to nine weeks; L and XL carry a 50 % margin,
 CDI Full and Faces having the most design risk. The dates are revisited at each release.
 
-### CDI 5: Lite, then Full
+### CDI 4.1 Full
 
-Decided on 2026-10-19: Vauban goes to **CDI 5.0** and implements **Full** there, rather than
-CDI 4.1 Full. Study: [`vauban/docs/superpowers/plans/2026-10-19-cdi-5-full-migration-study.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-5-full-migration-study.md)
-([vauban#171](https://codefloe.com/Vidocq/vauban/pulls/171)). Route: 4.1 Lite → 5.0 Lite → 5.0 Full,
-one shared engine with an optional `vauban-full` module.
+Decided on 2026-10-19: Vauban implements **CDI 4.1 Full**, the version Jakarta EE Web Profile 11
+requires; **no move to CDI 5 for now** (CDI 5 belongs to Jakarta EE 12). The Full work follows
+the stages of the Vauban study [`2026-10-19-cdi-5-full-migration-study.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-5-full-migration-study.md)
+([vauban#171](https://codefloe.com/Vidocq/vauban/pulls/171)), which hold for 4.1 as well: one shared
+engine with an optional `vauban-full` module. Its CDI 5 Lite stages are left for later.
 
 | Stage | Content | Engineer-days | Version |
 |---|---|---|---|
-| L0–L1 | 4.1 baseline pinned; new coordinates (`jakarta.cdi:*`); CDI 5 failure map | 4–7 | 0.6.0 |
-| L2–L4 | `@Reserve`, `@Eager`, `@AutoClose`; `SyntheticInjections`, parameterized and programmatic BCE registration; asynchronous invokers, global application scope | 13–22 | 0.6.0 |
-| L5–L6 | Lite, language model, SE and AtInject TCKs blocking in CI; downstream bricks, packaging, performance compared with 4.1 | 8–15 | 0.6.0 |
-| F0–F1 | Full runner and failure map; deployment and archive model, effective metadata, invalidation of generated code | 11–17 | 0.7.0 |
-| F2 | Portable extensions, `BeanManager` creation SPI | 18–30 | 0.7.0 |
+| F0–F1 | Full runner on the CDI 4.1 Full TCK and failure map; deployment and archive model, effective metadata, invalidation of generated code | 11–17 | 0.6.0 |
+| F2 | Portable extensions ([vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)), `BeanManager` creation SPI | 18–30 | 0.7.0 |
 | F3–F5 | XML and programmatic enablement, specialization, `InterceptionFactory`; decorators; passivation | 26–50 | 0.7.0 |
-| F6 | Cross-feature TCK failures, conformance evidence | 10–20 | 0.7.0 |
+| F6 | Cross-feature TCK failures, conformance evidence (CDI 4.1 Full TCK and signature test) | 10–20 | 0.7.0 |
 | Web/EE | Sessions, conversations, EL and transactions integration, over Foy and Mansart | 15–35 | 0.7.0 |
 
-Total: 25–45 engineer-days for Lite 5, 65–120 more for Full, 15–35 for the web and EE
-integration. The estimates are re-made after L0/L1 and after F0/F1, as the study asks.
-
-**Open decision — the certification target.** Jakarta EE Web Profile 11 requires CDI **4.1**
-Full; CDI 5.0 belongs to Jakarta EE 12. Either 1.0.0 certifies against the Web Profile of
-Jakarta EE 12 (and its other component versions: Faces, Servlet, Pages… to check against the
-EE 12 specification), or a CDI 4.1 Full line is kept for a Web Profile 11 certification. To
-decide before 0.7.0.
+Total: 65–120 engineer-days for Full, 15–35 for the web and EE integration; re-estimated after
+F0/F1, as the study asks. Keeping the engine independent of the CDI API version leaves the
+door open to CDI 5 later, with the Jakarta EE 12 Web Profile.
 
 ### 0.5.0 — production readiness, in detail
 
