@@ -159,9 +159,12 @@ therefore in neither the pull-request list nor the nightly job, like `vidocq-run
 ./mvnw -ntp -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-foy-servlet test
 ```
 
-**Result (2026-10-18, Foy main `826672b`, 14 min 21 s):** 1714 run, **1699 passing**, 8 errors, 7 skipped
-(api 855/859, spec 196/207, pluggability 646/646, compat 2/2). `Aordering4Tests` passes since vidocq#228
-(BUG-20261018-01); no other class changed. The 2026-10-11 run, on Foy `8b0b81d`, was 1698; the first measure, on
+**Result (2026-10-19, Foy main `826672b`, Ibarra `6b68c8e`, 14 min 23 s):** 1714 run, **1704 passing**, 3 errors,
+7 skipped (api 858/859, spec 198/207, pluggability 646/646, compat 2/2). The TCK's JSP pages now run:
+`vidocq-runtime-arquillian` compiles a war's pages with Ibarra at deployment (`WarJspPages`) when the runner puts
+`ibarra-compiler` and `ibarra-foy` on its class path, and hands the runtime their layer (`DeploymentApplicationLayer`),
+where Foy finds the engine. `ServletContext40Tests` (3 → 0) and `SecFormTests` (2 → 0) improved; no other class
+changed. The 2026-10-18 run was 1699: `Aordering4Tests` passes since vidocq#228 (BUG-20261018-01). The 2026-10-11 run, on Foy `8b0b81d`, was 1698; the first measure, on
 Foy `ee6c899`, 1694: Foy's effective-version fix (foy#33) brought the four `getEffectiveMajor/MinorVersion` tests back.
 
 `foy-tck` on Foy `826672b`: 1714 run, 1707 passing, 0 errors, 7 skipped (it runs the TCK's JSP pages with
@@ -169,7 +172,7 @@ Ibarra since foy#52). Every difference is explained:
 
 | Tests | Cause | Follow-up |
 |-------|-------|-----------|
-| `ServletContext40Tests` JSP ×3, `SecFormTests` `test2`/`test2_anno` | the runtime has no JSP engine yet; `foy-tck` passes them with Ibarra | Vidocq/vidocq#232 (Ibarra extension) |
+| ~~`ServletContext40Tests` JSP ×3, `SecFormTests` `test2`/`test2_anno`~~ | the runtime had no JSP engine | fixed: the Ibarra extension (vidocq#232) and the harness compiling each war's pages at deployment; pass |
 | `ClientCertTests`, `ClientCertAnnoTests` | the embedded container has no `https` container; `foy-tck` passes them with a TLS one | harness |
 | ~~`ServletContext30Tests` `getEffectiveMajorVersion`/`MinorVersion` ×4~~ | Foy: `FoyChappeBoot` never applied the `web.xml` version; only foy-tck's harness set it | fixed in Foy (foy#33, `8b0b81d`): pass |
 | `HttpSessionxTests.expireHttpSessionxTest` | the test drives two WARs on one server; the container boots one runtime per WAR, each on its own port | harness limit |

@@ -65,6 +65,8 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
 
     private VidocqContainerConfig config;
     private final Map<Archive<?>, DeploymentState> deployments = new LinkedHashMap<>();
+    /** Where the JSP pages of each deployment were compiled, removed at undeploy. */
+    private final Map<Archive<?>, java.nio.file.Path> pagesWork = new LinkedHashMap<>();
 
     /**
      * Everything created for one deployment, so deployments stay isolated and
@@ -155,6 +157,15 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // breaks profile resolution (%dev. keys).
             Thread.currentThread().setContextClassLoader(materialized.classLoader());
 
+            // The war's JSP pages, compiled by Ibarra when a runner puts its compiler on the class path: the
+            // runtime finds Ibarra's engine and the pages in the layer DeploymentApplicationLayer gives it.
+            if (WarJspPages.available()) {
+                java.nio.file.Path work = java.nio.file.Files.createTempDirectory("vidocq-tck-jsp-");
+                pagesWork.put(archive, work);
+                WarJspPages.compile(materialized.root(), materialized.classLoader(), work)
+                        .ifPresent(DeploymentApplicationLayer::set);
+            }
+
             // Boot Vidocq with extracted classes. A free port is probed, then bound by the runtime
             // a little later: another process may take it in between ("Failed to bind"), which a
             // run of a few hundred boots meets. Such a boot is retried on another port.
@@ -201,6 +212,8 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             if (materialized != null) {
                 closeQuietly(materialized);
             }
+            DeploymentApplicationLayer.clear();
+            deleteQuietly(pagesWork.remove(archive));
             throw new DeploymentException("Failed to deploy Vidocq application", e);
         }
     }
@@ -219,6 +232,18 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             System.clearProperty("vidocq.chappe.listener.default.port");
             System.clearProperty(SERVLET_CONTEXT_PATH);
             closeQuietly(state.materialized());
+            DeploymentApplicationLayer.clear();
+            deleteQuietly(pagesWork.remove(archive));
+        }
+    }
+
+    /** Removes {@code root} and what is under it; nothing for {@code null}. */
+    private static void deleteQuietly(java.nio.file.Path root) {
+        if (root == null) return;
+        try (var files = java.nio.file.Files.walk(root)) {
+            files.sorted(java.util.Comparator.reverseOrder()).forEach(file -> file.toFile().delete());
+        } catch (IOException ignored) {
+            // A temporary directory left behind is harmless.
         }
     }
 

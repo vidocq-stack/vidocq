@@ -15,6 +15,12 @@
     <description>Arquillian embedded container adapter for Vidocq</description>
 
     <dependencies>
+        <!-- Optional: a runner that wants the JSP tests puts Ibarra's compiler on its class path (WarJspPages). -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-compiler</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- Vidocq -->
         <dependency>
             <groupId>io.vidocq.runtime</groupId>

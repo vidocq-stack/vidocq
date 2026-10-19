@@ -89,6 +89,18 @@
         </dependency>
 
         <!-- Test harness: the embedded Vidocq Arquillian container. -->
+        <!-- The TCK's JSP pages: Ibarra compiles them at deployment (vidocq-runtime-arquillian WarJspPages)
+             and Foy serves them through its JSP engine service. -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-compiler</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-foy</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-arquillian</artifactId>
