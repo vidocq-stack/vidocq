@@ -25,6 +25,10 @@ module io.vidocq.runtime.examples.servlet {
     requires io.vidocq.runtime.core;
     requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
+    // JSP pages: vidocq:generate compiles them into this module, which reads what they use.
+    requires io.vidocq.runtime.extensions.jakartaee.web.ibarra;
+    requires io.vidocq.ibarra.api;
+    requires io.vidocq.peano.api;
     // Read by the code the Servlet codegen bundle generates: the $$FoyComponent factories.
     requires io.vidocq.foy.api;
     requires io.vidocq.vauban.api;

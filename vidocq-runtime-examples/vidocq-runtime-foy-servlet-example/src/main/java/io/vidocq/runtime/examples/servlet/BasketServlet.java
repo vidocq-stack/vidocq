@@ -72,7 +72,8 @@ public class BasketServlet extends HttpServlet {
             body.append("<tr class=\"total\"><td>Total</td><td class=\"price\">")
                     .append(Html.euros(basket.totalCents())).append("</td><td></td></tr></table>")
                     .append("<form method=\"post\" action=\"").append(action).append("\">")
-                    .append("<input type=\"hidden\" name=\"order\" value=\"1\"><button>Send to the kitchen</button></form>");
+                    .append("<input type=\"hidden\" name=\"order\" value=\"1\"><button>Send to the kitchen</button></form>")
+                    .append("<p><a href=\"").append(req.getContextPath()).append("/receipt\">See the receipt</a> (a JSP page)</p>");
         }
         Html.page(req, resp, "Basket", basket, ticket, body.toString());
     }

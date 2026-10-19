@@ -30,6 +30,15 @@
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
         </dependency>
+        <!-- JSP pages: compiled by Ibarra inside vidocq:generate, served by Foy, expressions by Peano. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-peano-el-extension</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>jakarta.servlet</groupId>
@@ -57,6 +66,12 @@
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <!-- Peano's processor: the accessors of the @ELAccessible records. -->
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                            <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>

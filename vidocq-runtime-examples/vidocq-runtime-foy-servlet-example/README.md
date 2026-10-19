@@ -13,8 +13,16 @@ session scopes of `vauban-webcontexts`.
 | `TicketFilter` (`/*`) | A `@WebFilter` that injects the `@RequestScoped` `RequestTicket` the servlet sees too |
 | `SessionCounter` | A `@WebListener` (`HttpSessionListener`) with an injected `@ApplicationScoped` bean |
 | `Menu`, `Kitchen` | `@ApplicationScoped` services |
+| `ReceiptServlet` (`/receipt`) | A servlet that prepares the data and forwards to a JSP under `WEB-INF` (`WEB-INF/views/receipt.jsp`) |
+| `about.jsp` | A JSP the client requests directly, from `META-INF/resources` |
+| `Receipt`, `ReceiptLine` | `@ELAccessible` records: Peano generates their accessors, so `${line.dish}` needs no reflection |
+| `EachTag`, `BistroFunctions`, `WEB-INF/tlds/bistro.tld` | A custom tag (`<bistro:each>`) and two functions (`bistro:euros`, `bistro:escape`) |
 
-Every page is written by a servlet: no JSP, no static file. The `module-info.java` has no
+The JSP pages are compiled by **Ibarra** inside `vidocq:generate`, served by **Foy**, and their
+expressions are evaluated by **Peano**. `BistroPagesTest` runs them with `-Dpeano.reflection=deny`,
+so an expression that fell back to reflection would fail.
+
+The other pages are written by servlets. The `module-info.java` has no
 exports, no opens and no hand-written `provides`. `META-INF/web.xml` holds only the
 `login-config`: FORM login keeps the identity in the HTTP session, so it ends at *Sign out* or
 after `vidocq.servlet.session-timeout` (15 minutes) without a request.

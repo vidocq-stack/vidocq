@@ -54,7 +54,8 @@ final class Html {
                 + "<nav><span class=\"brand\">Vidocq Bistro</span>"
                 + "<a href=\"" + root + "/\">Menu</a>"
                 + "<a href=\"" + root + "/basket\">Basket (" + basket.count() + ")</a>"
-                + "<a href=\"" + root + "/kitchen\">Kitchen</a>" + account(req) + "</nav>"
+                + "<a href=\"" + root + "/kitchen\">Kitchen</a>"
+                + "<a href=\"" + root + "/about.jsp\">About</a>" + account(req) + "</nav>"
                 + body
                 + "<footer>Session " + escape(req.getSession().getId().substring(0, 8))
                 + " · request " + ticket.id() + " · " + ticket.elapsedMicros() + " µs"

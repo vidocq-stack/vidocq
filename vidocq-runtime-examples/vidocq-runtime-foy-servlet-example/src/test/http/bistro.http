@@ -25,6 +25,25 @@ GET http://localhost:8080/basket
     });
 %}
 
+### The receipt: a JSP page under WEB-INF, reached by a forward from ReceiptServlet
+GET http://localhost:8080/receipt
+
+> {%
+    client.test("the receipt lists the dish", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.indexOf("1 × Beef bourguignon") >= 0, "Line missing");
+    });
+%}
+
+### A JSP page the client requests directly, with a tag library function
+GET http://localhost:8080/about.jsp?from=IntelliJ
+
+> {%
+    client.test("the about page is rendered", function () {
+        client.assert(response.body.indexOf("Welcome, visitor from IntelliJ") >= 0, "Parameter missing");
+    });
+%}
+
 ### Send the order to the kitchen
 POST http://localhost:8080/basket
 Content-Type: application/x-www-form-urlencoded
