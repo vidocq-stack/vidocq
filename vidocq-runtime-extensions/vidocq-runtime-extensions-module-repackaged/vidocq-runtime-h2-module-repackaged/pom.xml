@@ -109,16 +109,27 @@
             </plugin>
 
             <!-- 2) Compile only our module-info.java, patched into the 'com.h2database' module
-                 (the unpacked .class files above supply every exported package). -->
+                 (the unpacked .class files above supply every exported package). It lives in
+                 src/main/module-info, which is not a Maven source root: IntelliJ's own build, which
+                 compiles the source roots without the unpacked H2 classes, has nothing to compile here,
+                 so a Rebuild Project no longer fails on 59 "package is empty" exports (vidocq#240). -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <compilerArgs combine.children="append">
-                        <arg>--patch-module</arg>
-                        <arg>com.h2database=${project.build.outputDirectory}</arg>
-                    </compilerArgs>
-                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/main/module-info</compileSourceRoot>
+                            </compileSourceRoots>
+                            <compilerArgs combine.children="append">
+                                <arg>--patch-module</arg>
+                                <arg>com.h2database=${project.build.outputDirectory}</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- 3) Central requires a sources and a javadoc entry for every jar artifact, but

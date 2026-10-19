@@ -5,6 +5,20 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261019-01 — IntelliJ's Rebuild Project fails on the H2 module and leaves the other modules empty
+
+- **Date**: 2026-10-19
+- **Status**: FIXED on `fix/240-h2-module-info-outside-sources` (vidocq#240), to be confirmed in IntelliJ
+- **Symptom**: *Build → Rebuild Project* in IntelliJ 2026.2 fails on `vidocq-runtime-h2-module-repackaged` with
+  59 "package is empty or does not exist: org.h2…" errors; the rebuild having cleaned every output first, the
+  other modules are left without classes.
+- **Minimal repro**: a Rebuild Project of the reactor in IntelliJ.
+- **Cause**: the module's `module-info.java` exports H2's packages, whose classes only the Maven build brings
+  (`maven-dependency-plugin` unpacks them at `generate-resources`). IntelliJ compiles the source root alone.
+- **Fix**: `module-info.java` moves to `src/main/module-info`, which is not a source root; the `default-compile`
+  execution names it in `compileSourceRoots`. IntelliJ has nothing to compile in the module; Maven builds the
+  same jar (`module-info.class` byte-identical, same entries).
+
 ## BUG-20261018-01 — the `@WebListener` of a web fragment an absolute ordering excludes is registered
 
 - **Date**: 2026-10-18
