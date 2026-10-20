@@ -18,7 +18,7 @@ comes **before** the Web Profile work.
 | Version | Content | Estimate |
 |---|---|---|
 | **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano) | end of October 2026 |
-| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, static analysis gates in every pull request, a self-hosted SonarQube Community Build as the quality dashboard of `main`, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release watched by a self-hosted Dependency-Track; Persistence 3.2 (Antoine's project) if its first release is out in time, else in 1.1.0 | end of November 2026 |
+| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Antoine's project) if its first release is out in time, else in 1.1.0 | end of November 2026 |
 | **1.0.0-RC1 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | mid-January 2027 |
 | **1.0.0** | The fixes of the release candidate. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of January 2027 |
 | **1.0.x** | The external security audit, executed in February 2027, and its fixes | February–March 2027 |
@@ -84,28 +84,41 @@ door open to CDI 5 later, with the Jakarta EE 12 Web Profile.
   documented. Today: signed releases and signed commits, no threat model, no scanning, no SBOM.
   The external audit is ordered in November 2026 for an execution in February 2027: a vendor
   books four to eight weeks ahead. Its results and fixes ship in 1.0.x.
-- **Code quality and static analysis.** Two layers, settled on 2026-10-20 (#269, #284). What
-  blocks a pull request runs from Maven on the diff, with no server: Error Prone and NullAway in
-  `javac`; SpotBugs with find-sec-bugs; OpenGrep (the LGPL fork of Semgrep, which keeps cross-file
-  taint analysis) with the OWASP and Java rules; PMD; OSV-Scanner on every dependency, build
-  tooling included; Trivy on the `jlink` and Docker images; ArchUnit for the ecosystem's own rules
-  (no reflection in the cores, zero dependency, layering, virtual threads; #289); japicmp for the
-  API compatibility the 1.x line promises (#288). Above them, **SonarQube Community Build** — the
-  free, self-hosted edition of SonarQube, from SonarSource (Switzerland) — is the dashboard: it
-  imports those reports and JaCoCo, keeps the trends per brick, and its quality gate on new code is
-  awaited by the build of `main`. The Community Build analyses `main` only; the pull-request gates
-  are the Maven tools, and the paid Developer Edition is not needed. Nightly: Infer/RacerD for data
-  races on Chappe and Foy, OWASP ZAP against the reference deployment. The released versions are
-  watched continuously by a self-hosted Dependency-Track fed with the CycloneDX SBOMs (#270). Set
-  aside: CodeQL (CI use allowed only for open source hosted on GitHub.com), Qlty (non-open-source
-  licence), Codacy and DeepSource (US SaaS). The existing code gets a cleanup campaign of its own
-  (#285), bugs and security hotspots first, in the order the threat model gives: the
-  network-facing bricks before the others.
+- **Code quality and static analysis.** One central tool, settled on 2026-10-20 (#269, #284):
+  **SonarQube Community Build** — the free, self-hosted edition of SonarQube, from SonarSource
+  (Switzerland) — extended with the open-source
+  [community branch plugin](https://github.com/mc1arke/sonarqube-community-branch-plugin), which
+  adds branch and pull-request analysis to the Community Build. Every pull request of every
+  repository is analysed and gets a quality gate on its own new code; the server imports JaCoCo,
+  keeps the trends per brick, and is what the developers see in the IDE (SonarQube for IDE in
+  connected mode). The plugin is not supported by SonarSource and its version must match the
+  SonarQube version, so the pair is pinned and upgraded together, a few months behind the newest
+  Community Build; should the plugin stop, the fallback is the plain Community Build analysing
+  `main` only, with the same pipeline. Beside it, only what the Community Build cannot do, run
+  from Maven: Error Prone and NullAway in `javac` (null-safety at compile time); OpenGrep (the LGPL
+  fork of Semgrep, which keeps cross-file taint analysis, a paid feature in SonarQube) with the
+  OWASP and Java rules; OSV-Scanner on every dependency, build tooling included, and again, on a
+  schedule, on the CycloneDX SBOMs of the released versions (#270), so a CVE published after a
+  release is caught between releases; Trivy on the `jlink` and Docker images; ArchUnit for the
+  ecosystem's own rules (no reflection in the cores, zero dependency, layering, virtual threads;
+  #289); japicmp for the API compatibility the 1.x line promises (#288). Nightly: Infer/RacerD for
+  data races on Chappe and Foy, OWASP ZAP against the reference deployment. **Nothing blocks a
+  pull request yet**: every analysis starts in report mode (decided 2026-10-20) while the rules
+  are calibrated and the existing findings cleaned up (#285, bugs and security hotspots first, in
+  the order the threat model gives: the network-facing bricks before the others); switching a
+  repository's gate to blocking is a separate decision, reviewed at the 0.4.0 release, with the
+  intention of blocking everywhere before 1.0.0-RC1. Set aside, to keep the tool count down:
+  SpotBugs, PMD and Qodana (covered by SonarQube's Java rules), Dependency-Track (OSV-Scanner over
+  the SBOMs does the job without a server), the paid Developer Edition, CodeQL (CI use allowed
+  only for open source hosted on GitHub.com), Qlty (non-open-source licence), Codacy and
+  DeepSource (US SaaS).
 - **Dashboards.** SonarQube for the code; for the trends of benchmarks, TCK runs and soak tests,
   Grafana over a PostgreSQL the CI feeds, which is also the baseline store the regression gate
-  needs. Both behind the OpenID Connect provider of Codefloe, which is active (checked on
-  2026-10-20: issuer `https://codefloe.com`, authorization-code flow). A dashboard built with
-  Vidocq itself is a showcase for after 1.0, not a prerequisite.
+  needs. Both on the project's own host, behind the OpenID Connect provider of Codefloe, which is
+  active (checked on 2026-10-20: issuer `https://codefloe.com`, authorization-code flow):
+  natively for Grafana, through an OpenID Connect proxy for SonarQube, whose Community Build
+  signs in with SAML, not OpenID Connect. A dashboard built with Vidocq itself is a showcase for
+  after 1.0, not a prerequisite.
 
 ## Status of MicroProfile 7.2 specs (and Metrics, a standalone spec)
 
