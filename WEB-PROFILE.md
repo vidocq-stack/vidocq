@@ -21,22 +21,22 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Server Pages | 4.0 | `ibarra` | ✅ official TCK 682/682, pages precompiled at build time; extension `vidocq-runtime-ibarra-pages-extension` | done |
 | Jakarta Expression Language | 6.0 | `peano` | ✅ official TCK 361/361 and signatures; extension `vidocq-runtime-peano-el-extension` | done |
 | Jakarta Data | 1.0 | `mansart-jakarta-data` | ✅ official TCK 73/73 + signature (SQL; NoSQL out of scope) | done |
-| Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | 🟡 minimal JTA, no XA recovery; smoke 5/5 + signatures, full suite in progress | 0.6.0 |
-| Jakarta Persistence (JPA) | 3.2 | Antoine's project, split out of Mansart | 🟡 TCK 2131/2135 on a locally patched 3.2.1 suite, not an official result; first release pending | 0.4.0 |
-| Jakarta Validation (Bean Validation) | 3.1 | `erasmus` | 🟡 21/22 built-in constraints; cascading, groups, executable validation, TCK and runtime extension to do — [#64](https://codefloe.com/Vidocq/vidocq/issues/64) | 0.6.0 |
-| Jakarta Concurrency | 3.1 | — | ❌ no implementation, a natural fit for virtual threads — [#72](https://codefloe.com/Vidocq/vidocq/issues/72) | 0.6.0 |
-| Jakarta WebSocket | 2.2 | Chappe (protocol only) | ❌ Chappe speaks RFC 6455; the annotated and programmatic API, encoders/decoders and Servlet integration are missing — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 0.6.0 |
-| Jakarta Security | 4.0 | — | ❌ Foy enforces Servlet security (BASIC, FORM, CLIENT-CERT) with its own `IdentityStore`, which is not Jakarta Security — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 0.6.0 |
-| Jakarta Authentication | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 0.6.0 |
-| Jakarta Authorization | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 0.6.0 |
-| Jakarta Standard Tag Library | 3.0 | — | ❌ no implementation; tag handlers over Ibarra and Peano — [#66](https://codefloe.com/Vidocq/vidocq/issues/66) | 0.6.0 |
-| Jakarta Debugging Support for Other Languages | 2.0 | `ibarra` | ❌ SMAP not checked yet — [#73](https://codefloe.com/Vidocq/vidocq/issues/73) | 0.6.0 |
-| Jakarta Contexts and Dependency Injection | 4.1 **Full** | Vauban | ❌ Vauban implements CDI **Lite** (TCK 774/774); Full 4.1 planned, groundwork in 0.6.0, Full in 0.7.0, following the [CDI 4.1 Full study](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md); no CDI 5 for now — [vauban#38](https://codefloe.com/Vidocq/vauban/issues/38) | 0.7.0 |
-| — Portable Extensions (part of CDI Full) | — | Vauban | ❌ isolated module, architecture decided — [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39) | 0.7.0 |
-| Jakarta Enterprise Beans Lite | 4.0 | — | ❌ no implementation; needs CDI Full and Transactions — [#71](https://codefloe.com/Vidocq/vidocq/issues/71) | 0.7.0 |
-| Jakarta Faces | 4.1 | — | ❌ no implementation; **written from scratch** (decision of 2026-10-19), needs CDI Full and EL — [#66](https://codefloe.com/Vidocq/vidocq/issues/66) | 0.8.0 |
+| Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | 🟡 minimal JTA, no XA recovery; smoke 5/5 + signatures, full suite in progress | 1.1.0 |
+| Jakarta Persistence (JPA) | 3.2 | Antoine's project, split out of Mansart | 🟡 TCK 2131/2135 on a locally patched 3.2.1 suite, not an official result; first release pending | 0.4.0, else 1.1.0 |
+| Jakarta Validation (Bean Validation) | 3.1 | `erasmus` | 🟡 21/22 built-in constraints; cascading, groups, executable validation, TCK and runtime extension to do — [#64](https://codefloe.com/Vidocq/vidocq/issues/64) | 1.1.0 |
+| Jakarta Concurrency | 3.1 | — | ❌ no implementation, a natural fit for virtual threads — [#72](https://codefloe.com/Vidocq/vidocq/issues/72) | 1.1.0 |
+| Jakarta WebSocket | 2.2 | Chappe (protocol only) | ❌ Chappe speaks RFC 6455; the annotated and programmatic API, encoders/decoders and Servlet integration are missing — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 1.1.0 |
+| Jakarta Security | 4.0 | — | ❌ Foy enforces Servlet security (BASIC, FORM, CLIENT-CERT) with its own `IdentityStore`, which is not Jakarta Security — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
+| Jakarta Authentication | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
+| Jakarta Authorization | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
+| Jakarta Standard Tag Library | 3.0 | — | ❌ no implementation; tag handlers over Ibarra and Peano — [#66](https://codefloe.com/Vidocq/vidocq/issues/66) | 1.1.0 |
+| Jakarta Debugging Support for Other Languages | 2.0 | `ibarra` | ❌ SMAP not checked yet — [#73](https://codefloe.com/Vidocq/vidocq/issues/73) | 1.1.0 |
+| Jakarta Contexts and Dependency Injection | 4.1 **Full** | Vauban | ❌ Vauban implements CDI **Lite** (TCK 774/774); Full 4.1 planned, groundwork in 1.1.0, Full in 1.2.0, following the [CDI 4.1 Full study](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md); no CDI 5 for now — [vauban#38](https://codefloe.com/Vidocq/vauban/issues/38) | 1.2.0 |
+| — Portable Extensions (part of CDI Full) | — | Vauban | ❌ isolated module, architecture decided — [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39) | 1.2.0 |
+| Jakarta Enterprise Beans Lite | 4.0 | — | ❌ no implementation; needs CDI Full and Transactions — [#71](https://codefloe.com/Vidocq/vidocq/issues/71) | 1.2.0 |
+| Jakarta Faces | 4.1 | — | ❌ no implementation; **written from scratch** (decision of 2026-10-19), needs CDI Full and EL — [#66](https://codefloe.com/Vidocq/vidocq/issues/66) | 1.3.0 |
 
-Certification against Web Profile 11 is planned for **1.0.0**. Versions and dates:
+Certification against Web Profile 11 is planned for **1.4.0**. Versions and dates:
 [`ROADMAP.md`](ROADMAP.md#release-plan).
 
 (Jakarta Annotations, DI, Interceptors, JSON-P, JSON-B, REST are already covered by
@@ -172,13 +172,13 @@ Updated on 2026-10-19.
 - **Delivered:** Servlet 6.1 (Foy), Server Pages 4.0 (Ibarra, precompiled at build time),
   Expression Language 6.0 (Peano), Data 1.0 (Mansart), each with its runtime extension and
   its official TCK passing.
-- **In progress:** Persistence 3.2 (Antoine's project, for 0.4.0), Validation 3.1 (Erasmus),
+- **In progress:** Persistence 3.2 (Antoine's project, for 0.4.0, else 1.1.0), Validation 3.1 (Erasmus),
   Transactions 2.0 beyond minimal JTA.
 - **Not started:** Concurrency, WebSocket API, Security / Authentication / Authorization,
-  Standard Tag Library, Debugging Support (0.6.0); CDI Full and Enterprise Beans Lite
-  (0.7.0); Faces, from scratch (0.8.0).
-- Production readiness (0.5.0: fuzzing, soak and chaos tests, end-to-end benchmarks,
+  Standard Tag Library, Debugging Support (1.1.0); CDI Full and Enterprise Beans Lite
+  (1.2.0); Faces, from scratch (1.3.0).
+- Production readiness (1.0.0: fuzzing, soak and chaos tests, end-to-end benchmarks,
   security audit) comes before the Web Profile work; see `ROADMAP.md`.
 - Kubernetes is the assumed deployment platform (§5); no Kubernetes-specific code exists yet.
 - This document will grow a certification section (TCK binaries, filing process, results)
-  in the same shape as `CERTIFICATION.md` for 1.0.0.
+  in the same shape as `CERTIFICATION.md` for 1.4.0.

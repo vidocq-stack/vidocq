@@ -18,15 +18,22 @@ comes **before** the Web Profile work.
 | Version | Content | Estimate |
 |---|---|---|
 | **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano) | end of October 2026 |
-| **0.4.0** | MicroProfile 7.2 on the final artifacts; Persistence 3.2 (Antoine's project); security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a CycloneDX SBOM per release | end of November 2026 |
-| **0.5.0 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks and a performance regression gate in CI; threat model, internal audit, external security audit and its fixes | end of January 2027 |
-| **0.6.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | April 2027 |
-| **0.7.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | October 2027 |
-| **0.8.0 — Web Profile, part 3** | Faces 4.1, written from scratch | January 2028 |
-| **1.0.0** | Jakarta EE Web Profile 11 certification, on a proven production baseline | spring 2028 |
+| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, static analysis gates in every pull request and a self-hosted SonarQube with a quality gate on new code, a CycloneDX SBOM per release; Persistence 3.2 (Antoine's project) if its first release is out in time, else in 1.1.0 | end of November 2026 |
+| **1.0.0-RC1 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | mid-January 2027 |
+| **1.0.0** | The fixes of the release candidate. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of January 2027 |
+| **1.0.x** | The external security audit, executed in February 2027, and its fixes | February–March 2027 |
+| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model); Persistence 3.2 if it missed 0.4.0 | April 2027 |
+| **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | October 2027 |
+| **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | January 2028 |
+| **1.4.0** | Jakarta EE Web Profile 11 certification | spring 2028 |
 
-The 0.4.0 dates depend on two outside events: the MicroProfile 7.2 platform ballot and the
-first Persistence release. From 0.6.0 on, the dates follow the CDI Full estimates of the Vauban study (below). Gap analysis and per-spec status of the Web Profile:
+**Why 1.0.0 in January.** A 1.0 is a promise of stability, not the end of the feature list. The
+Core Profile is certified and MicroProfile 7.2 delivered; what 1.0.0 adds is the proof that the
+runtime holds in production: robustness, performance and security, measured and published. The
+Web Profile then comes as 1.x releases, which add without breaking; a breaking change would make
+a 2.0. The 0.4.0 dates depend on two outside events: the MicroProfile 7.2 platform ballot and
+the first Persistence release. From 1.1.0 on, the dates follow the CDI Full estimates of the
+Vauban study (below). Gap analysis and per-spec status of the Web Profile:
 [`WEB-PROFILE.md`](WEB-PROFILE.md).
 
 ### How the estimates are made
@@ -35,7 +42,9 @@ Measured on the 31 workspace repositories on 2026-10-19: a release every eight w
 on 2026-07-04, 0.3.0 on 2026-08-30), and 13 merged work items a week over the last eight
 weeks, 21 over the last four (a floor: many commits cite no issue). Sizes: S about a week,
 M one to two weeks, L about three weeks, XL six to nine weeks; L and XL carry a 50 % margin,
-CDI Full and Faces having the most design risk. The dates are revisited at each release.
+CDI Full and Faces having the most design risk. The dates are revisited at each release. The 1.0.0
+dates are the tightest of the plan: eight to ten weeks of focused work, holidays included; they
+hold only with days dedicated to the campaign.
 
 ### CDI 4.1 Full
 
@@ -49,17 +58,17 @@ for later.
 
 | Stage | Content | Engineer-days | Version |
 |---|---|---|---|
-| F0–F1 | Full runner on the CDI 4.1 Full TCK and failure map; deployment and archive model, effective metadata, invalidation of generated code | 11–17 | 0.6.0 |
-| F2 | Portable extensions ([vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)), `BeanManager` creation SPI | 18–30 | 0.7.0 |
-| F3–F5 | XML and programmatic enablement, specialization, `InterceptionFactory`; decorators; passivation | 26–50 | 0.7.0 |
-| F6 | Cross-feature TCK failures, conformance evidence (CDI 4.1 Full TCK and signature test) | 10–20 | 0.7.0 |
-| Web/EE | Sessions, conversations, EL and transactions integration, over Foy and Mansart | 15–35 | 0.7.0 |
+| F0–F1 | Full runner on the CDI 4.1 Full TCK and failure map; deployment and archive model, effective metadata, invalidation of generated code | 11–17 | 1.1.0 |
+| F2 | Portable extensions ([vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)), `BeanManager` creation SPI | 18–30 | 1.2.0 |
+| F3–F5 | XML and programmatic enablement, specialization, `InterceptionFactory`; decorators; passivation | 26–50 | 1.2.0 |
+| F6 | Cross-feature TCK failures, conformance evidence (CDI 4.1 Full TCK and signature test) | 10–20 | 1.2.0 |
+| Web/EE | Sessions, conversations, EL and transactions integration, over Foy and Mansart | 15–35 | 1.2.0 |
 
 Total: 65–120 engineer-days for Full, 15–35 for the web and EE integration; re-estimated after
 F0/F1, as the study asks. Keeping the engine independent of the CDI API version leaves the
 door open to CDI 5 later, with the Jakarta EE 12 Web Profile.
 
-### 0.5.0 — production readiness, in detail
+### 1.0.0 — production readiness, in detail
 
 - **Robustness.** Fuzzing (Jazzer) of the parsers exposed to the network: HTTP/1.1, HTTP/2
   frames and HPACK, TLS record handling, JSON (Champollion), multipart and `web.xml` (Foy),
@@ -73,6 +82,20 @@ door open to CDI 5 later, with the Jakarta EE 12 Web Profile.
 - **Security.** A threat model of the runtime and of each network-facing brick; an internal
   audit against it; an external audit, scoped and time-boxed; every finding fixed or
   documented. Today: signed releases and signed commits, no threat model, no scanning, no SBOM.
+  The external audit is ordered in November 2026 for an execution in February 2027: a vendor
+  books four to eight weeks ahead. Its results and fixes ship in 1.0.x.
+- **Code quality and static analysis.** Two layers. In every pull request, through the shared
+  CI actions, tools that need no infrastructure and fail the build: Error Prone in `javac`,
+  SpotBugs with find-sec-bugs, Semgrep with the OWASP and Java rules, OSV-Scanner or OWASP
+  Dependency-Check on every dependency (build tooling included), Trivy on the `jlink` and Docker
+  images. Above them, a self-hosted SonarQube Community Build as the dashboard: it imports those
+  reports and JaCoCo, and its quality gate, set on **new code**, is awaited by the Maven build.
+  The existing code gets a cleanup campaign of its own, bugs and security hotspots first, in the
+  order the threat model gives: the network-facing bricks before the others.
+- **Dashboards.** SonarQube for the code; for the trends of benchmarks, TCK runs and soak tests,
+  Grafana over a PostgreSQL the CI feeds, which is also the baseline store the regression gate
+  needs. Both behind the OpenID Connect provider of Codefloe. A dashboard built with Vidocq
+  itself is a showcase for after 1.0, not a prerequisite.
 
 ## Status of MicroProfile 7.2 specs (and Metrics, a standalone spec)
 
@@ -99,7 +122,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
-| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0; the TCK runs, the first release is pending |
+| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0 if its first release is out in time, else 1.1.0; the TCK runs |
 
 ## Jakarta EE Core Profile 11 certification
 
@@ -120,7 +143,7 @@ detailed results: [`CERTIFICATION.md`](CERTIFICATION.md); running instructions:
 
 ## Jakarta EE Web Profile 11
 
-Planned across 0.6.0, 0.7.0 and 0.8.0, certification for 1.0.0 (see the release plan above).
+Planned across 1.1.0, 1.2.0 and 1.3.0, certification for 1.4.0 (see the release plan above).
 Gap analysis, per-spec status, and tracking issues: [`WEB-PROFILE.md`](WEB-PROFILE.md)
 (umbrella issue [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67)). The pivotal
 gap is CDI 4.1 **Full** (Vauban implements Lite only), whose Portable Extensions
@@ -174,7 +197,7 @@ vidocq-runtime-integration-tests/         Arquillian ITs + cross-extension (humb
       re-run, public results page, and `jakartaee/platform#1351` filed
       (2026-08-31), accepted and closed on 2026-09-09.
 - [ ] End-to-end JMH benchmarks (cold start, cross-extension throughput, memory
-      footprint vs Quarkus/Helidon): planned for 0.5.0, see the release plan.
+      footprint vs Quarkus/Helidon): planned for 1.0.0, see the release plan.
       No perf number in docs without a `BENCH.md` entry.
 - [ ] GraalVM native-image AOT: prerequisite = no runtime reflection in any
       extension. Incremental validation (Chappe + Cassini first).

@@ -1,6 +1,6 @@
 # Vidocq Runtime — Threat model
 
-> Status: **draft v0, 2026-10-19.** It is the input of the 0.5.0 security work: the internal
+> Status: **draft v0, 2026-10-19.** It is the input of the 1.0.0 security work: the internal
 > audit (#277) and the external audit (#278). Tracking issue: #276. It is reviewed and updated
 > at every release. Facts below cite the documentation or the bug files they come from; a
 > mitigation that is not verified in code says so.
