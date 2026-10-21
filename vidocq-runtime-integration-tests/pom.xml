@@ -27,6 +27,21 @@
         <gpg.skip>true</gpg.skip>
     </properties>
 
+    <!-- The Arquillian BOM is imported here, by the test vehicles that use it, and not by vidocq-runtime-parent:
+         through ShrinkWrap Resolver's BOM it imports Maven's own dependency management, which every application
+         inheriting vidocq-runtime-parent then received (commons-lang3 3.12.0, commons-io 2.11.0, guava 31.1-jre). -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <modules>
         <module>vidocq-runtime-arquillian</module>
         <module>vidocq-runtime-it-cassini-rest</module>

@@ -734,15 +734,6 @@
                 <type>pom</type>
             </dependency>
 
-            <!-- Arquillian BOM -->
-            <dependency>
-                <groupId>org.jboss.arquillian</groupId>
-                <artifactId>arquillian-bom</artifactId>
-                <version>${arquillian.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
             <!-- Testcontainers BOM — consumed only by DevService providers (vidocq-runtime-devservice-*),
                  which run in the Maven plugin JVM. Never reaches the runtime module-path / AOT image. -->
             <dependency>
