@@ -63,6 +63,8 @@ final class McpChecks {
      * The MCP methods with a parameter that has no name: not a framework type, no explicit name in its
      * {@code @ToolArg}, {@code @PromptArg} or {@code @ResourceTemplateArg}, and compiled without {@code -parameters}.
      * langchain4j-cdi advertises such a parameter as {@code arg0}, {@code arg1}, ... and never binds it.
+     * Synthetic methods are skipped: lambda bodies, bridges and a coverage agent's {@code $jacocoInit} are
+     * written by the compiler or a tool, never declared as MCP methods, and their parameters have no name.
      *
      * @param methods the tool, prompt and resource template methods
      * @return {@code SimpleClassName#method} of each offending method, sorted, each once
@@ -70,6 +72,9 @@ final class McpChecks {
     static List<String> unnamedParameters(Collection<Method> methods) {
         List<String> offending = new ArrayList<>();
         for (Method method : methods) {
+            if (method.isSynthetic()) {
+                continue;
+            }
             for (Parameter parameter : method.getParameters()) {
                 if (!McpFrameworkTypes.isFrameworkType(parameter.getType()) && !explicitlyNamed(parameter)
                         && !parameter.isNamePresent()) {

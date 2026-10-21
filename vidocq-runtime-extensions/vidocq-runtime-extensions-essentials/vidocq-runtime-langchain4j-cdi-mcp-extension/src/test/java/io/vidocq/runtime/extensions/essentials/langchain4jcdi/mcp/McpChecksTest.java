@@ -64,4 +64,15 @@ class McpChecksTest {
 
         assertEquals(List.of("Unnamed#echo", "Unnamed#greet"), McpChecks.unnamedParameters(methods));
     }
+
+    @Test
+    void methodsGeneratedByTheCompilerOrAnAgentAreNeverMcpMethods() {
+        // A lambda body becomes a synthetic method, and so does JaCoCo's $jacocoInit under the
+        // quality profile: neither is an MCP method, whatever its parameters.
+        List<java.lang.reflect.Method> methods = List.of(FixtureMcpBeans.WithLambda.class.getDeclaredMethods());
+        assertTrue(methods.stream().anyMatch(java.lang.reflect.Method::isSynthetic),
+                "the fixture must hold a synthetic method");
+
+        assertEquals(List.of(), McpChecks.unnamedParameters(methods));
+    }
 }

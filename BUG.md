@@ -5,6 +5,21 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261021-01 — the MCP check reports synthetic methods as methods with unnamed parameters
+
+- **Date**: 2026-10-21
+- **Status**: FIXED on `fix/mcp-checks-skip-synthetic` (found by the SonarQube rollout, Vidocq/vidocq#284)
+- **Symptom**: under the `quality` profile, whose JaCoCo agent the SonarQube analysis build runs,
+  `McpChecksTest.aParameterWithoutAnyNameIsReportedWithItsMethod` fails: `expected: <[Unnamed#echo, Unnamed#greet]>
+  but was: <[Unnamed#$jacocoInit, Unnamed#echo, Unnamed#greet]>`.
+- **Minimal repro**: `McpChecks.unnamedParameters` on the declared methods of a tool class whose body holds a
+  lambda: the lambda becomes a synthetic method whose parameter has no name, reported as `WithLambda#lambda$shout$0`.
+- **Cause**: `unnamedParameters` inspected every method it was given, synthetic ones included. Lambda bodies,
+  bridges and JaCoCo's `$jacocoInit` (a condy bootstrap taking a `Lookup`, a `String` and a `Class`) are synthetic
+  and their parameters have no name. In production the methods come from langchain4j-cdi's registries, so only
+  the tests, which pass every declared method of a fixture, fed it synthetic methods.
+- **Fix**: synthetic methods are skipped; test `methodsGeneratedByTheCompilerOrAnAgentAreNeverMcpMethods`.
+
 ## BUG-20261019-01 — IntelliJ's Rebuild Project fails on the H2 module and leaves the other modules empty
 
 - **Date**: 2026-10-19

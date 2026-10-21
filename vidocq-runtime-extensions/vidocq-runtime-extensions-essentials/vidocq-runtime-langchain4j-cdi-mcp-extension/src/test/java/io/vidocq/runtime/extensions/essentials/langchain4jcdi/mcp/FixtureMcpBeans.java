@@ -28,6 +28,9 @@ import org.mcpjava.server.resources.ResourceTemplateArg;
 import org.mcpjava.server.tools.Tool;
 import org.mcpjava.server.tools.ToolArg;
 
+import java.util.Locale;
+import java.util.function.UnaryOperator;
+
 /**
  * MCP methods to fill the registries of a test. This module compiles without {@code -parameters}, so a parameter
  * without an explicit name here has no name at run time.
@@ -76,6 +79,19 @@ final class FixtureMcpBeans {
         @Prompt(name = "greet", description = "Greets.")
         public String greet(@PromptArg(description = "who") String who) {
             return who;
+        }
+    }
+
+    /**
+     * A tool with a named argument whose body holds a lambda: the compiler turns the lambda into a
+     * synthetic method, whose parameter has no name.
+     */
+    static final class WithLambda {
+
+        @Tool(name = "shout", description = "Shouts.")
+        public String shout(@ToolArg(name = "text") String text) {
+            UnaryOperator<String> upper = value -> value.toUpperCase(Locale.ROOT);
+            return upper.apply(text);
         }
     }
 }
