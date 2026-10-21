@@ -24,6 +24,8 @@
         <maven.javadoc.skip>true</maven.javadoc.skip>
         <maven.source.skip>true</maven.source.skip>
         <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: test vehicle, its main code only exists for its own tests (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
     </properties>
 
     <dependencies>
@@ -98,7 +100,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                     <argLine>
+                        @{argLine}
                         --add-modules java.net.http
                         --add-reads io.vidocq.runtime.it.foyservlet=java.net.http
                     </argLine>

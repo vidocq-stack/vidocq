@@ -191,7 +191,8 @@
                     </systemPropertyVariables>
                     <!-- Some TCK clients set Cookie, Host and other headers the JDK HttpClient refuses by
                          default (JDK-8203771); read at class init, so it goes in argLine. -->
-                    <argLine>-Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} -Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
                 </configuration>
             </plugin>
         </plugins>

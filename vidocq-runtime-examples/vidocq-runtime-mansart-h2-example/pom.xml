@@ -253,7 +253,8 @@
                          the JVM's input arguments hold them too, and the test checks the console shows neither. -->
                     <!-- allowRestrictedHeaders: the test sends an action request with the console's Origin, a header
                          HttpURLConnection drops otherwise. -->
-                    <argLine>-Dvidocq.pool.password=devc-it-default-7Qx4 -Dvidocq.pool.audit.password=devc-it-audit-9Kp2 -Dsun.net.http.allowRestrictedHeaders=true</argLine>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} -Dvidocq.pool.password=devc-it-default-7Qx4 -Dvidocq.pool.audit.password=devc-it-audit-9Kp2 -Dsun.net.http.allowRestrictedHeaders=true</argLine>
                 </configuration>
             </plugin>
             <plugin>

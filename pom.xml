@@ -130,6 +130,22 @@
         <!-- GraalJS, test scope only: the dev console's EditorCoreTest runs the page's editor-core.js as the ES module
              it is. The community coordinates: org.graalvm.polyglot:js (js-community is its deprecated alias). -->
         <graaljs.version>25.4.4.1.1</graaljs.version>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            vidocq-runtime-coverage (quality profile), so the tests of the vidocq-runtime-it-*
+            modules count for the code they exercise in the other modules. The second path is the
+            per-module default: applications created by `vidocq create` inherit this POM, and
+            they have no vidocq-runtime-coverage module (SonarQube only warns about a missing
+            report and merges the ones it finds).
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-runtime-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- The examples are analysed (people copy them) but not measured for coverage, and they
+             may print to System.out (rule java:S106). -->
+        <sonar.coverage.exclusions>**/vidocq-runtime-examples/**</sonar.coverage.exclusions>
+        <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
+        <sonar.issue.ignore.multicriteria.examples.resourceKey>**/vidocq-runtime-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
     </properties>
 
     <dependencyManagement>
@@ -845,4 +861,17 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>vidocq-runtime-coverage</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>
