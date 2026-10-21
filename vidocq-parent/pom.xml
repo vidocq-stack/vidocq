@@ -110,6 +110,20 @@
              script when the upstream dependency is expressed via a property. -->
         <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
+        <!--
+            Empty by default so that a module that needs its own JVM options for its tests
+            writes them as <argLine>@{argLine} its options</argLine> in surefire. Under the
+            quality profile, JaCoCo's prepare-agent puts its agent in this property and the
+            late @{argLine} replacement keeps it; a plain <argLine> would drop the agent and
+            leave the module without coverage. Without the profile, @{argLine} is empty.
+        -->
+        <argLine></argLine>
+        <!--
+            SonarQube (Vidocq/vidocq#284): sources written by annotation processors and
+            other generators are not ours to fix, keep them out of the analysis. A
+            repository that sets its own sonar.exclusions must keep these patterns.
+        -->
+        <sonar.exclusions>**/generated-sources/**,**/generated/**</sonar.exclusions>
         <!-- mycila license-maven-plugin: build-time only, no runtime dependency.
              Manages the triple-license SPDX header on every .java source file.
              Header template lives at <repo-root>/etc/license-header.txt. -->
