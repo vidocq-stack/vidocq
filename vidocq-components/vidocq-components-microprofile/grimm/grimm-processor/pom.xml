@@ -77,7 +77,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                     <argLine>
+                        @{argLine}
                         --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.config=io.vidocq.grimm.processor
                         --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.scanner=io.vidocq.grimm.processor
                         --add-exports io.vidocq.grimm.core/io.vidocq.grimm.internal.serialization=io.vidocq.grimm.processor

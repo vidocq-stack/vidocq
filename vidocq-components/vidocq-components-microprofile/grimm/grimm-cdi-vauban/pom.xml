@@ -151,7 +151,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
           <argLine>
+            @{argLine}
             --add-modules java.net.http
             --add-reads io.vidocq.grimm.cdi.vauban=java.net.http,io.vidocq.vauban.core,io.vidocq.cassini.api,io.vidocq.cassini.chappe,io.vidocq.chappe.api
             --add-opens io.vidocq.grimm.cdi.vauban/io.vidocq.grimm.cdi=io.vidocq.vauban.core
