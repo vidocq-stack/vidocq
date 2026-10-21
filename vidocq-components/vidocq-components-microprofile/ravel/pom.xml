@@ -81,6 +81,13 @@
             resolved from Maven Central.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl ravel-tck test</ci.tck.command>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            ravel-coverage (quality profile), so the tests of ravel-it-weld count for the code
+            they exercise in the other modules.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/ravel-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <!--
@@ -182,6 +189,16 @@
             <id>tck</id>
             <modules>
                 <module>ravel-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>ravel-coverage</module>
             </modules>
         </profile>
     </profiles>
