@@ -103,7 +103,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                     <argLine>
+                        @{argLine}
                         --add-reads io.vidocq.dirac.cdi.vauban=io.vidocq.vauban.core
                         --add-opens io.vidocq.dirac.cdi.vauban/io.vidocq.dirac.cdi.internal=io.vidocq.vauban.core
                     </argLine>

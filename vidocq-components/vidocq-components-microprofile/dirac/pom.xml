@@ -86,6 +86,19 @@
             resolved from Maven Central.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl dirac-tck test</ci.tck.command>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            dirac-coverage (quality profile), so the tests of dirac-it-weld and
+            dirac-cdi-vauban-module-it count for the code they exercise in the other modules.
+            dirac-examples stays analysed, out of the coverage figures, and may print to
+            System.out (rule java:S106).
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/dirac-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.exclusions>**/dirac-examples/**</sonar.coverage.exclusions>
+        <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
+        <sonar.issue.ignore.multicriteria.examples.resourceKey>**/dirac-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
     </properties>
 
     <!--
@@ -256,6 +269,16 @@
                     </plugin>
                 </plugins>
             </build>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>dirac-coverage</module>
+            </modules>
         </profile>
     </profiles>
 </project>
