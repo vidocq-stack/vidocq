@@ -92,6 +92,13 @@
             artefact — it had never run outside a developer machine.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl knock-tck test</ci.tck.command>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            knock-coverage (quality profile), so the tests of knock-it-weld count for the code
+            they exercise in the other modules.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/knock-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <!--
@@ -212,6 +219,16 @@
             <id>tck</id>
             <modules>
                 <module>knock-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>knock-coverage</module>
             </modules>
         </profile>
     </profiles>
