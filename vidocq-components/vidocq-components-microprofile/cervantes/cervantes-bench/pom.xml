@@ -23,6 +23,8 @@
         <gpg.skip>true</gpg.skip>
         <smallrye.jwt.version>4.6.1</smallrye.jwt.version>
         <build-helper.version>3.6.0</build-helper.version>
+        <!-- SonarQube: a JMH harness, never released, which follows the JMH conventions by design (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
     </properties>
 
     <dependencies>

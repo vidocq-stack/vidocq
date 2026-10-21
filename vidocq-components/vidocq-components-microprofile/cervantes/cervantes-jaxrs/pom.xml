@@ -148,7 +148,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                     <argLine>
+                        @{argLine}
                         --add-exports io.vidocq.cervantes.core/io.vidocq.cervantes.internal=io.vidocq.cervantes.jaxrs
                         --add-reads io.vidocq.cervantes.jaxrs=jakarta.json
                     </argLine>

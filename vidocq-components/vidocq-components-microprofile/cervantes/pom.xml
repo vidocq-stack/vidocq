@@ -94,6 +94,19 @@
             resolved from Maven Central.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl cervantes-tck test</ci.tck.command>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            cervantes-coverage (quality profile), so the tests of cervantes-it-weld count for the
+            code they exercise in the other modules.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/cervantes-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- The examples are analysed (people copy them) but kept out of the coverage. -->
+        <sonar.coverage.exclusions>**/cervantes-examples/**</sonar.coverage.exclusions>
+        <!-- Writing to the console (java:S106) is what the examples are for. -->
+        <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
+        <sonar.issue.ignore.multicriteria.examples.resourceKey>**/cervantes-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
     </properties>
 
     <!--
@@ -125,6 +138,16 @@
             <id>tck</id>
             <modules>
                 <module>cervantes-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>cervantes-coverage</module>
             </modules>
         </profile>
     </profiles>
