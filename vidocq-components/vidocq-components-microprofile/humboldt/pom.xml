@@ -92,6 +92,13 @@
             waits. Four minutes on a pull request buys the only automated proof of conformance.
         -->
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl humboldt-tck test</ci.tck.command>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            humboldt-coverage (quality profile), so the tests of humboldt-it-weld count for the
+            code they exercise in the other modules.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/humboldt-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <!--
@@ -257,6 +264,16 @@
             <id>tck</id>
             <modules>
                 <module>humboldt-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>humboldt-coverage</module>
             </modules>
         </profile>
     </profiles>
