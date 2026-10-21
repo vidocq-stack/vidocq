@@ -63,6 +63,13 @@
         <!-- Jakarta Expression Language 6.0 spec API — already modular upstream
              (module jakarta.el), no Vidocq fork needed. -->
         <jakarta.el.version>6.0.1</jakarta.el.version>
+
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            peano-coverage (quality profile), so the tests of one module count for the code they
+            exercise in the others.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/peano-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <!--
@@ -126,6 +133,16 @@
             <id>tck</id>
             <modules>
                 <module>peano-tck</module>
+            </modules>
+        </profile>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>peano-coverage</module>
             </modules>
         </profile>
     </profiles>
