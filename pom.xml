@@ -123,10 +123,11 @@
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
         <!-- DevServices container providers (build-tooling only — plugin classpath, never runtime) -->
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
         <!-- Schema migration backends (opt-in extension modules) -->
-        <flyway.version>11.1.0</flyway.version>
-        <liquibase.version>4.31.1</liquibase.version>
+        <flyway.version>13.9.0</flyway.version>
+        <!-- 4.33.0 is the last Apache 2.0 release: Liquibase 5 moved to the Functional Source License (FSL-1.1-ALv2). -->
+        <liquibase.version>4.33.0</liquibase.version>
         <!-- GraalJS, test scope only: the dev console's EditorCoreTest runs the page's editor-core.js as the ES module
              it is. The community coordinates: org.graalvm.polyglot:js (js-community is its deprecated alias). -->
         <graaljs.version>25.4.4.1.1</graaljs.version>

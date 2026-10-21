@@ -24,7 +24,7 @@ import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -44,7 +44,7 @@ class LiquibaseSchemaMigratorPostgresIT {
     @Timeout(240)
     void migratesPostgres() throws Exception {
         assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available — skipping");
-        try (PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16-alpine")) {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
             pg.start();
             MigrationResult r = new LiquibaseSchemaMigrator().migrate(new MigrationTarget(
                     "default", pg.getJdbcUrl(), pg.getUsername(), pg.getPassword(),

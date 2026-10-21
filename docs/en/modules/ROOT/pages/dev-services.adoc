@@ -38,7 +38,7 @@ Every dev services jar is a named module [.tag-new]#NEW#, as every published Vid
 reaches a module path as an automatic module. The providers name Testcontainers by the name its jar's
 file gives it (`testcontainers`), which is fine where they run, the plugin's class path, and they need
 Testcontainers' core only: the PostgreSQL provider configures a plain container rather than
-Testcontainers' `postgresql` module. `vidocq-runtime-devservices-junit` still lands on a test run's
+Testcontainers' PostgreSQL module, `testcontainers-postgresql`. `vidocq-runtime-devservices-junit` still lands on a test run's
 class path, where its `META-INF/services` entry finds it; on a module path, its `provides` does.
 
 [#configuration-sources]

@@ -24,7 +24,7 @@ import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -45,7 +45,7 @@ class FlywaySchemaMigratorPostgresIT {
     void migratesPostgres() throws Exception {
         String unusable = dockerProblem();
         assumeTrue(unusable == null, () -> "Docker is not usable here, skipping: " + unusable);
-        try (PostgreSQLContainer<?> pg = new PostgreSQLContainer<>("postgres:16-alpine")) {
+        try (PostgreSQLContainer pg = new PostgreSQLContainer("postgres:16-alpine")) {
             pg.start();
             MigrationResult r = new FlywaySchemaMigrator().migrate(new MigrationTarget(
                     "default", pg.getJdbcUrl(), pg.getUsername(), pg.getPassword(),

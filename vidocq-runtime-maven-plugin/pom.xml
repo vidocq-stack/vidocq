@@ -85,20 +85,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- JUnit 4 must live in the plugin realm at RUNTIME: Testcontainers-based DevService
-             providers reference org.junit.rules.TestRule (GenericContainer implements it), and the JVM
-             resolves that interface when the container class loads. Declared on the plugin itself
-             (not only on the providers) because a transitive of a <plugin><dependency> does not reliably
-             reach the realm — Testcontainers marks junit optional, so the mediation drops it. -->
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
-            <!-- Explicit compile: a parent dependencyManagement pins junit:junit to test scope,
-                 which would keep it out of the plugin realm. We need it at runtime. -->
-            <scope>compile</scope>
-        </dependency>
-
         <!-- Build tooling: vidocq:generate compiles the application's JSP pages with Ibarra (vidocq#232). -->
         <dependency>
             <groupId>io.vidocq.ibarra</groupId><artifactId>ibarra-compiler</artifactId>

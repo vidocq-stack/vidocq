@@ -19,7 +19,7 @@
  */
 module io.vidocq.runtime.extensions.essentials.migration.liquibase {
     requires io.vidocq.runtime.extensions.essentials.migration;
-    // liquibase-core 4.31.1 ships no module-info; its Automatic-Module-Name manifest entry is "liquibase.core"
+    // liquibase-core ships no module-info; its Automatic-Module-Name manifest entry is "liquibase.core"
     requires liquibase.core;
     requires java.sql;
 

@@ -1199,6 +1199,14 @@ A tool, prompt or resource template argument has no explicit name and its class 
 
 `vidocq-runtime-migration-extension` migrates each datasource at boot, in `beforeStart`, before the pools open, with the one backend on the path: `vidocq-runtime-flyway-migration-extension` or `vidocq-runtime-liquibase-migration-extension`. It migrates the `@Default` datasource whenever `vidocq.pool.url` is set, and a named datasource only when `vidocq.migration.<name>.locations` is set. A migration that fails stops the boot.
 
+[#schema-migration-backends]
+=== What each backend brings [.tag-new]#NEW#
+
+A backend brings its engine into the application, with the engine's own dependencies:
+
+* `vidocq-runtime-flyway-migration-extension`: Flyway 13.9.0 (`flyway-core`, `flyway-database-postgresql` and `flyway-database-cockroachdb`), Apache 2.0. Of Jackson, only `jackson-annotations` comes with it: since Flyway 13.5, `jackson-databind` serves Flyway's TOML and JSON configuration files only, which the extension does not read.
+* `vidocq-runtime-liquibase-migration-extension`: Liquibase 4.33.0 and its libraries, Apache 2.0, with commons-lang3 3.20.0 in place of the 3.17.0 Liquibase declares (CVE-2025-48924). The backend stays on Liquibase 4: 4.33.0 is the last release under the Apache 2.0 licence, as Liquibase 5 moved to the Functional Source License (FSL-1.1-ALv2).
+
 [#schema-migration-keys]
 === Configuration [.tag-new]#NEW#
 

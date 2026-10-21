@@ -40,12 +40,13 @@
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
         </dependency>
-        <!-- Override: Liquibase 4.31.1 requires commons-lang3 >= 3.13.0 (SystemProperties).
-             A parent BOM or transitive dep pins it to 3.12.0; override here to unblock. -->
+        <!-- Override, nearer than Liquibase's own: Liquibase requires commons-lang3 >= 3.13.0
+             (SystemProperties), which another path of the graph would lower to 3.12.0, and the 3.17.0
+             that liquibase-core 4.33.0 declares is open to CVE-2025-48924, fixed in 3.18.0. -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
-            <version>3.17.0</version>
+            <version>3.20.0</version>
         </dependency>
         <!-- For the tests only: the child JVM of LayeredLiquibaseProcessTest installs the application
              layer and publishes it as Vidocq does (VidocqAppLayer, InstalledApplicationLayer). -->
@@ -67,7 +68,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- JDBC driver needed at test runtime for the Postgres IT (Liquibase only contains the

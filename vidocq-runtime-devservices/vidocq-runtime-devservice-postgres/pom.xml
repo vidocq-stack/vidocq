@@ -28,16 +28,6 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
         </dependency>
-        <!-- Testcontainers' GenericContainer implements org.junit.rules.TestRule (JUnit 4): the JVM
-             resolves that interface when the container class loads, so JUnit 4 must be present at
-             RUNTIME too — in the consuming plugin realm. Hence compile scope (transitive), not provided. -->
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
-            <!-- Explicit compile: a parent dependencyManagement pins junit:junit to test scope. -->
-            <scope>compile</scope>
-        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
