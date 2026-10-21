@@ -16,6 +16,8 @@
         <maven.deploy.skip>true</maven.deploy.skip>
         <!-- Test-only CDI container for the multi-dataStore routing tests (MANSART-005). -->
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <!-- SonarQube: its main code is the sample entities and repositories of its tests (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
     </properties>
 
     <dependencies>
