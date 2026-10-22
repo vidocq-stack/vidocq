@@ -28,9 +28,12 @@ import jakarta.enterprise.inject.literal.NamedLiteral;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -116,5 +119,18 @@ class ConfiguredNamesTest {
     void withoutKeysNothingIsDeclared() {
         assertEquals(Map.of(), declarations("vidocq.pool.url", "jdbc:h2:mem:x"));
         assertEquals(Map.of(), bound(Map.of()));
+    }
+
+    @Test
+    void aBackslashOfTheDeclarationIsDoubledInAPropertiesFile() throws IOException {
+        // A properties file reads \\ as \: the declaration @Named("say \"hi\"") is written with doubled backslashes.
+        var file = new Properties();
+        file.load(new StringReader("vidocq.naming.comp/env/greeting = java.lang.String @Named(\"say \\\\\"hi\\\\\"\")\n"));
+        var keys = new LinkedHashMap<String, String>();
+        file.stringPropertyNames().forEach(key -> keys.put(key, file.getProperty(key)));
+
+        var bean = (JndiTarget.Bean) bound(NamingExtension.declarations(new Config(keys))).get("java:comp/env/greeting");
+
+        assertEquals(Set.of(NamedLiteral.of("say \"hi\"")), bean.qualifiers());
     }
 }
