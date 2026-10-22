@@ -24,6 +24,7 @@ import java.io.BufferedReader;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -46,14 +47,15 @@ import jakarta.servlet.http.Part;
 
 /**
  * An {@link HttpServletRequest} double: attributes, parameters, character encoding, a
- * context path (default {@code /app}), an always-present session and request dispatchers
+ * context path (default {@code /app}), a session (present by default, see {@link #withoutSession()}), locales and request dispatchers
  * configured through {@link #dispatchers()}. Everything else throws
  * {@link UnsupportedOperationException}.
  */
 public class TestHttpServletRequest implements HttpServletRequest {
 
     private final TestServletContext context;
-    private final TestHttpSession session;
+    private TestHttpSession session;
+    private List<Locale> locales = List.of(Locale.US);
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private final Map<String, String[]> parameters = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
@@ -63,6 +65,26 @@ public class TestHttpServletRequest implements HttpServletRequest {
     public TestHttpServletRequest(TestServletContext context) {
         this.context = context;
         this.session = new TestHttpSession(context);
+    }
+
+    /**
+     * Starts without a session: {@code getSession(false)} returns {@code null} until
+     * {@code getSession()} or {@code getSession(true)} creates and records one.
+     */
+    public TestHttpServletRequest withoutSession() {
+        this.session = null;
+        return this;
+    }
+
+    /** Whether a session currently exists. */
+    public boolean hasSession() {
+        return session != null;
+    }
+
+    /** Sets the locales returned by {@code getLocales()}, most preferred first. */
+    public TestHttpServletRequest setLocales(Locale... locales) {
+        this.locales = List.of(locales);
+        return this;
     }
 
     /** Changes the context path. */
@@ -99,11 +121,14 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public HttpSession getSession() {
-        return session;
+        return getSession(true);
     }
 
     @Override
     public HttpSession getSession(boolean create) {
+        if (session == null && create) {
+            session = new TestHttpSession(context);
+        }
         return session;
     }
 
@@ -360,12 +385,12 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public Locale getLocale() {
-        throw nope();
+        return locales.isEmpty() ? Locale.getDefault() : locales.get(0);
     }
 
     @Override
     public Enumeration<Locale> getLocales() {
-        throw nope();
+        return Collections.enumeration(locales);
     }
 
     @Override

@@ -198,7 +198,7 @@ public class TestPageContext extends PageContext {
 
     @Override
     public HttpSession getSession() {
-        return request.getSession();
+        return request.getSession(false);
     }
 
     @Override

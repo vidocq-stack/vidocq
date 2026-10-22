@@ -48,6 +48,7 @@ import jakarta.servlet.descriptor.JspConfigDescriptor;
 public class TestServletContext implements ServletContext {
 
     private final Map<String, Object> attributes = new LinkedHashMap<>();
+    private final Map<String, String> initParameters = new LinkedHashMap<>();
     private final Map<String, TestServletContext> foreign = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
     private String contextPath = "/app";
@@ -175,12 +176,18 @@ public class TestServletContext implements ServletContext {
 
     @Override
     public String getInitParameter(String name) {
-        throw nope();
+        return initParameters.get(name);
     }
 
     @Override
     public Enumeration<String> getInitParameterNames() {
-        throw nope();
+        return Collections.enumeration(initParameters.keySet().stream().toList());
+    }
+
+    /** Sets a context initialisation parameter, as a deployment descriptor would. */
+    public TestServletContext initParameter(String name, String value) {
+        initParameters.put(name, value);
+        return this;
     }
 
     @Override

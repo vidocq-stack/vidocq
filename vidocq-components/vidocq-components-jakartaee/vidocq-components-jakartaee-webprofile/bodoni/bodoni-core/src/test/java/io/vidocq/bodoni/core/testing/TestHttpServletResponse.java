@@ -24,7 +24,9 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 
 import jakarta.servlet.ServletOutputStream;
@@ -48,6 +50,18 @@ public class TestHttpServletResponse implements HttpServletResponse {
     private String redirect;
     private String characterEncoding = "ISO-8859-1";
     private String contentType;
+    private Locale locale;
+    private boolean encodingExplicit;
+    private final Map<Locale, String> localeEncodings = new HashMap<>();
+
+    /**
+     * Maps a locale to the character encoding {@code setLocale} selects for it, unless
+     * the encoding was set explicitly.
+     */
+    public TestHttpServletResponse mapLocaleEncoding(Locale loc, String encoding) {
+        localeEncodings.put(loc, encoding);
+        return this;
+    }
 
     /** Arguments of {@code encodeURL}, in call order. */
     public List<String> encodedUrls() {
@@ -106,6 +120,7 @@ public class TestHttpServletResponse implements HttpServletResponse {
     @Override
     public void setCharacterEncoding(String encoding) {
         this.characterEncoding = encoding;
+        this.encodingExplicit = true;
     }
 
     @Override
@@ -116,6 +131,9 @@ public class TestHttpServletResponse implements HttpServletResponse {
     @Override
     public void setContentType(String type) {
         this.contentType = type;
+        if (type != null && type.toLowerCase(Locale.ROOT).contains("charset=")) {
+            this.encodingExplicit = true;
+        }
     }
 
     @Override
@@ -235,12 +253,16 @@ public class TestHttpServletResponse implements HttpServletResponse {
 
     @Override
     public void setLocale(Locale loc) {
-        throw nope();
+        this.locale = loc;
+        String mapped = localeEncodings.get(loc);
+        if (!encodingExplicit && mapped != null) {
+            this.characterEncoding = mapped;
+        }
     }
 
     @Override
     public Locale getLocale() {
-        throw nope();
+        return locale == null ? Locale.getDefault() : locale;
     }
 
     private static UnsupportedOperationException nope() {
