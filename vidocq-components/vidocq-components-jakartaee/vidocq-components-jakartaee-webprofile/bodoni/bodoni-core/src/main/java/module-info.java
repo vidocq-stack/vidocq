@@ -21,11 +21,12 @@
 /**
  * Bodoni — Jakarta Standard Tag Library 3.0 implementation.
  *
- * <p>The {@code functions} package is exported unqualified; tag-handler
- * packages will be exported unqualified when they land (B1): pages
- * precompiled by Ibarra call {@code new} on handlers from the application
- * module, and other Pages containers instantiate them by class name — neither
- * needs {@code opens}.
+ * <p>The {@code functions} package and the tag-handler packages (today
+ * {@code tags.core}; {@code fmt}, {@code xml} and {@code sql} to come) are
+ * exported unqualified: pages precompiled by Ibarra call {@code new} on
+ * handlers from the application module, and other Pages containers
+ * instantiate them by class name — neither needs {@code opens}. The
+ * {@code internal} package is not exported.
  *
  * <p>{@code jakarta.servlet.jsp.jstl} brings {@code jakarta.servlet.jsp},
  * {@code jakarta.servlet}, {@code jakarta.el}, {@code java.sql} and

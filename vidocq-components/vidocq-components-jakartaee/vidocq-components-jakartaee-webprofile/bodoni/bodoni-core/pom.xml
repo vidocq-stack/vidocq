@@ -12,7 +12,7 @@
 
     <artifactId>bodoni-core</artifactId>
     <name>Bodoni :: Core</name>
-    <description>Jakarta Standard Tag Library 3.0 implementation — tag handlers, functions and TLDs of the core, fmt, functions, xml and sql libraries (scaffold, see PLAN.md)</description>
+    <description>Jakarta Standard Tag Library 3.0 implementation — tag handlers, functions and TLDs of the core, fmt, functions, xml and sql libraries (B1: core and functions; see PLAN.md)</description>
 
     <dependencies>
         <!-- The implemented spec: compile scope, reaches applications transitively. -->

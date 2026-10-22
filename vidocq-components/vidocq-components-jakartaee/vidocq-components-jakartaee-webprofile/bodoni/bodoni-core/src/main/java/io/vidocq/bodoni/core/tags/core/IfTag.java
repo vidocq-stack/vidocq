@@ -24,7 +24,7 @@ import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.ConditionalTagSupport;
 
 /**
- * {@code <c:if>} (Tags 3.0 §5.2): evaluates its body when {@code test} is true and optionally
+ * {@code <c:if>} (Tags 3.0 §5.3): evaluates its body when {@code test} is true and optionally
  * exports the test result in {@code var} / {@code scope} (handled by the base class).
  */
 public class IfTag extends ConditionalTagSupport {

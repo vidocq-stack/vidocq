@@ -24,7 +24,7 @@ import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.ConditionalTagSupport;
 
 /**
- * {@code <c:when>} (Tags 3.0 §5.4): a branch of {@code <c:choose>}; its body is evaluated when
+ * {@code <c:when>} (Tags 3.0 §5.5): a branch of {@code <c:choose>}; its body is evaluated when
  * {@code test} is true and no earlier branch was taken.
  */
 public class WhenTag extends ConditionalTagSupport {
@@ -43,10 +43,10 @@ public class WhenTag extends ConditionalTagSupport {
         if (!(getParent() instanceof ChooseTag choose)) {
             throw new JspTagException("<c:when> must be a direct child of <c:choose>");
         }
-        if (choose.subtagSucceeded() || !test) {
+        if (choose.branchTaken() || !test) {
             return false;
         }
-        choose.markSubtagSucceeded();
+        choose.markBranchTaken();
         return true;
     }
 

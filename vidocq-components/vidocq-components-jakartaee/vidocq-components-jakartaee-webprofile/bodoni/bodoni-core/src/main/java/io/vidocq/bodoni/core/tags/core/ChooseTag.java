@@ -24,34 +24,34 @@ import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.tagext.TagSupport;
 
 /**
- * {@code <c:choose>} (Tags 3.0 §5.3): mutually exclusive conditional block. It remembers
+ * {@code <c:choose>} (Tags 3.0 §5.4): mutually exclusive conditional block. It remembers
  * whether one of its {@code <c:when>} children has already been taken.
  */
 public class ChooseTag extends TagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private boolean subtagSucceeded;
+    private boolean branchTaken;
 
     @Override
     public int doStartTag() throws JspException {
-        subtagSucceeded = false;
+        branchTaken = false;
         return EVAL_BODY_INCLUDE;
     }
 
-    /** @return whether a {@code when} sub-tag has already been taken */
-    boolean subtagSucceeded() {
-        return subtagSucceeded;
+    /** @return whether a branch ({@code when} or {@code otherwise}) has already been taken */
+    boolean branchTaken() {
+        return branchTaken;
     }
 
-    /** Records that a {@code when} sub-tag has been taken. */
-    void markSubtagSucceeded() {
-        subtagSucceeded = true;
+    /** Records that a branch has been taken. */
+    void markBranchTaken() {
+        branchTaken = true;
     }
 
     @Override
     public void release() {
         super.release();
-        subtagSucceeded = false;
+        branchTaken = false;
     }
 }

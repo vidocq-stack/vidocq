@@ -25,7 +25,7 @@ import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.tagext.TagSupport;
 
 /**
- * {@code <c:otherwise>} (Tags 3.0 §5.5): the last branch of {@code <c:choose>}, taken when no
+ * {@code <c:otherwise>} (Tags 3.0 §5.6): the last branch of {@code <c:choose>}, taken when no
  * {@code <c:when>} was.
  */
 public class OtherwiseTag extends TagSupport {
@@ -37,10 +37,10 @@ public class OtherwiseTag extends TagSupport {
         if (!(getParent() instanceof ChooseTag choose)) {
             throw new JspTagException("<c:otherwise> must be a direct child of <c:choose>");
         }
-        if (choose.subtagSucceeded()) {
+        if (choose.branchTaken()) {
             return SKIP_BODY;
         }
-        choose.markSubtagSucceeded();
+        choose.markBranchTaken();
         return EVAL_BODY_INCLUDE;
     }
 }
