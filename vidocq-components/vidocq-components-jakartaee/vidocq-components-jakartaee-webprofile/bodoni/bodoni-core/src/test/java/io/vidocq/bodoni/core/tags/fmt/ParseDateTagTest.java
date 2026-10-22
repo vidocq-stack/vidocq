@@ -284,4 +284,12 @@ class ParseDateTagTest {
         run(tag);
         assertEquals(INSTANT, parsed());
     }
+
+    @Test
+    void malformedFallbackLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_FALLBACK_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        ParseDateTag tag = new ParseDateTag();
+        tag.setValue("4/13/02");
+        assertThrows(JspTagException.class, () -> run(tag));
+    }
 }

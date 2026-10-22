@@ -135,7 +135,7 @@ public class FormatDateTag extends TagSupport {
     }
 
     private String format() throws JspTagException {
-        Locale locale = FmtSupport.formattingLocale(this, pageContext, I18n.DATE_LOCALES);
+        Locale locale = FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.DATE_LOCALES);
         if (locale == null) {
             return value.toString();
         }

@@ -275,4 +275,12 @@ class FormatDateTagTest {
         tag.setTimeZone("GMT");
         assertEquals(expected(DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.US)).format(INSTANT), run(tag));
     }
+
+    @Test
+    void malformedFallbackLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_FALLBACK_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        FormatDateTag tag = new FormatDateTag();
+        tag.setValue(INSTANT);
+        assertThrows(JspTagException.class, () -> run(tag));
+    }
 }

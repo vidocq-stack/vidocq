@@ -20,6 +20,7 @@
 
 package io.vidocq.bodoni.core.internal;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,6 +35,8 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletRequestWrapper;
 import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 import jakarta.servlet.jsp.jstl.fmt.LocalizationContext;
@@ -44,6 +47,7 @@ import org.junit.jupiter.api.io.TempDir;
 import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
 import io.vidocq.bodoni.core.testing.TestHttpServletResponse;
 import io.vidocq.bodoni.core.testing.TestPageContext;
+import io.vidocq.bodoni.core.testing.TestServletContext;
 
 class I18nTest {
 
@@ -150,6 +154,25 @@ class I18nTest {
     }
 
     @Test
+    void withoutAnAcceptLanguageHeaderThereAreNoBrowserLocales() {
+        request().withoutAcceptLanguage(Locale.US);
+        assertEquals(List.of(), I18n.preferredLocales(pc));
+    }
+
+    @Test
+    void withoutAnAcceptLanguageHeaderTheFallbackLocaleSelectsTheBundle() {
+        request().withoutAcceptLanguage(Locale.US);
+        fallback(Locale.FRENCH);
+        assertSelected("test-bundles.ex3.Resources", "fr", Locale.FRENCH);
+    }
+
+    @Test
+    void withoutAnAcceptLanguageHeaderNorFallbackThereIsNoFormattingLocale() {
+        request().withoutAcceptLanguage(Locale.US);
+        assertNull(I18n.formattingLocale(pc, new Locale[] {Locale.US, Locale.ENGLISH}));
+    }
+
+    @Test
     void usesTheContextClassLoader(@TempDir Path dir) throws IOException {
         Path pkg = Files.createDirectories(dir.resolve("ccl-only"));
         Files.writeString(pkg.resolve("Messages_en.properties"), "greeting=ccl\n");
@@ -189,6 +212,35 @@ class I18nTest {
         I18n.setResponseLocale(pc, Locale.FRANCE);
         assertEquals(Locale.FRANCE, response().getLocale());
         assertFalse(request().hasSession());
+    }
+
+    @Test
+    void setResponseLocaleIgnoresAnInvalidatedSession() {
+        request().getSession(false).invalidate();
+        I18n.setResponseLocale(pc, Locale.FRANCE);
+        assertEquals(Locale.FRANCE, response().getLocale());
+    }
+
+    @Test
+    void setResponseLocaleAcceptsANonHttpRequest() {
+        TestServletContext context = new TestServletContext();
+        TestHttpServletRequest http = new TestHttpServletRequest(context);
+        TestHttpServletResponse plainResponse = new TestHttpServletResponse();
+        TestPageContext plain = new TestPageContext(http, plainResponse, context) {
+            @Override
+            public ServletRequest getRequest() {
+                return new ServletRequestWrapper(http);
+            }
+        };
+        I18n.setResponseLocale(plain, Locale.FRANCE);
+        assertEquals(Locale.FRANCE, plainResponse.getLocale());
+    }
+
+    @Test
+    void intersectionToleratesDuplicateLocales() {
+        Locale[] withDuplicates = {Locale.FRENCH, Locale.GERMAN, Locale.FRENCH};
+        assertArrayEquals(new Locale[] {Locale.FRENCH},
+                I18n.intersection(new Locale[] {Locale.FRENCH, Locale.JAPANESE}, withDuplicates));
     }
 
     @Test

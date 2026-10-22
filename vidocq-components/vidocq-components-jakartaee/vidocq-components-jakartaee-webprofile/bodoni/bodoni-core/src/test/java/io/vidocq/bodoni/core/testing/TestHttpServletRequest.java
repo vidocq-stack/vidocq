@@ -29,6 +29,7 @@ import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.DispatcherType;
@@ -47,15 +48,19 @@ import jakarta.servlet.http.Part;
 
 /**
  * An {@link HttpServletRequest} double: attributes, parameters, character encoding, a
- * context path (default {@code /app}), a session (present by default, see {@link #withoutSession()}), locales and request dispatchers
+ * context path (default {@code /app}), a session (present by default, see {@link #withoutSession()}), locales with their {@code Accept-Language}
+ * header (see {@link #withoutAcceptLanguage(Locale)}) and request dispatchers
  * configured through {@link #dispatchers()}. Everything else throws
  * {@link UnsupportedOperationException}.
  */
 public class TestHttpServletRequest implements HttpServletRequest {
 
+    private static final String ACCEPT_LANGUAGE = "Accept-Language";
+
     private final TestServletContext context;
     private TestHttpSession session;
     private List<Locale> locales = List.of(Locale.US);
+    private boolean acceptLanguage = true;
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private final Map<String, String[]> parameters = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
@@ -81,9 +86,24 @@ public class TestHttpServletRequest implements HttpServletRequest {
         return session != null;
     }
 
-    /** Sets the locales returned by {@code getLocales()}, most preferred first. */
+    /**
+     * Sets the locales returned by {@code getLocales()}, most preferred first, as if the
+     * client sent them in an {@code Accept-Language} header.
+     */
     public TestHttpServletRequest setLocales(Locale... locales) {
         this.locales = List.of(locales);
+        this.acceptLanguage = true;
+        return this;
+    }
+
+    /**
+     * Models a request without an {@code Accept-Language} header, as a container sees it:
+     * {@code getHeader("Accept-Language")} is {@code null} and {@code getLocales()} returns
+     * the server's default locale alone (Servlet API Javadoc).
+     */
+    public TestHttpServletRequest withoutAcceptLanguage(Locale serverDefault) {
+        this.locales = List.of(serverDefault);
+        this.acceptLanguage = false;
         return this;
     }
 
@@ -205,12 +225,16 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public String getHeader(String name) {
-        throw nope();
+        if (!ACCEPT_LANGUAGE.equalsIgnoreCase(name) || !acceptLanguage) {
+            return null;
+        }
+        return locales.stream().map(Locale::toLanguageTag).collect(Collectors.joining(","));
     }
 
     @Override
     public Enumeration<String> getHeaders(String name) {
-        throw nope();
+        String value = getHeader(name);
+        return Collections.enumeration(value == null ? List.of() : List.of(value));
     }
 
     @Override

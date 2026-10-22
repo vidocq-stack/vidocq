@@ -32,6 +32,7 @@ import java.util.Locale;
 import io.vidocq.bodoni.core.testing.Body;
 import io.vidocq.bodoni.core.testing.TagHarness;
 import io.vidocq.bodoni.core.testing.TestPageContext;
+import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
@@ -282,5 +283,21 @@ class FormatNumberTagTest {
         tag.release();
         tag.setValue(1234.5);
         assertEquals("1,234.5", run(tag));
+    }
+
+    @Test
+    void withoutAnAcceptLanguageHeaderThereIsNoFormattingLocale() throws Exception {
+        ((TestHttpServletRequest) pc.getRequest()).withoutAcceptLanguage(Locale.US);
+        FormatNumberTag tag = new FormatNumberTag();
+        tag.setValue(1234.5);
+        assertEquals("1234.5", run(tag));
+    }
+
+    @Test
+    void malformedConfiguredLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        FormatNumberTag tag = new FormatNumberTag();
+        tag.setValue(1);
+        assertThrows(JspTagException.class, () -> run(tag));
     }
 }

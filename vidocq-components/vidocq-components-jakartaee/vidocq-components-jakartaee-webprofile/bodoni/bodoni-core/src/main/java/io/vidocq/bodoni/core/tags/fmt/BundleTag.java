@@ -60,7 +60,7 @@ public class BundleTag extends TagSupport {
 
     @Override
     public int doStartTag() throws JspException {
-        localizationContext = I18n.determine(pageContext, basename);
+        localizationContext = FmtSupport.determine("fmt:bundle", pageContext, basename);
         I18n.setResponseLocale(pageContext, localizationContext.getLocale());
         return EVAL_BODY_INCLUDE;
     }

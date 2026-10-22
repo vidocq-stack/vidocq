@@ -53,15 +53,17 @@ final class FmtSupport {
      * by the resource bundle determination algorithm, and the response locale is set from the
      * result.
      *
+     * @param action the action name, for messages
      * @return the context, or {@code null} when the setting is absent
+     * @throws JspTagException when a locale configuration setting is malformed
      */
-    static LocalizationContext defaultContext(PageContext pc) {
+    static LocalizationContext defaultContext(String action, PageContext pc) throws JspTagException {
         Object setting = Config.find(pc, Config.FMT_LOCALIZATION_CONTEXT);
         if (setting instanceof LocalizationContext context) {
             return context;
         }
         if (setting instanceof String basename) {
-            LocalizationContext context = I18n.determine(pc, basename);
+            LocalizationContext context = determine(action, pc, basename);
             I18n.setResponseLocale(pc, context.getLocale());
             return context;
         }
@@ -69,24 +71,59 @@ final class FmtSupport {
     }
 
     /**
+     * The resource bundle determination algorithm (§8.3.2), with a malformed
+     * {@code jakarta.servlet.jsp.jstl.fmt.locale} or {@code .fallbackLocale} configuration
+     * setting reported as a {@link JspTagException}.
+     *
+     * @param action the action name, for messages
+     */
+    static LocalizationContext determine(String action, PageContext pc, String basename) throws JspTagException {
+        try {
+            return I18n.determine(pc, basename);
+        } catch (IllegalArgumentException e) {
+            throw configurationError(action, e);
+        }
+    }
+
+    /**
+     * The formatting locale lookup algorithm alone (§9.3.3) over {@code available}, with a
+     * malformed locale configuration setting reported as a {@link JspTagException}. Unlike
+     * {@link #formattingLocale}, it neither consults a localization context nor sets the
+     * response locale.
+     *
+     * @param action the action name, for messages
+     * @return the matching available locale, or {@code null}
+     */
+    static Locale lookup(String action, PageContext pc, Locale[] available) throws JspTagException {
+        try {
+            return I18n.formattingLocale(pc, available);
+        } catch (IllegalArgumentException e) {
+            throw configurationError(action, e);
+        }
+    }
+
+    /**
      * The formatting locale of an action (§9.2): the locale of the nearest enclosing
      * {@code <fmt:bundle>}, else the locale of the default localization context, else the
      * locale found by lookup among {@code available} (which is then also the response locale).
      *
+     * @param action the action name, for messages
      * @return the locale, or {@code null} when none applies
+     * @throws JspTagException when a locale configuration setting is malformed
      */
-    static Locale formattingLocale(Tag tag, PageContext pc, Locale[] available) {
+    static Locale formattingLocale(String action, Tag tag, PageContext pc, Locale[] available)
+            throws JspTagException {
         if (TagSupport.findAncestorWithClass(tag, BundleTag.class) instanceof BundleTag bundle) {
             LocalizationContext context = bundle.getLocalizationContext();
             if (context != null && context.getLocale() != null) {
                 return context.getLocale();
             }
         }
-        LocalizationContext context = defaultContext(pc);
+        LocalizationContext context = defaultContext(action, pc);
         if (context != null && context.getLocale() != null) {
             return context.getLocale();
         }
-        Locale found = I18n.formattingLocale(pc, available);
+        Locale found = lookup(action, pc, available);
         if (found != null) {
             I18n.setResponseLocale(pc, found);
         }
@@ -183,6 +220,10 @@ final class FmtSupport {
             case "full" -> DateFormat.FULL;
             default -> throw new JspTagException(action + ": invalid style '" + name + "'");
         };
+    }
+
+    private static JspTagException configurationError(String action, IllegalArgumentException e) {
+        return new JspTagException(action + ": " + e.getMessage(), e);
     }
 
     /** A {@code String} id or a {@link TimeZone}; {@code null} for anything else, or an empty id. */

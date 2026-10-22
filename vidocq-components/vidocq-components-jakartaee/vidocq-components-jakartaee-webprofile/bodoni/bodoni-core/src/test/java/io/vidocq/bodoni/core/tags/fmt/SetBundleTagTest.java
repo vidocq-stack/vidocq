@@ -112,4 +112,12 @@ class SetBundleTagTest {
         assertInstanceOf(LocalizationContext.class,
                 Config.get(pc, Config.FMT_LOCALIZATION_CONTEXT, PageContext.PAGE_SCOPE));
     }
+
+    @Test
+    void malformedConfiguredLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        SetBundleTag tag = new SetBundleTag();
+        tag.setBasename("test-bundles.ex1.Resources");
+        assertThrows(JspTagException.class, () -> TagHarness.run(tag, pc, Body.NONE));
+    }
 }

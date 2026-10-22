@@ -238,4 +238,34 @@ class MessageTagTest {
         assertEquals("There are {0} athletes registered.", TagHarness.run(tag, pc, Body.EMPTY));
         assertEquals("There are {0} athletes registered.", TagHarness.run(tag, pc, Body.NONE));
     }
+
+    @Test
+    void withoutAContextLocaleTheMessageLocaleLookupAloneGivesTheFormatLocale() throws Exception {
+        preferred(Locale.GERMAN);
+        Config.set(pc, Config.FMT_FALLBACK_LOCALE, Locale.ENGLISH, PageContext.PAGE_SCOPE);
+        // A default context that the determination algorithm would resolve to "en"
+        configure("test-bundles.ex2.Resources");
+        MessageTag tag = message("athletes");
+        // The bundle attribute: the root bundle, without locale
+        tag.setBundle(new LocalizationContext(ResourceBundle.getBundle(BASENAME, Locale.ROOT), null));
+        String expected = NumberFormat.getIntegerInstance(Locale.GERMAN).format(10582);
+        assertEquals("There are " + expected + " athletes registered.", withParam(tag, 10582));
+    }
+
+    @Test
+    void malformedConfiguredLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        configure(BASENAME);
+        MessageTag tag = message("greeting");
+        assertThrows(JspTagException.class, () -> TagHarness.run(tag, pc, Body.NONE));
+    }
+
+    @Test
+    void malformedFallbackLocaleInTheMessageLocaleLookupIsAJspTagException() {
+        preferred(Locale.JAPANESE);
+        Config.set(pc, Config.FMT_FALLBACK_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        MessageTag tag = message("athletes");
+        tag.setBundle(new LocalizationContext(ResourceBundle.getBundle(BASENAME, Locale.ROOT), null));
+        assertThrows(JspTagException.class, () -> withParam(tag, 1));
+    }
 }

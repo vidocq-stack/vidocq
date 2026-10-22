@@ -160,4 +160,13 @@ class SetLocaleTagTest {
             pc = new TestPageContext(request, new TestHttpServletResponse(), ctx);
         }
     }
+
+    @Test
+    void invalidatedSessionDoesNotFailTheAction() throws Exception {
+        pc.getSession().invalidate();
+        SetLocaleTag tag = new SetLocaleTag();
+        tag.setValue("fr");
+        TagHarness.run(tag, pc, Body.NONE);
+        assertEquals(Locale.FRENCH, response().getLocale());
+    }
 }

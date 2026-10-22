@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 
 class FmtSupportTest {
 
+    private static final String ACTION = "fmt:test";
     private static final Locale[] AVAILABLE = I18n.NUMBER_LOCALES;
 
     private final TestPageContext pc = TestPageContext.create();
@@ -59,7 +60,7 @@ class FmtSupportTest {
         TagHarness.run(bundle, pc, p -> {
             TagSupport child = new TagSupport();
             child.setParent(bundle);
-            seen[0] = FmtSupport.formattingLocale(child, pc, AVAILABLE);
+            seen[0] = FmtSupport.formattingLocale(ACTION, child, pc, AVAILABLE);
         });
         return seen[0];
     }
@@ -87,46 +88,46 @@ class FmtSupportTest {
     }
 
     @Test
-    void localizationContextConfigurationLocaleIsNext() {
+    void localizationContextConfigurationLocaleIsNext() throws Exception {
         Config.set(pc, Config.FMT_LOCALIZATION_CONTEXT,
                 new LocalizationContext(null, Locale.GERMAN), PageContext.PAGE_SCOPE);
-        assertEquals(Locale.GERMAN, FmtSupport.formattingLocale(new TagSupport(), pc, AVAILABLE));
+        assertEquals(Locale.GERMAN, FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, AVAILABLE));
     }
 
     @Test
-    void stringConfigurationIsDeterminedAndSetsTheResponseLocale() {
+    void stringConfigurationIsDeterminedAndSetsTheResponseLocale() throws Exception {
         request().setLocales(Locale.CANADA_FRENCH);
         Config.set(pc, Config.FMT_LOCALIZATION_CONTEXT, "test-bundles.ex1.Resources", PageContext.PAGE_SCOPE);
-        assertEquals(Locale.CANADA_FRENCH, FmtSupport.formattingLocale(new TagSupport(), pc, AVAILABLE));
+        assertEquals(Locale.CANADA_FRENCH, FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, AVAILABLE));
         assertEquals(Locale.CANADA_FRENCH, response().getLocale());
     }
 
     @Test
-    void defaultContextForALocalizationContextIsReturnedAsIs() {
+    void defaultContextForALocalizationContextIsReturnedAsIs() throws Exception {
         LocalizationContext ctx = new LocalizationContext(null, Locale.GERMAN);
         Config.set(pc, Config.FMT_LOCALIZATION_CONTEXT, ctx, PageContext.PAGE_SCOPE);
         Locale before = response().getLocale();
-        assertEquals(ctx, FmtSupport.defaultContext(pc));
+        assertEquals(ctx, FmtSupport.defaultContext(ACTION, pc));
         assertEquals(before, response().getLocale());
     }
 
     @Test
-    void defaultContextIsAbsentWithoutConfiguration() {
-        assertNull(FmtSupport.defaultContext(pc));
+    void defaultContextIsAbsentWithoutConfiguration() throws Exception {
+        assertNull(FmtSupport.defaultContext(ACTION, pc));
     }
 
     @Test
-    void lookupIsTheLastResortAndSetsTheResponseLocale() {
+    void lookupIsTheLastResortAndSetsTheResponseLocale() throws Exception {
         request().setLocales(Locale.FRENCH);
-        assertEquals(Locale.FRENCH, FmtSupport.formattingLocale(new TagSupport(), pc, AVAILABLE));
+        assertEquals(Locale.FRENCH, FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, AVAILABLE));
         assertEquals(Locale.FRENCH, response().getLocale());
     }
 
     @Test
-    void noMatchYieldsNull() {
+    void noMatchYieldsNull() throws Exception {
         request().setLocales(Locale.FRENCH);
         Locale before = response().getLocale();
-        assertNull(FmtSupport.formattingLocale(new TagSupport(), pc, new Locale[] {Locale.JAPANESE}));
+        assertNull(FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, new Locale[] {Locale.JAPANESE}));
         assertEquals(before, response().getLocale());
     }
 
@@ -185,7 +186,7 @@ class FmtSupportTest {
             mid.setParent(bundle);
             TagSupport leaf = new TagSupport();
             leaf.setParent(mid);
-            seen[0] = FmtSupport.formattingLocale(leaf, pc, AVAILABLE);
+            seen[0] = FmtSupport.formattingLocale(ACTION, leaf, pc, AVAILABLE);
         });
         assertEquals(Locale.ENGLISH, seen[0]);
     }

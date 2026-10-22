@@ -28,11 +28,12 @@ import java.util.Map;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
-/** A map-backed {@link HttpSession}. */
+/** A map-backed {@link HttpSession}; after {@link #invalidate()} its attribute methods throw {@link IllegalStateException}. */
 public class TestHttpSession implements HttpSession {
 
     private final TestServletContext context;
     private final Map<String, Object> attributes = new LinkedHashMap<>();
+    private boolean invalid;
 
     public TestHttpSession(TestServletContext context) {
         this.context = context;
@@ -50,16 +51,19 @@ public class TestHttpSession implements HttpSession {
 
     @Override
     public Object getAttribute(String name) {
+        checkValid();
         return attributes.get(name);
     }
 
     @Override
     public Enumeration<String> getAttributeNames() {
+        checkValid();
         return Collections.enumeration(attributes.keySet().stream().toList());
     }
 
     @Override
     public void setAttribute(String name, Object value) {
+        checkValid();
         if (value == null) {
             attributes.remove(name);
         } else {
@@ -69,6 +73,7 @@ public class TestHttpSession implements HttpSession {
 
     @Override
     public void removeAttribute(String name) {
+        checkValid();
         attributes.remove(name);
     }
 
@@ -94,12 +99,20 @@ public class TestHttpSession implements HttpSession {
 
     @Override
     public void invalidate() {
-        throw nope();
+        checkValid();
+        invalid = true;
+        attributes.clear();
     }
 
     @Override
     public boolean isNew() {
         throw nope();
+    }
+
+    private void checkValid() {
+        if (invalid) {
+            throw new IllegalStateException("session invalidated");
+        }
     }
 
     private static UnsupportedOperationException nope() {

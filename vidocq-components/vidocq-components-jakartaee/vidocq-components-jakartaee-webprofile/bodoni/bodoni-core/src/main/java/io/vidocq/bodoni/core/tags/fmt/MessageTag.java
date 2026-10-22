@@ -49,6 +49,7 @@ import jakarta.servlet.jsp.tagext.TagSupport;
 public class MessageTag extends BodyTagSupport {
 
     private static final long serialVersionUID = 1L;
+    private static final String ACTION = "fmt:message";
 
     private String key;
     private boolean keySet;
@@ -108,7 +109,7 @@ public class MessageTag extends BodyTagSupport {
                 pageContext.getOut().print(message);
             }
         } catch (IOException e) {
-            throw new JspTagException("fmt:message: " + e.getMessage(), e);
+            throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
         return EVAL_PAGE;
     }
@@ -128,11 +129,11 @@ public class MessageTag extends BodyTagSupport {
         try {
             return Scopes.of(scope);
         } catch (IllegalArgumentException e) {
-            throw new JspTagException("fmt:message: " + e.getMessage(), e);
+            throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
     }
 
-    private String resolve() {
+    private String resolve() throws JspTagException {
         String name = keySet ? key : bodyKey();
         if (name == null || name.isEmpty()) {
             return "??????";
@@ -147,7 +148,7 @@ public class MessageTag extends BodyTagSupport {
             }
         }
         if (context == null) {
-            context = FmtSupport.defaultContext(pageContext);
+            context = FmtSupport.defaultContext(ACTION, pageContext);
         }
         ResourceBundle resources = context == null ? null : context.getResourceBundle();
         if (resources == null) {
@@ -166,10 +167,15 @@ public class MessageTag extends BodyTagSupport {
         return bodyContent == null ? null : bodyContent.getString().trim();
     }
 
-    private String format(String pattern, Locale contextLocale) {
+    /**
+     * Parametric replacement (§8.8): the {@link MessageFormat} locale is the localization
+     * context's; without one, the formatting locale lookup alone over the locales of both
+     * number and date formatting; without a match, the runtime's default locale.
+     */
+    private String format(String pattern, Locale contextLocale) throws JspTagException {
         Locale locale = contextLocale;
         if (locale == null) {
-            locale = FmtSupport.formattingLocale(this, pageContext, I18n.MESSAGE_LOCALES);
+            locale = FmtSupport.lookup(ACTION, pageContext, I18n.MESSAGE_LOCALES);
         }
         if (locale == null) {
             locale = Locale.getDefault();

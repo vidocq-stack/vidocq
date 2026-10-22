@@ -23,6 +23,7 @@ package io.vidocq.bodoni.core.tags.fmt;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Locale;
 
@@ -32,8 +33,11 @@ import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
 import io.vidocq.bodoni.core.testing.TestHttpServletResponse;
 import io.vidocq.bodoni.core.testing.TestPageContext;
 
-import jakarta.servlet.jsp.tagext.Tag;
+import jakarta.servlet.jsp.JspTagException;
+import jakarta.servlet.jsp.PageContext;
+import jakarta.servlet.jsp.jstl.core.Config;
 import jakarta.servlet.jsp.jstl.fmt.LocalizationContext;
+import jakarta.servlet.jsp.tagext.Tag;
 
 import org.junit.jupiter.api.Test;
 
@@ -133,5 +137,23 @@ class BundleTagTest {
         second.setBasename("test-bundles.ex1.Resources");
         TagHarness.run(second, pc, Body.EMPTY);
         assertNull(second.getPrefix());
+    }
+
+    @Test
+    void malformedFallbackLocaleIsAJspTagException() {
+        Config.set(pc, Config.FMT_FALLBACK_LOCALE, "1x", PageContext.PAGE_SCOPE);
+        BundleTag tag = new BundleTag();
+        tag.setBasename("test-bundles.ex1.Resources");
+        assertThrows(JspTagException.class, () -> TagHarness.run(tag, pc, Body.EMPTY));
+    }
+
+    @Test
+    void invalidatedSessionDoesNotFailTheAction() throws Exception {
+        request().setLocales(Locale.ENGLISH);
+        request().getSession(false).invalidate();
+        BundleTag tag = new BundleTag();
+        tag.setBasename("test-bundles.ex1.Resources");
+        assertEquals("hello", TagHarness.run(tag, pc, p -> p.getOut().print("hello")));
+        assertEquals(Locale.ENGLISH, response().getLocale());
     }
 }

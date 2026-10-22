@@ -187,7 +187,7 @@ public class FormatNumberTag extends BodyTagSupport {
 
     private String format(Object raw) throws JspException {
         Number number = toNumber(raw);
-        Locale locale = FmtSupport.formattingLocale(this, pageContext, I18n.NUMBER_LOCALES);
+        Locale locale = FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.NUMBER_LOCALES);
         NumberFormat format = FmtSupport.numberFormat(ACTION, type, pattern, locale == null ? Locale.ROOT : locale);
         if (locale == null) {
             return number.toString();

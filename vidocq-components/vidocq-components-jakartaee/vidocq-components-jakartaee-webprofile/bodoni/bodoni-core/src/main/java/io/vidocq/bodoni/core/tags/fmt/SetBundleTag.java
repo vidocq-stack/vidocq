@@ -37,6 +37,7 @@ import jakarta.servlet.jsp.tagext.TagSupport;
 public class SetBundleTag extends TagSupport {
 
     private static final long serialVersionUID = 1L;
+    private static final String ACTION = "fmt:setBundle";
 
     private String basename;
     private String varName;
@@ -63,9 +64,9 @@ public class SetBundleTag extends TagSupport {
         try {
             scopeId = Scopes.of(scope);
         } catch (IllegalArgumentException e) {
-            throw new JspTagException("fmt:setBundle: " + e.getMessage(), e);
+            throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
-        LocalizationContext context = I18n.determine(pageContext, basename);
+        LocalizationContext context = FmtSupport.determine(ACTION, pageContext, basename);
         if (varName != null) {
             pageContext.setAttribute(varName, context, scopeId);
         } else {

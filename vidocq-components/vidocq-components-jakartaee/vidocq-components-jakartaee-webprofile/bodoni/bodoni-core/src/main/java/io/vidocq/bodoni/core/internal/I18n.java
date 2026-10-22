@@ -23,13 +23,16 @@ package io.vidocq.bodoni.core.internal;
 import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Set;
 
+import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.jsp.PageContext;
@@ -46,6 +49,8 @@ public final class I18n {
     /** Session attribute holding the response character encoding (§8.4). */
     public static final String REQUEST_CHARSET = "jakarta.servlet.jsp.jstl.fmt.request.charset";
 
+    private static final String ACCEPT_LANGUAGE = "Accept-Language";
+
     /** Locales supported by {@link NumberFormat}. */
     public static final Locale[] NUMBER_LOCALES = NumberFormat.getAvailableLocales();
 
@@ -60,14 +65,23 @@ public final class I18n {
 
     /**
      * The preferred locales of a page (§8.2.1): the configured locale when set
-     * (application-based), else the request's locales in order (browser-based).
+     * (application-based), else the request's locales in order (browser-based). An HTTP
+     * request without an {@code Accept-Language} header has no browser-based locales: the
+     * container then answers {@code getLocales()} with its own default locale, and the
+     * algorithms of §8.3.2 and §9.3 never consider the default locale of the runtime.
+     *
+     * @throws IllegalArgumentException when the configured locale is malformed
      */
     public static List<Locale> preferredLocales(PageContext pc) {
         Locale configured = Locales.of(Config.find(pc, Config.FMT_LOCALE));
         if (configured != null) {
             return List.of(configured);
         }
-        return Collections.list(pc.getRequest().getLocales());
+        ServletRequest request = pc.getRequest();
+        if (request instanceof HttpServletRequest http && isBlank(http.getHeader(ACCEPT_LANGUAGE))) {
+            return List.of();
+        }
+        return Collections.list(request.getLocales());
     }
 
     /**
@@ -86,6 +100,7 @@ public final class I18n {
      *
      * @return a context holding the bundle and the preferred (or fallback) locale that led
      *         to it, the root bundle without locale, or an empty context
+     * @throws IllegalArgumentException when the configured locale or fallback locale is malformed
      */
     public static LocalizationContext determine(PageContext pc, String basename) {
         if (basename == null || basename.isEmpty()) {
@@ -107,17 +122,23 @@ public final class I18n {
     }
 
     /**
-     * Sets the response locale and, when a session exists, records the resulting response
-     * character encoding in it (§8.4). Never creates a session.
+     * Sets the response locale and, if a session exists and has not been invalidated, records
+     * the resulting response character encoding in it (§8.4). Never creates a session.
      */
     public static void setResponseLocale(PageContext pc, Locale locale) {
         if (locale == null) {
             return;
         }
         pc.getResponse().setLocale(locale);
-        HttpSession session = ((HttpServletRequest) pc.getRequest()).getSession(false);
-        if (session != null) {
-            session.setAttribute(REQUEST_CHARSET, pc.getResponse().getCharacterEncoding());
+        if (pc.getRequest() instanceof HttpServletRequest http) {
+            HttpSession session = http.getSession(false);
+            if (session != null) {
+                try {
+                    session.setAttribute(REQUEST_CHARSET, pc.getResponse().getCharacterEncoding());
+                } catch (IllegalStateException _) {
+                    // invalidated session: behave as if there were none
+                }
+            }
         }
     }
 
@@ -126,6 +147,7 @@ public final class I18n {
      * locale, that matches an available locale.
      *
      * @return the matching available locale, or {@code null}
+     * @throws IllegalArgumentException when the configured locale or fallback locale is malformed
      */
     public static Locale formattingLocale(PageContext pc, Locale[] available) {
         List<Locale> candidates = new ArrayList<>(preferredLocales(pc));
@@ -195,8 +217,13 @@ public final class I18n {
                 && (found.getVariant().isEmpty() || found.getVariant().equals(wanted.getVariant()));
     }
 
-    private static Locale[] intersection(Locale[] first, Locale[] second) {
-        Set<Locale> other = Set.of(second);
-        return java.util.Arrays.stream(first).filter(other::contains).toArray(Locale[]::new);
+    /** The locales of {@code first} that {@code second} also holds; either may repeat a locale. */
+    static Locale[] intersection(Locale[] first, Locale[] second) {
+        Set<Locale> other = new HashSet<>(Arrays.asList(second));
+        return Arrays.stream(first).filter(other::contains).distinct().toArray(Locale[]::new);
+    }
+
+    private static boolean isBlank(String text) {
+        return text == null || text.isBlank();
     }
 }

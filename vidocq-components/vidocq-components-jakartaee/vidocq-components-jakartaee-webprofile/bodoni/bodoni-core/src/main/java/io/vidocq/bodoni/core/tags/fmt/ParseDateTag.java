@@ -180,13 +180,14 @@ public class ParseDateTag extends BodyTagSupport {
     }
 
     private Locale locale() throws JspTagException {
+        Locale explicit;
         try {
-            Locale explicit = Locales.of(parseLocale);
-            return explicit != null ? explicit
-                    : FmtSupport.formattingLocale(this, pageContext, I18n.DATE_LOCALES);
+            explicit = Locales.of(parseLocale);
         } catch (IllegalArgumentException e) {
             throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
+        return explicit != null ? explicit
+                : FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.DATE_LOCALES);
     }
 
     private void emit(Date date, int scopeId) throws JspTagException {
