@@ -28,16 +28,19 @@ import org.junit.jupiter.api.Test;
 
 import javax.naming.Context;
 import javax.naming.InitialContext;
+import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * vidocq#297: the assembled runtime, on the module path, with the naming extension. The {@code java:} names
- * are answered by the running container, and Mansart Data resolves a repository's JNDI data store through them.
+ * {@code vidocq.properties} declares are answered by the running container, and Mansart Data resolves a
+ * repository's JNDI data store through them.
  */
 class NamingModulePathTest {
 
@@ -69,6 +72,18 @@ class NamingModulePathTest {
     @Test
     void a_jdbc_name_is_the_named_pool_of_the_running_container() throws NamingException {
         assertSame(auditBean(), new InitialContext().lookup("java:comp/env/jdbc/audit"));
+    }
+
+    @Test
+    void an_alias_in_another_namespace_answers_the_same_pool() throws NamingException {
+        assertSame(auditBean(), new InitialContext().lookup("java:app/env/jdbc/reporting"));
+    }
+
+    @Test
+    void the_namespaces_are_distinct() throws NamingException {
+        var context = new InitialContext();
+
+        assertThrows(NameNotFoundException.class, () -> context.lookup("java:module/env/jdbc/audit"));
     }
 
     @Test
