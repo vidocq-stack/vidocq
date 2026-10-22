@@ -15,7 +15,7 @@
 
 **B0 scaffold.** The reactor and the `bodoni-core` module descriptor exist; no tag is
 implemented yet. Bodoni is required by Jakarta EE Web Profile 11 and tracked by
-[Vidocq/vidocq#66](https://codefloe.com/Vidocq/vidocq/issues/66). The design of record is
+[Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266). The design of record is
 [PLAN.md](PLAN.md) (spec scope, brick rule, Java Modules layout, Ibarra build-time
 inlining, friction points, TCK plan, milestones B0–B7, open questions).
 

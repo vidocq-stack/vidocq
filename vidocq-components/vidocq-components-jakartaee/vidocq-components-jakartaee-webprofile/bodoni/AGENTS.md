@@ -60,9 +60,6 @@ of local divergence, the brick-specific sections further down take precedence.
   `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql` and `java.desktop`)
   — no Vidocq fork needed. Its POM declares Servlet 6.0 / EL 5.0 at compile scope; the
   root POM excludes them and pins the EE 11 levels as `provided`.
-- The build uses `git-commit-id-maven-plugin` (from `vidocq-parent`): it needs at least
-  one commit in the repository. Before the first commit, build with
-  `-Dmaven.gitcommitid.skip=true`.
 
 ## Essential Commands
 

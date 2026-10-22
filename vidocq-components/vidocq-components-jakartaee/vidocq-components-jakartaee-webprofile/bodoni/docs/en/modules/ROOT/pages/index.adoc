@@ -41,7 +41,7 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 
 == Position in the ecosystem
 
-Bodoni sits in the Jakarta EE web tier next to Peano (Expression Language 6.0) and Ibarra (Pages 4.0). It depends on neither: page expressions are evaluated by whatever EL implementation the container uses, and pages are translated by whatever Pages container runs them. Under Vidocq, the runtime extension brings Bodoni + Ibarra + Peano. It is required by Jakarta EE Web Profile 11 (Vidocq issue https://codefloe.com/Vidocq/vidocq/issues/66[#66]).
+Bodoni sits in the Jakarta EE web tier next to Peano (Expression Language 6.0) and Ibarra (Pages 4.0). It depends on neither: page expressions are evaluated by whatever EL implementation the container uses, and pages are translated by whatever Pages container runs them. Under Vidocq, the runtime extension brings Bodoni + Ibarra + Peano. It is required by Jakarta EE Web Profile 11 (Vidocq issue https://codefloe.com/Vidocq/vidocq/issues/266[#266]).
 
 == Quick links
 

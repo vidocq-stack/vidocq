@@ -3,7 +3,7 @@
 > Status: **B0 scaffold**. This document is the design of record for Bodoni, the
 > Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem,
 > required by Jakarta EE Web Profile 11 and tracked by
-> [Vidocq/vidocq#66](https://codefloe.com/Vidocq/vidocq/issues/66) (see
+> [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) (see
 > `vidocq/WEB-PROFILE.md`). Only the reactor and the `bodoni-core` module descriptor
 > exist; no tag is implemented.
 > Decisions marked **(to validate)** need the maintainer's sign-off before the
