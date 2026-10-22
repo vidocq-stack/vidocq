@@ -38,6 +38,7 @@ module io.vidocq.runtime.it.foyservlet {
     provides io.vidocq.foy.spi.gen.WebComponent with
             io.vidocq.runtime.it.foyservlet.AccountServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.CartServlet$$FoyComponent,
+            io.vidocq.runtime.it.foyservlet.GreetingServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.LoginServlet$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.PoweredByFilter$$FoyComponent,
             io.vidocq.runtime.it.foyservlet.SessionEventsServlet$$FoyComponent,

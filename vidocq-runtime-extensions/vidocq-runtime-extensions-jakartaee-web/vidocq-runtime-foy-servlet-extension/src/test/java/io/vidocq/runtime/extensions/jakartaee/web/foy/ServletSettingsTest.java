@@ -36,18 +36,22 @@ class ServletSettingsTest {
         assertNull(s.contextPath());
         assertEquals(ChappeListener.DEFAULT, s.listener());
         assertEquals(30 * 60, s.sessionTimeoutSeconds());
+        assertEquals("UTF-8", s.responseCharacterEncoding());
     }
 
     @Test
-    void readsTheThreeKeys() {
+    void readsTheFourKeys() {
         ServletSettings s = ServletSettings.from(new MapConfiguration(Map.of(
                 "vidocq.servlet.context-path", "/app",
                 "vidocq.servlet.listener", "admin",
-                "vidocq.servlet.session-timeout", "120")));
+                "vidocq.servlet.session-timeout", "120",
+                "vidocq.servlet.response-character-encoding", " iso-8859-1 ")));
 
         assertEquals("/app", s.contextPath());
         assertEquals("admin", s.listener());
         assertEquals(120, s.sessionTimeoutSeconds());
+        // The canonical name of the charset, whatever the spelling of the configuration.
+        assertEquals("ISO-8859-1", s.responseCharacterEncoding());
     }
 
     @Test
@@ -58,13 +62,22 @@ class ServletSettingsTest {
     }
 
     @Test
+    void unknownResponseEncodingNamesTheKey() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSettings.from(
+                new MapConfiguration(Map.of("vidocq.servlet.response-character-encoding", "no-such-charset"))));
+        assertTrue(e.getMessage().contains("vidocq.servlet.response-character-encoding"), e.getMessage());
+        assertTrue(e.getMessage().contains("no-such-charset"), e.getMessage());
+    }
+
+    @Test
     void theExtensionDeclaresItsNameAndKeys() {
         FoyExtension extension = new FoyExtension();
 
         assertEquals("servlet-foy", extension.name());
         assertEquals(600, extension.priority());
         assertEquals(Set.of("vidocq.servlet.context-path", "vidocq.servlet.listener",
-                "vidocq.servlet.session-timeout", "vidocq.servlet.users.*", "vidocq.servlet.confidential-port",
+                "vidocq.servlet.session-timeout", "vidocq.servlet.response-character-encoding",
+                "vidocq.servlet.users.*", "vidocq.servlet.confidential-port",
                 "vidocq.servlet.rotate-session-id-on-login"), extension.configKeys());
     }
 }

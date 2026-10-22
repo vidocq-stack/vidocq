@@ -30,7 +30,8 @@ import java.util.List;
 /**
  * {@code vidocq.http.mount.<n>.type=servlet}: mounts the application's servlets on a declared
  * prefix and listener. The prefix is the context path; {@code vidocq.http.mount.<n>.session-timeout}
- * overrides {@code vidocq.servlet.session-timeout} for this mount. One servlet mount per application,
+ * overrides {@code vidocq.servlet.session-timeout} for this mount, which uses
+ * {@code vidocq.servlet.response-character-encoding} (there is no per-mount key). One servlet mount per application,
  * which keeps its prefix (Foy dispatches on the full path): {@code strip-prefix=true} and a second
  * {@code type=servlet} mount fail.
  */
@@ -69,8 +70,11 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
         int global = ServletSettings.seconds(cfg.vidocqConfig().getValue(ServletSettings.SESSION_TIMEOUT).orElse(null));
         int timeout = ServletSettings.seconds(key + ".session-timeout",
                 cfg.property("session-timeout").orElse(null), global);
+        String encoding = ServletSettings.encoding(
+                cfg.vidocqConfig().getValue(ServletSettings.RESPONSE_CHARACTER_ENCODING).orElse(null));
         String contextPath = cfg.prefix().isEmpty() || "/".equals(cfg.prefix()) ? "/" : cfg.prefix();
-        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(beanManager, loader, contextPath, timeout, cfg.vidocqConfig())
+        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(beanManager, loader, contextPath, timeout, encoding,
+                cfg.vidocqConfig())
                 .orElseThrow(() -> new IllegalStateException(key
                         + ".type=servlet, but the application has no servlet, filter, listener, web.xml "
                         + "nor ServletContainerInitializer"));

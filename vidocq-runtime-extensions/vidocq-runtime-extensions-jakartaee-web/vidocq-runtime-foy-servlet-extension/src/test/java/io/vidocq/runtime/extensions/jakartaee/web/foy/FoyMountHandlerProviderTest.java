@@ -72,6 +72,20 @@ class FoyMountHandlerProviderTest {
     }
 
     @Test
+    void aServletMountTakesTheResponseEncodingOfTheConfiguration(@TempDir Path root) throws Exception {
+        new FoyMountHandlerProvider().create(mount(Map.of()), deployments, null,
+                FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
+        assertEquals("UTF-8", deployments.all().getFirst().mounted().servletContext().getResponseCharacterEncoding());
+        deployments.closeAll();
+
+        new FoyMountHandlerProvider().create(mount(Map.of("vidocq.servlet.response-character-encoding", "ISO-8859-1")),
+                deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML));
+
+        assertEquals("ISO-8859-1", deployments.all().getFirst().mounted().servletContext()
+                .getResponseCharacterEncoding());
+    }
+
+    @Test
     void declarativeMountWithoutComponentsFails(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of());
 

@@ -188,6 +188,10 @@
                         <!-- HTTP/2 server push is an accepted gap of Foy on Chappe (deprecated in 6.1):
                              the TCK's own switch skips the tests that need it. -->
                         <servlet.tck.support.http2Push>false</servlet.tck.support.http2Push>
+                        <!-- The runtime answers in UTF-8 when an application configures no response
+                             encoding (Vidocq/vidocq#273); the TCK asserts the Servlet default, ISO-8859-1,
+                             which this key restores. Without it, 20 encoding tests fail. -->
+                        <vidocq.servlet.response-character-encoding>ISO-8859-1</vidocq.servlet.response-character-encoding>
                     </systemPropertyVariables>
                     <!-- Some TCK clients set Cookie, Host and other headers the JDK HttpClient refuses by
                          default (JDK-8203771); read at class init, so it goes in argLine. -->

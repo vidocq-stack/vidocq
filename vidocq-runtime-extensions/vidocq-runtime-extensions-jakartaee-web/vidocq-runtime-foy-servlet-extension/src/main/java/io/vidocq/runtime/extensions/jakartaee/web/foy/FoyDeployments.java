@@ -75,13 +75,17 @@ final class FoyDeployments {
     }
 
     /**
+     * Deploys the application with Foy.
+     *
      * @param contextPath {@code null}: the descriptors' {@code <default-context-path>}, else {@code /}
+     * @param responseCharacterEncoding the context's default response encoding when no descriptor
+     *                    declares one
      * @param config      read for the {@linkplain ServletSecurity security settings}
      * @return empty when the application has no servlet, filter, listener nor initializer
      */
     static Optional<FoyChappeBoot.Mounted> deploy(BeanManager beanManager, ClassLoader loader,
                                                   String contextPath, int sessionTimeoutSeconds,
-                                                  VidocqConfig config) {
+                                                  String responseCharacterEncoding, VidocqConfig config) {
         FoyChappeBoot.Builder builder = FoyChappeBoot.builder()
                 .beanManager(beanManager)
                 .classLoader(loader)
@@ -89,7 +93,9 @@ final class FoyDeployments {
                 .componentSource(type -> ComponentSources.classFile(loader, type))
                 // The JSP engine and its compiled pages are looked up in the application layer (vidocq#232).
                 .applicationLayer(ApplicationLayer.current().orElse(ModuleLayer.boot()))
-                .sessionTimeoutSeconds(sessionTimeoutSeconds);
+                .sessionTimeoutSeconds(sessionTimeoutSeconds)
+                // web.xml and the fragments win, and an initializer or a listener can still set another one.
+                .defaultResponseCharacterEncoding(responseCharacterEncoding);
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
         try {

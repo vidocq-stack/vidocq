@@ -167,6 +167,15 @@ where Foy finds the engine. `ServletContext40Tests` (3 → 0) and `SecFormTests`
 changed. The 2026-10-18 run was 1699: `Aordering4Tests` passes since vidocq#228 (BUG-20261018-01). The 2026-10-11 run, on Foy `8b0b81d`, was 1698; the first measure, on
 Foy `ee6c899`, 1694: Foy's effective-version fix (foy#33) brought the four `getEffectiveMajor/MinorVersion` tests back.
 
+**Response encoding (2026-10-22, Vidocq/vidocq#273):** the runtime makes UTF-8 the default response encoding of
+an application that configures none, where the Servlet specification says ISO-8859-1. The TCK asserts the Servlet
+default: without a setting, 20 tests fail: 9 under `api` and the same 9 under `pluggability.api`
+(`getCharacterEncodingDefaultTest`, `getContentTypeTest` or `getWriterTest` of `ServletResponseTests`,
+`ServletResponseWrapperTests`, `HttpServletResponseTests` and `HttpServletResponseWrapperTests`), and
+`EncodingTests` `spec2Test`/`spec3Test`.
+The runner sets `vidocq.servlet.response-character-encoding=ISO-8859-1`, which restores the Servlet default, in its
+surefire system properties.
+
 `foy-tck` on Foy `826672b`: 1714 run, 1707 passing, 0 errors, 7 skipped (it runs the TCK's JSP pages with
 Ibarra since foy#52). Every difference is explained:
 

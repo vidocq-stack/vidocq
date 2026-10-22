@@ -29,6 +29,9 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -38,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -61,6 +65,10 @@ class FoyExtensionTest {
               </servlet-mapping>
             </web-app>
             """;
+
+    /** {@link #WEB_XML} with a {@code <response-character-encoding>} of ISO-8859-1. */
+    static final String ISO_8859_1_WEB_XML = WEB_XML.replace("<listener>",
+            "<response-character-encoding>ISO-8859-1</response-character-encoding>\n  <listener>");
 
     private final List<Mount> mounts = new ArrayList<>();
     private final List<FoyExtension> extensions = new ArrayList<>();
@@ -143,7 +151,7 @@ class FoyExtensionTest {
         Object boot = new Object();
         FoyDeployments deployments = FoyDeployments.forBoot(boot);
         FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(null, loaderWith(root, WEB_XML), "/shop",
-                1800, config(Map.of())).orElseThrow();
+                1800, "UTF-8", config(Map.of())).orElseThrow();
 
         deployments.record("vidocq.servlet", "admin", mounted);
 
@@ -174,6 +182,29 @@ class FoyExtensionTest {
                 config(Map.of("vidocq.servlet.confidential-port", "70000")), loaderWith(root, WEB_XML)));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
+    }
+
+    /** What the application declares, what the configuration says, and the context's resulting encoding. */
+    static Stream<Arguments> responseEncodings() {
+        return Stream.of(
+                Arguments.of("nothing configured: UTF-8", WEB_XML, Map.of(), "UTF-8"),
+                Arguments.of("the descriptor wins", ISO_8859_1_WEB_XML, Map.of(), "ISO-8859-1"),
+                Arguments.of("the descriptor wins over the key", ISO_8859_1_WEB_XML,
+                        Map.of("vidocq.servlet.response-character-encoding", "UTF-16"), "ISO-8859-1"),
+                Arguments.of("the key restores the Servlet default", WEB_XML,
+                        Map.of("vidocq.servlet.response-character-encoding", "ISO-8859-1"), "ISO-8859-1"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("responseEncodings")
+    void theContextsDefaultResponseEncoding(String description, String webXml, Map<String, String> values,
+                                            String expected, @TempDir Path root) throws Exception {
+        FoyExtension extension = configured(values);
+
+        extension.start(null, config(Map.of()), loaderWith(root, webXml));
+
+        assertEquals(expected, extension.deployments().all().getFirst().mounted().servletContext()
+                .getResponseCharacterEncoding(), description);
     }
 
     private FoyExtension configured(Map<String, String> values) {
