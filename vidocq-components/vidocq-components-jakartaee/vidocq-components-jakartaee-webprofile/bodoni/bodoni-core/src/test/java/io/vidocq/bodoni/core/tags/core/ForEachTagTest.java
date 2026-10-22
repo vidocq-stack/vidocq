@@ -178,6 +178,23 @@ class ForEachTagTest {
     }
 
     @Test
+    void negativeEndMeansNoIterationOverItems() throws Exception {
+        ForEachTag t = tag();
+        t.setItems(List.of("a", "b"));
+        t.setBegin(0);
+        t.setEnd(-1);
+        assertEquals("", TagHarness.run(t, TestPageContext.create(), PRINT_X));
+    }
+
+    @Test
+    void negativeEndMeansNoIterationWithoutItems() throws Exception {
+        ForEachTag t = tag();
+        t.setBegin(0);
+        t.setEnd(-1);
+        assertEquals("", TagHarness.run(t, TestPageContext.create(), PRINT_X));
+    }
+
+    @Test
     void unsupportedItemsTypeIsRejected() {
         ForEachTag t = tag();
         t.setItems(new Object());

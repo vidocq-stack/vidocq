@@ -24,6 +24,7 @@ import jakarta.el.ValueExpression;
 import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.LoopTagSupport;
 
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -77,11 +78,13 @@ public class ForTokensTag extends LoopTagSupport {
         if (beginSpecified) {
             validateBegin();
         }
-        if (endSpecified) {
-            validateEnd();
-        }
         if (stepSpecified) {
             validateStep();
+        }
+        if (endSpecified && end < begin) {
+            // Tags 3.0 §6.2/§6.3: end < begin means the loop is not executed (end may be -1)
+            iterator = Collections.emptyIterator();
+            return;
         }
         Object value = rawItems;
         if (value instanceof ValueExpression expression) {
@@ -89,7 +92,7 @@ public class ForTokensTag extends LoopTagSupport {
             value = expression.getValue(pageContext.getELContext());
         }
         if (value == null) {
-            iterator = java.util.Collections.emptyIterator();
+            iterator = Collections.emptyIterator();
         } else {
             iterator = ForEachTag.tokens(value.toString(), delims == null ? "" : delims);
         }

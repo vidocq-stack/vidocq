@@ -60,6 +60,14 @@ class ForTokensTagTest {
     }
 
     @Test
+    void negativeEndMeansNoIteration() throws Exception {
+        ForTokensTag t = tag("a,b", ",");
+        t.setBegin(0);
+        t.setEnd(-1);
+        assertEquals("", TagHarness.run(t, TestPageContext.create(), PRINT_X));
+    }
+
+    @Test
     void reusedInstanceFollowsTheNewAttributes() throws Exception {
         ForTokensTag t = tag("a,b", ",");
         assertEquals("a,b,", TagHarness.run(t, TestPageContext.create(), PRINT_X));

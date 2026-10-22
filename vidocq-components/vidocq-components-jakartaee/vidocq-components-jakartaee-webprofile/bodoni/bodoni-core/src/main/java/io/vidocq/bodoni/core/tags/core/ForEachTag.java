@@ -78,11 +78,13 @@ public class ForEachTag extends LoopTagSupport {
         if (beginSpecified) {
             validateBegin();
         }
-        if (endSpecified) {
-            validateEnd();
-        }
         if (stepSpecified) {
             validateStep();
+        }
+        if (endSpecified && end < begin) {
+            // Tags 3.0 §6.2/§6.3: end < begin means the loop is not executed (end may be -1)
+            iterator = Collections.emptyIterator();
+            return;
         }
         if (!itemsSpecified) {
             if (!endSpecified) {
