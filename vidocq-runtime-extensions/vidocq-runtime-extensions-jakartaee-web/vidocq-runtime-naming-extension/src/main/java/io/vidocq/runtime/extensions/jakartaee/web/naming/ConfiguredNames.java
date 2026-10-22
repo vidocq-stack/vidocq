@@ -31,9 +31,9 @@ import java.util.Map;
  * {@code java:} is a link to that name, any other value a bean written as text. Vauban checks them when the
  * container starts.
  *
- * <p>{@link NamingExtension} publishes the declarations before the container starts, and gives the container a
- * factory for this bean, so its package opens nothing. {@code @Dependent}: the naming service destroys it once it has
- * bound the names.
+ * <p>The bean is in the module's build-time index and created by its generated provider; {@link NamingExtension}
+ * publishes the declarations before the container starts. Without {@code vidocq.naming.*} keys it binds nothing.
+ * {@code @Dependent}: the naming service destroys it once it has bound the names.
  */
 @Dependent
 public class ConfiguredNames implements JndiBindings {

@@ -24,7 +24,6 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
-import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import io.vidocq.vauban.naming.JavaNaming;
 
 import javax.naming.Context;
@@ -92,19 +91,11 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
     @Override
     public void configure(VidocqConfiguration config) {
         declared = declarations(config);
+        ConfiguredNames.declare(declared);
         installed = JavaNaming.installAsDefault(Thread.currentThread().getContextClassLoader());
         if (!installed) {
             String property = System.getProperty(Context.INITIAL_CONTEXT_FACTORY);
             kept = property != null ? property : "set in jndi.properties";
-        }
-    }
-
-    @Override
-    public void beforeStart(VaubanContainerBuilder builder) {
-        if (!declared.isEmpty()) {
-            ConfiguredNames.declare(declared);
-            builder.addBeanClass(ConfiguredNames.class);
-            builder.addFactory(ConfiguredNames.class, ConfiguredNames::new);
         }
     }
 

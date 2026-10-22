@@ -18,8 +18,9 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 /**
- * The JNDI {@code java:} namespace, answered by the running CDI container through Vauban Naming. An
- * application that contributes names requires {@code io.vidocq.vauban.naming} for {@code JndiNameProvider}.
+ * The JNDI {@code java:} namespace, answered by the running CDI container through Vauban Naming, with the names
+ * {@code vidocq.properties} declares. An application that declares names in code requires
+ * {@code io.vidocq.vauban.naming} for {@code JndiBindings}.
  */
 module io.vidocq.runtime.extensions.jakartaee.web.naming {
     requires transitive io.vidocq.vauban.naming;
@@ -27,4 +28,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.naming {
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.naming.NamingExtension;
+
+    // ConfiguredNames is created in-module by the generated provider: no `opens` to the container.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.runtime.extensions.jakartaee.web.naming._VaubanComponents;
 }
