@@ -142,7 +142,7 @@ class MessageTagTest {
     }
 
     @Test
-    void unknownKeyGivesTheKeyBetweenQuestionMarks()throws Exception {
+    void unknownKeyGivesTheKeyBetweenQuestionMarks() throws Exception {
         preferred(Locale.ENGLISH);
         configure(BASENAME);
         assertEquals("???nope???", TagHarness.run(message("nope"), pc, Body.NONE));

@@ -59,7 +59,9 @@ class BundleTagTest {
         tag.setBasename("test-bundles.ex1.Resources");
         request().setLocales(Locale.ENGLISH);
         assertEquals("hello", TagHarness.run(tag, pc, p -> p.getOut().print("hello")));
-        assertEquals(Tag.EVAL_BODY_INCLUDE, new BundleTag().doStartTag());
+        BundleTag withoutBasename = new BundleTag();
+        withoutBasename.setPageContext(pc);
+        assertEquals(Tag.EVAL_BODY_INCLUDE, withoutBasename.doStartTag());
     }
 
     @Test

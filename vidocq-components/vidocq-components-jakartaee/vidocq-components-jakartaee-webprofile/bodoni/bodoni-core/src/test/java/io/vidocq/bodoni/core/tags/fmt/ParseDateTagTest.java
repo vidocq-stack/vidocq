@@ -29,6 +29,8 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.DateFormat;
 import java.text.ParseException;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -270,15 +272,17 @@ class ParseDateTagTest {
 
     @Test
     void reusedInstanceKeepsTheAttributesWhoseSetterIsNotCalledAgain() throws Exception {
-        ParseDateTag tag = us("13.04.02");
-        tag.setPattern("dd.MM.yy");
+        // German month names: a parse locale lost on reuse falls back to en_US and fails
+        ParseDateTag tag = us("13 März 2002");
+        tag.setPattern("d MMMM yyyy");
         tag.setParseLocale("de_DE");
         tag.setTimeZone("Asia/Tokyo");
         tag.setVar("d");
         run(tag);
-        tag.setValue("14.04.02");
+        tag.setValue("14 Mai 2002");
         run(tag);
-        assertEquals(new Date(INSTANT.getTime() + 86_400_000L - 9 * 3_600_000L), parsed());
+        assertEquals(Date.from(ZonedDateTime.of(2002, 5, 14, 0, 0, 0, 0, ZoneId.of("Asia/Tokyo")).toInstant()),
+                parsed());
     }
 
     @Test
