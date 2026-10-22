@@ -20,11 +20,14 @@
 
 package io.vidocq.bodoni.core.tags.fmt;
 
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.TimeZone;
 
 import io.vidocq.bodoni.core.internal.I18n;
 
+import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 import jakarta.servlet.jsp.jstl.fmt.LocalizationContext;
@@ -107,6 +110,33 @@ final class FmtSupport {
         }
         TimeZone fromConfig = convert(Config.find(pc, Config.FMT_TIME_ZONE));
         return fromConfig != null ? fromConfig : TimeZone.getDefault();
+    }
+
+    /**
+     * The number format of an action (§9.7, §9.8): the locale's number, currency or percent
+     * instance by {@code type} (default {@code number}), with a non-empty {@code pattern}
+     * applied on top of it (the pattern takes precedence over the type; the symbols stay the
+     * locale's).
+     *
+     * @param action the action name, for messages
+     * @throws JspTagException when {@code type} is none of the three, or the pattern is invalid
+     */
+    static NumberFormat numberFormat(String action, String type, String pattern, Locale locale)
+            throws JspTagException {
+        NumberFormat format = switch (type == null || type.isEmpty() ? "number" : type) {
+            case "number" -> NumberFormat.getNumberInstance(locale);
+            case "currency" -> NumberFormat.getCurrencyInstance(locale);
+            case "percent" -> NumberFormat.getPercentInstance(locale);
+            default -> throw new JspTagException(action + ": invalid type '" + type + "'");
+        };
+        if (pattern != null && !pattern.isEmpty() && format instanceof DecimalFormat decimal) {
+            try {
+                decimal.applyPattern(pattern);
+            } catch (IllegalArgumentException e) {
+                throw new JspTagException(action + ": invalid pattern '" + pattern + "'", e);
+            }
+        }
+        return format;
     }
 
     /** A {@code String} id or a {@link TimeZone}; {@code null} for anything else, or an empty id. */
