@@ -268,7 +268,7 @@ class CorePagesIT {
     @Test
     void fmtFormatsAndParsesWithTheLocaleSetByThePage() throws Exception {
         String page = get("/fmt.jsp");
-        assertEquals("345 987,246", paragraph(page, "number"));
+        assertEquals(FRENCH_NUMBER, paragraph(page, "number"));
         assertEquals("13.04.02", paragraph(page, "date"));
         assertEquals("samedi 13 avril 2002", paragraph(page, "full"));
     }
@@ -283,7 +283,7 @@ class CorePagesIT {
 
     @Test
     void fmtLegacyUriFormatsANumber() throws Exception {
-        assertEquals("345 987,246", paragraph(get("/fmt-legacy.jsp"), "number"));
+        assertEquals(FRENCH_NUMBER, paragraph(get("/fmt-legacy.jsp"), "number"));
     }
 
     @Test
