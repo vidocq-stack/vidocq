@@ -152,6 +152,19 @@ class SetTagTest {
     }
 
     @Test
+    void reusedAsAnEmptyElementDoesNotSetThePreviousBody() throws Exception {
+        // A pooled handler: <c:set var="x">first</c:set>, then <c:set var="x"/>, which gets
+        // no setBodyContent from the container: the value is "" (Tags 3.0 §4.3).
+        TestPageContext pc = TestPageContext.create();
+        SetTag tag = new SetTag();
+        tag.setVar("x");
+        TagHarness.run(tag, pc, p -> p.getOut().print("first"));
+        assertEquals("first", pc.getAttribute("x"));
+        TagHarness.run(tag, pc, Body.NONE);
+        assertEquals("", pc.getAttribute("x"));
+    }
+
+    @Test
     void emptyBodyGivesEmptyString() throws Exception {
         TestPageContext pc = TestPageContext.create();
         SetTag tag = new SetTag();

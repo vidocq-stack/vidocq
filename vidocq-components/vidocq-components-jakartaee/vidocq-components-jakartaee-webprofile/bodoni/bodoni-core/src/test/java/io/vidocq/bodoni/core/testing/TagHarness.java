@@ -53,7 +53,9 @@ public final class TagHarness {
      * Runs {@code tag}; returns the text written to the writer current at entry (the page
      * writer, or the enclosing {@code BodyContent} when nested in a buffered body) during
      * the run, and the {@code doEndTag} result ({@code -1} when it was not reached).
-     * {@code release()} is not called.
+     * {@code release()} is not called. With {@link Body#NONE} the tag is run as an empty
+     * element: no body lifecycle at all, so a {@code BodyTag} receives no
+     * {@code BodyContent} for that use.
      */
     public static Result runForResult(Tag tag, TestPageContext pc, Tag parent, Body body) throws Exception {
         JspWriter target = pc.getOut();
@@ -95,8 +97,12 @@ public final class TagHarness {
 
     private static void lifecycle(Tag tag, TestPageContext pc, Body body, int[] end) throws Exception {
         int r = tag.doStartTag();
-        if (r == Tag.SKIP_BODY) {
-            // no body
+        if (r == Tag.SKIP_BODY || body == Body.NONE) {
+            // no body evaluated; for an empty element the body lifecycle never starts
+            if (r != Tag.SKIP_BODY && r != Tag.EVAL_BODY_INCLUDE
+                    && !(r == BodyTag.EVAL_BODY_BUFFERED && tag instanceof BodyTag)) {
+                throw new IllegalStateException("invalid doStartTag result " + r + " for " + tag.getClass().getName());
+            }
         } else if (r == Tag.EVAL_BODY_INCLUDE) {
             loop(tag, pc, body);
         } else if (r == BodyTag.EVAL_BODY_BUFFERED && tag instanceof BodyTag bt) {

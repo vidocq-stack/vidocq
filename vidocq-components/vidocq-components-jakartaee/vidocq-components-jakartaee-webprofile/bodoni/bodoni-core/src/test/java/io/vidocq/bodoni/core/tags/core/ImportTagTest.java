@@ -337,4 +337,15 @@ class ImportTagTest {
         explicit.setUrl("/w");
         assertEquals("a", TagHarness.run(explicit, pc, Body.EMPTY));
     }
+
+    @Test
+    void reusedAsAnEmptyElementKeepsNoStaleBodyContent() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        req(pc).dispatchers().content("/inc", "hello");
+        ImportTag tag = new ImportTag();
+        tag.setUrl("/inc");
+        assertEquals("hello", TagHarness.run(tag, pc, p -> p.getOut().print("ignored")));
+        assertEquals("hello", TagHarness.run(tag, pc, Body.NONE));
+        assertNull(tag.getBodyContent());
+    }
 }

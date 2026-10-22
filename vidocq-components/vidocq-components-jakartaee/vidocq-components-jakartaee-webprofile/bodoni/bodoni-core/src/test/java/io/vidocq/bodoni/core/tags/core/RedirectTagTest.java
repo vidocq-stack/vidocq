@@ -21,6 +21,7 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.vidocq.bodoni.core.testing.TagHarness;
@@ -81,5 +82,15 @@ class RedirectTagTest {
         TagHarness.run(tag, pc, p -> UrlTagTest.addParam(p, tag, "a", "1"));
         TagHarness.run(tag, pc, p -> { });
         assertEquals("/app/n;jsessionid=T", ((TestHttpServletResponse) pc.getResponse()).redirect());
+    }
+
+    @Test
+    void reusedAsAnEmptyElementKeepsNoStaleBodyContent() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        RedirectTag tag = new RedirectTag();
+        tag.setUrl("/n");
+        TagHarness.run(tag, pc, p -> p.getOut().print("ignored"));
+        TagHarness.run(tag, pc, io.vidocq.bodoni.core.testing.Body.NONE);
+        assertNull(tag.getBodyContent());
     }
 }

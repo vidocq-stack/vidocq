@@ -55,6 +55,8 @@ public class ParamTag extends BodyTagSupport {
 
     @Override
     public int doStartTag() throws JspException {
+        // An empty element gets no setBodyContent: never reuse a pooled handler's old body.
+        bodyContent = null;
         buffered = false;
         if (TagSupport.findAncestorWithClass(this, ParamParent.class) == null) {
             throw new JspTagException("c:param must be nested in c:url, c:redirect or c:import");

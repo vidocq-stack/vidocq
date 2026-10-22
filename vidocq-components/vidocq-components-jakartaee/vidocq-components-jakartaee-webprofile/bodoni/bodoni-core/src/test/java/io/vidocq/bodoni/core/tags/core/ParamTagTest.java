@@ -91,4 +91,20 @@ class ParamTagTest {
         TagHarness.run(parent, pc, p -> TagHarness.run(param, pc, parent, Body.EMPTY));
         assertEquals("p?n=;jsessionid=T", pc.getAttribute("u"));
     }
+
+    @Test
+    void reusedAsAnEmptyElementDoesNotSendThePreviousBody() throws Exception {
+        // A pooled handler (no release() between uses): <c:param name="n">one</c:param>, then
+        // <c:param name="n"/>, which gets no setBodyContent from the container.
+        TestPageContext pc = TestPageContext.create();
+        UrlTag parent = new UrlTag();
+        parent.setValue("p");
+        parent.setVar("u");
+        ParamTag param = new ParamTag();
+        param.setName("n");
+        TagHarness.run(parent, pc, p -> TagHarness.run(param, pc, parent, q -> q.getOut().print("one")));
+        assertEquals("p?n=one;jsessionid=T", pc.getAttribute("u"));
+        TagHarness.run(parent, pc, p -> TagHarness.run(param, pc, parent, Body.NONE));
+        assertEquals("p?n=;jsessionid=T", pc.getAttribute("u"));
+    }
 }

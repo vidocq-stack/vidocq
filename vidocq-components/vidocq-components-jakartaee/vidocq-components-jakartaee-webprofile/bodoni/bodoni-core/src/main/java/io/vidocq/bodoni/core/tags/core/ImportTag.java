@@ -127,6 +127,8 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
 
     @Override
     public int doStartTag() throws JspException {
+        // An empty element gets no setBodyContent: never reuse a pooled handler's old body.
+        bodyContent = null;
         params.clear();
         openReader = null;
         if (url == null || url.isEmpty()) {

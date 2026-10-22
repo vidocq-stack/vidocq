@@ -80,6 +80,8 @@ public class SetTag extends BodyTagSupport {
 
     @Override
     public int doStartTag() throws JspException {
+        // An empty element gets no setBodyContent: never reuse a pooled handler's old body.
+        bodyContent = null;
         buffered = false;
         if (targetSet) {
             if (target == null) {

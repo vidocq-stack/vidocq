@@ -65,6 +65,8 @@ public class RedirectTag extends BodyTagSupport implements ParamParent {
 
     @Override
     public int doStartTag() throws JspException {
+        // An empty element gets no setBodyContent: never reuse a pooled handler's old body.
+        bodyContent = null;
         params.clear();
         return EVAL_BODY_BUFFERED;
     }

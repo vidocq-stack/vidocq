@@ -29,8 +29,24 @@ import jakarta.servlet.jsp.PageContext;
 @FunctionalInterface
 public interface Body {
 
-    /** A body that renders nothing. */
+    /**
+     * A present but empty body ({@code <x></x>}): the container still runs the body
+     * lifecycle (for a buffered body: {@code pushBody}, {@code setBodyContent},
+     * {@code doInitBody}, {@code doAfterBody}).
+     */
     Body EMPTY = pc -> {
+    };
+
+    /**
+     * No body at all: an empty element ({@code <x/>}). The harness skips the whole body
+     * lifecycle, as a Pages container does: no {@code setBodyContent}, no
+     * {@code doInitBody}, no {@code doAfterBody}, whatever {@code doStartTag} returned.
+     */
+    Body NONE = new Body() {
+        @Override
+        public void render(PageContext pc) {
+            throw new IllegalStateException("an empty element has no body to render");
+        }
     };
 
     void render(PageContext pc) throws Exception;

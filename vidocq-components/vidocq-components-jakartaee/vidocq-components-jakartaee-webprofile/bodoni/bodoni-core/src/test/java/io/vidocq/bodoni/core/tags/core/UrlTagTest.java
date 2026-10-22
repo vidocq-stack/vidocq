@@ -21,6 +21,7 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -107,5 +108,15 @@ class UrlTagTest {
         tag.release();
         tag.setValue("/p");
         assertEquals("/app/p;jsessionid=T", TagHarness.run(tag, pc, p -> { }));
+    }
+
+    @Test
+    void reusedAsAnEmptyElementKeepsNoStaleBodyContent() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        UrlTag tag = new UrlTag();
+        tag.setValue("/p");
+        TagHarness.run(tag, pc, p -> p.getOut().print("ignored"));
+        TagHarness.run(tag, pc, io.vidocq.bodoni.core.testing.Body.NONE);
+        assertNull(tag.getBodyContent());
     }
 }

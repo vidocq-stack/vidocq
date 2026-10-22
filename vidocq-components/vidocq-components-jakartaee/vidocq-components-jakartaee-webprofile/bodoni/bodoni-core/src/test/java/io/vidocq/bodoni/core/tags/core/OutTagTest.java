@@ -105,4 +105,15 @@ class OutTagTest {
         tag.setValue(null);
         assertEquals("", TagHarness.run(tag, pc, Body.EMPTY));
     }
+
+    @Test
+    void reusedAsAnEmptyElementDoesNotWriteThePreviousBody() throws Exception {
+        // A pooled handler: first <c:out value="${null}">first</c:out>, then
+        // <c:out value="${null}"/>, which gets no setBodyContent from the container.
+        OutTag tag = new OutTag();
+        TestPageContext pc = TestPageContext.create();
+        tag.setValue(null);
+        assertEquals("first", TagHarness.run(tag, pc, p -> p.getOut().print("first")));
+        assertEquals("", TagHarness.run(tag, pc, Body.NONE));
+    }
 }

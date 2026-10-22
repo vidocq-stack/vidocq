@@ -225,6 +225,53 @@ class TagHarnessTest {
     }
 
     @Test
+    void emptyElementSkipsTheBodyLifecycle() throws Exception {
+        // JSP 4.0 BodyTag: for an empty element (<x/>) the container calls neither
+        // setBodyContent nor doInitBody nor doAfterBody, even on EVAL_BODY_BUFFERED.
+        TestPageContext pc = TestPageContext.create();
+        var before = pc.getOut();
+        List<String> calls = new ArrayList<>();
+        BodyTagSupport tag = new BodyTagSupport() {
+            @Override
+            public int doStartTag() {
+                calls.add("start");
+                return EVAL_BODY_BUFFERED;
+            }
+
+            @Override
+            public void setBodyContent(BodyContent b) {
+                calls.add("setBodyContent");
+                super.setBodyContent(b);
+            }
+
+            @Override
+            public void doInitBody() {
+                calls.add("init");
+            }
+
+            @Override
+            public int doAfterBody() {
+                calls.add("after");
+                return SKIP_BODY;
+            }
+
+            @Override
+            public int doEndTag() {
+                calls.add("end:" + (pageContext.getOut() == before));
+                return EVAL_PAGE;
+            }
+        };
+        TagHarness.run(tag, pc, Body.NONE);
+        assertEquals(List.of("start", "end:true"), calls);
+    }
+
+    @Test
+    void emptyElementSkipsTheBodyOfAnIncludeTag() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        assertEquals("", TagHarness.run(new Twice(), pc, Body.NONE));
+    }
+
+    @Test
     void nestedRunInsideBufferedParentBody() throws Exception {
         TestPageContext pc = TestPageContext.create();
         Upper parent = new Upper();
