@@ -66,8 +66,10 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: CompositeELResolver.getCommonPropertyType queries every resolver (there is no
   resolution flag for it), so ReflectionGuard.getCommonPropertyType runs after the table and
   applies the member-access guard to what is only metadata.
-- Status: open. Suggested fix: ReflectionGuard.getCommonPropertyType returns null without
-  checking the policy; it performs no reflective member access.
+- Status: fixed (2026-10-22). ReflectionGuard.getCommonPropertyType returns null without
+  checking the policy, as it performs no reflective member access; the composite then returns
+  what the other resolvers report, as in allow mode. Regression test:
+  MapEntryAccessTest.commonPropertyTypeIsMetadataNotMemberAccess.
 
 ## CI-003 · 2026-10-11 · Forge branch updates create unsigned merge commits
 

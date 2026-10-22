@@ -117,6 +117,14 @@ class MapEntryAccessTest {
                 + "; register a generated accessor provider or a custom resolver", unknown.getMessage());
     }
 
+    @Test
+    void commonPropertyTypeIsMetadataNotMemberAccess() {
+        // EL-020: CompositeELResolver asks every resolver, so the deny guard runs after the table answered.
+        var entry = only(Map.of("a", 1));
+        assertEquals(Object.class, context.getELResolver().getCommonPropertyType(context, entry));
+        assertEquals(Object.class, context.getELResolver().getCommonPropertyType(context, new Plain()));
+    }
+
     public static final class Plain {
         public String getName() { return "plain"; }
     }

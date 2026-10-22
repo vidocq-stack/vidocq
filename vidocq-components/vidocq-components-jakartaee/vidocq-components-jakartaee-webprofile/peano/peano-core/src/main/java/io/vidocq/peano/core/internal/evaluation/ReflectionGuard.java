@@ -74,8 +74,9 @@ public final class ReflectionGuard extends ELResolver {
         requireAllowed(base);
         return null;
     }
+    /** Metadata only: no member is accessed, and CompositeELResolver asks every resolver (EL-020). */
     @Override public Class<?> getCommonPropertyType(ELContext context,Object base) {
-        property(context,base);
+        java.util.Objects.requireNonNull(context,"context");
         return null;
     }
 }
