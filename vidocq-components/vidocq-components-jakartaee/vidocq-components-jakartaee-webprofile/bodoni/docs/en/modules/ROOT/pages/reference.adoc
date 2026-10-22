@@ -112,7 +112,7 @@ Formatting in a locale other than English needs the JDK module `jdk.localedata` 
 
 `fmt:bundle`, `fmt:setBundle` and `fmt:message` load a bundle by name with `ResourceBundle.getBundle(basename, locale, loader)`, where `loader` is the thread context class loader, or the system class loader when it is `null`. This is also the loader of the `LocaleSupport` class of the JSTL API. The first-level matching rules of spec 8.3.1 are applied by Bodoni itself: the JDK refuses a `ResourceBundle.Control` supplied by a named module, so Bodoni filters the candidate locales, and the JVM default locale is never used.
 
-The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in link:https://codefloe.com/Vidocq/foy[Vidocq/foy] (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
+The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in link:https://codefloe.com/Vidocq/foy/pulls/76[Vidocq/foy#76] (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 
 What the lookup can see depends on where the application keeps its bundles. Observed on JDK 25 (2026-10-22), from a library module, with a named application module in the same class loader:
 

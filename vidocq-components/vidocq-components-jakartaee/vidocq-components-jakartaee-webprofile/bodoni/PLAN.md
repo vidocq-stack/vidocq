@@ -324,7 +324,7 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    `jakarta.servlet.jsp.jstl.fmt.localizationContext` (no `opens`). A module-aware lookup is
    deferred to `bodoni-ibarra` (B6), where generated code runs inside the application module.
    The lookup requires the container to run requests with the application class loader as
-   thread context class loader. BOD-002: fixed in Vidocq/foy (Foy BUG-20261022-06). Foy builds
+   thread context class loader. BOD-002: fixed in Vidocq/foy (Foy BUG-20261022-06, [Vidocq/foy#76](https://codefloe.com/Vidocq/foy/pulls/76)). Foy builds
    that predate it leave the request thread's context class loader unset, so `fmt:` cannot find
    application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 5. **Open Liberty precedence** — `pages-4.0` exposes the JSTL API and presumably its own
