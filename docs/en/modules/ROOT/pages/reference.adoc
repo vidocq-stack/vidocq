@@ -92,11 +92,13 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.servlet.context-path` [.tag-new]#NEW# +
 `vidocq.servlet.listener` +
-`vidocq.servlet.session-timeout`
+`vidocq.servlet.session-timeout` +
+`vidocq.servlet.response-character-encoding` [.tag-new]#NEW#
 | `/` +
 `default` +
-`1800`
-| The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, and session timeout in seconds. See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
+`1800` +
+`UTF-8`
+| The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, session timeout in seconds, and the default response encoding when no descriptor declares a `<response-character-encoding>` (`ISO-8859-1` restores the Servlet default). See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
 | `vidocq.servlet.users.<name>.password` [.tag-new]#NEW# +
 `vidocq.servlet.users.<name>.roles` +

@@ -195,7 +195,29 @@ The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebL
 | `vidocq.servlet.session-timeout`
 | `1800`
 | Session timeout in seconds, used when no descriptor declares a `<session-timeout>`. Zero or less: sessions never expire.
+
+| `vidocq.servlet.response-character-encoding` [.tag-new]#NEW#
+| `UTF-8`
+| Default response encoding of the application, used when neither `web.xml` nor a web fragment declares a `<response-character-encoding>`. See <<servlet-response-encoding>>.
 |===
+
+[#servlet-response-encoding]
+=== Response encoding [.tag-new]#NEW#
+
+The Servlet specification encodes a text response in ISO-8859-1 unless the application names another encoding, so a page with accents, written through `getWriter()`, reaches the browser garbled. Under the runtime, an application that configures nothing answers in **UTF-8**: the extension makes UTF-8 the default response encoding of the `ServletContext`, and `getWriter()` responses carry `charset=UTF-8`.
+
+What the application configures still wins:
+
+* a `<response-character-encoding>` in `web.xml` or in a web fragment;
+* `ServletContext.setResponseCharacterEncoding(...)`, called by a `ServletContainerInitializer` or a listener;
+* the encoding a servlet sets on its response, with `setCharacterEncoding` or `setContentType("text/html;charset=...")`.
+
+`vidocq.servlet.response-character-encoding` changes the default; `ISO-8859-1` restores the Servlet one. The value must name a character encoding the JDK supports, or the application fails at startup with the key in the message. A declarative `type=servlet` mount takes the same value. The Servlet TCK run on the assembled runtime asserts the Servlet default, so it sets the key to `ISO-8859-1`.
+
+[source,properties]
+----
+vidocq.servlet.response-character-encoding=ISO-8859-1
+----
 
 === Security
 
