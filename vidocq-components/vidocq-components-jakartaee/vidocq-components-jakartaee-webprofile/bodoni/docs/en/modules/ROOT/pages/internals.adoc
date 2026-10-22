@@ -1,8 +1,8 @@
 = Internals
-:description: Maven modules, Java modules and the JDK modules Bodoni relies on — B0 scaffold.
+:description: Maven modules, Java modules and the JDK modules Bodoni relies on — B1.
 
 [.lead]
-Today the reactor holds one module, `bodoni-core`, whose module descriptor only reads the JSTL API module. The planned layout is below.
+Today `bodoni-core` holds the `c:` and `fn:` libraries (milestone B1). The `bodoni-it-ibarra` module is an integration test behind the `it-ibarra` profile. The planned layout is below.
 
 == Modules
 
@@ -10,7 +10,8 @@ Today the reactor holds one module, `bodoni-core`, whose module descriptor only 
 |===
 | Artefact | Java module | Role | State
 
-| `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B0: descriptor only
+| `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B1: `c:` and `fn:`
+| `bodoni-it-ibarra` | `io.vidocq.bodoni.it.ibarra` | Renders pages on Ibarra + Foy + Peano; not published, `it-ibarra` profile only | B1
 | `bodoni-ibarra` | `io.vidocq.bodoni.ibarra` | Build-time inliners for Ibarra (`TagInliner` SPI, never at run time) | planned (B6)
 | `bodoni-tck` | — | Official Tags TCK runner, `-Ptck` profile only | planned (B5)
 | `bodoni-it-openliberty` | — (WAR) | Portability proof on Open Liberty | planned (B7)
@@ -27,10 +28,16 @@ module io.vidocq.bodoni.core {
 }
 ----
 
+== Packages
+
+* `io.vidocq.bodoni.core.tags.core` -- the `c:` tag handlers (exported).
+* `io.vidocq.bodoni.core.functions` -- the `fn:` functions (exported).
+* `io.vidocq.bodoni.core.internal` -- support code (scoped variables, URLs, external resources); not exported.
+
 == JDK modules only
 
 * `x:` — `javax.xml.parsers`, `javax.xml.transform`, `javax.xml.xpath` (`java.xml`); XPath variables resolved over the page scopes.
 * `sql:` — `java.sql`; JNDI data sources through the standard `InitialContext` (`java.naming`).
-* `c:import` — `java.net.http` or `URLConnection` for absolute URLs; `RequestDispatcher` for context URLs.
+* `c:import` — `java.net.http` (`HttpClient`) for `http` and `https`, `URLConnection` for other absolute schemes; `RequestDispatcher` for context URLs.
 
 No `synchronized`, no `ThreadLocal`: state lives in the handler instance and in the `PageContext` scopes.

@@ -1,11 +1,13 @@
 # Bodoni — Design plan
 
-> Status: **B0 scaffold**. This document is the design of record for Bodoni, the
+> Status: **B1 delivered (2026-10-22)** -- the `fn:` functions and the `c:` core tags are
+> implemented in `bodoni-core`, with unit tests and an Ibarra integration test
+> (`bodoni-it-ibarra`, `it-ibarra` profile). `fmt:`, `x:` and `sql:` (B2 to B4) are not
+> implemented. This document is the design of record for Bodoni, the
 > Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem,
 > required by Jakarta EE Web Profile 11 and tracked by
 > [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) (see
-> `vidocq/WEB-PROFILE.md`). Only the reactor and the `bodoni-core` module descriptor
-> exist; no tag is implemented.
+> `vidocq/WEB-PROFILE.md`). The official TCK has not been run.
 > Decisions marked **(to validate)** need the maintainer's sign-off before the
 > milestone that depends on them starts. Facts marked **(verified YYYY-MM-DD)** were
 > checked against the artefact or the spec named next to them; everything else is a
@@ -79,8 +81,11 @@ the jar) contains only the `jakarta.servlet.jsp.jstl.core` (`Config`, `LoopTag`,
 (scoped-variable helpers, locale/bundle resolution, XPath engine glue, data-source
 resolution).
 
-Out of scope until the open questions below are settled: the pre-3.0 URIs
-(`http://java.sun.com/jsp/jstl/core`, `…/jstl/core_rt`, 1.0 EL TLDs). The GlassFish/WildFly
+Legacy URIs (decided in B1, 2026-10-22, closing open question 2): the JSTL 1.2 URIs
+(`http://java.sun.com/jsp/jstl/core`, `…/functions`) are shipped, as `c-1_2.tld` and
+`fn-1_2.tld` mapped to the same classes, so that existing pages keep working; the JSTL 1.0
+URIs (`_rt` variants, 1.0 EL TLDs) are not shipped, as no maintained page targets them.
+For reference, the GlassFish/WildFly
 implementation (`org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1-jbossorg-1`, inspected
 2026-10-22) still ships them alongside the `jakarta.tags.*` TLDs; spec Appendix B.1 only
 records the rename (jstl-api#144). Whether the TCK exercises the old URIs is unverified.
@@ -272,7 +277,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 | # | Content | Done when |
 |---|---|---|
 | B0 | Scaffold: reactor, `bodoni-core` module descriptor, docs, this plan | `./mvnw -ntp clean install` green (needs the first commit, or `-Dmaven.gitcommitid.skip=true`) |
-| B1 | `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT |
+| B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). Known limitation: BOD-001 |
 | B2 | `fmt:` i18n and formatting (§8–§9): locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; open question 4 settled |
 | B3 | `x:` (§11–§13): JDK parser/XSLT/XPath, scope variable resolver, `x:forEach` context | unit tests; open question 6 settled |
 | B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
@@ -287,9 +292,11 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 1. **TCK artefact** — `jakarta-tags-tck-3.0.0.zip` (spec page, EE 10) or
    `jakarta.tck:tags-tck:11.0.x` (Maven Central, EE 11 levels)? Which is authoritative for
    a Web Profile 11 claim, and which harness does each use?
-2. **Legacy URIs** — ship TLDs for the pre-3.0 URIs (`http://java.sun.com/jsp/jstl/*`,
-   `_rt`, 1.0) as the GlassFish implementation does, or `jakarta.tags.*` only? Depends on
-   what the TCK and migration needs require. (to validate)
+2. ~~**Legacy URIs**~~ — decided in B1 (2026-10-22): the JSTL 1.2 URIs
+   (`http://java.sun.com/jsp/jstl/core`, `…/functions`) are shipped alongside
+   `jakarta.tags.*`, because pages written for JSTL 1.2 keep working unchanged; the JSTL 1.0
+   URIs (`_rt`, 1.0 EL TLDs) are not shipped. Whether the TCK exercises the old URIs is
+   still unverified (question 1).
 3. **`java.desktop` via the API module** — accept that the upstream descriptor
    `requires transitive java.desktop` (apparently for `java.xml`), or report it upstream
    (jstl-api) and ask for `requires transitive java.xml` instead? Effect on jlink images
@@ -311,3 +318,20 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    already reads `java.sql` and `java.xml`, so a split would not shrink the module graph.
    Default: one jar. (to validate)
 9. **`TagInliner` SPI shape** — owned by Ibarra; to be designed there (cross-repo item).
+
+## Decisions recorded in B1
+
+- **`c:import` HTTP client** (validated 2026-10-22): `java.net.http.HttpClient` for `http`
+  and `https`, `URLConnection` for the other absolute schemes; no public client SPI. The
+  client is created lazily, runs on virtual threads and has a 10 second connect timeout.
+  Relative URLs go through the `RequestDispatcher`.
+- **Packages**: `io.vidocq.bodoni.core.tags.core` (handlers, exported),
+  `io.vidocq.bodoni.core.functions` (exported), `io.vidocq.bodoni.core.internal` (not exported).
+
+## Cross-repo item: BOD-001
+
+Under Peano with `peano.reflection=deny`, a precompiled page cannot read `${s.index}` (or any
+property) of the `varStatus` variable of `c:forEach` / `c:forTokens`: no accessor table exists
+for the JSTL API's `LoopTagStatus`, and `bodoni-core` cannot depend on Peano. Candidate owners:
+Peano, the Ibarra precompiler, an optional Bodoni adapter module, or the Bodoni Vidocq runtime
+extension -- the maintainer decides. Tracked in `BUG.md` (BOD-001).

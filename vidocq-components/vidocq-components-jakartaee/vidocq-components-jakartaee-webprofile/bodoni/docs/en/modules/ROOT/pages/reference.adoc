@@ -1,8 +1,8 @@
 = Reference
-:description: Coordinates, dependencies, configuration and deployment notes — B0 scaffold.
+:description: Coordinates, dependencies, tag and function lists, c:import behaviour and deployment notes — B1.
 
 [.lead]
-Bodoni publishes nothing yet. This page fixes the coordinates and the dependency contract that the implementation will honour.
+Bodoni publishes the `c:` and `fn:` libraries of Jakarta Standard Tag Library 3.0. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
 
 == Coordinates
 
@@ -25,12 +25,86 @@ Bodoni publishes nothing yet. This page fixes the coordinates and the dependency
 | `jakarta.el:jakarta.el-api:6.0.1` | `provided` | Brought by the container.
 |===
 
-No build tooling dependency yet.
+No build tooling dependency.
 
-== Spec-mandated dynamic behaviour (target)
+== Tag libraries
 
-* `sql:setDataSource driver="…"` loads a JDBC driver class by name, as the spec requires.
-* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni provides no naming implementation.
+Each library is served under two URIs, both mapped to the same classes. The JSTL 1.0 URIs are not shipped.
+
+[cols="1,1,3",options="header"]
+|===
+| Library | Prefix | URIs
+
+| Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core`
+| Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions`
+|===
+
+The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported package `io.vidocq.bodoni.core.tags.core`, the functions in `io.vidocq.bodoni.core.functions`.
+
+=== Core tags (`c:`)
+
+The attributes of each tag are those of {spec-tags-3-0}[the specification] (chapters 4 to 7).
+
+[cols="1,3",options="header"]
+|===
+| Tag | Role (spec chapter)
+
+| `c:out` | Evaluates an expression and writes it, XML-escaped by default (4)
+| `c:set` | Sets a scoped variable, or a property or map entry of a target (4)
+| `c:remove` | Removes a scoped variable (4)
+| `c:catch` | Catches a `Throwable` of its body into a variable (4)
+| `c:if` | Conditional on a `test` expression (5)
+| `c:choose`, `c:when`, `c:otherwise` | Mutually exclusive conditional (5)
+| `c:forEach` | Iterates over a collection, array, map, iterator, enumeration, comma-separated string, or an integer range; exposes `varStatus` (6)
+| `c:forTokens` | Iterates over the tokens of a string split on delimiters (6)
+| `c:import` | Includes the content of an absolute or relative URL (7)
+| `c:url` | Builds a URL, rewritten for the context and the session (7)
+| `c:redirect` | Sends an HTTP redirect (7)
+| `c:param` | Adds a request parameter to its enclosing `c:import`, `c:url` or `c:redirect` (7)
+|===
+
+=== Functions (`fn:`)
+
+The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
+
+[cols="2,3",options="header"]
+|===
+| Function | Signature
+
+| `fn:contains` | `boolean contains(String, String)`
+| `fn:containsIgnoreCase` | `boolean containsIgnoreCase(String, String)`
+| `fn:endsWith` | `boolean endsWith(String, String)`
+| `fn:escapeXml` | `String escapeXml(String)`
+| `fn:indexOf` | `int indexOf(String, String)`
+| `fn:join` | `String join(String[], String)`
+| `fn:length` | `int length(Object)`
+| `fn:replace` | `String replace(String, String, String)`
+| `fn:split` | `String[] split(String, String)`
+| `fn:startsWith` | `boolean startsWith(String, String)`
+| `fn:substring` | `String substring(String, int, int)`
+| `fn:substringAfter` | `String substringAfter(String, String)`
+| `fn:substringBefore` | `String substringBefore(String, String)`
+| `fn:toLowerCase` | `String toLowerCase(String)`
+| `fn:toUpperCase` | `String toUpperCase(String)`
+| `fn:trim` | `String trim(String)`
+|===
+
+== `c:import` and external resources
+
+* **Absolute URLs.** `http` and `https` go through `java.net.http.HttpClient`; any other absolute scheme goes through `URLConnection`. The client is created lazily, on the first absolute import, runs on virtual threads and has a 10 second connect timeout. There is no public client SPI.
+* **Relative URLs.** The resource is included through the `RequestDispatcher` of the current or of a foreign context (`context` attribute).
+* **Session identifier.** A `;jsessionid=` path parameter is stripped from the URL before it is requested.
+* **Character set.** The `charEncoding` attribute wins; otherwise the `charset` declared in the content type of the resource; otherwise `ISO-8859-1` (spec 7.4).
+
+== Spec-mandated dynamic behaviour
+
+* `sql:setDataSource driver="…"` loads a JDBC driver class by name, as the spec requires (`sql:` arrives with B4).
+* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni ships no naming implementation: the lookup relies on the one the application server or the Vidocq runtime provides.
+
+[#bod-001]
+== Known limitation: BOD-001
+
+Under Peano with `peano.reflection=deny`, a page cannot read a property of the `varStatus` variable of `c:forEach` or `c:forTokens` (for example `${s.index}`): no accessor table is registered for the `LoopTagStatus` object of the JSTL API, and `bodoni-core` cannot depend on Peano to register one. With `peano.reflection=allow` the same pages render correctly. The owner of the fix is undecided; see `BUG.md` in the repository.
 
 [WARNING]
 .Deploying on an application server

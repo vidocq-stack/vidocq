@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B0 scaffold — no tag implemented yet.** Read [PLAN.md](PLAN.md) before any
+**Status: B1 delivered — `fn:` and `c:` implemented; `fmt:`, `x:`, `sql:` not yet.** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -67,9 +67,14 @@ of local divergence, the brick-specific sections further down take precedence.
 sdk env
 ./mvnw -ntp clean install                          # default reactor (no TCK)
 ./mvnw test
+./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify   # Ibarra IT (see note below)
 # planned (B5): ./mvnw -Ptck -pl bodoni-tck test
 # planned (B5): ./run-official-tck-tags-3.0.sh smoke|all|-Dtest=…
 ```
+
+The `it-ibarra` profile is not part of the default build: it needs **local snapshots** of
+chappe, foy, peano and ibarra (`0.4.0-SNAPSHOT`) in `~/.m2`. The IT runs under
+`peano.reflection=deny`; its `varStatus` test is `@Disabled` on BUG.md BOD-001.
 
 `bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
 `./mvnw install` will neither build nor download anything TCK-related.
@@ -78,7 +83,8 @@ sdk env
 
 ```
 bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
-                c:, fmt:, fn:, x:, sql:  (B0: module descriptor only)
+                c:, fmt:, fn:, x:, sql:  (B1: c: and fn:)
+bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
 (planned)     bodoni-ibarra  ← optional build-time inliner for Ibarra (TagInliner SPI)
 (planned)     bodoni-tck     ← official Tags TCK runner, in-reactor behind `tck`
 (planned)     bodoni-it-other-containers/bodoni-it-openliberty ← portability proof
@@ -116,9 +122,9 @@ bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
   parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
 - **Java modules**: `io.vidocq.bodoni.core` (artifact `bodoni-core`); planned
   `io.vidocq.bodoni.ibarra` (artifact `bodoni-ibarra`).
-- **Packages**: `io.vidocq.bodoni.core.<library>` (exported tag handlers / functions,
-  library = `core`, `fmt`, `functions`, `xml`, `sql`; names to validate in B1) and
-  `io.vidocq.bodoni.core.internal.*` = implementation, not exported.
+- **Packages** (fixed in B1): `io.vidocq.bodoni.core.tags.<library>` (exported tag
+  handlers; `tags.core` today, `fmt`, `xml`, `sql` to come), `io.vidocq.bodoni.core.functions`
+  (exported `fn:` functions) and `io.vidocq.bodoni.core.internal` = implementation, not exported.
 - Licence header from `etc/license-header.txt` on every `.java` file.
 - Commits: see "Ecosystem rules" above.
 

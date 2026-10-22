@@ -28,8 +28,9 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   reflection only through registered `AccessorProvider` tables; nothing registers one for
   `LoopTagStatus`. `bodoni-core` must not depend on Peano (AGENTS.md constraint 1). Not a
   Bodoni handler defect.
-- Candidate owners (the maintainer decides): an optional Bodoni adapter module depending
-  on Peano (engine-adapter exception of the brick/extension rule) that registers the
-  `LoopTagStatus` accessor table, or the Bodoni Vidocq runtime extension. Cross-repo item
-  in `tasks/todo.md`.
+- Candidate owners (the maintainer decides): (1) Peano, with built-in accessors for
+  Jakarta API types such as `LoopTagStatus`; (2) the Ibarra precompiler; (3) an optional
+  Bodoni adapter module depending on Peano (engine-adapter exception of the brick/extension
+  rule) that registers the `LoopTagStatus` accessor table; (4) the Bodoni Vidocq runtime
+  extension. Cross-repo item in `tasks/todo.md` and `PLAN.md`.
 - Status: open.

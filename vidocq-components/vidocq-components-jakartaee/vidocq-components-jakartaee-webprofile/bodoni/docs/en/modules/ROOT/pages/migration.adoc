@@ -2,7 +2,7 @@
 :description: Coming to Bodoni from the GlassFish / Apache JSTL implementations — what will map.
 
 [.lead]
-Bodoni is a scaffold: there is nothing to migrate to yet. This page records the intended contract so the expectation is clear.
+Bodoni implements the `c:` and `fn:` libraries today (B1); `fmt:`, `x:` and `sql:` follow in B2 to B4. This page records the contract so the expectation is clear.
 
 == The good news (target)
 
@@ -10,7 +10,7 @@ Pages that use the standard tags through the `jakarta.tags.*` URIs need no chang
 
 == What to check (target)
 
-* **Pre-3.0 URIs** — `http://java.sun.com/jsp/jstl/core` and the other legacy URIs are not planned yet; switch to `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql`.
+* **JSTL 1.2 URIs** — `http://java.sun.com/jsp/jstl/core` and `http://java.sun.com/jsp/jstl/functions` are served by the same classes as the `jakarta.tags.*` URIs, so existing pages keep working. The JSTL 1.0 URIs (`_rt` variants, 1.0 EL TLDs) are not shipped. New pages should use `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql` (the last three arrive with B2 to B4).
 * **Implementation classes** — `org.apache.taglibs.standard.*` handlers, often extended by applications, have no Bodoni equivalent by name. Extend the API base classes (`LoopTagSupport`, `ConditionalTagSupport`) instead.
 * **XML engines** — Bodoni uses the JDK XPath/XSLT implementation; Xalan-specific extension functions are not available.
 * **Resource bundles under Java Modules** — bundles in a named application module may need a specific packaging; see the open questions in link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].

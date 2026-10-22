@@ -1,25 +1,52 @@
 = Usage
-:description: The five JSTL 3.0 tag libraries and their URIs — target; nothing is implemented yet.
+:description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
 
 [.lead]
-Bodoni will implement the five tag libraries of Jakarta Standard Tag Library 3.0. None is available yet; the table gives the planned milestone of each.
+Bodoni implements two of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1). The table gives the status of each.
 
 [cols="1,2,1,1",options="header"]
 |===
-| Library | URI | Prefix | Milestone
+| Library | URI | Prefix | Status
 
-| Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | B1
-| Functions | `jakarta.tags.functions` | `fn` | B1
-| I18N and formatting | `jakarta.tags.fmt` | `fmt` | B2
-| XML processing | `jakarta.tags.xml` | `x` | B3
-| Relational database access | `jakarta.tags.sql` | `sql` | B4
+| Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | implemented (B1)
+| Functions | `jakarta.tags.functions` | `fn` | implemented (B1)
+| I18N and formatting | `jakarta.tags.fmt` | `fmt` | planned (B2)
+| XML processing | `jakarta.tags.xml` | `x` | planned (B3)
+| Relational database access | `jakarta.tags.sql` | `sql` | planned (B4)
 |===
 
-The pre-3.0 URIs (`http://java.sun.com/jsp/jstl/core`, …) are not planned yet: see the open questions in link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
+The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
 
-== Configuration data (target)
+== Core library
 
-The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`):
+[source,jsp]
+----
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<c:set var="user" value="${param.user}" scope="request"/>
+<c:choose>
+  <c:when test="${empty user}">Hello, stranger.</c:when>
+  <c:otherwise>Hello, <c:out value="${user}"/>.</c:otherwise>
+</c:choose>
+<c:forEach items="${items}" var="item" begin="0" end="9">
+  <c:if test="${item.visible}"><p><c:out value="${item.label}"/></p></c:if>
+</c:forEach>
+<a href="<c:url value='/search'><c:param name='q' value='${user}'/></c:url>">Search</a>
+<c:catch var="failure"><c:import url="https://example.org/fragment.html"/></c:catch>
+----
+
+== Functions library
+
+[source,jsp]
+----
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<p>${fn:toUpperCase(fn:trim(title))}</p>
+<p>${fn:length(items)} items, joined: ${fn:join(fn:split('a,b,c', ','), ' | ')}</p>
+<p>${fn:escapeXml(comment)}</p>
+----
+
+== Configuration data
+
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:` and `fn:` libraries read none of them; they matter from B2 and B4:
 
 * `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
 * `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.

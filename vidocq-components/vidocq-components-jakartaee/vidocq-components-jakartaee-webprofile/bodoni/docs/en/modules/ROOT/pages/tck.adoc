@@ -2,7 +2,7 @@
 :description: Official Jakarta Standard Tag Library 3.0 TCK — not run yet (B5).
 
 [.lead]
-The official TCK has **not been run**: no tag is implemented yet. Nothing on this page is a test result or a certification claim.
+The official TCK has **not been run** (milestone B5). The `c:` and `fn:` libraries are covered by Bodoni's own unit and integration tests only. Nothing on this page is a TCK result or a certification claim.
 
 == Plan of record
 

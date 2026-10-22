@@ -1,8 +1,8 @@
 = Getting started
-:description: Adding Bodoni to a page application — target setup; nothing is implemented yet.
+:description: Adding Bodoni to a page application and writing a first page with the c: and fn: libraries.
 
 [.lead]
-Bodoni is a scaffold: there is no tag to use yet. This page records the intended setup so the contract is clear from the start.
+Bodoni provides the `c:` (core) and `fn:` (functions) libraries of Jakarta Standard Tag Library 3.0. The `fmt:`, `x:` and `sql:` libraries are not implemented yet (B2 to B4).
 
 == Build from source
 
@@ -14,7 +14,7 @@ sdk env                       # Java 25 + Maven 3.9.16 (.sdkmanrc)
 ./mvnw -ntp clean install
 ----
 
-== Dependency (target)
+== Dependency
 
 The application declares Bodoni only. The JSTL API comes with it transitively; the Pages, Servlet and EL APIs come from the container.
 
@@ -36,17 +36,25 @@ module com.acme.shop {
 }
 ----
 
-== First page (target)
+The TLDs are packaged in `META-INF` of `bodoni-core`: the Pages container finds them by URI, with no `taglib` mapping in `web.xml`.
+
+== First page
 
 [source,jsp]
 ----
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<c:set var="names" value="${fn:split('ada,grace,edsger', ',')}"/>
 <ul>
-  <c:forEach items="${cart.items}" var="item" varStatus="s">
-    <li>${s.count}. <c:out value="${item.name}"/> (${fn:length(item.options)} options)</li>
+  <c:forEach items="${names}" var="name">
+    <li><c:out value="${fn:toUpperCase(name)}"/></li>
   </c:forEach>
 </ul>
 ----
 
 Under Vidocq, the runtime extension (planned) brings Bodoni, Ibarra and Peano together; the page is precompiled at build time.
+
+[NOTE]
+====
+Under Peano with `peano.reflection=deny`, reading a property of the `varStatus` variable fails: see xref:reference.adoc#bod-001[BOD-001].
+====

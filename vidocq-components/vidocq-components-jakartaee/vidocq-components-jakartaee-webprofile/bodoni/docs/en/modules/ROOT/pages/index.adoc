@@ -1,5 +1,5 @@
 = Bodoni
-:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B0 scaffold.
+:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B1: `fn:` and `c:` delivered.
 
 // TODO: centred logo (image::bodoni-logo.png[Bodoni,300,role=module-logo]) once
 // modules/ROOT/images/bodoni-logo.png exists — tracked in tasks/todo.md.
@@ -9,8 +9,8 @@ Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vido
 
 [IMPORTANT]
 ====
-Bodoni is **a scaffold (B0)**: the Maven reactor and the `io.vidocq.bodoni.core` module descriptor exist, no tag is implemented yet.
-This documentation describes the intended `{project-version}` development line; every page states what exists today.
+Milestone **B1** is delivered: the `c:` (core) and `fn:` (functions) libraries are implemented. The `fmt:`, `x:` and `sql:` libraries are not yet (B2 to B4). Known limitation: xref:reference.adoc#bod-001[BOD-001].
+This documentation describes the `{project-version}` development line; every page states what exists today.
 The design of record is link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
 ====
 
@@ -29,7 +29,7 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.bodoni.core` — see xref:internals.adoc[Internals]
 | Runtime dependencies | None beyond the JSTL API (`compile`); Pages, Servlet and EL APIs are `provided` by the container
-| Status | B0 scaffold — nothing implemented, not released or certified
+| Status | B1 — `c:` and `fn:` implemented; `fmt:`, `x:`, `sql:` not yet; not released or certified
 | Official TCK | Not run yet — see xref:tck.adoc[TCK status]
 |===
 
