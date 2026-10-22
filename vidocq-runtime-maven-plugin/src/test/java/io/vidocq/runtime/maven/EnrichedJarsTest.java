@@ -150,6 +150,45 @@ class EnrichedJarsTest {
         }
     }
 
+    /**
+     * A library may find a resource folder through its class loader, as Vaadin's development mode finds the
+     * frontend files of its jars: the folder needs its own entry in the jar, as the JDK finds no folder without one.
+     */
+    @Test
+    void theCopyHasAnEntryForEveryFolder() throws Exception {
+        Path source = jar(tmp.resolve("m2/lib-1.0.jar"), Map.of(
+                "module-info.class", descriptor("org.dep"),
+                "org/", new byte[0],
+                "org/dep/", new byte[0],
+                "org/dep/Service.class", emptyClass("org.dep.Service"),
+                "META-INF/frontend/", new byte[0],
+                "META-INF/frontend/tools/", new byte[0],
+                "META-INF/frontend/tools/tools.js", "tools".getBytes(StandardCharsets.UTF_8)),
+                Map.of());
+        Path patchDir = patch(tmp.resolve("patch"), Map.of(
+                "org/dep/generated/_VaubanComponents.class", emptyClass("org.dep.generated._VaubanComponents")));
+        Path out = tmp.resolve("target/vidocq-enriched/lib-1.0.jar");
+
+        EnrichedJars.write(source, null, patchDir, List.of("org.dep.generated._VaubanComponents"),
+                "org.dep:lib:1.0", source, out);
+
+        try (JarFile copy = new JarFile(out.toFile())) {
+            List<String> names = copy.stream().map(JarEntry::getName).toList();
+            Set<String> folders = new java.util.TreeSet<>();
+            names.stream().filter(n -> !n.endsWith("/")).forEach(n -> {
+                for (int i = n.indexOf('/'); i >= 0; i = n.indexOf('/', i + 1)) {
+                    folders.add(n.substring(0, i + 1));
+                }
+            });
+            assertTrue(folders.containsAll(Set.of("META-INF/frontend/tools/", "org/dep/generated/")));
+            for (String folder : folders) {
+                assertTrue(copy.getEntry(folder) != null && copy.getEntry(folder).isDirectory(),
+                        folder + " has a directory entry: " + names);
+            }
+            assertEquals(names.size(), Set.copyOf(names).size(), "each entry once: " + names);
+        }
+    }
+
     @Test
     void resolvePrefersTheEnrichedCopyThenTheModularizedOne() throws Exception {
         Path build = tmp.resolve("target");

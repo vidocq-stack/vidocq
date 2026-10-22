@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261022-01 — an enriched jar has no folder entries, so Vaadin's development mode copies no frontend files
+
+- **Date**: 2026-10-22
+- **Status**: FIXED on `pr/ybl/enriched-jar-folders` (found on threadlocalrandom/VaadinCreate2026, Vidocq/vidocq#256)
+- **Symptom**: with `vaadin-dev-server` and no ready development bundle, `vidocq:run` fails the Vite build:
+  `Cannot find module or type declarations for side-effect import of
+  'Frontend/generated/jar-resources/vaadin-dev-tools/vaadin-dev-tools.js'`. Vaadin logs `Visited 16 resources`
+  while copying the frontend files of its jars, and `vaadin-dev-tools/` stays empty.
+- **Minimal repro**: `EnrichedJars.write` on a jar holding `META-INF/frontend/tools/tools.js` and its folder entries:
+  the copy keeps the file and drops `META-INF/frontend/` and `META-INF/frontend/tools/`.
+- **Cause**: `EnrichedJars.write` skipped every directory entry of the source jar. The JDK finds a folder resource of
+  a jar, such as `META-INF/frontend/`, only through its directory entry, so Vaadin found no frontend folder in the
+  three jars `vidocq:generate` enriches (`flow-server`, `vaadin-dev-server`, `atmosphere-runtime`), which had 0
+  directory entries instead of 17 in the original `vaadin-dev-server`. Vidocq/vauban#177 named Vauban's `vauban:`
+  resource URLs instead; that change removes Vaadin's `PinnedNpmVersions` error but the copy works without it.
+- **Fix**: the copy writes an entry for every folder before its first file, as the jar tool does, including the
+  folders of generated packages. The inputs digest gains a `layout folders` line, so a copy written before is
+  rewritten once. Test `theCopyHasAnEntryForEveryFolder`.
+
 ## BUG-20261021-01 — the MCP check reports synthetic methods as methods with unnamed parameters
 
 - **Date**: 2026-10-21

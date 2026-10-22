@@ -434,7 +434,18 @@ public final class EnrichedJars {
         Files.createDirectories(out.toAbsolutePath().getParent());
         Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(tmp), manifest)) {
+            // Every folder gets its own entry, before its first file, as the jar tool writes them: the JDK finds a
+            // folder resource, such as the frontend files Vaadin's development mode copies, only through that entry.
+            Set<String> folders = new HashSet<>();
             for (var e : entries.entrySet()) {
+                String name = e.getKey();
+                for (int i = name.indexOf('/'); i >= 0; i = name.indexOf('/', i + 1)) {
+                    String folder = name.substring(0, i + 1);
+                    if (folders.add(folder)) {
+                        jar.putNextEntry(new JarEntry(folder));
+                        jar.closeEntry();
+                    }
+                }
                 jar.putNextEntry(new JarEntry(e.getKey()));
                 jar.write(e.getValue());
                 jar.closeEntry();
@@ -466,6 +477,8 @@ public final class EnrichedJars {
         MessageDigest digest = sha256();
         Consumer<String> add = s -> digest.update((s + "\n").getBytes(StandardCharsets.UTF_8));
         add.accept("source " + sha256(source));
+        // A copy written before folders had their own entries is rewritten once
+        add.accept("layout folders");
         add.accept("coordinates " + coordinates);
         providers.stream().sorted().forEach(p -> add.accept("provider " + p));
         Map<String, byte[]> patch = readTree(patchDir);
