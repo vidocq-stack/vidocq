@@ -31,7 +31,7 @@ class GeneratedAccessorResolverTest {
     void rejectsConflictingTablesForTheSameRuntimeType() {
         assertThrows(ELException.class,
                 () -> new GeneratedAccessorELResolver(List.of(new Table(),new Table())));
-        assertThrows(ELException.class, () -> new GeneratedAccessorELResolver(null));
+        assertThrows(ELException.class, () -> new GeneratedAccessorELResolver((java.util.Collection<AccessorTable>) null));
     }
 
     @Test

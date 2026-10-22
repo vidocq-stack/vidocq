@@ -389,7 +389,7 @@ by class or interface. Instance bases select by supertype lookup (exact class, s
 then interfaces breadth-first; ELClass bases stay exact) since Vidocq/bodoni BOD-001; core
 also registers a built-in Map.Entry table, aligned with BeanELResolver, that an application
 Map.Entry table replaces. Core uses ServiceLoader and snapshots registrations in an
-immutable map; conflicting targets fail explicitly. The standard factory resolver
+immutable map, loaded once per factory and context class loader (EL-019); conflicting targets fail explicitly. The standard factory resolver
 hook places table dispatch after application resolvers and before API fallbacks.
 Closed application packages keep all direct calls inside their own Java module.
 Named-consumer tests cover closed beans/records and compare a direct table against

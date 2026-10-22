@@ -48,12 +48,13 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: the table map and the matching-table cache are owned by the resolver instance,
   which is per context, instead of by the factory. The ServiceLoader scan per context
   predates EL-018; the hierarchy walk per context and class comes with it.
-- Status: open. Suggested fix: build the tables and the ConcurrentHashMap cache once in a
-  factory-scoped catalog shared by its resolvers (and by adapt). Mind the class-loader and
-  module-layer semantics: ServiceLoader.load(AccessorProvider.class) currently resolves from
-  the thread context class loader at context creation, so a factory shared across
-  applications or layers must not serve one application's tables to another. No figure is
-  claimed; measure and record in BENCH.md before and after.
+- Status: fixed (2026-10-22). AccessorCatalog holds the tables and the lookup cache.
+  PeanoExpressionFactory loads one lazily from the context class loader it was created
+  under and shares it with every resolver it returns and with coerceToType's lambda
+  adaptation. A context created under another context class loader gets its own catalog,
+  so a factory shared across applications never serves one application's tables to
+  another. Regression tests: FactoryAccessorCatalogTest. Figures: BENCH.md, 2026-10-22
+  EL-019 entry (ContextBenchmark).
 
 ## EL-020 · 2026-10-22 · Deny mode throws from getCommonPropertyType after a table answered
 

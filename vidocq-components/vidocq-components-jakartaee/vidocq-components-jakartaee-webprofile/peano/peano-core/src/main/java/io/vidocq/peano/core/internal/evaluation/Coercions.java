@@ -22,6 +22,7 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.function.Supplier;
 import jakarta.el.ELException;
 import jakarta.el.LambdaExpression;
 
@@ -41,11 +42,25 @@ public final class Coercions {
      * @param <T> target type
      * @return converted value
      */
-    @SuppressWarnings("unchecked")
     public static <T> T convert(Object value, Class<T> type) {
+        return convert(value, type, () -> AccessorCatalog.load(Thread.currentThread().getContextClassLoader()));
+    }
+
+    /**
+     * Converts a value as {@link #convert(Object, Class)} does, adapting lambdas to application
+     * functional interfaces through the given catalog, which is only requested for such a lambda.
+     *
+     * @param value input value
+     * @param type target type
+     * @param accessors the accessor catalog of the calling factory (EL-019)
+     * @param <T> target type
+     * @return converted value
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T convert(Object value, Class<T> type, Supplier<AccessorCatalog> accessors) {
         if (type == null) return (T) value;
         try {
-            return (T) convertValue(value, type);
+            return (T) convertValue(value, type, accessors);
         } catch (ELException error) {
             throw error;
         } catch (RuntimeException error) {
@@ -53,7 +68,7 @@ public final class Coercions {
         }
     }
 
-    private static Object convertValue(Object value, Class<?> type) {
+    private static Object convertValue(Object value, Class<?> type, Supplier<AccessorCatalog> accessors) {
         if (value == null && !type.isPrimitive() && type != String.class) {
             return null;
         }
@@ -64,7 +79,7 @@ public final class Coercions {
         if (value instanceof LambdaExpression lambda && type.isInterface()) {
             Object standard = StandardFunctionalAdapters.adapt(null,lambda,type);
             if (standard != null) return standard;
-            Object adapted = GeneratedAccessorELResolver.adapt(lambda, type);
+            Object adapted = GeneratedAccessorELResolver.adapt(accessors.get(), lambda, type);
             if (adapted != null) return adapted;
         }
         if (boxed == String.class) {

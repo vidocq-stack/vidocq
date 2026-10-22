@@ -20,12 +20,14 @@
 package io.vidocq.peano.core.internal;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.CompositeELResolver;
 import jakarta.el.ExpressionFactory;
 import jakarta.el.MethodExpression;
 import jakarta.el.ValueExpression;
+import io.vidocq.peano.core.internal.evaluation.AccessorCatalog;
 import io.vidocq.peano.core.internal.evaluation.Coercions;
 import io.vidocq.peano.core.internal.evaluation.StreamELResolver;
 import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
@@ -34,14 +36,35 @@ import io.vidocq.peano.core.internal.evaluation.ReflectionGuard;
 /** Jakarta EL provider, discovered through the core module's service declaration. */
 public final class PeanoExpressionFactory extends ExpressionFactory {
     private final ParsedExpressionCache expressions = new ParsedExpressionCache();
+    /** The application this factory was created for, as ExpressionFactory.newInstance resolves it. */
+    private final ClassLoader owner = Thread.currentThread().getContextClassLoader();
+    /** The owner's accessor tables and lookup cache, loaded on first use and shared by every context (EL-019). */
+    private final AtomicReference<AccessorCatalog> accessors = new AtomicReference<>();
+
     public PeanoExpressionFactory() {
         ReflectionGuard.denied();
+    }
+
+    /**
+     * The accessor catalog for the calling thread's application. A context class loader other than
+     * the owner's may see other providers, so it gets its own catalog, never the shared one.
+     */
+    private AccessorCatalog accessors() {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (current != owner) return AccessorCatalog.load(current);
+        AccessorCatalog catalog = accessors.get();
+        if (catalog == null) {
+            // A race loads twice; both catalogs are equivalent and the first one published wins.
+            catalog = AccessorCatalog.load(owner);
+            if (!accessors.compareAndSet(null, catalog)) catalog = accessors.get();
+        }
+        return catalog;
     }
 
     @Override
     public ELResolver getStreamELResolver() {
         var resolver = new CompositeELResolver();
-        resolver.add(new GeneratedAccessorELResolver());
+        resolver.add(new GeneratedAccessorELResolver(accessors()));
         resolver.add(new StreamELResolver());
         resolver.add(new ReflectionGuard());
         return resolver;
@@ -70,7 +93,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
 
     @Override
     public <T> T coerceToType(Object value, Class<T> targetType) {
-        return Coercions.convert(value, targetType);
+        return Coercions.convert(value, targetType, this::accessors);
     }
 }
 

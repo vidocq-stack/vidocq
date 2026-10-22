@@ -710,3 +710,58 @@ heap bound. The source/hash distribution, collector and class/JIT bookkeeping af
 it; fixed 128-entry and 16KiB-per-entry engineering limits remain the design bounds.
 Delta vs a previous equivalent retention run: none; this establishes that diagnostic
 baseline. It does not measure application contexts, class-loader unload or RSS.
+
+## 2026-10-22 · EL-019 per-factory accessor catalog
+
+- Hardware: Apple M5 Max, Mac17,6, 18 logical CPUs, 128 GiB RAM; macOS 27.0.1.
+- JVM: Temurin 25+36-LTS, OpenJDK 64-Bit Server VM; JMH 1.37, Expressly 6.0.0,
+  Jakarta EL API 6.0.1. One benchmark thread, peano.reflection=allow, named modules.
+- Benchmark: new `ContextBenchmark.contextAndEvaluate`. Each operation creates a
+  StandardELContext over the factory (which asks it for its stream resolver), stores the
+  factory in the context, then evaluates one expression parsed during setup: `${model.value}`
+  on the bench's generated-table Model (`property`) or `${data.value}` on a Map
+  (`mapProperty`). This is the shape of one page request; it is not a throughput figure.
+- Before: branch `fix/el-019-el-020` at the EL-020 commit plus the benchmark, where every
+  resolver loads the AccessorProvider services and builds its own lookup cache. After: the
+  same branch with the factory-scoped AccessorCatalog.
+- Local run; workstation activity, CPU frequency, power mode and thermal state were not
+  controlled.
+
+Exact build and run, from the checkout root, for each state:
+
+```bash
+export JAVA_HOME=/Users/yblazart/.sdkman/candidates/java/25-tem
+export PATH="$JAVA_HOME/bin:$PATH"
+./mvnw -ntp -q -Pbench -pl peano-bench -am package -DskipTests
+./run-bench.sh ContextBenchmark -rf json -rff peano-bench/target/jmh-context-<state>.json
+```
+
+JMH annotations select 2 forks, 3 one-second warmups and 5 one-second measurements per
+fork. Raw output (decimal separator from the workstation locale), before:
+
+```text
+Benchmark                             (engine)    (fixture)  Mode  Cnt      Score     Error  Units
+ContextBenchmark.contextAndEvaluate      peano     property  avgt   10  15598,946 ± 316,097  ns/op
+ContextBenchmark.contextAndEvaluate      peano  mapProperty  avgt   10  16048,685 ± 609,867  ns/op
+ContextBenchmark.contextAndEvaluate  expressly     property  avgt   10    438,239 ±   4,026  ns/op
+ContextBenchmark.contextAndEvaluate  expressly  mapProperty  avgt   10    117,986 ±   1,323  ns/op
+```
+
+After:
+
+```text
+Benchmark                             (engine)    (fixture)  Mode  Cnt    Score    Error  Units
+ContextBenchmark.contextAndEvaluate      peano     property  avgt   10  158,850 ±  1,789  ns/op
+ContextBenchmark.contextAndEvaluate      peano  mapProperty  avgt   10  167,834 ±  7,461  ns/op
+ContextBenchmark.contextAndEvaluate  expressly     property  avgt   10  462,509 ± 30,801  ns/op
+ContextBenchmark.contextAndEvaluate  expressly  mapProperty  avgt   10  122,533 ±  1,092  ns/op
+```
+
+Raw JSON: [before](peano-bench/results/2026-10-22-el-019-context-before.json),
+[after](peano-bench/results/2026-10-22-el-019-context-after.json).
+
+Delta vs before: Peano 15598.9 → 158.9 ns/op (`property`) and 16048.7 → 167.8 ns/op
+(`mapProperty`), about 98× and 96×. The Map fixture never reaches a table, so the cost removed
+is the per-context service loading, not the lookup. Expressly, which this change does not
+touch, moves by +5.5 % and +3.9 %, within run-to-run noise of an uncontrolled workstation;
+it is the control. First comparable run of this benchmark; no earlier entry to compare.

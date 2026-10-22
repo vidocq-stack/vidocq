@@ -79,16 +79,20 @@ receive final diagnostics. No binary subtype scan is performed.
 AccessorProvider contributes a collection of AccessorTable instances, each an ELResolver
 registered for one class or interface. A Java module provides directive registers the public provider,
 even when the provider and model package have no exports or opens.
-GeneratedAccessorELResolver loads providers through ServiceLoader and snapshots their
-tables in an immutable class-keyed map. Duplicate target registrations fail explicitly.
+AccessorCatalog loads providers through ServiceLoader and snapshots their
+tables in an immutable class-keyed map. The factory loads one catalog, lazily, from the context
+class loader it was created under, and every context it serves shares it (EL-019); a context
+created under another context class loader gets its own catalog, so one application never sees
+another's tables. Duplicate target registrations fail explicitly.
 A built-in Map.Entry table (core internal package, not a service) is added unless an
 application table already targets Map.Entry. It mirrors the API BeanELResolver (read-only key
 and value, the three Map.Entry methods by exact arity) and is checked differentially against it.
 An instance base matches tables by supertype lookup: the exact class, the superclasses
 nearest first, then the interfaces breadth-first (see the Reference page for the exact order).
-Each operation tries them in that order until one resolves it. Each resolver caches the ordered
-list per runtime class in a ConcurrentHashMap, an empty list recording the absence of a table; resolvers are created per ELContext, so a ClassValue would
-churn the JDK classes' per-class maps. ELClass bases keep the exact-class lookup.
+Each operation tries them in that order until one resolves it. The catalog caches the ordered
+list per runtime class in a ConcurrentHashMap, an empty list recording the absence of a table.
+A ClassValue is not used: it would attach one application's tables to JDK classes such as the
+Map.Entry implementations, shared by every application. ELClass bases keep the exact-class lookup.
 Tables keep evaluation state in ELContext and must support concurrent use.
 
 The factory's getStreamELResolver hook returns a composite containing the table resolver

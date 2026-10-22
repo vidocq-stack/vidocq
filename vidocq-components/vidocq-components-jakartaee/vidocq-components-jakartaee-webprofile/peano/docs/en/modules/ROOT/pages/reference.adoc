@@ -314,7 +314,9 @@ resolves the operation, it falls through to the rest of the resolver chain, whic
 reflection policy above. getCommonPropertyType comes from the first matching table that reports
 one. A table keyed on a public interface therefore serves anonymous and private implementations,
 which no table can name. The ordered list of matching tables is cached per runtime class,
-including an empty list.
+including an empty list. The tables and that cache are built once per factory and shared by
+the contexts it creates; a context created under a different thread context class loader gets
+its own, so applications never share tables.
 
 An ELClass base (static fields and methods) uses its exact class only: static members are not
 inherited through EL. Functional-interface conversion keeps its exact target-interface lookup.
