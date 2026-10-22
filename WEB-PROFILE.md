@@ -29,7 +29,7 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Security | 4.0 | — | ❌ Foy enforces Servlet security (BASIC, FORM, CLIENT-CERT) with its own `IdentityStore`, which is not Jakarta Security — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
 | Jakarta Authentication | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
 | Jakarta Authorization | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
-| Jakarta Standard Tag Library | 3.0 | [`bodoni`](https://codefloe.com/Vidocq/bodoni) | ❌ repository scaffolded (2026-10-22), no tag yet: portable handlers on the JSTL API, optionally inlined by Ibarra at build time; `sql:` JNDI names need the runtime naming extension ([#297](https://codefloe.com/Vidocq/vidocq/issues/297)) — [#266](https://codefloe.com/Vidocq/vidocq/issues/266) | 1.1.0 |
+| Jakarta Standard Tag Library | 3.0 | [`bodoni`](https://codefloe.com/Vidocq/bodoni) | ❌ repository scaffolded (2026-10-22), no tag yet: portable handlers on the JSTL API, optionally inlined by Ibarra at build time; `sql:` JNDI names resolve through the runtime naming extension ([#297](https://codefloe.com/Vidocq/vidocq/issues/297)) — [#266](https://codefloe.com/Vidocq/vidocq/issues/266) | 1.1.0 |
 | Jakarta Debugging Support for Other Languages | 2.0 | `ibarra` | ❌ SMAP not checked yet — [#73](https://codefloe.com/Vidocq/vidocq/issues/73) | 1.1.0 |
 | Jakarta Contexts and Dependency Injection | 4.1 **Full** | Vauban | ❌ Vauban implements CDI **Lite** (TCK 774/774); Full 4.1 planned, groundwork in 1.1.0, Full in 1.2.0, following the [CDI 4.1 Full study](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md); no CDI 5 for now — [vauban#38](https://codefloe.com/Vidocq/vauban/issues/38) | 1.2.0 |
 | — Portable Extensions (part of CDI Full) | — | Vauban | ❌ isolated module, architecture decided — [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39) | 1.2.0 |
@@ -69,7 +69,7 @@ API at runtime instead of a third-party bytecode library), lives in
 | Jakarta WebSocket 2.2 (annotated API) | [vidocq#65](https://codefloe.com/Vidocq/vidocq/issues/65) |
 | Faces 4.1 (from scratch) | [vidocq#66](https://codefloe.com/Vidocq/vidocq/issues/66) |
 | Standard Tag Library 3.0 (Bodoni) | [vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) |
-| `java:` naming context backed by CDI (`vidocq-runtime-naming-extension`) | [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) |
+| `java:` naming context backed by CDI (`vidocq-runtime-naming-extension`): `java:comp/env/jdbc/…` delivered; `@Resource`, `resource-ref`, `env-entry` to come | [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) |
 | Jakarta Enterprise Beans Lite 4.0 | [vidocq#71](https://codefloe.com/Vidocq/vidocq/issues/71) |
 | Jakarta Concurrency 3.1 | [vidocq#72](https://codefloe.com/Vidocq/vidocq/issues/72) |
 | Debugging Support 2.0 (SMAP for Server Pages) | [vidocq#73](https://codefloe.com/Vidocq/vidocq/issues/73) |
@@ -169,11 +169,12 @@ solves the *operations* half of the "application server" problem; the *semantics
 
 ## 6. Status
 
-Updated on 2026-10-19.
+Updated on 2026-10-22.
 
 - **Delivered:** Servlet 6.1 (Foy), Server Pages 4.0 (Ibarra, precompiled at build time),
   Expression Language 6.0 (Peano), Data 1.0 (Mansart), each with its runtime extension and
-  its official TCK passing.
+  its official TCK passing; the `java:comp/env` naming context for data sources
+  (`vidocq-runtime-naming-extension`, Vauban Naming).
 - **In progress:** Persistence 3.2 (Antoine's project, for 0.4.0, else 1.1.0), Validation 3.1 (Erasmus),
   Transactions 2.0 beyond minimal JTA.
 - **Not started:** Concurrency, WebSocket API, Security / Authentication / Authorization,

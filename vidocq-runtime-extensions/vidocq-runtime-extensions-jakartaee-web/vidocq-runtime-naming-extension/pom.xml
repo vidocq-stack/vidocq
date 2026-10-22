@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-naming-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Naming</name>
+    <description>Vidocq Runtime extension that serves the JNDI java: namespace from the running CDI container,
+        through Vauban Naming: java:comp/env/jdbc/orders is the @Named("orders") DataSource bean</description>
+
+    <dependencies>
+        <!-- The factory, its contexts and the CDI beans that resolve the names. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-naming</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

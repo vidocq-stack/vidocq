@@ -314,6 +314,11 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-naming-extension</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>
@@ -444,6 +449,11 @@
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-classloader</artifactId>
+                <version>${vauban.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-naming</artifactId>
                 <version>${vauban.version}</version>
             </dependency>
 

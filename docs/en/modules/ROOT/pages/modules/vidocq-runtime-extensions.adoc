@@ -58,6 +58,10 @@
 | `jakartaee-web`
 | Serves the application's JSP pages, compiled at build time by xref:ibarra::index.adoc[Ibarra], through the Servlet extension, with Jakarta EL from Peano. See <<ibarra-pages>>.
 
+| `vidocq-runtime-naming-extension` [.tag-new]#NEW#
+| `jakartaee-web`
+| Answers the JNDI `java:` names from the running container, through xref:vauban::usage.adoc#jndi[Vauban Naming]: `java:comp/env/jdbc/orders` is the `@Named("orders")` data source. See <<naming>>.
+
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
 | JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
@@ -316,6 +320,46 @@ At run time, Foy finds Ibarra's JSP engine and the compiled pages in the applica
 The `pages` section of the startup report counts the compiled pages and lists their paths; when none was compiled, it reports an anomaly with the steps above.
 
 Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named` bean) need an EL resolver from Vauban (Vidocq/vauban#150); a page reads request, session and application attributes.
+
+[[naming]]
+== JNDI `java:` names [.tag-new]#NEW#
+
+Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:vauban::usage.adoc#jndi[Vauban Naming].
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-naming-extension</artifactId>
+</dependency>
+----
+
+The extension needs no codegen and no directive in the application's module unless the application looks names up itself or contributes some, with `requires io.vidocq.runtime.extensions.jakartaee.web.naming`. `vidocq extension add naming` adds the dependency and that directive.
+
+[cols="2,3",options="header"]
+|===
+| Name | Answered by
+
+| `java:comp/env/jdbc/<name>`
+| the `@Named("<name>")` `DataSource` bean, such as a pool of the Mansart Pool extension (`vidocq.pool.<name>.url`)
+
+| `java:module/env/…`, `java:app/env/…`
+| the same names: a Vidocq application is a single component
+
+| `java:comp/env`
+| a context, in which `jdbc/<name>` resolves
+
+| any other name of `java:comp/env`
+| a `JndiNameProvider` bean, when one answers it
+|===
+
+*Installation.* In its `configure` phase, before the container starts, the extension makes Vauban's factory the default of the JVM, through the `java.naming.factory.initial` system property. It sets the property only when the application chose no factory: neither in that property nor in a `jndi.properties` file, which the property would override. `ldap://`, `rmi://` and `dns://` names still reach the JDK's providers, and `new InitialContext(env)` with an explicit `Context.INITIAL_CONTEXT_FACTORY` still gets that factory. When Vidocq stops, the extension clears the property it set.
+
+*A context holds no container.* Each lookup asks the container running at that moment: a context the application kept answers from the new container after a `vidocq:dev` restart, and with no container running a lookup throws `NoInitialContextException`. The names are resolved lazily, at each lookup, and the namespace is read-only: `bind` and the other writes throw `OperationNotSupportedException`. A `@Dependent` data source is refused, since nobody would destroy the instance a lookup creates; the pools of the Mansart Pool extension are `@Singleton`.
+
+The `naming` section of the startup report says which factory answers `java:` names: this extension's, or the one the application chose.
+
+Not covered yet: `@Resource` injection, `resource-ref` and `env-entry` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
 
 == Typical lifecycle — Chappe example
 

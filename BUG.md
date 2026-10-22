@@ -698,3 +698,25 @@ where this whole bug class is invisible.
   Champollion through `cassini-core`.
 - **Fix**: the extension declares `champollion-jsonb` (`runtime`, with `champollion-jsonp`) and
   `jakarta.ws.rs-api`: a brick depends on APIs, its Vidocq runtime extension picks the implementations.
+
+## BUG-20261022-01 — `@VidocqDataSources` on a module declaration crashes javac
+
+- **Date**: 2026-10-22
+- **Status**: OPEN
+- **Affected module**: vidocq-runtime-mansart-pool-datasources-codegen (`VidocqDataSourcesProcessor`)
+- **Symptom**: the annotation's `@Target` allows `MODULE`, but a module annotated with it does not compile:
+  `Fatal error compiling: java.lang.NullPointerException: Cannot invoke
+  "javax.lang.model.element.PackageElement.getQualifiedName()" because the return value of
+  "javax.lang.model.util.Elements.getPackageOf(javax.lang.model.element.Element)" is null`.
+- **Minimal reproduction**: a module compiled with `vidocq-runtime-mansart-pool-datasources-codegen` on its
+  processor path, whose `module-info.java` reads
+  ```
+  @io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.VidocqDataSources("audit")
+  module com.example.app { requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool; }
+  ```
+- **Cause**: `VidocqDataSourcesProcessor.java:113` takes the generated holder's package from
+  `elements.getPackageOf(anchor)`, which returns `null` when the anchor is a `ModuleElement`.
+- **Investigations**:
+  - 2026-10-22: found while writing `vidocq-runtime-it-naming` (vidocq#297); the IT annotates a type instead.
+    A fix has to pick a package for a module anchor (for instance the module's first package, or refuse
+    `MODULE` in `@Target`).

@@ -105,6 +105,16 @@ class KnownExtensionsTest {
                 KnownExtensions.moduleDirectives("ibarra-pages", "consumer"));
     }
 
+    /** vidocq#297: the java: namespace needs no codegen and no directive beyond its module. */
+    @Test
+    void namingIsAWebExtensionWithoutCodegen() {
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("naming").groupId());
+        assertEquals("vidocq-runtime-naming-extension", KnownExtensions.resolve("naming").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("naming"));
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.naming"),
+                KnownExtensions.moduleDirectives("naming", "consumer"));
+    }
+
     @Test
     void peanoElShipsItsAccessorCodegenBundle() {
         assertEquals("io.vidocq.runtime.extensions.jakartaee.core",KnownExtensions.resolve("peano-el").groupId());

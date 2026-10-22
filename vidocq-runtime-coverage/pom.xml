@@ -31,8 +31,8 @@
         execution data make up the report; in test scope, only their execution data counts.
         vidocq-runtime-it-cassini-rest, -it-humboldt-cassini, -it-cervantes-jwt and
         -it-grimm-openapi only hold tests of the other modules, and -it-cyrano-jpms,
-        -it-foy-servlet, -it-ibarra-pages, -it-ravel-config and -it-langchain4j-cdi-mcp only add
-        the small application their tests run (SonarQube skips it): without this report, these
+        -it-foy-servlet, -it-ibarra-pages, -it-naming, -it-ravel-config and -it-langchain4j-cdi-mcp
+        only add the small application their tests run (SonarQube skips it): without this report, these
         tests would not count for the code they exercise (Vidocq/vidocq#284).
 
         Left out: vidocq-runtime-core-codegen, the *-extension-codegen bundles and
@@ -161,6 +161,11 @@
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-naming-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -298,6 +303,12 @@
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-it-ibarra-pages</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-it-naming</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

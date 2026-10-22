@@ -51,6 +51,7 @@
         <module>vidocq-runtime-it-cyrano-jpms</module>
         <module>vidocq-runtime-it-foy-servlet</module>
         <module>vidocq-runtime-it-ibarra-pages</module>
+        <module>vidocq-runtime-it-naming</module>
         <module>vidocq-runtime-it-ravel-config</module>
         <module>vidocq-runtime-it-langchain4j-cdi-mcp</module>
     </modules>

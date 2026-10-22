@@ -34,6 +34,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}` [.tag-new]#NEW#
 | Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
 
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}` [.tag-new]#NEW#
+| JNDI `java:` names answered by the running container through Vauban Naming: `java:comp/env/jdbc/<name>` is the `@Named("<name>")` data source. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
+
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
 
