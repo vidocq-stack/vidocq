@@ -31,6 +31,8 @@ import java.lang.constant.MethodTypeDesc;
 import java.lang.constant.ModuleDesc;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,12 +45,14 @@ import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -163,7 +167,8 @@ class EnrichedJarsTest {
                 "org/dep/Service.class", emptyClass("org.dep.Service"),
                 "META-INF/frontend/", new byte[0],
                 "META-INF/frontend/tools/", new byte[0],
-                "META-INF/frontend/tools/tools.js", "tools".getBytes(StandardCharsets.UTF_8)),
+                "META-INF/frontend/tools/tools.js", "tools".getBytes(StandardCharsets.UTF_8),
+                "META-INF/empty/", new byte[0]),
                 Map.of());
         Path patchDir = patch(tmp.resolve("patch"), Map.of(
                 "org/dep/generated/_VaubanComponents.class", emptyClass("org.dep.generated._VaubanComponents")));
@@ -172,20 +177,30 @@ class EnrichedJarsTest {
         EnrichedJars.write(source, null, patchDir, List.of("org.dep.generated._VaubanComponents"),
                 "org.dep:lib:1.0", source, out);
 
+        List<String> names;
         try (JarFile copy = new JarFile(out.toFile())) {
-            List<String> names = copy.stream().map(JarEntry::getName).toList();
-            Set<String> folders = new java.util.TreeSet<>();
-            names.stream().filter(n -> !n.endsWith("/")).forEach(n -> {
-                for (int i = n.indexOf('/'); i >= 0; i = n.indexOf('/', i + 1)) {
-                    folders.add(n.substring(0, i + 1));
-                }
-            });
-            assertTrue(folders.containsAll(Set.of("META-INF/frontend/tools/", "org/dep/generated/")));
-            for (String folder : folders) {
-                assertTrue(copy.getEntry(folder) != null && copy.getEntry(folder).isDirectory(),
-                        folder + " has a directory entry: " + names);
+            names = copy.stream().map(JarEntry::getName).toList();
+        }
+        assertEquals(names.size(), Set.copyOf(names).size(), "each entry once: " + names);
+        assertTrue(names.contains("META-INF/empty/"), "a folder with no file stays: " + names);
+        for (int k = 0; k < names.size(); k++) {
+            String name = names.get(k);
+            if (name.equals(JarFile.MANIFEST_NAME)) {
+                continue; // first, as JarInputStream needs it; its folder follows
             }
-            assertEquals(names.size(), Set.copyOf(names).size(), "each entry once: " + names);
+            for (int i = name.indexOf('/'); i >= 0 && i < name.length() - 1; i = name.indexOf('/', i + 1)) {
+                String folder = name.substring(0, i + 1);
+                int at = names.indexOf(folder);
+                assertTrue(at >= 0 && at < k, folder + " has an entry before " + name + ": " + names);
+            }
+        }
+        assertTrue(names.containsAll(Set.of("META-INF/frontend/tools/", "org/dep/generated/")), names.toString());
+        try (var in = new JarInputStream(Files.newInputStream(out))) {
+            assertNotNull(in.getManifest(), "the manifest stays the first entry");
+        }
+        try (var loader = new URLClassLoader(new URL[] {out.toUri().toURL()}, null)) {
+            assertNotNull(loader.getResource("META-INF/frontend/tools/"));
+            assertNotNull(loader.getResource("org/dep/generated/"));
         }
     }
 

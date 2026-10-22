@@ -67,16 +67,20 @@ class JpmsPatchesTest {
 
     @Test
     void enrichAddsPatchClassesWithoutTouchingExistingEntries() throws IOException {
-        Path srcJar = jar("lib.jar", "module-info.class", "com/acme/lib/Bean.class");
+        Path srcJar = jar("lib.jar", "module-info.class", "com/", "com/acme/", "com/acme/lib/",
+                "com/acme/lib/Bean.class");
         Path patchDir = tmp.resolve("patch");
         write(patchDir.resolve("com/acme/lib/Bean_ClientProxy.class"));
+        write(patchDir.resolve("com/acme/lib/generated/Components.class"));
         Path outJar = tmp.resolve("out/lib.jar");
 
         JpmsPatches.enrich(srcJar, patchDir, outJar);
 
+        // A generated package gets its folder entry, which a class loader needs to find the folder
         Set<String> entries = entriesOf(outJar);
-        assertEquals(Set.of("module-info.class", "com/acme/lib/Bean.class",
-                "com/acme/lib/Bean_ClientProxy.class"), entries);
+        assertEquals(Set.of("module-info.class", "com/", "com/acme/", "com/acme/lib/", "com/acme/lib/Bean.class",
+                "com/acme/lib/Bean_ClientProxy.class", "com/acme/lib/generated/",
+                "com/acme/lib/generated/Components.class"), entries);
     }
 
     @Test

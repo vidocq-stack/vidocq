@@ -56,6 +56,8 @@ import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * The enriched copy of a scanned dependency jar: the jar with the classes {@code vidocq:generate} generated for it —
@@ -343,14 +345,18 @@ public final class EnrichedJars {
         Set<String> requires = VaubanModuleReferences.of(patchClasses);
 
         Map<String, byte[]> entries = new LinkedHashMap<>();
+        List<String> sourceFolders = new ArrayList<>();
         Manifest manifest = new Manifest();
         try (JarFile in = new JarFile(source.toFile(), false)) {
             if (in.getManifest() != null) {
                 manifest = new Manifest(in.getManifest());
             }
             for (JarEntry entry : Collections.list(in.entries())) {
-                if (entry.isDirectory() || entry.getName().equals(JarFile.MANIFEST_NAME)
-                        || isSignature(entry.getName())) {
+                if (entry.isDirectory()) {
+                    sourceFolders.add(entry.getName());
+                    continue;
+                }
+                if (entry.getName().equals(JarFile.MANIFEST_NAME) || isSignature(entry.getName())) {
                     continue;
                 }
                 try (InputStream is = in.getInputStream(entry)) {
@@ -434,24 +440,35 @@ public final class EnrichedJars {
         Files.createDirectories(out.toAbsolutePath().getParent());
         Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(tmp), manifest)) {
-            // Every folder gets its own entry, before its first file, as the jar tool writes them: the JDK finds a
-            // folder resource, such as the frontend files Vaadin's development mode copies, only through that entry.
+            // Every folder gets its own entry, the source jar's own ones first, then any other before its first
+            // file, as the jar tool writes them.
             Set<String> folders = new HashSet<>();
+            for (String folder : sourceFolders) {
+                putFolders(jar, folder, folders);
+            }
             for (var e : entries.entrySet()) {
-                String name = e.getKey();
-                for (int i = name.indexOf('/'); i >= 0; i = name.indexOf('/', i + 1)) {
-                    String folder = name.substring(0, i + 1);
-                    if (folders.add(folder)) {
-                        jar.putNextEntry(new JarEntry(folder));
-                        jar.closeEntry();
-                    }
-                }
+                putFolders(jar, e.getKey(), folders);
                 jar.putNextEntry(new JarEntry(e.getKey()));
                 jar.write(e.getValue());
                 jar.closeEntry();
             }
         }
         Files.move(tmp, out, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /**
+     * Writes an entry for each folder of {@code name} that {@code written} does not hold yet, outermost first, and
+     * adds it there. The JDK finds a folder resource of a jar, such as the frontend files Vaadin's development mode
+     * copies, only through that entry.
+     */
+    static void putFolders(ZipOutputStream out, String name, Set<String> written) throws IOException {
+        for (int i = name.indexOf('/', 1); i >= 0; i = name.indexOf('/', i + 1)) {
+            String folder = name.substring(0, i + 1);
+            if (written.add(folder)) {
+                out.putNextEntry(new ZipEntry(folder));
+                out.closeEntry();
+            }
+        }
     }
 
     /** {@code META-INF/*.SF}, {@code *.RSA}, {@code *.DSA}, {@code *.EC}, {@code SIG-*}: a signature. */
@@ -467,8 +484,8 @@ public final class EnrichedJars {
     /**
      * {@code sha256:…} over what a copy is written from: the source jar, the parked classes, the providers, the
      * coordinates, when a descriptor is synthesized the names of the jars jdeps resolves against, and, for a jar
-     * bricks processed, each brick, the lines {@link Scanned#brickInputs()} carry and the parked resources merged.
-     * A jar no brick processed gets the same digest as before bricks existed.
+     * bricks processed, each brick, the lines {@link Scanned#brickInputs()} carry and the parked resources merged,
+     * and the layout of the copy, so that a copy written with an older layout is rewritten.
      *
      * @param dep the scanned jar, or {@code null} for a direct {@code write}
      */

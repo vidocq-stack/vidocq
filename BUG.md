@@ -20,9 +20,12 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   three jars `vidocq:generate` enriches (`flow-server`, `vaadin-dev-server`, `atmosphere-runtime`), which had 0
   directory entries instead of 17 in the original `vaadin-dev-server`. Vidocq/vauban#177 named Vauban's `vauban:`
   resource URLs instead; that change removes Vaadin's `PinnedNpmVersions` error but the copy works without it.
-- **Fix**: the copy writes an entry for every folder before its first file, as the jar tool does, including the
-  folders of generated packages. The inputs digest gains a `layout folders` line, so a copy written before is
-  rewritten once. Test `theCopyHasAnEntryForEveryFolder`.
+- **Fix**: the copy keeps the source jar's folder entries, empty ones included, and writes an entry for every other
+  folder before its first file, as the jar tool does, the folders of generated packages included.
+  `JpmsPatches.enrich`, used at packaging, gives a generated package its folder entry too. The inputs digest gains a
+  `layout folders` line, so a copy written before is rewritten once; on Windows, that one rewrite fails while a
+  running `vidocq:dev` holds the copy open, and passes once it stops. Tests `theCopyHasAnEntryForEveryFolder`,
+  `enrichAddsPatchClassesWithoutTouchingExistingEntries`.
 
 ## BUG-20261021-01 — the MCP check reports synthetic methods as methods with unnamed parameters
 

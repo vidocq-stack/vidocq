@@ -166,6 +166,8 @@ public final class JpmsPatches {
                         return;
                     }
                     try {
+                        // A generated package gets its folder entry, as the source jar's own packages have theirs
+                        EnrichedJars.putFolders(zout, name, present);
                         zout.putNextEntry(new ZipEntry(name));
                         Files.copy(file, zout);
                         zout.closeEntry();
