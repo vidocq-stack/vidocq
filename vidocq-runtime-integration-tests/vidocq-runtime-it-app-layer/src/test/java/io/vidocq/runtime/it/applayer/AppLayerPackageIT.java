@@ -39,6 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AppLayerPackageIT {
 
     private static final String STARTED = "Vidocq - Started in";
+    /** The name of the loader Vauban defines the application layer's modules with. */
+    private static final String LAYER_LOADER = "vauban-app-layer";
 
     @Test
     void allShipsTheLibraryInAppAndLaunchesItInTheApplicationLayer(@TempDir Path dir) throws Exception {
@@ -57,7 +59,9 @@ class AppLayerPackageIT {
 
         Path runLog = Fixture.logs().resolve("package-run.log");
         String out = run(script, runLog);
-        assertTrue(out.contains("LOOKUP-FOUND vauban:"), "the library's loader is the application layer's:\n" + out);
+        // The loader's name, not the URL's scheme: Vauban gives a plain jar a jar: URL (Vidocq/vauban#178)
+        assertTrue(out.contains("LOOKUP-LOADER " + LAYER_LOADER), "the library's loader is the application layer's:\n" + out);
+        assertTrue(out.contains("LOOKUP-FOUND "), "it sees the application's resource:\n" + out);
         assertTrue(out.contains("3 modules, 2 libraries"), "the report counts the libraries in the layer:\n" + out);
         assertTrue(out.contains("SQL-OK"), "a JDK module only an app/ module requires is resolved (vidocq#254):\n" + out);
     }
@@ -78,7 +82,7 @@ class AppLayerPackageIT {
 
         Path runLog = Fixture.logs().resolve("package-classes-run.log");
         String out = run(script, runLog);
-        assertFalse(out.contains("LOOKUP-FOUND vauban:"), out);
+        assertFalse(out.contains("LOOKUP-LOADER " + LAYER_LOADER), out);
         // acme.sql, an explicit module the application reads, moves with it; the automatic library stays out.
         assertTrue(out.contains("2 modules, 1 library (boot-layer"), "the automatic library is outside the layer:\n" + out);
         assertTrue(out.contains("SQL-OK"), out);
