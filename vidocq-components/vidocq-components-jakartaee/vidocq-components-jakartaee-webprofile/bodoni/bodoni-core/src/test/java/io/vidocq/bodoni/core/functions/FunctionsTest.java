@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -114,6 +115,32 @@ class FunctionsTest {
         assertTrue(Functions.containsIgnoreCase("ABC", "b"));
         assertFalse(Functions.containsIgnoreCase("ABC", "x"));
         assertTrue(Functions.containsIgnoreCase(null, null));
+    }
+
+    @Test
+    void containsIgnoreCaseDoesNotDependOnTheDefaultLocale() {
+        // Turkish dotted/dotless i: "file".toUpperCase() is "FİLE" under tr-TR.
+        Locale saved = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertTrue(Functions.containsIgnoreCase("file", "FILE"));
+            assertTrue(Functions.containsIgnoreCase("PROFILE", "fil"));
+            assertFalse(Functions.containsIgnoreCase("file", "FILES"));
+        } finally {
+            Locale.setDefault(saved);
+        }
+    }
+
+    @Test
+    void lengthOfEveryPrimitiveArrayType() {
+        assertEquals(1, Functions.length(new long[1]));
+        assertEquals(2, Functions.length(new short[2]));
+        assertEquals(3, Functions.length(new byte[3]));
+        assertEquals(4, Functions.length(new char[4]));
+        assertEquals(5, Functions.length(new boolean[5]));
+        assertEquals(6, Functions.length(new float[6]));
+        assertEquals(7, Functions.length(new double[7]));
+        assertEquals(2, Functions.length(new int[][] {{1}, {2, 3}}));
     }
 
     @Test

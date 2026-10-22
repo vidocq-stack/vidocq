@@ -20,7 +20,6 @@
 
 package io.vidocq.bodoni.core.functions;
 
-import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -43,9 +42,20 @@ public final class Functions {
         return nn(string).contains(nn(substring));
     }
 
-    /** {@code fn:containsIgnoreCase}. */
+    /**
+     * {@code fn:containsIgnoreCase}. The comparison is char-wise and locale-independent
+     * ({@link String#regionMatches(boolean, int, String, int, int)}), so it does not change
+     * with the default locale (Turkish dotted / dotless i).
+     */
     public static boolean containsIgnoreCase(String string, String substring) {
-        return nn(string).toUpperCase().contains(nn(substring).toUpperCase());
+        String in = nn(string);
+        String sub = nn(substring);
+        for (int i = 0, last = in.length() - sub.length(); i <= last; i++) {
+            if (in.regionMatches(true, i, sub, 0, sub.length())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** {@code fn:endsWith}. */
@@ -88,8 +98,37 @@ public final class Functions {
         if (input instanceof Map<?, ?> m) {
             return m.size();
         }
-        if (input.getClass().isArray()) {
-            return Array.getLength(input);
+        switch (input) {
+            case Object[] a -> {
+                return a.length;
+            }
+            case int[] a -> {
+                return a.length;
+            }
+            case long[] a -> {
+                return a.length;
+            }
+            case short[] a -> {
+                return a.length;
+            }
+            case byte[] a -> {
+                return a.length;
+            }
+            case char[] a -> {
+                return a.length;
+            }
+            case boolean[] a -> {
+                return a.length;
+            }
+            case float[] a -> {
+                return a.length;
+            }
+            case double[] a -> {
+                return a.length;
+            }
+            default -> {
+                // not an array: the other accepted types follow
+            }
         }
         if (input instanceof Iterator<?> it) {
             int n = 0;
