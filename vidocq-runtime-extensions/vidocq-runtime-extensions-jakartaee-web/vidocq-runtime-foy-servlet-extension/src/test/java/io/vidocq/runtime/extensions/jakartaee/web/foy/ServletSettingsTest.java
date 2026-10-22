@@ -63,8 +63,8 @@ class ServletSettingsTest {
 
     @Test
     void unknownResponseEncodingNamesTheKey() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSettings.from(
-                new MapConfiguration(Map.of("vidocq.servlet.response-character-encoding", "no-such-charset"))));
+        var config = new MapConfiguration(Map.of("vidocq.servlet.response-character-encoding", "no-such-charset"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSettings.from(config));
         assertTrue(e.getMessage().contains("vidocq.servlet.response-character-encoding"), e.getMessage());
         assertTrue(e.getMessage().contains("no-such-charset"), e.getMessage());
     }
