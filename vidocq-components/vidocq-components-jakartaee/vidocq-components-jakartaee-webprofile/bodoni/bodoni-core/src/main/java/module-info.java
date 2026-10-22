@@ -39,4 +39,7 @@ module io.vidocq.bodoni.core {
 
     // The fn: functions are called directly by generated pages.
     exports io.vidocq.bodoni.core.functions;
+
+    // Tag handlers are instantiated by name by Pages containers and by new in precompiled pages.
+    exports io.vidocq.bodoni.core.tags.core;
 }
