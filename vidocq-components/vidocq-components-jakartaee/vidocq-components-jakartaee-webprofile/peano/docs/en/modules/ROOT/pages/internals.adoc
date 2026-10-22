@@ -83,10 +83,10 @@ GeneratedAccessorELResolver loads providers through ServiceLoader and snapshots 
 tables in an immutable class-keyed map. Duplicate target registrations fail explicitly.
 A built-in Map.Entry table (core internal package, not a service) is added unless an
 application table already targets Map.Entry.
-An instance base selects its table by supertype lookup: the exact class, the superclasses
+An instance base matches tables by supertype lookup: the exact class, the superclasses
 nearest first, then the interfaces breadth-first (see the Reference page for the exact order).
-Each resolver caches the selection per runtime class in a ConcurrentHashMap, a sentinel
-recording the absence of a table; resolvers are created per ELContext, so a ClassValue would
+Each operation tries them in that order until one resolves it. Each resolver caches the ordered
+list per runtime class in a ConcurrentHashMap, an empty list recording the absence of a table; resolvers are created per ELContext, so a ClassValue would
 churn the JDK classes' per-class maps. ELClass bases keep the exact-class lookup.
 Tables keep evaluation state in ELContext and must support concurrent use.
 

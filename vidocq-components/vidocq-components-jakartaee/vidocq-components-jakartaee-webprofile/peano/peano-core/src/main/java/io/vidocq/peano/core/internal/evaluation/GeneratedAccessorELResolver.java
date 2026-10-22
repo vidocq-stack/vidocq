@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Objects;
@@ -40,7 +41,7 @@ import io.vidocq.peano.spi.AccessorTable;
 /**
  * Direct application-table dispatch, with no property/member introspection.
  *
- * <p>An instance base selects the first table registered for, in order:
+ * <p>An instance base matches the tables registered for, in order:
  * <ol>
  * <li>its exact runtime class;</li>
  * <li>each superclass, nearest first, Object excluded;</li>
@@ -49,19 +50,22 @@ import io.vidocq.peano.spi.AccessorTable;
  * come before the interfaces declared by the direct superclass, and so on. An interface reached
  * twice is visited once.</li>
  * </ol>
- * So a table keyed on a public interface serves anonymous and private implementations. The result
- * is cached per runtime class, absence included. An ELClass base (static access) uses the exact
- * class only, as static members are not inherited through EL, and convertToType keeps its
+ * Each operation tries the matching tables in that order and stops at the first one that resolves
+ * it (sets the resolution flag, or returns method metadata); a table that leaves the operation
+ * unresolved, such as a generated table that accepts its exact class only, passes it to the next.
+ * When none resolves, the operation stays unresolved for the rest of the resolver chain.
+ * So a table keyed on a public interface serves anonymous and private implementations. The ordered
+ * list is cached per runtime class, an empty list included. An ELClass base (static access) uses the
+ * exact class only, as static members are not inherited through EL, and convertToType keeps its
  * exact-target lookup for functional interfaces.
  *
  * <p>A built-in Map.Entry table is always registered; an application table for Map.Entry replaces
  * it, while two application tables for one type remain a conflict.
  */
 public final class GeneratedAccessorELResolver extends ELResolver {
-    /** Cache marker for a runtime class with no table anywhere in its hierarchy. */
-    private static final Object NONE = new Object();
     private final Map<Class<?>, AccessorTable> tables;
-    private final ConcurrentHashMap<Class<?>, Object> selected = new ConcurrentHashMap<>();
+    /** Matching tables per runtime class, in lookup order; an empty list means none. */
+    private final ConcurrentHashMap<Class<?>, List<AccessorTable>> matching = new ConcurrentHashMap<>();
 
     public GeneratedAccessorELResolver() {
         this(load());
@@ -97,27 +101,29 @@ public final class GeneratedAccessorELResolver extends ELResolver {
         return accessors;
     }
 
-    private AccessorTable table(ELContext context, Object base) {
+    private List<AccessorTable> tables(ELContext context, Object base) {
         Objects.requireNonNull(context, "context");
         bind(context);
-        if (base == null) return null;
-        if (base instanceof ELClass type) return tables.get(type.getKlass());
-        Class<?> runtime = base.getClass();
-        Object table = selected.get(runtime);
-        if (table == null) {
-            Object found = lookup(runtime);
-            table = selected.putIfAbsent(runtime, found == null ? NONE : found);
-            if (table == null) table = found == null ? NONE : found;
+        if (base == null) return List.of();
+        if (base instanceof ELClass type) {
+            AccessorTable exact = tables.get(type.getKlass());
+            return exact == null ? List.of() : List.of(exact);
         }
-        return table == NONE ? null : (AccessorTable) table;
+        Class<?> runtime = base.getClass();
+        List<AccessorTable> found = matching.get(runtime);
+        if (found == null) {
+            found = lookup(runtime);
+            List<AccessorTable> raced = matching.putIfAbsent(runtime, found);
+            if (raced != null) found = raced;
+        }
+        return found;
     }
 
-    private AccessorTable lookup(Class<?> runtime) {
-        AccessorTable exact = tables.get(runtime);
-        if (exact != null) return exact;
-        for (Class<?> type = runtime.getSuperclass(); type != null && type != Object.class; type = type.getSuperclass()) {
+    private List<AccessorTable> lookup(Class<?> runtime) {
+        var found = new ArrayList<AccessorTable>();
+        for (Class<?> type = runtime; type != null && (type == runtime || type != Object.class); type = type.getSuperclass()) {
             AccessorTable table = tables.get(type);
-            if (table != null) return table;
+            if (table != null) found.add(table);
         }
         // Breadth-first: a class contributes its interfaces, then its superclass; an interface its parents.
         var queue = new ArrayDeque<Class<?>>();
@@ -127,13 +133,13 @@ public final class GeneratedAccessorELResolver extends ELResolver {
             Class<?> type = queue.poll();
             if (type.isInterface()) {
                 AccessorTable table = tables.get(type);
-                if (table != null) return table;
+                if (table != null) found.add(table);
             }
             for (Class<?> parent : type.getInterfaces()) if (visited.add(parent)) queue.add(parent);
             Class<?> superclass = type.getSuperclass();
             if (superclass != null && superclass != Object.class) queue.add(superclass);
         }
-        return null;
+        return List.copyOf(found);
     }
 
     private void bind(ELContext context) {
@@ -163,16 +169,17 @@ public final class GeneratedAccessorELResolver extends ELResolver {
     /** Generated metadata is context-owned; lazy service discovery also supports custom contexts. */
     public static MethodReference reference(ELContext context, Object base, String method,
             Class<?>[] types, Object[] arguments) {
-        var resolver = catalog(context);
-        AccessorTable table = resolver.table(context, base);
-        return table == null ? null : table.getMethodReference(context, base, method, types, arguments);
+        for (AccessorTable table : catalog(context).tables(context, base)) {
+            MethodReference reference = table.getMethodReference(context, base, method, types, arguments);
+            if (reference != null) return reference;
+        }
+        return null;
     }
 
     /** Direct captured-function dispatch; the ordinary resolution flag distinguishes a null result. */
     public static Object invokeRegistered(ELContext context, Object base, String method,
             Class<?>[] types, Object[] arguments) {
-        AccessorTable table = catalog(context).table(context, base);
-        return table == null ? null : table.invoke(context, base, method, types, arguments);
+        return catalog(context).invokeTables(context, base, method, types, arguments);
     }
 
     private static GeneratedAccessorELResolver catalog(ELContext context) {
@@ -186,38 +193,59 @@ public final class GeneratedAccessorELResolver extends ELResolver {
 
     @Override
     public Object getValue(ELContext context, Object base, Object property) {
-        AccessorTable table = table(context, base);
-        return table == null ? null : table.getValue(context, base, property);
+        for (AccessorTable table : tables(context, base)) {
+            Object value = table.getValue(context, base, property);
+            if (context.isPropertyResolved()) return value;
+        }
+        return null;
     }
 
     @Override
     public Class<?> getType(ELContext context, Object base, Object property) {
-        AccessorTable table = table(context, base);
-        return table == null ? null : table.getType(context, base, property);
+        for (AccessorTable table : tables(context, base)) {
+            Class<?> type = table.getType(context, base, property);
+            if (context.isPropertyResolved()) return type;
+        }
+        return null;
     }
 
     @Override
     public void setValue(ELContext context, Object base, Object property, Object value) {
-        AccessorTable table = table(context, base);
-        if (table != null) table.setValue(context, base, property, value);
+        for (AccessorTable table : tables(context, base)) {
+            table.setValue(context, base, property, value);
+            if (context.isPropertyResolved()) return;
+        }
     }
 
     @Override
     public boolean isReadOnly(ELContext context, Object base, Object property) {
-        AccessorTable table = table(context, base);
-        return table != null && table.isReadOnly(context, base, property);
+        for (AccessorTable table : tables(context, base)) {
+            boolean readOnly = table.isReadOnly(context, base, property);
+            if (context.isPropertyResolved()) return readOnly;
+        }
+        return false;
     }
 
     @Override
     public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
-        AccessorTable table = table(context, base);
-        return table == null ? null : table.invoke(context, base, method, types, arguments);
+        return invokeTables(context, base, method, types, arguments);
     }
 
+    private Object invokeTables(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
+        for (AccessorTable table : tables(context, base)) {
+            Object result = table.invoke(context, base, method, types, arguments);
+            if (context.isPropertyResolved()) return result;
+        }
+        return null;
+    }
+
+    /** The first matching table that reports a common property type supplies it. */
     @Override
     public Class<?> getCommonPropertyType(ELContext context, Object base) {
-        AccessorTable table = table(context, base);
-        return table == null ? null : table.getCommonPropertyType(context, base);
+        for (AccessorTable table : tables(context, base)) {
+            Class<?> type = table.getCommonPropertyType(context, base);
+            if (type != null) return type;
+        }
+        return null;
     }
 }
-

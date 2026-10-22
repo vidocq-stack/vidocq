@@ -32,10 +32,10 @@ import jakarta.el.MethodReference;
  *
  * Tables must be safe for concurrent use and keep evaluation state in the ELContext.
  * Selection tries the exact runtime class, then its superclasses nearest first (Object
- * excluded), then its interfaces breadth-first, and uses the first registered table; a table
- * keyed on a public interface therefore serves anonymous and private implementations. A table
- * selected for a subtype leaves operations it does not handle unresolved. Static access through
- * an ELClass base uses the exact class only.
+ * excluded), then its interfaces breadth-first; each operation goes to those tables in that
+ * order until one resolves it, so a table that leaves an operation unresolved passes it on. A
+ * table keyed on a public interface therefore serves anonymous and private implementations.
+ * Static access through an ELClass base uses the exact class only.
  * This contract can be implemented by generated code or by a handwritten table.
  * Functional-interface tables handle convertToType by exact target interface.
  * Factory-driven lambda conversion supplies a null context; adapters then use the

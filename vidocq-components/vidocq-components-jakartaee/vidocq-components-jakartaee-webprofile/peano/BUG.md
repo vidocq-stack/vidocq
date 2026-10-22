@@ -15,14 +15,17 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: GeneratedAccessorELResolver selected a table with tables.get(base.getClass()),
   the exact runtime class only. No table can be written for a private or anonymous class,
   and Peano shipped no Map.Entry table.
-- Status: fixed. Instance bases now select the first table of the exact class, then the
-  superclasses nearest first, then the interfaces breadth-first, cached per runtime class
+- Status: fixed. Instance bases now try the tables of the exact class, then the superclasses
+  nearest first, then the interfaces breadth-first, until one resolves the operation (a
+  generated exact-class table no longer hides an interface table); the ordered list is cached
+  per runtime class
   (ELClass bases and functional conversion stay exact). peano-core registers a built-in
   Map.Entry table (key read-only, value written through setValue) that an application
   table replaces. The LoopTagStatus table itself belongs to Bodoni (bodoni-peano).
 - Evidence: MapEntryAccessTest (deny mode, Map.of, HashMap and unmodifiable entries,
   writes, unknown-type guard message) and GeneratedAccessorResolverTest (interface,
-  superclass, precedence, breadth-first order, built-in override) failed before the change,
+  superclass, precedence, breadth-first order, built-in override, fall-through behind an
+  exact-only superclass table in deny mode) failed before the change,
   except the guard-message and negative-lookup cases, which pin unchanged behaviour.
 
 ## CI-003 · 2026-10-11 · Forge branch updates create unsigned merge commits

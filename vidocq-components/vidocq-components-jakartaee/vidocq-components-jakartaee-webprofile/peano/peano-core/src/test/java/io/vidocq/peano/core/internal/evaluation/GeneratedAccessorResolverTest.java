@@ -142,6 +142,149 @@ class GeneratedAccessorResolverTest {
                 new Labelled(java.util.Map.Entry.class,"one"), new Labelled(java.util.Map.Entry.class,"two"))));
     }
 
+    @Test
+    void anUnresolvingTableFallsThroughToTheNextMatchingTable() {
+        var exact = new ExactOnly(Base.class);
+        var status = new StatusTable();
+        var resolver = new GeneratedAccessorELResolver(List.of(exact, status));
+        var context = new StandardELContext(ExpressionFactory.newInstance());
+        var sub = new Sub();
+        assertEquals("status", resolver.getValue(context,sub,"prop"));
+        assertTrue(context.isPropertyResolved());
+        context.setPropertyResolved(false);
+        assertEquals(String.class, resolver.getType(context,sub,"prop"));
+        assertTrue(context.isPropertyResolved());
+        context.setPropertyResolved(false);
+        assertFalse(resolver.isReadOnly(context,sub,"prop"));
+        assertTrue(context.isPropertyResolved());
+        context.setPropertyResolved(false);
+        resolver.setValue(context,sub,"prop","written");
+        assertTrue(context.isPropertyResolved());
+        assertEquals("written", status.written);
+        context.setPropertyResolved(false);
+        assertEquals("acted", resolver.invoke(context,sub,"act",new Class<?>[0],new Object[0]));
+        assertTrue(context.isPropertyResolved());
+        context.setPropertyResolved(false);
+        assertEquals("act", GeneratedAccessorELResolver.reference(context,sub,"act",new Class<?>[0],new Object[0])
+                .getMethodInfo().getName());
+        context.setPropertyResolved(false);
+        assertEquals("acted", GeneratedAccessorELResolver.invokeRegistered(context,sub,"act",new Class<?>[0],new Object[0]));
+        assertTrue(context.isPropertyResolved());
+        context.setPropertyResolved(false);
+        assertEquals(String.class, resolver.getCommonPropertyType(context,sub));
+        // The exact-class table still serves its own class first.
+        assertEquals("base", resolver.getValue(context,new Base(),"prop"));
+        assertTrue(exact.consulted > 0);
+        // No matching table resolves: the operation stays unresolved for the rest of the chain.
+        context.setPropertyResolved(false);
+        assertNull(resolver.getValue(context,sub,"missing"));
+        assertFalse(context.isPropertyResolved());
+    }
+
+    @Test
+    void interfaceTableResolvesBehindAnExactOnlySuperclassTableInDenyMode() {
+        String previous = System.getProperty("peano.reflection");
+        System.setProperty("peano.reflection","deny");
+        try {
+            var factory = ExpressionFactory.newInstance();
+            var context = new StandardELContext(factory);
+            var chain = new CompositeELResolver();
+            chain.add(new GeneratedAccessorELResolver(List.of(new ExactOnly(Base.class), new StatusTable())));
+            chain.add(new ReflectionGuard());
+            context.addELResolver(chain);
+            context.getVariableMapper().setVariable("x", factory.createValueExpression(new Sub(), Object.class));
+            assertEquals("status", factory.createValueExpression(context,"${x.prop}",Object.class).getValue(context));
+            assertEquals("acted", factory.createValueExpression(context,"${x.act()}",Object.class).getValue(context));
+            var denied = assertThrows(ELException.class,
+                    () -> factory.createValueExpression(context,"${x.missing}",Object.class).getValue(context));
+            assertEquals("Reflection fallback denied for " + Sub.class.getName()
+                    + "; register a generated accessor provider or a custom resolver", denied.getMessage());
+        } finally {
+            if (previous == null) System.clearProperty("peano.reflection");
+            else System.setProperty("peano.reflection",previous);
+        }
+    }
+
+    /** Behaves like a generated table: it handles its exact class only. */
+    private static final class ExactOnly extends AccessorTable {
+        private final Class<?> type;
+        private int consulted;
+        ExactOnly(Class<?> type) { this.type = type; }
+        private boolean accepts(ELContext context, Object base, Object property) {
+            consulted++;
+            if (base == null || base.getClass() != type || !"prop".equals(property)) return false;
+            context.setPropertyResolved(base,property);
+            return true;
+        }
+        @Override public Class<?> targetType() { return type; }
+        @Override public Object getValue(ELContext context, Object base, Object property) {
+            return accepts(context,base,property) ? "base" : null;
+        }
+        @Override public Class<?> getType(ELContext context, Object base, Object property) {
+            return accepts(context,base,property) ? String.class : null;
+        }
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+            accepts(context,base,property);
+        }
+        @Override public boolean isReadOnly(ELContext context, Object base, Object property) {
+            return accepts(context,base,property) && false;
+        }
+        @Override public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] args) {
+            consulted++;
+            if (base == null || base.getClass() != type || !"act".equals(method)) return null;
+            context.setPropertyResolved(base,method);
+            return "base-acted";
+        }
+        @Override public MethodReference getMethodReference(ELContext context, Object base, String method,
+                Class<?>[] types, Object[] arguments) {
+            consulted++;
+            return base != null && base.getClass() == type && "act".equals(method)
+                    ? new MethodReference(base,new MethodInfo("act",String.class,new Class<?>[0]),
+                            new java.lang.annotation.Annotation[0],new Object[0]) : null;
+        }
+        @Override public Class<?> getCommonPropertyType(ELContext context, Object base) {
+            return base != null && base.getClass() == type ? String.class : null;
+        }
+    }
+
+    /** Handwritten interface table: serves every Status implementation. */
+    private static final class StatusTable extends AccessorTable {
+        private Object written;
+        private boolean accepts(ELContext context, Object base, Object property) {
+            if (!(base instanceof Status) || !"prop".equals(property)) return false;
+            context.setPropertyResolved(base,property);
+            return true;
+        }
+        @Override public Class<?> targetType() { return Status.class; }
+        @Override public Object getValue(ELContext context, Object base, Object property) {
+            return accepts(context,base,property) ? "status" : null;
+        }
+        @Override public Class<?> getType(ELContext context, Object base, Object property) {
+            return accepts(context,base,property) ? String.class : null;
+        }
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+            if (accepts(context,base,property)) written = value;
+        }
+        @Override public boolean isReadOnly(ELContext context, Object base, Object property) {
+            accepts(context,base,property);
+            return false;
+        }
+        @Override public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] args) {
+            if (!(base instanceof Status) || !"act".equals(method)) return null;
+            context.setPropertyResolved(base,method);
+            return "acted";
+        }
+        @Override public MethodReference getMethodReference(ELContext context, Object base, String method,
+                Class<?>[] types, Object[] arguments) {
+            return base instanceof Status && "act".equals(method)
+                    ? new MethodReference(base,new MethodInfo("act",String.class,new Class<?>[0]),
+                            new java.lang.annotation.Annotation[0],new Object[0]) : null;
+        }
+        @Override public Class<?> getCommonPropertyType(ELContext context, Object base) {
+            return base instanceof Status ? String.class : null;
+        }
+    }
+
     private static Object who(GeneratedAccessorELResolver resolver, Object base) {
         var context = new StandardELContext(ExpressionFactory.newInstance());
         Object value = resolver.getValue(context,base,"who");

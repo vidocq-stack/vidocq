@@ -295,7 +295,7 @@ retain their own implementation responsibility.
 
 == Accessor table selection
 
-An instance base selects the first AccessorTable registered for, in order:
+An instance base matches the AccessorTables registered for, in order:
 
 . its exact runtime class;
 . each superclass, nearest first (`java.lang.Object` excluded);
@@ -304,12 +304,17 @@ An instance base selects the first AccessorTable registered for, in order:
   come before the interfaces declared by the direct superclass, and so on up the hierarchy.
   An interface reached twice is visited once.
 
-A table keyed on a public interface therefore serves anonymous and private implementations,
-which no table can name. The selected table alone handles the base: an operation it leaves
-unresolved falls through to the rest of the resolver chain (the reflection policy above), not
-to a table further up the hierarchy. Generated tables accept their exact class only, so a
-generated superclass table leaves a subclass unresolved. The selection is cached per runtime
-class, including the absence of a table.
+Each operation (getValue, getType, setValue, isReadOnly, method invocation and method
+metadata) tries the matching tables in that order and stops at the first one that resolves it:
+the table sets the resolution flag, or returns a method reference. A table that leaves the
+operation unresolved passes it to the next matching table. Generated tables accept their exact
+class only, so a subclass without its own table falls through its generated superclass table
+to, for instance, a handwritten table on an interface it implements. When no matching table
+resolves the operation, it falls through to the rest of the resolver chain, which applies the
+reflection policy above. getCommonPropertyType comes from the first matching table that reports
+one. A table keyed on a public interface therefore serves anonymous and private implementations,
+which no table can name. The ordered list of matching tables is cached per runtime class,
+including an empty list.
 
 An ELClass base (static fields and methods) uses its exact class only: static members are not
 inherited through EL. Functional-interface conversion keeps its exact target-interface lookup.
