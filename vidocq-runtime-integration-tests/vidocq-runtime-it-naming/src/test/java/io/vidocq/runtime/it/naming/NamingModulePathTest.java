@@ -80,6 +80,14 @@ class NamingModulePathTest {
     }
 
     @Test
+    void a_bean_with_a_qualifier_of_the_application_is_named_by_its_declaration() throws NamingException {
+        var clock = (AuditClock) new InitialContext().lookup("java:comp/env/clock/audit");
+
+        assertSame(CDI.current().select(AuditClock.class, AuditClock.class.getAnnotation(Ledger.class)).get(), clock);
+        assertEquals("UTC", clock.zone());
+    }
+
+    @Test
     void the_namespaces_are_distinct() throws NamingException {
         var context = new InitialContext();
 
