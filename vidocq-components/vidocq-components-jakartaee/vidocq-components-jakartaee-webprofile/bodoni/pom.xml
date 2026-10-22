@@ -143,4 +143,25 @@
             tck        adds bodoni-tck            ./mvnw -Ptck -pl bodoni-tck test
             quality    adds bodoni-coverage       aggregated JaCoCo report for SonarQube
     -->
+    <profiles>
+        <!--
+            it-ibarra adds bodoni-it-ibarra, an unpublished integration test that
+            precompiles real pages with Ibarra and renders them on Foy over Chappe:
+                ./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify
+            The default build neither builds the module nor resolves Ibarra, Peano,
+            Foy or Chappe.
+        -->
+        <profile>
+            <id>it-ibarra</id>
+            <properties>
+                <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
+                <peano.version>0.4.0-SNAPSHOT</peano.version>
+                <foy.version>0.4.0-SNAPSHOT</foy.version>
+                <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+            </properties>
+            <modules>
+                <module>bodoni-it-ibarra</module>
+            </modules>
+        </profile>
+    </profiles>
 </project>

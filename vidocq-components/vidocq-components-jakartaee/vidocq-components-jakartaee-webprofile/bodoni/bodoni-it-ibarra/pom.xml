@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    bodoni-it-ibarra — unpublished integration test, joins the reactor only under the
+    `it-ibarra` profile of bodoni-parent.
+
+    The module is an application: Ibarra's precompile goal compiles the pages of
+    src/main/webapp at process-classes, against bodoni-core's TLDs (discovered from the
+    META-INF of the modules the application requires). CorePagesIT then forks a minimal
+    Foy-over-Chappe host on the module path (sources in src/test/resources/host, modelled
+    on Ibarra's ibarra-tck host) with -Dpeano.reflection=deny, and checks the rendered
+    HTML over HTTP.
+
+    Ibarra, Peano, Foy and Chappe appear here only: never in bodoni-core.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.vidocq.bodoni</groupId>
+        <artifactId>bodoni-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>bodoni-it-ibarra</artifactId>
+    <name>Bodoni :: IT :: Ibarra</name>
+    <description>Integration test — core and functions pages precompiled by Ibarra and rendered on Foy (not published)</description>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <dependencies>
+        <!-- The application: Bodoni's tags and functions, the Ibarra and Peano APIs the
+             precompiled pages call. -->
+        <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-api</artifactId>
+            <version>${ibarra.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-api</artifactId>
+            <version>${peano.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet.jsp</groupId>
+            <artifactId>jakarta.servlet.jsp-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.el</groupId>
+            <artifactId>jakarta.el-api</artifactId>
+        </dependency>
+
+        <!-- The runtime of the forked host (as in ibarra-tck). -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-foy</artifactId>
+            <version>${ibarra.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-core</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+            <version>${peano.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.vidocq.ibarra</groupId>
+                <artifactId>ibarra-maven-plugin</artifactId>
+                <version>${ibarra.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>precompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- The IT compiles the host (javax.tools) and drives it over HTTP
+                             (java.net.http): test-compilation-only read edges, never in the
+                             application's module-info. -->
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>java.compiler,java.net.http</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.bodoni.it.ibarra=java.compiler,java.net.http</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.5</version>
+                <configuration>
+                    <!-- The IT itself runs on the class path; the application and the
+                         host it forks run strictly as named modules. -->
+                    <useModulePath>false</useModulePath>
+                    <classesDirectory>${project.build.outputDirectory}</classesDirectory>
+                    <systemPropertyVariables>
+                        <bodoni.it.application>${project.build.outputDirectory}</bodoni.it.application>
+                        <bodoni.it.webapp>${project.basedir}/src/main/webapp</bodoni.it.webapp>
+                        <bodoni.it.work>${project.build.directory}/it-work</bodoni.it.work>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
