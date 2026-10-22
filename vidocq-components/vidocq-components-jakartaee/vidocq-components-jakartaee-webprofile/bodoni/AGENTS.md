@@ -76,7 +76,9 @@ The `it-ibarra` profile is not part of the default build: it needs **local snaps
 chappe, foy, peano and ibarra (`0.4.0-SNAPSHOT`) in `~/.m2`. The IT runs under
 `peano.reflection=deny` (`denyModeIsActive` proves it); its `varStatus` and `Map.Entry`
 tests (BUG.md BOD-001, fixed) need the `bodoni-peano` adapter and a Peano with
-supertype lookup.
+supertype lookup. BOD-002 is fixed in Vidocq/foy (Foy BUG-20261022-06). Foy builds that
+predate it leave the request thread's context class loader unset, so `fmt:` cannot find
+application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 
 `bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
 `./mvnw install` will neither build nor download anything TCK-related.

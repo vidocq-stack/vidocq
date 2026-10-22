@@ -48,7 +48,11 @@ public class BundleTag extends TagSupport {
         this.prefix = prefix;
     }
 
-    /** @return the context established for the body; {@code null} outside it */
+    /**
+     * @return the context established by the latest {@link #doStartTag()} for the body; it is
+     *         kept until the next {@code doStartTag()} or {@link #release()}, and is
+     *         {@code null} before the first {@code doStartTag()} and after {@code release()}
+     */
     public LocalizationContext getLocalizationContext() {
         return localizationContext;
     }

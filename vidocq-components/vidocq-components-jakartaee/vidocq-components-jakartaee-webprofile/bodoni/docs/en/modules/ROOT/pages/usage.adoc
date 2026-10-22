@@ -48,7 +48,7 @@ The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/
 <fmt:parseNumber var="quantity" value="${param.qty}" integerOnly="true"/>
 ----
 
-The directory `i18n-bundles` is not a Java package, so a named application module needs no `opens` for it (see xref:reference.adoc#bundles[Resource bundles under Java Modules]). Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
+The directory `i18n-bundles` is not a Java package, so a named application module needs no `opens` for it. Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
 
 == Functions library
 

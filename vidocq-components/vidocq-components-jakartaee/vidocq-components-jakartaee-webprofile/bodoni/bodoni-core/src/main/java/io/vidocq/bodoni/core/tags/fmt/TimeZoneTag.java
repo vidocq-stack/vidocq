@@ -43,7 +43,11 @@ public class TimeZoneTag extends TagSupport {
         this.value = value;
     }
 
-    /** @return the time zone of the body; {@code null} outside it */
+    /**
+     * @return the time zone set by the latest {@link #doStartTag()} for the body; it is kept
+     *         until the next {@code doStartTag()} or {@link #release()}, and is {@code null}
+     *         before the first {@code doStartTag()} and after {@code release()}
+     */
     public TimeZone getTimeZone() {
         return timeZone;
     }

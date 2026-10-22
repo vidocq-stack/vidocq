@@ -99,18 +99,20 @@ The `fmt:` handlers read these settings through `Config.find`: page, request, se
 |===
 | Setting | Role
 
-| `jakarta.servlet.jsp.jstl.fmt.locale` | Locale used when no `fmt:setLocale` is in effect (8.11)
-| `jakarta.servlet.jsp.jstl.fmt.fallbackLocale` | Locale tried when no bundle matches the preferred locales (8.11)
-| `jakarta.servlet.jsp.jstl.fmt.localizationContext` | Default `LocalizationContext` or base name for `fmt:message` (8.11)
+| `jakarta.servlet.jsp.jstl.fmt.locale` | The application-based locale, written by `fmt:setLocale`: when set, it replaces the browser locales (`Accept-Language`) as the preferred locale of every `fmt:` action (8.11.1)
+| `jakarta.servlet.jsp.jstl.fmt.fallbackLocale` | Locale tried after the preferred locales, both for the bundle of a localization context and for the formatting locale lookup (8.11.2, 9.3.3)
+| `jakarta.servlet.jsp.jstl.fmt.localizationContext` | Default `LocalizationContext`, or a base name, for `fmt:message`; its locale is also the formatting locale of a formatting action that is not in a `fmt:bundle` with a locale (8.11.3, 9.2)
 | `jakarta.servlet.jsp.jstl.fmt.timeZone` | Default time zone of the date tags (9.11)
 |===
+
+Formatting in a locale other than English needs the JDK module `jdk.localedata` in a `jlink` image or a runtime started with `--limit-modules`.
 
 [#bundles]
 === Resource bundles under Java Modules
 
 `fmt:bundle`, `fmt:setBundle` and `fmt:message` load a bundle by name with `ResourceBundle.getBundle(basename, locale, loader)`, where `loader` is the thread context class loader, or the system class loader when it is `null`. This is also the loader of the `LocaleSupport` class of the JSTL API. The first-level matching rules of spec 8.3.1 are applied by Bodoni itself: the JDK refuses a `ResourceBundle.Control` supplied by a named module, so Bodoni filters the candidate locales, and the JVM default locale is never used.
 
-The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. Foy does not yet (BOD-002, being fixed in link:https://codefloe.com/Vidocq/foy[Vidocq/foy]).
+The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in link:https://codefloe.com/Vidocq/foy[Vidocq/foy] (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 
 What the lookup can see depends on where the application keeps its bundles. Observed on JDK 25 (2026-10-22), from a library module, with a named application module in the same class loader:
 

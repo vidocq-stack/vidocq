@@ -74,7 +74,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   Chappe's virtual threads), every fmt IT passes unchanged.
 - Candidate owners: Foy (set the context class loader to the application loader for the
   duration of a request, as Servlet containers do) or the host launcher.
-- Status: fixed (2026-10-22) in Vidocq/foy, branch `fix/request-context-class-loader`
-  (Foy BUG-20261022-06; the PR number will be added later): requests run with the application
-  class loader as context class loader. The bundle ITs (one per placement) are enabled and pass
-  without any change to the host or to Bodoni.
+- Status: fixed (2026-10-22). Fixed in Vidocq/foy (Foy BUG-20261022-06). Foy builds that
+  predate it leave the request thread's context class loader unset, so `fmt:` cannot find
+  application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix. With it,
+  requests run with the application class loader as context class loader and the bundle ITs
+  (one per placement) pass without any change to the host or to Bodoni.

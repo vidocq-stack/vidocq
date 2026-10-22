@@ -280,7 +280,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 |---|---|---|
 | B0 | Scaffold: reactor, `bodoni-core` module descriptor, docs, this plan | `./mvnw -ntp clean install` green (needs the first commit, or `-Dmaven.gitcommitid.skip=true`) |
 | B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). BOD-001 fixed by `bodoni-peano` |
-| B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (two tests disabled until BOD-002 is fixed in Foy); open question 4 settled |
+| B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (BOD-002: fixed in Vidocq/foy, Foy BUG-20261022-06; Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix); open question 4 settled |
 | B3 | `x:` (§11–§13): JDK parser/XSLT/XPath, scope variable resolver, `x:forEach` context | unit tests; open question 6 settled |
 | B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
 | B5 | `bodoni-tck` + `run-official-tck-tags-3.0.sh`, behind `-Ptck` | official suite green with standard handlers (open question 1 settled) |
@@ -324,7 +324,9 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    `jakarta.servlet.jsp.jstl.fmt.localizationContext` (no `opens`). A module-aware lookup is
    deferred to `bodoni-ibarra` (B6), where generated code runs inside the application module.
    The lookup requires the container to run requests with the application class loader as
-   thread context class loader; Foy does not yet (BOD-002, Vidocq/foy).
+   thread context class loader. BOD-002: fixed in Vidocq/foy (Foy BUG-20261022-06). Foy builds
+   that predate it leave the request thread's context class loader unset, so `fmt:` cannot find
+   application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 5. **Open Liberty precedence** — `pages-4.0` exposes the JSTL API and presumably its own
    implementation for the `jakarta.tags.*` URIs; does a WAR-bundled Bodoni win (Pages
    allows a container to provide alternate implementations for well-known URIs)? What does
