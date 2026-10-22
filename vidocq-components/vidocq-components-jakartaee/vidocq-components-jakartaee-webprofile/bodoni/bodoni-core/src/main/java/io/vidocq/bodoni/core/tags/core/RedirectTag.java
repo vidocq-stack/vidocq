@@ -39,6 +39,11 @@ import jakarta.servlet.jsp.tagext.BodyTagSupport;
  *
  * <p>The URL is resolved like {@code <c:url>} does, then relative URLs go through
  * {@code encodeRedirectURL}.
+ *
+ * <p>§7.6 defines no "Null &amp; Error Handling" for this action. {@code url} is a
+ * {@code String} attribute, so a container hands {@code url="${null}"} over as {@code ""},
+ * which is redirected to as a page-relative URL (§2.7: null handling is action-specific). A
+ * {@code null} that does reach the handler (attribute never set) is an error.
  */
 public class RedirectTag extends BodyTagSupport implements ParamParent {
 

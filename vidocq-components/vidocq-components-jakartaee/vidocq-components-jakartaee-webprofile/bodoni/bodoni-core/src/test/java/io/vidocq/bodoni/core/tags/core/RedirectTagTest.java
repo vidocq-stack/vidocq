@@ -75,6 +75,18 @@ class RedirectTagTest {
     }
 
     @Test
+    void emptyUrlIsAPageRelativeRedirect() throws Exception {
+        // url="${null}" reaches the handler as "" (String-typed attribute, EL coercion), and
+        // §7.6 has no "Null & Error Handling": "" is a page-relative URL, not an error.
+        TestPageContext pc = TestPageContext.create();
+        RedirectTag tag = new RedirectTag();
+        tag.setUrl("");
+        TagHarness.Result r = TagHarness.runForResult(tag, pc, null, p -> { });
+        assertEquals(Tag.SKIP_PAGE, r.endTagResult());
+        assertEquals(";jsessionid=T", ((TestHttpServletResponse) pc.getResponse()).redirect());
+    }
+
+    @Test
     void reusedInstanceCarriesNoParameter() throws Exception {
         TestPageContext pc = TestPageContext.create();
         RedirectTag tag = new RedirectTag();
