@@ -50,6 +50,14 @@ generates the application's and the Vaadin jars' glue. The parent manages the ve
 plugin, and `combine.children="append"` keeps the processors it already declares (`vidocq-runtime-core-codegen`)
 next to Foy's.
 
+Three parts of this pom are easy to leave out, and each one fails in its own way (see <<troubleshooting>>):
+
+* Foy's processor and the `generate` execution of `vidocq-runtime-maven-plugin`. Without them, the Vaadin servlet is
+  never deployed and every request answers 404.
+* The `jvmArgs` properties, which start Vaadin in production mode under every goal. Without them, every request
+  answers 500.
+* An SLF4J provider. Vaadin logs through SLF4J, and without a provider it logs nothing at all.
+
 [source,xml]
 ----
 <parent>
@@ -61,6 +69,10 @@ next to Foy's.
 <properties>
   <vaadin.version>25.3.2</vaadin.version>
   <vidocq.app.layer>all</vidocq.app.layer>
+  <!-- Production mode under vidocq:dev, vidocq:run and in the vidocq:package launch scripts. -->
+  <vidocq.dev.jvmArgs>-Dvaadin.productionMode=true</vidocq.dev.jvmArgs>
+  <vidocq.run.jvmArgs>-Dvaadin.productionMode=true</vidocq.run.jvmArgs>
+  <vidocq.jvmArgs>-Dvaadin.productionMode=true</vidocq.jvmArgs>
 </properties>
 
 <dependencyManagement>
@@ -93,6 +105,12 @@ next to Foy's.
     <groupId>com.vaadin</groupId>
     <artifactId>vaadin-prod-bundle</artifactId>
     <version>${vaadin.version}</version>
+  </dependency>
+  <!-- Vaadin logs through SLF4J: without a provider it is silent. This one writes to java.util.logging. -->
+  <dependency>
+    <groupId>org.slf4j</groupId>
+    <artifactId>slf4j-jdk14</artifactId>
+    <version>2.0.17</version>
   </dependency>
 </dependencies>
 
@@ -229,15 +247,27 @@ copies under `target/vidocq-enriched/`, and the startup report counts them:
 layer       69 modules, 68 libraries, 2 enriched (Foy 2) (vidocq.app.path, 69 archives)
 ----
 
-The output is cached in `~/.cache/vidocq/depgen`, so only the first build pays for it. Without this step,
-`flow-server`'s listener is never registered and the application answers 404. See
+The output is cached in `~/.cache/vidocq/depgen`, so only the first build pays for it. See
 xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
+
+Vaadin deploys its servlet from that listener, `com.vaadin.flow.server.startup.ServletContextListeners`, and not from
+one of its `ServletContainerInitializer` classes. Foy sees the listener of a library jar only once the jar has been
+processed. Without this step, the initializers still run, but the listener is never registered, no servlet is
+deployed and the application answers 404. The startup report shows whether the servlet is there:
+
+----
+servlet     1 servlet(s), 0 filter(s) at /
+----
+
+With an SLF4J provider, Vaadin also logs `Automatically deploying Vaadin servlet with name ... to /*`.
 
 [#production-mode]
 === Production mode [.tag-new]#NEW#
 
-`vaadin-prod-bundle` and `build-frontend` give a production build without Node. Start the application with
-`-Dvaadin.productionMode=true`:
+`vaadin-prod-bundle` and `build-frontend` give a production build without Node. Start the application with the
+system property `-Dvaadin.productionMode=true`. Vaadin reads it as a system property only. A file such as
+`vaadin.properties` in `src/main/resources` is not read. The `jvmArgs` properties of the <<setup,pom>> pass it to
+every goal, and each one can also be given on the command line:
 
 [cols="1,3"]
 |===
@@ -248,6 +278,10 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors 
 | `vidocq:package` | `-Dvidocq.jvmArgs=-Dvaadin.productionMode=true`, written into the launch scripts
 | `vidocq:jlink` | `JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true` in the environment of `bin/<app>`
 |===
+
+Without it, Vaadin starts in development mode. It then looks for a development bundle and every request answers 500
+with _Frontend development bundle is expected to be in the project or on the classpath, but not found_. With an SLF4J
+provider, the log shows `Vaadin is running in production mode.` once the property is set.
 
 Vaadin's own development mode, with Node and hot frontend reload, was not tried on Vidocq.
 
@@ -330,6 +364,29 @@ message that names the jars.
   image then works as long as the application does not use Collaboration Engine or LitTemplate.
 
 The resulting image is about 68 MB with its JDK, and starts in about 330 ms.
+
+[#troubleshooting]
+== Troubleshooting [.tag-new]#NEW#
+
+Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>). With no provider, the log shows only
+`SLF4J(W): No SLF4J providers were found`, and Vaadin's own errors appear nowhere.
+
+[cols="2,2,3"]
+|===
+| Symptom | Cause | Fix
+
+| Every request answers 404, and the startup report shows `0 servlet(s)`. The initializers are registered.
+| The Vaadin jars were not processed, so Vaadin's `@WebListener` was never registered and its servlet never deployed.
+| Add Foy's processor and the `generate` execution of `vidocq-runtime-maven-plugin`. See <<what-the-build-does>>.
+
+| Every request answers 500 with _Frontend development bundle is expected to be in the project or on the classpath, but not found_.
+| Vaadin runs in development mode.
+| Pass `-Dvaadin.productionMode=true`. See <<production-mode>>.
+
+| Every request answers 500 with _Unable to find index.html_.
+| Vaadin is outside the application layer.
+| Set `vidocq.app.layer=all`. See <<app-layer>>.
+|===
 
 [#limits]
 == Known limits [.tag-new]#NEW#
