@@ -1,8 +1,8 @@
 = Getting started
-:description: Adding Bodoni to a page application and writing a first page with the c: and fn: libraries.
+:description: Adding Bodoni to a page application and writing a first page with the c:, fmt: and fn: libraries.
 
 [.lead]
-Bodoni provides the `c:` (core) and `fn:` (functions) libraries of Jakarta Standard Tag Library 3.0. The `fmt:`, `x:` and `sql:` libraries are not implemented yet (B2 to B4).
+Bodoni provides the `c:` (core), `fmt:` (I18N and formatting) and `fn:` (functions) libraries of Jakarta Standard Tag Library 3.0. The `x:` and `sql:` libraries are not implemented yet (B3, B4). Applications with `fmt:` resource bundles in a named module: see xref:reference.adoc#bundles[Resource bundles under Java Modules].
 
 == Build from source
 

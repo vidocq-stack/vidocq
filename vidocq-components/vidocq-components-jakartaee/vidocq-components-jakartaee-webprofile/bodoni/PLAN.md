@@ -1,9 +1,9 @@
 # Bodoni — Design plan
 
-> Status: **B1 delivered (2026-10-22)** -- the `fn:` functions and the `c:` core tags are
-> implemented in `bodoni-core`, with unit tests and an Ibarra integration test
-> (`bodoni-it-ibarra`, `it-ibarra` profile). `fmt:`, `x:` and `sql:` (B2 to B4) are not
-> implemented. This document is the design of record for Bodoni, the
+> Status: **B2 delivered (2026-10-22)** -- the `fn:` functions, the `c:` core tags and the
+> `fmt:` i18n and formatting tags are implemented in `bodoni-core`, with unit tests and an
+> Ibarra integration test (`bodoni-it-ibarra`, `it-ibarra` profile). `x:` and `sql:` (B3, B4)
+> are not implemented. This document is the design of record for Bodoni, the
 > Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem,
 > required by Jakarta EE Web Profile 11 and tracked by
 > [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) (see
@@ -241,8 +241,9 @@ response wrapper, as the spec requires. The exported `Reader` (syntax 2) is clos
 From a named module, `ResourceBundle.getBundle(String, Locale, ClassLoader)` does not see
 bundles encapsulated in other named modules; `getBundle(String, Locale, Module)` can
 load on behalf of the application module, but which module to use (page class's module?
-context class loader's unnamed module for WARs?) is unverified (open question 4). No
-`opens` may be required from applications without a documented reason.
+context class loader's unnamed module for WARs?) was unverified; settled in B2 (open
+question 4, evidence table there). `opens` of the bundle package is one of three documented
+placements, never the only one.
 
 ### Reflection, threads
 
@@ -279,7 +280,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 |---|---|---|
 | B0 | Scaffold: reactor, `bodoni-core` module descriptor, docs, this plan | `./mvnw -ntp clean install` green (needs the first commit, or `-Dmaven.gitcommitid.skip=true`) |
 | B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). BOD-001 fixed by `bodoni-peano` |
-| B2 | `fmt:` i18n and formatting (§8–§9): locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; open question 4 settled |
+| B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (two tests disabled until BOD-002 is fixed in Foy); open question 4 settled |
 | B3 | `x:` (§11–§13): JDK parser/XSLT/XPath, scope variable resolver, `x:forEach` context | unit tests; open question 6 settled |
 | B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
 | B5 | `bodoni-tck` + `run-official-tck-tags-3.0.sh`, behind `-Ptck` | official suite green with standard handlers (open question 1 settled) |
@@ -302,9 +303,28 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    `requires transitive java.desktop` (apparently for `java.xml`), or report it upstream
    (jstl-api) and ask for `requires transitive java.xml` instead? Effect on jlink images
    and on Peano's "no `java.desktop`" stance to be assessed.
-4. **Resource bundles under Java Modules** — which `Module` / `ClassLoader` `fmt:` uses to
-   find application bundles in a named application module and in a WAR, without
-   requiring `opens`.
+4. ~~**Resource bundles under Java Modules**~~ -- decided in B2 (2026-10-22): `fmt:` calls
+   `ResourceBundle.getBundle(basename, locale, loader)` with the thread context class loader
+   (the system class loader when it is `null`), the loader the API's `LocaleSupport` uses.
+   The first-level semantics of §8.3.1 are enforced by Bodoni (the JDK refuses a
+   `ResourceBundle.Control` from a named module, so Bodoni filters the candidates itself;
+   the JVM default locale is never used). Evidence (JDK 25, 2026-10-22), from a library
+   module, with a named application module in the same class loader:
+
+   | Bundle location | Named application module | Application on the class path (WAR) |
+   |---|---|---|
+   | encapsulated package | not found (every `getBundle` overload, including on behalf of the page's module) | found |
+   | `opens`ed package | found | found |
+   | jar root or non-package directory (e.g. `i18n-bundles/`) | found | found |
+   | class-based bundle in a non-exported package | not found | found |
+
+   For a named application module the Reference page documents three placements: `opens`
+   the bundle package, bundles at the jar root or in a directory whose name is not a Java
+   package, or a `LocalizationContext` built in application code and set as
+   `jakarta.servlet.jsp.jstl.fmt.localizationContext` (no `opens`). A module-aware lookup is
+   deferred to `bodoni-ibarra` (B6), where generated code runs inside the application module.
+   The lookup requires the container to run requests with the application class loader as
+   thread context class loader; Foy does not yet (BOD-002, Vidocq/foy).
 5. **Open Liberty precedence** — `pages-4.0` exposes the JSTL API and presumably its own
    implementation for the `jakarta.tags.*` URIs; does a WAR-bundled Bodoni win (Pages
    allows a container to provide alternate implementations for well-known URIs)? What does
@@ -329,6 +349,19 @@ The Vidocq runtime extension (vidocq repository) follows B5.
   Relative URLs go through the `RequestDispatcher`.
 - **Packages**: `io.vidocq.bodoni.core.tags.core` (handlers, exported),
   `io.vidocq.bodoni.core.functions` (exported), `io.vidocq.bodoni.core.internal` (not exported).
+
+## Decisions recorded in B2
+
+- **Bundle lookup** (maintainer decision, 2026-10-22): thread context class loader, system
+  class loader when `null`; first-level semantics of §8.3.1 enforced by Bodoni; module-aware
+  lookup deferred to B6. See open question 4 for the evidence table.
+- **Dates**: `fmt:formatDate` and `fmt:parseDate` handle `java.util.Date` only (the spec
+  type); no `java.time` support in B2.
+- **JSTL 1.2 URI**: `http://java.sun.com/jsp/jstl/fmt` is shipped next to `jakarta.tags.fmt`
+  (`fmt-1_2.tld`), as for `c:` and `fn:`.
+- **Bundle prefix**: the `prefix` of an enclosing `fmt:bundle` applies to every nested
+  `fmt:message`, including one with an explicit `bundle` attribute (§8.6, "any nested
+  <fmt:message> actions").
 
 ## Cross-repo item: BOD-001 (fixed)
 

@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B1 delivered — `fn:` and `c:` implemented; `fmt:`, `x:`, `sql:` not yet.** Read [PLAN.md](PLAN.md) before any
+**Status: B2 delivered — `fn:`, `c:` and `fmt:` implemented; `x:`, `sql:` not yet.** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -85,7 +85,7 @@ supertype lookup.
 
 ```
 bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
-                c:, fmt:, fn:, x:, sql:  (B1: c: and fn:)
+                c:, fmt:, fn:, x:, sql:  (B2: c:, fn: and fmt:)
 bodoni-peano  ← optional engine adapter: LoopTagStatus accessor table for Peano
                 `peano.reflection=deny` (BOD-001); the only module allowed to depend on Peano
 bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
@@ -130,7 +130,7 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
   (artifact `bodoni-peano`); planned
   `io.vidocq.bodoni.ibarra` (artifact `bodoni-ibarra`).
 - **Packages** (fixed in B1): `io.vidocq.bodoni.core.tags.<library>` (exported tag
-  handlers; `tags.core` today, `fmt`, `xml`, `sql` to come), `io.vidocq.bodoni.core.functions`
+  handlers; `tags.core` and `tags.fmt` today, `xml`, `sql` to come), `io.vidocq.bodoni.core.functions`
   (exported `fn:` functions) and `io.vidocq.bodoni.core.internal` = implementation, not exported.
 - Licence header from `etc/license-header.txt` on every `.java` file.
 - Commits: see "Ecosystem rules" above.

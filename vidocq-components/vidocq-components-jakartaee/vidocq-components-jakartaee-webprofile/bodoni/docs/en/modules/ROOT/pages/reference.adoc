@@ -1,8 +1,8 @@
 = Reference
-:description: Coordinates, dependencies, tag and function lists, c:import behaviour and deployment notes — B1.
+:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, deployment notes — B1 and B2.
 
 [.lead]
-Bodoni publishes the `c:` and `fn:` libraries of Jakarta Standard Tag Library 3.0. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
+Bodoni publishes the `c:`, `fmt:` and `fn:` libraries of Jakarta Standard Tag Library 3.0. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
 
 == Coordinates
 
@@ -37,10 +37,11 @@ Each library is served under two URIs, both mapped to the same classes. The JSTL
 | Library | Prefix | URIs
 
 | Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core`
+| I18N and formatting | `fmt` | `jakarta.tags.fmt`, `http://java.sun.com/jsp/jstl/fmt` |
 | Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions`
 |===
 
-The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported package `io.vidocq.bodoni.core.tags.core`, the functions in `io.vidocq.bodoni.core.functions`.
+The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fmt.tld`, `fmt-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core` and `io.vidocq.bodoni.core.tags.fmt`, the functions in `io.vidocq.bodoni.core.functions`.
 
 === Core tags (`c:`)
 
@@ -63,6 +64,75 @@ The attributes of each tag are those of {spec-tags-3-0}[the specification] (chap
 | `c:redirect` | Sends an HTTP redirect (7)
 | `c:param` | Adds a request parameter to its enclosing `c:import`, `c:url` or `c:redirect` (7)
 |===
+
+=== I18N and formatting tags (`fmt:`)
+
+The twelve handlers of `io.vidocq.bodoni.core.tags.fmt`, with the attributes of `fmt.tld` (spec chapters 8 and 9). Attributes marked * are required. All attributes accept runtime expressions.
+
+[cols="1,3",options="header"]
+|===
+| Tag | Attributes
+
+| `fmt:setLocale` | `value`*, `variant`, `scope`
+| `fmt:requestEncoding` | `value`
+| `fmt:timeZone` | `value`*
+| `fmt:setTimeZone` | `value`*, `var`, `scope`
+| `fmt:bundle` | `basename`*, `prefix`
+| `fmt:setBundle` | `basename`*, `var`, `scope`
+| `fmt:message` | `key`, `bundle`, `var`, `scope`
+| `fmt:param` | `value`
+| `fmt:formatNumber` | `value`, `type`, `pattern`, `currencyCode`, `currencySymbol`, `groupingUsed`, `maxIntegerDigits`, `minIntegerDigits`, `maxFractionDigits`, `minFractionDigits`, `var`, `scope`
+| `fmt:parseNumber` | `value`, `type`, `pattern`, `parseLocale`, `integerOnly`, `var`, `scope`
+| `fmt:formatDate` | `value`*, `type`, `dateStyle`, `timeStyle`, `pattern`, `timeZone`, `var`, `scope`
+| `fmt:parseDate` | `value`, `type`, `dateStyle`, `timeStyle`, `pattern`, `timeZone`, `parseLocale`, `var`, `scope`
+|===
+
+* Dates are `java.util.Date` values, the type of the spec; `java.time` types are not supported.
+* The `prefix` of an enclosing `fmt:bundle` applies to every nested `fmt:message`, including one with an explicit `bundle` attribute (spec 8.6, "any nested <fmt:message> actions").
+
+[#fmt-config]
+==== Configuration settings
+
+The `fmt:` handlers read these settings through `Config.find`: page, request, session and application scope, then the context initialisation parameter of the same name.
+
+[cols="2,3",options="header"]
+|===
+| Setting | Role
+
+| `jakarta.servlet.jsp.jstl.fmt.locale` | Locale used when no `fmt:setLocale` is in effect (8.11)
+| `jakarta.servlet.jsp.jstl.fmt.fallbackLocale` | Locale tried when no bundle matches the preferred locales (8.11)
+| `jakarta.servlet.jsp.jstl.fmt.localizationContext` | Default `LocalizationContext` or base name for `fmt:message` (8.11)
+| `jakarta.servlet.jsp.jstl.fmt.timeZone` | Default time zone of the date tags (9.11)
+|===
+
+[#bundles]
+=== Resource bundles under Java Modules
+
+`fmt:bundle`, `fmt:setBundle` and `fmt:message` load a bundle by name with `ResourceBundle.getBundle(basename, locale, loader)`, where `loader` is the thread context class loader, or the system class loader when it is `null`. This is also the loader of the `LocaleSupport` class of the JSTL API. The first-level matching rules of spec 8.3.1 are applied by Bodoni itself: the JDK refuses a `ResourceBundle.Control` supplied by a named module, so Bodoni filters the candidate locales, and the JVM default locale is never used.
+
+The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. Foy does not yet (BOD-002, being fixed in link:https://codefloe.com/Vidocq/foy[Vidocq/foy]).
+
+What the lookup can see depends on where the application keeps its bundles. Observed on JDK 25 (2026-10-22), from a library module, with a named application module in the same class loader:
+
+[cols="3,2,2",options="header"]
+|===
+| Bundle location | Named application module | Application on the class path (WAR)
+
+| Encapsulated package | not found (every `getBundle` overload, including on behalf of the page's module) | found
+| `opens`ed package | found | found
+| Jar root or non-package directory (for example `i18n-bundles/`) | found | found
+| Class-based bundle in a non-exported package | not found | found
+|===
+
+For an application that is a named module, pick one of these placements:
+
+. **`opens` the bundle package** to everyone. The JSTL resolves bundles by name at run time, from another module, so the package must be open for the lookup to see it.
+. **Put the bundles at the jar root, or in a directory whose name is not a Java package** (`i18n-bundles/Messages_fr.properties`, base name `i18n-bundles.Messages`). No `opens` is needed.
+. **Build the `LocalizationContext` in application code** and set it as `jakarta.servlet.jsp.jstl.fmt.localizationContext` (any scope). The application loads the bundle from inside its own module, so nothing is `opens`ed.
+
+An application on the class path, such as a WAR, needs none of this.
+
+A module-aware lookup, where generated code runs inside the application module, is deferred to `bodoni-ibarra` (B6).
 
 === Functions (`fn:`)
 

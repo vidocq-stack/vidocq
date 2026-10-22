@@ -2,7 +2,7 @@
 :description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
 
 [.lead]
-Bodoni implements two of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1). The table gives the status of each.
+Bodoni implements three of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1, B2). The table gives the status of each.
 
 [cols="1,2,1,1",options="header"]
 |===
@@ -10,12 +10,12 @@ Bodoni implements two of the five tag libraries of Jakarta Standard Tag Library 
 
 | Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | implemented (B1)
 | Functions | `jakarta.tags.functions` | `fn` | implemented (B1)
-| I18N and formatting | `jakarta.tags.fmt` | `fmt` | planned (B2)
+| I18N and formatting | `jakarta.tags.fmt` | `fmt` | implemented (B2)
 | XML processing | `jakarta.tags.xml` | `x` | planned (B3)
 | Relational database access | `jakarta.tags.sql` | `sql` | planned (B4)
 |===
 
-The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
+The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
 
 == Core library
 
@@ -34,6 +34,22 @@ The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core` and `http://java.sun.com/j
 <c:catch var="failure"><c:import url="https://example.org/fragment.html"/></c:catch>
 ----
 
+== I18N and formatting library
+
+[source,jsp]
+----
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<fmt:setLocale value="fr_FR"/>
+<fmt:bundle basename="i18n-bundles.Messages" prefix="greeting.">
+  <p><fmt:message key="hello"><fmt:param value="${user}"/></fmt:message></p>
+</fmt:bundle>
+<p><fmt:formatNumber value="${price}" type="currency" currencyCode="EUR"/></p>
+<p><fmt:formatDate value="${now}" type="both" dateStyle="long" timeStyle="short"/></p>
+<fmt:parseNumber var="quantity" value="${param.qty}" integerOnly="true"/>
+----
+
+Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
+
 == Functions library
 
 [source,jsp]
@@ -46,7 +62,7 @@ The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core` and `http://java.sun.com/j
 
 == Configuration data
 
-The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:` and `fn:` libraries read none of them; they matter from B2 and B4:
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]); the `sql:` settings matter from B4:
 
 * `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
 * `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.
