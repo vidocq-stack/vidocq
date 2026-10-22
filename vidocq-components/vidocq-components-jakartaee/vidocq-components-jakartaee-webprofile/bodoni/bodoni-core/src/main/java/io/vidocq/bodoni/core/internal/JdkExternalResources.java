@@ -83,7 +83,7 @@ final class JdkExternalResources implements ExternalResources {
         HttpResponse<InputStream> response;
         try {
             response = Client.INSTANCE.send(httpRequest(uri), HttpResponse.BodyHandlers.ofInputStream());
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw new InterruptedIOException("Interrupted while fetching " + absoluteUrl);
         }

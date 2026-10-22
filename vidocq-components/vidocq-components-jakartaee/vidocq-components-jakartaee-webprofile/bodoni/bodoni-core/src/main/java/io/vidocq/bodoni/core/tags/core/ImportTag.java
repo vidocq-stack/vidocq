@@ -43,7 +43,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import jakarta.servlet.jsp.JspException;
@@ -75,7 +74,7 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
     private final transient ExternalResources external;
     private String url;
     private String context;
-    private String var;
+    private String varName;
     private String scope;
     private String charEncoding;
     private String varReader;
@@ -101,9 +100,9 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         this.context = context;
     }
 
-    /** @param var the name of the exported {@code String} variable */
-    public void setVar(String var) {
-        this.var = var;
+    /** @param name the name of the exported {@code String} variable */
+    public void setVar(String name) {
+        this.varName = name;
     }
 
     /** @param scope {@code page}, {@code request}, {@code session} or {@code application} */
@@ -138,7 +137,7 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         if (url == null || url.isEmpty()) {
             throw new JspTagException("c:import: the url attribute is required and must not be empty");
         }
-        if (var != null) {
+        if (varName != null) {
             scopeConstant();
         }
         if (varReader == null) {
@@ -163,8 +162,8 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
                 sb.append(buf, 0, n);
             }
             text = sb.toString();
-            if (var != null) {
-                pageContext.setAttribute(var, text, scopeConstant());
+            if (varName != null) {
+                pageContext.setAttribute(varName, text, scopeConstant());
             } else {
                 pageContext.getOut().write(text);
             }
@@ -188,7 +187,7 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         if (reader != null) {
             try {
                 reader.close();
-            } catch (IOException e) {
+            } catch (IOException _) {
                 // nothing useful to do while unwinding
             }
         }
@@ -209,16 +208,19 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         String responseEncoding = pageContext.getResponse().getCharacterEncoding();
         try {
             if (Urls.isAbsolute(url)) {
-                String target = Urls.appendParameters(url, params, responseEncoding);
-                try {
-                    return external.open(target, charEncoding);
-                } catch (IOException e) {
-                    throw new JspTagException("c:import: cannot read " + target + ": " + e.getMessage(), e);
-                }
+                return openExternal(Urls.appendParameters(url, params, responseEncoding));
             }
             return new StringReader(include(Urls.appendParameters(Urls.stripSessionId(url), params, responseEncoding)));
         } catch (IllegalArgumentException e) {
             throw new JspTagException("c:import: " + e.getMessage(), e);
+        }
+    }
+
+    private Reader openExternal(String target) throws JspTagException {
+        try {
+            return external.open(target, charEncoding);
+        } catch (IOException e) {
+            throw new JspTagException("c:import: cannot read " + target + ": " + e.getMessage(), e);
         }
     }
 
@@ -232,7 +234,7 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
             }
             dispatcher = foreign.getRequestDispatcher(path);
         } else {
-            dispatcher = ((HttpServletRequest) pageContext.getRequest()).getRequestDispatcher(path);
+            dispatcher = pageContext.getRequest().getRequestDispatcher(path);
         }
         if (dispatcher == null) {
             throw new JspTagException("c:import: no resource found for " + path);
@@ -261,7 +263,7 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         super.release();
         url = null;
         context = null;
-        var = null;
+        varName = null;
         scope = null;
         charEncoding = null;
         varReader = null;

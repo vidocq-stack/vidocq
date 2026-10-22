@@ -169,10 +169,12 @@ class TagHarnessTest {
 
             @Override
             public void doCatch(Throwable t) {
+                // a test double: nothing to do
             }
 
             @Override
             public void doFinally() {
+                // a test double: nothing to do
             }
         }
         TagHarness.run(new Failing(), pc, p -> {
@@ -184,7 +186,8 @@ class TagHarnessTest {
     @Test
     void failureWithoutTryCatchFinallyPropagates() {
         TestPageContext pc = TestPageContext.create();
-        assertThrows(IllegalStateException.class, () -> TagHarness.run(new Twice(), pc, p -> {
+        Twice tag = new Twice();
+        assertThrows(IllegalStateException.class, () -> TagHarness.run(tag, pc, p -> {
             throw new IllegalStateException("boom");
         }));
     }

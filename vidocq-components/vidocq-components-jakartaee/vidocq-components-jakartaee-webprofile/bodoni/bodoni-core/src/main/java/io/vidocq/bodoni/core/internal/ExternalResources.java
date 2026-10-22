@@ -72,7 +72,7 @@ public interface ExternalResources {
                 }
                 try {
                     return Charset.forName(value);
-                } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException _) {
                     // an unusable declared charset falls back to the default below
                 }
             }

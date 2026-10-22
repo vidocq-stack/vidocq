@@ -33,15 +33,6 @@ import org.junit.jupiter.api.Test;
 
 class ParamTagTest {
 
-    private static String url(Body inner) throws Exception {
-        TestPageContext pc = TestPageContext.create();
-        UrlTag tag = new UrlTag();
-        tag.setValue("p");
-        tag.setVar("u");
-        TagHarness.run(tag, pc, inner == null ? Body.EMPTY : p -> inner.render(p));
-        return (String) pc.getAttribute("u");
-    }
-
     @Test
     void valueFromBodyWhenNoValueAttribute() throws Exception {
         TestPageContext pc = TestPageContext.create();

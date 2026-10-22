@@ -53,6 +53,7 @@ class SetTagTest {
 
         @Override
         public void setValue(ELContext context, Object value) {
+            // a test double: nothing to do
         }
 
         @Override

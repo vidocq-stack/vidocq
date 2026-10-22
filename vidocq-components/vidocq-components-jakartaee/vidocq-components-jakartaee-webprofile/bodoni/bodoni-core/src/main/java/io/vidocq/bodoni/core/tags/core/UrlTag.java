@@ -49,7 +49,7 @@ public class UrlTag extends BodyTagSupport implements ParamParent {
 
     private String value;
     private String context;
-    private String var;
+    private String varName;
     private String scope;
     private final transient List<Map.Entry<String, String>> params = new ArrayList<>();
 
@@ -63,9 +63,9 @@ public class UrlTag extends BodyTagSupport implements ParamParent {
         this.context = context;
     }
 
-    /** @param var the name of the exported scoped variable */
-    public void setVar(String var) {
-        this.var = var;
+    /** @param name the name of the exported scoped variable */
+    public void setVar(String name) {
+        this.varName = name;
     }
 
     /** @param scope {@code page}, {@code request}, {@code session} or {@code application} */
@@ -83,7 +83,7 @@ public class UrlTag extends BodyTagSupport implements ParamParent {
         // An empty element gets no setBodyContent: never reuse a pooled handler's old body.
         bodyContent = null;
         params.clear();
-        if (var != null) {
+        if (varName != null) {
             scopeConstant();
         }
         return EVAL_BODY_BUFFERED;
@@ -100,8 +100,8 @@ public class UrlTag extends BodyTagSupport implements ParamParent {
             if (!Urls.isAbsolute(result)) {
                 result = response.encodeURL(result);
             }
-            if (var != null) {
-                pageContext.setAttribute(var, result, scopeConstant());
+            if (varName != null) {
+                pageContext.setAttribute(varName, result, scopeConstant());
             } else {
                 pageContext.getOut().print(result);
             }
@@ -126,7 +126,7 @@ public class UrlTag extends BodyTagSupport implements ParamParent {
         super.release();
         value = null;
         context = null;
-        var = null;
+        varName = null;
         scope = null;
         params.clear();
     }

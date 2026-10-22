@@ -105,7 +105,8 @@ class ImportTagTest {
         assertEquals("abc", out);
         assertNull(pc.getAttribute("r"));
         assertInstanceOf(Reader.class, seen.get(0));
-        assertThrows(IOException.class, () -> ((Reader) seen.get(0)).read());
+        Reader exported = (Reader) seen.get(0);
+        assertThrows(IOException.class, exported::read);
     }
 
     @Test

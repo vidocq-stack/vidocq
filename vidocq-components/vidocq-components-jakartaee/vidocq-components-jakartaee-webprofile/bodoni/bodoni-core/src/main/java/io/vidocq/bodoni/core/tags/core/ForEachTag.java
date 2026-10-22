@@ -45,7 +45,7 @@ public class ForEachTag extends LoopTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object rawItems;
+    private transient Object rawItems;
     private boolean itemsSpecified;
     private transient Iterator<?> iterator;
 

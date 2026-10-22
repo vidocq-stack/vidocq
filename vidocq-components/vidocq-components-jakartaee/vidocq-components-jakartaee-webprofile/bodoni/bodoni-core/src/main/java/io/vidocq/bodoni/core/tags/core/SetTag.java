@@ -42,12 +42,12 @@ public class SetTag extends BodyTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object value;
+    private transient Object value;
     private boolean valueSet;
-    private Object target;
+    private transient Object target;
     private boolean targetSet;
     private String property;
-    private String var;
+    private String varName;
     private String scope;
     private transient boolean buffered;
 
@@ -68,9 +68,9 @@ public class SetTag extends BodyTagSupport {
         this.property = property;
     }
 
-    /** @param var the name of the scoped variable */
-    public void setVar(String var) {
-        this.var = var;
+    /** @param name the name of the scoped variable */
+    public void setVar(String name) {
+        this.varName = name;
     }
 
     /** @param scope {@code page}, {@code request}, {@code session} or {@code application} */
@@ -90,7 +90,7 @@ public class SetTag extends BodyTagSupport {
             if (property == null) {
                 throw new JspTagException("c:set: the property attribute is required with target");
             }
-        } else if (var == null) {
+        } else if (varName == null) {
             throw new JspTagException("c:set: either var or target is required");
         } else {
             scopeConstant();
@@ -128,18 +128,18 @@ public class SetTag extends BodyTagSupport {
     private void setVariable(Object result) throws JspTagException {
         int scopeId = scopeConstant();
         if (result instanceof ValueExpression expression) {
-            pageContext.getELContext().getVariableMapper().setVariable(var, expression);
+            pageContext.getELContext().getVariableMapper().setVariable(varName, expression);
             return;
         }
         if (result == null) {
             if (scope == null) {
-                pageContext.removeAttribute(var);
+                pageContext.removeAttribute(varName);
             } else {
-                pageContext.removeAttribute(var, scopeId);
+                pageContext.removeAttribute(varName, scopeId);
             }
             return;
         }
-        pageContext.setAttribute(var, result, scopeId);
+        pageContext.setAttribute(varName, result, scopeId);
     }
 
     @SuppressWarnings("unchecked")
@@ -174,7 +174,7 @@ public class SetTag extends BodyTagSupport {
         target = null;
         targetSet = false;
         property = null;
-        var = null;
+        varName = null;
         scope = null;
         buffered = false;
     }

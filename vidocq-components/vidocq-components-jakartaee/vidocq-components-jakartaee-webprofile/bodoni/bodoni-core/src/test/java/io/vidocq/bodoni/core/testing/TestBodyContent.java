@@ -178,10 +178,12 @@ public class TestBodyContent extends BodyContent {
 
     @Override
     public void flush() {
+        // a test double: nothing to flush or close
     }
 
     @Override
     public void close() {
+        // a test double: nothing to flush or close
     }
 
     @Override

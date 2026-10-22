@@ -34,12 +34,12 @@ public class RemoveTag extends TagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private String var;
+    private String varName;
     private String scope;
 
-    /** @param var the name of the scoped variable to remove */
-    public void setVar(String var) {
-        this.var = var;
+    /** @param name the name of the scoped variable to remove */
+    public void setVar(String name) {
+        this.varName = name;
     }
 
     /** @param scope {@code page}, {@code request}, {@code session} or {@code application} */
@@ -49,14 +49,14 @@ public class RemoveTag extends TagSupport {
 
     @Override
     public int doStartTag() throws JspException {
-        if (var == null) {
+        if (varName == null) {
             throw new JspTagException("c:remove: the var attribute is required");
         }
         if (scope == null) {
-            pageContext.removeAttribute(var);
+            pageContext.removeAttribute(varName);
         } else {
             try {
-                pageContext.removeAttribute(var, Scopes.of(scope));
+                pageContext.removeAttribute(varName, Scopes.of(scope));
             } catch (IllegalArgumentException e) {
                 throw new JspTagException("c:remove: " + e.getMessage(), e);
             }
@@ -67,7 +67,7 @@ public class RemoveTag extends TagSupport {
     @Override
     public void release() {
         super.release();
-        var = null;
+        varName = null;
         scope = null;
     }
 }

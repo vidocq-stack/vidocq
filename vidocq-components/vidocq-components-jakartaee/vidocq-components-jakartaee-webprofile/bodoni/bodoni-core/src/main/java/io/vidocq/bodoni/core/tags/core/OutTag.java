@@ -41,8 +41,8 @@ public class OutTag extends BodyTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object value;
-    private Object defaultValue;
+    private transient Object value;
+    private transient Object defaultValue;
     private boolean escapeXml = true;
     private transient boolean buffered;
 

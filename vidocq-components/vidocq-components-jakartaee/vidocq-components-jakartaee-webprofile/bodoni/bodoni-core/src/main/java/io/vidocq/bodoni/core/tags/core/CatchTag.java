@@ -34,25 +34,25 @@ public class CatchTag extends TagSupport implements TryCatchFinally {
 
     private static final long serialVersionUID = 1L;
 
-    private String var;
+    private String varName;
 
-    /** @param var the page-scoped variable receiving the caught exception */
-    public void setVar(String var) {
-        this.var = var;
+    /** @param name the page-scoped variable receiving the caught exception */
+    public void setVar(String name) {
+        this.varName = name;
     }
 
     @Override
     public int doStartTag() throws JspException {
-        if (var != null) {
-            pageContext.removeAttribute(var, PageContext.PAGE_SCOPE);
+        if (varName != null) {
+            pageContext.removeAttribute(varName, PageContext.PAGE_SCOPE);
         }
         return EVAL_BODY_INCLUDE;
     }
 
     @Override
     public void doCatch(Throwable t) {
-        if (var != null) {
-            pageContext.setAttribute(var, t, PageContext.PAGE_SCOPE);
+        if (varName != null) {
+            pageContext.setAttribute(varName, t, PageContext.PAGE_SCOPE);
         }
     }
 
@@ -64,6 +64,6 @@ public class CatchTag extends TagSupport implements TryCatchFinally {
     @Override
     public void release() {
         super.release();
-        var = null;
+        varName = null;
     }
 }
