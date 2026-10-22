@@ -77,6 +77,34 @@ class NamingExtensionTest {
         assertEquals(APPLICATION_FACTORY, System.getProperty(Context.INITIAL_CONTEXT_FACTORY));
     }
 
+    /** A configuration with these keys only. */
+    private record Config(Map<String, String> keys) implements io.vidocq.runtime.spi.VidocqConfiguration {
+        @Override public java.util.Optional<String> property(String key) { return java.util.Optional.ofNullable(keys.get(key)); }
+        @Override public Iterable<String> propertyNames() { return keys.keySet(); }
+    }
+
+    @Test
+    void the_report_lists_each_declared_name() {
+        var keys = new LinkedHashMap<String, String>();
+        keys.put("vidocq.naming.comp/env/toto", "com.acme.Toto @Named(\"Toto\")");
+        keys.put("vidocq.naming.comp/env/jdbc/legacy", "java:comp/env/jdbc/orders");
+        var extension = new NamingExtension();
+        extension.configure(new Config(keys));
+        var section = new Section();
+        extension.contribute(null, section);
+        extension.onStop();
+
+        assertEquals(java.util.List.of("java: names", "java:comp/env/jdbc/legacy", "java:comp/env/toto"),
+                java.util.List.copyOf(section.rows.keySet()));
+        assertEquals("java:comp/env/jdbc/orders", section.rows.get("java:comp/env/jdbc/legacy"));
+        assertEquals("com.acme.Toto @Named(\"Toto\")", section.rows.get("java:comp/env/toto"));
+    }
+
+    @Test
+    void the_extension_claims_the_naming_keys() {
+        assertEquals(java.util.Set.of("vidocq.naming.*"), new NamingExtension().configKeys());
+    }
+
     @Test
     void the_report_says_which_factory_answers_java_names() {
         var installed = new NamingExtension();
@@ -86,7 +114,7 @@ class NamingExtensionTest {
         installed.onStop();
 
         assertEquals("JNDI java: namespace", section.summary);
-        assertEquals("java:comp/env, from the CDI container", section.rows.get("java: names"));
+        assertEquals("the declared names, from the CDI container", section.rows.get("java: names"));
 
         System.setProperty(Context.INITIAL_CONTEXT_FACTORY, APPLICATION_FACTORY);
         var kept = new NamingExtension();
