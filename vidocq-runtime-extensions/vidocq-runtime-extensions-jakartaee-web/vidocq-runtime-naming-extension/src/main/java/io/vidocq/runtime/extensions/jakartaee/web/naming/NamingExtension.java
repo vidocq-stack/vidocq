@@ -30,6 +30,7 @@ import javax.naming.Context;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The JNDI {@code java:} namespace (vidocq#297): bricks and applications that look a resource up with
@@ -52,7 +53,7 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
 
     private volatile boolean installed;
     private volatile String kept;
-    private volatile Map<String, String> declared = Map.of();
+    private final AtomicReference<Map<String, String>> declared = new AtomicReference<>(Map.of());
 
     @Override public String name() { return "naming"; }
     @Override public String id() { return "naming"; }
@@ -90,8 +91,8 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
 
     @Override
     public void configure(VidocqConfiguration config) {
-        declared = declarations(config);
-        ConfiguredNames.declare(declared);
+        declared.set(declarations(config));
+        ConfiguredNames.declare(declared.get());
         installed = JavaNaming.installAsDefault(Thread.currentThread().getContextClassLoader());
         if (!installed) {
             String property = System.getProperty(Context.INITIAL_CONTEXT_FACTORY);
@@ -106,7 +107,7 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
             installed = false;
         }
         kept = null;
-        declared = Map.of();
+        declared.set(Map.of());
         ConfiguredNames.declare(Map.of());
     }
 
@@ -120,6 +121,6 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
         } else {
             section.row(JAVA_NAMES, "not initialized");
         }
-        declared.forEach(section::row);
+        declared.get().forEach(section::row);
     }
 }

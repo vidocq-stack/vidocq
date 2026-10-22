@@ -25,6 +25,7 @@ import io.vidocq.vauban.naming.JndiTarget;
 import jakarta.enterprise.context.Dependent;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The java: names declared in {@code vidocq.properties}, as a {@link JndiBindings} bean: a value starting with
@@ -39,17 +40,17 @@ import java.util.Map;
 public class ConfiguredNames implements JndiBindings {
 
     /** Name to target, as written; published by {@link NamingExtension#configure}. */
-    private static volatile Map<String, String> declarations = Map.of();
+    private static final AtomicReference<Map<String, String>> DECLARATIONS = new AtomicReference<>(Map.of());
 
     /** Publishes the names the next container declares. */
     static void declare(Map<String, String> names) {
-        declarations = Map.copyOf(names);
+        DECLARATIONS.set(Map.copyOf(names));
     }
 
     @Override
     public void bind(Binder binder) {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        declarations.forEach((name, target) -> binder.bind(name,
+        DECLARATIONS.get().forEach((name, target) -> binder.bind(name,
                 target.startsWith("java:") ? JndiTarget.link(target) : JndiTarget.bean(target, loader)));
     }
 }
