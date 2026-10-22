@@ -50,3 +50,29 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   read-only `LoopTagStatus` table (`current`, `index`, `count`, `first`, `last`, `begin`, `end`,
   `step`) through an `AccessorProvider`. `CorePagesIT.forEachExposesVarStatusProperties` and
   `forEachExposesMapEntryKeyAndValue` are enabled and pass under `deny`.
+
+## BOD-002 · 2026-10-22 · `fmt:message` finds no bundle of the application module: the request thread's context class loader is the system class loader
+
+- Symptom: on the `bodoni-it-ibarra` host (Foy over Chappe, application as a named module in its
+  own layer), `fmt:setBundle basename="io.vidocq.bodoni.it.ibarra.i18n.Labels" var="labels"`
+  then `fmt:message key="greeting" bundle="${labels}"` renders `???greeting???` (no
+  exception). The same for `fmt:bundle basename="it-bundles.Plain"`. The bundle exists, its
+  package is `opens`ed, and `Module.getResourceAsStream("it-bundles/Plain.properties")` from the
+  page finds it.
+- Minimal repro: `./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify` with the two
+  `@Disabled` tests of `CorePagesIT` (`fmtMessagesResolveBundlesOfTheApplicationModule`,
+  `fmtLegacyUriResolvesAMessage`) enabled. Diagnosis page (not kept): a scriptlet printing
+  `Thread.currentThread().getContextClassLoader()` answers
+  `jdk.internal.loader.ClassLoaders$AppClassLoader`, while `getClass().getClassLoader()` of the
+  precompiled page is `jdk.internal.loader.Loader` (the layer loader defining the application module).
+- Cause hypothesis: Foy sets the application loader as the context class loader only around
+  WebSocket callbacks (`WebConnectionImpl`, `CallbackSerializer`), not while it invokes a servlet
+  or a precompiled page; Ibarra sets it only around EL context creation. Bodoni's bundle lookup
+  uses the thread context class loader (maintainer decision, PLAN.md open question 4), like
+  `LocaleSupport` of the JSTL API. Not a Bodoni defect. Experiment: with the host launcher
+  setting the context class loader of its main thread to the application loader (inherited by
+  Chappe's virtual threads), every fmt IT passes unchanged.
+- Candidate owners: Foy (set the context class loader to the application loader for the
+  duration of a request, as Servlet containers do) or the host launcher.
+- Status: open, cross-repo (Foy). The two bundle ITs are `@Disabled` with a reference to this
+  entry; the other `fmt:` ITs run and pass.

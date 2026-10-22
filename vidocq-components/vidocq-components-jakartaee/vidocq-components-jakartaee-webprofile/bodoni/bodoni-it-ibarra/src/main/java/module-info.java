@@ -30,4 +30,7 @@ module io.vidocq.bodoni.it.ibarra {
     requires io.vidocq.ibarra.api;
     requires io.vidocq.peano.api;
     requires io.vidocq.bodoni.core;
+
+    // fmt: resolves bundles by name at run time (Bodoni PLAN.md, open question 4)
+    opens io.vidocq.bodoni.it.ibarra.i18n;
 }
