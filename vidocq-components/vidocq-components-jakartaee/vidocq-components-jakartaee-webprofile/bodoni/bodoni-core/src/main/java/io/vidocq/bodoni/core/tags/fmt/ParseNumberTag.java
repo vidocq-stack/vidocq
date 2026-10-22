@@ -38,9 +38,9 @@ import jakarta.servlet.jsp.tagext.BodyTagSupport;
  * a percentage.
  *
  * <p>The value comes from the {@code value} attribute or, when it was not set, from the trimmed
- * body. The parse locale is {@code parseLocale} or else the formatting locale (§9.2). Every
- * attribute is cleared when a use ends, so a handler instance reused by a container carries
- * nothing over.
+ * body. The parse locale is {@code parseLocale} or else the formatting locale (§9.2).
+ * Attributes persist until {@link #release()}, as the {@code Tag} lifecycle lets a container
+ * reuse an instance without calling the setters of unchanged attributes again.
  */
 public class ParseNumberTag extends BodyTagSupport {
 
@@ -102,18 +102,14 @@ public class ParseNumberTag extends BodyTagSupport {
 
     @Override
     public int doEndTag() throws JspException {
-        try {
-            int scopeId = scopeId();
-            String text = valueSet ? value : bodyValue();
-            if (text == null || text.isEmpty()) {
-                if (varName != null) {
-                    pageContext.removeAttribute(varName, scopeId);
-                }
-            } else {
-                emit(parse(text), scopeId);
+        int scopeId = scopeId();
+        String text = valueSet ? value : bodyValue();
+        if (text == null || text.isEmpty()) {
+            if (varName != null) {
+                pageContext.removeAttribute(varName, scopeId);
             }
-        } finally {
-            reset();
+        } else {
+            emit(parse(text), scopeId);
         }
         return EVAL_PAGE;
     }
@@ -121,12 +117,8 @@ public class ParseNumberTag extends BodyTagSupport {
     @Override
     public void release() {
         super.release();
-        reset();
         varName = null;
         scope = null;
-    }
-
-    private void reset() {
         value = null;
         valueSet = false;
         type = null;

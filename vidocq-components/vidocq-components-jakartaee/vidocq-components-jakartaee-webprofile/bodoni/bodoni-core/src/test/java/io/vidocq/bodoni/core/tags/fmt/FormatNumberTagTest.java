@@ -251,16 +251,24 @@ class FormatNumberTagTest {
     }
 
     @Test
-    void reusedInstanceKeepsNoSettingOfThePreviousUse() throws Exception {
-        FormatNumberTag tag = us(1234567.891);
+    void reusedInstanceWithoutSetterCallsReproducesTheOutput() throws Exception {
+        FormatNumberTag tag = us(1234.5);
         tag.setType("currency");
         tag.setCurrencyCode("EUR");
         tag.setGroupingUsed(false);
-        tag.setMaxFractionDigits(0);
-        tag.setMinIntegerDigits(10);
-        assertEquals("€0001234568", run(tag));
-        tag.setValue(1234567.891);
-        assertEquals("1,234,567.891", run(tag));
+        tag.setMinIntegerDigits(6);
+        assertEquals("€001234.50", run(tag));
+        assertEquals("€001234.50", run(tag));
+    }
+
+    @Test
+    void reusedInstanceKeepsTheAttributesWhoseSetterIsNotCalledAgain() throws Exception {
+        FormatNumberTag tag = us(1234.5);
+        tag.setType("currency");
+        tag.setCurrencyCode("EUR");
+        assertEquals("€1,234.50", run(tag));
+        tag.setValue(1.5);
+        assertEquals("€1.50", run(tag));
     }
 
     @Test

@@ -39,9 +39,9 @@ import jakarta.servlet.jsp.tagext.BodyTagSupport;
  * percentage, in the formatting locale (§9.2).
  *
  * <p>The value comes from the {@code value} attribute or, when it was not set, from the trimmed
- * body. The grouping, digit and currency options are applied only when their setter was called
- * for the current use: the settings are cleared when the use ends, so a handler instance reused
- * by a container carries nothing over.
+ * body. The grouping, digit and currency options are applied only when their setter was called;
+ * attributes persist until {@link #release()}, as the {@code Tag} lifecycle lets a container
+ * reuse an instance without calling the setters of unchanged attributes again.
  */
 public class FormatNumberTag extends BodyTagSupport {
 
@@ -143,18 +143,14 @@ public class FormatNumberTag extends BodyTagSupport {
 
     @Override
     public int doEndTag() throws JspException {
-        try {
-            int scopeId = scopeId();
-            Object raw = valueSet ? value : bodyValue();
-            if (raw == null || "".equals(raw)) {
-                if (varName != null) {
-                    pageContext.removeAttribute(varName, scopeId);
-                }
-            } else {
-                emit(format(raw), scopeId);
+        int scopeId = scopeId();
+        Object raw = valueSet ? value : bodyValue();
+        if (raw == null || "".equals(raw)) {
+            if (varName != null) {
+                pageContext.removeAttribute(varName, scopeId);
             }
-        } finally {
-            reset();
+        } else {
+            emit(format(raw), scopeId);
         }
         return EVAL_PAGE;
     }
@@ -162,12 +158,8 @@ public class FormatNumberTag extends BodyTagSupport {
     @Override
     public void release() {
         super.release();
-        reset();
         varName = null;
         scope = null;
-    }
-
-    private void reset() {
         value = null;
         valueSet = false;
         type = null;

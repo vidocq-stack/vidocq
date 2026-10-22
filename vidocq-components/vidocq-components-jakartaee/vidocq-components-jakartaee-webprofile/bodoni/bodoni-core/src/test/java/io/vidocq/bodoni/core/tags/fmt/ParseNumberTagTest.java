@@ -166,13 +166,22 @@ class ParseNumberTagTest {
     }
 
     @Test
-    void reusedInstanceKeepsNoSettingOfThePreviousUse() throws Exception {
+    void reusedInstanceWithoutSetterCallsReproducesTheOutput() throws Exception {
         ParseNumberTag tag = us("1.234,5");
         tag.setParseLocale("de_DE");
         tag.setIntegerOnly(true);
         assertEquals("1234", run(tag));
-        tag.setValue("1,234.5");
-        assertEquals("1234.5", run(tag));
+        assertEquals("1234", run(tag));
+    }
+
+    @Test
+    void reusedInstanceKeepsTheAttributesWhoseSetterIsNotCalledAgain() throws Exception {
+        ParseNumberTag tag = us("1.234,5");
+        tag.setParseLocale("de_DE");
+        tag.setIntegerOnly(true);
+        assertEquals("1234", run(tag));
+        tag.setValue("9.876,5");
+        assertEquals("9876", run(tag));
     }
 
     @Test
