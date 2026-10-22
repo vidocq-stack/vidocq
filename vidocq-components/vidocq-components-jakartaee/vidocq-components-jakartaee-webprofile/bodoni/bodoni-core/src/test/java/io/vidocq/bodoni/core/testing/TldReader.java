@@ -45,7 +45,8 @@ public final class TldReader {
     }
 
     /** An {@code <attribute>} element of a tag. */
-    public record Attribute(String name, boolean required, boolean rtexprvalue, boolean deferred) {
+    public record Attribute(String name, boolean required, boolean rtexprvalue, boolean deferred,
+            String type) {
     }
 
     /** A {@code <tag>} element. */
@@ -109,12 +110,23 @@ public final class TldReader {
                         Boolean.parseBoolean(childText(a, "required")),
                         Boolean.parseBoolean(childText(a, "rtexprvalue")),
                         a.getElementsByTagName("deferred-value").getLength() > 0
-                                || a.getElementsByTagName("deferred-method").getLength() > 0));
+                                || a.getElementsByTagName("deferred-method").getLength() > 0,
+                        attributeType(a)));
             }
             result.add(new Tag(childText(e, "name"), childText(e, "tag-class"),
                     childText(e, "body-content"), attributes));
         }
         return result;
+    }
+
+    /** The {@code <type>} of the attribute, or of its {@code <deferred-value>}. */
+    private static String attributeType(Element attribute) {
+        String type = childText(attribute, "type");
+        if (type != null) {
+            return type;
+        }
+        List<Element> deferred = children(attribute, "deferred-value");
+        return deferred.isEmpty() ? null : childText(deferred.get(0), "type");
     }
 
     private static List<Element> children(Element parent, String name) {

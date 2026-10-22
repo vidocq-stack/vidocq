@@ -20,7 +20,6 @@
 
 package io.vidocq.bodoni.core.tags.core;
 
-import jakarta.el.ValueExpression;
 import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.LoopTagSupport;
 
@@ -36,13 +35,13 @@ public class ForTokensTag extends LoopTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object rawItems;
+    private String items;
     private String delims;
     private transient Iterator<?> iterator;
 
-    /** @param items the string to tokenize (static value or deferred expression) */
-    public void setItems(Object items) {
-        this.rawItems = items;
+    /** @param items the string to tokenize */
+    public void setItems(String items) {
+        this.items = items;
     }
 
     /** @param delims the delimiter characters */
@@ -86,15 +85,10 @@ public class ForTokensTag extends LoopTagSupport {
             iterator = Collections.emptyIterator();
             return;
         }
-        Object value = rawItems;
-        if (value instanceof ValueExpression expression) {
-            deferredExpression = expression;
-            value = expression.getValue(pageContext.getELContext());
-        }
-        if (value == null) {
+        if (items == null) {
             iterator = Collections.emptyIterator();
         } else {
-            iterator = ForEachTag.tokens(value.toString(), delims == null ? "" : delims);
+            iterator = ForEachTag.tokens(items, delims == null ? "" : delims);
         }
     }
 
@@ -115,9 +109,8 @@ public class ForTokensTag extends LoopTagSupport {
     @Override
     public void release() {
         super.release();
-        rawItems = null;
+        items = null;
         delims = null;
         iterator = null;
-        deferredExpression = null;
     }
 }

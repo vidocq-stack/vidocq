@@ -41,54 +41,74 @@ import io.vidocq.bodoni.core.testing.TldReader;
 /** Checks the core tag library descriptors against the attribute tables of Tags 3.0 §4-§7. */
 class CoreTldTest {
 
-    /** Expected attribute: required, rtexprvalue. */
-    private record Attr(boolean required, boolean rtexprvalue) {
+    /** Expected attribute: required, rtexprvalue, declared type, deferred-value. */
+    private record Attr(boolean required, boolean rtexprvalue, Class<?> type, boolean deferred) {
     }
 
     private record Expected(String bodyContent, Map<String, Attr> attributes) {
     }
 
-    private static final Attr REQ_DYN = new Attr(true, true);
-    private static final Attr OPT_DYN = new Attr(false, true);
-    private static final Attr REQ_STATIC = new Attr(true, false);
-    private static final Attr OPT_STATIC = new Attr(false, false);
+    private static Attr reqDyn(Class<?> type) {
+        return new Attr(true, true, type, false);
+    }
+
+    private static Attr optDyn(Class<?> type) {
+        return new Attr(false, true, type, false);
+    }
+
+    private static Attr deferredDyn(Class<?> type) {
+        return new Attr(false, true, type, true);
+    }
+
+    private static Attr reqStatic(Class<?> type) {
+        return new Attr(true, false, type, false);
+    }
+
+    private static Attr optStatic(Class<?> type) {
+        return new Attr(false, false, type, false);
+    }
 
     private static final Map<String, Expected> SPEC = new LinkedHashMap<>();
 
     static {
         // §4.2
-        SPEC.put("out", new Expected("JSP", attrs("value", REQ_DYN, "escapeXml", OPT_DYN, "default", OPT_DYN)));
+        SPEC.put("out", new Expected("JSP", attrs("value", reqDyn(Object.class), "escapeXml", optDyn(boolean.class),
+                "default", optDyn(Object.class))));
         // §4.3
-        SPEC.put("set", new Expected("JSP", attrs("value", OPT_DYN, "var", OPT_STATIC, "scope", OPT_STATIC,
-                "target", OPT_DYN, "property", OPT_DYN)));
+        SPEC.put("set", new Expected("JSP", attrs("value", deferredDyn(Object.class), "var", optStatic(String.class),
+                "scope", optStatic(String.class), "target", optDyn(Object.class), "property", optDyn(String.class))));
         // §4.4
-        SPEC.put("remove", new Expected("empty", attrs("var", REQ_STATIC, "scope", OPT_STATIC)));
+        SPEC.put("remove", new Expected("empty", attrs("var", reqStatic(String.class), "scope", optStatic(String.class))));
         // §4.5
-        SPEC.put("catch", new Expected("JSP", attrs("var", OPT_STATIC)));
+        SPEC.put("catch", new Expected("JSP", attrs("var", optStatic(String.class))));
         // §5.3
-        SPEC.put("if", new Expected("JSP", attrs("test", REQ_DYN, "var", OPT_STATIC, "scope", OPT_STATIC)));
+        SPEC.put("if", new Expected("JSP", attrs("test", reqDyn(boolean.class), "var", optStatic(String.class),
+                "scope", optStatic(String.class))));
         // §5.4
         SPEC.put("choose", new Expected("JSP", attrs()));
         // §5.5
-        SPEC.put("when", new Expected("JSP", attrs("test", REQ_DYN)));
+        SPEC.put("when", new Expected("JSP", attrs("test", reqDyn(boolean.class))));
         // §5.6
         SPEC.put("otherwise", new Expected("JSP", attrs()));
         // §6.2
-        SPEC.put("forEach", new Expected("JSP", attrs("var", OPT_STATIC, "items", OPT_DYN, "varStatus", OPT_STATIC,
-                "begin", OPT_DYN, "end", OPT_DYN, "step", OPT_DYN)));
+        SPEC.put("forEach", new Expected("JSP", attrs("var", optStatic(String.class), "items", deferredDyn(Object.class),
+                "varStatus", optStatic(String.class), "begin", optDyn(int.class), "end", optDyn(int.class),
+                "step", optDyn(int.class))));
         // §6.3
-        SPEC.put("forTokens", new Expected("JSP", attrs("var", OPT_STATIC, "items", REQ_DYN, "delims", REQ_DYN,
-                "varStatus", OPT_STATIC, "begin", OPT_DYN, "end", OPT_DYN, "step", OPT_DYN)));
+        SPEC.put("forTokens", new Expected("JSP", attrs("var", optStatic(String.class), "items", reqDyn(String.class),
+                "delims", reqDyn(String.class), "varStatus", optStatic(String.class), "begin", optDyn(int.class),
+                "end", optDyn(int.class), "step", optDyn(int.class))));
         // §7.4
-        SPEC.put("import", new Expected("JSP", attrs("url", REQ_DYN, "context", OPT_DYN, "var", OPT_STATIC,
-                "scope", OPT_STATIC, "charEncoding", OPT_DYN, "varReader", OPT_STATIC)));
+        SPEC.put("import", new Expected("JSP", attrs("url", reqDyn(String.class), "context", optDyn(String.class),
+                "var", optStatic(String.class), "scope", optStatic(String.class), "charEncoding", optDyn(String.class),
+                "varReader", optStatic(String.class))));
         // §7.5
-        SPEC.put("url", new Expected("JSP", attrs("value", REQ_DYN, "context", OPT_DYN, "var", OPT_STATIC,
-                "scope", OPT_STATIC)));
+        SPEC.put("url", new Expected("JSP", attrs("value", reqDyn(String.class), "context", optDyn(String.class),
+                "var", optStatic(String.class), "scope", optStatic(String.class))));
         // §7.6
-        SPEC.put("redirect", new Expected("JSP", attrs("url", REQ_DYN, "context", OPT_DYN)));
+        SPEC.put("redirect", new Expected("JSP", attrs("url", reqDyn(String.class), "context", optDyn(String.class))));
         // §7.7
-        SPEC.put("param", new Expected("JSP", attrs("name", REQ_DYN, "value", OPT_DYN)));
+        SPEC.put("param", new Expected("JSP", attrs("name", reqDyn(String.class), "value", optDyn(String.class))));
     }
 
     private static Map<String, Attr> attrs(Object... pairs) {
@@ -128,9 +148,8 @@ class CoreTldTest {
                 Attr want = expected.attributes().get(a.name());
                 assertEquals(want.required(), a.required(), tag.name() + "@" + a.name() + " required");
                 assertEquals(want.rtexprvalue(), a.rtexprvalue(), tag.name() + "@" + a.name() + " rtexprvalue");
-                boolean deferred = (tag.name().equals("set") && a.name().equals("value"))
-                        || (tag.name().equals("forEach") && a.name().equals("items"));
-                assertEquals(deferred, a.deferred(), tag.name() + "@" + a.name() + " deferred-value");
+                assertEquals(want.deferred(), a.deferred(), tag.name() + "@" + a.name() + " deferred-value");
+                assertEquals(want.type().getName(), a.type(), tag.name() + "@" + a.name() + " type");
             }
         }
     }
@@ -146,11 +165,12 @@ class CoreTldTest {
                 String setter = "set" + Character.toUpperCase(a.name().charAt(0)) + a.name().substring(1);
                 boolean found = false;
                 for (Method m : type.getMethods()) {
-                    if (m.getName().equals(setter) && m.getParameterCount() == 1) {
+                    if (m.getName().equals(setter) && m.getParameterCount() == 1
+                            && m.getParameterTypes()[0].getName().equals(a.type())) {
                         found = true;
                     }
                 }
-                assertTrue(found, tag.tagClass() + " has public " + setter);
+                assertTrue(found, tag.tagClass() + " has public " + setter + "(" + a.type() + ")");
             }
         }
     }
