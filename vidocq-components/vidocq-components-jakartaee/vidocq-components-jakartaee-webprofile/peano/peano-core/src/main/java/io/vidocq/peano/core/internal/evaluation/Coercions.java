@@ -77,68 +77,79 @@ public final class Coercions {
             return value;
         }
         if (value instanceof LambdaExpression lambda && type.isInterface()) {
-            Object standard = StandardFunctionalAdapters.adapt(null,lambda,type);
-            if (standard != null) return standard;
-            Object adapted = GeneratedAccessorELResolver.adapt(accessors.get(), lambda, type);
+            Object adapted = adaptLambda(lambda, type, accessors);
             if (adapted != null) return adapted;
         }
         if (boxed == String.class) {
             return value == null ? "" : value instanceof Enum<?> e ? e.name() : value.toString();
         }
-        if (boxed == Boolean.class) {
-            if (value == null || "".equals(value)) {
-                return false;
-            }
-            if (value instanceof String text) {
-                return Boolean.valueOf(text);
-            }
-            throw failure(type);
-        }
-        if (boxed == Character.class) {
-            if (value == null || "".equals(value)) {
-                return (char) 0;
-            }
-            if (value instanceof Number number) {
-                return (char) number.shortValue();
-            }
-            if (value instanceof String text) {
-                return text.charAt(0);
-            }
-            throw failure(type);
-        }
+        if (boxed == Boolean.class) return booleanValue(value, type);
+        if (boxed == Character.class) return characterValue(value, type);
         if (Number.class.isAssignableFrom(boxed)) {
             return number(value, boxed);
         }
-        if (type.isEnum()) {
-            if ("".equals(value)) {
-                return null;
-            }
-            if (value instanceof String text) {
-                return enumValue(type, text);
-            }
-            throw failure(type);
-        }
-        if (type.isArray()) {
-            if (value == null) {
-                return null;
-            }
-            if (!value.getClass().isArray()) {
-                throw failure(type);
-            }
-            int length = Array.getLength(value);
-            Class<?> elementType = type.getComponentType();
-            Object result = Array.newInstance(elementType, length);
-            for (int i = 0; i < length; i++) {
-                Array.set(result, i, convert(Array.get(value, i), elementType));
-            }
-            return result;
-        }
+        if (type.isEnum()) return enumConversion(value, type);
+        if (type.isArray()) return arrayValue(value, type, accessors);
         var registered=RegisteredConversions.discover(value,type);
         if (registered.handled()) return registered.value();
         if ("".equals(value) && !type.isPrimitive()) {
             return null;
         }
         throw failure(type);
+    }
+
+    private static Object adaptLambda(LambdaExpression lambda, Class<?> type, Supplier<AccessorCatalog> accessors) {
+        Object standard = StandardFunctionalAdapters.adapt(null,lambda,type);
+        return standard != null ? standard : GeneratedAccessorELResolver.adapt(accessors.get(), lambda, type);
+    }
+
+    private static Boolean booleanValue(Object value, Class<?> type) {
+        if (value == null || "".equals(value)) {
+            return false;
+        }
+        if (value instanceof String text) {
+            return Boolean.valueOf(text);
+        }
+        throw failure(type);
+    }
+
+    private static Character characterValue(Object value, Class<?> type) {
+        if (value == null || "".equals(value)) {
+            return (char) 0;
+        }
+        if (value instanceof Number number) {
+            return (char) number.shortValue();
+        }
+        if (value instanceof String text) {
+            return text.charAt(0);
+        }
+        throw failure(type);
+    }
+
+    private static Enum<?> enumConversion(Object value, Class<?> type) {
+        if ("".equals(value)) {
+            return null;
+        }
+        if (value instanceof String text) {
+            return enumValue(type, text);
+        }
+        throw failure(type);
+    }
+
+    private static Object arrayValue(Object value, Class<?> type, Supplier<AccessorCatalog> accessors) {
+        if (value == null) {
+            return null;
+        }
+        if (!value.getClass().isArray()) {
+            throw failure(type);
+        }
+        int length = Array.getLength(value);
+        Class<?> elementType = type.getComponentType();
+        Object result = Array.newInstance(elementType, length);
+        for (int i = 0; i < length; i++) {
+            Array.set(result, i, convert(Array.get(value, i), elementType, accessors));
+        }
+        return result;
     }
 
     private static Number number(Object value, Class<?> type) {

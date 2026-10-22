@@ -29,6 +29,8 @@ import jakarta.el.ELResolver;
 
 /** Stops API member fallback after generated and custom resolvers have had their turn. */
 public final class ReflectionGuard extends ELResolver {
+    private static final String CONTEXT = "context";
+
     public static boolean denied() {
         return switch (System.getProperty("peano.reflection","allow")) {
             case "allow" -> false;
@@ -48,7 +50,7 @@ public final class ReflectionGuard extends ELResolver {
     }
 
     private static void property(ELContext context,Object base) {
-        java.util.Objects.requireNonNull(context,"context");
+        java.util.Objects.requireNonNull(context,CONTEXT);
         if (base==null || base instanceof Map<?,?> || base instanceof List<?>
                 || base instanceof ResourceBundle || base.getClass().isArray()) return;
         requireAllowed(base);
@@ -70,13 +72,13 @@ public final class ReflectionGuard extends ELResolver {
         return false;
     }
     @Override public Object invoke(ELContext context,Object base,Object method,Class<?>[] types,Object[] arguments) {
-        java.util.Objects.requireNonNull(context,"context");
+        java.util.Objects.requireNonNull(context,CONTEXT);
         requireAllowed(base);
         return null;
     }
     /** Metadata only: no member is accessed, and CompositeELResolver asks every resolver (EL-020). */
     @Override public Class<?> getCommonPropertyType(ELContext context,Object base) {
-        java.util.Objects.requireNonNull(context,"context");
+        java.util.Objects.requireNonNull(context,CONTEXT);
         return null;
     }
 }
