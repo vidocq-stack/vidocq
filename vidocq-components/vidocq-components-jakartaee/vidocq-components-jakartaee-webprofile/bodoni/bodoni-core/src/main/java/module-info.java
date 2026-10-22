@@ -37,6 +37,9 @@
 module io.vidocq.bodoni.core {
     requires transitive jakarta.servlet.jsp.jstl;
 
+    // c:import reads absolute http(s) URLs through java.net.http.
+    requires java.net.http;
+
     // The fn: functions are called directly by generated pages.
     exports io.vidocq.bodoni.core.functions;
 
