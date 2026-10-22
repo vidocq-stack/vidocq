@@ -40,4 +40,20 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Tests run on the module path (patched module). The EL BeanELResolver
+                         invokes public accessors of test beans reflectively: open the test
+                         doubles package to jakarta.el for the test run only (never in the
+                         main module-info). Test beans live in this package. -->
+                    <argLine>@{argLine} --add-opens io.vidocq.bodoni.core/io.vidocq.bodoni.core.testing=jakarta.el</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>
