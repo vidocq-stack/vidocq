@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.essentials.migration.flyway;
 
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.Location;
+import org.flywaydb.core.api.locations.LocationParser;
 import org.flywaydb.core.api.resource.LoadableResource;
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The migrations of an application layer, as Flyway reads them (vidocq#96). */
 class ApplicationLayerMigrationsTest {
 
-    private static final Location[] TEST_MIGRATION = {new Location("classpath:db/testmigration")};
+    private static final Location[] TEST_MIGRATION = {LocationParser.parseLocation("classpath:db/testmigration")};
 
     @Test
     void aScriptKeepsTheNameFlywaysOwnScannerGivesIt() throws Exception {
@@ -62,7 +63,7 @@ class ApplicationLayerMigrationsTest {
 
     @Test
     void onlyConcreteJavaMigrationsAreClasses() {
-        var migrations = new ApplicationLayerMigrations(new Location[]{new Location("classpath:db/testjava")},
+        var migrations = new ApplicationLayerMigrations(new Location[]{LocationParser.parseLocation("classpath:db/testjava")},
                 directory -> List.of("db/testjava/NotAMigration.class", "db/testjava/V1__CreateGadget.class"),
                 new NameOnlyLoader(), StandardCharsets.UTF_8, false);
 
@@ -76,6 +77,18 @@ class ApplicationLayerMigrationsTest {
         FlywayException e = assertThrows(FlywayException.class, () -> new ApplicationLayerMigrations(TEST_MIGRATION,
                 directory -> List.of(), new NameOnlyLoader(), StandardCharsets.UTF_8, true));
         assertEquals("Unable to resolve location classpath:db/testmigration.", e.getMessage());
+    }
+
+    @Test
+    void aWildcardLocationKeepsOnlyTheFilesItMatches() {
+        var migrations = new ApplicationLayerMigrations(
+                new Location[]{LocationParser.parseLocation("classpath:db/*/scripts")},
+                directory -> List.of("db/blue/scripts/V1__create_widget.sql", "db/blue/other/V2__drop_widget.sql"),
+                new NameOnlyLoader(), StandardCharsets.UTF_8, false);
+
+        assertEquals(List.of("db/blue/scripts/V1__create_widget.sql"),
+                migrations.getResources("V", new String[]{".sql"}).stream()
+                        .map(LoadableResource::getAbsolutePath).toList());
     }
 
     @Test

@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * The migrations of {@code classpath:} locations, found in the application's own modules rather than by
@@ -69,7 +70,7 @@ final class ApplicationLayerMigrations implements ResourceProvider, ClassProvide
                                Charset encoding, boolean failOnMissingLocations) {
         for (Location location : locations) {
             List<String> names = lister.apply(location.getRootPath()).stream()
-                    .filter(location::matchesPath)
+                    .filter(name -> inLocation(location, name))
                     .toList();
             if (names.isEmpty() && failOnMissingLocations) {
                 throw new FlywayException("Unable to resolve location " + location + ".");
@@ -83,6 +84,12 @@ final class ApplicationLayerMigrations implements ResourceProvider, ClassProvide
                 }
             }
         }
+    }
+
+    /** Whether a file belongs to a location: any file under its root, unless the location has a wildcard. */
+    private static boolean inLocation(Location location, String name) {
+        Pattern pathRegex = location.getPathRegex();
+        return pathRegex == null || pathRegex.matcher(name).matches();
     }
 
     @Override

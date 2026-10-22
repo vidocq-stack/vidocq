@@ -25,6 +25,7 @@ import io.vidocq.runtime.extensions.essentials.migration.MigrationTarget;
 import io.vidocq.runtime.extensions.essentials.migration.SchemaMigrator;
 import io.vidocq.runtime.spi.ApplicationLayer;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.CoreLocationPrefix;
 import org.flywaydb.core.api.Location;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.flywaydb.core.api.output.MigrateResult;
@@ -160,7 +161,7 @@ public final class FlywaySchemaMigrator implements SchemaMigrator {
     private static void listFromTheApplicationLayer(FluentConfiguration configuration,
                                                     Function<String, List<String>> lister, MigrationTarget t) {
         Location[] locations = configuration.getLocations();
-        if (!Arrays.stream(locations).allMatch(Location::isClassPath)) {
+        if (!Arrays.stream(locations).allMatch(CoreLocationPrefix::isClassPath)) {
             LOG.log(System.Logger.Level.WARNING, "Datasource " + t.dataSourceName() + ": the locations "
                     + Arrays.toString(locations) + " are not all classpath:, so Flyway scans them itself, and its"
                     + " scanner cannot list the classpath: ones in the application layer");
