@@ -60,7 +60,7 @@
 
 | `vidocq-runtime-naming-extension` [.tag-new]#NEW#
 | `jakartaee-web`
-| Answers the JNDI `java:` names from the running container, through xref:vauban::usage.adoc#jndi[Vauban Naming]: `java:comp/env/jdbc/orders` is the `@Named("orders")` data source. See <<naming>>.
+| Answers the JNDI `java:` names from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `java:comp/env/jdbc/orders` is the `@Named("orders")` data source. See <<naming>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -324,7 +324,7 @@ Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named`
 [[naming]]
 == JNDI `java:` names [.tag-new]#NEW#
 
-Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:vauban::usage.adoc#jndi[Vauban Naming].
+Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:vauban::jndi.adoc[Vauban Naming].
 
 [source,xml]
 ----
