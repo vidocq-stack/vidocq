@@ -24,7 +24,6 @@ import java.util.Objects;
 import java.util.Set;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
-import jakarta.el.MethodNotFoundException;
 import jakarta.el.MethodReference;
 import jakarta.el.PropertyNotWritableException;
 import jakarta.servlet.jsp.jstl.core.LoopTagStatus;
@@ -159,8 +158,7 @@ final class LoopTagStatusAccessorTable extends AccessorTable {
                 case 4 -> status.isLast();
                 case 5 -> status.getBegin();
                 case 6 -> status.getEnd();
-                case 7 -> status.getStep();
-                default -> throw new MethodNotFoundException("Unknown method descriptor");
+                default -> status.getStep();
             };
         } catch (ELException failure) {
             throw failure;

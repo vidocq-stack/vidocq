@@ -31,7 +31,6 @@ import jakarta.el.ExpressionFactory;
 import jakarta.el.PropertyNotWritableException;
 import jakarta.el.StandardELContext;
 import jakarta.el.ValueExpression;
-import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.LoopTagStatus;
 import jakarta.servlet.jsp.jstl.core.LoopTagSupport;
 import org.junit.jupiter.api.AfterEach;
@@ -173,7 +172,7 @@ class LoopTagStatusAccessTest {
     }
 
     @Test
-    void readsTheStatusOfARealLoopTag() throws JspTagException {
+    void readsTheStatusOfARealLoopTag() {
         var tag = new CountingTag();
         tag.bounds(1, 3, 2);
         var status = tag.getLoopStatus();
