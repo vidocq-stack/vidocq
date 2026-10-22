@@ -20,8 +20,10 @@
 
 package io.vidocq.bodoni.core.tags.fmt;
 
+import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -137,6 +139,50 @@ final class FmtSupport {
             }
         }
         return format;
+    }
+
+    /**
+     * The date format of an action (§9.9, §9.10): a non-empty {@code pattern} gives a
+     * {@link SimpleDateFormat} in {@code locale} (it takes precedence over {@code type} and the
+     * styles); otherwise the locale's date, time or date-and-time instance by {@code type}
+     * (default {@code date}), with {@code dateStyle} applied for {@code date} and {@code both}
+     * and {@code timeStyle} for {@code time} and {@code both} (default style {@code default}).
+     * The format is set to {@code zone}.
+     *
+     * @param action the action name, for messages
+     * @throws JspTagException when {@code type} or a style is unknown, or the pattern is invalid
+     */
+    static DateFormat dateFormat(String action, String type, String dateStyle, String timeStyle, String pattern,
+            Locale locale, TimeZone zone) throws JspTagException {
+        DateFormat format;
+        if (pattern != null && !pattern.isEmpty()) {
+            try {
+                format = new SimpleDateFormat(pattern, locale);
+            } catch (IllegalArgumentException e) {
+                throw new JspTagException(action + ": invalid pattern '" + pattern + "'", e);
+            }
+        } else {
+            format = switch (type == null || type.isEmpty() ? "date" : type) {
+                case "date" -> DateFormat.getDateInstance(style(action, dateStyle), locale);
+                case "time" -> DateFormat.getTimeInstance(style(action, timeStyle), locale);
+                case "both" -> DateFormat.getDateTimeInstance(style(action, dateStyle), style(action, timeStyle),
+                        locale);
+                default -> throw new JspTagException(action + ": invalid type '" + type + "'");
+            };
+        }
+        format.setTimeZone(zone);
+        return format;
+    }
+
+    private static int style(String action, String name) throws JspTagException {
+        return switch (name == null || name.isEmpty() ? "default" : name) {
+            case "default" -> DateFormat.DEFAULT;
+            case "short" -> DateFormat.SHORT;
+            case "medium" -> DateFormat.MEDIUM;
+            case "long" -> DateFormat.LONG;
+            case "full" -> DateFormat.FULL;
+            default -> throw new JspTagException(action + ": invalid style '" + name + "'");
+        };
     }
 
     /** A {@code String} id or a {@link TimeZone}; {@code null} for anything else, or an empty id. */
