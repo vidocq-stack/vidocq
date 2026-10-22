@@ -74,5 +74,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   Chappe's virtual threads), every fmt IT passes unchanged.
 - Candidate owners: Foy (set the context class loader to the application loader for the
   duration of a request, as Servlet containers do) or the host launcher.
-- Status: open, cross-repo (Foy). The two bundle ITs are `@Disabled` with a reference to this
-  entry; the other `fmt:` ITs run and pass.
+- Status: fixed (2026-10-22) in Vidocq/foy, branch `fix/request-context-class-loader`
+  (Foy BUG-20261022-06; the PR number will be added later): requests run with the application
+  class loader as context class loader. The bundle ITs (one per placement) are enabled and pass
+  without any change to the host or to Bodoni.

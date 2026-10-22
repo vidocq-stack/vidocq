@@ -18,5 +18,5 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 
-/** Resource bundles of the {@code fmt:} pages (a resources-only package, opened to the page runtime). */
+/** Resource bundles of the {@code fmt:} pages (a resources-only package, opened so that library modules can read them). */
 package io.vidocq.bodoni.it.ibarra.i18n;

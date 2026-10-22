@@ -44,7 +44,6 @@ import java.util.regex.Pattern;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -76,8 +75,15 @@ class CorePagesIT {
     private static final Set<String> APPLICATION_LIBRARIES = Set.of(
             "io.vidocq.bodoni.core", "io.vidocq.bodoni.peano", "jakarta.servlet.jsp.jstl");
 
-    /** JDK modules the application layer reads through the JSTL API and Bodoni. */
+    /**
+     * JDK modules the application layer reads through the JSTL API and Bodoni. The host runs with
+     * {@code --limit-modules}: {@code jdk.localedata} provides the CLDR locale data (French, ...)
+     * the fmt pages format with.
+     */
     private static final String JDK_MODULES = "java.desktop,java.sql,java.net.http,jdk.localedata";
+
+    /** "345 987,246": the French group separator of the JDK's CLDR data is U+202F. */
+    private static final String FRENCH_NUMBER = "345\u202f987,246";
 
     private static Process host;
     private static Path log;
@@ -249,12 +255,14 @@ class CorePagesIT {
     }
 
     @Test
-    @Disabled("BUG.md BOD-002: Foy leaves the system class loader as the request thread's context class loader")
-    void fmtMessagesResolveBundlesOfTheApplicationModule() throws Exception {
-        // Package bundle (opens) and non-package directory bundle, both read by name at run time.
-        String page = get("/fmt.jsp");
-        assertEquals("Bonjour de la part de Bodoni", paragraph(page, "greeting"));
-        assertEquals("Salut Bodoni", paragraph(page, "plain"));
+    void fmtMessageResolvesABundleOfAnOpenedPackage() throws Exception {
+        // The French strings come from the JDK's CLDR data and the page's own bundles.
+        assertEquals("Bonjour de la part de Bodoni", paragraph(get("/fmt.jsp"), "greeting"));
+    }
+
+    @Test
+    void fmtMessageResolvesABundleOfANonPackageDirectoryWithItsParam() throws Exception {
+        assertEquals("Salut Bodoni", paragraph(get("/fmt.jsp"), "plain"));
     }
 
     @Test
@@ -279,7 +287,6 @@ class CorePagesIT {
     }
 
     @Test
-    @Disabled("BUG.md BOD-002: Foy leaves the system class loader as the request thread's context class loader")
     void fmtLegacyUriResolvesAMessage() throws Exception {
         assertEquals("Bonjour de la part de Bodoni", paragraph(get("/fmt-legacy.jsp"), "message"));
     }

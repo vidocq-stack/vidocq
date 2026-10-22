@@ -24,13 +24,14 @@
  * <p>Requiring {@code io.vidocq.bodoni.core} makes Bodoni's {@code META-INF/*.tld}
  * reachable to Ibarra's TLD discovery and lets the generated pages construct the
  * exported tag handlers and call the {@code fn:} functions directly. No package is
- * exported or opened.
+ * exported; only the resources-only {@code i18n} package (the {@code fmt:} bundles) is opened.
  */
 module io.vidocq.bodoni.it.ibarra {
     requires io.vidocq.ibarra.api;
     requires io.vidocq.peano.api;
     requires io.vidocq.bodoni.core;
 
-    // fmt: resolves bundles by name at run time (Bodoni PLAN.md, open question 4)
+    // fmt: resolves bundles by name at run time (Bodoni PLAN.md, open question 4); a library module
+    // cannot see a bundle in an encapsulated package of the application module.
     opens io.vidocq.bodoni.it.ibarra.i18n;
 }
