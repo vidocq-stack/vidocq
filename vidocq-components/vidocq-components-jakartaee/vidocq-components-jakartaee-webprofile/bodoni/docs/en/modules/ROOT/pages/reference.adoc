@@ -91,7 +91,7 @@ The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
 
 == `c:import` and external resources
 
-* **Absolute URLs.** `http` and `https` go through `java.net.http.HttpClient`; any other absolute scheme goes through `URLConnection`. The client is created lazily, on the first absolute import, runs on virtual threads and has a 10 second connect timeout. There is no public client SPI.
+* **Absolute URLs.** `http` and `https` go through `java.net.http.HttpClient`; any other absolute scheme goes through `URLConnection`. The client is created lazily, on the first absolute import, runs on virtual threads and has a 10 second connect timeout; each request has a 30 second timeout. `URLConnection` reads get the same limits (10 second connect, 30 second read timeout). There is no public client SPI.
 * **Relative URLs.** The resource is included through the `RequestDispatcher` of the current or of a foreign context (`context` attribute).
 * **Session identifier.** A `;jsessionid=` path parameter is stripped from the URL before it is requested.
 * **Character set.** The `charEncoding` attribute wins; otherwise the `charset` declared in the content type of the resource; otherwise `ISO-8859-1` (spec 7.4).

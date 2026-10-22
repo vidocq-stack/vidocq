@@ -23,9 +23,13 @@ package io.vidocq.bodoni.core.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.Reader;
+import java.net.URI;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -39,6 +43,20 @@ class ExternalResourcesTest {
         assertEquals(StandardCharsets.ISO_8859_1, ExternalResources.charsetOf(null, "text/html"));
         assertEquals(StandardCharsets.ISO_8859_1, ExternalResources.charsetOf(null, null));
         assertEquals(StandardCharsets.UTF_8, ExternalResources.charsetOf(null, "text/plain;Charset=utf-8"));
+    }
+
+    @Test
+    void httpRequestsHaveATimeout() {
+        assertEquals(Optional.of(Duration.ofSeconds(30)),
+                JdkExternalResources.httpRequest(URI.create("http://example.org/x")).timeout());
+    }
+
+    @Test
+    void urlConnectionsHaveConnectAndReadTimeouts(@TempDir Path dir) throws Exception {
+        URLConnection connection = dir.toUri().toURL().openConnection();
+        JdkExternalResources.withTimeouts(connection);
+        assertEquals(10_000, connection.getConnectTimeout());
+        assertEquals(30_000, connection.getReadTimeout());
     }
 
     @Test

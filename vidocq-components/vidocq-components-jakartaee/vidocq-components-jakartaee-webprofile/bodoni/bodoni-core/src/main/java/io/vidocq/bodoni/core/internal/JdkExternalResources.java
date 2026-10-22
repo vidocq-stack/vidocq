@@ -38,6 +38,15 @@ final class JdkExternalResources implements ExternalResources {
 
     static final ExternalResources INSTANCE = new JdkExternalResources();
 
+    /** Time allowed to open a connection. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Time allowed for an http(s) response to start (request timeout), or between two reads of
+     * a {@code URLConnection} (read timeout).
+     */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+
     /**
      * Lazy holder: the client (and its virtual-thread executor) is created on first absolute
      * http(s) import, never for relative imports.
@@ -45,7 +54,7 @@ final class JdkExternalResources implements ExternalResources {
     private static final class Client {
         static final HttpClient INSTANCE = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(CONNECT_TIMEOUT)
                 .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .build();
     }
@@ -65,7 +74,7 @@ final class JdkExternalResources implements ExternalResources {
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
             return openHttp(uri, absoluteUrl, charEncoding);
         }
-        URLConnection connection = uri.toURL().openConnection();
+        URLConnection connection = withTimeouts(uri.toURL().openConnection());
         InputStream in = connection.getInputStream();
         return reader(in, charEncoding, connection.getContentType());
     }
@@ -73,8 +82,7 @@ final class JdkExternalResources implements ExternalResources {
     private static Reader openHttp(URI uri, String absoluteUrl, String charEncoding) throws IOException {
         HttpResponse<InputStream> response;
         try {
-            response = Client.INSTANCE.send(HttpRequest.newBuilder(uri).GET().build(),
-                    HttpResponse.BodyHandlers.ofInputStream());
+            response = Client.INSTANCE.send(httpRequest(uri), HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new InterruptedIOException("Interrupted while fetching " + absoluteUrl);
@@ -85,6 +93,18 @@ final class JdkExternalResources implements ExternalResources {
             throw new IOException("HTTP status " + status + " for " + absoluteUrl);
         }
         return reader(response.body(), charEncoding, response.headers().firstValue("Content-Type").orElse(null));
+    }
+
+    /** The GET request of an absolute http(s) import. */
+    static HttpRequest httpRequest(URI uri) {
+        return HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT).GET().build();
+    }
+
+    /** Applies the connect and read timeouts to a non-http(s) connection; returns it. */
+    static URLConnection withTimeouts(URLConnection connection) {
+        connection.setConnectTimeout((int) CONNECT_TIMEOUT.toMillis());
+        connection.setReadTimeout((int) REQUEST_TIMEOUT.toMillis());
+        return connection;
     }
 
     private static Reader reader(InputStream in, String charEncoding, String contentType) throws IOException {

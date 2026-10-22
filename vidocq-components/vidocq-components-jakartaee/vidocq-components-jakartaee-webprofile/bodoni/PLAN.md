@@ -323,7 +323,8 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 
 - **`c:import` HTTP client** (validated 2026-10-22): `java.net.http.HttpClient` for `http`
   and `https`, `URLConnection` for the other absolute schemes; no public client SPI. The
-  client is created lazily, runs on virtual threads and has a 10 second connect timeout.
+  client is created lazily, runs on virtual threads and has a 10 second connect timeout
+  and a 30 second request timeout; `URLConnection` gets 10 s connect / 30 s read timeouts.
   Relative URLs go through the `RequestDispatcher`.
 - **Packages**: `io.vidocq.bodoni.core.tags.core` (handlers, exported),
   `io.vidocq.bodoni.core.functions` (exported), `io.vidocq.bodoni.core.internal` (not exported).
