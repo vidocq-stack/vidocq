@@ -39,6 +39,8 @@ import javax.naming.Context;
  */
 public final class NamingExtension implements VidocqExtension, StartupReportContributor {
 
+    private static final String JAVA_NAMES = "java: names";
+
     private volatile boolean installed;
     private volatile String kept;
 
@@ -68,11 +70,11 @@ public final class NamingExtension implements VidocqExtension, StartupReportCont
     public void contribute(StartupReportContext context, StartupReportSection section) {
         section.summary("JNDI java: namespace");
         if (installed) {
-            section.row("java: names", "java:comp/env, from the CDI container");
+            section.row(JAVA_NAMES, "java:comp/env, from the CDI container");
         } else if (kept != null) {
-            section.row("java: names", "the application's factory, " + kept);
+            section.row(JAVA_NAMES, "the application's factory, " + kept);
         } else {
-            section.row("java: names", "not initialized");
+            section.row(JAVA_NAMES, "not initialized");
         }
     }
 }

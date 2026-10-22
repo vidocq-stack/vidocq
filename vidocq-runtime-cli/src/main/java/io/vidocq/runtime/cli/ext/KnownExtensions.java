@@ -36,89 +36,94 @@ public final class KnownExtensions {
 
     private KnownExtensions() {}
 
+    private static final String ESSENTIALS = "io.vidocq.runtime.extensions.essentials";
+    private static final String JAKARTAEE_CORE = "io.vidocq.runtime.extensions.jakartaee.core";
+    private static final String JAKARTAEE_WEB = "io.vidocq.runtime.extensions.jakartaee.web";
+    private static final String MICROPROFILE = "io.vidocq.runtime.extensions.microprofile";
+
     private static final List<RegistryEntry> CATALOG = List.of(
             new RegistryEntry("chappe-webserver",
-                    "io.vidocq.runtime.extensions.essentials",
+                    ESSENTIALS,
                     "vidocq-runtime-chappe-webserver-extension",
                     "Chappe HTTP web server"),
             new RegistryEntry("ravel-config",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-ravel-config-extension",
                     "MicroProfile Config"),
             new RegistryEntry("peano-el",
-                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    JAKARTAEE_CORE,
                     "vidocq-runtime-peano-el-extension",
                     "Jakarta Expression Language 6.0"),
             new RegistryEntry("cassini-rest",
-                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    JAKARTAEE_CORE,
                     "vidocq-runtime-cassini-rest-extension",
                     "Jakarta REST (JAX-RS) endpoints"),
             new RegistryEntry("grimm-openapi",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-grimm-openapi-extension",
                     "MicroProfile OpenAPI document (/openapi)"),
             new RegistryEntry("grimm-openapi-ui",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-grimm-openapi-ui-extension",
                     "Swagger UI for the OpenAPI document"),
             new RegistryEntry("cyrano-rest-client",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-cyrano-rest-client-extension",
                     "MicroProfile REST Client"),
             new RegistryEntry("cervantes-jwt",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-cervantes-jwt-extension",
                     "MicroProfile JWT authentication"),
             new RegistryEntry("humboldt-telemetry",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-humboldt-telemetry-extension",
                     "MicroProfile Telemetry (tracing)"),
             new RegistryEntry("knock-health",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-knock-health-extension",
                     "MicroProfile Health checks"),
             new RegistryEntry("dirac-metrics",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-dirac-metrics-extension",
                     "MicroProfile Metrics"),
             new RegistryEntry("heisenberg-fault-tolerance",
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-heisenberg-fault-tolerance-extension",
                     "MicroProfile Fault Tolerance"),
             new RegistryEntry("foy-servlet",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-foy-servlet-extension",
                     "Jakarta Servlet (servlets, filters, HTTP sessions)"),
             new RegistryEntry("ibarra-pages",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-ibarra-pages-extension",
                     "Jakarta Pages (JSP), compiled at build time"),
             new RegistryEntry("naming",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-naming-extension",
                     "JNDI java: names (java:comp/env/jdbc/...) answered by CDI beans"),
             new RegistryEntry("mansart-data",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-data-extension",
                     "Jakarta Persistence (JPA)"),
             new RegistryEntry("mansart-pool",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-pool-extension",
                     "JDBC connection pooling"),
             new RegistryEntry("migration",
-                    "io.vidocq.runtime.extensions.essentials",
+                    ESSENTIALS,
                     "vidocq-runtime-migration-extension",
                     "Schema migrations applied at boot"),
             new RegistryEntry("flyway-migration",
-                    "io.vidocq.runtime.extensions.essentials",
+                    ESSENTIALS,
                     "vidocq-runtime-flyway-migration-extension",
                     "Flyway schema migrations"),
             new RegistryEntry("liquibase-migration",
-                    "io.vidocq.runtime.extensions.essentials",
+                    ESSENTIALS,
                     "vidocq-runtime-liquibase-migration-extension",
                     "Liquibase schema migrations"),
             new RegistryEntry("mansart-transactions",
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-transactions-extension",
                     "Jakarta Transactions (JTA)"));
 
@@ -175,25 +180,25 @@ public final class KnownExtensions {
     public static Optional<ExtensionCoordinate> codegenBundle(String id) {
         return switch (id == null ? "" : id.trim().toLowerCase()) {
             case "peano-el" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    JAKARTAEE_CORE,
                     "vidocq-runtime-peano-el-extension-codegen"));
             case "cassini-rest" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.jakartaee.core",
+                    JAKARTAEE_CORE,
                     "vidocq-runtime-cassini-rest-extension-codegen"));
             case "foy-servlet" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-foy-servlet-extension-codegen"));
             case "mansart-data" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-data-extension-codegen"));
             case "mansart-transactions" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.jakartaee.web",
+                    JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-transactions-extension-codegen"));
             case "ravel-config" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-ravel-config-extension-codegen"));
             case "cyrano-rest-client" -> Optional.of(new ExtensionCoordinate(
-                    "io.vidocq.runtime.extensions.microprofile",
+                    MICROPROFILE,
                     "vidocq-runtime-cyrano-rest-client-extension-codegen"));
             default -> Optional.empty();
         };
