@@ -115,9 +115,11 @@ final class LoopTagStatusAccessorTable extends AccessorTable {
         return base instanceof LoopTagStatus ? String.class : null;
     }
 
-    private static boolean methodTarget(ELContext context, Object base, Object method) {
+    /** Claims a call only when the name is one of the eight methods and no argument is passed. */
+    private static boolean methodTarget(ELContext context, Object base, Object method, Object[] arguments) {
         Objects.requireNonNull(context);
-        if (!(base instanceof LoopTagStatus) || !(method instanceof String name)) {
+        if (!(base instanceof LoopTagStatus) || !(method instanceof String name)
+                || (arguments != null && arguments.length != 0)) {
             return false;
         }
         for (var descriptor : METHODS) {
@@ -131,7 +133,7 @@ final class LoopTagStatusAccessorTable extends AccessorTable {
     @Override
     public MethodReference getMethodReference(ELContext context, Object base, String method,
             Class<?>[] types, Object[] arguments) {
-        if (!methodTarget(context, base, method)) {
+        if (!methodTarget(context, base, method, arguments)) {
             return null;
         }
         var descriptor = METHODS[MethodSelection.select(context, METHODS, method, types, arguments, false)];
@@ -141,15 +143,12 @@ final class LoopTagStatusAccessorTable extends AccessorTable {
 
     @Override
     public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
-        if (!methodTarget(context, base, method)) {
+        if (!methodTarget(context, base, method, arguments)) {
             return null;
         }
         context.setPropertyResolved(base, method);
         Object[] args = arguments == null ? new Object[0] : arguments;
         int selected = MethodSelection.select(context, METHODS, (String) method, types, args, false);
-        if (args.length != 0) {
-            throw new MethodNotFoundException("Invalid argument count");
-        }
         var status = (LoopTagStatus) base;
         try {
             return switch (selected) {

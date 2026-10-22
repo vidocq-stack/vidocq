@@ -48,4 +48,18 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The differential test drives the reflective BeanELResolver, which needs
+                         the test package open to jakarta.el (test run only, never in main). -->
+                    <argLine>@{argLine} --add-opens io.vidocq.bodoni.peano/io.vidocq.bodoni.peano=jakarta.el</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

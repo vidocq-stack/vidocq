@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import jakarta.el.BeanELResolver;
 import jakarta.el.ELException;
 import jakarta.el.ExpressionFactory;
 import jakarta.el.PropertyNotWritableException;
@@ -200,6 +201,77 @@ class LoopTagStatusAccessTest {
                 .findFirst().orElseThrow();
         assertEquals(List.of("io.vidocq.bodoni.peano.internal.BodoniAccessorProvider"), provides.providers());
         assertTrue(module.getDescriptor().exports().isEmpty());
+    }
+
+    @Test
+    void doesNotClaimACallWhoseShapeMatchesNoStatusMethod() {
+        var status = new OverloadedStatus();
+        var failure = assertThrows(ELException.class, () -> eval(status, "${s.getIndex(10)}"));
+        assertEquals("Reflection fallback denied for " + OverloadedStatus.class.getName()
+                + "; register a generated accessor provider or a custom resolver", failure.getMessage());
+        assertEquals(1, eval(status, "${s.getIndex()}"));
+    }
+
+    @Test
+    void agreesWithBeanELResolverOnEveryProperty() {
+        // The reflective resolver is the oracle; it needs a public class, so the anonymous
+        // status object is replaced by a public implementation here.
+        var status = new OverloadedStatus();
+        var oracle = new BeanELResolver();
+        for (String property : PROPERTIES) {
+            var value = expression(status, "${s." + property + "}");
+            assertEquals(oracle.getValue(context, status, property), value.getValue(context), property);
+            assertEquals(oracle.getType(context, status, property), value.getType(context), property);
+            assertEquals(oracle.isReadOnly(context, status, property), value.isReadOnly(context), property);
+        }
+    }
+
+    /** A public status with an extra overload, as an application class could declare. */
+    public static final class OverloadedStatus implements LoopTagStatus {
+        @Override
+        public Object getCurrent() {
+            return "b";
+        }
+
+        @Override
+        public int getIndex() {
+            return 1;
+        }
+
+        /** Not part of {@link LoopTagStatus}. */
+        public int getIndex(int offset) {
+            return 1 + offset;
+        }
+
+        @Override
+        public int getCount() {
+            return 2;
+        }
+
+        @Override
+        public boolean isFirst() {
+            return false;
+        }
+
+        @Override
+        public boolean isLast() {
+            return true;
+        }
+
+        @Override
+        public Integer getBegin() {
+            return 0;
+        }
+
+        @Override
+        public Integer getEnd() {
+            return null;
+        }
+
+        @Override
+        public Integer getStep() {
+            return 2;
+        }
     }
 
     /** A minimal loop tag, to obtain the status object of the JSTL API itself. */
