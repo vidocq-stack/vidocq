@@ -21,8 +21,8 @@
 /**
  * Bodoni — Jakarta Standard Tag Library 3.0 implementation.
  *
- * <p>Scaffold (milestone B0): no package exists yet, so nothing is exported.
- * Tag-handler packages will be exported unqualified when they land (B1): pages
+ * <p>The {@code functions} package is exported unqualified; tag-handler
+ * packages will be exported unqualified when they land (B1): pages
  * precompiled by Ibarra call {@code new} on handlers from the application
  * module, and other Pages containers instantiate them by class name — neither
  * needs {@code opens}.
@@ -36,4 +36,7 @@
  */
 module io.vidocq.bodoni.core {
     requires transitive jakarta.servlet.jsp.jstl;
+
+    // The fn: functions are called directly by generated pages.
+    exports io.vidocq.bodoni.core.functions;
 }
