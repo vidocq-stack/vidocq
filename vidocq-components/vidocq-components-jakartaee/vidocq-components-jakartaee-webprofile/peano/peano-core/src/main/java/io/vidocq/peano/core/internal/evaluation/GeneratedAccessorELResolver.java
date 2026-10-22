@@ -59,8 +59,10 @@ import io.vidocq.peano.spi.AccessorTable;
  * exact class only, as static members are not inherited through EL, and convertToType keeps its
  * exact-target lookup for functional interfaces.
  *
- * <p>A built-in Map.Entry table is always registered; an application table for Map.Entry replaces
- * it, while two application tables for one type remain a conflict.
+ * <p>A built-in Map.Entry table is always registered, in both reflection modes, and so runs ahead of
+ * the API BeanELResolver. An application table keyed on Map.Entry replaces it; tables found earlier in
+ * the lookup order take precedence for what they resolve, and unresolved operations fall through.
+ * Two application tables for one type remain a conflict.
  */
 public final class GeneratedAccessorELResolver extends ELResolver {
     private final Map<Class<?>, AccessorTable> tables;
@@ -117,6 +119,11 @@ public final class GeneratedAccessorELResolver extends ELResolver {
             if (raced != null) found = raced;
         }
         return found;
+    }
+
+    /** The cached matching tables of a runtime class, or null before its first lookup (tests). */
+    List<AccessorTable> cached(Class<?> runtime) {
+        return matching.get(runtime);
     }
 
     private List<AccessorTable> lookup(Class<?> runtime) {

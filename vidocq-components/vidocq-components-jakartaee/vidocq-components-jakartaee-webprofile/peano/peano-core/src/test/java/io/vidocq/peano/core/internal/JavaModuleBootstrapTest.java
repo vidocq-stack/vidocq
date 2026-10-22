@@ -79,6 +79,25 @@ class JavaModuleBootstrapTest {
         assertTrue(Files.readString(temporary.resolve("process.log")).contains("PEANO_MODULE_OK"));
     }
 
+    @Test
+    void applicationEntryOverloadsBehaveAsWithBeanELResolverInAllowMode() throws Exception {
+        Path api = Path.of(ExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path core = Path.of(PeanoExpressionFactory.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path spi = Path.of(AccessorProvider.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path source = temporary.resolve("entry-source");
+        copyResource("/entry-overload/module-info.java", source.resolve("module-info.java"));
+        copyResource("/entry-overload/Main.java", source.resolve("Main.java"));
+        Path classes = temporary.resolve("entry-classes");
+        Path javaBin = Path.of(System.getProperty("java.home"), "bin");
+        assertEquals(0, run(javaBin.resolve("javac").toString(), "--module-path", api.toString(),
+                "-d", classes.toString(), source.resolve("module-info.java").toString(),
+                source.resolve("Main.java").toString()));
+        assertEquals(0, run(javaBin.resolve("java").toString(), "--module-path",
+                String.join(File.pathSeparator, api.toString(), spi.toString(), core.toString(), classes.toString()),
+                "--module", "peano.entryoverload/io.vidocq.peano.entryoverload.Main"));
+        assertTrue(Files.readString(temporary.resolve("process.log")).contains("PEANO_ENTRY_OVERLOAD_OK"));
+    }
+
     private void copyResource(String resource, Path target) throws IOException {
         Files.createDirectories(target.getParent());
         try (var input = getClass().getResourceAsStream(resource)) {

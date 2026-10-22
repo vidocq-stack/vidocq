@@ -321,19 +321,25 @@ inherited through EL. Functional-interface conversion keeps its exact target-int
 
 [.tag-new]#NEW# Peano ships a built-in table for `java.util.Map.Entry`, so `${e.key}` and
 `${e.value}` work in deny mode on the JDK's private entry classes (`HashMap$Node`, the entries
-of `Map.of` and of unmodifiable views):
+of `Map.of` and of unmodifiable views). It gives the results of the API BeanELResolver, the
+reflective path:
 
-* `key` is read-only: `isReadOnly` is true, `getType` is null and a write raises
-  PropertyNotWritableException.
-* `value` is writable through `Map.Entry.setValue`; `getType` is `Object.class` and
-  `isReadOnly` false. An entry that refuses the write (UnsupportedOperationException)
-  raises PropertyNotWritableException.
+* `key` and `value` are read-only: `isReadOnly` is true, `getType` is null and a write raises
+  PropertyNotWritableException. `Map.Entry.setValue` returns the previous value, so it is not a
+  JavaBeans setter; peano-processor applies the same rule.
 * `getCommonPropertyType` is `String.class`, as for generated tables.
 * `getKey()`, `getValue()` and `setValue(Object)` are callable as methods, with method metadata.
+  The table claims a call only when its name and arity (and declared parameter types, when
+  given) match one of these three methods. Any other call, such as an application overload
+  `getValue(String)`, stays unresolved.
 
-Other properties stay unresolved and follow the reflection policy. An application table for
-`Map.Entry`, or for a concrete entry class, replaces the built-in one; two application tables
-for the same type remain a registration conflict.
+The table also runs in allow mode, ahead of BeanELResolver: what it resolves never reaches
+BeanELResolver, with the same results. Operations it leaves unresolved (other properties,
+other methods) fall through to the next matching table, then to the rest of the resolver chain
+and the reflection policy. An application table keyed on `Map.Entry` itself replaces the
+built-in table. A table for a concrete entry class, or for another supertype found earlier in
+the lookup order, comes first and takes precedence only for what it resolves. Two application
+tables for the same type remain a registration conflict.
 
 == Java functional-interface conversion
 

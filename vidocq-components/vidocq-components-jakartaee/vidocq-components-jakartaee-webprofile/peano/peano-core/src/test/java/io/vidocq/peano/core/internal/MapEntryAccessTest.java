@@ -81,29 +81,28 @@ class MapEntryAccessTest {
     }
 
     @Test
-    void writesTheValueThroughTheEntry() {
+    void keyAndValueAreReadOnlyLikeBeanELResolver() {
+        // Map.Entry.setValue returns V: not a JavaBeans setter, so value is read-only (Vidocq/bodoni BOD-001 review I1).
         var map = new HashMap<String, Object>();
         map.put("b", 2);
-        var value = expression(only(map), "${e.value}");
-        assertFalse(value.isReadOnly(context));
-        assertEquals(Object.class, value.getType(context));
-        value.setValue(context, 5);
-        assertEquals(5, map.get("b"));
+        for (String property : new String[]{"key", "value"}) {
+            var expression = expression(only(map), "${e." + property + "}");
+            assertTrue(expression.isReadOnly(context), property);
+            assertNull(expression.getType(context), property);
+            assertThrows(PropertyNotWritableException.class, () -> expression.setValue(context, 5), property);
+        }
+        var unmodifiable = expression(only(Collections.unmodifiableMap(map)), "${e.value}");
+        assertTrue(unmodifiable.isReadOnly(context));
+        assertThrows(PropertyNotWritableException.class, () -> unmodifiable.setValue(context, 5));
+        assertEquals(2, map.get("b"));
     }
 
     @Test
-    void rejectsWritesToKeysAndUnmodifiableEntries() {
+    void setValueStaysCallableAsAMethod() {
         var map = new HashMap<String, Object>();
         map.put("b", 2);
-        var key = expression(only(map), "${e.key}");
-        assertTrue(key.isReadOnly(context));
-        assertNull(key.getType(context));
-        assertThrows(PropertyNotWritableException.class, () -> key.setValue(context, "x"));
-        var unmodifiable = expression(only(Collections.unmodifiableMap(map)), "${e.value}");
-        assertThrows(PropertyNotWritableException.class, () -> unmodifiable.setValue(context, 5));
-        var immutable = expression(only(Map.of("a", 1)), "${e.value}");
-        assertThrows(PropertyNotWritableException.class, () -> immutable.setValue(context, 5));
-        assertEquals(2, map.get("b"));
+        assertEquals(2, eval(only(map), "${e.setValue(5)}"));
+        assertEquals(5L, map.get("b"));
     }
 
     @Test

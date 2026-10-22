@@ -95,11 +95,44 @@ class GeneratedAccessorResolverTest {
     void cachesNegativeLookupsAndLeavesUnmatchedHierarchiesUnresolved() {
         var resolver = new GeneratedAccessorELResolver(List.of(new Labelled(Status.class,"status")));
         var context = new StandardELContext(ExpressionFactory.newInstance());
-        for (int i = 0; i < 2; i++) {
-            context.setPropertyResolved(false);
-            assertNull(resolver.getValue(context,new Middle(),"who"));
-            assertFalse(context.isPropertyResolved());
-        }
+        assertNull(resolver.cached(Middle.class));
+        assertNull(resolver.getValue(context,new Middle(),"who"));
+        assertFalse(context.isPropertyResolved());
+        List<AccessorTable> cached = resolver.cached(Middle.class);
+        assertEquals(List.of(), cached);
+        assertNull(resolver.getValue(context,new Middle(),"who"));
+        assertFalse(context.isPropertyResolved());
+        assertSame(cached, resolver.cached(Middle.class));
+    }
+
+    @Test
+    void visitsAnInterfaceReachedThroughTwoParentsOnce() {
+        var diamond = new Counting(Diamond.class);
+        var resolver = new GeneratedAccessorELResolver(List.of(diamond));
+        var context = new StandardELContext(ExpressionFactory.newInstance());
+        assertNull(resolver.getValue(context,new Cross(),"who"));
+        assertFalse(context.isPropertyResolved());
+        assertEquals(1, diamond.calls);
+        assertEquals(List.of(diamond), resolver.cached(Cross.class));
+        assertEquals("diamond", who(new GeneratedAccessorELResolver(List.of(new Labelled(Diamond.class,"diamond"))), new Cross()));
+        // Right sits on the first level, Diamond on the next one.
+        assertEquals("right", who(new GeneratedAccessorELResolver(List.of(
+                new Labelled(Diamond.class,"diamond"), new Labelled(Right.class,"right"))), new Cross()));
+    }
+
+    @Test
+    void leavesNullBasesUnresolved() {
+        var resolver = new GeneratedAccessorELResolver(List.of(new Labelled(Status.class,"status")));
+        var context = new StandardELContext(ExpressionFactory.newInstance());
+        assertNull(resolver.getValue(context,null,"who"));
+        assertNull(resolver.getType(context,null,"who"));
+        assertFalse(resolver.isReadOnly(context,null,"who"));
+        resolver.setValue(context,null,"who","x");
+        assertNull(resolver.invoke(context,null,"who",null,new Object[0]));
+        assertNull(resolver.getCommonPropertyType(context,null));
+        assertNull(GeneratedAccessorELResolver.reference(context,null,"who",null,new Object[0]));
+        assertNull(GeneratedAccessorELResolver.invokeRegistered(context,null,"who",null,new Object[0]));
+        assertFalse(context.isPropertyResolved());
     }
 
     @Test
@@ -305,6 +338,23 @@ class GeneratedAccessorResolverTest {
     interface Inherited {}
     static class Middle extends Base implements Inherited {}
     static final class Leaf extends Middle implements Own {}
+    interface Diamond {}
+    interface Left extends Diamond {}
+    interface Right extends Diamond {}
+    static final class Cross implements Left, Right {}
+
+    /** Counts the getValue calls it receives and never resolves. */
+    private static final class Counting extends AccessorTable {
+        private final Class<?> type;
+        private int calls;
+        Counting(Class<?> type) { this.type = type; }
+        @Override public Class<?> targetType() { return type; }
+        @Override public Object getValue(ELContext context, Object base, Object property) { calls++; return null; }
+        @Override public Class<?> getType(ELContext context, Object base, Object property) { return null; }
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {}
+        @Override public boolean isReadOnly(ELContext context, Object base, Object property) { return false; }
+        @Override public Class<?> getCommonPropertyType(ELContext context, Object base) { return null; }
+    }
 
     /** Answers the pseudo-property "who" with its label, for any base it is selected for. */
     private static final class Labelled extends AccessorTable {

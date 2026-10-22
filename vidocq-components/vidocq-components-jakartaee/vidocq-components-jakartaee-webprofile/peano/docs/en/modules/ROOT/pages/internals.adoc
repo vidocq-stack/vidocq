@@ -82,7 +82,8 @@ even when the provider and model package have no exports or opens.
 GeneratedAccessorELResolver loads providers through ServiceLoader and snapshots their
 tables in an immutable class-keyed map. Duplicate target registrations fail explicitly.
 A built-in Map.Entry table (core internal package, not a service) is added unless an
-application table already targets Map.Entry.
+application table already targets Map.Entry. It mirrors the API BeanELResolver (read-only key
+and value, the three Map.Entry methods by exact arity) and is checked differentially against it.
 An instance base matches tables by supertype lookup: the exact class, the superclasses
 nearest first, then the interfaces breadth-first (see the Reference page for the exact order).
 Each operation tries them in that order until one resolves it. Each resolver caches the ordered

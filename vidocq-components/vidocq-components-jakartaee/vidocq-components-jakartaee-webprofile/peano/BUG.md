@@ -20,13 +20,54 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   generated exact-class table no longer hides an interface table); the ordered list is cached
   per runtime class
   (ELClass bases and functional conversion stay exact). peano-core registers a built-in
-  Map.Entry table (key read-only, value written through setValue) that an application
-  table replaces. The LoopTagStatus table itself belongs to Bodoni (bodoni-peano).
+  Map.Entry table aligned with the API BeanELResolver (key and value read-only, getKey(),
+  getValue() and setValue(Object) callable, other method shapes left unresolved) that an
+  application Map.Entry table replaces. The LoopTagStatus table itself belongs to Bodoni
+  (bodoni-peano).
 - Evidence: MapEntryAccessTest (deny mode, Map.of, HashMap and unmodifiable entries,
   writes, unknown-type guard message) and GeneratedAccessorResolverTest (interface,
   superclass, precedence, breadth-first order, built-in override, fall-through behind an
   exact-only superclass table in deny mode) failed before the change,
   except the guard-message and negative-lookup cases, which pin unchanged behaviour.
+  A review found the first version of the table writable on value and claiming application
+  overloads such as getValue(String) (MethodNotFoundException in allow mode); the follow-up
+  MapEntryAccessorTableTest (differential against BeanELResolver on HashMap, Map.of and
+  SimpleEntry entries) and the entry-overload module fixture failed before that fix.
+
+## EL-019 · 2026-10-22 · Every ELContext rebuilds the accessor tables and the lookup cache
+
+- Symptom: each StandardELContext, ELProcessor or ELManager gets a fresh
+  GeneratedAccessorELResolver: a full ServiceLoader scan of AccessorProvider, then, per
+  distinct runtime class, a supertype walk (getInterfaces copies, a queue, a set, a list)
+  before the per-resolver cache helps. GeneratedAccessorELResolver.adapt also builds a new
+  resolver, with its ServiceLoader scan, on every factory lambda coercion.
+- Minimal reproduction: StandardELContext(ExpressionFactory) calls
+  factory.getStreamELResolver() in its constructor (javap), and
+  PeanoExpressionFactory.getStreamELResolver returns new GeneratedAccessorELResolver().
+  Evaluate `${e.key}` in two new contexts: both run the lookup for the entry class.
+- Cause: the table map and the matching-table cache are owned by the resolver instance,
+  which is per context, instead of by the factory. The ServiceLoader scan per context
+  predates EL-018; the hierarchy walk per context and class comes with it.
+- Status: open. Suggested fix: build the tables and the ConcurrentHashMap cache once in a
+  factory-scoped catalog shared by its resolvers (and by adapt). Mind the class-loader and
+  module-layer semantics: ServiceLoader.load(AccessorProvider.class) currently resolves from
+  the thread context class loader at context creation, so a factory shared across
+  applications or layers must not serve one application's tables to another. No figure is
+  claimed; measure and record in BENCH.md before and after.
+
+## EL-020 · 2026-10-22 · Deny mode throws from getCommonPropertyType after a table answered
+
+- Symptom: under -Dpeano.reflection=deny,
+  context.getELResolver().getCommonPropertyType(context, entry) on a HashMap$Node throws
+  "Reflection fallback denied for java.util.HashMap$Node", although the built-in Map.Entry
+  table answered String.class. Generated tables hit the same failure.
+- Minimal reproduction: deny mode, StandardELContext over the Peano factory, call
+  getCommonPropertyType on the resolver chain with any base that has a table.
+- Cause: CompositeELResolver.getCommonPropertyType queries every resolver (there is no
+  resolution flag for it), so ReflectionGuard.getCommonPropertyType runs after the table and
+  applies the member-access guard to what is only metadata.
+- Status: open. Suggested fix: ReflectionGuard.getCommonPropertyType returns null without
+  checking the policy; it performs no reflective member access.
 
 ## CI-003 · 2026-10-11 · Forge branch updates create unsigned merge commits
 

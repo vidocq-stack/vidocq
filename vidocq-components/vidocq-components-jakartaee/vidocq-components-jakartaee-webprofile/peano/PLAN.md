@@ -387,7 +387,8 @@ P6 runtime foundation (2026-10-10): peano-api exports only io.vidocq.peano.spi.
 AccessorProvider contributes AccessorTable instances (ELResolver subclasses), keyed
 by class or interface. Instance bases select by supertype lookup (exact class, superclasses,
 then interfaces breadth-first; ELClass bases stay exact) since Vidocq/bodoni BOD-001; core
-also registers a built-in Map.Entry table that an application table may replace. Core uses ServiceLoader and snapshots registrations in an
+also registers a built-in Map.Entry table, aligned with BeanELResolver, that an application
+Map.Entry table replaces. Core uses ServiceLoader and snapshots registrations in an
 immutable map; conflicting targets fail explicitly. The standard factory resolver
 hook places table dispatch after application resolvers and before API fallbacks.
 Closed application packages keep all direct calls inside their own Java module.
