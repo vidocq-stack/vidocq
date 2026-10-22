@@ -76,18 +76,17 @@ public final class Coercions {
         if (boxed.isInstance(value)) {
             return value;
         }
-        if (value instanceof LambdaExpression lambda && type.isInterface()) {
-            Object adapted = adaptLambda(lambda, type, accessors);
-            if (adapted != null) return adapted;
-        }
-        if (boxed == String.class) {
-            return value == null ? "" : value instanceof Enum<?> e ? e.name() : value.toString();
-        }
+        Object adapted = value instanceof LambdaExpression lambda && type.isInterface()
+                ? adaptLambda(lambda, type, accessors) : null;
+        return adapted != null ? adapted : convertTo(value, type, boxed, accessors);
+    }
+
+    /** Converts by target kind, once identity and lambda adaptation did not apply. */
+    private static Object convertTo(Object value, Class<?> type, Class<?> boxed, Supplier<AccessorCatalog> accessors) {
+        if (boxed == String.class) return stringValue(value);
         if (boxed == Boolean.class) return booleanValue(value, type);
         if (boxed == Character.class) return characterValue(value, type);
-        if (Number.class.isAssignableFrom(boxed)) {
-            return number(value, boxed);
-        }
+        if (Number.class.isAssignableFrom(boxed)) return number(value, boxed);
         if (type.isEnum()) return enumConversion(value, type);
         if (type.isArray()) return arrayValue(value, type, accessors);
         var registered=RegisteredConversions.discover(value,type);
@@ -96,6 +95,11 @@ public final class Coercions {
             return null;
         }
         throw failure(type);
+    }
+
+    private static String stringValue(Object value) {
+        if (value == null) return "";
+        return value instanceof Enum<?> e ? e.name() : value.toString();
     }
 
     private static Object adaptLambda(LambdaExpression lambda, Class<?> type, Supplier<AccessorCatalog> accessors) {
