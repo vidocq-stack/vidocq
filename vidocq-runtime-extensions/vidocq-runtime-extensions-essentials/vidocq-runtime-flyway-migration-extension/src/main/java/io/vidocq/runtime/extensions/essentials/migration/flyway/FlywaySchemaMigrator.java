@@ -39,7 +39,7 @@ import java.util.function.Function;
  * Flyway-backed {@link SchemaMigrator}.
  *
  * <p>Flyway loads scripts, drivers and Java migrations through the application's class loader, the thread
- * context class loader. When Vidocq booted the application in a module layer of its own, that loader lists no
+ * context class loader. When Vidocq booted the application in a module layer of its own, that loader may list no
  * directory, so the {@code classpath:} locations are listed from the layer's modules instead
  * ({@link ApplicationLayerMigrations}, vidocq#96).
  */

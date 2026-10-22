@@ -43,8 +43,9 @@ import java.util.regex.Pattern;
 /**
  * The migrations of {@code classpath:} locations, found in the application's own modules rather than by
  * Flyway's class-path scanner, for a launch where the application sits in a module layer of its own
- * (vidocq#96). There, the context class loader serves a script by name but lists no directory, and
- * Flyway's scanner, which asks {@code getResources("db/migration")} first, finds nothing.
+ * (vidocq#96). There, the context class loader serves a script by name but may list no directory, and
+ * Flyway's scanner, which asks {@code getResources("db/migration")} first, then finds nothing. Vauban lists the
+ * directories of a plain jar or a directory since Vidocq/vauban#178, never those of an sjar.
  *
  * <p>Each location is listed by {@code lister}, from the layer's modules; each file is read, and each class
  * loaded, by name through {@code loader}. A resource keeps the name Flyway's own scanner gives it, relative

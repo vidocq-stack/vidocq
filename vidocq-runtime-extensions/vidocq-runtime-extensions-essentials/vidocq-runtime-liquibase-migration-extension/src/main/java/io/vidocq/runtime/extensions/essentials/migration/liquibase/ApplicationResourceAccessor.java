@@ -33,9 +33,9 @@ import java.util.function.Function;
 
 /**
  * Serves Liquibase the application's changelogs when Vidocq booted the application in a module layer of its own
- * (vidocq#96). There, the context class loader serves a file by name, but under a {@code vauban:} URL that
- * Liquibase's {@code ClassLoaderResourceAccessor} cannot open ({@code unknown protocol: vauban}), and it lists no
- * directory. A file is read here by name through the loader; a directory, for {@code includeAll}, is listed from
+ * (vidocq#96). There, the context class loader serves a file by name, but may give it a {@code vauban:} URL that
+ * Liquibase's {@code ClassLoaderResourceAccessor} cannot open ({@code unknown protocol: vauban}), and list no
+ * directory: Vauban does both for an sjar, and did for every archive before Vidocq/vauban#178. A file is read here by name through the loader; a directory, for {@code includeAll}, is listed from
  * the layer's modules.
  */
 final class ApplicationResourceAccessor extends AbstractResourceAccessor {

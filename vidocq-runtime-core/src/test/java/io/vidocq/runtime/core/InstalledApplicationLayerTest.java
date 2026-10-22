@@ -29,7 +29,6 @@ import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.constant.ModuleDesc;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The application layer the core publishes to the extensions, and why they need it: its loader serves a file of
- * the application by name, but lists none of its directories (vidocq#96).
+ * the application by name, but may list none of its directories (vidocq#96). Vauban lists those of a plain jar or
+ * a directory since Vidocq/vauban#178, never those of an archive a byte-source plugin reads, such as an sjar.
  */
 class InstalledApplicationLayerTest {
 
@@ -70,8 +70,6 @@ class InstalledApplicationLayerTest {
             assertEquals(List.of("db/migration/V1__create.sql"), ApplicationLayer.list(layer, "db/migration"));
             ClassLoader loader = Thread.currentThread().getContextClassLoader();
             assertNotNull(loader.getResource("db/migration/V1__create.sql"), "the layer's loader serves a file by name");
-            assertEquals(List.of(), Collections.list(loader.getResources("db/migration")),
-                    "but lists no directory: what Flyway's own scanner relies on");
         } finally {
             VidocqAppLayer.resetForReload();
             if (previous == null) {
