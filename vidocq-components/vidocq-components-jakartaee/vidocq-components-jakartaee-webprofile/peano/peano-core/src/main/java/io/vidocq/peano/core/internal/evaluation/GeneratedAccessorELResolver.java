@@ -22,6 +22,7 @@ package io.vidocq.peano.core.internal.evaluation;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.MethodReference;
@@ -108,6 +109,17 @@ public final class GeneratedAccessorELResolver extends ELResolver {
     public static <T> T adapt(AccessorCatalog catalog, jakarta.el.LambdaExpression value, Class<T> type) {
         AccessorTable table = catalog.exact(type);
         return table == null ? null : table.convertToType(null, value, type);
+    }
+
+    /**
+     * Binds a resolver over the creating factory's catalog unless the context already has one. Function
+     * calls and method metadata reach the tables directly, possibly before any resolver of the chain
+     * binds itself; without this, they would load the providers again in every context (EL-019).
+     */
+    public static void prepare(ELContext context, Supplier<AccessorCatalog> accessors) {
+        if (accessors != null && context.getContext(GeneratedAccessorELResolver.class) == null) {
+            new GeneratedAccessorELResolver(accessors.get()).bind(context);
+        }
     }
 
     /** Generated metadata is context-owned; lazy service discovery also supports custom contexts. */

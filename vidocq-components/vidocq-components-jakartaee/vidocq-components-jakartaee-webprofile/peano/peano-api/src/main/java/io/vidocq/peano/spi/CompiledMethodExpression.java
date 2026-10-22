@@ -118,9 +118,9 @@ public abstract class CompiledMethodExpression extends MethodExpression {
         return new Resolved(base,name,parameterTypes==null ? null : parameterTypes.clone(),arguments);
     }
     private record Resolved(Object base,String name,Class<?>[] types,Object[] arguments) {}
-    private static MethodReference metadata(ELContext context,Resolved resolved) {
+    private MethodReference metadata(ELContext context,Resolved resolved) {
         Class<?> type=resolved.base() instanceof ELClass owner ? owner.getKlass() : resolved.base().getClass();
-        var table=CompiledFunctionValueExpression.registered(context,type);
+        var table=CompiledFunctionValueExpression.registered(context,getClass(),type);
         MethodReference generated=table==null ? null : guarded(()->table.getMethodReference(context,resolved.base(),resolved.name(),resolved.types(),resolved.arguments()));
         if (generated!=null) return generated;
         requireReflection(resolved.base());

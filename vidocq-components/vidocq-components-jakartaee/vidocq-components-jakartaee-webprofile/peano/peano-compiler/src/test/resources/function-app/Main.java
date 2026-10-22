@@ -122,6 +122,8 @@ public class Main {
             check(sum.getValue(context).equals(9L) && Provider.creations==2,"Provider snapshot ignored loader change");
             check(sum.getValue(context).equals(9L) && Provider.creations==2,"Changed-loader snapshot was not reused");
         } finally { Thread.currentThread().setContextClassLoader(previousLoader); }
+        // EL-019: a new context, as each page request gets, reuses the snapshot of the expression class.
+        check(sum.getValue(new Context()).equals(9L) && Provider.creations==2,"Accessor providers recreated for a new evaluation context");
         context.captures.clear();
         check(new Nested(context,Object.class).getValue(context).equals(2006L)
                 && context.captures.equals(List.of("f:sum")),"Nested function capture or binding failed");

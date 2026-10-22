@@ -30,7 +30,8 @@ import jakarta.el.MethodReference;
  * unknown operations unresolved. Writable types describe setter inputs; read-only
  * properties return null from getType. Operand conversion uses the supplied ELContext.
  *
- * Tables must be safe for concurrent use and keep evaluation state in the ELContext.
+ * Tables must be safe for concurrent use and keep evaluation state in the ELContext: one
+ * instance serves every context of an expression factory, and every compiled expression.
  * Selection tries the exact runtime class, then its superclasses nearest first (Object
  * excluded), then its interfaces breadth-first; each operation goes to those tables in that
  * order until one resolves it, so a table that leaves an operation unresolved passes it on. A

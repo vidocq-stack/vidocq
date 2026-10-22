@@ -53,8 +53,13 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   under and shares it with every resolver it returns and with coerceToType's lambda
   adaptation. A context created under another context class loader gets its own catalog,
   so a factory shared across applications never serves one application's tables to
-  another. Regression tests: FactoryAccessorCatalogTest. Figures: BENCH.md, 2026-10-22
-  EL-019 entry (ContextBenchmark).
+  another. Function calls and method metadata, which reach the tables outside the resolver
+  chain, bind a resolver over the creating factory's catalog. Compiled expressions keep their
+  snapshot per generated expression class (ClassValue) instead of per context. Regression
+  tests: FactoryAccessorCatalogTest, FactoryCoercionCatalogTest, and the function-app fixture
+  of FunctionExpressionCompilerTest. Figures: BENCH.md, 2026-10-22 EL-019 entry
+  (ContextBenchmark). Residual: a factory shared across applications keeps the first one's
+  class loader reachable (internals page).
 
 ## EL-020 · 2026-10-22 · Deny mode throws from getCommonPropertyType after a table answered
 

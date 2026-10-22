@@ -36,6 +36,10 @@ class FactoryAccessorCatalogTest {
         var context = new StandardELContext(factory);
         context.getVariableMapper().setVariable("e", factory.createValueExpression(entry, Object.class));
         assertEquals("a", factory.createValueExpression(context, "${e.key}", Object.class).getValue(context));
+        return bound(context);
+    }
+
+    private static AccessorCatalog bound(ELContext context) {
         return ((GeneratedAccessorELResolver) context.getContext(GeneratedAccessorELResolver.class)).catalog();
     }
 
@@ -62,6 +66,27 @@ class FactoryAccessorCatalogTest {
             thread.setContextClassLoader(previous);
         }
         assertSame(owner, evaluateInNewContext());
+    }
+
+    @Test
+    void functionCallsInANewContextUseTheFactoryCatalog() throws NoSuchMethodException {
+        // A function call goes to the tables directly, before any resolver of the chain binds itself.
+        AccessorCatalog shared = evaluateInNewContext();
+        var context = new StandardELContext(factory);
+        context.getFunctionMapper().mapFunction("m", "abs", Math.class.getMethod("abs", int.class));
+        assertEquals(Integer.valueOf(1), factory.createValueExpression(context, "${m:abs(-1)}", Object.class).getValue(context));
+        assertSame(shared, bound(context));
+    }
+
+    @Test
+    void methodMetadataInANewContextUsesTheFactoryCatalog() {
+        AccessorCatalog shared = evaluateInNewContext();
+        var context = new StandardELContext(factory);
+        context.getVariableMapper().setVariable("e", factory.createValueExpression(entry, Object.class));
+        MethodInfo info = factory.createMethodExpression(context, "${e.getKey()}", Object.class, new Class<?>[0])
+                .getMethodInfo(context);
+        assertEquals("getKey", info.getName());
+        assertSame(shared, bound(context));
     }
 
     @Test

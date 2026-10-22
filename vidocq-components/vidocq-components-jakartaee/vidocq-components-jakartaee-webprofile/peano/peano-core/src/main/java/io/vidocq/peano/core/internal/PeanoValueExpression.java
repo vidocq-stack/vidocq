@@ -22,11 +22,14 @@ package io.vidocq.peano.core.internal;
 import java.util.Objects;
 import java.util.Map;
 import java.lang.reflect.Method;
+import java.util.function.Supplier;
 import jakarta.el.ELContext;
 import jakarta.el.PropertyNotWritableException;
 import jakarta.el.ValueExpression;
 import jakarta.el.ValueReference;
+import io.vidocq.peano.core.internal.evaluation.AccessorCatalog;
 import io.vidocq.peano.core.internal.evaluation.Bindings;
+import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
 import io.vidocq.peano.core.internal.evaluation.Interpreter;
 import io.vidocq.peano.core.internal.evaluation.ResolverAccess;
 import io.vidocq.peano.core.internal.syntax.Ast;
@@ -43,9 +46,12 @@ final class PeanoValueExpression extends ValueExpression {
     private final boolean objectExpression;
     private final Map<String, ValueExpression> variables;
     private final Map<String, Method> functions;
+    /** The creating factory's accessor catalog; absent after deserialization (EL-019). */
+    private final transient Supplier<AccessorCatalog> accessors;
 
     private PeanoValueExpression(Class<?> expectedType, String source, Template template, Template identity,
-            Object instance, boolean objectExpression, Map<String, ValueExpression> variables, Map<String, Method> functions) {
+            Object instance, boolean objectExpression, Map<String, ValueExpression> variables, Map<String, Method> functions,
+            Supplier<AccessorCatalog> accessors) {
         this.expectedType = expectedType;
         this.source = source;
         this.template = template;
@@ -54,6 +60,7 @@ final class PeanoValueExpression extends ValueExpression {
         this.objectExpression = objectExpression;
         this.variables = variables;
         this.functions = functions;
+        this.accessors = accessors;
     }
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context) {
@@ -61,12 +68,17 @@ final class PeanoValueExpression extends ValueExpression {
     }
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context, ExpressionAnalysis analysis) {
+        return text(source, expectedType, context, analysis, null);
+    }
+
+    static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context, ExpressionAnalysis analysis,
+            Supplier<AccessorCatalog> accessors) {
         return new PeanoValueExpression(expectedType, source, analysis.template(), analysis.identity(), null, false,
-                Bindings.capture(analysis, context), Bindings.captureFunctions(analysis, context));
+                Bindings.capture(analysis, context), Bindings.captureFunctions(analysis, context), accessors);
     }
 
     static PeanoValueExpression object(Object instance, Class<?> expectedType) {
-        return new PeanoValueExpression(expectedType, null, null, null, instance, true, Map.of(), Map.of());
+        return new PeanoValueExpression(expectedType, null, null, null, instance, true, Map.of(), Map.of(), null);
     }
 
     @Override
@@ -134,7 +146,14 @@ final class PeanoValueExpression extends ValueExpression {
     }
 
     private Object rawValue(ELContext context) {
-        return objectExpression ? instance : Interpreter.evaluate(template, context, variables, functions);
+        if (objectExpression) return instance;
+        prepare(context);
+        return Interpreter.evaluate(template, context, variables, functions);
+    }
+
+    /** Only function calls reach the tables outside the resolver chain. */
+    private void prepare(ELContext context) {
+        if (!functions.isEmpty()) GeneratedAccessorELResolver.prepare(context, accessors);
     }
 
     private Object writeReplace() {
@@ -161,6 +180,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     private ResolverAccess.Location location(Ast body, ELContext context) {
         if (body instanceof Ast.Identifier identifier) return new ResolverAccess.Location(null, identifier.name());
+        prepare(context);
         if (body instanceof Ast.Property property) return ResolverAccess.property(property, context, variables, functions);
         return null;
     }

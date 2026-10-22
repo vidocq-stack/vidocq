@@ -45,6 +45,12 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
         ReflectionGuard.denied();
     }
 
+    /** A factory whose owner's catalog is already loaded (tests). */
+    PeanoExpressionFactory(AccessorCatalog accessors) {
+        this();
+        this.accessors.set(accessors);
+    }
+
     /**
      * The accessor catalog for the calling thread's application. A context class loader other than
      * the owner's may see other providers, so it gets its own catalog, never the shared one.
@@ -75,7 +81,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
         Objects.requireNonNull(expectedType, "expectedType");
-        return PeanoValueExpression.text(expression, expectedType, context, expressions.parse(expression));
+        return PeanoValueExpression.text(expression, expectedType, context, expressions.parse(expression), this::accessors);
     }
 
     @Override
@@ -88,7 +94,8 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
             Class<?> expectedReturnType, Class<?>[] expectedParamTypes) {
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(expression, "expression");
-        return new PeanoMethodExpression(context, expression, expectedReturnType, expectedParamTypes, expressions.parse(expression));
+        return new PeanoMethodExpression(context, expression, expectedReturnType, expectedParamTypes, expressions.parse(expression),
+                this::accessors);
     }
 
     @Override

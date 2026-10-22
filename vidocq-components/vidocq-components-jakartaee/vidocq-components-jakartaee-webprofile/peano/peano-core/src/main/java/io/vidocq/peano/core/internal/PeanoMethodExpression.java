@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
 import jakarta.el.MethodExpression;
@@ -33,6 +34,7 @@ import jakarta.el.MethodInfo;
 import jakarta.el.MethodNotFoundException;
 import jakarta.el.MethodReference;
 import jakarta.el.ValueExpression;
+import io.vidocq.peano.core.internal.evaluation.AccessorCatalog;
 import io.vidocq.peano.core.internal.evaluation.Bindings;
 import io.vidocq.peano.core.internal.evaluation.Interpreter;
 import io.vidocq.peano.core.internal.evaluation.MethodMetadata;
@@ -53,16 +55,19 @@ final class PeanoMethodExpression extends MethodExpression {
     private final Map<String, ValueExpression> variables;
     private final Map<String, Method> functions;
     private final boolean parametersProvided;
+    /** The creating factory's accessor catalog; absent after deserialization (EL-019). */
+    private final transient Supplier<AccessorCatalog> accessors;
 
     private record Resolved(ResolverAccess.Location location, Class<?>[] types, Object[] arguments) {
     }
 
     PeanoMethodExpression(ELContext context, String source, Class<?> expectedReturnType, Class<?>[] expectedTypes) {
-        this(context, source, expectedReturnType, expectedTypes, ExpressionAnalysis.parse(source));
+        this(context, source, expectedReturnType, expectedTypes, ExpressionAnalysis.parse(source), null);
     }
 
     PeanoMethodExpression(ELContext context, String source, Class<?> expectedReturnType, Class<?>[] expectedTypes,
-            ExpressionAnalysis analysis) {
+            ExpressionAnalysis analysis, Supplier<AccessorCatalog> accessors) {
+        this.accessors = accessors;
         this.source = source;
         this.template = analysis.template();
         this.identity = analysis.identity();
@@ -84,6 +89,7 @@ final class PeanoMethodExpression extends MethodExpression {
     @Override
     public Object invoke(ELContext context, Object[] parameters) {
         Objects.requireNonNull(context, "context");
+        GeneratedAccessorELResolver.prepare(context, accessors);
         return invokeChecked(context, parameters, List.of());
     }
 
@@ -124,6 +130,7 @@ final class PeanoMethodExpression extends MethodExpression {
     @Override
     public MethodInfo getMethodInfo(ELContext context) {
         Objects.requireNonNull(context, "context");
+        GeneratedAccessorELResolver.prepare(context, accessors);
         if (isLiteralText()) return new MethodInfo(source, expectedReturnType == null ? String.class : expectedReturnType,
                 expectedParameterTypes.clone());
         if (body instanceof Ast.Identifier) {
@@ -139,6 +146,7 @@ final class PeanoMethodExpression extends MethodExpression {
     @Override
     public MethodReference getMethodReference(ELContext context) {
         Objects.requireNonNull(context, "context");
+        GeneratedAccessorELResolver.prepare(context, accessors);
         context.notifyBeforeEvaluation(source);
         MethodReference reference = reference(context);
         context.notifyAfterEvaluation(source);

@@ -83,7 +83,16 @@ AccessorCatalog loads providers through ServiceLoader and snapshots their
 tables in an immutable class-keyed map. The factory loads one catalog, lazily, from the context
 class loader it was created under, and every context it serves shares it (EL-019); a context
 created under another context class loader gets its own catalog, so one application never sees
-another's tables. Duplicate target registrations fail explicitly.
+another's tables. Function calls and method metadata reach the tables outside the resolver chain,
+so the expressions a factory creates bind a resolver over its catalog into the context when none
+is bound yet. Compiled expressions (peano-api) keep their snapshot per generated expression class
+in a ClassValue, used when the context class loader is that class's own loader; any other loader
+gets a snapshot cached in the context, as before.
+The factory holds the class loader it was created under, and its catalog holds that application's
+tables. A factory shared across applications, such as the static factory of ELManager when the EL
+API and Peano sit in a server-wide library, therefore keeps the first application reachable after
+it is undeployed. Ibarra and Vidocq create one factory per application, and on an application
+server the brick ships inside the application, so neither is affected. Duplicate target registrations fail explicitly.
 A built-in Map.Entry table (core internal package, not a service) is added unless an
 application table already targets Map.Entry. It mirrors the API BeanELResolver (read-only key
 and value, the three Map.Entry methods by exact arity) and is checked differentially against it.

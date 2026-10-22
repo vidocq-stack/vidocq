@@ -102,7 +102,7 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         Class<?>[] types=function.parameters().toArray(new Class<?>[0]);
         context.setPropertyResolved(false);
         Object value=guarded(()-> {
-            AccessorTable table=registered(context,function.owner());
+            AccessorTable table=registered(context,getClass(),function.owner());
             return table==null ? null : table.invoke(context,base,function.name(),types,arguments);
         });
         if (context.isPropertyResolved()) return value;
@@ -118,10 +118,35 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         return value;
     }
 
+    /**
+     * The accessor table registered for a type, from the providers visible to the thread context
+     * class loader. When that loader is the compiled expression class's own, the snapshot taken
+     * from it is kept per expression class, so each new context reuses it (EL-019); any other
+     * context class loader gets a snapshot cached in the context, as before. The snapshot hangs
+     * off the application's own generated class, never off a shared JDK class.
+     */
+    static AccessorTable registered(ELContext context,Class<?> expression,Class<?> owner) {
+        if (expression.getClassLoader()==Thread.currentThread().getContextClassLoader())
+            return REGISTRIES.get(expression).tables().get(owner);
+        return registered(context,owner);
+    }
+
     protected static AccessorTable registered(ELContext context,Class<?> owner) {
         ClassLoader loader=Thread.currentThread().getContextClassLoader();
         Object cached=context.getContext(Registry.class);
         if (cached instanceof Registry registry && registry.loader()==loader) return registry.tables().get(owner);
+        var registry=load(loader);
+        context.putContext(Registry.class,registry);
+        return registry.tables().get(owner);
+    }
+
+    private static final ClassValue<Registry> REGISTRIES=new ClassValue<>() {
+        @Override protected Registry computeValue(Class<?> expression) {
+            return load(expression.getClassLoader());
+        }
+    };
+
+    private static Registry load(ClassLoader loader) {
         var tables=new HashMap<Class<?>,AccessorTable>();
         try {
             for (var provider:ServiceLoader.load(AccessorProvider.class,loader)) {
@@ -137,9 +162,7 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         } catch (ServiceConfigurationError failure) {
             throw new ELException("Cannot load accessor providers",failure);
         }
-        var registry=new Registry(loader,Map.copyOf(tables));
-        context.putContext(Registry.class,registry);
-        return registry.tables().get(owner);
+        return new Registry(loader,Map.copyOf(tables));
     }
 
     private record Registry(ClassLoader loader,Map<Class<?>,AccessorTable> tables) {}

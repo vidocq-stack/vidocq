@@ -25,7 +25,8 @@ import java.util.Collection;
  * Service implemented inside an application module to supply its direct accessors.
  * Register implementations with a Java module provides directive.
  * Providers return complete tables, without requiring an export or opens directive
- * for the application package.
+ * for the application package. Peano loads the providers once per expression factory, or
+ * per compiled expression class, and shares the returned tables across threads and contexts.
  */
 public interface AccessorProvider {
     /**
