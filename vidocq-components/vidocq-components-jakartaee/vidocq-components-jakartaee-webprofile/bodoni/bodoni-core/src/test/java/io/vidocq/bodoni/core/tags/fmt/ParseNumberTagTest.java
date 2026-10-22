@@ -25,14 +25,17 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.ParseException;
 import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.vidocq.bodoni.core.testing.Body;
 import io.vidocq.bodoni.core.testing.TagHarness;
-import io.vidocq.bodoni.core.testing.TestPageContext;
 import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
+import io.vidocq.bodoni.core.testing.TestPageContext;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
@@ -40,6 +43,9 @@ import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ParseNumberTagTest {
 
@@ -116,11 +122,22 @@ class ParseNumberTagTest {
         assertEquals("0.25", run(tag));
     }
 
-    @Test
-    void invalidTypeIsATagException() {
+    static Stream<Arguments> invalidAttributes() {
+        return Stream.of(
+                arguments("type", (Consumer<ParseNumberTag>) t -> t.setType("scientific")),
+                arguments("pattern", (Consumer<ParseNumberTag>) t -> t.setPattern("#.#.#")),
+                arguments("scope", (Consumer<ParseNumberTag>) t -> {
+                    t.setVar("n");
+                    t.setScope("galaxy");
+                }));
+    }
+
+    @ParameterizedTest(name = "invalid {0}")
+    @MethodSource("invalidAttributes")
+    void invalidAttributeIsATagException(String attribute, Consumer<ParseNumberTag> invalid) {
         ParseNumberTag tag = us("1");
-        tag.setType("scientific");
-        assertThrows(JspTagException.class, () -> run(tag));
+        invalid.accept(tag);
+        assertThrows(JspTagException.class, () -> run(tag), attribute);
     }
 
     @Test
@@ -156,14 +173,6 @@ class ParseNumberTagTest {
         Config.set(pc, Config.FMT_LOCALE, Locale.US, PageContext.PAGE_SCOPE);
         ParseNumberTag tag = new ParseNumberTag();
         assertEquals("1234", TagHarness.run(tag, pc, p -> p.getOut().print(" 1,234\n")));
-    }
-
-    @Test
-    void invalidScopeIsATagException() {
-        ParseNumberTag tag = us("1");
-        tag.setVar("n");
-        tag.setScope("galaxy");
-        assertThrows(JspTagException.class, () -> run(tag));
     }
 
     @Test

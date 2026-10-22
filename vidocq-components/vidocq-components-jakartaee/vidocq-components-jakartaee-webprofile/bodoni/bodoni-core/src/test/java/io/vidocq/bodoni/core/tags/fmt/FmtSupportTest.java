@@ -23,6 +23,7 @@ package io.vidocq.bodoni.core.tags.fmt;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -42,7 +43,7 @@ import org.junit.jupiter.api.Test;
 class FmtSupportTest {
 
     private static final String ACTION = "fmt:test";
-    private static final Locale[] AVAILABLE = I18n.NUMBER_LOCALES;
+    private static final List<Locale> AVAILABLE = I18n.numberLocales();
 
     private final TestPageContext pc = TestPageContext.create();
 
@@ -127,7 +128,7 @@ class FmtSupportTest {
     void noMatchYieldsNull() throws Exception {
         request().setLocales(Locale.FRENCH);
         Locale before = response().getLocale();
-        assertNull(FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, new Locale[] {Locale.JAPANESE}));
+        assertNull(FmtSupport.formattingLocale(ACTION, new TagSupport(), pc, List.of(Locale.JAPANESE)));
         assertEquals(before, response().getLocale());
     }
 

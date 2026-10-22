@@ -24,6 +24,7 @@ import java.text.DateFormat;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -94,7 +95,7 @@ final class FmtSupport {
      * @param action the action name, for messages
      * @return the matching available locale, or {@code null}
      */
-    static Locale lookup(String action, PageContext pc, Locale[] available) throws JspTagException {
+    static Locale lookup(String action, PageContext pc, List<Locale> available) throws JspTagException {
         try {
             return I18n.formattingLocale(pc, available);
         } catch (IllegalArgumentException e) {
@@ -111,7 +112,7 @@ final class FmtSupport {
      * @return the locale, or {@code null} when none applies
      * @throws JspTagException when a locale configuration setting is malformed
      */
-    static Locale formattingLocale(String action, Tag tag, PageContext pc, Locale[] available)
+    static Locale formattingLocale(String action, Tag tag, PageContext pc, List<Locale> available)
             throws JspTagException {
         if (TagSupport.findAncestorWithClass(tag, BundleTag.class) instanceof BundleTag bundle) {
             LocalizationContext context = bundle.getLocalizationContext();

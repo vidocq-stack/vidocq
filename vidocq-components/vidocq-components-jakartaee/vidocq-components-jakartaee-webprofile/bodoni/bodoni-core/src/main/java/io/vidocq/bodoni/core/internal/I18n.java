@@ -23,7 +23,6 @@ package io.vidocq.bodoni.core.internal;
 import java.text.DateFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -51,16 +50,26 @@ public final class I18n {
 
     private static final String ACCEPT_LANGUAGE = "Accept-Language";
 
-    /** Locales supported by {@link NumberFormat}. */
-    public static final Locale[] NUMBER_LOCALES = NumberFormat.getAvailableLocales();
-
-    /** Locales supported by {@link DateFormat}. */
-    public static final Locale[] DATE_LOCALES = DateFormat.getAvailableLocales();
-
-    /** Locales supported by both number and date formatting (§8.8). */
-    public static final Locale[] MESSAGE_LOCALES = intersection(NUMBER_LOCALES, DATE_LOCALES);
+    private static final List<Locale> NUMBER_LOCALES = List.of(NumberFormat.getAvailableLocales());
+    private static final List<Locale> DATE_LOCALES = List.of(DateFormat.getAvailableLocales());
+    private static final List<Locale> MESSAGE_LOCALES = intersection(NUMBER_LOCALES, DATE_LOCALES);
 
     private I18n() {
+    }
+
+    /** @return the locales supported by {@link NumberFormat} (§9.3.1), unmodifiable */
+    public static List<Locale> numberLocales() {
+        return NUMBER_LOCALES;
+    }
+
+    /** @return the locales supported by {@link DateFormat} (§9.3.1), unmodifiable */
+    public static List<Locale> dateLocales() {
+        return DATE_LOCALES;
+    }
+
+    /** @return the locales supported by both number and date formatting (§8.8), unmodifiable */
+    public static List<Locale> messageLocales() {
+        return MESSAGE_LOCALES;
     }
 
     /**
@@ -149,7 +158,7 @@ public final class I18n {
      * @return the matching available locale, or {@code null}
      * @throws IllegalArgumentException when the configured locale or fallback locale is malformed
      */
-    public static Locale formattingLocale(PageContext pc, Locale[] available) {
+    public static Locale formattingLocale(PageContext pc, List<Locale> available) {
         List<Locale> candidates = new ArrayList<>(preferredLocales(pc));
         Locale fallback = Locales.of(Config.find(pc, Config.FMT_FALLBACK_LOCALE));
         if (fallback != null) {
@@ -165,7 +174,7 @@ public final class I18n {
     }
 
     /** §9.3.2 match order: language, country and variant; language and country; language alone. */
-    private static Locale match(Locale wanted, Locale[] available) {
+    private static Locale match(Locale wanted, List<Locale> available) {
         for (Locale a : available) {
             if (a.equals(wanted)) {
                 return a;
@@ -218,9 +227,9 @@ public final class I18n {
     }
 
     /** The locales of {@code first} that {@code second} also holds; either may repeat a locale. */
-    static Locale[] intersection(Locale[] first, Locale[] second) {
-        Set<Locale> other = new HashSet<>(Arrays.asList(second));
-        return Arrays.stream(first).filter(other::contains).distinct().toArray(Locale[]::new);
+    static List<Locale> intersection(List<Locale> first, List<Locale> second) {
+        Set<Locale> other = new HashSet<>(second);
+        return first.stream().filter(other::contains).distinct().toList();
     }
 
     private static boolean isBlank(String text) {

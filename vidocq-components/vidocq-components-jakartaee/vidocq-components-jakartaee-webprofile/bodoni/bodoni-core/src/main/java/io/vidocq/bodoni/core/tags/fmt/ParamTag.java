@@ -34,7 +34,7 @@ public class ParamTag extends BodyTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object value;
+    private transient Object value;
     private boolean valueSet;
     private transient boolean buffered;
 

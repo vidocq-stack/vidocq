@@ -25,12 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.vidocq.bodoni.core.testing.Body;
 import io.vidocq.bodoni.core.testing.TagHarness;
@@ -42,6 +45,9 @@ import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class ParseDateTagTest {
 
@@ -228,20 +234,28 @@ class ParseDateTagTest {
         assertTrue(e.getMessage().contains("4/13/02"));
     }
 
-    @Test
-    void invalidTypeIsATagException() {
-        ParseDateTag tag = us("1");
-        tag.setType("century");
-        assertThrows(JspTagException.class, () -> run(tag));
+    static Stream<Arguments> invalidAttributes() {
+        return Stream.of(
+                arguments("type", (Consumer<ParseDateTag>) t -> t.setType("century")),
+                arguments("dateStyle", (Consumer<ParseDateTag>) t -> t.setDateStyle("huge")),
+                arguments("timeStyle", (Consumer<ParseDateTag>) t -> {
+                    t.setType("both");
+                    t.setTimeStyle("huge");
+                }),
+                arguments("pattern", (Consumer<ParseDateTag>) t -> t.setPattern("bbbbbbbbbb{")),
+                arguments("scope", (Consumer<ParseDateTag>) t -> {
+                    t.setPattern("M/d/yy");
+                    t.setVar("d");
+                    t.setScope("galaxy");
+                }));
     }
 
-    @Test
-    void invalidScopeIsATagException() {
+    @ParameterizedTest(name = "invalid {0}")
+    @MethodSource("invalidAttributes")
+    void invalidAttributeIsATagException(String attribute, Consumer<ParseDateTag> invalid) {
         ParseDateTag tag = us("4/13/02");
-        tag.setPattern("M/d/yy");
-        tag.setVar("d");
-        tag.setScope("galaxy");
-        assertThrows(JspTagException.class, () -> run(tag));
+        invalid.accept(tag);
+        assertThrows(JspTagException.class, () -> run(tag), attribute);
     }
 
     @Test

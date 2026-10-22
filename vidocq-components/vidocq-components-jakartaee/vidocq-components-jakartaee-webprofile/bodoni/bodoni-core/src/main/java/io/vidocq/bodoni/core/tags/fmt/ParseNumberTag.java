@@ -51,7 +51,7 @@ public class ParseNumberTag extends BodyTagSupport {
     private boolean valueSet;
     private String type;
     private String pattern;
-    private Object parseLocale;
+    private transient Object parseLocale;
     private boolean integerOnly;
     private String varName;
     private String scope;
@@ -161,7 +161,7 @@ public class ParseNumberTag extends BodyTagSupport {
             throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
         return explicit != null ? explicit
-                : FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.NUMBER_LOCALES);
+                : FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.numberLocales());
     }
 
     private void emit(Number number, int scopeId) throws JspTagException {

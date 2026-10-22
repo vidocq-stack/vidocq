@@ -48,7 +48,7 @@ public class FormatNumberTag extends BodyTagSupport {
     private static final long serialVersionUID = 1L;
     private static final String ACTION = "fmt:formatNumber";
 
-    private Object value;
+    private transient Object value;
     private boolean valueSet;
     private String type;
     private String pattern;
@@ -187,11 +187,14 @@ public class FormatNumberTag extends BodyTagSupport {
 
     private String format(Object raw) throws JspException {
         Number number = toNumber(raw);
-        Locale locale = FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.NUMBER_LOCALES);
-        NumberFormat format = FmtSupport.numberFormat(ACTION, type, pattern, locale == null ? Locale.ROOT : locale);
+        Locale locale = FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.numberLocales());
         if (locale == null) {
+            // Without a formatting locale the output is toString() (§9.7), yet an invalid type or
+            // pattern is still an error: the format is built in the root locale only to check them.
+            FmtSupport.numberFormat(ACTION, type, pattern, Locale.ROOT);
             return number.toString();
         }
+        NumberFormat format = FmtSupport.numberFormat(ACTION, type, pattern, locale);
         configure(format);
         return format.format(number);
     }

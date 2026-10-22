@@ -20,6 +20,7 @@
 package io.vidocq.bodoni.peano;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -124,8 +125,8 @@ class LoopTagStatusAccessTest {
         assertEquals("b", eval(status, "${s.current}"));
         assertEquals(1, eval(status, "${s.index}"));
         assertEquals(2, eval(status, "${s.count}"));
-        assertEquals(false, eval(status, "${s.first}"));
-        assertEquals(false, eval(status, "${s.last}"));
+        assertFalse((Boolean) eval(status, "${s.first}"));
+        assertFalse((Boolean) eval(status, "${s.last}"));
         assertEquals(0, eval(status, "${s.begin}"));
         assertEquals(5, eval(status, "${s.end}"));
         assertEquals(2, eval(status, "${s.step}"));
@@ -135,8 +136,8 @@ class LoopTagStatusAccessTest {
 
     @Test
     void readsFirstAndLast() {
-        assertEquals(true, eval(status("a", 0, 1, null, null, null), "${s.first}"));
-        assertEquals(true, eval(status("c", 2, 3, null, null, null), "${s.last}"));
+        assertTrue((Boolean) eval(status("a", 0, 1, null, null, null), "${s.first}"));
+        assertTrue((Boolean) eval(status("c", 2, 3, null, null, null), "${s.last}"));
     }
 
     @Test
@@ -153,8 +154,8 @@ class LoopTagStatusAccessTest {
         assertEquals("b", eval(status, "${s.getCurrent()}"));
         assertEquals(1, eval(status, "${s.getIndex()}"));
         assertEquals(2, eval(status, "${s.getCount()}"));
-        assertEquals(false, eval(status, "${s.isFirst()}"));
-        assertEquals(false, eval(status, "${s.isLast()}"));
+        assertFalse((Boolean) eval(status, "${s.isFirst()}"));
+        assertFalse((Boolean) eval(status, "${s.isLast()}"));
         assertEquals(0, eval(status, "${s.getBegin()}"));
         assertEquals(5, eval(status, "${s.getEnd()}"));
         assertEquals(2, eval(status, "${s.getStep()}"));

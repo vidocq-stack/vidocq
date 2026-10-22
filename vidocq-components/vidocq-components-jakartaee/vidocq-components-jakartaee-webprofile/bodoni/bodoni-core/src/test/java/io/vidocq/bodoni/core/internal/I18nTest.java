@@ -20,11 +20,11 @@
 
 package io.vidocq.bodoni.core.internal;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -169,7 +169,7 @@ class I18nTest {
     @Test
     void withoutAnAcceptLanguageHeaderNorFallbackThereIsNoFormattingLocale() {
         request().withoutAcceptLanguage(Locale.US);
-        assertNull(I18n.formattingLocale(pc, new Locale[] {Locale.US, Locale.ENGLISH}));
+        assertNull(I18n.formattingLocale(pc, List.of(Locale.US, Locale.ENGLISH)));
     }
 
     @Test
@@ -238,9 +238,9 @@ class I18nTest {
 
     @Test
     void intersectionToleratesDuplicateLocales() {
-        Locale[] withDuplicates = {Locale.FRENCH, Locale.GERMAN, Locale.FRENCH};
-        assertArrayEquals(new Locale[] {Locale.FRENCH},
-                I18n.intersection(new Locale[] {Locale.FRENCH, Locale.JAPANESE}, withDuplicates));
+        List<Locale> withDuplicates = List.of(Locale.FRENCH, Locale.GERMAN, Locale.FRENCH);
+        assertEquals(List.of(Locale.FRENCH),
+                I18n.intersection(List.of(Locale.FRENCH, Locale.JAPANESE, Locale.FRENCH), withDuplicates));
     }
 
     @Test
@@ -252,8 +252,8 @@ class I18nTest {
 
     @Test
     void formattingLocaleLookup() {
-        Locale[] available = {Locale.ENGLISH, Locale.FRANCE, Locale.of("de", "CH"),
-                Locale.of("es", "ES", "x")};
+        List<Locale> available = List.of(Locale.ENGLISH, Locale.FRANCE, Locale.of("de", "CH"),
+                Locale.of("es", "ES", "x"));
         request().setLocales(Locale.FRANCE);
         assertEquals(Locale.FRANCE, I18n.formattingLocale(pc, available));
         request().setLocales(EN_GB);
@@ -271,10 +271,20 @@ class I18nTest {
 
     @Test
     void availableLocaleSets() {
-        assertTrue(List.of(I18n.NUMBER_LOCALES).contains(Locale.FRANCE));
-        assertTrue(List.of(I18n.DATE_LOCALES).contains(Locale.GERMANY));
-        assertTrue(List.of(I18n.MESSAGE_LOCALES).contains(Locale.FRANCE));
-        assertTrue(List.of(I18n.NUMBER_LOCALES).containsAll(List.of(I18n.MESSAGE_LOCALES)));
-        assertTrue(List.of(I18n.DATE_LOCALES).containsAll(List.of(I18n.MESSAGE_LOCALES)));
+        assertTrue(I18n.numberLocales().contains(Locale.FRANCE));
+        assertTrue(I18n.dateLocales().contains(Locale.GERMANY));
+        assertTrue(I18n.messageLocales().contains(Locale.FRANCE));
+        assertTrue(I18n.numberLocales().containsAll(I18n.messageLocales()));
+        assertTrue(I18n.dateLocales().containsAll(I18n.messageLocales()));
+    }
+
+    @Test
+    void availableLocaleSetsAreUnmodifiable() {
+        List<Locale> number = I18n.numberLocales();
+        List<Locale> date = I18n.dateLocales();
+        List<Locale> message = I18n.messageLocales();
+        assertThrows(UnsupportedOperationException.class, () -> number.add(Locale.ROOT));
+        assertThrows(UnsupportedOperationException.class, () -> date.add(Locale.ROOT));
+        assertThrows(UnsupportedOperationException.class, () -> message.add(Locale.ROOT));
     }
 }

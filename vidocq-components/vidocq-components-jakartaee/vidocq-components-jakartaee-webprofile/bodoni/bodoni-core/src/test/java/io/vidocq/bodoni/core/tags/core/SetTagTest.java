@@ -21,6 +21,7 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -190,7 +191,7 @@ class SetTagTest {
         remove.setProperty("k");
         remove.setValue(null);
         TagHarness.run(remove, pc, Body.EMPTY);
-        assertEquals(false, map.containsKey("k"));
+        assertFalse(map.containsKey("k"));
     }
 
     @Test

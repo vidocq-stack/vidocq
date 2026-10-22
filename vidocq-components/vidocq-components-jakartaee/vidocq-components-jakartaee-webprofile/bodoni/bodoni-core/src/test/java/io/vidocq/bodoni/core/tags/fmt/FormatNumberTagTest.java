@@ -25,14 +25,17 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.NumberFormat;
 import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.vidocq.bodoni.core.testing.Body;
 import io.vidocq.bodoni.core.testing.TagHarness;
-import io.vidocq.bodoni.core.testing.TestPageContext;
 import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
+import io.vidocq.bodoni.core.testing.TestPageContext;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
@@ -40,6 +43,9 @@ import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class FormatNumberTagTest {
 
@@ -137,19 +143,26 @@ class FormatNumberTagTest {
         assertEquals("1,234.5", run(tag));
     }
 
-    @Test
-    void invalidCurrencyCodeIsATagException() {
-        FormatNumberTag tag = us(1);
-        tag.setType("currency");
-        tag.setCurrencyCode("ZZZZ");
-        assertThrows(JspTagException.class, () -> run(tag));
+    static Stream<Arguments> invalidAttributes() {
+        return Stream.of(
+                arguments("currencyCode", (Consumer<FormatNumberTag>) t -> {
+                    t.setType("currency");
+                    t.setCurrencyCode("ZZZZ");
+                }),
+                arguments("type", (Consumer<FormatNumberTag>) t -> t.setType("scientific")),
+                arguments("pattern", (Consumer<FormatNumberTag>) t -> t.setPattern("#.#.#")),
+                arguments("scope", (Consumer<FormatNumberTag>) t -> {
+                    t.setVar("p");
+                    t.setScope("galaxy");
+                }));
     }
 
-    @Test
-    void invalidTypeIsATagException() {
+    @ParameterizedTest(name = "invalid {0}")
+    @MethodSource("invalidAttributes")
+    void invalidAttributeIsATagException(String attribute, Consumer<FormatNumberTag> invalid) {
         FormatNumberTag tag = us(1);
-        tag.setType("scientific");
-        assertThrows(JspTagException.class, () -> run(tag));
+        invalid.accept(tag);
+        assertThrows(JspTagException.class, () -> run(tag), attribute);
     }
 
     @Test
@@ -241,14 +254,6 @@ class FormatNumberTagTest {
         tag.setScope("request");
         assertEquals("", run(tag));
         assertEquals("50%", pc.getAttribute("p", PageContext.REQUEST_SCOPE));
-    }
-
-    @Test
-    void invalidScopeIsATagException() {
-        FormatNumberTag tag = us(1);
-        tag.setVar("p");
-        tag.setScope("galaxy");
-        assertThrows(JspTagException.class, () -> run(tag));
     }
 
     @Test

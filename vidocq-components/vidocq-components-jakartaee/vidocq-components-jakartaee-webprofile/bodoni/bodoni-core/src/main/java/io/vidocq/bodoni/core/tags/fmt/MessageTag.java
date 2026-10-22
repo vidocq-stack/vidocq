@@ -53,7 +53,7 @@ public class MessageTag extends BodyTagSupport {
 
     private String key;
     private boolean keySet;
-    private LocalizationContext bundle;
+    private transient LocalizationContext bundle;
     private String varName;
     private String scope;
     private final transient List<Object> params = new ArrayList<>();
@@ -175,7 +175,7 @@ public class MessageTag extends BodyTagSupport {
     private String format(String pattern, Locale contextLocale) throws JspTagException {
         Locale locale = contextLocale;
         if (locale == null) {
-            locale = FmtSupport.lookup(ACTION, pageContext, I18n.MESSAGE_LOCALES);
+            locale = FmtSupport.lookup(ACTION, pageContext, I18n.messageLocales());
         }
         if (locale == null) {
             locale = Locale.getDefault();

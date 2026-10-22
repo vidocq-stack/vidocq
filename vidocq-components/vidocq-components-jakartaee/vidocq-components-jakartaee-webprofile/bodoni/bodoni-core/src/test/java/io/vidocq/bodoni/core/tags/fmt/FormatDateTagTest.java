@@ -23,11 +23,14 @@ package io.vidocq.bodoni.core.tags.fmt;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.vidocq.bodoni.core.testing.Body;
 import io.vidocq.bodoni.core.testing.TagHarness;
@@ -38,6 +41,9 @@ import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class FormatDateTagTest {
 
@@ -208,41 +214,27 @@ class FormatDateTagTest {
         assertEquals(INSTANT.toString(), run(tag));
     }
 
-    @Test
-    void invalidTypeIsATagException() {
-        FormatDateTag tag = us();
-        tag.setType("century");
-        assertThrows(JspTagException.class, () -> run(tag));
+    static Stream<Arguments> invalidAttributes() {
+        return Stream.of(
+                arguments("type", (Consumer<FormatDateTag>) t -> t.setType("century")),
+                arguments("dateStyle", (Consumer<FormatDateTag>) t -> t.setDateStyle("huge")),
+                arguments("timeStyle", (Consumer<FormatDateTag>) t -> {
+                    t.setType("both");
+                    t.setTimeStyle("huge");
+                }),
+                arguments("pattern", (Consumer<FormatDateTag>) t -> t.setPattern("bbbbbbbbbb{")),
+                arguments("scope", (Consumer<FormatDateTag>) t -> {
+                    t.setVar("d");
+                    t.setScope("galaxy");
+                }));
     }
 
-    @Test
-    void invalidDateStyleIsATagException() {
+    @ParameterizedTest(name = "invalid {0}")
+    @MethodSource("invalidAttributes")
+    void invalidAttributeIsATagException(String attribute, Consumer<FormatDateTag> invalid) {
         FormatDateTag tag = us();
-        tag.setDateStyle("huge");
-        assertThrows(JspTagException.class, () -> run(tag));
-    }
-
-    @Test
-    void invalidTimeStyleIsATagException() {
-        FormatDateTag tag = us();
-        tag.setType("both");
-        tag.setTimeStyle("huge");
-        assertThrows(JspTagException.class, () -> run(tag));
-    }
-
-    @Test
-    void invalidPatternIsATagException() {
-        FormatDateTag tag = us();
-        tag.setPattern("bbbbbbbbbb{");
-        assertThrows(JspTagException.class, () -> run(tag));
-    }
-
-    @Test
-    void invalidScopeIsATagException() {
-        FormatDateTag tag = us();
-        tag.setVar("d");
-        tag.setScope("galaxy");
-        assertThrows(JspTagException.class, () -> run(tag));
+        invalid.accept(tag);
+        assertThrows(JspTagException.class, () -> run(tag), attribute);
     }
 
     @Test

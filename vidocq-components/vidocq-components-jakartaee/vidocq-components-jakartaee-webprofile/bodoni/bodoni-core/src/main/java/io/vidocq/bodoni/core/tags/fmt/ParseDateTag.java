@@ -55,8 +55,8 @@ public class ParseDateTag extends BodyTagSupport {
     private String dateStyle;
     private String timeStyle;
     private String pattern;
-    private Object timeZone;
-    private Object parseLocale;
+    private transient Object timeZone;
+    private transient Object parseLocale;
     private String varName;
     private String scope;
 
@@ -187,7 +187,7 @@ public class ParseDateTag extends BodyTagSupport {
             throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
         return explicit != null ? explicit
-                : FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.DATE_LOCALES);
+                : FmtSupport.formattingLocale(ACTION, this, pageContext, I18n.dateLocales());
     }
 
     private void emit(Date date, int scopeId) throws JspTagException {

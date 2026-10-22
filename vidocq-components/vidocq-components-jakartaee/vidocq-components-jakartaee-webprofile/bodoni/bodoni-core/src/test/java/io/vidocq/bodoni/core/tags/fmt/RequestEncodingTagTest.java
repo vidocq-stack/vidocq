@@ -21,6 +21,7 @@
 package io.vidocq.bodoni.core.tags.fmt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.vidocq.bodoni.core.testing.Body;
@@ -79,7 +80,7 @@ class RequestEncodingTagTest {
                 new io.vidocq.bodoni.core.testing.TestHttpServletResponse(), ctx);
         TagHarness.run(new RequestEncodingTag(), page, Body.NONE);
         assertEquals("ISO-8859-1", bare.getCharacterEncoding());
-        assertEquals(false, bare.hasSession());
+        assertFalse(bare.hasSession());
     }
 
     @Test
