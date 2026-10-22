@@ -118,7 +118,31 @@ class MessageTagTest {
     }
 
     @Test
-    void unknownKeyGivesTheKeyBetweenQuestionMarks() throws Exception {
+    void prefixIsPrependedEvenWithAnExplicitBundleAttribute() throws Exception {
+        preferred(Locale.ENGLISH);
+        BundleTag enclosing = bundle("com.acme.");
+        MessageTag tag = message("firstName");
+        tag.setBundle(new LocalizationContext(ResourceBundle.getBundle(BASENAME, Locale.ROOT), Locale.ENGLISH));
+        assertEquals("First", TagHarness.run(tag, pc, enclosing, Body.NONE));
+        MessageTag unknown = message("nope");
+        unknown.setBundle(new LocalizationContext(ResourceBundle.getBundle(BASENAME, Locale.ROOT), Locale.ENGLISH));
+        assertEquals("???com.acme.nope???", TagHarness.run(unknown, pc, enclosing, Body.NONE));
+    }
+
+    @Test
+    void prefixIsPrependedWhenTheEnclosingBundleHasNoContext() throws Exception {
+        preferred(Locale.ENGLISH);
+        configure(BASENAME);
+        BundleTag enclosing = new BundleTag();
+        enclosing.setPageContext(pc);
+        enclosing.setPrefix("com.acme.");
+        assertNull(enclosing.getLocalizationContext());
+        assertEquals("First", TagHarness.run(message("firstName"), pc, enclosing, Body.NONE));
+        assertEquals("???com.acme.nope???", TagHarness.run(message("nope"), pc, enclosing, Body.NONE));
+    }
+
+    @Test
+    void unknownKeyGivesTheKeyBetweenQuestionMarks()throws Exception {
         preferred(Locale.ENGLISH);
         configure(BASENAME);
         assertEquals("???nope???", TagHarness.run(message("nope"), pc, Body.NONE));

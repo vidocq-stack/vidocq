@@ -138,9 +138,10 @@ public class MessageTag extends BodyTagSupport {
             return "??????";
         }
         LocalizationContext context = bundle;
-        if (context == null && TagSupport.findAncestorWithClass(this, BundleTag.class) instanceof BundleTag enclosing
-                && enclosing.getLocalizationContext() != null) {
-            context = enclosing.getLocalizationContext();
+        if (TagSupport.findAncestorWithClass(this, BundleTag.class) instanceof BundleTag enclosing) {
+            if (context == null) {
+                context = enclosing.getLocalizationContext();
+            }
             if (enclosing.getPrefix() != null) {
                 name = enclosing.getPrefix() + name;
             }
