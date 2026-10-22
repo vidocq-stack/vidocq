@@ -1,5 +1,5 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%-- varStatus properties need an accessor for LoopTagStatus under peano.reflection=deny (BUG.md BOD-001). --%>
+<%-- varStatus properties are served under peano.reflection=deny by bodoni-peano (BUG.md BOD-001). --%>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <c:set var="letters" value="${fn:split('a,b,c', ',')}"/>

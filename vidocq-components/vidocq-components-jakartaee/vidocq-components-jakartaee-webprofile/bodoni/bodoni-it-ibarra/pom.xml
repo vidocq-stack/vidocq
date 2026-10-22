@@ -83,6 +83,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-peano</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
             <version>${chappe.version}</version>

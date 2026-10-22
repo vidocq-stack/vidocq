@@ -73,6 +73,9 @@
         <jakarta.pages.version>4.0.0</jakarta.pages.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
+
+        <!-- Peano: only the bodoni-peano engine adapter (and the it-ibarra profile) depend on it. -->
+        <peano.version>0.4.0-SNAPSHOT</peano.version>
     </properties>
 
     <!--
@@ -83,6 +86,7 @@
     -->
     <modules>
         <module>bodoni-core</module>
+        <module>bodoni-peano</module>
     </modules>
 
     <dependencyManagement>
@@ -128,10 +132,27 @@
                 <scope>provided</scope>
             </dependency>
 
+            <!-- Peano — only for bodoni-peano, the engine adapter (never bodoni-core). -->
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-api</artifactId>
+                <version>${peano.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-core</artifactId>
+                <version>${peano.version}</version>
+            </dependency>
+
             <!-- Internal Bodoni modules -->
             <dependency>
                 <groupId>io.vidocq.bodoni</groupId>
                 <artifactId>bodoni-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.bodoni</groupId>
+                <artifactId>bodoni-peano</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
@@ -155,7 +176,6 @@
             <id>it-ibarra</id>
             <properties>
                 <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
-                <peano.version>0.4.0-SNAPSHOT</peano.version>
                 <foy.version>0.4.0-SNAPSHOT</foy.version>
                 <chappe.version>0.4.0-SNAPSHOT</chappe.version>
             </properties>

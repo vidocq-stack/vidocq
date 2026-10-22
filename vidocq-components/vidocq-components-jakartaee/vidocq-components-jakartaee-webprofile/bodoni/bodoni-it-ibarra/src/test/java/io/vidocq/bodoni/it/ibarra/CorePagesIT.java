@@ -44,7 +44,6 @@ import java.util.regex.Pattern;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -58,8 +57,8 @@ import org.junit.jupiter.api.Test;
  * {@code Map} values, which Peano resolves without reflection, and {@link #denyModeIsActive()}
  * proves that the host really denies reflection. The {@code varStatus} page reads
  * {@code LoopTagStatus} properties and the {@code entries} page reads {@code Map.Entry}
- * properties: both need an accessor nothing registers yet (BUG.md BOD-001), so their tests
- * are disabled until then.
+ * properties: under deny mode both are served by accessor tables, the {@code LoopTagStatus}
+ * one from {@code bodoni-peano} and the {@code Map.Entry} one built into Peano (BUG.md BOD-001).
  */
 class CorePagesIT {
 
@@ -74,7 +73,7 @@ class CorePagesIT {
 
     /** Modules deployed with the application, like the jars of a WAR's WEB-INF/lib. */
     private static final Set<String> APPLICATION_LIBRARIES = Set.of(
-            "io.vidocq.bodoni.core", "jakarta.servlet.jsp.jstl");
+            "io.vidocq.bodoni.core", "io.vidocq.bodoni.peano", "jakarta.servlet.jsp.jstl");
 
     /** JDK modules the application layer reads through the JSTL API and Bodoni. */
     private static final String JDK_MODULES = "java.desktop,java.sql,java.net.http";
@@ -155,7 +154,6 @@ class CorePagesIT {
     }
 
     @Test
-    @Disabled("BOD-001: Peano deny mode has no accessor for jakarta.servlet.jsp.jstl.core.LoopTagStatus — see BUG.md")
     void forEachExposesVarStatusProperties() throws Exception {
         String page = get("/status.jsp");
         assertEquals("0:1:a;1:2:b;2:3:c;", paragraph(page, "status"));
@@ -163,7 +161,6 @@ class CorePagesIT {
     }
 
     @Test
-    @Disabled("BOD-001: Peano deny mode has no accessor for java.util.Map.Entry implementations — see BUG.md")
     void forEachExposesMapEntryKeyAndValue() throws Exception {
         // Tags 3.0 §6.1.2: iterating a Map exposes Map.Entry items with key and value.
         assertEquals("k=v;", paragraph(get("/entries.jsp?k=v"), "entries"));
