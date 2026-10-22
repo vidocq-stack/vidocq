@@ -3,6 +3,6 @@
 <%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <c:set var="letters" value="${fn:split('a,b,c', ',')}"/>
 <html><body>
-<p id="loop"><c:forEach items="${letters}" var="x" varStatus="s">${s.index}:${x}</c:forEach></p>
+<p id="loop"><c:forEach items="${letters}" var="x"><c:set var="i" value="${i + 1}"/>${i}:${x}</c:forEach></p>
 <p id="length">${fn:length(letters)}</p>
 </body></html>

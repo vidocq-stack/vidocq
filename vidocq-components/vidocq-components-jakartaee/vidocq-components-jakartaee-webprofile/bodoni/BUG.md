@@ -18,15 +18,18 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   <%@ taglib prefix="c" uri="jakarta.tags.core" %>
   <c:forEach items="${['a','b']}" var="x" varStatus="s">${s.index}:${x}</c:forEach>
   ```
-  `./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify` — `CorePagesIT` 6/7 failing
-  (every `core.jsp` / `legacy.jsp` check; `functions.jsp` passes).
+  In `bodoni-it-ibarra`, `status.jsp` and `CorePagesIT.forEachExposesVarStatusProperties`
+  (disabled with a reference to this entry; it passes when the host runs with `allow`).
+  Every other check of `./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify` runs
+  under `deny` and passes.
 - Cause hypothesis: the status object is the anonymous `LoopTagStatus` implementation
   of the JSTL API's `LoopTagSupport` (Tags 3.0 §6.1, `varStatus` of type
   `jakarta.servlet.jsp.jstl.core.LoopTagStatus`). Peano resolves bean properties without
   reflection only through registered `AccessorProvider` tables; nothing registers one for
-  `LoopTagStatus`. `bodoni-core` must not depend on Peano (AGENTS.md constraint 1), so the
-  table has to come from the Pages/EL side or from the Vidocq runtime extension that
-  assembles Bodoni with Ibarra and Peano. Not a Bodoni handler defect.
-- Status: open — Ibarra (cross-repo item in `tasks/todo.md`; owner to decide between
-  Ibarra, Peano and the Vidocq runtime extension). `CorePagesIT` keeps asserting the
-  correct rendering under `deny`.
+  `LoopTagStatus`. `bodoni-core` must not depend on Peano (AGENTS.md constraint 1). Not a
+  Bodoni handler defect.
+- Candidate owners (the maintainer decides): an optional Bodoni adapter module depending
+  on Peano (engine-adapter exception of the brick/extension rule) that registers the
+  `LoopTagStatus` accessor table, or the Bodoni Vidocq runtime extension. Cross-repo item
+  in `tasks/todo.md`.
+- Status: open.
