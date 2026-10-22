@@ -104,7 +104,7 @@ The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
 [#bod-001]
 == Known limitation: BOD-001
 
-Under Peano with `peano.reflection=deny`, a page cannot read a property of the `varStatus` variable of `c:forEach` or `c:forTokens` (for example `${s.index}`): no accessor table is registered for the `LoopTagStatus` object of the JSTL API, and `bodoni-core` cannot depend on Peano to register one. With `peano.reflection=allow` the same pages render correctly. The owner of the fix is undecided; see `BUG.md` in the repository.
+Under Peano with `peano.reflection=deny`, a page cannot read a property of the `varStatus` variable of `c:forEach` or `c:forTokens` (for example `${s.index}`), nor the `key` or `value` of the `Map.Entry` items of a `c:forEach` over a `Map` (for example `${e.key}`): no accessor table is registered for the `LoopTagStatus` object of the JSTL API or for the JDK's `Map.Entry` classes, and `bodoni-core` cannot depend on Peano to register one. With `peano.reflection=allow` the same pages render correctly. The owner of the fix is undecided; see `BUG.md` in the repository.
 
 [WARNING]
 .Deploying on an application server

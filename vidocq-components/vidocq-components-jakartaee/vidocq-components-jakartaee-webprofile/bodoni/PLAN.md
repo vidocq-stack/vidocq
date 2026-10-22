@@ -332,7 +332,9 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 ## Cross-repo item: BOD-001
 
 Under Peano with `peano.reflection=deny`, a precompiled page cannot read `${s.index}` (or any
-property) of the `varStatus` variable of `c:forEach` / `c:forTokens`: no accessor table exists
-for the JSTL API's `LoopTagStatus`, and `bodoni-core` cannot depend on Peano. Candidate owners:
+property) of the `varStatus` variable of `c:forEach` / `c:forTokens`, nor `${e.key}` /
+`${e.value}` of the `Map.Entry` items of a `c:forEach` over a `Map`: no accessor table exists
+for the JSTL API's `LoopTagStatus` or the JDK's `Map.Entry` classes, and `bodoni-core` cannot
+depend on Peano. Candidate owners:
 Peano, the Ibarra precompiler, an optional Bodoni adapter module, or the Bodoni Vidocq runtime
 extension -- the maintainer decides. Tracked in `BUG.md` (BOD-001).

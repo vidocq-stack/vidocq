@@ -15,7 +15,7 @@
 
 **B1 delivered.** The `c:` (core) and `fn:` (functions) libraries are implemented in
 `bodoni-core`; `fmt:`, `x:` and `sql:` are not yet (B2 to B4). The official TCK has not been
-run. Known limitation: BOD-001 (`varStatus` properties under Peano deny mode, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
+run. Known limitation: BOD-001 (`varStatus` and `Map.Entry` properties under Peano deny mode, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
 [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266). The design of record is
 [PLAN.md](PLAN.md) (spec scope, brick rule, Java Modules layout, Ibarra build-time
 inlining, friction points, TCK plan, milestones B0–B7, open questions).

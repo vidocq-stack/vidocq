@@ -74,7 +74,8 @@ sdk env
 
 The `it-ibarra` profile is not part of the default build: it needs **local snapshots** of
 chappe, foy, peano and ibarra (`0.4.0-SNAPSHOT`) in `~/.m2`. The IT runs under
-`peano.reflection=deny`; its `varStatus` test is `@Disabled` on BUG.md BOD-001.
+`peano.reflection=deny` (`denyModeIsActive` proves it); its `varStatus` and `Map.Entry`
+tests are `@Disabled` on BUG.md BOD-001.
 
 `bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
 `./mvnw install` will neither build nor download anything TCK-related.

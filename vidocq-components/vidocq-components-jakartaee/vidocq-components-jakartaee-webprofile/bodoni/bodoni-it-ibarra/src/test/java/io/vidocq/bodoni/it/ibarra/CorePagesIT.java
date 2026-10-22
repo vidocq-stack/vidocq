@@ -55,9 +55,11 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The host runs strictly on the module path with {@code -Dpeano.reflection=deny} and
  * without any compiler module: the pages only use {@code String}, arrays, {@code List} and
- * {@code Map} values, which Peano resolves without reflection. The {@code varStatus} page
- * reads {@code LoopTagStatus} properties, which needs an accessor nothing registers yet
- * (BUG.md BOD-001): its test is disabled until then.
+ * {@code Map} values, which Peano resolves without reflection, and {@link #denyModeIsActive()}
+ * proves that the host really denies reflection. The {@code varStatus} page reads
+ * {@code LoopTagStatus} properties and the {@code entries} page reads {@code Map.Entry}
+ * properties: both need an accessor nothing registers yet (BUG.md BOD-001), so their tests
+ * are disabled until then.
  */
 class CorePagesIT {
 
@@ -161,6 +163,13 @@ class CorePagesIT {
     }
 
     @Test
+    @Disabled("BOD-001: Peano deny mode has no accessor for java.util.Map.Entry implementations — see BUG.md")
+    void forEachExposesMapEntryKeyAndValue() throws Exception {
+        // Tags 3.0 §6.1.2: iterating a Map exposes Map.Entry items with key and value.
+        assertEquals("k=v;", paragraph(get("/entries.jsp?k=v"), "entries"));
+    }
+
+    @Test
     void conditionalsUnderJakartaUris() throws Exception {
         String page = get("/core.jsp");
         assertEquals("three", paragraph(page, "if"));
@@ -209,11 +218,58 @@ class CorePagesIT {
         assertEquals("6/0", paragraph(page, "length"));
     }
 
-    private static String get(String page) throws Exception {
-        HttpResponse<String> response = CLIENT.send(
+    @Test
+    void importInlinesARelativeFragmentWithItsParameter() throws Exception {
+        // Tags 3.0 §7.4: the fragment declares UTF-8 and writes non-ASCII text; c:param reaches it.
+        assertEquals("Manuale Tipografico — Parma, Bodoni, «è»", paragraph(get("/import.jsp"), "fragment").strip());
+    }
+
+    @Test
+    void importOfAMissingResourceFailsInsideCatch() throws Exception {
+        // Tags 3.0 §7.4 "Null & Error Handling": no resource, or a non-2xx status, is a JspException.
+        String caught = paragraph(get("/import.jsp"), "missing");
+        assertTrue(caught.startsWith("jakarta.servlet.jsp.JspTagException"), caught);
+    }
+
+    @Test
+    void importOfAResourceAnsweringARedirectFails() throws Exception {
+        // Tags 3.0 §7.4: a status outside 2xx set by the included resource is a JspException
+        // naming the resource and the status.
+        String caught = paragraph(get("/import.jsp"), "status");
+        assertTrue(caught.startsWith("jakarta.servlet.jsp.JspTagException") && caught.contains("302"), caught);
+    }
+
+    @Test
+    void redirectSendsTheContextRelativeLocation() throws Exception {
+        // Tags 3.0 §7.6: the context path is prepended to a URL starting with a slash; the
+        // response may be rewritten with a session id (encodeRedirectURL).
+        HttpResponse<String> response = send("/redirect.jsp");
+        assertEquals(302, response.statusCode(), () -> response.body() + "\n--- host log ---\n" + hostLog());
+        String location = response.headers().firstValue("Location").orElse("");
+        assertTrue(location.matches("(http://127\\.0\\.0\\.1:" + port + ")?" + Pattern.quote(CONTEXT + "/core.jsp")
+                + "(;jsessionid=[^?]+)?" + Pattern.quote("?from=redirect")), location);
+    }
+
+    @Test
+    void denyModeIsActive() throws Exception {
+        // Guards the premise of this IT: the host runs with peano.reflection=deny, so reading a
+        // bean property of a plain public class without a registered accessor fails.
+        HttpResponse<String> response = send("/deny.jsp");
+        assertEquals(500, response.statusCode(), response::body);
+        String diagnostics = response.body() + hostLog();
+        assertTrue(diagnostics.contains("Reflection fallback denied for jakarta.servlet.jsp.JspTagException"),
+                () -> response.body() + "\n--- host log ---\n" + hostLog());
+    }
+
+    private static HttpResponse<String> send(String page) throws Exception {
+        return CLIENT.send(
                 HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + CONTEXT + page))
                         .timeout(Duration.ofSeconds(20)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String get(String page) throws Exception {
+        HttpResponse<String> response = send(page);
         assertEquals(200, response.statusCode(),
                 () -> page + " -> " + response.statusCode() + "\n" + response.body() + "\n--- host log ---\n" + hostLog());
         return response.body();
