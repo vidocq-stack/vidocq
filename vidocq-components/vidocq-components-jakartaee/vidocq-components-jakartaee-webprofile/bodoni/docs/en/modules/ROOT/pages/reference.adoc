@@ -1,0 +1,47 @@
+= Reference
+:description: Coordinates, dependencies, configuration and deployment notes — B0 scaffold.
+
+[.lead]
+Bodoni publishes nothing yet. This page fixes the coordinates and the dependency contract that the implementation will honour.
+
+== Coordinates
+
+[cols="1,2",options="header"]
+|===
+| Artefact | Coordinates
+
+| `bodoni-core` | `io.vidocq.bodoni:bodoni-core:{project-version}`
+|===
+
+== Dependencies
+
+[cols="2,1,2",options="header"]
+|===
+| Dependency | Scope | Note
+
+| `jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.2` | `compile` | The implemented spec. Its POM declares Servlet 6.0 / EL 5.0 at compile scope; Bodoni excludes them.
+| `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0` | `provided` | Brought by the Pages container.
+| `jakarta.servlet:jakarta.servlet-api:6.1.0` | `provided` | Brought by the container.
+| `jakarta.el:jakarta.el-api:6.0.1` | `provided` | Brought by the container.
+|===
+
+No build tooling dependency yet.
+
+== Spec-mandated dynamic behaviour (target)
+
+* `sql:setDataSource driver="…"` loads a JDBC driver class by name, as the spec requires.
+* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni provides no naming implementation.
+
+[WARNING]
+.Deploying on an application server
+====
+To be written and tested in milestone B7 by `bodoni-it-openliberty`. Known so far: Open Liberty's `pages-4.0` feature exposes the JSTL API packages itself, so there is no separate server JSTL feature to keep off; which implementation answers the `jakarta.tags.*` URIs when the WAR bundles Bodoni is not verified yet.
+====
+
+== Compatibility
+
+* **Java**: 25 (LTS).
+* **Maven**: 3.9.16 (Model 4.0.0).
+* **Java Modules**: strict, every module has a `module-info.java`.
+* **Virtual threads**: no `synchronized`, no `ThreadLocal`.
+* **Specs**: targets {spec-tags-3-0}[Jakarta Standard Tag Library 3.0] on Jakarta Pages 4.0, Servlet 6.1 and Expression Language 6.0.

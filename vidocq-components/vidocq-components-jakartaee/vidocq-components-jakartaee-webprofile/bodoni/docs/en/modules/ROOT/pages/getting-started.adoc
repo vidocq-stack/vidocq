@@ -1,0 +1,52 @@
+= Getting started
+:description: Adding Bodoni to a page application — target setup; nothing is implemented yet.
+
+[.lead]
+Bodoni is a scaffold: there is no tag to use yet. This page records the intended setup so the contract is clear from the start.
+
+== Build from source
+
+[source,bash]
+----
+git clone git@codefloe.com:Vidocq/bodoni.git
+cd bodoni
+sdk env                       # Java 25 + Maven 3.9.16 (.sdkmanrc)
+./mvnw -ntp clean install
+----
+
+== Dependency (target)
+
+The application declares Bodoni only. The JSTL API comes with it transitively; the Pages, Servlet and EL APIs come from the container.
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+  <groupId>io.vidocq.bodoni</groupId>
+  <artifactId>bodoni-core</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+An application module that refers to JSTL API types (for example `LoopTagStatus`) reads them through Bodoni:
+
+[source,java]
+----
+module com.acme.shop {
+    requires io.vidocq.bodoni.core;   // brings jakarta.servlet.jsp.jstl transitively
+}
+----
+
+== First page (target)
+
+[source,jsp]
+----
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<ul>
+  <c:forEach items="${cart.items}" var="item" varStatus="s">
+    <li>${s.count}. <c:out value="${item.name}"/> (${fn:length(item.options)} options)</li>
+  </c:forEach>
+</ul>
+----
+
+Under Vidocq, the runtime extension (planned) brings Bodoni, Ibarra and Peano together; the page is precompiled at build time.

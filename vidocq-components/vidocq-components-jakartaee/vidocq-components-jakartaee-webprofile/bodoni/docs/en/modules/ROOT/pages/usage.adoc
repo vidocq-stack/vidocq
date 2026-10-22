@@ -1,0 +1,25 @@
+= Usage
+:description: The five JSTL 3.0 tag libraries and their URIs — target; nothing is implemented yet.
+
+[.lead]
+Bodoni will implement the five tag libraries of Jakarta Standard Tag Library 3.0. None is available yet; the table gives the planned milestone of each.
+
+[cols="1,2,1,1",options="header"]
+|===
+| Library | URI | Prefix | Milestone
+
+| Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | B1
+| Functions | `jakarta.tags.functions` | `fn` | B1
+| I18N and formatting | `jakarta.tags.fmt` | `fmt` | B2
+| XML processing | `jakarta.tags.xml` | `x` | B3
+| Relational database access | `jakarta.tags.sql` | `sql` | B4
+|===
+
+The pre-3.0 URIs (`http://java.sun.com/jsp/jstl/core`, …) are not planned yet: see the open questions in link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
+
+== Configuration data (target)
+
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`):
+
+* `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
+* `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.

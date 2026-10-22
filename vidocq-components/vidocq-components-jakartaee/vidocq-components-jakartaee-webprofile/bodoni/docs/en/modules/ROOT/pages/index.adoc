@@ -1,0 +1,59 @@
+= Bodoni
+:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B0 scaffold.
+
+// TODO: centred logo (image::bodoni-logo.png[Bodoni,300,role=module-logo]) once
+// modules/ROOT/images/bodoni-logo.png exists — tracked in tasks/todo.md.
+
+[.lead]
+Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem, in pure Java 25: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` libraries as standard, portable tag handlers, with no dependency beyond the JSTL API and the JDK — and, when Ibarra precompiles the pages, the hot core tags inlined at build time.
+
+[IMPORTANT]
+====
+Bodoni is **a scaffold (B0)**: the Maven reactor and the `io.vidocq.bodoni.core` module descriptor exist, no tag is implemented yet.
+This documentation describes the intended `{project-version}` development line; every page states what exists today.
+The design of record is link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
+====
+
+== Origin of the name
+
+Giambattista Bodoni (1740–1813), printer to the Duke of Parma, contemporary and rival of Joaquín Ibarra. His _Manuale Tipografico_ (1788; posthumous 1818 edition) is a catalogue of standard, ready-made type that any printer composes pages with. See https://en.wikipedia.org/wiki/Giambattista_Bodoni[the Wikipedia article].
+
+JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni supplies the type — the same kind of nod as Ibarra's to Cervantes.
+
+== At a glance
+
+[cols="1,3"]
+|===
+| Implemented spec | {spec-tags-3-0}[Jakarta Standard Tag Library 3.0]
+| Repo | {repo-bodoni}
+| Java | 25 (LTS)
+| Java modules | `io.vidocq.bodoni.core` — see xref:internals.adoc[Internals]
+| Runtime dependencies | None beyond the JSTL API (`compile`); Pages, Servlet and EL APIs are `provided` by the container
+| Status | B0 scaffold — nothing implemented, not released or certified
+| Official TCK | Not run yet — see xref:tck.adoc[TCK status]
+|===
+
+== Three identifying traits
+
+. **Zero third-party dependency** — the JSTL API jar and JDK modules (`java.xml`, `java.sql`, `java.net.http`). No Apache Taglibs, no Xalan.
+. **Portable** — standard tag handlers that run unchanged on Ibarra, Jasper or Open Liberty. Bodoni depends on APIs only; the Vidocq runtime extension assembles it with Ibarra and Peano.
+. **Codegen where it pays** — an optional `bodoni-ibarra` module lets Ibarra inline `c:if`, `c:choose`, `c:forEach`, `c:set`, `c:out` and friends at build time, tested differentially against the standard handlers.
+
+== Position in the ecosystem
+
+Bodoni sits in the Jakarta EE web tier next to Peano (Expression Language 6.0) and Ibarra (Pages 4.0). It depends on neither: page expressions are evaluated by whatever EL implementation the container uses, and pages are translated by whatever Pages container runs them. Under Vidocq, the runtime extension brings Bodoni + Ibarra + Peano. It is required by Jakarta EE Web Profile 11 (Vidocq issue https://codefloe.com/Vidocq/vidocq/issues/66[#66]).
+
+== Quick links
+
+* xref:getting-started.adoc[Getting started]
+* xref:usage.adoc[Usage patterns]
+* xref:concepts.adoc[Concepts]
+* xref:internals.adoc[Internals]
+* xref:tck.adoc[TCK status]
+* xref:reference.adoc[Reference]
+* xref:migration.adoc[Migration]
+
+[NOTE]
+====
+Performance numbers live in link:{repo-bodoni}/src/branch/main/BENCH.md[BENCH.md] (no numbers recorded yet). None appear inline in this page.
+====

@@ -1,0 +1,19 @@
+= TCK status
+:description: Official Jakarta Standard Tag Library 3.0 TCK — not run yet (B5).
+
+[.lead]
+The official TCK has **not been run**: no tag is implemented yet. Nothing on this page is a test result or a certification claim.
+
+== Plan of record
+
+[cols="1,3",options="header"]
+|===
+| Item | Configuration
+
+| Runner | `bodoni-tck` module, in the reactor only under the `-Ptck` Maven profile (same pattern as `peano-tck` and `ibarra-tck`); the official artefact resolved only under `-Ptck,tck-official`.
+| Artefact | Open question. Candidates: `jakarta-tags-tck-3.0.0.zip` from download.eclipse.org (linked from the Tags 3.0 spec page), or `jakarta.tck:tags-tck` 11.0.x on Maven Central (Arquillian + JUnit 5, built against the Jakarta EE 11 API levels).
+| Container | The suite deploys WARs with pages: Ibarra + Foy + Peano behind the Arquillian adapter of `ibarra-tck`, at test scope only.
+| Script | `run-official-tck-tags-3.0.sh` with `smoke` / `all` / `-Dtest=` modes.
+| Inlining | Run first with the standard handlers, then again with `bodoni-ibarra` inlining enabled.
+| Merge gate | 100 % PASS once green; challenges, if any, in a `TCK.md`.
+|===

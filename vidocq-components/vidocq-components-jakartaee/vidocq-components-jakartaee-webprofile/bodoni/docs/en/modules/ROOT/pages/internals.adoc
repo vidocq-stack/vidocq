@@ -1,0 +1,36 @@
+= Internals
+:description: Maven modules, Java modules and the JDK modules Bodoni relies on — B0 scaffold.
+
+[.lead]
+Today the reactor holds one module, `bodoni-core`, whose module descriptor only reads the JSTL API module. The planned layout is below.
+
+== Modules
+
+[cols="1,1,2,1",options="header"]
+|===
+| Artefact | Java module | Role | State
+
+| `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B0: descriptor only
+| `bodoni-ibarra` | `io.vidocq.bodoni.ibarra` | Build-time inliners for Ibarra (`TagInliner` SPI, never at run time) | planned (B6)
+| `bodoni-tck` | — | Official Tags TCK runner, `-Ptck` profile only | planned (B5)
+| `bodoni-it-openliberty` | — (WAR) | Portability proof on Open Liberty | planned (B7)
+|===
+
+== The JSTL API module
+
+`jakarta.servlet.jsp.jstl-api` 3.0.2 is a named module, `jakarta.servlet.jsp.jstl`. It exports `jakarta.servlet.jsp.jstl.core`, `.fmt`, `.sql` and `.tlv`, and `requires transitive` `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql` and `java.desktop`. Every Bodoni user therefore reads `java.desktop`; Bodoni itself does not use `java.beans` (open question in PLAN.md).
+
+[source,java]
+----
+module io.vidocq.bodoni.core {
+    requires transitive jakarta.servlet.jsp.jstl;
+}
+----
+
+== JDK modules only
+
+* `x:` — `javax.xml.parsers`, `javax.xml.transform`, `javax.xml.xpath` (`java.xml`); XPath variables resolved over the page scopes.
+* `sql:` — `java.sql`; JNDI data sources through the standard `InitialContext` (`java.naming`).
+* `c:import` — `java.net.http` or `URLConnection` for absolute URLs; `RequestDispatcher` for context URLs.
+
+No `synchronized`, no `ThreadLocal`: state lives in the handler instance and in the `PageContext` scopes.

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.bodoni</groupId>
+    <artifactId>bodoni-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Bodoni</name>
+    <description>Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, strict Java Modules, portable tag handlers with optional build-time inlining by Ibarra</description>
+    <url>https://codefloe.com/Vidocq/bodoni</url>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+    </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://codefloe.com/Vidocq/bodoni</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/bodoni.git</connection>
+        <developerConnection>scm:git:git@codefloe.com:Vidocq/bodoni.git</developerConnection>
+    </scm>
+
+    <properties>
+        <!-- Jakarta Standard Tag Library 3.0 spec API — already modular upstream
+             (module jakarta.servlet.jsp.jstl, verified on the 3.0.2 jar: requires
+             transitive jakarta.servlet.jsp, jakarta.servlet, jakarta.el, java.sql
+             and java.desktop), no Vidocq fork needed. Bodoni ships it at compile
+             scope: it is the spec this brick implements. -->
+        <jakarta.jstl.version>3.0.2</jakarta.jstl.version>
+
+        <!-- Platform APIs Bodoni runs on — `provided`: the Pages container
+             (Ibarra under Vidocq, Jasper or Open Liberty elsewhere) brings them.
+             Levels of Jakarta EE 11 / Web Profile 11. -->
+        <jakarta.pages.version>4.0.0</jakarta.pages.version>
+        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
+        <jakarta.el.version>6.0.1</jakarta.el.version>
+    </properties>
+
+    <!--
+        Main reactor modules. Planned modules (PLAN.md, milestones B5-B7):
+        bodoni-tck joins the reactor only under the `tck` Maven profile, like
+        every other Vidocq sub-project; bodoni-ibarra (optional build-time
+        inliner) and bodoni-it-other-containers/bodoni-it-openliberty follow.
+    -->
+    <modules>
+        <module>bodoni-core</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Jakarta Standard Tag Library 3.0 — the implemented spec.
+                 The upstream POM declares jakarta.servlet-api 6.0.0 and
+                 jakarta.el-api 5.0.0 at compile scope: excluded here so they
+                 never reach applications transitively; the container brings
+                 the EE 11 levels below. -->
+            <dependency>
+                <groupId>jakarta.servlet.jsp.jstl</groupId>
+                <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+                <version>${jakarta.jstl.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>jakarta.servlet</groupId>
+                        <artifactId>jakarta.servlet-api</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>jakarta.el</groupId>
+                        <artifactId>jakarta.el-api</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <!-- Platform APIs (provided by the Pages container) -->
+            <dependency>
+                <groupId>jakarta.servlet.jsp</groupId>
+                <artifactId>jakarta.servlet.jsp-api</artifactId>
+                <version>${jakarta.pages.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>${jakarta.servlet.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.el</groupId>
+                <artifactId>jakarta.el-api</artifactId>
+                <version>${jakarta.el.version}</version>
+                <scope>provided</scope>
+            </dependency>
+
+            <!-- Internal Bodoni modules -->
+            <dependency>
+                <groupId>io.vidocq.bodoni</groupId>
+                <artifactId>bodoni-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!--
+        Planned profiles (not wired until the module exists, PLAN.md "TCK plan"):
+
+            tck        adds bodoni-tck            ./mvnw -Ptck -pl bodoni-tck test
+            quality    adds bodoni-coverage       aggregated JaCoCo report for SonarQube
+    -->
+</project>

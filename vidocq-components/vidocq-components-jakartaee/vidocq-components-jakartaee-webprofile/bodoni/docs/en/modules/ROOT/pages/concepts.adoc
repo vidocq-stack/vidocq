@@ -1,0 +1,17 @@
+= Concepts
+:description: Standard handlers as the portable reference, build-time inlining as an optional optimisation.
+
+[.lead]
+Two ideas shape Bodoni: the standard tag handlers are the reference everywhere, and Ibarra may replace the hot core tags by generated code at build time.
+
+== Standard handlers are the reference
+
+Every tag is a standard Jakarta Pages tag handler described by a TLD shipped in `bodoni-core`. Any Pages container — Ibarra, Jasper, Open Liberty — runs them through the normal tag lifecycle. They are what the official TCK certifies.
+
+== Build-time inlining (planned)
+
+Ibarra translates and compiles pages during the application build. Through a translation-time extension point planned in Ibarra (working name `TagInliner`, comparable to Jasper's `TagPlugin`), the optional `bodoni-ibarra` module will emit inline code for `c:if`, `c:choose` / `c:when` / `c:otherwise`, `c:forEach`, `c:forTokens`, `c:set`, `c:remove`, `c:out` and `c:catch`. The result must be indistinguishable from the handler path; when a tag uses a feature the inliner does not model, the handler is used.
+
+== A brick depends on APIs
+
+Bodoni ships the JSTL API; the Pages, Servlet and EL APIs are `provided`. It never depends on Ibarra, Peano or Foy. Under Vidocq, the runtime extension assembles them.
