@@ -220,8 +220,9 @@ class LoopTagStatusAccessorTableTest {
     @Test
     void getterFailuresAreWrapped() {
         var cause = new IllegalStateException("boom");
+        var status = new Status(cause);
         var failure = assertThrows(ELException.class,
-                () -> table.invoke(context, new Status(cause), "getIndex", NO_TYPES, NO_ARGS));
+                () -> table.invoke(context, status, "getIndex", NO_TYPES, NO_ARGS));
         assertEquals("Loop status method invocation failed", failure.getMessage());
         assertSame(cause, failure.getCause());
     }
@@ -229,8 +230,9 @@ class LoopTagStatusAccessorTableTest {
     @Test
     void elExceptionsPassThroughUnwrapped() {
         var original = new ELException("original");
+        var status = new Status(original);
         var failure = assertThrows(ELException.class,
-                () -> table.invoke(context, new Status(original), "getCount", NO_TYPES, NO_ARGS));
+                () -> table.invoke(context, status, "getCount", NO_TYPES, NO_ARGS));
         assertSame(original, failure);
     }
 }
