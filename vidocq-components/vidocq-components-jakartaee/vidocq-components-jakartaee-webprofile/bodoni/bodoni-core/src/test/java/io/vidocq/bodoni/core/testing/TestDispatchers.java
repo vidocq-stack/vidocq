@@ -46,7 +46,20 @@ public final class TestDispatchers {
     private final Map<String, String> contents = new HashMap<>();
     private final Map<String, Integer> statuses = new HashMap<>();
     private final Map<String, Exception> failures = new HashMap<>();
+    private final Map<String, Action> actions = new HashMap<>();
     private final List<String> included = new ArrayList<>();
+
+    /** Arbitrary behaviour of a dispatched path, run with the request and response it receives. */
+    @FunctionalInterface
+    public interface Action {
+        void run(ServletRequest request, ServletResponse response) throws Exception;
+    }
+
+    /** The path runs {@code action} when dispatched (after status, before configured content). */
+    public TestDispatchers action(String path, Action action) {
+        actions.put(path, action);
+        return this;
+    }
 
     /** The path serves {@code content}. */
     public TestDispatchers content(String path, String content) {
@@ -79,29 +92,39 @@ public final class TestDispatchers {
 
     /** The dispatcher for {@code path}, or {@code null} when none is configured. */
     public RequestDispatcher get(String path) {
-        if (!contents.containsKey(path) && !failures.containsKey(path)) {
+        if (!contents.containsKey(path) && !failures.containsKey(path) && !actions.containsKey(path)) {
             return null;
         }
         return new RequestDispatcher() {
             @Override
             public void forward(ServletRequest request, ServletResponse response)
                     throws ServletException, IOException {
-                dispatch(path, response);
+                dispatch(path, request, response);
             }
 
             @Override
             public void include(ServletRequest request, ServletResponse response)
                     throws ServletException, IOException {
-                dispatch(path, response);
+                dispatch(path, request, response);
             }
         };
     }
 
-    private void dispatch(String path, ServletResponse response) throws ServletException, IOException {
+    private void dispatch(String path, ServletRequest request, ServletResponse response) throws ServletException, IOException {
         included.add(path);
         Integer status = statuses.get(path);
         if (status != null && response instanceof HttpServletResponse http) {
             http.setStatus(status);
+        }
+        Action action = actions.get(path);
+        if (action != null) {
+            try {
+                action.run(request, response);
+            } catch (IOException | ServletException | RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ServletException(e);
+            }
         }
         Exception failure = failures.get(path);
         if (failure != null) {

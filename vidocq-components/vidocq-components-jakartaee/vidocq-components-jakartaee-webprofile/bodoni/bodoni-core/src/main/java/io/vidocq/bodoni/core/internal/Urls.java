@@ -124,4 +124,31 @@ public final class Urls {
         }
         return out.append(fragment).toString();
     }
+
+    /**
+     * Removes a {@code ;jsessionid=...} path parameter (name matched case-insensitively) from
+     * the path of a relative URL, up to the next {@code ;}, {@code /}, {@code ?} or
+     * {@code #}. The query string and the fragment are left untouched. Tags 3.0 §7.4:
+     * {@code c:import} removes session id information from the URL it dispatches.
+     */
+    public static String stripSessionId(String url) {
+        int pathEnd = url.length();
+        for (int i = 0; i < url.length(); i++) {
+            char c = url.charAt(i);
+            if (c == '?' || c == '#') {
+                pathEnd = i;
+                break;
+            }
+        }
+        String path = url.substring(0, pathEnd);
+        int at = path.toLowerCase(java.util.Locale.ROOT).indexOf(";jsessionid=");
+        if (at < 0) {
+            return url;
+        }
+        int stop = at + 1;
+        while (stop < path.length() && path.charAt(stop) != ';' && path.charAt(stop) != '/') {
+            stop++;
+        }
+        return path.substring(0, at) + path.substring(stop) + url.substring(pathEnd);
+    }
 }

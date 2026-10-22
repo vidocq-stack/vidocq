@@ -23,6 +23,7 @@ package io.vidocq.bodoni.core.tags.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -220,5 +221,120 @@ class ImportTagTest {
         tag.setVarReader("r");
         TagHarness.run(tag, pc, Body.EMPTY);
         assertNull(pc.getAttribute("r"));
+    }
+
+    private static ImportTag importOf(String url) {
+        ImportTag tag = new ImportTag();
+        tag.setUrl(url);
+        return tag;
+    }
+
+    @Test
+    void redirectFromTheIncludedResourceNeverReachesTheRealResponse() {
+        String[] overloads = {"a", "b", "c", "d"};
+        for (String name : overloads) {
+            TestPageContext pc = TestPageContext.create();
+            req(pc).dispatchers().action("/r", (rq, rs) -> {
+                jakarta.servlet.http.HttpServletResponse http = (jakarta.servlet.http.HttpServletResponse) rs;
+                switch (name) {
+                    case "a" -> http.sendRedirect("x");
+                    case "b" -> http.sendRedirect("x", 301);
+                    case "c" -> http.sendRedirect("x", true);
+                    default -> http.sendRedirect("x", 303, false);
+                }
+            });
+            JspTagException e = assertThrows(JspTagException.class,
+                    () -> TagHarness.run(importOf("/r"), pc, Body.EMPTY));
+            assertTrue(e.getMessage().contains("/r"), e.getMessage());
+            io.vidocq.bodoni.core.testing.TestHttpServletResponse real =
+                    (io.vidocq.bodoni.core.testing.TestHttpServletResponse) pc.getResponse();
+            assertNull(real.redirect(), name);
+            assertEquals(200, real.getStatus(), name);
+        }
+    }
+
+    @Test
+    void resetOperationsActOnTheCaptureOnly() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        req(pc).dispatchers().action("/s", (rq, rs) -> {
+            jakarta.servlet.http.HttpServletResponse http = (jakarta.servlet.http.HttpServletResponse) rs;
+            rs.getWriter().write("junk");
+            rs.resetBuffer();
+            rs.getWriter().write("kept");
+            rs.flushBuffer();
+            http.setStatus(500);
+            rs.reset();
+            rs.getWriter().write("final");
+        });
+        assertEquals("final", TagHarness.run(importOf("/s"), pc, Body.EMPTY));
+        assertEquals(200, ((io.vidocq.bodoni.core.testing.TestHttpServletResponse) pc.getResponse()).getStatus());
+    }
+
+    @Test
+    void runtimeExceptionIsWrappedWithTheCause() {
+        TestPageContext pc = TestPageContext.create();
+        IllegalStateException cause = new IllegalStateException("bad");
+        req(pc).dispatchers().failWith("/x", cause);
+        JspTagException e = assertThrows(JspTagException.class, () -> TagHarness.run(importOf("/x"), pc, Body.EMPTY));
+        assertSame(cause, e.getCause());
+        assertSame(cause, e.getCause());
+    }
+
+    @Test
+    void servletExceptionWithRootCauseExposesIt() {
+        TestPageContext pc = TestPageContext.create();
+        IOException root = new IOException("disk full");
+        req(pc).dispatchers().failWith("/x", new jakarta.servlet.ServletException("outer", root));
+        JspTagException e = assertThrows(JspTagException.class, () -> TagHarness.run(importOf("/x"), pc, Body.EMPTY));
+        assertSame(root, e.getCause());
+        assertTrue(e.getMessage().contains("disk full"), e.getMessage());
+    }
+
+    @Test
+    void servletExceptionWithoutRootCauseIsWrappedLikeIo() {
+        TestPageContext pc = TestPageContext.create();
+        jakarta.servlet.ServletException cause = new jakarta.servlet.ServletException("plain");
+        req(pc).dispatchers().failWith("/x", cause);
+        JspTagException e = assertThrows(JspTagException.class, () -> TagHarness.run(importOf("/x"), pc, Body.EMPTY));
+        assertSame(cause, e.getCause());
+        assertTrue(e.getMessage().contains("plain"), e.getMessage());
+    }
+
+    @Test
+    void sessionIdIsStrippedBeforeDispatching() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        req(pc).dispatchers().content("/inc?q=1", "ok");
+        assertEquals("ok", TagHarness.run(importOf("/inc;JSESSIONID=ABC123?q=1"), pc, Body.EMPTY));
+        assertEquals(List.of("/inc?q=1"), req(pc).dispatchers().calls());
+    }
+
+    @Test
+    void bytesAreDecodedWithTheCharsetDeclaredByTheResource() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        pc.getResponse().setCharacterEncoding("ISO-8859-1");
+        req(pc).dispatchers().action("/u", (rq, rs) -> {
+            rs.setContentType("text/plain; charset=UTF-8");
+            rs.getOutputStream().write("\u00e9".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        });
+        assertEquals("\u00e9", TagHarness.run(importOf("/u"), pc, Body.EMPTY));
+        TestPageContext pc2 = TestPageContext.create();
+        req(pc2).dispatchers().action("/u", (rq, rs) -> {
+            rs.setCharacterEncoding("UTF-8");
+            rs.getOutputStream().write("\u00e9".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        });
+        assertEquals("\u00e9", TagHarness.run(importOf("/u"), pc2, Body.EMPTY));
+    }
+
+    @Test
+    void undeclaredBytesAreIso88591NotThePageEncoding() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        pc.getResponse().setCharacterEncoding("UTF-8");
+        req(pc).dispatchers().action("/u", (rq, rs) -> rs.getOutputStream().write(0xE9));
+        assertEquals("\u00e9", TagHarness.run(importOf("/u"), pc, Body.EMPTY));
+        ImportTag explicit = importOf("/u");
+        explicit.setCharEncoding("UTF-16BE");
+        req(pc).dispatchers().action("/w", (rq, rs) -> rs.getOutputStream().write(new byte[] {0, 'a'}));
+        explicit.setUrl("/w");
+        assertEquals("a", TagHarness.run(explicit, pc, Body.EMPTY));
     }
 }

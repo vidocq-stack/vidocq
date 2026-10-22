@@ -30,15 +30,25 @@ import java.net.URLConnection;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.concurrent.Executors;
 
-/** {@link ExternalResources} backed by one shared {@link HttpClient} and {@link URLConnection}. */
+/** {@link ExternalResources} backed by one shared, lazily built {@link HttpClient} and {@link URLConnection}. */
 final class JdkExternalResources implements ExternalResources {
 
     static final ExternalResources INSTANCE = new JdkExternalResources();
 
-    private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    /**
+     * Lazy holder: the client (and its virtual-thread executor) is created on first absolute
+     * http(s) import, never for relative imports.
+     */
+    private static final class Client {
+        static final HttpClient INSTANCE = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .connectTimeout(Duration.ofSeconds(10))
+                .executor(Executors.newVirtualThreadPerTaskExecutor())
+                .build();
+    }
 
     private JdkExternalResources() {
     }
@@ -63,7 +73,7 @@ final class JdkExternalResources implements ExternalResources {
     private static Reader openHttp(URI uri, String absoluteUrl, String charEncoding) throws IOException {
         HttpResponse<InputStream> response;
         try {
-            response = CLIENT.send(HttpRequest.newBuilder(uri).GET().build(),
+            response = Client.INSTANCE.send(HttpRequest.newBuilder(uri).GET().build(),
                     HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

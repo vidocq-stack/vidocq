@@ -27,8 +27,10 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import io.vidocq.bodoni.core.internal.ExternalResources;
@@ -208,13 +210,13 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
                     throw new JspTagException("c:import: cannot read " + target + ": " + e.getMessage(), e);
                 }
             }
-            return new StringReader(include(Urls.appendParameters(url, params, responseEncoding), responseEncoding));
+            return new StringReader(include(Urls.appendParameters(Urls.stripSessionId(url), params, responseEncoding)));
         } catch (IllegalArgumentException e) {
             throw new JspTagException("c:import: " + e.getMessage(), e);
         }
     }
 
-    private String include(String path, String responseEncoding) throws JspTagException {
+    private String include(String path) throws JspTagException {
         RequestDispatcher dispatcher;
         if (context != null) {
             Urls.requireContextRelative(url, context);
@@ -229,19 +231,23 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         if (dispatcher == null) {
             throw new JspTagException("c:import: no resource found for " + path);
         }
-        String encoding = charEncoding != null && !charEncoding.isBlank() ? charEncoding : responseEncoding;
-        Charset charset = encoding == null ? Charset.forName("ISO-8859-1") : Charset.forName(encoding.trim());
         CapturingResponse capture = new CapturingResponse((HttpServletResponse) pageContext.getResponse());
         try {
             dispatcher.include(pageContext.getRequest(), capture);
-        } catch (ServletException | IOException e) {
+        } catch (ServletException e) {
+            Throwable root = e.getRootCause();
+            if (root != null) {
+                throw new JspTagException("c:import: cannot include " + path + ": " + root.getMessage(), root);
+            }
+            throw new JspTagException("c:import: cannot include " + path + ": " + e.getMessage(), e);
+        } catch (IOException | RuntimeException e) {
             throw new JspTagException("c:import: cannot include " + path + ": " + e.getMessage(), e);
         }
         int status = capture.status();
         if (status < 200 || status >= 300) {
             throw new JspTagException("c:import: " + path + " answered with status " + status);
         }
-        return capture.content(charset);
+        return capture.content(charEncoding);
     }
 
     @Override
@@ -257,14 +263,24 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         openReader = null;
     }
 
-    /** Captures what an included resource writes, and its status, instead of sending it. */
+    /**
+     * Captures what an included resource writes, and its status, instead of sending it. An
+     * include must not change the importing page's response, so nothing here reaches the
+     * wrapped response: status, redirects, errors, reset and flush calls only touch the
+     * capture. A redirect or error requested by the resource is recorded as its status (302
+     * for the overloads without a status), which makes the import fail as for any non-2xx
+     * outcome. The character encoding the resource declares is remembered and used to decode
+     * bytes when {@code charEncoding} is not set; the default is ISO-8859-1 (§7.4).
+     */
     private static final class CapturingResponse extends HttpServletResponseWrapper {
 
-        private final StringWriter chars = new StringWriter();
-        private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        private StringWriter chars = new StringWriter();
+        private ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         private PrintWriter writer;
         private ServletOutputStream stream;
         private int status = SC_OK;
+        private String declaredEncoding;
+        private String contentType;
 
         CapturingResponse(HttpServletResponse response) {
             super(response);
@@ -274,11 +290,13 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
             return status;
         }
 
-        String content(Charset charset) {
+        String content(String charEncoding) {
             if (writer != null) {
                 writer.flush();
                 return chars.toString();
             }
+            String name = charEncoding != null && !charEncoding.isBlank() ? charEncoding : declaredEncoding;
+            Charset charset = name == null ? StandardCharsets.ISO_8859_1 : Charset.forName(name.trim());
             return bytes.toString(charset);
         }
 
@@ -340,18 +358,66 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         }
 
         @Override
+        public void sendRedirect(String location) {
+            this.status = SC_FOUND;
+        }
+
+        @Override
+        public void sendRedirect(String location, int sc) {
+            this.status = sc;
+        }
+
+        @Override
+        public void sendRedirect(String location, boolean clearBuffer) {
+            this.status = SC_FOUND;
+        }
+
+        @Override
         public void sendRedirect(String location, int sc, boolean clearBuffer) {
             this.status = sc;
         }
 
         @Override
+        public void reset() {
+            resetBuffer();
+            status = SC_OK;
+        }
+
+        @Override
+        public void resetBuffer() {
+            if (writer != null) {
+                writer.flush();
+            }
+            chars.getBuffer().setLength(0);
+            bytes.reset();
+        }
+
+        @Override
+        public void flushBuffer() {
+            // everything stays in the capture buffer until the import completes
+        }
+
+        @Override
         public void setContentType(String type) {
-            // an included resource cannot change the importing page's headers
+            this.contentType = type;
+            if (type != null && type.toLowerCase(Locale.ROOT).contains("charset=")) {
+                this.declaredEncoding = ExternalResources.charsetOf(null, type).name();
+            }
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
         }
 
         @Override
         public void setCharacterEncoding(String encoding) {
-            // an included resource cannot change the importing page's headers
+            this.declaredEncoding = encoding;
+        }
+
+        @Override
+        public String getCharacterEncoding() {
+            return declaredEncoding == null ? "ISO-8859-1" : declaredEncoding;
         }
     }
 }
