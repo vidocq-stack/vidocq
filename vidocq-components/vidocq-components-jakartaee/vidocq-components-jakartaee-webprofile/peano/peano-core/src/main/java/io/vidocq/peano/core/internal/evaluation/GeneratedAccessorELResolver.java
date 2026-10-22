@@ -128,10 +128,19 @@ public final class GeneratedAccessorELResolver extends ELResolver {
 
     private List<AccessorTable> lookup(Class<?> runtime) {
         var found = new ArrayList<AccessorTable>();
+        collectSuperclassTables(runtime, found);
+        collectInterfaceTables(runtime, found);
+        return List.copyOf(found);
+    }
+
+    private void collectSuperclassTables(Class<?> runtime, List<AccessorTable> found) {
         for (Class<?> type = runtime; type != null && (type == runtime || type != Object.class); type = type.getSuperclass()) {
             AccessorTable table = tables.get(type);
             if (table != null) found.add(table);
         }
+    }
+
+    private void collectInterfaceTables(Class<?> runtime, List<AccessorTable> found) {
         // Breadth-first: a class contributes its interfaces, then its superclass; an interface its parents.
         var queue = new ArrayDeque<Class<?>>();
         var visited = new HashSet<Class<?>>();
@@ -146,7 +155,6 @@ public final class GeneratedAccessorELResolver extends ELResolver {
             Class<?> superclass = type.getSuperclass();
             if (superclass != null && superclass != Object.class) queue.add(superclass);
         }
-        return List.copyOf(found);
     }
 
     private void bind(ELContext context) {

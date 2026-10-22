@@ -123,14 +123,15 @@ final class MapEntryAccessorTable extends AccessorTable {
     @Override
     @SuppressWarnings("unchecked")
     public Object invoke(ELContext context, Object base, Object method, Class<?>[] types, Object[] arguments) {
-        MethodDescriptor descriptor = shape(context, base, method, types, arguments == null ? new Object[0] : arguments);
+        Object[] actual = arguments == null ? new Object[0] : arguments;
+        MethodDescriptor descriptor = shape(context, base, method, types, actual);
         if (descriptor == null) return null;
         context.setPropertyResolved(base, method);
         var entry = (Map.Entry<Object, Object>) base;
         try {
             if (descriptor == GET_KEY) return entry.getKey();
             if (descriptor == GET_VALUE) return entry.getValue();
-            return entry.setValue(context.convertToType(arguments[0], Object.class));
+            return entry.setValue(context.convertToType(actual[0], Object.class));
         } catch (ELException failure) {
             throw failure;
         } catch (RuntimeException failure) {

@@ -171,8 +171,9 @@ class GeneratedAccessorResolverTest {
         var context = new StandardELContext(ExpressionFactory.newInstance());
         assertNull(resolver.getValue(context,java.util.Map.entry("a",1),"key"));
         assertFalse(context.isPropertyResolved());
-        assertThrows(ELException.class, () -> new GeneratedAccessorELResolver(List.of(
-                new Labelled(java.util.Map.Entry.class,"one"), new Labelled(java.util.Map.Entry.class,"two"))));
+        var duplicates = List.<AccessorTable>of(
+                new Labelled(java.util.Map.Entry.class,"one"), new Labelled(java.util.Map.Entry.class,"two"));
+        assertThrows(ELException.class, () -> new GeneratedAccessorELResolver(duplicates));
     }
 
     @Test
@@ -228,8 +229,8 @@ class GeneratedAccessorResolverTest {
             context.getVariableMapper().setVariable("x", factory.createValueExpression(new Sub(), Object.class));
             assertEquals("status", factory.createValueExpression(context,"${x.prop}",Object.class).getValue(context));
             assertEquals("acted", factory.createValueExpression(context,"${x.act()}",Object.class).getValue(context));
-            var denied = assertThrows(ELException.class,
-                    () -> factory.createValueExpression(context,"${x.missing}",Object.class).getValue(context));
+            var missing = factory.createValueExpression(context,"${x.missing}",Object.class);
+            var denied = assertThrows(ELException.class, () -> missing.getValue(context));
             assertEquals("Reflection fallback denied for " + Sub.class.getName()
                     + "; register a generated accessor provider or a custom resolver", denied.getMessage());
         } finally {
@@ -351,7 +352,9 @@ class GeneratedAccessorResolverTest {
         @Override public Class<?> targetType() { return type; }
         @Override public Object getValue(ELContext context, Object base, Object property) { calls++; return null; }
         @Override public Class<?> getType(ELContext context, Object base, Object property) { return null; }
-        @Override public void setValue(ELContext context, Object base, Object property, Object value) {}
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+            // Intentionally empty: this table only counts reads.
+        }
         @Override public boolean isReadOnly(ELContext context, Object base, Object property) { return false; }
         @Override public Class<?> getCommonPropertyType(ELContext context, Object base) { return null; }
     }
@@ -373,7 +376,9 @@ class GeneratedAccessorResolverTest {
             return null;
         }
         @Override public Class<?> getType(ELContext context, Object base, Object property) { return null; }
-        @Override public void setValue(ELContext context, Object base, Object property, Object value) {}
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+            // Intentionally empty: this table is read-only.
+        }
         @Override public boolean isReadOnly(ELContext context, Object base, Object property) { return true; }
         @Override public Class<?> getCommonPropertyType(ELContext context, Object base) { return String.class; }
     }
@@ -390,7 +395,9 @@ class GeneratedAccessorResolverTest {
             return null;
         }
         @Override public Class<?> getType(ELContext context, Object base, Object property) { return null; }
-        @Override public void setValue(ELContext context, Object base, Object property, Object value) {}
+        @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+            // Intentionally empty: this table is read-only.
+        }
         @Override public boolean isReadOnly(ELContext context, Object base, Object property) { return true; }
         @Override public Class<?> getCommonPropertyType(ELContext context, Object base) { return String.class; }
     }

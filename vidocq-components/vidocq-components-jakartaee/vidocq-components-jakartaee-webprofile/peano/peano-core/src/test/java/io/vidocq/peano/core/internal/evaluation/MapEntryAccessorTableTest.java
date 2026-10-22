@@ -130,6 +130,16 @@ class MapEntryAccessorTableTest {
         assertTrue(context.isPropertyResolved());
     }
 
+    @Test
+    void nullArgumentsAreAnEmptyArrayForTheArityCheck() {
+        var resolver = new GeneratedAccessorELResolver(List.of());
+        var context = new StandardELContext(factory);
+        var entry = new LocalizedEntry();
+        assertNull(assertDoesNotThrow(() -> resolver.invoke(context, entry, "setValue",
+                new Class<?>[]{Object.class}, null)));
+        assertFalse(context.isPropertyResolved());
+    }
+
     // The allow-mode comparison with BeanELResolver for an application overload needs a package
     // exported to jakarta.el: JavaModuleBootstrapTest runs it in the entry-overload module fixture.
 
