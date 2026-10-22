@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<taglib xmlns="https://jakarta.ee/xml/ns/jakartaee"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-jsptaglibrary_3_0.xsd"
+        version="3.0">
+  <description>Jakarta Standard Tag Library 3.0 - core library</description>
+  <display-name>JSTL core</display-name>
+  <tlib-version>3.0</tlib-version>
+  <short-name>c</short-name>
+  <uri>http://java.sun.com/jsp/jstl/core</uri>
+
+  <tag>
+    <description>Evaluates an expression and outputs the result to the current JspWriter.</description>
+    <name>out</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.OutTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Expression to be evaluated.</description>
+      <name>value</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>Whether the XML special characters are converted to entity codes. Defaults to true.</description>
+      <name>escapeXml</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>boolean</type>
+    </attribute>
+    <attribute>
+      <description>Default value if the resulting value is null.</description>
+      <name>default</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Sets the value of a scoped variable or a property of a target object.</description>
+    <name>set</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.SetTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Expression to be evaluated.</description>
+      <name>value</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <deferred-value>
+        <type>java.lang.Object</type>
+      </deferred-value>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope for var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Target object whose property will be set.</description>
+      <name>target</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>Name of the property to be set in the target object.</description>
+      <name>property</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Removes a scoped variable.</description>
+    <name>remove</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.RemoveTag</tag-class>
+    <body-content>empty</body-content>
+    <attribute>
+      <description>Name of the scoped variable to be removed.</description>
+      <name>var</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope for var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Catches a java.lang.Throwable thrown by any of its nested actions.</description>
+    <name>catch</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.CatchTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Name of the exported scoped variable for the exception thrown from a nested action.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Evaluates its body content if the test condition is true.</description>
+    <name>if</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.IfTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The test condition that determines whether the body content is processed.</description>
+      <name>test</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>boolean</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the test condition.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope for var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Provides the context for mutually exclusive conditional execution.</description>
+    <name>choose</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.ChooseTag</tag-class>
+    <body-content>JSP</body-content>
+  </tag>
+
+  <tag>
+    <description>Represents an alternative within a choose action.</description>
+    <name>when</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.WhenTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The test condition that determines whether the body content is processed.</description>
+      <name>test</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>boolean</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Represents the last alternative within a choose action.</description>
+    <name>otherwise</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.OtherwiseTag</tag-class>
+    <body-content>JSP</body-content>
+  </tag>
+
+  <tag>
+    <description>Repeats its body content over a collection of objects, or a fixed number of times.</description>
+    <name>forEach</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.ForEachTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Name of the exported scoped variable for the current item.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Collection of items to iterate over.</description>
+      <name>items</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <deferred-value>
+        <type>java.lang.Object</type>
+      </deferred-value>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the status of the iteration.</description>
+      <name>varStatus</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Iteration begins at the item located at the specified index.</description>
+      <name>begin</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration ends at the item located at the specified index (inclusive).</description>
+      <name>end</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration processes every step items of the collection.</description>
+      <name>step</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Iterates over tokens, separated by the supplied delimiters.</description>
+    <name>forTokens</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.ForTokensTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Name of the exported scoped variable for the current item.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>String of tokens to iterate over.</description>
+      <name>items</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>The set of delimiters.</description>
+      <name>delims</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the status of the iteration.</description>
+      <name>varStatus</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Iteration begins at the token located at the specified index.</description>
+      <name>begin</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration ends at the token located at the specified index (inclusive).</description>
+      <name>end</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration processes every step tokens of the string.</description>
+      <name>step</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Imports the content of a URL-based resource.</description>
+    <name>import</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.ImportTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The URL of the resource to import.</description>
+      <name>url</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the context when accessing a relative URL of a foreign context.</description>
+      <name>context</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the resource content.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope for var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Character encoding of the content at the input resource.</description>
+      <name>charEncoding</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the resource content as a Reader.</description>
+      <name>varReader</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Builds a URL with the proper rewriting rules applied.</description>
+    <name>url</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.UrlTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The URL to be processed.</description>
+      <name>value</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the context when specifying a relative URL of a foreign context.</description>
+      <name>context</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the processed URL.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope for var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Sends an HTTP redirect to the client.</description>
+    <name>redirect</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.RedirectTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The URL of the resource to redirect to.</description>
+      <name>url</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the context when redirecting to a relative URL of a foreign context.</description>
+      <name>context</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Adds a request parameter to the URL of the enclosing import, url or redirect action.</description>
+    <name>param</name>
+    <tag-class>io.vidocq.bodoni.core.tags.core.ParamTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Name of the query string parameter.</description>
+      <name>name</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Value of the parameter.</description>
+      <name>value</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+</taglib>
