@@ -56,5 +56,5 @@ Under Vidocq, the runtime extension (planned) brings Bodoni, Ibarra and Peano to
 
 [NOTE]
 ====
-Under Peano with `peano.reflection=deny`, reading a property of the `varStatus` variable, or the `key` / `value` of a `Map.Entry` while iterating a `Map`, fails: see xref:reference.adoc#bod-001[BOD-001].
+Under Peano with `peano.reflection=deny`, add `bodoni-peano` to read the properties of the `varStatus` variable: see xref:reference.adoc#bod-001[BOD-001].
 ====

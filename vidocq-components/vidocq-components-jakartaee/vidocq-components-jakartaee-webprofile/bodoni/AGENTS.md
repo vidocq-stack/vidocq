@@ -75,7 +75,8 @@ sdk env
 The `it-ibarra` profile is not part of the default build: it needs **local snapshots** of
 chappe, foy, peano and ibarra (`0.4.0-SNAPSHOT`) in `~/.m2`. The IT runs under
 `peano.reflection=deny` (`denyModeIsActive` proves it); its `varStatus` and `Map.Entry`
-tests are `@Disabled` on BUG.md BOD-001.
+tests (BUG.md BOD-001, fixed) need the `bodoni-peano` adapter and a Peano with
+supertype lookup.
 
 `bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
 `./mvnw install` will neither build nor download anything TCK-related.
@@ -85,6 +86,8 @@ tests are `@Disabled` on BUG.md BOD-001.
 ```
 bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
                 c:, fmt:, fn:, x:, sql:  (B1: c: and fn:)
+bodoni-peano  ← optional engine adapter: LoopTagStatus accessor table for Peano
+                `peano.reflection=deny` (BOD-001); the only module allowed to depend on Peano
 bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
 (planned)     bodoni-ibarra  ← optional build-time inliner for Ibarra (TagInliner SPI)
 (planned)     bodoni-tck     ← official Tags TCK runner, in-reactor behind `tck`
@@ -96,7 +99,9 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
 1. **`bodoni-core` depends on the JSTL API only** (compile scope), plus the `provided`
    Pages / Servlet / EL APIs it brings transitively. No Ibarra, Peano, Foy or Vauban
    dependency in `bodoni-core` — ever. It must run unchanged on any Pages container
-   (Ibarra, Jasper, Open Liberty).
+   (Ibarra, Jasper, Open Liberty). The one module allowed to depend on Peano is
+   `bodoni-peano`, an optional engine adapter (engine-adapter exception of the ecosystem's
+   brick/extension rule, like `cassini-chappe`): `peano-api` only, no `bodoni-core`.
 2. **Standard tag handlers are the portable reference.** They are what Jasper or Open
    Liberty run and what the TCK certifies. Build-time inlining (`bodoni-ibarra`) is an
    optional optimisation that must be behaviourally identical, tested differentially
@@ -121,7 +126,8 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
 
 - **Maven groupId**: `io.vidocq.bodoni`; version `0.4.0-SNAPSHOT` (workspace dev line,
   parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`).
-- **Java modules**: `io.vidocq.bodoni.core` (artifact `bodoni-core`); planned
+- **Java modules**: `io.vidocq.bodoni.core` (artifact `bodoni-core`), `io.vidocq.bodoni.peano`
+  (artifact `bodoni-peano`); planned
   `io.vidocq.bodoni.ibarra` (artifact `bodoni-ibarra`).
 - **Packages** (fixed in B1): `io.vidocq.bodoni.core.tags.<library>` (exported tag
   handlers; `tags.core` today, `fmt`, `xml`, `sql` to come), `io.vidocq.bodoni.core.functions`

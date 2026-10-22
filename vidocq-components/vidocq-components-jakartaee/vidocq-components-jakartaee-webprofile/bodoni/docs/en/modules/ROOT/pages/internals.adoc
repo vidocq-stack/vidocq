@@ -11,6 +11,7 @@ Today `bodoni-core` holds the `c:` and `fn:` libraries (milestone B1). The `bodo
 | Artefact | Java module | Role | State
 
 | `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B1: `c:` and `fn:`
+| `bodoni-peano` | `io.vidocq.bodoni.peano` | Optional engine adapter: `LoopTagStatus` accessor table for Peano `peano.reflection=deny` | B1
 | `bodoni-it-ibarra` | `io.vidocq.bodoni.it.ibarra` | Renders pages on Ibarra + Foy + Peano; not published, `it-ibarra` profile only | B1
 | `bodoni-ibarra` | `io.vidocq.bodoni.ibarra` | Build-time inliners for Ibarra (`TagInliner` SPI, never at run time) | planned (B6)
 | `bodoni-tck` | — | Official Tags TCK runner, `-Ptck` profile only | planned (B5)

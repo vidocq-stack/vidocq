@@ -11,6 +11,7 @@ Bodoni publishes the `c:` and `fn:` libraries of Jakarta Standard Tag Library 3.
 | Artefact | Coordinates
 
 | `bodoni-core` | `io.vidocq.bodoni:bodoni-core:{project-version}`
+| `bodoni-peano` | `io.vidocq.bodoni:bodoni-peano:{project-version}` (optional engine adapter, Java module `io.vidocq.bodoni.peano`)
 |===
 
 == Dependencies
@@ -102,9 +103,13 @@ The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
 * A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni ships no naming implementation: the lookup relies on the one the application server or the Vidocq runtime provides.
 
 [#bod-001]
-== Known limitation: BOD-001
+== Peano deny mode: bodoni-peano (BOD-001)
 
-Under Peano with `peano.reflection=deny`, a page cannot read a property of the `varStatus` variable of `c:forEach` or `c:forTokens` (for example `${s.index}`), nor the `key` or `value` of the `Map.Entry` items of a `c:forEach` over a `Map` (for example `${e.key}`): no accessor table is registered for the `LoopTagStatus` object of the JSTL API or for the JDK's `Map.Entry` classes, and `bodoni-core` cannot depend on Peano to register one. With `peano.reflection=allow` the same pages render correctly. The owner of the fix is undecided; see `BUG.md` in the repository.
+Under Peano with `peano.reflection=deny`, Peano reads bean properties only through accessor tables. The `varStatus` object of `c:forEach` and `c:forTokens` (Tags 3.0 section 6.1) is an anonymous `LoopTagStatus` implementation of the JSTL API that no application table can name, so reading `${s.index}` fails with "Reflection fallback denied".
+
+Add `bodoni-peano` to the application when it runs on Peano with `peano.reflection=deny`. It is an optional engine adapter: its Java module `io.vidocq.bodoni.peano` requires `jakarta.servlet.jsp.jstl` and `io.vidocq.peano.api`, exports nothing, and provides Peano's `AccessorProvider` service with a read-only table keyed on `LoopTagStatus` (`current`, `index`, `count`, `first`, `last`, `begin`, `end`, `step`). It is the only Bodoni module that depends on Peano (`peano-api`); `bodoni-core` does not. The Bodoni Vidocq runtime extension will declare it. With `peano.reflection=allow`, or on another Pages container, it is not needed.
+
+The `key` and `value` of the `Map.Entry` items of a `c:forEach` over a `Map` need no Bodoni module: Peano resolves tables through superclasses and interfaces and ships its own `Map.Entry` table.
 
 [WARNING]
 .Deploying on an application server

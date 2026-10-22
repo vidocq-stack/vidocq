@@ -9,7 +9,7 @@ Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vido
 
 [IMPORTANT]
 ====
-Milestone **B1** is delivered: the `c:` (core) and `fn:` (functions) libraries are implemented. The `fmt:`, `x:` and `sql:` libraries are not yet (B2 to B4). Known limitation: xref:reference.adoc#bod-001[BOD-001].
+Milestone **B1** is delivered: the `c:` (core) and `fn:` (functions) libraries are implemented. The `fmt:`, `x:` and `sql:` libraries are not yet (B2 to B4). Under Peano with `peano.reflection=deny`, add the optional `bodoni-peano` adapter: xref:reference.adoc#bod-001[BOD-001].
 This documentation describes the `{project-version}` development line; every page states what exists today.
 The design of record is link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
 ====

@@ -27,7 +27,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   ```
   In `bodoni-it-ibarra`, `status.jsp` with `CorePagesIT.forEachExposesVarStatusProperties`
   and `entries.jsp` with `CorePagesIT.forEachExposesMapEntryKeyAndValue` (both disabled
-  with a reference to this entry; both pass when the host runs with `allow`).
+  with a reference to this entry until the fix; both pass when the host runs with `allow`).
   `CorePagesIT.denyModeIsActive` (enabled) proves the host really runs under `deny`.
   Every other check of `./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify` runs
   under `deny` and passes.
@@ -42,4 +42,11 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   Bodoni adapter module depending on Peano (engine-adapter exception of the brick/extension
   rule) that registers the `LoopTagStatus` and `Map.Entry` accessor tables; (4) the Bodoni Vidocq runtime
   extension. Cross-repo item in `tasks/todo.md` and `PLAN.md`.
-- Status: open.
+- Status: fixed (2026-10-22), in two parts. (1) `Vidocq/peano`, branch
+  `feat/accessor-supertype-lookup`: Peano resolves an accessor table by the runtime class, then
+  its superclasses, then its interfaces, and ships a built-in `java.util.Map.Entry` table
+  (`${e.key}`, `${e.value}`). (2) `bodoni-peano`, the optional engine adapter (engine-adapter
+  exception of the brick/extension rule; `bodoni-core` stays free of Peano): it provides the
+  read-only `LoopTagStatus` table (`current`, `index`, `count`, `first`, `last`, `begin`, `end`,
+  `step`) through an `AccessorProvider`. `CorePagesIT.forEachExposesVarStatusProperties` and
+  `forEachExposesMapEntryKeyAndValue` are enabled and pass under `deny`.

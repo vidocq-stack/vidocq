@@ -133,6 +133,7 @@ Ibarra + Peano and, optionally, puts `bodoni-ibarra` on the precompilation path.
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
 | `bodoni-core` | `io.vidocq.bodoni.core` | runtime | `transitive jakarta.servlet.jsp.jstl` (brings `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql`, `java.desktop` → `java.xml`); later `java.net.http` if `c:import` uses it, `java.naming` for `sql:` | the tag-handler and function packages (unqualified: generated pages and other containers instantiate handlers); `…core.internal.*` not exported |
+| `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table) |
 | `bodoni-ibarra` (planned) | `io.vidocq.bodoni.ibarra` | build only | `io.vidocq.bodoni.core`, Ibarra's compiler-side SPI module | nothing — `provides` the `TagInliner` SPI |
 | `bodoni-tck` (planned) | — | test, `-Ptck` | Ibarra + Peano + Foy (test scope), official TCK | — |
 | `bodoni-it-openliberty` (planned) | — (WAR) | test | `bodoni-core` | — |
@@ -277,7 +278,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 | # | Content | Done when |
 |---|---|---|
 | B0 | Scaffold: reactor, `bodoni-core` module descriptor, docs, this plan | `./mvnw -ntp clean install` green (needs the first commit, or `-Dmaven.gitcommitid.skip=true`) |
-| B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). Known limitation: BOD-001 |
+| B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). BOD-001 fixed by `bodoni-peano` |
 | B2 | `fmt:` i18n and formatting (§8–§9): locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; open question 4 settled |
 | B3 | `x:` (§11–§13): JDK parser/XSLT/XPath, scope variable resolver, `x:forEach` context | unit tests; open question 6 settled |
 | B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
@@ -329,12 +330,13 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 - **Packages**: `io.vidocq.bodoni.core.tags.core` (handlers, exported),
   `io.vidocq.bodoni.core.functions` (exported), `io.vidocq.bodoni.core.internal` (not exported).
 
-## Cross-repo item: BOD-001
+## Cross-repo item: BOD-001 (fixed)
 
-Under Peano with `peano.reflection=deny`, a precompiled page cannot read `${s.index}` (or any
+Under Peano with `peano.reflection=deny`, a precompiled page could not read `${s.index}` (or any
 property) of the `varStatus` variable of `c:forEach` / `c:forTokens`, nor `${e.key}` /
-`${e.value}` of the `Map.Entry` items of a `c:forEach` over a `Map`: no accessor table exists
-for the JSTL API's `LoopTagStatus` or the JDK's `Map.Entry` classes, and `bodoni-core` cannot
-depend on Peano. Candidate owners:
-Peano, the Ibarra precompiler, an optional Bodoni adapter module, or the Bodoni Vidocq runtime
-extension -- the maintainer decides. Tracked in `BUG.md` (BOD-001).
+`${e.value}` of the `Map.Entry` items of a `c:forEach` over a `Map`. Resolution, in two parts:
+Peano (`Vidocq/peano`, branch `feat/accessor-supertype-lookup`) looks tables up through
+superclasses and interfaces and ships the `Map.Entry` table; `bodoni-peano`, an optional engine
+adapter (engine-adapter exception of the brick/extension rule; `bodoni-core` stays free of
+Peano), ships the `LoopTagStatus` table. The Bodoni Vidocq runtime extension will declare
+`bodoni-peano`. Tracked in `BUG.md` (BOD-001).
