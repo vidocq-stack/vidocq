@@ -42,6 +42,7 @@ import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
@@ -55,8 +56,11 @@ import jakarta.servlet.jsp.tagext.TryCatchFinally;
  * {@code <c:import>} (Tags 3.0 §7.4): imports the content of a URL-based resource.
  *
  * <p>A relative URL is included through a {@code RequestDispatcher} of the current or, with
- * {@code context}, of a foreign web application; the included output is captured and decoded
- * with {@code charEncoding} (default: the response encoding). An absolute URL is read through
+ * {@code context}, of a foreign web application; the included output is captured. Text the
+ * resource writes through its {@code Writer} is taken as is; bytes it writes through its
+ * {@code OutputStream} are decoded with {@code charEncoding}, else with the character encoding
+ * the resource declares (content type or character encoding), else with ISO-8859-1. An
+ * absolute URL is read through
  * {@link ExternalResources}. Nested {@code <c:param>} extend the query string, except with
  * {@code varReader}, where the resource is opened at the start tag and the exported
  * {@link Reader} is visible in the body only and closed afterwards.
@@ -269,7 +273,8 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
      * Captures what an included resource writes, and its status, instead of sending it. An
      * include must not change the importing page's response, so nothing here reaches the
      * wrapped response: status, redirects, errors, reset and flush calls only touch the
-     * capture. A redirect or error requested by the resource is recorded as its status (302
+     * capture, and headers, cookies, content length and locale are dropped. Content type and
+     * character encoding are recorded, not forwarded. A redirect or error requested by the resource is recorded as its status (302
      * for the overloads without a status), which makes the import fail as for any non-2xx
      * outcome. The character encoding the resource declares is remembered and used to decode
      * bytes when {@code charEncoding} is not set; the default is ISO-8859-1 (§7.4).
@@ -420,6 +425,59 @@ public class ImportTag extends BodyTagSupport implements ParamParent, TryCatchFi
         @Override
         public String getCharacterEncoding() {
             return declaredEncoding == null ? "ISO-8859-1" : declaredEncoding;
+        }
+
+        // Headers, cookies, length and locale of an included resource are ignored, as the
+        // Servlet include contract asks: nothing is forwarded to the importing response.
+
+        @Override
+        public void setContentLength(int len) {
+            // ignored
+        }
+
+        @Override
+        public void setContentLengthLong(long len) {
+            // ignored
+        }
+
+        @Override
+        public void setHeader(String name, String value) {
+            // ignored
+        }
+
+        @Override
+        public void addHeader(String name, String value) {
+            // ignored
+        }
+
+        @Override
+        public void setIntHeader(String name, int value) {
+            // ignored
+        }
+
+        @Override
+        public void addIntHeader(String name, int value) {
+            // ignored
+        }
+
+        @Override
+        public void setDateHeader(String name, long date) {
+            // ignored
+        }
+
+        @Override
+        public void addDateHeader(String name, long date) {
+            // ignored
+        }
+
+        @Override
+        public void addCookie(Cookie cookie) {
+            // ignored
+        }
+
+        @Override
+        public void setLocale(Locale locale) {
+            // ignored
         }
     }
 }

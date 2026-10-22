@@ -271,6 +271,27 @@ class ImportTagTest {
     }
 
     @Test
+    void headersCookiesLengthAndLocaleOfTheIncludedResourceNeverReachTheRealResponse() throws Exception {
+        // The real response double throws on every one of these calls: reaching it fails the import.
+        TestPageContext pc = TestPageContext.create();
+        req(pc).dispatchers().action("/h", (rq, rs) -> {
+            jakarta.servlet.http.HttpServletResponse http = (jakarta.servlet.http.HttpServletResponse) rs;
+            http.setContentLength(4);
+            http.setContentLengthLong(4L);
+            http.setHeader("X-A", "1");
+            http.addHeader("X-A", "2");
+            http.setIntHeader("X-B", 1);
+            http.addIntHeader("X-B", 2);
+            http.setDateHeader("X-C", 0L);
+            http.addDateHeader("X-C", 1L);
+            http.addCookie(new jakarta.servlet.http.Cookie("k", "v"));
+            http.setLocale(java.util.Locale.FRANCE);
+            rs.getWriter().write("body");
+        });
+        assertEquals("body", TagHarness.run(importOf("/h"), pc, Body.EMPTY));
+    }
+
+    @Test
     void runtimeExceptionIsWrappedWithTheCause() {
         TestPageContext pc = TestPageContext.create();
         IllegalStateException cause = new IllegalStateException("bad");
