@@ -188,4 +188,53 @@ class TagHarnessTest {
             throw new IllegalStateException("boom");
         }));
     }
+
+    @Test
+    void runForResultExposesDoEndTagResult() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        TagSupport skipPage = new TagSupport() {
+            @Override
+            public int doEndTag() {
+                return SKIP_PAGE;
+            }
+        };
+        TagHarness.Result r = TagHarness.runForResult(skipPage, pc, null, Body.EMPTY);
+        assertEquals(Tag.SKIP_PAGE, r.endTagResult());
+        assertEquals(Tag.EVAL_PAGE, TagHarness.runForResult(new TagSupport(), pc, null, Body.EMPTY).endTagResult());
+    }
+
+    @Test
+    void endTagResultIsMinusOneWhenNotReached() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        TagHarness.Result r = TagHarness.runForResult(new Recorder(), pc, null, p -> {
+            throw new IllegalStateException("boom");
+        });
+        assertEquals(-1, r.endTagResult());
+    }
+
+    @Test
+    void nonBodyTagReturningBufferedIsRejected() {
+        TestPageContext pc = TestPageContext.create();
+        TagSupport bad = new TagSupport() {
+            @Override
+            public int doStartTag() {
+                return BodyTagSupport.EVAL_BODY_BUFFERED;
+            }
+        };
+        assertThrows(IllegalStateException.class, () -> TagHarness.run(bad, pc, Body.EMPTY));
+    }
+
+    @Test
+    void nestedRunInsideBufferedParentBody() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        Upper parent = new Upper();
+        String[] child = new String[1];
+        String out = TagHarness.run(parent, pc, p -> {
+            p.getOut().write("a");
+            child[0] = TagHarness.run(new Twice(), pc, parent, q -> q.getOut().write("c"));
+            p.getOut().write("b");
+        });
+        assertEquals("cc", child[0]);
+        assertEquals("ACCB", out);
+    }
 }

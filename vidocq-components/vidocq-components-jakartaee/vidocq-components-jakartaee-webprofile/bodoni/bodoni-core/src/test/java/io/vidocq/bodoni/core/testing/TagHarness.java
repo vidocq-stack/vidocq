@@ -20,6 +20,7 @@
 
 package io.vidocq.bodoni.core.testing;
 
+import jakarta.servlet.jsp.JspWriter;
 import jakarta.servlet.jsp.tagext.BodyContent;
 import jakarta.servlet.jsp.tagext.BodyTag;
 import jakarta.servlet.jsp.tagext.IterationTag;
@@ -34,22 +35,34 @@ public final class TagHarness {
     private TagHarness() {
     }
 
+    /** Outcome of a run: the text written and the {@code doEndTag} result. */
+    public record Result(String output, int endTagResult) {
+    }
+
     /** Runs {@code tag} without a parent. */
     public static String run(Tag tag, TestPageContext pc, Body body) throws Exception {
         return run(tag, pc, null, body);
     }
 
-    /**
-     * Runs {@code tag} and returns the text written to the page's {@code JspWriter} during
-     * the run. {@code doEndTag}'s return value is ignored. {@code release()} is not called.
-     */
+    /** Runs {@code tag} and returns only the text written during the run. */
     public static String run(Tag tag, TestPageContext pc, Tag parent, Body body) throws Exception {
-        TestJspWriter page = (TestJspWriter) pc.getOut();
-        int start = page.getString().length();
+        return runForResult(tag, pc, parent, body).output();
+    }
+
+    /**
+     * Runs {@code tag}; returns the text written to the writer current at entry (the page
+     * writer, or the enclosing {@code BodyContent} when nested in a buffered body) during
+     * the run, and the {@code doEndTag} result ({@code -1} when it was not reached).
+     * {@code release()} is not called.
+     */
+    public static Result runForResult(Tag tag, TestPageContext pc, Tag parent, Body body) throws Exception {
+        JspWriter target = pc.getOut();
+        int start = text(target).length();
+        int[] end = {-1};
         tag.setPageContext(pc);
         tag.setParent(parent);
         try {
-            lifecycle(tag, pc, body);
+            lifecycle(tag, pc, body, end);
         } catch (Throwable t) {
             if (tag instanceof TryCatchFinally tcf) {
                 try {
@@ -67,26 +80,38 @@ public final class TagHarness {
                 tcf.doFinally();
             }
         }
-        return page.getString().substring(start);
+        return new Result(text(target).substring(start), end[0]);
     }
 
-    private static void lifecycle(Tag tag, TestPageContext pc, Body body) throws Exception {
-        int r = tag.doStartTag();
-        if (r != Tag.SKIP_BODY) {
-            if (r == BodyTag.EVAL_BODY_BUFFERED && tag instanceof BodyTag bt) {
-                BodyContent bc = pc.pushBody();
-                try {
-                    bt.setBodyContent(bc);
-                    bt.doInitBody();
-                    loop(tag, pc, body);
-                } finally {
-                    pc.popBody();
-                }
-            } else {
-                loop(tag, pc, body);
-            }
+    private static String text(JspWriter w) {
+        if (w instanceof TestJspWriter t) {
+            return t.getString();
         }
-        tag.doEndTag();
+        if (w instanceof BodyContent bc) {
+            return bc.getString();
+        }
+        throw new IllegalStateException("unsupported writer " + w.getClass());
+    }
+
+    private static void lifecycle(Tag tag, TestPageContext pc, Body body, int[] end) throws Exception {
+        int r = tag.doStartTag();
+        if (r == Tag.SKIP_BODY) {
+            // no body
+        } else if (r == Tag.EVAL_BODY_INCLUDE) {
+            loop(tag, pc, body);
+        } else if (r == BodyTag.EVAL_BODY_BUFFERED && tag instanceof BodyTag bt) {
+            BodyContent bc = pc.pushBody();
+            try {
+                bt.setBodyContent(bc);
+                bt.doInitBody();
+                loop(tag, pc, body);
+            } finally {
+                pc.popBody();
+            }
+        } else {
+            throw new IllegalStateException("invalid doStartTag result " + r + " for " + tag.getClass().getName());
+        }
+        end[0] = tag.doEndTag();
     }
 
     private static void loop(Tag tag, TestPageContext pc, Body body) throws Exception {
