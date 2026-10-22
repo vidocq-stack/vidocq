@@ -361,7 +361,7 @@ The Vidocq runtime extension (vidocq repository) follows B5.
   (`fmt-1_2.tld`), as for `c:` and `fn:`.
 - **Bundle prefix**: the `prefix` of an enclosing `fmt:bundle` applies to every nested
   `fmt:message`, including one with an explicit `bundle` attribute (§8.6, "any nested
-  <fmt:message> actions").
+  `<fmt:message>` actions").
 
 ## Cross-repo item: BOD-001 (fixed)
 
