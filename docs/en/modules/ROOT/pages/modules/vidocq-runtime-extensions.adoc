@@ -60,7 +60,7 @@
 
 | `vidocq-runtime-naming-extension` [.tag-new]#NEW#
 | `jakartaee-web`
-| Answers the JNDI `java:` names from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `java:comp/env/jdbc/orders` is the `@Named("orders")` data source. See <<naming>>.
+| Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -334,32 +334,40 @@ Code written for an application server looks its resources up by name, and the b
 </dependency>
 ----
 
-The extension needs no codegen and no directive in the application's module unless the application looks names up itself or contributes some, with `requires io.vidocq.runtime.extensions.jakartaee.web.naming`. `vidocq extension add naming` adds the dependency and that directive.
+The extension needs no codegen and no directive in the application's module unless the application looks names up itself or declares some in code, with `requires io.vidocq.runtime.extensions.jakartaee.web.naming`. `vidocq extension add naming` adds the dependency and that directive.
 
-[cols="2,3",options="header"]
-|===
-| Name | Answered by
+*Declaring names.* Vidocq answers only the names the application declares, one key of `vidocq.properties` per name: `vidocq.naming.` followed by the name without `java:`.
 
-| `java:comp/env/jdbc/<name>`
-| the `@Named("<name>")` `DataSource` bean, such as a pool of the Mansart Pool extension (`vidocq.pool.<name>.url`)
+[source,properties]
+----
+# a bean: its type, then its qualifiers; none means @Default
+vidocq.naming.comp/env/jdbc/orders   = javax.sql.DataSource @Named("orders")
+vidocq.naming.comp/env/jms/audit     = com.acme.AuditQueue
+vidocq.naming.comp/env/payment       = com.acme.Payment @com.acme.Primary
+vidocq.naming.comp/env/orders/eu     = com.acme.Orders @com.acme.Region("eu") @com.acme.Tier(level = 2)
 
-| `java:module/env/…`, `java:app/env/…`
-| the same names: a Vidocq application is a single component
+# a link: another name, such as an alias of a data source
+vidocq.naming.comp/env/jdbc/legacy   = java:comp/env/jdbc/orders
+vidocq.naming.app/env/jdbc/reporting = java:comp/env/jdbc/orders
+----
 
-| `java:comp/env`
-| a context, in which `jdbc/<name>` resolves
+* *The key* copies into a lookup as it is: `vidocq.naming.comp/env/com.acme.Orders/ds` is `java:comp/env/com.acme.Orders/ds`. A properties key takes `/`; only a `:` would need escaping, and the key has none. A key under `vidocq.naming.` that does not start with `comp/`, `module/`, `app/` or `global/` fails the start, so that `vidocq.naming.comp.env.orders`, with dots for slashes, is not silently ignored.
+* *A value starting with `java:`* links to that name. *Any other value* is a bean written as text: `@Named`, `@Default` and `@Any` take their short name, every other qualifier its fully qualified name, and a member is a Java source literal (xref:vauban::jndi.adoc#text[the grammar]).
+* *The four namespaces are distinct*, as in the Jakarta EE Platform: `java:comp`, `java:module`, `java:app` and `java:global`. A name exists only in the namespace it is declared in, so `java:comp/env/jdbc/orders` does not answer `java:app/env/jdbc/orders`: declare both, or link one to the other.
+* *Nothing is declared by default*, not even the pools of the Mansart Pool extension: a pool `vidocq.pool.orders.url` is the `@Named("orders")` data source, and `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` names it.
+* *Environment variables* override a key already in a file, as MicroProfile Config maps them (`VIDOCQ_NAMING_COMP_ENV_JDBC_ORDERS`), but cannot declare a new name: the `/` of the name cannot be read back from the variable.
 
-| any other name of `java:comp/env`
-| a `JndiNameProvider` bean, when one answers it
-|===
+*What is checked at startup.* Vauban checks every declared name when the container starts, as it checks an injection point. The start fails, naming the key, when a name is declared twice, when no bean or several beans match a bean, when that bean is `@Dependent` (nobody would destroy the instance a lookup creates; the pools of the Mansart Pool extension are `@Singleton`), when a qualifier is not one, when a link names an undeclared name, or when links loop.
 
 *Installation.* In its `configure` phase, before the container starts, the extension makes Vauban's factory the default of the JVM, through the `java.naming.factory.initial` system property. It sets the property only when the application chose no factory: neither in that property nor in a `jndi.properties` file, which the property would override. `ldap://`, `rmi://` and `dns://` names still reach the JDK's providers, and `new InitialContext(env)` with an explicit `Context.INITIAL_CONTEXT_FACTORY` still gets that factory. When Vidocq stops, the extension clears the property it set.
 
-*A context holds no container.* Each lookup asks the container running at that moment: a context the application kept answers from the new container after a `vidocq:dev` restart, and with no container running a lookup throws `NoInitialContextException`. The names are resolved lazily, at each lookup, and the namespace is read-only: `bind` and the other writes throw `OperationNotSupportedException`. A `@Dependent` data source is refused, since nobody would destroy the instance a lookup creates; the pools of the Mansart Pool extension are `@Singleton`.
+*A context holds no container.* Each lookup asks the container running at that moment: a context the application kept answers from the new container after a `vidocq:dev` restart, and with no container running a lookup throws `NoInitialContextException`. A bean is resolved at each lookup, and the namespace is read-only: `bind` and the other writes throw `OperationNotSupportedException`. `java:comp/env`, `java:module/env`, `java:app/env` and the parents of a declared name are contexts, in which relative names resolve, as the Standard Tag Library resolves `jdbc/orders` under `java:comp/env`.
 
-The `naming` section of the startup report says which factory answers `java:` names: this extension's, or the one the application chose.
+The `naming` section of the startup report says which factory answers `java:` names, this extension's or the one the application chose, then lists each declared name with its target.
 
-Not covered yet: `@Resource` injection, `resource-ref` and `env-entry` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
+An application or a library can also declare names in code, with a `JndiBindings` bean, and answer names not known in advance with a `JndiNameProvider` bean: see xref:vauban::jndi.adoc[Vauban Naming].
+
+Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-ref` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
 
 == Typical lifecycle — Chappe example
 

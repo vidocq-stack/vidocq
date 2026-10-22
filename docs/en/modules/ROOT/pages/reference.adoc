@@ -35,7 +35,7 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
 
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}` [.tag-new]#NEW#
-| JNDI `java:` names answered by the running container through Vauban Naming: `java:comp/env/jdbc/<name>` is the `@Named("<name>")` data source. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
+| JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
 | Maven plugin — `generate`, `package`, `dev`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info` (`modularize` moved to the Vauban plugin)
@@ -117,6 +117,10 @@ none +
 `vidocq.pool.username` / `vidocq.pool.password`
 | —
 | JDBC coordinates of the default Mansart datasource. A named datasource uses `vidocq.pool.<name>.url`.
+
+| `vidocq.naming.<name without java:>` [.tag-new]#NEW#
+| —
+| Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `vidocq.pool.maxSize`
 | `20`

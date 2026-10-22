@@ -69,7 +69,7 @@ API at runtime instead of a third-party bytecode library), lives in
 | Jakarta WebSocket 2.2 (annotated API) | [vidocq#65](https://codefloe.com/Vidocq/vidocq/issues/65) |
 | Faces 4.1 (from scratch) | [vidocq#66](https://codefloe.com/Vidocq/vidocq/issues/66) |
 | Standard Tag Library 3.0 (Bodoni) | [vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) |
-| `java:` naming context backed by CDI (`vidocq-runtime-naming-extension`): `java:comp/env/jdbc/…` delivered; `@Resource`, `resource-ref`, `env-entry` to come | [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) |
+| `java:` naming context backed by CDI (`vidocq-runtime-naming-extension`): names declared in `vidocq.properties` (`vidocq.naming.*`: beans and links, four distinct namespaces) delivered; `@Resource`, `resource-ref`, `env-entry` to come | [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) |
 | Jakarta Enterprise Beans Lite 4.0 | [vidocq#71](https://codefloe.com/Vidocq/vidocq/issues/71) |
 | Jakarta Concurrency 3.1 | [vidocq#72](https://codefloe.com/Vidocq/vidocq/issues/72) |
 | Debugging Support 2.0 (SMAP for Server Pages) | [vidocq#73](https://codefloe.com/Vidocq/vidocq/issues/73) |

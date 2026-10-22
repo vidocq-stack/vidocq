@@ -101,7 +101,7 @@ public final class KnownExtensions {
             new RegistryEntry("naming",
                     JAKARTAEE_WEB,
                     "vidocq-runtime-naming-extension",
-                    "JNDI java: names (java:comp/env/jdbc/...) answered by CDI beans"),
+                    "JNDI java: names declared in vidocq.properties, answered by CDI beans"),
             new RegistryEntry("mansart-data",
                     JAKARTAEE_WEB,
                     "vidocq-runtime-mansart-data-extension",
