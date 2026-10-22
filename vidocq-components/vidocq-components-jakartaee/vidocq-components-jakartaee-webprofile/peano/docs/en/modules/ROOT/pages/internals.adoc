@@ -70,17 +70,24 @@ factory conversion instead uses the lambda's captured context and factory result
 No proxy, runtime bytecode generation or reflective method lookup is involved.
 
 The processor generates separate tables for accessible source descendants of selected
-roots in the current compilation. Runtime dispatch remains keyed by exact class, so
+roots in the current compilation. Generated tables accept their exact class only, so
 new overloads, covariant returns and override annotations belong to the concrete table.
 Static hiding retains the most-derived signature. Generation waits for unresolved
 superclass and interface hierarchies across processing rounds; unresolved selections
 receive final diagnostics. No binary subtype scan is performed.
 
 AccessorProvider contributes a collection of AccessorTable instances, each an ELResolver
-for one exact runtime class. A Java module provides directive registers the public provider,
+registered for one class or interface. A Java module provides directive registers the public provider,
 even when the provider and model package have no exports or opens.
 GeneratedAccessorELResolver loads providers through ServiceLoader and snapshots their
 tables in an immutable class-keyed map. Duplicate target registrations fail explicitly.
+A built-in Map.Entry table (core internal package, not a service) is added unless an
+application table already targets Map.Entry.
+An instance base selects its table by supertype lookup: the exact class, the superclasses
+nearest first, then the interfaces breadth-first (see the Reference page for the exact order).
+Each resolver caches the selection per runtime class in a ConcurrentHashMap, a sentinel
+recording the absence of a table; resolvers are created per ELContext, so a ClassValue would
+churn the JDK classes' per-class maps. ELClass bases keep the exact-class lookup.
 Tables keep evaluation state in ELContext and must support concurrent use.
 
 The factory's getStreamELResolver hook returns a composite containing the table resolver
@@ -97,8 +104,9 @@ compiles without a Peano API requirement.
 
 The runtime foundation validates the service contract with handwritten tables;
 the processor now emits property tables using the same contract.
-Generated method metadata is implemented. Exact runtime-class registration intentionally requires separate
-tables for subclasses.
+Generated method metadata is implemented. Generated tables accept their exact class only, so
+subclasses still need their own generated tables; handwritten tables keyed on an interface or a
+superclass serve every subtype that has no closer table.
 
 == APT property generation (implemented)
 
@@ -155,7 +163,7 @@ ELException or wrap the underlying failure as its cause.
 Metadata constants must be accessible to the owning application package/module.
 Specialized inherited generic parameters are diagnosed. Object-declared methods,
 constructors and synthetic stream/optional metadata retain their existing fallback
-or pending status; exact-class dispatch still requires separately selected subclasses.
+or pending status; generated tables still require separately selected subclasses.
 All emitted Java platform names are qualified to survive application names such as Class or Object.
 
 == Lexer (implemented)

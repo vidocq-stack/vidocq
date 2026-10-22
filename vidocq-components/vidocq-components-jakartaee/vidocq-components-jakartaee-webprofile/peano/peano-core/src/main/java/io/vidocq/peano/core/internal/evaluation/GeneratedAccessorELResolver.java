@@ -19,10 +19,13 @@
  */
 package io.vidocq.peano.core.internal.evaluation;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Objects;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
@@ -34,9 +37,31 @@ import jakarta.el.MethodReference;
 import io.vidocq.peano.spi.AccessorProvider;
 import io.vidocq.peano.spi.AccessorTable;
 
-/** Direct application-table dispatch, with no property/member introspection. */
+/**
+ * Direct application-table dispatch, with no property/member introspection.
+ *
+ * <p>An instance base selects the first table registered for, in order:
+ * <ol>
+ * <li>its exact runtime class;</li>
+ * <li>each superclass, nearest first, Object excluded;</li>
+ * <li>its interfaces, breadth-first over the type hierarchy: the exact class's own interfaces
+ * in declaration order, then the next level, in which the superinterfaces of those interfaces
+ * come before the interfaces declared by the direct superclass, and so on. An interface reached
+ * twice is visited once.</li>
+ * </ol>
+ * So a table keyed on a public interface serves anonymous and private implementations. The result
+ * is cached per runtime class, absence included. An ELClass base (static access) uses the exact
+ * class only, as static members are not inherited through EL, and convertToType keeps its
+ * exact-target lookup for functional interfaces.
+ *
+ * <p>A built-in Map.Entry table is always registered; an application table for Map.Entry replaces
+ * it, while two application tables for one type remain a conflict.
+ */
 public final class GeneratedAccessorELResolver extends ELResolver {
+    /** Cache marker for a runtime class with no table anywhere in its hierarchy. */
+    private static final Object NONE = new Object();
     private final Map<Class<?>, AccessorTable> tables;
+    private final ConcurrentHashMap<Class<?>, Object> selected = new ConcurrentHashMap<>();
 
     public GeneratedAccessorELResolver() {
         this(load());
@@ -53,6 +78,7 @@ public final class GeneratedAccessorELResolver extends ELResolver {
                 throw new ELException("Conflicting accessor tables for " + type.getName());
             }
         }
+        registered.putIfAbsent(Map.Entry.class, new MapEntryAccessorTable());
         tables = Map.copyOf(registered);
     }
 
@@ -74,7 +100,40 @@ public final class GeneratedAccessorELResolver extends ELResolver {
     private AccessorTable table(ELContext context, Object base) {
         Objects.requireNonNull(context, "context");
         bind(context);
-        return base == null ? null : tables.get(base instanceof ELClass type ? type.getKlass() : base.getClass());
+        if (base == null) return null;
+        if (base instanceof ELClass type) return tables.get(type.getKlass());
+        Class<?> runtime = base.getClass();
+        Object table = selected.get(runtime);
+        if (table == null) {
+            Object found = lookup(runtime);
+            table = selected.putIfAbsent(runtime, found == null ? NONE : found);
+            if (table == null) table = found == null ? NONE : found;
+        }
+        return table == NONE ? null : (AccessorTable) table;
+    }
+
+    private AccessorTable lookup(Class<?> runtime) {
+        AccessorTable exact = tables.get(runtime);
+        if (exact != null) return exact;
+        for (Class<?> type = runtime.getSuperclass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            AccessorTable table = tables.get(type);
+            if (table != null) return table;
+        }
+        // Breadth-first: a class contributes its interfaces, then its superclass; an interface its parents.
+        var queue = new ArrayDeque<Class<?>>();
+        var visited = new HashSet<Class<?>>();
+        queue.add(runtime);
+        while (!queue.isEmpty()) {
+            Class<?> type = queue.poll();
+            if (type.isInterface()) {
+                AccessorTable table = tables.get(type);
+                if (table != null) return table;
+            }
+            for (Class<?> parent : type.getInterfaces()) if (visited.add(parent)) queue.add(parent);
+            Class<?> superclass = type.getSuperclass();
+            if (superclass != null && superclass != Object.class) queue.add(superclass);
+        }
+        return null;
     }
 
     private void bind(ELContext context) {

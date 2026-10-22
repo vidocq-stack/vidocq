@@ -31,7 +31,11 @@ import jakarta.el.MethodReference;
  * properties return null from getType. Operand conversion uses the supplied ELContext.
  *
  * Tables must be safe for concurrent use and keep evaluation state in the ELContext.
- * Selection uses the exact runtime class; subclass tables are registered separately.
+ * Selection tries the exact runtime class, then its superclasses nearest first (Object
+ * excluded), then its interfaces breadth-first, and uses the first registered table; a table
+ * keyed on a public interface therefore serves anonymous and private implementations. A table
+ * selected for a subtype leaves operations it does not handle unresolved. Static access through
+ * an ELClass base uses the exact class only.
  * This contract can be implemented by generated code or by a handwritten table.
  * Functional-interface tables handle convertToType by exact target interface.
  * Factory-driven lambda conversion supplies a null context; adapters then use the
@@ -43,9 +47,9 @@ public abstract class AccessorTable extends ELResolver {
     protected AccessorTable() {}
 
     /**
-     * Returns the exact runtime class handled by this table.
+     * Returns the class or interface this table is registered for.
      *
-     * @return a non-null target class
+     * @return a non-null target type
      */
     public abstract Class<?> targetType();
 

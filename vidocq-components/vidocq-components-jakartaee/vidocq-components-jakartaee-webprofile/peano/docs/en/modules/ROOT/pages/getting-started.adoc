@@ -208,7 +208,8 @@ module com.example.app {
 ----
 
 ApplicationTables returns AccessorTable instances. Each table implements the ELResolver
-operations with direct calls to one exact runtime class and claims handled properties
+operations with direct calls for one class or interface (a subtype with no table of its own
+uses its nearest supertype's table, see the Reference page) and claims handled properties
 through ELContext.setPropertyResolved(base, property), including null results.
 Unknown operations stay unresolved. The model/provider package needs no exports or opens.
 StandardELContext and ELProcessor discover the tables automatically; custom resolvers

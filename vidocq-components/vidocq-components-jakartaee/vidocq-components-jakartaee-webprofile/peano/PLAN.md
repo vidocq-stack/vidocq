@@ -385,7 +385,9 @@ no runtime proxies or bytecode generation are used.
 
 P6 runtime foundation (2026-10-10): peano-api exports only io.vidocq.peano.spi.
 AccessorProvider contributes AccessorTable instances (ELResolver subclasses), keyed
-by exact runtime class. Core uses ServiceLoader and snapshots registrations in an
+by class or interface. Instance bases select by supertype lookup (exact class, superclasses,
+then interfaces breadth-first; ELClass bases stay exact) since Vidocq/bodoni BOD-001; core
+also registers a built-in Map.Entry table that an application table may replace. Core uses ServiceLoader and snapshots registrations in an
 immutable map; conflicting targets fail explicitly. The standard factory resolver
 hook places table dispatch after application resolvers and before API fallbacks.
 Closed application packages keep all direct calls inside their own Java module.
@@ -416,7 +418,7 @@ switch is implemented with the approved configuration name.
 P6 source hierarchies (2026-10-10): annotated and explicitly selected roots also select
 their accessible descendants in the current compilation, including nested declarations
 and types generated in later processing rounds. Each concrete type gets its own table
-and registration fragment; register every required provider. Runtime lookup stays exact,
+and registration fragment; register every required provider. Generated tables accept their exact class,
 preserving concrete overloads, override annotations and covariant return metadata.
 Static hiding keeps the most-derived declaration for each signature. Unselected private
 descendants are skipped; explicitly selected private declarations remain errors.

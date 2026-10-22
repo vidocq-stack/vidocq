@@ -293,6 +293,43 @@ invocation has a generated table: their Method descriptor is restored by lookup.
 The setting governs Peano's fallback; application resolvers and API import handling
 retain their own implementation responsibility.
 
+== Accessor table selection
+
+An instance base selects the first AccessorTable registered for, in order:
+
+. its exact runtime class;
+. each superclass, nearest first (`java.lang.Object` excluded);
+. its interfaces, breadth-first over the type hierarchy: the exact class's own interfaces
+  in declaration order, then the next level, where the superinterfaces of those interfaces
+  come before the interfaces declared by the direct superclass, and so on up the hierarchy.
+  An interface reached twice is visited once.
+
+A table keyed on a public interface therefore serves anonymous and private implementations,
+which no table can name. The selected table alone handles the base: an operation it leaves
+unresolved falls through to the rest of the resolver chain (the reflection policy above), not
+to a table further up the hierarchy. Generated tables accept their exact class only, so a
+generated superclass table leaves a subclass unresolved. The selection is cached per runtime
+class, including the absence of a table.
+
+An ELClass base (static fields and methods) uses its exact class only: static members are not
+inherited through EL. Functional-interface conversion keeps its exact target-interface lookup.
+
+[.tag-new]#NEW# Peano ships a built-in table for `java.util.Map.Entry`, so `${e.key}` and
+`${e.value}` work in deny mode on the JDK's private entry classes (`HashMap$Node`, the entries
+of `Map.of` and of unmodifiable views):
+
+* `key` is read-only: `isReadOnly` is true, `getType` is null and a write raises
+  PropertyNotWritableException.
+* `value` is writable through `Map.Entry.setValue`; `getType` is `Object.class` and
+  `isReadOnly` false. An entry that refuses the write (UnsupportedOperationException)
+  raises PropertyNotWritableException.
+* `getCommonPropertyType` is `String.class`, as for generated tables.
+* `getKey()`, `getValue()` and `setValue(Object)` are callable as methods, with method metadata.
+
+Other properties stay unresolved and follow the reflection policy. An application table for
+`Map.Entry`, or for a concrete entry class, replaces the built-in one; two application tables
+for the same type remain a registration conflict.
+
 == Java functional-interface conversion
 
 Peano includes statically compiled adapters for all 43 java.util.function interfaces
