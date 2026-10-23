@@ -43,13 +43,18 @@ public final class TestNaming {
     private static final Map<String, Object> BINDINGS = new ConcurrentHashMap<>();
     private static final AtomicInteger CLOSED = new AtomicInteger();
     private static String previous;
+    private static boolean installed;
+    private static volatile boolean failOnClose;
 
     private TestNaming() {
     }
 
     /** Makes {@code new InitialContext()} use {@link Factory}, remembering the previous setting. */
     public static void install() {
-        previous = System.getProperty(Context.INITIAL_CONTEXT_FACTORY);
+        if (!installed) {
+            previous = System.getProperty(Context.INITIAL_CONTEXT_FACTORY);
+            installed = true;
+        }
         System.setProperty(Context.INITIAL_CONTEXT_FACTORY, Factory.class.getName());
     }
 
@@ -61,6 +66,8 @@ public final class TestNaming {
             System.setProperty(Context.INITIAL_CONTEXT_FACTORY, previous);
         }
         previous = null;
+        installed = false;
+        failOnClose = false;
         BINDINGS.clear();
         CLOSED.set(0);
     }
@@ -68,6 +75,11 @@ public final class TestNaming {
     /** Binds a value under the full name a lookup will use. */
     public static void bind(String name, Object value) {
         BINDINGS.put(name, value);
+    }
+
+    /** Makes every context's {@code close()} throw a {@code NamingException} until {@link #uninstall()}. */
+    public static void failOnClose() {
+        failOnClose = true;
     }
 
     /** The number of contexts closed since the last {@link #uninstall()}. */
@@ -89,9 +101,15 @@ public final class TestNaming {
                 case "lookup" -> lookup(args[0]);
                 case "close" -> {
                     CLOSED.incrementAndGet();
+                    if (failOnClose) {
+                        throw new NamingException("close failed");
+                    }
                     yield null;
                 }
                 case "getEnvironment" -> new Hashtable<>();
+                case "hashCode" -> System.identityHashCode(proxy);
+                case "equals" -> proxy == args[0];
+                case "toString" -> "TestNaming.Context@" + Integer.toHexString(System.identityHashCode(proxy));
                 default -> throw new OperationNotSupportedException(method.getName());
             };
             return (Context) Proxy.newProxyInstance(Factory.class.getClassLoader(),

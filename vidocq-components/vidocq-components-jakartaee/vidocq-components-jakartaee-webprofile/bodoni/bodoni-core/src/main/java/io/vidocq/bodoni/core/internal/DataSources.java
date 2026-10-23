@@ -85,6 +85,7 @@ public final class DataSources {
         }
         Object found = lookup(name);
         if (found == null) {
+            // not found, or bound to null: both fall back to the JDBC parameter form
             return new DriverManagerDataSource(JdbcParameters.parse(name));
         }
         if (found instanceof DataSource dataSource) {

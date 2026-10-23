@@ -102,6 +102,16 @@ class DataSourcesTest {
     }
 
     @Test
+    void aFailingContextCloseDoesNotLoseTheDataSource() throws SQLException {
+        TestNaming.install();
+        TestNaming.failOnClose();
+        DataSource ds = new LeakyDataSource();
+        TestNaming.bind("java:comp/env/jdbc/test", ds);
+        assertSame(ds, DataSources.resolve("jdbc/test"));
+        assertEquals(1, TestNaming.closedContexts());
+    }
+
+    @Test
     void aBlankStringFails() {
         SQLException e = assertThrows(SQLException.class, () -> DataSources.resolve(" "));
         assertEquals("the data source string is empty", e.getMessage());
