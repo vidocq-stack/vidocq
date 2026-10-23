@@ -34,6 +34,9 @@ import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.jstl.core.Config;
+import jakarta.servlet.jsp.jstl.sql.SQLExecutionTag;
+import jakarta.servlet.jsp.tagext.Tag;
+import jakarta.servlet.jsp.tagext.TagSupport;
 
 /**
  * What the {@code sql:} actions share: the data-source algorithm of Tags 3.0 §10.2, the
@@ -164,7 +167,26 @@ final class SqlSupport {
         return configured;
     }
 
-    private static DataSource resolve(String action, Object source) throws JspException {
+    /**
+     * The nearest enclosing {@link SQLExecutionTag}, which receives a parameter value.
+     *
+     * @param from    the parameter action
+     * @param element the action as written in a page, for the message
+     * @return the enclosing action
+     * @throws JspTagException when no enclosing action accepts parameters
+     */
+    static SQLExecutionTag executionAncestor(Tag from, String element) throws JspTagException {
+        if (TagSupport.findAncestorWithClass(from, SQLExecutionTag.class) instanceof SQLExecutionTag target) {
+            return target;
+        }
+        throw new JspTagException("<" + element + "> must be nested in an action that implements SQLExecutionTag");
+    }
+
+    /**
+     * Resolves a data source object or string with {@link DataSources#resolve}, a failure
+     * becoming a {@link JspException} named after the action.
+     */
+    static DataSource resolve(String action, Object source) throws JspException {
         try {
             return DataSources.resolve(source);
         } catch (SQLException e) {
