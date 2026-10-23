@@ -21,7 +21,6 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import jakarta.servlet.jsp.JspTagException;
-import jakarta.servlet.jsp.jstl.core.LoopTagSupport;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -29,9 +28,10 @@ import java.util.NoSuchElementException;
 
 /**
  * {@code <c:forTokens>} (Tags 3.0 §6.3): iterates over the tokens of a string split on any
- * character of {@code delims}.
+ * character of {@code delims}; {@code begin}, {@code end} and {@code step} are handled by
+ * {@link RangeLoopTagSupport}.
  */
-public class ForTokensTag extends LoopTagSupport {
+public class ForTokensTag extends RangeLoopTagSupport {
 
     private static final long serialVersionUID = 1L;
 
@@ -49,24 +49,6 @@ public class ForTokensTag extends LoopTagSupport {
         this.delims = delims;
     }
 
-    /** @param begin the first index (zero-based, inclusive) */
-    public void setBegin(int begin) {
-        this.begin = begin;
-        this.beginSpecified = true;
-    }
-
-    /** @param end the last index (inclusive) */
-    public void setEnd(int end) {
-        this.end = end;
-        this.endSpecified = true;
-    }
-
-    /** @param step the iteration step (at least 1) */
-    public void setStep(int step) {
-        this.step = step;
-        this.stepSpecified = true;
-    }
-
     @Override
     protected String getDelims() {
         return delims;
@@ -74,18 +56,7 @@ public class ForTokensTag extends LoopTagSupport {
 
     @Override
     protected void prepare() throws JspTagException {
-        if (beginSpecified) {
-            validateBegin();
-        }
-        if (stepSpecified) {
-            validateStep();
-        }
-        if (endSpecified && end < begin) {
-            // Tags 3.0 §6.2/§6.3: end < begin means the loop is not executed (end may be -1)
-            iterator = Collections.emptyIterator();
-            return;
-        }
-        if (items == null) {
+        if (!prepareRange() || items == null) {
             iterator = Collections.emptyIterator();
         } else {
             iterator = ForEachTag.tokens(items, delims == null ? "" : delims);

@@ -38,10 +38,11 @@ import java.util.StringTokenizer;
  * {@code <c:forEach>} (Tags 3.0 §6.2): iterates over arrays, collections, maps, iterators,
  * enumerations and comma-separated strings, or over an integer range when {@code items} is
  * absent. {@code begin}, {@code end}, {@code step}, {@code var} and {@code varStatus} are
- * handled by {@link LoopTagSupport}. A deferred {@code items} expression makes the base class
- * map {@code var} to a per-item deferred expression for the body.
+ * handled by {@link RangeLoopTagSupport} and {@link LoopTagSupport}. A deferred {@code items}
+ * expression makes the base class map {@code var} to a per-item deferred expression for the
+ * body.
  */
-public class ForEachTag extends LoopTagSupport {
+public class ForEachTag extends RangeLoopTagSupport {
 
     private static final long serialVersionUID = 1L;
 
@@ -55,34 +56,9 @@ public class ForEachTag extends LoopTagSupport {
         this.itemsSpecified = true;
     }
 
-    /** @param begin the first index (zero-based, inclusive) */
-    public void setBegin(int begin) {
-        this.begin = begin;
-        this.beginSpecified = true;
-    }
-
-    /** @param end the last index (inclusive) */
-    public void setEnd(int end) {
-        this.end = end;
-        this.endSpecified = true;
-    }
-
-    /** @param step the iteration step (at least 1) */
-    public void setStep(int step) {
-        this.step = step;
-        this.stepSpecified = true;
-    }
-
     @Override
     protected void prepare() throws JspTagException {
-        if (beginSpecified) {
-            validateBegin();
-        }
-        if (stepSpecified) {
-            validateStep();
-        }
-        if (endSpecified && end < begin) {
-            // Tags 3.0 §6.2/§6.3: end < begin means the loop is not executed (end may be -1)
+        if (!prepareRange()) {
             iterator = Collections.emptyIterator();
             return;
         }
