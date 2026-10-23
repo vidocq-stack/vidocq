@@ -68,12 +68,16 @@ final class IdeaApplications {
     static final String EXCLUDE_PROPERTY = "vidocq.idea.exclude";
     /** The goal's own switch ({@code VidocqIdeaMojo#skip}); never a module setting. */
     static final String SKIP_PROPERTY = "vidocq.idea.skip";
+    /** The name of an application's run configurations, by default its main class, else its artifactId. */
+    static final String CONFIGURATION_NAME_PROPERTY = "vidocq.idea.configurationName";
+    /** The IntelliJ module of an application, by default its artifactId. */
+    static final String MODULE_NAME_PROPERTY = "vidocq.idea.moduleName";
     /**
      * Settings read from each module's own model. A command-line {@code -D} does not change them, and no goal
      * parameter reads them.
      */
     static final List<String> MODULE_PROPERTIES = List.of(ApplicationMainClass.PROPERTY,
-            ApplicationMainClass.MODULE_PROPERTY, "vidocq.idea.configurationName", "vidocq.idea.moduleName",
+            ApplicationMainClass.MODULE_PROPERTY, CONFIGURATION_NAME_PROPERTY, MODULE_NAME_PROPERTY,
             EXCLUDE_PROPERTY, "vidocq.dev.debugHost", "vidocq.dev.debugPort");
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
@@ -112,76 +116,113 @@ final class IdeaApplications {
 
         for (MavenProject project : projects) {
             String coordinates = project.getGroupId() + ":" + project.getArtifactId();
-            // Declared in this pom, not inherited: the pom to fix is reported once.
-            Model own = project.getOriginalModel();
-            if (own != null && Boolean.parseBoolean(own.getProperties().getProperty(SKIP_PROPERTY))) {
-                diagnostics.add(new Diagnostic(Level.WARN, PREFIX + coordinates + " sets " + SKIP_PROPERTY
-                        + "=true in its pom, which does not leave a module out: that property skips the whole"
-                        + " goal, from the command line or from the top-level project of the build. Set <"
-                        + EXCLUDE_PROPERTY + ">true</" + EXCLUDE_PROPERTY + "> to leave out this module and the"
-                        + " modules that inherit its properties."));
-            }
-            if ("pom".equals(project.getPackaging())) {
-                diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates, "packaging pom")));
-                continue;
-            }
-            Plugin plugin = project.getPlugin(PLUGIN_KEY);
+            reportSkipProperty(project, coordinates, diagnostics);
+            Plugin plugin = candidatePlugin(project, coordinates, diagnostics);
             if (plugin == null) {
-                diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates,
-                        "vidocq-runtime-maven-plugin is not in its <build><plugins>")));
                 continue;
             }
-            if (Boolean.parseBoolean(project.getProperties().getProperty(EXCLUDE_PROPERTY))) {
-                diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates
-                        + " excluded (" + EXCLUDE_PROPERTY + "=true in its pom)"));
-                continue;
-            }
-            String declared = ApplicationMainClass.declared(project);
             // null when the runtime's own main boots the application: vidocq.mainModule is then enough.
-            String mainClass = ApplicationMainClass.normalize(declared);
+            String mainClass = ApplicationMainClass.normalize(ApplicationMainClass.declared(project));
             if (mainClass == null && ApplicationMainClass.declaredMainModule(project) == null) {
                 reportNotAnApplication(plugin, coordinates, diagnostics);
                 continue;
             }
-
-            int errorsBefore = errors.size();
-            if (mainClass != null && !JAVA_NAME.matcher(mainClass).matches()) {
-                errors.add(PREFIX + coordinates + ": the main class \"" + mainClass + "\" is not a Java class name.");
-            }
-            String configurationName = pomValue(project, "vidocq.idea.configurationName",
-                    mainClass == null ? project.getArtifactId() : simpleName(mainClass), coordinates, errors);
-            String moduleName = pomValue(project, "vidocq.idea.moduleName", project.getArtifactId(),
-                    coordinates, errors);
-            String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
-            String debugHost = debugHost(project, coordinates, errors);
-            int debugPort = debugPort(project, coordinates, errors);
-            if (errors.size() > errorsBefore) {
+            IdeaApplication application = application(project, plugin, mainClass, directory, diagnostics, errors);
+            if (application == null) {
                 continue;
             }
-
-            applications.add(new IdeaApplication(coordinates, mainClass, configurationName, moduleName, pomPath,
-                    generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort));
+            applications.add(application);
 
             // The IntelliJ module only matters to Run on the main class, which needs one.
-            if (mainClass != null && project.getProperties().getProperty("vidocq.idea.moduleName") == null) {
-                reportRenamedModule(project, coordinates, moduleNames, allProjects, diagnostics);
-                String reason = splitReason(project);
-                if (reason != null) {
-                    String artifactId = project.getArtifactId();
-                    diagnostics.add(new Diagnostic(Level.WARN, PREFIX + "IntelliJ may import " + coordinates
-                            + " as the modules '" + artifactId + ".main' and '" + artifactId + ".test' (" + reason
-                            + "). If Run on its main class does not reuse the generated configuration, set"
-                            + " <vidocq.idea.moduleName>" + artifactId + ".main</vidocq.idea.moduleName> in its pom."));
-                }
+            if (mainClass != null && project.getProperties().getProperty(MODULE_NAME_PROPERTY) == null) {
+                reportModuleName(project, coordinates, moduleNames, allProjects, diagnostics);
             }
-            List<String> profiles = vidocqProfiles(project);
-            if (!profiles.isEmpty()) {
-                diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates + " takes Vidocq settings from"
-                        + " active profile(s) " + String.join(", ", profiles)
-                        + "; run vidocq:idea and its check with the same profiles."));
-            }
+            reportProfiles(project, coordinates, diagnostics);
         }
+        reportIgnoredUserProperties(userProperties, diagnostics);
+        return new Discovery(List.copyOf(applications), List.copyOf(diagnostics), List.copyOf(errors));
+    }
 
+    /** Warns about {@value #SKIP_PROPERTY} declared in this pom, not inherited: the pom to fix is reported once. */
+    private static void reportSkipProperty(MavenProject project, String coordinates, List<Diagnostic> diagnostics) {
+        Model own = project.getOriginalModel();
+        if (own != null && Boolean.parseBoolean(own.getProperties().getProperty(SKIP_PROPERTY))) {
+            diagnostics.add(new Diagnostic(Level.WARN, PREFIX + coordinates + " sets " + SKIP_PROPERTY
+                    + "=true in its pom, which does not leave a module out: that property skips the whole"
+                    + " goal, from the command line or from the top-level project of the build. Set <"
+                    + EXCLUDE_PROPERTY + ">true</" + EXCLUDE_PROPERTY + "> to leave out this module and the"
+                    + " modules that inherit its properties."));
+        }
+    }
+
+    /** This plugin in the module, or {@code null} when the module cannot be an application, the reason reported. */
+    private static Plugin candidatePlugin(MavenProject project, String coordinates, List<Diagnostic> diagnostics) {
+        if ("pom".equals(project.getPackaging())) {
+            diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates, "packaging pom")));
+            return null;
+        }
+        Plugin plugin = project.getPlugin(PLUGIN_KEY);
+        if (plugin == null) {
+            diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates,
+                    "vidocq-runtime-maven-plugin is not in its <build><plugins>")));
+            return null;
+        }
+        if (Boolean.parseBoolean(project.getProperties().getProperty(EXCLUDE_PROPERTY))) {
+            diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates
+                    + " excluded (" + EXCLUDE_PROPERTY + "=true in its pom)"));
+            return null;
+        }
+        return plugin;
+    }
+
+    /**
+     * The application a module declares, or {@code null} when one of its settings is invalid: every such
+     * setting is reported in {@code errors}, not only the first.
+     */
+    private static IdeaApplication application(MavenProject project, Plugin plugin, String mainClass, Path directory,
+                                               List<Diagnostic> diagnostics, List<String> errors) {
+        String coordinates = project.getGroupId() + ":" + project.getArtifactId();
+        int errorsBefore = errors.size();
+        if (mainClass != null && !JAVA_NAME.matcher(mainClass).matches()) {
+            errors.add(PREFIX + coordinates + ": the main class \"" + mainClass + "\" is not a Java class name.");
+        }
+        String configurationName = pomValue(project, CONFIGURATION_NAME_PROPERTY,
+                mainClass == null ? project.getArtifactId() : simpleName(mainClass), coordinates, errors);
+        String moduleName = pomValue(project, MODULE_NAME_PROPERTY, project.getArtifactId(), coordinates, errors);
+        String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
+        String debugHost = debugHost(project, coordinates, errors);
+        int debugPort = debugPort(project, coordinates, errors);
+        if (errors.size() > errorsBefore) {
+            return null;
+        }
+        return new IdeaApplication(coordinates, mainClass, configurationName, moduleName, pomPath,
+                generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort);
+    }
+
+    /** Warns when IntelliJ may give the module another name than the configuration's default one. */
+    private static void reportModuleName(MavenProject project, String coordinates, Map<String, String> moduleNames,
+                                         List<MavenProject> allProjects, List<Diagnostic> diagnostics) {
+        reportRenamedModule(project, coordinates, moduleNames, allProjects, diagnostics);
+        String reason = splitReason(project);
+        if (reason != null) {
+            String artifactId = project.getArtifactId();
+            diagnostics.add(new Diagnostic(Level.WARN, PREFIX + "IntelliJ may import " + coordinates
+                    + " as the modules '" + artifactId + ".main' and '" + artifactId + ".test' (" + reason
+                    + "). If Run on its main class does not reuse the generated configuration, set <"
+                    + MODULE_NAME_PROPERTY + ">" + artifactId + ".main</" + MODULE_NAME_PROPERTY + "> in its pom."));
+        }
+    }
+
+    private static void reportProfiles(MavenProject project, String coordinates, List<Diagnostic> diagnostics) {
+        List<String> profiles = vidocqProfiles(project);
+        if (!profiles.isEmpty()) {
+            diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates + " takes Vidocq settings from"
+                    + " active profile(s) " + String.join(", ", profiles)
+                    + "; run vidocq:idea and its check with the same profiles."));
+        }
+    }
+
+    private static void reportIgnoredUserProperties(Properties userProperties, List<Diagnostic> diagnostics) {
         for (String key : MODULE_PROPERTIES) {
             if (userProperties.getProperty(key) != null) {
                 diagnostics.add(new Diagnostic(Level.WARN, PREFIX + "ignoring -D" + key + " from the command line:"
@@ -189,7 +230,6 @@ final class IdeaApplications {
                         + " not depend on how Maven was invoked."));
             }
         }
-        return new Discovery(List.copyOf(applications), List.copyOf(diagnostics), List.copyOf(errors));
     }
 
     private static String notAnApplication(String coordinates, String reason) {

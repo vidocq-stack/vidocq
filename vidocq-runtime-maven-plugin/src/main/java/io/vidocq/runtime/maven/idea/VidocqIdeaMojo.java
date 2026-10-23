@@ -42,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -409,74 +410,35 @@ public class VidocqIdeaMojo extends AbstractMojo {
         }
     }
 
+    /** What {@link #write} did with one file, in the order the summary line lists them. */
+    private enum Outcome {
+        CREATED("created"), UPDATED("updated"), UNCHANGED("unchanged"), UNTOUCHED("left untouched");
+
+        private final String label;
+
+        Outcome(String label) {
+            this.label = label;
+        }
+    }
+
     private void write(Iterable<Target> targets, Path runDirectory, Map<String, Target> byKey)
             throws MojoExecutionException {
         boolean runDirectoryExisted = Files.isDirectory(runDirectory);
-        int created = 0;
-        int updated = 0;
-        int unchanged = 0;
-        int untouched = 0;
+        Map<Outcome, Integer> outcomes = new EnumMap<>(Outcome.class);
         for (Target target : targets) {
-            IdeaApplication application = target.application();
-            String details = " (" + application.coordinates() + (application.mainClass() == null
-                    ? ", no main class of its own" : ", main class " + application.mainClass())
-                    + ", IntelliJ module " + application.moduleName() + ")";
-            switch (target.state()) {
-                case UNCHANGED -> {
-                    getLog().info(PREFIX + "unchanged " + target.shownPath() + details);
-                    unchanged++;
-                }
-                case EDITED, FOREIGN -> {
-                    warnUserOwned(target);
-                    untouched++;
-                }
-                case MISSING -> {
-                    replace(runDirectory, target);
-                    getLog().info(PREFIX + "created " + target.shownPath() + details);
-                    created++;
-                }
-                case OUTDATED, UNMARKED -> {
-                    replace(runDirectory, target);
-                    getLog().info(PREFIX + "updated " + target.shownPath()
-                            + (target.state() == State.UNMARKED ? ", marker added" : "") + details);
-                    updated++;
-                }
-            }
+            outcomes.merge(writeFile(target, runDirectory), 1, Integer::sum);
         }
         reportOrphans(runDirectory, byKey);
 
         List<String> counts = new ArrayList<>();
-        if (created > 0) counts.add(created + " created");
-        if (updated > 0) counts.add(updated + " updated");
-        if (unchanged > 0) counts.add(unchanged + " unchanged");
-        if (untouched > 0) counts.add(untouched + " left untouched");
+        outcomes.forEach((outcome, count) -> counts.add(count + " " + outcome.label));
         getLog().info(PREFIX + byKey.size() + " run configuration(s): " + String.join(", ", counts));
 
-        int written = created + updated;
+        int written = outcomes.getOrDefault(Outcome.CREATED, 0) + outcomes.getOrDefault(Outcome.UPDATED, 0);
         if (written > 0) {
-            if (renderKind == Kind.MAVEN) {
-                getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings > Build,"
-                        + " Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the"
-                        + " application runs on: vidocq:run forks it from the JVM running Maven."
-                        + (jre == null ? "" : " These configurations use the '" + jre + "' SDK, which must exist under"
-                        + " that name on every machine."));
-            } else {
-                getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the SDK used by Make"
-                        + (generateBeforeLaunch ? " and as the Maven runner JRE used by the vidocq:generate step"
-                        + " (Settings > Build, Execution, Deployment > Build Tools > Maven > Runner)" : "") + "."
-                        + (jre == null ? "" : " The application runs on the '" + jre + "' SDK, which must exist under"
-                        + " that name on every machine."));
-            }
+            logRunnerJre();
             if (jre == null) {
-                // The configuration measured to work in IntelliJ pinned its JDK; a launch on the JDK IntelliJ
-                // picks by itself has not been verified there.
-                getLog().warn(PREFIX + "vidocq.idea.jre is not set, so the run configurations written do not pin a"
-                        + " JDK: IntelliJ " + (renderKind == Kind.MAVEN
-                        ? "runs Maven on its Maven runner JRE" : "launches the application on the module SDK")
-                        + ", which can be another JDK than the"
-                        + " one it is built and tested with. To launch on a known JDK, declare <vidocq.idea.jre> in the"
-                        + " top-level pom with the name of an IntelliJ SDK of Java 25 or newer that exists on every"
-                        + " machine, for example <vidocq.idea.jre>temurin-25</vidocq.idea.jre>.");
+                warnUnpinnedJre();
             }
             if (!runDirectoryExisted || written > 1) {
                 // RCInArbitraryFileListener only reacts to events on *.run.xml paths and stops at the first
@@ -486,6 +448,63 @@ public class VidocqIdeaMojo extends AbstractMojo {
                         + " appear, use File > Reload All from Disk.");
             }
         }
+    }
+
+    private Outcome writeFile(Target target, Path runDirectory) throws MojoExecutionException {
+        IdeaApplication application = target.application();
+        String details = " (" + application.coordinates() + (application.mainClass() == null
+                ? ", no main class of its own" : ", main class " + application.mainClass())
+                + ", IntelliJ module " + application.moduleName() + ")";
+        return switch (target.state()) {
+            case UNCHANGED -> {
+                getLog().info(PREFIX + "unchanged " + target.shownPath() + details);
+                yield Outcome.UNCHANGED;
+            }
+            case EDITED, FOREIGN -> {
+                warnUserOwned(target);
+                yield Outcome.UNTOUCHED;
+            }
+            case MISSING -> {
+                replace(runDirectory, target);
+                getLog().info(PREFIX + "created " + target.shownPath() + details);
+                yield Outcome.CREATED;
+            }
+            case OUTDATED, UNMARKED -> {
+                replace(runDirectory, target);
+                getLog().info(PREFIX + "updated " + target.shownPath()
+                        + (target.state() == State.UNMARKED ? ", marker added" : "") + details);
+                yield Outcome.UPDATED;
+            }
+        };
+    }
+
+    /** The JDK IntelliJ must run the written configurations on, which depends on their kind. */
+    private void logRunnerJre() {
+        if (renderKind == Kind.MAVEN) {
+            getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the Maven runner JRE (Settings > Build,"
+                    + " Execution, Deployment > Build Tools > Maven > Runner), which is also the JDK the"
+                    + " application runs on: vidocq:run forks it from the JVM running Maven."
+                    + (jre == null ? "" : " These configurations use the '" + jre + "' SDK, which must exist under"
+                    + " that name on every machine."));
+        } else {
+            getLog().info(PREFIX + "IntelliJ needs JDK 25 or newer as the SDK used by Make"
+                    + (generateBeforeLaunch ? " and as the Maven runner JRE used by the vidocq:generate step"
+                    + " (Settings > Build, Execution, Deployment > Build Tools > Maven > Runner)" : "") + "."
+                    + (jre == null ? "" : " The application runs on the '" + jre + "' SDK, which must exist under"
+                    + " that name on every machine."));
+        }
+    }
+
+    private void warnUnpinnedJre() {
+        // The configuration measured to work in IntelliJ pinned its JDK; a launch on the JDK IntelliJ
+        // picks by itself has not been verified there.
+        getLog().warn(PREFIX + "vidocq.idea.jre is not set, so the run configurations written do not pin a"
+                + " JDK: IntelliJ " + (renderKind == Kind.MAVEN
+                ? "runs Maven on its Maven runner JRE" : "launches the application on the module SDK")
+                + ", which can be another JDK than the"
+                + " one it is built and tested with. To launch on a known JDK, declare <vidocq.idea.jre> in the"
+                + " top-level pom with the name of an IntelliJ SDK of Java 25 or newer that exists on every"
+                + " machine, for example <vidocq.idea.jre>temurin-25</vidocq.idea.jre>.");
     }
 
     private void warnUserOwned(Target target) {
