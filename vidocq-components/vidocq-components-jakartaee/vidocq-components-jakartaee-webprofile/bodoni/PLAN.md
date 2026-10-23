@@ -446,8 +446,15 @@ external reference itself, the JDK never fetches on its own:
   cannot reach into `/WEB-INF/`. "Inside" is decided by one function for the target and the
   origin (`SystemIdPolicy.protectedDirectory`): the first non-empty segment of the path,
   decoded again until no escape is left, split on `/` and `\`, cut at `;` or `:`, without
-  trailing dots, spaces or control characters, compared ignoring case. Absolute system ids and
-  the no-system-id mode are unchanged.
+  trailing dots, spaces or control characters, compared ignoring case. A target whose path,
+  decoded again, has a dot segment, or still has an escape after the last of 4 rounds, is
+  refused as outside the web application; such an origin counts as public. Absolute system ids
+  and the no-system-id mode are unchanged. Two consequences the Reference page spells out: a
+  system id without a leading `/` inherits the page's directory, so in a view under `/WEB-INF/`
+  (a forwarded `/WEB-INF/views/list.jsp` with `systemId="catalog.xml"`) it is inside `/WEB-INF/`
+  (use a context-relative public path or no system id there); and `document()` is resolved by
+  the stylesheet's policy, so a stylesheet under `/WEB-INF/` that calls `document()` on URIs taken
+  from its input document lends its access to them.
 - **The origin is fixed when the policy is built**, from the page's system id. The base a
   parser or an XSLT processor passes only resolves the reference, so an `xml:base` in an
   untrusted document cannot widen it.
