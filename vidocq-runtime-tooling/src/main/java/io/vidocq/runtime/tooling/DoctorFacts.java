@@ -79,7 +79,7 @@ public final class DoctorFacts {
     private static boolean referencesVidocq(Path pom) {
         try {
             return Files.readString(pom).contains("io.vidocq.runtime");
-        } catch (IOException e) {
+        } catch (IOException _) {
             return false;
         }
     }
@@ -87,7 +87,7 @@ public final class DoctorFacts {
     private static List<String> configKeys(Path config) {
         try {
             return List.copyOf(PropertiesText.entries(Files.readString(config)).keySet());
-        } catch (IOException e) {
+        } catch (IOException _) {
             return List.of();
         }
     }

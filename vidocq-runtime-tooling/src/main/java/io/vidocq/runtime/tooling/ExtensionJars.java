@@ -56,7 +56,7 @@ public final class ExtensionJars {
                     .flatMap(ref -> ref.descriptor().provides().stream())
                     .map(ModuleDescriptor.Provides::service)
                     .anyMatch(SPI::equals);
-        } catch (FindException | SecurityException e) {
+        } catch (FindException | SecurityException _) {
             return false;
         }
     }
@@ -69,7 +69,7 @@ public final class ExtensionJars {
         try (InputStream in = Files.newInputStream(moduleInfo)) {
             return ModuleDescriptor.read(in).provides().stream().map(ModuleDescriptor.Provides::service)
                     .anyMatch(SPI::equals);
-        } catch (IOException | InvalidModuleDescriptorException e) {
+        } catch (IOException | InvalidModuleDescriptorException _) {
             return false;
         }
     }

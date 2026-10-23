@@ -198,7 +198,7 @@ class VidocqProjectReportMojoTest {
                 field.setAccessible(true);
                 field.set(target, value);
                 return;
-            } catch (NoSuchFieldException notHere) {
+            } catch (NoSuchFieldException _) {
                 // declared higher up
             }
         }
