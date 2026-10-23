@@ -30,7 +30,11 @@
  *
  * <p>{@code jakarta.servlet.jsp.jstl} brings {@code jakarta.servlet.jsp},
  * {@code jakarta.servlet}, {@code jakarta.el}, {@code java.sql} and
- * {@code java.desktop} transitively (upstream module descriptor). At the Maven
+ * {@code java.desktop} transitively (upstream module descriptor). Bodoni
+ * {@code requires transitive java.xml} itself: the {@code x:} handlers use it
+ * directly and their exported signatures expose {@code org.xml.sax} and
+ * {@code javax.xml.transform} types, so it does not rely on the API module
+ * reaching {@code java.xml} through {@code java.desktop}. At the Maven
  * level the Pages, Servlet and EL APIs are {@code provided}: the container
  * supplies them. Bodoni never depends on an EL, Pages or Servlet
  * implementation (see PLAN.md).
