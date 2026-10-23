@@ -135,11 +135,11 @@ class CorePagesIT {
         runtime.add(hostClasses);
 
         log = work.resolve("host.log");
-        // UTC: the sql page binds 1788-01-01. Before 1900 the legacy java.util calendar and java.time
-        // (which H2 converts a java.sql.Date with) disagree on most zones' offsets (Europe/Paris:
-        // CET against local mean time), which would shift the bound date by a day.
+        // Europe/Paris, whatever the machine's zone: the sql page binds 1788-01-01, a day on which
+        // the legacy java.util zone data (CET) and java.time (local mean time, which H2 converts
+        // with) disagree; Bodoni must still bind the right day (BUG.md BOD-005).
         host = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-Dpeano.reflection=deny", "-Duser.timezone=UTC",
+                "-Dpeano.reflection=deny", "-Duser.timezone=Europe/Paris",
                 "--module-path", join(runtime),
                 "--limit-modules", "bodoni.it.host,io.vidocq.chappe.core," + JDK_MODULES,
                 "--add-modules", "io.vidocq.chappe.core," + JDK_MODULES,
@@ -418,7 +418,8 @@ class CorePagesIT {
 
     @Test
     void sqlDateParamBindsADate() throws Exception {
-        // Tags 3.0 §10.7: a java.util.Date from fmt:parseDate bound as a java.sql.Date.
+        // Tags 3.0 §10.7: a java.util.Date from fmt:parseDate bound as a java.sql.Date; 1788 in the
+        // host's Europe/Paris zone guards BOD-005.
         assertEquals("Manuale", paragraph(sqlPage(), "date"));
     }
 

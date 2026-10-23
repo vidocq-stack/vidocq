@@ -115,3 +115,26 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Status: fixed (2026-10-23, branch `feat/b3-xml`). `c:if` keeps the name it is given and
   checks it when the action runs: an unknown name is a `JspTagException`
   (`c:if: Invalid scope: invalid`, cause kept) and nothing is exported.
+
+## BOD-005 · 2026-10-23 · `sql:dateParam` binds the day before for a date before 1891 in Europe/Paris
+
+- Symptom: in a JVM whose default zone used local mean time before 1891 (for example
+  `Europe/Paris`), a `sql:dateParam` date or timestamp before 1891 bound through H2 shifts
+  by the local-mean-time offset: `1788-01-01` reaches the database as `1787-12-31`, and
+  `1788-01-01 12:00` as `11:09:21`, so the query matches no row (Tags 3.0 §10.8).
+  Found by the B4 Task 8 review.
+- Minimal repro (`-Duser.timezone=Europe/Paris`, H2 2.3.232):
+  ```jsp
+  <fmt:parseDate var="d" value="1788-01-01" pattern="yyyy-MM-dd" parseLocale="en"/>
+  <sql:query var="r">SELECT title FROM book WHERE published = ?<sql:dateParam value="${d}" type="date"/></sql:query>
+  ```
+  finds nothing for a row published `DATE '1788-01-01'`. Unit test: `DateParamZoneTest`
+  (`tags.sql`); IT: `CorePagesIT.sqlDateParamBindsADate`, host in `Europe/Paris`.
+- Cause: `fmt:parseDate` and `sql:dateParam` build the right instant from the legacy
+  `java.util` zone data (CET, +1:00). H2's `setObject` / `setDate` without a `Calendar` convert
+  the `java.sql.Date` / `Timestamp` millis with `java.time` zone rules (Paris local mean time,
+  +0:09:21), which disagree with the legacy rules before 1891.
+- Status: fixed in Bodoni (2026-10-23, branch `feat/b4-sql`, B4). `sql:param` and
+  `sql:dateParam` bind `java.sql.Date`, `Time` and `Timestamp` values with
+  `setDate` / `setTime` / `setTimestamp` and a fresh default-zone `Calendar`, which JDBC
+  defines as equivalent to the plain setter. Other values keep `setObject`.

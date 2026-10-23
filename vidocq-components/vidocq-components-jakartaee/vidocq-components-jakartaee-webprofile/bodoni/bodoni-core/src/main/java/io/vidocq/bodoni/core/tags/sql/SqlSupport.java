@@ -21,9 +21,13 @@
 package io.vidocq.bodoni.core.tags.sql;
 
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.Calendar;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -138,16 +142,23 @@ final class SqlSupport {
     /**
      * Binds {@code parameters} to the markers of {@code statement}, in order. A {@code null}
      * value is bound as SQL {@code NULL} of the type the driver reports for the marker,
-     * {@link Types#NULL} when it cannot tell (Tags 3.0 §10.7).
+     * {@link Types#NULL} when it cannot tell (Tags 3.0 §10.7). A {@code java.sql.Date},
+     * {@code Time} or {@code Timestamp} is bound with a default-zone {@link Calendar}, which JDBC
+     * defines as equivalent to the plain setter, because some drivers (H2) convert the plain form
+     * with {@code java.time} zone rules, which differ from the legacy rules for old dates
+     * (BUG.md BOD-005).
      */
     static void bind(PreparedStatement statement, List<Object> parameters) throws SQLException {
         for (int i = 0; i < parameters.size(); i++) {
             Object value = parameters.get(i);
             int index = i + 1;
-            if (value == null) {
-                statement.setNull(index, nullType(statement, index));
-            } else {
-                statement.setObject(index, value);
+            switch (value) {
+                case null -> statement.setNull(index, nullType(statement, index));
+                // A fresh Calendar per value: Calendar is not thread-safe.
+                case Timestamp stamp -> statement.setTimestamp(index, stamp, Calendar.getInstance());
+                case Time time -> statement.setTime(index, time, Calendar.getInstance());
+                case Date date -> statement.setDate(index, date, Calendar.getInstance());
+                default -> statement.setObject(index, value);
             }
         }
     }
