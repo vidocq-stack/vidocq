@@ -48,7 +48,8 @@ public final class XmlDocuments {
      * events into a DOM tree, the filter reading from a hardened {@code XMLReader}.
      *
      * <p>The input carries {@link SystemIdPolicy#parserSystemId()}, which also becomes the
-     * document URI. The filter, when given, gets that reader as its parent and the policy as
+     * document URI when the page gave a system id; without one the document URI is
+     * {@code null}, never the policy's private base. The filter, when given, gets that reader as its parent and the policy as
      * its own entity resolver: an {@code XMLFilterImpl} replaces its parent's resolver by
      * itself when it parses, so a resolver left on the parent alone is never asked (probe:
      * {@code JdkXmlFactsTest}). {@code input} is not closed.
@@ -68,8 +69,11 @@ public final class XmlDocuments {
         InputSource source = new InputSource(input);
         String systemId = policy.parserSystemId();
         source.setSystemId(systemId);
+        String documentUri = policy.systemId() == null ? null : systemId;
         if (filter == null) {
-            return XmlFactories.documentBuilder(policy).parse(source);
+            Document document = XmlFactories.documentBuilder(policy).parse(source);
+            document.setDocumentURI(documentUri);
+            return document;
         }
         filter.setParent(XmlFactories.xmlReader(policy));
         filter.setEntityResolver(policy);
@@ -78,8 +82,8 @@ public final class XmlDocuments {
         // A Transformer does not inherit the factory's ErrorListener.
         identity.setErrorListener(factory.getErrorListener());
         Document document = XmlFactories.emptyDocument();
-        document.setDocumentURI(systemId);
-        identity.transform(new SAXSource(filter, source), new DOMResult(document, systemId));
+        document.setDocumentURI(documentUri);
+        identity.transform(new SAXSource(filter, source), new DOMResult(document, documentUri));
         return document;
     }
 }

@@ -381,6 +381,35 @@ class ParseTagTest {
     }
 
     @Test
+    void aFilteredDocumentResolvesEntitiesThroughARelativeSystemId() throws Exception {
+        context.resource("/x/xfiles/resolve.xml", RESOLVE);
+        ParseTag tag = parseBody();
+        tag.setSystemId("/x/doc.xml");
+        tag.setFilter(new AttributeAddingFilter());
+
+        run(tag, text(SYSTEM_ID_BODY));
+
+        assertEquals("Entity Resolved", xpath("$d//resolved"));
+        assertEquals("yes", xpath("$d//resolved/@seen"));
+    }
+
+    @Test
+    void aFilteredDocumentRefusesACrossOriginEntityWithoutAConnection() {
+        server = TestHttpServer.start();
+        String target = "http://localhost:" + server.port() + "/e.xml";
+        String systemId = "http://127.0.0.1:" + server.port() + "/x/doc.xml";
+        ParseTag tag = parse("<!DOCTYPE r [<!ENTITY e SYSTEM '" + target + "'>]><r>&e;</r>");
+        tag.setSystemId(systemId);
+        tag.setFilter(new AttributeAddingFilter());
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals("x:parse: external reference '" + target + "' refused, system id '" + systemId
+                + "': not the same origin", e.getMessage());
+        assertTrue(server.requestedPaths().isEmpty());
+    }
+
+    @Test
     void underARelativeSystemIdAnEntityOutsideTheWebApplicationIsRefused() {
         ParseTag tag = parse("<!DOCTYPE r [<!ENTITY e SYSTEM 'file:///etc/hosts'>]><r>&e;</r>");
         tag.setSystemId("/x/doc.xml");

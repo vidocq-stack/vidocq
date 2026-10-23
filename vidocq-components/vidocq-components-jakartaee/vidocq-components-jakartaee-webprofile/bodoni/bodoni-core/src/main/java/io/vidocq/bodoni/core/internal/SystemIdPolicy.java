@@ -55,7 +55,11 @@ import org.xml.sax.ext.EntityResolver2;
  * base a parser or an XSLT processor passes only serves to resolve a reference, never to
  * widen the origin (an {@code xml:base} in an untrusted document changes that base):
  * <ul>
- *   <li>no system id: every reference is refused;</li>
+ *   <li>no system id: every reference is refused. The parser is given the private base
+ *       {@code bodoni-none:/doc/} ({@link #NONE_BASE}) so that it never expands a reference
+ *       against the JVM working directory, and a refusal names the reference as the document
+ *       wrote it, even when it arrives expanded against that base (the two-argument
+ *       {@code resolveEntity} an {@code XMLFilterImpl} receives);</li>
  *   <li>an opaque system id ({@code jar:}, ...): every reference is refused;</li>
  *   <li>an absolute system id: a target must have the same scheme, host and port (scheme and
  *       host compared case-insensitively, default port normalised); it is opened with
@@ -81,6 +85,15 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     /** The private scheme that keeps the expansion of a relative system id inside the web application. */
     public static final String WEBAPP_SCHEME = "bodoni-webapp";
+
+    /** The private scheme of the base given to the parser when the page gave no system id. */
+    public static final String NONE_SCHEME = "bodoni-none";
+
+    /**
+     * The base given to the parser when the page gave no system id: without one, the JDK
+     * would expand a relative reference against the JVM working directory.
+     */
+    public static final String NONE_BASE = NONE_SCHEME + ":/doc/";
 
     /** Message of a refused reference: action, reference, system id, reason. */
     static final String REFUSED = "%s: external reference '%s' refused, system id '%s': %s";
@@ -159,11 +172,11 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     /**
      * The system id to give the parser or the XSLT processor: an absolute system id as given,
-     * a relative one as its {@code bodoni-webapp:} URI, {@code null} for none.
+     * a relative one as its {@code bodoni-webapp:} URI, none as {@link #NONE_BASE}.
      */
     public String parserSystemId() {
         return switch (mode) {
-            case NONE -> null;
+            case NONE -> NONE_BASE;
             case OPAQUE, ABSOLUTE -> systemId;
             case WEBAPP -> origin.toString();
         };
@@ -372,7 +385,26 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     // ---- failures -----------------------------------------------------------
 
     private JspException refused(String reference, String reason) {
-        return record(new JspException(REFUSED.formatted(action, reference, shownSystemId(), reason)));
+        String shown = mode == Mode.NONE ? asWritten(reference) : reference;
+        return record(new JspException(REFUSED.formatted(action, shown, shownSystemId(), reason)));
+    }
+
+    /**
+     * A reference as the document wrote it, before the parser expanded it against
+     * {@link #NONE_BASE} (the two-argument {@code resolveEntity}, as an {@code XMLFilterImpl}
+     * receives it).
+     */
+    private static String asWritten(String reference) {
+        if (reference == null) {
+            return null;
+        }
+        if (reference.startsWith(NONE_BASE)) {
+            return reference.substring(NONE_BASE.length());
+        }
+        if (reference.startsWith(NONE_SCHEME + ":")) {
+            return reference.substring(NONE_SCHEME.length() + 1);
+        }
+        return reference;
     }
 
     private JspException unreadable(String reference, Exception cause) {

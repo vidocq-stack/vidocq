@@ -20,6 +20,7 @@
 package io.vidocq.bodoni.core.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,6 +33,9 @@ import io.vidocq.bodoni.core.testing.AttributeAddingFilter;
 import io.vidocq.bodoni.core.testing.TestPageContext;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
@@ -94,29 +98,42 @@ class XmlDocumentsTest {
         assertEquals("a", filtered.getDocumentElement().getTagName());
     }
 
+    /**
+     * An {@code XMLFilterImpl} only has the two-argument {@code resolveEntity}: the parser hands
+     * it the reference already expanded against the document's base. Without a system id that
+     * base must not be the JVM working directory, and the refusal must name the reference as
+     * written, as on the path without a filter.
+     */
     @Test
-    void theFilterResolvesExternalReferencesThroughThePolicy() {
-        SystemIdPolicy policy = policy(null);
+    void theFilterRefusesWithTheMessageOfThePathWithoutFilter() {
+        SystemIdPolicy filtered = policy(null);
+        SystemIdPolicy plain = policy(null);
         AttributeAddingFilter filter = new AttributeAddingFilter();
-        StringReader input = new StringReader(EXTERNAL);
+        StringReader filteredInput = new StringReader(EXTERNAL);
+        StringReader plainInput = new StringReader(EXTERNAL);
 
-        assertThrows(TransformerException.class, () -> XmlDocuments.parse(input, policy, filter));
+        assertThrows(TransformerException.class, () -> XmlDocuments.parse(filteredInput, filtered, filter));
+        assertThrows(SAXException.class, () -> XmlDocuments.parse(plainInput, plain, null));
 
-        // An XMLFilterImpl only has the two-argument resolveEntity: the parser hands it the
-        // reference already expanded against the JVM working directory.
-        String message = policy.recordedFailure().getMessage();
-        assertTrue(message.startsWith("x:parse: external reference 'file:"), message);
-        assertTrue(message.endsWith("/e.xml' refused, system id '(none)': no system id"), message);
+        assertEquals(REFUSED, plain.recordedFailure().getMessage());
+        assertEquals(REFUSED, filtered.recordedFailure().getMessage());
     }
 
-    @Test
-    void withoutAFilterExternalReferencesGoThroughThePolicy() {
-        SystemIdPolicy policy = policy(null);
-        StringReader input = new StringReader(EXTERNAL);
+    @ParameterizedTest(name = "system id {0}")
+    @NullSource
+    @ValueSource(strings = {"jar:file:/a.jar!/doc.xml", "urn:example:doc"})
+    void noReferenceIsExpandedAgainstTheWorkingDirectory(String systemId) {
+        String cwd = System.getProperty("user.dir");
+        for (AttributeAddingFilter filter : new AttributeAddingFilter[] {null, new AttributeAddingFilter()}) {
+            SystemIdPolicy policy = policy(systemId);
+            StringReader input = new StringReader(EXTERNAL);
 
-        assertThrows(SAXException.class, () -> XmlDocuments.parse(input, policy, null));
+            assertThrows(Exception.class, () -> XmlDocuments.parse(input, policy, filter));
 
-        assertEquals(REFUSED, policy.recordedFailure().getMessage());
+            String message = policy.recordedFailure().getMessage();
+            assertTrue(message.contains("e.xml' refused"), message);
+            assertFalse(message.contains(cwd), message);
+        }
     }
 
     @Test

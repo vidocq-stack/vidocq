@@ -96,9 +96,37 @@ class SystemIdPolicyTest {
 
             assertEquals("x:parse: external reference 'a.xml' refused, system id '(none)': no system id",
                     policy.recordedFailure().getMessage());
-            assertNull(policy.parserSystemId());
+            assertEquals("bodoni-none:/doc/", policy.parserSystemId());
         }
         assertNull(SystemIdPolicy.of(ACTION, null, pc).systemId());
+    }
+
+    @Test
+    void withoutASystemIdTheTwoArgumentFormNamesTheReferenceAsWritten() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, null, pc);
+        SystemIdPolicy rooted = SystemIdPolicy.of(ACTION, null, pc);
+        SystemIdPolicy absolute = SystemIdPolicy.of(ACTION, null, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, "bodoni-none:/doc/sub/e.xml"));
+        assertThrows(SAXException.class, () -> rooted.resolveEntity(null, "bodoni-none:/e.xml"));
+        assertThrows(SAXException.class, () -> absolute.resolveEntity(null, "http://h.example/e.xml"));
+
+        assertEquals("x:parse: external reference 'sub/e.xml' refused, system id '(none)': no system id",
+                policy.recordedFailure().getMessage());
+        assertEquals("x:parse: external reference '/e.xml' refused, system id '(none)': no system id",
+                rooted.recordedFailure().getMessage());
+        assertEquals("x:parse: external reference 'http://h.example/e.xml' refused, system id '(none)': no system id",
+                absolute.recordedFailure().getMessage());
+    }
+
+    @Test
+    void withoutASystemIdANullReferenceIsRefused() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, null, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null));
+
+        assertEquals("x:parse: external reference 'null' refused, system id '(none)': no system id",
+                policy.recordedFailure().getMessage());
     }
 
     // ---- relative system id -------------------------------------------------
