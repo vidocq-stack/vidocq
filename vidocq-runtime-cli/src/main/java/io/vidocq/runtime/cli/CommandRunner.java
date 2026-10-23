@@ -32,28 +32,25 @@ import io.vidocq.runtime.cli.doctor.Diagnostic;
 import io.vidocq.runtime.cli.doctor.Diagnostics;
 import io.vidocq.runtime.cli.doctor.DoctorContext;
 import io.vidocq.runtime.cli.ext.ExtensionCache;
-import io.vidocq.runtime.tooling.ExtensionCoordinate;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
-import io.vidocq.runtime.tooling.KnownExtensions;
-import io.vidocq.runtime.tooling.ModuleInfoEditor;
-import io.vidocq.runtime.tooling.PomDependencies;
-import io.vidocq.runtime.tooling.PomEditor;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
-import io.vidocq.runtime.tooling.RegistryEntry;
 import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.cli.spi.CliPlugins;
+import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
 import io.vidocq.runtime.cli.update.HttpDownloads;
 import io.vidocq.runtime.cli.update.UpdatePlan;
-import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
+import io.vidocq.runtime.tooling.ExtensionEditor;
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.RegistryEntry;
+import io.vidocq.runtime.tooling.Reporter;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Pattern;
 /**
  * Dispatches a parsed {@link Command} to its implementation.
  * Uses pattern-matching switch so the compiler enforces exhaustiveness
@@ -657,191 +654,55 @@ public final class CommandRunner {
         return editPom(Path.of("").toAbsolutePath(), remove.ids(), false);
     }
 
+    /** How the shared project editing reports on the terminal. */
+    private static final Reporter CLI_REPORTER = new Reporter() {
+        @Override
+        public void success(String message, String detail) {
+            CliOutput.success(detail.isEmpty() ? message : message + CliOutput.dim("  (" + detail + ")"));
+        }
+
+        @Override
+        public void note(String message) {
+            CliOutput.println("  " + CliOutput.dim(message));
+        }
+
+        @Override
+        public void warning(String message) {
+            CliOutput.warning(message);
+        }
+
+        @Override
+        public void error(String message) {
+            CliOutput.error(message);
+        }
+    };
+
     /**
      * Adds (or removes) the {@code module-info.java} directives of {@code ids}, when the
-     * project has one — the module path needs them as much as the pom needs the dependency.
+     * project has one.
      *
      * @return whether the file changed
      */
     static boolean updateModuleInfo(Path projectDir, List<String> ids, boolean add) {
-        Path file = projectDir.resolve("src").resolve("main").resolve("java").resolve("module-info.java");
-        if (!Files.isRegularFile(file)) {
-            return false;
-        }
-        try {
-            String source = Files.readString(file);
-            String pkg = applicationPackage(source, file.getParent());
-            String updated = source;
-            for (String id : ids) {
-                updated = (add
-                        ? ModuleInfoEditor.add(updated, id, KnownExtensions.moduleDirectives(id, pkg))
-                        : ModuleInfoEditor.remove(updated, id, KnownExtensions.moduleName(id).orElse(null)))
-                        .source();
-                if (add && pkg == null) {
-                    warnUnopenedPackage(id, moduleName(source));
-                }
-            }
-            if (updated.equals(source)) {
-                return false;
-            }
-            Files.writeString(file, updated);
-            CliOutput.success("module-info.java updated"
-                    + CliOutput.dim("  (" + (add ? "requires/opens for " : "dropped ") + String.join(", ", ids) + ")"));
-            return true;
-        } catch (IOException | IllegalArgumentException e) {
-            CliOutput.warning("Could not update module-info.java: " + e.getMessage());
-            return false;
-        }
+        return ExtensionEditor.updateModuleInfo(projectDir, ids, add, CLI_REPORTER);
     }
 
     /**
-     * The module's name when it is also a package of the sources that holds a class (the
-     * scaffold's layout), else null. An empty package, or one with only a
-     * {@code package-info.java}, is not in the compiled module: opening it compiles with a
-     * warning, then the JVM refuses the module ("Package … not found in module").
+     * {@code vidocq extension add} ({@code add}) or {@code remove} on the project in {@code projectDir}: the
+     * edit {@code vidocq:add-extension} and {@code vidocq:remove-extension} make too (#314).
      */
-    static String applicationPackage(String moduleInfo, Path javaRoot) throws IOException {
-        String name = moduleName(moduleInfo);
-        if (name == null) {
-            return null;
-        }
-        Path dir = javaRoot.resolve(name.replace('.', '/'));
-        if (!Files.isDirectory(dir)) {
-            return null;
-        }
-        try (var files = Files.list(dir)) {
-            return files.map(f -> f.getFileName().toString())
-                    .anyMatch(f -> f.endsWith(".java") && !f.equals("package-info.java")) ? name : null;
-        }
-    }
-
-    /** The name a {@code module-info.java} declares, else null. */
-    private static String moduleName(String moduleInfo) {
-        var m = Pattern.compile("\\bmodule\\s+([A-Za-z0-9_.]+)\\s*\\{").matcher(moduleInfo);
-        return m.find() ? m.group(1) : null;
-    }
-
-    /** Tells the user to open the package once it has a class, when {@code id} would have opened it. */
-    private static void warnUnopenedPackage(String id, String pkg) {
-        if (pkg != null && KnownExtensions.moduleDirectives(id, pkg).contains("opens " + pkg)) {
-            CliOutput.warning(id + " reflects on the application package, which has no class yet: add "
-                    + CliOutput.cyan("opens " + pkg + ";") + " to module-info.java once it has one.");
-        }
-    }
-
-    /** {@code vidocq extension add} ({@code add}) or {@code remove} on the project in {@code projectDir}. */
     static int editPom(Path projectDir, List<String> ids, boolean add) {
-        Path pomPath = projectDir.resolve(POM_XML);
-        if (!Files.isRegularFile(pomPath)) {
-            CliOutput.error("No pom.xml in the current directory — run from a Vidocq project root.");
-            return 1;
-        }
-        String pom;
-        try {
-            pom = Files.readString(pomPath);
-        } catch (IOException e) {
-            CliOutput.error("Could not read pom.xml: " + e.getMessage());
-            return 1;
-        }
-
-        // Pin the runtime version: the parent manages Vidocq artifacts at ${project.version},
-        // which is the application's own version as soon as it declares one.
-        String runtimeVersion;
-        try {
-            runtimeVersion = PomDependencies.runtimeVersion(pom).orElse(Version.runtime());
-        } catch (IllegalArgumentException e) {
-            CliOutput.error(e.getMessage());
-            return 1;
-        }
-        boolean droppedInheritedPaths = PomEditor.dropsInheritedProcessorPaths(pom);
-        boolean anyChange = false;
-        for (String id : ids) {
-            ExtensionCoordinate coord;
-            try {
-                coord = KnownExtensions.resolve(id);
-            } catch (IllegalArgumentException e) {
-                CliOutput.error("Invalid extension id '" + id + "': " + e.getMessage());
-                return 1;
-            }
-            PomEditor.Result result = editPomFor(pom, id, coord, runtimeVersion, add);
-            pom = result.pom();
-            anyChange |= result.changed();
-        }
-        if (add && droppedInheritedPaths) {
-            reportProcessorPathsMode(pom);
-        }
-
-        boolean moduleInfoChanged = updateModuleInfo(pomPath.getParent(), ids, add);
-        if (!anyChange) {
-            CliOutput.println();
-            CliOutput.info(moduleInfoChanged ? "pom.xml left untouched." : "No changes — pom.xml left untouched.");
-            return 0;
-        }
-        try {
-            Files.writeString(pomPath, pom);
-        } catch (IOException e) {
-            CliOutput.error("Could not write pom.xml: " + e.getMessage());
+        ExtensionEditor.Outcome outcome = ExtensionEditor.edit(projectDir, ids, add, Version.runtime(), CLI_REPORTER);
+        if (!outcome.succeeded()) {
             return 1;
         }
         CliOutput.println();
+        if (!outcome.pomChanged()) {
+            CliOutput.info(outcome.moduleInfoChanged() ? "pom.xml left untouched." : "No changes — pom.xml left untouched.");
+            return 0;
+        }
         CliOutput.success("pom.xml updated.");
         CliOutput.println(CliOutput.dim("  Run 'mvn package' (or './mvnw package' if present) to fetch the new dependencies."));
         return 0;
-    }
-
-    /** Adds or removes one extension's dependency, with its codegen bundle's processor path. */
-    private static PomEditor.Result editPomFor(String pom, String id, ExtensionCoordinate coord,
-                                               String runtimeVersion, boolean add) {
-        PomEditor.Result result = add
-                ? PomEditor.add(pom, coord, runtimeVersion)
-                : PomEditor.remove(pom, coord);
-        PomEditor.Result apt = editProcessorPath(result.pom(), id, runtimeVersion, add);
-        if (result.changed()) {
-            CliOutput.success((add ? "Added " : "Removed ") + id
-                    + CliOutput.dim("  (" + coord + ")"));
-            if (add && !KnownExtensions.isKnown(id)) {
-                CliOutput.println(CliOutput.dim(
-                        "       ↳ not a known extension — resolved by convention; verify the coordinate."));
-            }
-        } else if (add) {
-            CliOutput.println("  " + CliOutput.dim("• " + id + " already present — skipped."));
-        } else {
-            CliOutput.warning(id + " not found in pom.xml — skipped.");
-        }
-        return new PomEditor.Result(apt.pom(), result.changed() || apt.changed());
-    }
-
-    /**
-     * Extensions shipping an APT codegen bundle need it on the compiler's
-     * annotationProcessorPaths, or vidocq:checkpom fails the next build; removing the
-     * extension removes it too.
-     */
-    private static PomEditor.Result editProcessorPath(String pom, String id, String runtimeVersion, boolean add) {
-        var codegen = KnownExtensions.codegenBundle(id);
-        if (codegen.isEmpty()) {
-            return new PomEditor.Result(pom, false);
-        }
-        PomEditor.Result apt = add
-                ? PomEditor.addAnnotationProcessorPath(pom, codegen.get(), runtimeVersion)
-                : PomEditor.removeAnnotationProcessorPath(pom, codegen.get());
-        if (apt.changed()) {
-            CliOutput.success((add ? "Wired " : "Unwired ") + codegen.get().artifactId()
-                    + CliOutput.dim("  (annotationProcessorPaths)"));
-        }
-        return apt;
-    }
-
-    /**
-     * Paths that replace the parent's drop the Vauban indexer (BUG-20261023-02); wiring a
-     * codegen bundle makes them append, anything else only warns.
-     */
-    private static void reportProcessorPathsMode(String pom) {
-        if (PomEditor.dropsInheritedProcessorPaths(pom)) {
-            CliOutput.warning("annotationProcessorPaths replaces the parent's and so drops the Vauban indexer"
-                    + " (vidocq-runtime-core-codegen): declare it with combine.children=\"append\".");
-        } else {
-            CliOutput.success("annotationProcessorPaths now appends to the parent's"
-                    + CliOutput.dim("  (keeps the Vauban indexer, vidocq-runtime-core-codegen)"));
-        }
     }
 }

@@ -83,11 +83,6 @@ class CommandRunnerMainlessTest {
         assertTrue(Files.readString(dir.resolve("demo/src/main/java/module-info.java")).contains("opens com.acme.demo"));
     }
 
-    @Test
-    void aModuleInfoWithoutModuleDeclarationHasNoApplicationPackage(@TempDir Path javaRoot) throws IOException {
-        assertEquals(null, CommandRunner.applicationPackage("// not a module declaration\n", javaRoot));
-    }
-
     private static String captured(Runnable action) {
         PrintStream original = System.out;
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();

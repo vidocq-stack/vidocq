@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli;
+package io.vidocq.runtime.tooling;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /** The package {@code vidocq extension add} may open: one the JVM will find in the module. */
-class CommandRunnerApplicationPackageTest {
+class ExtensionEditorApplicationPackageTest {
 
     private static final String MODULE_INFO = "module com.acme.demo {\n}\n";
 
@@ -39,7 +39,7 @@ class CommandRunnerApplicationPackageTest {
         Path pkg = Files.createDirectories(javaRoot.resolve("com/acme/demo"));
         Files.writeString(pkg.resolve("HelloResource.java"), "package com.acme.demo; class HelloResource {}");
 
-        assertEquals("com.acme.demo", CommandRunner.applicationPackage(MODULE_INFO, javaRoot));
+        assertEquals("com.acme.demo", ExtensionEditor.applicationPackage(MODULE_INFO, javaRoot));
     }
 
     @Test
@@ -48,7 +48,7 @@ class CommandRunnerApplicationPackageTest {
         // then the JVM refuses the module ("Package com.acme.demo not found in module").
         Files.createDirectories(javaRoot.resolve("com/acme/demo"));
 
-        assertNull(CommandRunner.applicationPackage(MODULE_INFO, javaRoot));
+        assertNull(ExtensionEditor.applicationPackage(MODULE_INFO, javaRoot));
     }
 
     @Test
@@ -56,6 +56,11 @@ class CommandRunnerApplicationPackageTest {
         Path pkg = Files.createDirectories(javaRoot.resolve("com/acme/demo"));
         Files.writeString(pkg.resolve("package-info.java"), "package com.acme.demo;");
 
-        assertNull(CommandRunner.applicationPackage(MODULE_INFO, javaRoot));
+        assertNull(ExtensionEditor.applicationPackage(MODULE_INFO, javaRoot));
+    }
+
+    @Test
+    void aModuleInfoWithoutModuleDeclarationHasNoApplicationPackage(@TempDir Path javaRoot) throws IOException {
+        assertNull(ExtensionEditor.applicationPackage("// not a module declaration\n", javaRoot));
     }
 }

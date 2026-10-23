@@ -209,6 +209,10 @@ class CommandRunnerExtensionTest {
                   <artifactId>demo</artifactId>
                   <version>1.0.0</version>
                   <dependencies>
+                    <dependency>
+                      <groupId>io.vidocq.runtime</groupId>
+                      <artifactId>vidocq-runtime-core</artifactId>
+                    </dependency>
                   </dependencies>
                 """ + build + """
                 </project>
