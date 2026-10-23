@@ -20,6 +20,7 @@
 
 package io.vidocq.bodoni.core.internal;
 
+import java.io.ByteArrayOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,6 +29,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,7 +73,10 @@ import org.xml.sax.ext.EntityResolver2;
  *       {@code bodoni-webapp:<context-relative path>} (a leading {@code /} is
  *       context-relative, anything else relative to the directory of the current page), and a
  *       target must stay a {@code bodoni-webapp:} URI whose decoded path has no {@code .} or
- *       {@code ..} segment; it is read with {@code ServletContext.getResourceAsStream}.</li>
+ *       {@code ..} segment; it is read with {@code ServletContext.getResourceAsStream}. A target
+ *       inside {@code /WEB-INF/} or {@code /META-INF/} is refused unless the system id is inside
+ *       that same directory ({@link #protectedDirectory}): a stylesheet kept under
+ *       {@code /WEB-INF/} imports its siblings, a public document cannot read them.</li>
  * </ul>
  *
  * <p>A refused or unreadable reference is recorded as a {@link JspException} naming the
@@ -114,6 +119,20 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     /** Refusal reason: a relative system id and a target outside the web application. */
     static final String OUTSIDE_WEB_APPLICATION = "outside the web application";
+
+    /**
+     * Refusal reason: a relative system id and a target inside {@code /WEB-INF/} or
+     * {@code /META-INF/}, the system id not inside that same directory (maintainer decision
+     * 2026-10-23).
+     */
+    static final String INSIDE_PROTECTED_DIRECTORY = "inside /WEB-INF/ or /META-INF/ while the system id is not";
+
+    private static final String WEB_INF = "WEB-INF";
+
+    private static final String META_INF = "META-INF";
+
+    /** How many times {@link #protectedDirectory} percent-decodes a path again, at most. */
+    private static final int MAX_DECODING_ROUNDS = 4;
 
     /** Refusal reason: the reference, or the base it is resolved against, is not a URI. */
     static final String NOT_A_URI = "not a valid URI";
@@ -379,6 +398,10 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         if (!insideWebApp(target)) {
             throw refused(reference, OUTSIDE_WEB_APPLICATION);
         }
+        String directory = protectedDirectory(target.getPath());
+        if (directory != null && !directory.equals(protectedDirectory(origin.getPath()))) {
+            throw refused(reference, INSIDE_PROTECTED_DIRECTORY);
+        }
         InputStream in;
         try {
             in = pageContext.getServletContext().getResourceAsStream(target.getPath());
@@ -410,6 +433,93 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
             }
         }
         return false;
+    }
+
+    /**
+     * The protected directory ({@code WEB-INF} or {@code META-INF}) the first segment of a
+     * decoded path names, {@code null} for none. The match is conservative, so that no spelling
+     * a container might map to the same directory gets through:
+     * <ul>
+     *   <li>the path is percent-decoded again, in case a container decodes it a second time;</li>
+     *   <li>{@code /} and {@code \} both separate segments, and doubled separators count as one;</li>
+     *   <li>a segment is cut at its first {@code ;} (a path parameter) or {@code :} (an NTFS
+     *       stream name), then loses its trailing dots, spaces and control characters (Windows
+     *       drops trailing dots and spaces);</li>
+     *   <li>a segment left empty ({@code .}, {@code ..}, blanks) is skipped, the next one is first;</li>
+     *   <li>the name is compared ignoring case (case-insensitive file systems).</li>
+     * </ul>
+     */
+    static String protectedDirectory(String path) {
+        for (String segment : decodedAgain(path).split("[/\\\\]")) {
+            String name = segmentName(segment);
+            if (!name.isEmpty()) {
+                return protectedName(name);
+            }
+        }
+        return null;
+    }
+
+    private static String protectedName(String name) {
+        if (WEB_INF.equalsIgnoreCase(name)) {
+            return WEB_INF;
+        }
+        return META_INF.equalsIgnoreCase(name) ? META_INF : null;
+    }
+
+    /** A segment cut at its first {@code ;} or {@code :}, without trailing dots, spaces or control characters. */
+    private static String segmentName(String segment) {
+        int end = segment.length();
+        for (int i = 0; i < segment.length(); i++) {
+            char c = segment.charAt(i);
+            if (c == ';' || c == ':') {
+                end = i;
+                break;
+            }
+        }
+        while (end > 0 && (segment.charAt(end - 1) == '.' || segment.charAt(end - 1) <= ' ')) {
+            end--;
+        }
+        return segment.substring(0, end);
+    }
+
+    /** {@code path} percent-decoded again until no escape is left (bounded rounds). */
+    private static String decodedAgain(String path) {
+        String decoded = path;
+        for (int round = 0; round < MAX_DECODING_ROUNDS && decoded.indexOf('%') >= 0; round++) {
+            decoded = percentDecoded(decoded);
+        }
+        return decoded;
+    }
+
+    /**
+     * One round of lenient percent decoding (UTF-8): every well-formed {@code %XX} escape is
+     * decoded, a malformed one is kept as written, so it cannot hide the escapes after it.
+     */
+    private static String percentDecoded(String text) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(text.length());
+        int i = 0;
+        while (i < text.length()) {
+            int escaped = escapedByte(text, i);
+            if (escaped >= 0) {
+                bytes.write(escaped);
+                i += 3;
+            } else {
+                int end = i + Character.charCount(text.codePointAt(i));
+                bytes.writeBytes(text.substring(i, end).getBytes(StandardCharsets.UTF_8));
+                i = end;
+            }
+        }
+        return bytes.toString(StandardCharsets.UTF_8);
+    }
+
+    /** The byte a well-formed {@code %XX} escape at {@code i} stands for, {@code -1} if there is none. */
+    private static int escapedByte(String text, int i) {
+        if (text.charAt(i) != '%' || i + 2 >= text.length()) {
+            return -1;
+        }
+        int high = Character.digit(text.charAt(i + 1), 16);
+        int low = Character.digit(text.charAt(i + 2), 16);
+        return high < 0 || low < 0 ? -1 : (high << 4) | low;
     }
 
     // ---- relative system ids ------------------------------------------------

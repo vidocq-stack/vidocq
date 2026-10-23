@@ -365,6 +365,19 @@ class CorePagesIT {
     }
 
     @Test
+    void xmlParseRefusesAnEntityIntoWebInfFromAPublicSystemId() throws Exception {
+        String caught = paragraph(get("/xml-protected.jsp"), "webinf");
+        assertTrue(caught.contains("refused") && caught.contains("/WEB-INF/secret.xml")
+                && caught.contains("inside /WEB-INF/ or /META-INF/ while the system id is not"), caught);
+    }
+
+    @Test
+    void xmlTransformImportsASiblingUnderWebInf() throws Exception {
+        // A stylesheet whose xsltSystemId is under /WEB-INF/ imports /WEB-INF/xsl/common.xsl.
+        assertEquals("{Manuale}", paragraph(get("/xml-protected.jsp"), "transform"));
+    }
+
+    @Test
     void denyModeIsActive() throws Exception {
         // Guards the premise of this IT: the host runs with peano.reflection=deny, so reading a
         // bean property of a plain public class without a registered accessor fails.

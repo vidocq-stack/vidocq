@@ -65,6 +65,10 @@ class SystemIdPolicyTest {
     private static final String OUTSIDE = "outside the web application";
     private static final String NOT_SAME_ORIGIN = "not the same origin";
     private static final String BODY = "<e/>";
+    private static final String TRANSFORM = "x:transform";
+    private static final String CATALOG = "/data/catalog.xml";
+    private static final String WEB_INF_XSL = "/WEB-INF/xsl/main.xsl";
+    private static final String PROTECTED = "inside /WEB-INF/ or /META-INF/ while the system id is not";
 
     private TestServletContext context;
     private TestHttpServletRequest request;
@@ -147,16 +151,131 @@ class SystemIdPolicyTest {
 
     @Test
     void relativeEntitiesAreReadFromTheWebApplication() throws Exception {
-        context.resource("/shop/data/xfiles/e.xml", BODY).resource("/WEB-INF/e.xml", "<secret/>");
+        context.resource("/shop/data/xfiles/e.xml", BODY).resource("/other/e.xml", "<other/>");
         SystemIdPolicy policy = SystemIdPolicy.of(ACTION, DOC, pc);
 
         InputSource entity = policy.resolveEntity(null, null, policy.parserSystemId(), "xfiles/e.xml");
-        InputSource webInf = policy.resolveEntity(null, null, policy.parserSystemId(), "/WEB-INF/e.xml");
+        InputSource rooted = policy.resolveEntity(null, null, policy.parserSystemId(), "/other/e.xml");
 
         assertEquals(BODY, read(entity));
         assertEquals("bodoni-webapp:/shop/data/xfiles/e.xml", entity.getSystemId());
-        assertEquals("<secret/>", read(webInf));
+        assertEquals("<other/>", read(rooted));
         assertNull(policy.recordedFailure());
+    }
+
+    // ---- relative system id: /WEB-INF/ and /META-INF/ -------------------------
+
+    @Test
+    void aStylesheetUnderWebInfImportsItsSiblings() throws Exception {
+        context.resource("/WEB-INF/xsl/common.xsl", "<common/>");
+        SystemIdPolicy policy = SystemIdPolicy.of(TRANSFORM, WEB_INF_XSL, pc);
+
+        Source common = policy.resolve("common.xsl", policy.parserSystemId());
+
+        assertEquals("<common/>", read(assertInstanceOf(SAXSource.class, common).getInputSource()));
+        assertNull(policy.recordedFailure());
+    }
+
+    @Test
+    void aStylesheetUnderWebInfMayLeaveIt() throws Exception {
+        context.resource("/data/public.xml", "<public/>");
+        SystemIdPolicy policy = SystemIdPolicy.of(TRANSFORM, WEB_INF_XSL, pc);
+
+        Source leaving = policy.resolve("/data/public.xml", policy.parserSystemId());
+
+        assertEquals("<public/>", read(assertInstanceOf(SAXSource.class, leaving).getInputSource()));
+    }
+
+    @Test
+    void aStylesheetUnderWebInfCannotEnterMetaInf() {
+        context.resource("/META-INF/x.xml", BODY);
+        SystemIdPolicy policy = SystemIdPolicy.of(TRANSFORM, WEB_INF_XSL, pc);
+
+        TransformerException thrown = assertThrows(TransformerException.class,
+                () -> policy.resolve("/META-INF/x.xml", policy.parserSystemId()));
+
+        assertEquals("x:transform: external reference '/META-INF/x.xml' refused, system id '" + WEB_INF_XSL + "': "
+                + PROTECTED, policy.recordedFailure().getMessage());
+        assertSame(policy.recordedFailure(), thrown.getCause());
+    }
+
+    @Test
+    void aPublicDocumentCannotEnterWebInfOrMetaInf() {
+        context.resource("/WEB-INF/web.xml", "<web-app/>").resource("/META-INF/MANIFEST.MF", "Manifest-Version: 1.0");
+        for (String reference : new String[] {"/WEB-INF/web.xml", "/META-INF/MANIFEST.MF", "../WEB-INF/web.xml"}) {
+            assertProtected(CATALOG, reference);
+        }
+    }
+
+    @Test
+    void aPublicDocumentStillReadsPublicResources() throws Exception {
+        context.resource("/data/other.xml", "<other/>")
+                .resource("/data/WEB-INF/x.xml", "<nested/>")
+                .resource("/WEB-INFO/x.xml", "<info/>");
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, CATALOG, pc);
+
+        assertEquals("<other/>", read(policy.resolveEntity(null, null, null, "other.xml")));
+        // Only the first segment names a protected directory.
+        assertEquals("<nested/>", read(policy.resolveEntity(null, null, null, "WEB-INF/x.xml")));
+        assertEquals("<info/>", read(policy.resolveEntity(null, null, null, "/WEB-INFO/x.xml")));
+        assertNull(policy.recordedFailure());
+    }
+
+    @Test
+    void aDocumentUnderMetaInfReadsItsSiblings() throws Exception {
+        context.resource("/META-INF/resources/b.dtd", "<!ELEMENT a EMPTY>");
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/META-INF/resources/a.xml", pc);
+
+        assertEquals("<!ELEMENT a EMPTY>", read(policy.resolveEntity(null, null, null, "b.dtd")));
+        assertNull(policy.recordedFailure());
+    }
+
+    @Test
+    void otherSpellingsOfAProtectedDirectoryAreRefused() {
+        for (String reference : new String[] {
+                // Case-insensitive file systems.
+                "/web-inf/web.xml", "/Web-Inf/web.xml", "/meta-inf/MANIFEST.MF",
+                // A path parameter, an NTFS stream name.
+                "/WEB-INF;x/web.xml", "/WEB-INF::$DATA/web.xml",
+                // Trailing dots and spaces, which Windows drops.
+                "/WEB-INF./web.xml", "/WEB-INF%20/web.xml", "/WEB-INF.%20./web.xml",
+                // Percent encoding, once (decoded by URI.getPath) and twice.
+                "/%57EB-INF/web.xml", "/%2557EB-INF/web.xml", "/%252FWEB-INF/web.xml",
+                // A malformed escape does not stop the other escapes from being decoded.
+                "/%2557EB-INF/%25zz.xml",
+                // Doubled slashes and backslashes.
+                "/%2FWEB-INF/web.xml", "/%5CWEB-INF%5Cweb.xml",
+                // Leading segments a container could drop.
+                "/%252E/WEB-INF/web.xml", "/%2520/WEB-INF/web.xml",
+                // The directory itself.
+                "/WEB-INF", "/WEB-INF/"}) {
+            assertProtected(CATALOG, reference);
+        }
+    }
+
+    @Test
+    void aDoubledSlashBeforeAProtectedDirectoryIsOutsideTheWebApplication() {
+        // An authority, or a normalisation that leaves a doubled slash: refused before the protected check.
+        for (String reference : new String[] {"//WEB-INF/web.xml", "/x/..//WEB-INF/web.xml"}) {
+            SystemIdPolicy policy = SystemIdPolicy.of(ACTION, CATALOG, pc);
+
+            assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
+
+            assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + CATALOG + "': " + OUTSIDE,
+                    policy.recordedFailure().getMessage());
+        }
+    }
+
+    @Test
+    void anOriginInAProtectedDirectoryIsMatchedTheSameWay() throws Exception {
+        context.resource("/WEB-INF/xsl/common.xsl", "<common/>");
+        for (String systemId : new String[] {"/web-inf/xsl/main.xsl", "/WEB-INF;x/xsl/main.xsl", "/WEB-INF./xsl/main.xsl"}) {
+            SystemIdPolicy policy = SystemIdPolicy.of(TRANSFORM, systemId, pc);
+
+            Source common = policy.resolve("/WEB-INF/xsl/common.xsl", policy.parserSystemId());
+
+            assertEquals("<common/>", read(assertInstanceOf(SAXSource.class, common).getInputSource()), systemId);
+        }
     }
 
     @Test
@@ -466,6 +585,16 @@ class SystemIdPolicyTest {
     }
 
     // ---- helpers --------------------------------------------------------------
+
+    /** {@code reference}, resolved against the page's {@code systemId}, is refused as protected; nothing is read. */
+    private void assertProtected(String systemId, String reference) {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, systemId, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
+
+        assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + systemId + "': " + PROTECTED,
+                policy.recordedFailure().getMessage());
+    }
 
     private String importXml() {
         return "http://127.0.0.1:" + server.port() + "/ctx/import.xml";
