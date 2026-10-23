@@ -41,4 +41,19 @@ class PluginDescriptorJlinkTest {
         assertTrue(mojo.contains("${vidocq.jlink.mergeSharedResources}</mergeSharedResources>"),
                 "property not bound");
     }
+
+    @Test
+    void neitherJlinkNorJpackageRequiresAMainClass() throws Exception {
+        String xml = Files.readString(Path.of("target", "classes", "META-INF", "maven", "plugin.xml"));
+        for (String goal : new String[] {"jlink", "jpackage"}) {
+            int start = xml.indexOf("<goal>" + goal + "</goal>");
+            assertTrue(start > 0, "no " + goal + " mojo");
+            String mojo = xml.substring(start, xml.indexOf("</mojo>", start));
+            int parameter = mojo.indexOf("<name>mainClass</name>");
+            assertTrue(parameter > 0, goal + ": mainClass not declared");
+            String declaration = mojo.substring(parameter, mojo.indexOf("</parameter>", parameter));
+            assertTrue(declaration.contains("<required>false</required>"),
+                    goal + ": mainClass must be optional, the runtime's main starts an application without one");
+        }
+    }
 }

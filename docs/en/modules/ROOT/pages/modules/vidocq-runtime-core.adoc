@@ -47,6 +47,9 @@ public class App {
 
 `Vidocq.main` is a simple facade over `VidocqBootstrap`. User code does not need a `@SpringBootApplication` nor an application class — extensions and beans are discovered from the module path (`ServiceLoader` + the compile-time bean index). For a zero-config IDE launch, annotate a trampoline `main` with `@VidocqMain` and call `Vidocq.run(App.class, args)` — the application is then re-loaded inside the Vauban application layer.
 
+[#app-module-property]
+[.tag-new]#NEW# The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
+
 [#main-shapes]
 === Which main methods are accepted [.tag-new]#NEW#
 
@@ -169,7 +172,7 @@ The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <ad
 * the <<launch-mode,launch mode>> — `dev`, `test` or `prod` — with, in parentheses, the signal it was read from: `dev (IntelliJ agent)`, `prod (no dev or test signal)`;
 * the <<launch-mode-debugger,debugger>>, when the JVM runs with a JDWP agent;
 * the xref:dev-console.adoc#banner-segment[dev console] [.tag-new]#NEW#, when it is on the module path and on for this launch: `devconsole :8888` for a loopback host, `devconsole <host>:<port>` otherwise, nothing for port `0`. It is the configured address, a promise made before the bind; the console's own `Vidocq dev console: http://…/` record, logged once it listens, is the one to trust;
-* the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
+* the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module `-Dvidocq.app.module` names [.tag-new]#NEW#, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
 
 Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console [.tag-new]#NEW#, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
 

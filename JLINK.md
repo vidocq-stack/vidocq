@@ -69,6 +69,11 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
 4. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
    --launcher <name>=<module>/<mainClass> --strip-debug --compress=zip-6
    --no-header-files --no-man-pages --output target/dist`.
+   Without an application main class, the launcher is
+   `<name>=io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and
+   `--add-options=--add-modules=<module> -Dvidocq.app.module=<module>` bakes into the image what
+   resolves the application module and has `Vidocq.main` re-layer it as a `@VidocqMain`
+   trampoline would.
 5. Copies `vidocq.properties` + `logging.properties` (and any configured
    resource) into `dist/conf/`.
 
@@ -84,7 +89,7 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
             <goals><goal>jlink</goal></goals>
             <configuration>
                 <mainModule>com.example.myapp</mainModule>          <!-- required -->
-                <mainClass>com.example.myapp.MainApp</mainClass>     <!-- required -->
+                <mainClass>com.example.myapp.MainApp</mainClass>     <!-- optional: default, the runtime's main -->
                 <launcher>my-app</launcher>                          <!-- default: artifactId -->
                 <distDir>${project.build.directory}/dist</distDir>   <!-- default -->
                 <stripDebug>true</stripDebug>                        <!-- default: true -->
@@ -131,7 +136,7 @@ without re-resolving modules. Delegates to `java.util.spi.ToolProvider("jpackage
     <goals><goal>jpackage</goal></goals>
     <configuration>
         <mainModule>com.example.myapp</mainModule>          <!-- required -->
-        <mainClass>com.example.myapp.MainApp</mainClass>     <!-- required -->
+        <mainClass>com.example.myapp.MainApp</mainClass>     <!-- optional: default, the runtime's main -->
         <appName>my-app</appName>                            <!-- default: artifactId -->
         <appVersion>1.0.0</appVersion>                       <!-- macOS requires 1.x.y, not 0.x.y -->
         <type>app-image</type>                               <!-- app-image | dmg | pkg | deb | rpm | msi | exe -->

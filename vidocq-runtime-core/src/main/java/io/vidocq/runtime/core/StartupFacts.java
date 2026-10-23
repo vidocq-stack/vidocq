@@ -156,8 +156,8 @@ final class StartupFacts {
 
     /**
      * The name of the application module: the module of the class that called {@code Vidocq.run}, else that of
-     * {@code vidocq.app.main}, else the launched module ({@link Vidocq#applicationModule()}); {@code null} when
-     * there is none.
+     * {@code vidocq.app.main}, else the module {@code vidocq.app.module} names, else the launched module
+     * ({@link Vidocq#applicationModule()}); {@code null} when there is none.
      */
     private static String applicationName() {
         try {

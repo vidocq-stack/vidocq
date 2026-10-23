@@ -61,10 +61,12 @@ public class VidocqJpackageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
-    @Parameter(property = "vidocq.mainModule", required = true)
+    /** The application's Java module. */
+    @Parameter(property = "vidocq.mainModule")
     private String mainModule;
 
-    @Parameter(property = "vidocq.mainClass", required = true)
+    /** The application main class. Optional: without one, the runtime's own main starts ({@link ImageLaunch}). */
+    @Parameter(property = "vidocq.mainClass")
     private String mainClass;
 
     /** Application name (binary / installer). Default: {@code project.artifactId}. */
@@ -117,6 +119,12 @@ public class VidocqJpackageMojo extends AbstractMojo {
         }
 
         String version = sanitizeVersion(appVersion);
+        ImageLaunch launch;
+        try {
+            launch = ImageLaunch.of(mainModule, mainClass);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
 
         try {
             deleteRecursive(installerDir.toPath());
@@ -127,14 +135,14 @@ public class VidocqJpackageMojo extends AbstractMojo {
             args.add("--name"); args.add(appName);
             args.add("--app-version"); args.add(version);
             args.add("--runtime-image"); args.add(runtimeImage.getAbsolutePath());
-            args.add("--module"); args.add(mainModule + "/" + mainClass);
+            args.addAll(entryArgs(launch));
             args.add("--dest"); args.add(installerDir.getAbsolutePath());
             if (vendor != null && !vendor.isBlank())          { args.add("--vendor"); args.add(vendor); }
             if (description != null && !description.isBlank()) { args.add("--description"); args.add(description); }
             if (icon != null && icon.isFile())                { args.add("--icon"); args.add(icon.getAbsolutePath()); }
 
             getLog().info("Vidocq jpackage — type=" + type + " name=" + appName
-                    + " version=" + version + " main=" + mainModule + "/" + mainClass);
+                    + " version=" + version + " main=" + launch.entryPoint());
 
             ToolProvider jpackage = ToolProvider.findFirst("jpackage")
                     .orElseThrow(() -> new MojoExecutionException(
@@ -147,6 +155,20 @@ public class VidocqJpackageMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("jpackage IO error", e);
         }
+    }
+
+    /**
+     * The {@code --module} the application starts with and, without an application main class, its JVM options
+     * as {@code --java-options}. vidocq:jlink already baked them into its image; passing them again keeps an
+     * image built otherwise ({@code runtimeImage}) startable, and the JVM accepts them twice.
+     */
+    static List<String> entryArgs(ImageLaunch launch) {
+        List<String> args = new ArrayList<>();
+        args.add("--module"); args.add(launch.entryPoint());
+        for (String option : launch.vmOptions()) {
+            args.add("--java-options"); args.add(option);
+        }
+        return args;
     }
 
     /** jpackage requires a version without qualifiers ({@code 1.2.3}). We strip {@code -SNAPSHOT} and others. */

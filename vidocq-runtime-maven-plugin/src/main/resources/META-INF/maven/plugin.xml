@@ -537,16 +537,16 @@
                 <parameter>
                     <name>mainModule</name>
                     <type>java.lang.String</type>
-                    <required>true</required>
+                    <required>false</required>
                     <editable>true</editable>
-                    <description>Java module containing the main class</description>
+                    <description>The application's Java module (the goal fails, naming the property, without it)</description>
                 </parameter>
                 <parameter>
                     <name>mainClass</name>
                     <type>java.lang.String</type>
-                    <required>true</required>
+                    <required>false</required>
                     <editable>true</editable>
-                    <description>Fully qualified main class</description>
+                    <description>Fully qualified application main class; without one, the launcher runs the runtime's own main</description>
                 </parameter>
                 <parameter>
                     <name>launcher</name>
@@ -690,8 +690,8 @@
                     <required>true</required><editable>false</editable>
                     <description>The Maven project</description>
                 </parameter>
-                <parameter><name>mainModule</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Java module containing the main class</description></parameter>
-                <parameter><name>mainClass</name><type>java.lang.String</type><required>true</required><editable>true</editable><description>Fully qualified main class</description></parameter>
+                <parameter><name>mainModule</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The application's Java module (the goal fails, naming the property, without it)</description></parameter>
+                <parameter><name>mainClass</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Fully qualified application main class; without one, the application starts with the runtime's own main</description></parameter>
                 <parameter><name>appName</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application name</description></parameter>
                 <parameter><name>appVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Application version</description></parameter>
                 <parameter><name>type</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>jpackage type: app-image, dmg, pkg, deb, rpm, msi, exe</description></parameter>

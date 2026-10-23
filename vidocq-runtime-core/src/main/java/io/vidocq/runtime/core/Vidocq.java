@@ -70,7 +70,10 @@ public final class Vidocq {
         // Universal-loader mode (-Dvidocq.app.path=…): the application archives resolve
         // into a child module layer defined by the Vauban class loader. Must precede
         // everything — extensions and configuration read through the loader installed here.
-        boolean layerJustInstalled = VidocqAppLayer.installIfConfigured();
+        // Without a path, -Dvidocq.app.module=… names the application module the launch resolved into the boot
+        // layer (a jlink image without an application main class): re-layered as a trampoline would.
+        boolean layerJustInstalled = VidocqAppLayer.installIfConfigured()
+                || VidocqAppLayer.installFromModuleIfConfigured();
         if (layerJustInstalled && VidocqAppLayer.runAppMainIfConfigured(args)) {
             // The application main (inside the layer) took over; when it calls
             // Vidocq.main/run back, the layer install is a no-op and the boot proceeds.
@@ -134,8 +137,8 @@ public final class Vidocq {
 
     /**
      * The application module, or {@code null}: the module of the class that called {@link #run}, else
-     * the module of {@code -Dvidocq.app.main}, else the {@code -m} module unless it is the runtime's.
-     * Never guessed among the application archives.
+     * the module of {@code -Dvidocq.app.main}, else the module {@code -Dvidocq.app.module} names, else the
+     * {@code -m} module unless it is the runtime's. Never guessed among the application archives.
      */
     static Module applicationModule() {
         Module caller = applicationModule;
@@ -145,6 +148,13 @@ public final class Vidocq {
         Module main = moduleOfClass(System.getProperty(VidocqAppLayer.APP_MAIN_PROPERTY, "").strip());
         if (main != null) {
             return main;
+        }
+        String named = System.getProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "").strip();
+        if (!named.isEmpty()) {
+            Module module = ModuleLayer.boot().findModule(named).orElse(null);
+            if (module != null) {
+                return module;
+            }
         }
         String launched = System.getProperty("jdk.module.main");
         if (launched == null || launched.isBlank() || launched.startsWith("io.vidocq.runtime.")) {

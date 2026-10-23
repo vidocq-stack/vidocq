@@ -325,7 +325,7 @@ reading the new directory. The goal's own reference is in the Vauban documentati
             <goals><goal>jlink</goal></goals>
             <configuration>
                 <mainModule>com.example.myapp</mainModule>
-                <mainClass>com.example.myapp.MainApp</mainClass>
+                <!-- optional: <mainClass>com.example.myapp.MainApp</mainClass> -->
                 <launcher>my-app</launcher>
                 <distDir>${project.build.directory}/dist</distDir>
                 <stripDebug>true</stripDebug>
@@ -358,9 +358,35 @@ target/
 └── Dockerfile                      # if docker is enabled
 ----
 
+[#jlink-without-main-class]
+=== Without an application main class [.tag-new]#NEW#
+
+`vidocq.mainModule` is the only setting the image needs. `vidocq.mainClass` is optional, as it is for
+`vidocq:dev`, `vidocq:run` and `vidocq:package`:
+
+* **with an application main class** (a `@VidocqMain` trampoline), the launcher runs
+  `<mainModule>/<mainClass>`, and the trampoline re-layers the application, as before;
+* **without one** (or with the runtime's own `io.vidocq.runtime.core.Vidocq`), the launcher runs the runtime's
+  main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal bakes two JVM options into the image
+  with jlink's `--add-options`: `--add-modules=<mainModule>`, because no module of the runtime reads the
+  application module and the JVM would leave it out of the boot layer, and `-Dvidocq.app.module=<mainModule>`,
+  which tells `Vidocq.main` to re-layer that module the way the trampoline does.
+
+The application boots in the same Vauban layer either way: the startup report reads
+`layer … (boot-layer detection from <mainModule>)` in both. Being in the image, the options apply to every way of
+starting it — `bin/<launcher>`, `bin/java -m …`, the `vidocq:jpackage` application and the `vidocq:docker` image.
+
+A missing `vidocq.mainModule` fails the goal with a message naming the property, and so does
+`vidocq.mainModule` set to the runtime's module `io.vidocq.runtime.core` without an application main class.
+
 == `vidocq:jpackage` goal
 
 Reuses the `jlink` image. Default type: `app-image` (cross-platform). On macOS, `.app`. On Windows, `.exe` or `.msi`. On Linux, `.deb` or `.rpm`.
+
+[.tag-new]#NEW# Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
+application starts with `--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the
+two options of <<jlink-without-main-class>> again as `--java-options`: an image built by `vidocq:jlink` already
+holds them, one given through `runtimeImage` may not.
 
 See `vidocq/JLINK.md` §3 for the exhaustive parameter list.
 

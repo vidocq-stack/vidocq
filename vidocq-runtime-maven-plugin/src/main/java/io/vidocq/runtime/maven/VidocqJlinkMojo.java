@@ -79,12 +79,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
-    /** Java module containing the main class (e.g. {@code io.vidocq.runtime.examples.rest}). */
-    @Parameter(property = "vidocq.mainModule", required = true)
+    /** The application's Java module (e.g. {@code io.vidocq.runtime.examples.rest}). */
+    @Parameter(property = "vidocq.mainModule")
     private String mainModule;
 
-    /** Fully qualified main class (e.g. {@code io.vidocq.runtime.examples.rest.RestExampleApp}). */
-    @Parameter(property = "vidocq.mainClass", required = true)
+    /**
+     * Fully qualified application main class (e.g. {@code io.vidocq.runtime.examples.rest.RestExampleApp}).
+     * Optional: without one, the launcher runs the runtime's own main ({@link ImageLaunch}).
+     */
+    @Parameter(property = "vidocq.mainClass")
     private String mainClass;
 
     /** Name of the launcher generated in {@code dist/bin/} (default: {@code project.artifactId}). */
@@ -154,11 +157,18 @@ public class VidocqJlinkMojo extends AbstractMojo {
             getLog().info("Vidocq jlink — skip (vidocq.jlink.skip=true).");
             return;
         }
-        getLog().info("Vidocq jlink — main: " + mainModule + "/" + mainClass);
+        ImageLaunch launch;
+        try {
+            launch = ImageLaunch.of(mainModule, mainClass);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        getLog().info("Vidocq jlink — main: " + launch.entryPoint()
+                + (launch.vmOptions().isEmpty() ? "" : " " + String.join(" ", launch.vmOptions())));
         try {
             stageModules();
             String addModules = resolveAddModules();
-            runJlink(addModules);
+            runJlink(addModules, launch);
             copyResources();
             getLog().info("jlink image ready: " + distDir.toPath().toAbsolutePath());
             getLog().info("Run with: " + distDir.toPath().toAbsolutePath() + "/bin/" + launcher);
@@ -366,7 +376,22 @@ public class VidocqJlinkMojo extends AbstractMojo {
         return String.join(",", all);
     }
 
-    private void runJlink(String addModules) throws IOException, InterruptedException {
+    /**
+     * The {@code --launcher} of the image and, without an application main class, the {@code --add-options} that
+     * bake the JVM options of {@code launch} into the image: every way of starting it then gets them — the
+     * launcher script, {@code bin/java -m …}, the jpackage application and the Docker image built on it.
+     */
+    static List<String> launcherArgs(String launcher, ImageLaunch launch) {
+        List<String> args = new ArrayList<>();
+        args.add("--launcher"); args.add(launcher + "=" + launch.entryPoint());
+        if (!launch.vmOptions().isEmpty()) {
+            // One argument: jlink refuses a separate value that starts with "--" (the --add-modules option).
+            args.add("--add-options=" + String.join(" ", launch.vmOptions()));
+        }
+        return args;
+    }
+
+    private void runJlink(String addModules, ImageLaunch launch) throws IOException, InterruptedException {
         Path output = distDir.toPath();
         deleteRecursive(output);
 
@@ -376,7 +401,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         List<String> args = new ArrayList<>();
         args.add("--module-path"); args.add(modulePath);
         args.add("--add-modules"); args.add(addModules);
-        args.add("--launcher"); args.add(launcher + "=" + mainModule + "/" + mainClass);
+        args.addAll(launcherArgs(launcher, launch));
         args.add("--output"); args.add(output.toString());
         args.add("--no-header-files");
         args.add("--no-man-pages");

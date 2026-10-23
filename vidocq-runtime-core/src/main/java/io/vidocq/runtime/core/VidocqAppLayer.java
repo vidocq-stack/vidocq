@@ -57,6 +57,12 @@ public final class VidocqAppLayer {
     public static final String APP_PATH_PROPERTY = "vidocq.app.path";
     /** Binary name of an application main class to run once the layer is installed. */
     public static final String APP_MAIN_PROPERTY = "vidocq.app.main";
+    /**
+     * Name of the application's module when it was resolved into the boot layer and the runtime's own main was
+     * launched: a jlink image without an application main class. {@link Vidocq#main} then re-layers it as a
+     * {@code @VidocqMain} trampoline would.
+     */
+    public static final String APP_MODULE_PROPERTY = "vidocq.app.module";
 
     private static final System.Logger LOG = System.getLogger(VidocqAppLayer.class.getName());
 
@@ -182,10 +188,33 @@ public final class VidocqAppLayer {
      * explicit module list.
      */
     static boolean installFromBootLayer(Class<?> caller) {
+        return installFromBootLayer(caller.getModule());
+    }
+
+    /**
+     * The trampoline path without a trampoline: {@value #APP_MODULE_PROPERTY} names the application's module, which
+     * the launch resolved into the boot layer ({@code --add-modules}), and the runtime's own main re-layers it as
+     * {@link #installFromBootLayer(Class)} does from the trampoline's module. Returns {@code false} when the property
+     * is absent or the layer is already in place.
+     *
+     * @throws IllegalStateException when the named module is not in the boot layer
+     */
+    static boolean installFromModuleIfConfigured() {
+        var name = System.getProperty(APP_MODULE_PROPERTY, "").strip();
+        if (name.isEmpty() || alreadyInLayer()) {
+            return false;
+        }
+        var module = ModuleLayer.boot().findModule(name).orElseThrow(() -> new IllegalStateException(
+                "Cannot create the application layer: the module " + name + " named by " + APP_MODULE_PROPERTY
+                        + " is not in the boot layer. Resolve it with --add-modules " + name
+                        + " on the java command (vidocq:jlink adds it to the image)"));
+        return installFromBootLayer(module);
+    }
+
+    private static boolean installFromBootLayer(Module callerModule) {
         if (alreadyInLayer()) {
             return false;
         }
-        var callerModule = caller.getModule();
         var callerLayer = callerModule.getLayer();
         if (!callerModule.isNamed() || callerLayer == null) {
             return false; // class-path launch — nothing to re-layer, agent net applies
