@@ -333,6 +333,43 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    the WARNING block tell users to exclude? To be settled by `bodoni-it-openliberty`.
 6. **XML hardening** — secure-processing / external-entity defaults for `x:parse` and
    `x:transform` vs spec §11.1.7 and TCK expectations.
+   Evidence (JDK 25, 2026-10-23), `JdkXmlFactsTest` (raw JAXP from `newDefaultInstance()`,
+   `FEATURE_SECURE_PROCESSING` true, access properties `""`, kept as a regression test):
+   - `doctypeWithInternalSubsetParses` — holds: the TCK `positiveParseNoDTDValidationTest`
+     document parses, `//docs` is `DATA`.
+   - `resolverStreamPassesUnderEmptyAccess` — holds: an `InputSource` byte stream from the
+     `EntityResolver2` passes under `""`; the access properties stay `""` (no fallback).
+   - `nullResolverResultIsRefusedUnderEmptyAccess` — holds: `SAXException` naming
+     `accessExternalDTD`, the `file:` target is not read.
+   - `entityResolver2SeesTheLiteralAndTheBase` — holds for the literal and the base:
+     `parts/p.xml` with base `bodoni-webapp:/dir/doc.xml`; a declaration inside the returned
+     entity (system id `bodoni-webapp:/dir/parts/p.xml`) gets that base; the external DTD
+     subset arrives as `r.dtd` with the document base. Differs on the name: the JDK passes
+     `null` as the entity name for every call (DOM and SAX), never `[dtd]` or `%p`, so the
+     name cannot tell the external subset from an entity.
+   - `uriResolverServesImportsUnderEmptyStylesheetAccess` — holds: `resolve("common.xsl",
+     "bodoni-webapp:/xsl/main.xsl")`; a byte-stream `SAXSource` passes under `""`.
+   - `nullUriResolverResultIsRefusedOnlyForAFetchableScheme` — differs from the plan: a
+     `null` answer is refused (`TransformerException` naming `accessExternalStylesheet`)
+     only under a `file:` base. Under a `bodoni-webapp:` base the JDK's access check fails
+     on the unknown scheme, prints the `MalformedURLException` stack trace on `System.err`
+     and drops the `xsl:import` without an error. A resolver that throws a
+     `TransformerException` fails `newTransformer` under any base: Bodoni's resolvers
+     refuse by throwing, never by returning `null`.
+   - `documentFunctionGoesThroughTheTransformerResolver` — holds: `document('data.xml')`
+     reaches the `Transformer`'s `URIResolver` with the stylesheet's system id as base, not
+     the factory's. The `Transformer` does not inherit the factory's `ErrorListener`.
+   - `saxSourceReaderKeepsItsEntityResolverDuringTransform` — holds: a `SAXSource`
+     document keeps its reader's entity resolver (no fallback to a `DOMSource`).
+   - `filterNeedsTheResolverOnItself` — holds: without a resolver on the `XMLFilterImpl`
+     the entity is refused (under a `bodoni-webapp:` base as a `MalformedURLException`
+     from the JDK's access check, nothing opened); with it, resolved through the
+     2-argument `resolveEntity`, which receives the expanded system id
+     (`bodoni-webapp:/dir/parts/p.xml`) and no base.
+   - `xpathKeepsVariablesAndRefusesExtensionFunctions` — holds: `$p:x` resolves, `$y`
+     answered `null` and `java:java.lang.System.nanoTime()` throw
+     `XPathExpressionException`; `evaluateExpression` types `BOOLEAN`, `NUMBER`, `STRING`,
+     `NODESET`.
 7. ~~**JNDI `java:comp` under Vidocq**~~ — decided: `vidocq-runtime-naming-extension`,
    [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) (see "`sql:` — DataSource
    resolution"). Not a Bodoni design item.
