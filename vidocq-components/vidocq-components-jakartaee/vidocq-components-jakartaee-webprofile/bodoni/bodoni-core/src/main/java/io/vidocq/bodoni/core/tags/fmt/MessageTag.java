@@ -20,7 +20,6 @@
 
 package io.vidocq.bodoni.core.tags.fmt;
 
-import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,12 +28,10 @@ import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 
 import io.vidocq.bodoni.core.internal.I18n;
-import io.vidocq.bodoni.core.internal.Scopes;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.fmt.LocalizationContext;
-import jakarta.servlet.jsp.tagext.BodyTagSupport;
 import jakarta.servlet.jsp.tagext.TagSupport;
 
 /**
@@ -46,7 +43,7 @@ import jakarta.servlet.jsp.tagext.TagSupport;
  * With {@code <fmt:param>} children the message goes through {@link MessageFormat}; without,
  * it is left unmodified.
  */
-public class MessageTag extends BodyTagSupport {
+public class MessageTag extends VarTagSupport {
 
     private static final long serialVersionUID = 1L;
     private static final String ACTION = "fmt:message";
@@ -54,9 +51,12 @@ public class MessageTag extends BodyTagSupport {
     private String key;
     private boolean keySet;
     private transient LocalizationContext bundle;
-    private String varName;
-    private String scope;
     private final transient List<Object> params = new ArrayList<>();
+
+    /** Creates the handler. */
+    public MessageTag() {
+        super(ACTION);
+    }
 
     /** @param key the message key; {@code null} or empty gives {@code ??????} */
     public void setKey(String key) {
@@ -67,16 +67,6 @@ public class MessageTag extends BodyTagSupport {
     /** @param bundle the localization context to look the key up in */
     public void setBundle(LocalizationContext bundle) {
         this.bundle = bundle;
-    }
-
-    /** @param name the scoped variable receiving the message instead of the output */
-    public void setVar(String name) {
-        this.varName = name;
-    }
-
-    /** @param scope the scope of {@code var} */
-    public void setScope(String scope) {
-        this.scope = scope;
     }
 
     /** Adds the next parameter of the parametric replacement. */
@@ -102,15 +92,7 @@ public class MessageTag extends BodyTagSupport {
         } finally {
             params.clear();
         }
-        try {
-            if (varName != null) {
-                pageContext.setAttribute(varName, message, scopeId);
-            } else {
-                pageContext.getOut().print(message);
-            }
-        } catch (IOException e) {
-            throw new JspTagException(ACTION + ": " + e.getMessage(), e);
-        }
+        export(message, scopeId);
         return EVAL_PAGE;
     }
 
@@ -120,21 +102,11 @@ public class MessageTag extends BodyTagSupport {
         key = null;
         keySet = false;
         bundle = null;
-        varName = null;
-        scope = null;
         params.clear();
     }
 
-    private int scopeId() throws JspTagException {
-        try {
-            return Scopes.of(scope);
-        } catch (IllegalArgumentException e) {
-            throw new JspTagException(ACTION + ": " + e.getMessage(), e);
-        }
-    }
-
     private String resolve() throws JspTagException {
-        String name = keySet ? key : bodyKey();
+        String name = keySet ? key : bodyValue();
         if (name == null || name.isEmpty()) {
             return "??????";
         }
@@ -161,10 +133,6 @@ public class MessageTag extends BodyTagSupport {
             return undefined(name);
         }
         return params.isEmpty() ? pattern : format(pattern, context.getLocale());
-    }
-
-    private String bodyKey() {
-        return bodyContent == null ? null : bodyContent.getString().trim();
     }
 
     /**

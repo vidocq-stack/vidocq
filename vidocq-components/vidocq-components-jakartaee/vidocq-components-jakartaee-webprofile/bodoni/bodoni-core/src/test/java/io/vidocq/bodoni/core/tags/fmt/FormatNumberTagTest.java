@@ -227,6 +227,13 @@ class FormatNumberTagTest {
     }
 
     @Test
+    void stringWithoutPointIsNotWidenedToADouble() throws Exception {
+        // A Long beyond 2^53 keeps every digit, and without a formatting locale its toString() has no ".0".
+        assertEquals("9,007,199,254,740,993", run(us("9007199254740993")));
+        assertEquals("12", run(tag(Locale.of("xx"), "12")));
+    }
+
+    @Test
     void unparsableStringIsAJspExceptionNamingTheValue() {
         FormatNumberTag tag = us("abc");
         JspException e = assertThrows(JspException.class, () -> run(tag));
