@@ -29,6 +29,7 @@ import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.AsyncContext;
@@ -49,8 +50,9 @@ import jakarta.servlet.http.Part;
 /**
  * An {@link HttpServletRequest} double: attributes, parameters, character encoding, a
  * context path (default {@code /app}), a servlet path (default {@code /page.jsp}), a session (present by default, see {@link #withoutSession()}), locales with their {@code Accept-Language}
- * header (see {@link #withoutAcceptLanguage(Locale)}) and request dispatchers
- * configured through {@link #dispatchers()}. Everything else throws
+ * header (see {@link #withoutAcceptLanguage(Locale)}), other headers (see
+ * {@link #header(String, String)}), cookies (see {@link #cookies(Cookie...)}) and request
+ * dispatchers configured through {@link #dispatchers()}. Everything else throws
  * {@link UnsupportedOperationException}.
  */
 public class TestHttpServletRequest implements HttpServletRequest {
@@ -63,6 +65,8 @@ public class TestHttpServletRequest implements HttpServletRequest {
     private boolean acceptLanguage = true;
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private final Map<String, String[]> parameters = new LinkedHashMap<>();
+    private final Map<String, String> headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+    private Cookie[] cookies;
     private final TestDispatchers dispatchers = new TestDispatchers();
     private String contextPath = "/app";
     private String servletPath = "/page.jsp";
@@ -123,6 +127,21 @@ public class TestHttpServletRequest implements HttpServletRequest {
     /** Sets (replaces) a request parameter. */
     public TestHttpServletRequest parameter(String name, String... values) {
         parameters.put(name, values);
+        return this;
+    }
+
+    /**
+     * Sets (replaces) a header other than {@code Accept-Language}, which follows the
+     * locales; header names are case-insensitive.
+     */
+    public TestHttpServletRequest header(String name, String value) {
+        headers.put(name, value);
+        return this;
+    }
+
+    /** Sets the cookies the client sent, in order; none makes {@code getCookies()} return {@code null}. */
+    public TestHttpServletRequest cookies(Cookie... cookies) {
+        this.cookies = cookies.length == 0 ? null : cookies.clone();
         return this;
     }
 
@@ -222,7 +241,7 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public Cookie[] getCookies() {
-        throw nope();
+        return cookies == null ? null : cookies.clone();
     }
 
     @Override
@@ -232,7 +251,10 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public String getHeader(String name) {
-        if (!ACCEPT_LANGUAGE.equalsIgnoreCase(name) || !acceptLanguage) {
+        if (!ACCEPT_LANGUAGE.equalsIgnoreCase(name)) {
+            return headers.get(name);
+        }
+        if (!acceptLanguage) {
             return null;
         }
         return locales.stream().map(Locale::toLanguageTag).collect(Collectors.joining(","));
