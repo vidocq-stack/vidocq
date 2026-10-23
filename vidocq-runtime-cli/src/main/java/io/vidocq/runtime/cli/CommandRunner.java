@@ -71,11 +71,11 @@ public final class CommandRunner {
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
-            case Command.ContinuousTest t      -> runMaven(RunGoals.test(), MavenInvocation.Options.none(), false,
+            case Command.ContinuousTest _      -> runMaven(RunGoals.test(), MavenInvocation.Options.none(), false,
                     "Starting " + CliOutput.bold("continuous testing") + "…");
-            case Command.Idea idea             -> runMaven(RunGoals.idea(idea.check(), idea.kind()),
+            case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
-                    (idea.check() == null ? "Writing" : "Checking") + " the IntelliJ run configurations…");
+                    (check == null ? "Writing" : "Checking") + " the IntelliJ run configurations…");
             case Command.Create c              -> runCreate(c);
             case Command.Build b               -> runBuild(b);
             case Command.Clean cl              -> runClean(cl);

@@ -26,6 +26,8 @@ import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,6 +37,9 @@ import java.util.Set;
  * No external dependency — hand-rolled to stay zero-dep.
  */
 public final class CliParser {
+
+    private static final String CHECK = "--check";
+    private static final String OPTIONS = "Options:";
 
     private CliParser() {}
 
@@ -105,15 +110,23 @@ public final class CliParser {
     private static Command.Idea parseIdea(String[] args, int from) {
         String check = null;
         String kind = null;
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
-                case "--check"  -> check = "true";
+        Iterator<String> it = Arrays.asList(args).subList(from, args.length).iterator();
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case CHECK      -> check = "true";
                 case "--strict" -> check = "strict";
-                case "--kind"   -> kind  = value(args, ++i, "--kind");
-                default         -> unknownOpt(args[i], "idea");
+                case "--kind"   -> kind  = next(it, "--kind");
+                default         -> unknownOpt(arg, "idea");
             }
         }
         return new Command.Idea(check, kind);
+    }
+
+    /** The value after an option, read from {@code it}. */
+    private static String next(Iterator<String> it, String opt) {
+        if (!it.hasNext()) throw new CliException("Option " + opt + " requires a value.");
+        return it.next();
     }
 
     private static Command.Doctor parseDoctor(String[] args, int from) {
@@ -246,7 +259,7 @@ public final class CliParser {
         boolean check = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--check" -> check = true;
+                case CHECK     -> check = true;
                 default        -> unknownOpt(args[i], "update");
             }
         }
@@ -347,60 +360,45 @@ public final class CliParser {
     private static void printTopicHelp(String topic) {
         switch (topic) {
             case "start" -> {
-                CliOutput.println(CliOutput.bold("vidocq start") + " — Build and run the application");
-                CliOutput.println();
-                CliOutput.println("Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and");
-                CliOutput.println("starts it with its dependencies and extensions on the module path.");
-                CliOutput.println();
-                CliOutput.println("Options:");
-                opt("--port, -p <n>",     "HTTP listening port, over the project's own setting");
-                opt("--config, -c <file>","Path to an external vidocq.properties file");
-                opt("--debug",            "Open a debug agent on port 5005");
+                topic("start", "Build and run the application",
+                        "Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and",
+                        "starts it with its dependencies and extensions on the module path.");
+                options("--port, -p <n>",      "HTTP listening port, over the project's own setting",
+                        "--config, -c <file>", "Path to an external vidocq.properties file",
+                        "--debug",             "Open a debug agent on port 5005");
             }
             case "dev" -> {
-                CliOutput.println(CliOutput.bold("vidocq dev") + " — Development mode");
-                CliOutput.println();
-                CliOutput.println("Runs 'mvn process-classes vidocq:dev' in the project (./mvnw when present):");
-                CliOutput.println("the application starts with its dependencies and extensions, the dev console");
-                CliOutput.println("and the debug agent (port 5005), and restarts on every source change.");
-                CliOutput.println();
-                CliOutput.println("Options:");
-                opt("--port, -p <n>",      "HTTP listening port, over the project's own setting");
-                opt("--profile, -P <name>","Config profile to activate (default: dev)");
-                opt("--debug",             "Force the debug agent on (it is on by default in dev)");
+                topic("dev", "Development mode",
+                        "Runs 'mvn process-classes vidocq:dev' in the project (./mvnw when present):",
+                        "the application starts with its dependencies and extensions, the dev console",
+                        "and the debug agent (port 5005), and restarts on every source change.");
+                options("--port, -p <n>",       "HTTP listening port, over the project's own setting",
+                        "--profile, -P <name>", "Config profile to activate (default: dev)",
+                        "--debug",              "Force the debug agent on (it is on by default in dev)");
             }
-            case "test" -> {
-                CliOutput.println(CliOutput.bold("vidocq test") + " — Continuous testing");
-                CliOutput.println();
-                CliOutput.println("Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then");
-                CliOutput.println("again on each change of the main or test sources, without the application.");
-                CliOutput.println("Keys: r runs every test, f the failed ones, q quits.");
-            }
+            case "test" -> topic("test", "Continuous testing",
+                    "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
+                    "again on each change of the main or test sources, without the application.",
+                    "Keys: r runs every test, f the failed ones, q quits.");
             case "idea" -> {
-                CliOutput.println(CliOutput.bold("vidocq idea") + " — IntelliJ run configurations (experimental)");
-                CliOutput.println();
-                CliOutput.println("Runs 'mvn vidocq:idea' in the project (./mvnw when present): one dev, run and");
-                CliOutput.println("debug configuration per application, in .run/, never .idea/.");
-                CliOutput.println();
-                CliOutput.println("Options:");
-                opt("--check",          "Only check that .run/ matches the poms (for CI)");
-                opt("--strict",         "Check, and also fail on files written or edited by hand");
-                opt("--kind <kind>",    "maven (default) or application: an Application run of the main class");
+                topic("idea", "IntelliJ run configurations (experimental)",
+                        "Runs 'mvn vidocq:idea' in the project (./mvnw when present): one dev, run and",
+                        "debug configuration per application, in .run/, never .idea/.");
+                options(CHECK,          "Only check that .run/ matches the poms (for CI)",
+                        "--strict",     "Check, and also fail on files written or edited by hand",
+                        "--kind <kind>", "maven (default) or application: an Application run of the main class");
             }
             case "doctor" -> {
-                CliOutput.println(CliOutput.bold("vidocq doctor") + " — Environment & project health checks");
-                CliOutput.println();
-                CliOutput.println("Runs a series of checks (Java version, JAVA_HOME, Maven wrapper,");
-                CliOutput.println("project layout, extensions) and prints a report. Exits non-zero if");
-                CliOutput.println("any check fails.");
-                CliOutput.println();
-                CliOutput.println("Options:");
-                opt("--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
+                topic("doctor", "Environment & project health checks",
+                        "Runs a series of checks (Java version, JAVA_HOME, Maven wrapper,",
+                        "project layout, extensions) and prints a report. Exits non-zero if",
+                        "any check fails.");
+                options("--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
             }
             case "create" -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
                 CliOutput.println();
-                CliOutput.println("Options:");
+                CliOutput.println(OPTIONS);
                 opt("--name, -n <name>",         "Project / artifact name (required)");
                 opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
@@ -426,7 +424,7 @@ public final class CliParser {
                 cmd("jpackage",           "Native installer / app-image (vidocq:jpackage)");
                 cmd("docker",             "Dockerfile around the jlink image (vidocq:docker)");
                 CliOutput.println();
-                CliOutput.println("Options:");
+                CliOutput.println(OPTIONS);
                 opt("--offline, -o",  "Run Maven offline (-o)");
                 opt("--skip-tests",   "Skip tests (-DskipTests)");
                 opt("--dry-run",      "Print the Maven command without running it");
@@ -440,7 +438,7 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Runs 'mvn clean' in the current project.");
                 CliOutput.println();
-                CliOutput.println("Options:");
+                CliOutput.println(OPTIONS);
                 opt("--offline, -o", "Run Maven offline (-o)");
                 opt("--dry-run",     "Print the Maven command without running it");
                 opt("-- <args...>",  "Pass everything after -- straight to Maven");
@@ -485,7 +483,7 @@ public final class CliParser {
                 CliOutput.println("in ~/.vidocq/cli, the 'vidocq' launcher is pointed at it, and an installed");
                 CliOutput.println("completion script is regenerated.");
                 CliOutput.println();
-                CliOutput.println("Options:");
+                CliOutput.println(OPTIONS);
                 CliOutput.println("  --check    Only report whether an update is available");
                 CliOutput.println();
                 CliOutput.println("Environment: VIDOCQ_CENTRAL, VIDOCQ_SNAPSHOTS (repository mirrors),");
@@ -524,6 +522,24 @@ public final class CliParser {
         CliOutput.println(CliOutput.bold("Plugin commands:"));
         for (VidocqCliPlugin plugin : plugins) {
             cmd(plugin.command(), plugin.description());
+        }
+    }
+
+    /** The heading of a command's help, then the lines that describe it. */
+    private static void topic(String command, String summary, String... description) {
+        CliOutput.println(CliOutput.bold("vidocq " + command) + " — " + summary);
+        CliOutput.println();
+        for (String line : description) {
+            CliOutput.println(line);
+        }
+    }
+
+    /** The options of a command's help, as name and description pairs. */
+    private static void options(String... namesAndDescriptions) {
+        CliOutput.println();
+        CliOutput.println(OPTIONS);
+        for (int i = 0; i < namesAndDescriptions.length; i += 2) {
+            opt(namesAndDescriptions[i], namesAndDescriptions[i + 1]);
         }
     }
 
