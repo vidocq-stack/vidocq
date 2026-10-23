@@ -137,7 +137,8 @@ To run the application once, without the watcher, use `mvn vidocq:run` [.tag-new
 `mvn vidocq:idea` [.tag-new]#NEW# writes IntelliJ IDEA run configurations for what an IDE should run: by
 default, three files per application — a Maven run of `vidocq:dev` suffixed ` (dev)` (the one above, console
 included), one of `vidocq:run` suffixed ` (run)`, and a Remote JVM Debug one suffixed ` (debug)` that attaches to
-`vidocq:dev`'s own debug agent. See xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
+`vidocq:dev`'s own debug agent. `vidocq.mainModule` is all it needs: the files are named after the
+`artifactId`, `todo (dev)` and so on. See xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
 NOTE: `vidocq dev` and `vidocq start` (the CLI commands, as opposed to the Maven goal) boot the runtime from the CLI's own module path and therefore do not see the extensions declared in your pom. Prefer `mvn vidocq:dev` and the packaged launcher for extension-based apps.
 

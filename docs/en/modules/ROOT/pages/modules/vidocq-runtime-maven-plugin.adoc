@@ -470,7 +470,9 @@ run always uses.
 
 | `vidocq.mainClass`
 | _(unset)_
-| The main class. Optional: the runtime links on the `ModuleMainClass` attribute of the module descriptor.
+| The application main class, typically a `@VidocqMain` trampoline. Optional: without it the runtime's own main boots the
+  application [.tag-new]#NEW#; with it, the class is passed as `-Dvidocq.app.main` and run inside the application
+  layer. See xref:usage.adoc#entry-point[The application entry point].
 
 | `vidocq.run.jvmArgs`
 | _(empty)_

@@ -341,7 +341,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Interface for the application entry class re-loaded inside the Vauban application layer by `Vidocq.run(Class, args)`.
 
 | `@VidocqMain`
-| Annotation for the zero-config IDE trampoline `main` — boots the runtime in the Vauban layer.
+| Annotation for the optional trampoline `main` — a right-click Run in the IDE, or a `VidocqApp` after boot; boots the runtime in the Vauban layer. An application needs none: the runtime's own main boots `vidocq.mainModule`.
 
 | `ApplicationLayer` [.tag-new]#NEW#
 | The module layer Vidocq boots the application in, when it has one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)`: what a library that scans the application reads, since the layer's class loader lists no directory. See xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files].

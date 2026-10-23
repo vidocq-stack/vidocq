@@ -138,8 +138,8 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 | Spring Boot | Vidocq Runtime | Note
 
 | `@SpringBootApplication`
-| `Vidocq.main(args)` + any class
-| No application class required
+| `vidocq.mainModule` in the pom
+| No application class required: the runtime's own main boots the module (xref:usage.adoc#entry-point[entry point])
 
 | `@RestController`
 | `@Path` + `@GET/@POST`

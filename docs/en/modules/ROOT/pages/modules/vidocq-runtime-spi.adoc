@@ -40,7 +40,7 @@ List indexed from the existing sources:
 | Typed conversion of configuration values.
 
 | `VidocqApp` / `@VidocqMain`
-| Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the zero-config IDE trampoline annotation.
+| Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the annotation of the optional trampoline `main` (an application needs none, see xref:usage.adoc#entry-point[The application entry point]).
 
 | `ApplicationLayer` [.tag-new]#NEW#
 | The application's module layer, when Vidocq boots it in one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)` (<<application-layer>>).

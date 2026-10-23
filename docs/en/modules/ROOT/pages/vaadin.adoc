@@ -68,6 +68,8 @@ Three parts of this pom are easy to leave out, and each one fails in its own way
 
 <properties>
   <vaadin.version>25.3.2</vaadin.version>
+  <!-- The application's Java module: the runtime's own main boots it, no main class needed. -->
+  <vidocq.mainModule>com.example.app</vidocq.mainModule>
   <vidocq.app.layer>all</vidocq.app.layer>
   <!-- Production mode under vidocq:dev, vidocq:run and in the vidocq:package launch scripts. -->
   <vidocq.dev.jvmArgs>-Dvaadin.productionMode=true</vidocq.dev.jvmArgs>
@@ -165,8 +167,6 @@ is open.
 [source,java]
 ----
 module com.example.app {
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
     requires io.vidocq.foy.api;
     requires io.vidocq.vauban.api;
@@ -180,23 +180,13 @@ module com.example.app {
 }
 ----
 
-The entry point is the usual `@VidocqMain` class, and a view is plain Vaadin:
+[.tag-new]#NEW# There is no main class: the runtime's own main boots the module that `vidocq.mainModule` names,
+under every goal down to the `vidocq:jlink` image. Add a `@VidocqMain` trampoline (and `requires
+io.vidocq.runtime.core; requires io.vidocq.runtime.spi;`) only for a right-click Run in the IDE or logic after
+boot, see xref:usage.adoc#vidocq-main-trampoline[When to add a trampoline]. A view is plain Vaadin:
 
 [source,java]
 ----
-@VidocqMain
-public class App implements VidocqApp {
-    static void main(String[] args) {
-        Vidocq.run(App.class, args);
-    }
-
-    @Override
-    public int run(String... args) throws Exception {
-        Vidocq.waitForExit();
-        return 0;
-    }
-}
-
 @Route("")
 public class MainView extends VerticalLayout {
     public MainView() {

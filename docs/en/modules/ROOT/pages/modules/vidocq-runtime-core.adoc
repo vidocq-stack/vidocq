@@ -34,18 +34,20 @@
 
 == Entry point
 
-[source,java]
-----
-package io.example;
+The entry point is the runtime's own main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, a facade over
+`VidocqBootstrap`. User code needs no main class, no `@SpringBootApplication` and no application class:
+extensions and beans are discovered from the module path (`ServiceLoader` + the compile-time bean index).
+`Vidocq.main` finds the application in one of three ways, tried in this order:
 
-public class App {
-    public static void main(String[] args) {
-        io.vidocq.runtime.core.Vidocq.main(args);
-    }
-}
-----
+* `-Dvidocq.app.path=<archives>`: the archives resolve into the Vauban application layer. `vidocq:run` and the
+  `vidocq:package` launchers pass it; `vidocq:dev`'s hot-reload loop re-creates that layer at each reload;
+* `-Dvidocq.app.module=<module>`: the module already sits in the boot layer and is re-layered (<<app-module-property>>).
+  A `vidocq:jlink` image passes it;
+* neither: the runtime boots in place, without an application layer.
 
-`Vidocq.main` is a simple facade over `VidocqBootstrap`. User code does not need a `@SpringBootApplication` nor an application class — extensions and beans are discovered from the module path (`ServiceLoader` + the compile-time bean index). For a zero-config IDE launch, annotate a trampoline `main` with `@VidocqMain` and call `Vidocq.run(App.class, args)` — the application is then re-loaded inside the Vauban application layer.
+An application main class is optional: a `@VidocqMain` trampoline that calls `Vidocq.run(App.class, args)`, for a
+right-click Run in the IDE or a `VidocqApp` that runs after boot. `Vidocq.run` re-layers the trampoline's module the
+same way, see xref:usage.adoc#entry-point[The application entry point].
 
 [#app-module-property]
 [.tag-new]#NEW# The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
@@ -53,7 +55,9 @@ public class App {
 [#main-shapes]
 === Which main methods are accepted [.tag-new]#NEW#
 
-Vidocq chooses the application's main itself whenever the application is handed over as a path rather than as a module to launch: `mvn vidocq:run`, `vidocq:dev` with `-Dvidocq.dev.hotReload=false`, and the packaged launcher of an application that has no `@VidocqMain` trampoline. All three pass `-Dvidocq.app.main`, and the runtime reaches that main by reflection, inside the application layer. (With a trampoline the script launches `--module app/acme.App` and the JVM launcher makes the choice; `vidocq:dev`'s hot-reload loop, the default, ignores `vidocq.app.main` on purpose and reboots the layer instead.)
+Vidocq chooses the application's main itself whenever the application is handed over as a path rather than as a module to launch: `mvn vidocq:run`, `vidocq:dev` with `-Dvidocq.dev.hotReload=false`, and the packaged launcher of an application that has no `@VidocqMain` trampoline. All three pass `-Dvidocq.app.main`, and the runtime reaches that main by reflection, inside the application layer. (With a trampoline the script launches `--module app/acme.App` and the JVM launcher makes the choice; `vidocq:dev`'s hot-reload loop, the default, ignores `vidocq.app.main` on purpose and reboots the layer instead.) All of this concerns an application that
+declares `vidocq.mainClass`: without one, no `vidocq.app.main` is passed and the runtime's main boots the
+application itself.
 
 The choice accepts the four shapes the Java SE launcher accepts since Java 25 (JEP 512), and, like the launcher, never requires `public`:
 
@@ -549,7 +553,7 @@ The beans of the bean index need load-time weaving, as those of an IDE build do,
 [VAUBAN-009] Load-time weaving could not be installed (...). Either build with Maven/Gradle (build-time weaving), run with -javaagent:vauban-weaver.jar=<plan>, or add the (ProxyLink) constructors manually.
 ----
 
-Build with Maven or Gradle, which weave at compile time, or launch through a `@VidocqMain` trampoline, whose application layer weaves without an agent.
+Build with Maven or Gradle, which weave at compile time, or launch the application in its application layer, which weaves without an agent: the runtime's own main does under `vidocq:dev`, `vidocq:run`, `vidocq:package` and in a `vidocq:jlink` image, and so does a `@VidocqMain` trampoline from the IDE.
 
 [#vidocq-gen-001]
 ==== VIDOCQ-GEN-001 — bean archives indexed at boot [.tag-new]#NEW#

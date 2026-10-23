@@ -7,10 +7,36 @@ point, packaging via the `vidocq-runtime-maven-plugin` (jlink, jpackage, Docker)
 configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-metrics},
 {spec-mp-openapi}), profiles, and AOT preparation.
 
-== The application entry point — `@VidocqMain`
+[#entry-point]
+== The application entry point
 
-The official application main is a *trampoline*: it contains nothing but
-`Vidocq.run(...)`.
+[.tag-new]#NEW# An application has no main class of its own by default. The runtime's main,
+`io.vidocq.runtime.core.Vidocq`, boots it from the module that `vidocq.mainModule` names, under every goal:
+
+* `vidocq:run` and the `vidocq:package` launchers hand the application to it as a path, `-Dvidocq.app.path`, and
+  `vidocq:dev`'s hot-reload loop re-creates that layer at each reload;
+* a `vidocq:jlink` image, and the `vidocq:jpackage` application built on it, start it with
+  `-Dvidocq.app.module`, see xref:modules/vidocq-runtime-core.adoc#app-module-property[the `vidocq.app.module`
+  property] and xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class];
+* `vidocq:idea` writes its `(dev)`, `(run)` and `(debug)` configurations from `vidocq.mainModule` alone, see
+  xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
+
+`vidocq create` writes no main class either, unless asked with `--main`. Whatever the launch, the application
+resolves into a **child module layer defined by the Vauban class loader**, where every class flows through the
+load-time transformations (client-proxy weaving…) at definition: same layer, same transformed classes, no
+instrumentation agent, no JVM warning.
+
+[#vidocq-main-trampoline]
+=== When to add a `@VidocqMain` trampoline
+
+A main class of your own is worth having in two cases only:
+
+* **a right-click Run on a main class in the IDE**, everything on the module path, without a Maven step (or the
+  `-Dvidocq.idea.kind=application` configurations of `vidocq:idea`, which run it);
+* **logic after boot, or an exit code**, through a `VidocqApp` passed to `Vidocq.run(Class, args)`.
+
+That main is a *trampoline*: it contains nothing but `Vidocq.run(...)`, and its module `requires
+io.vidocq.runtime.core` and `io.vidocq.runtime.spi`. Point `vidocq.mainClass` at it.
 
 [source,java]
 ----
@@ -31,12 +57,8 @@ public final class App implements VidocqApp {
 ----
 
 Why a trampoline? Because Vidocq does not let the application main "own" the runtime:
-`Vidocq.run()` re-resolves the application into a **child module layer defined by the
-Vauban class loader**, where every class flows through the load-time transformations
-(client-proxy weaving…) at definition. This is what makes a plain IDE launch —
-right-click → Run, everything on the module path, no special configuration — behave
-exactly like a production launch: same layer, same transformed classes, no
-instrumentation agent, no JVM warning.
+`Vidocq.run()` re-resolves the application into the Vauban layer, as the runtime's main does. A plain IDE launch
+then behaves exactly like a production launch.
 
 The contract (deliberately identical to Quarkus' `@QuarkusMain`):
 
@@ -46,9 +68,15 @@ The contract (deliberately identical to Quarkus' `@QuarkusMain`):
 * application logic that must run after boot goes into a `VidocqApp` passed to
   `Vidocq.run(Class, args)` — the class is re-loaded through the layer and instantiated
   there (as a CDI bean when it is one); its return value is the exit code;
-* a plain server without post-boot logic just calls `Vidocq.run(args)`.
+* a trampoline kept only for the IDE, without post-boot logic, just calls `Vidocq.run(args)`.
 
-`Vidocq.run()` picks the application modules of the boot layer automatically, with the
+`vidocq create --main` writes such a trampoline and sets `vidocq.mainClass`, see
+xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
+
+=== How the application modules are chosen
+
+When the application was resolved into the boot layer — a trampoline launched from the IDE, or a jlink image
+started with `vidocq.app.module` — `Vidocq.run()` and the runtime's main pick its modules automatically, with the
 policy of Vauban's xref:dev@vauban::se.adoc[Java SE launcher]: every module moves except the
 Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
 `sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
@@ -65,9 +93,9 @@ now fails with a message that names the class, its package and the two fixes, in
 container creates itself (Vidocq/vidocq#201). In the application layer, the usual case, Vidocq adds that
 export by itself.
 
-A legacy main that boots the runtime directly still works — unwoven beans are then
-covered by the load-time weaving agent (with the JDK's dynamic-agent warning) and the
-log suggests migrating to the trampoline.
+A legacy main that boots the runtime directly (through `VidocqBootstrap`) still works — unwoven beans are then
+covered by the load-time weaving agent (with the JDK's dynamic-agent warning). Delete it, or turn it into a
+trampoline if you need one of the two cases above.
 
 One more benefit: applications never declare generated providers in
 `module-info.java`. The annotation processors emit standard `META-INF/services` files
@@ -248,6 +276,36 @@ The workaround on 0.2.0 is to do by hand what 0.3.0 does natively:
 . launch with `--patch-module <dep.module>=<dir>` for each dependency, e.g. via the
   `<jvmArgs>` of the `package` goal for the generated launch scripts.
 ====
+
+[#several-applications]
+== Several applications in one reactor [.tag-new]#NEW#
+
+A reactor can hold one application per module, next to the library modules they share. Each application module
+is an ordinary Vidocq application: `vidocq-runtime-maven-plugin` in its `<build><plugins>`, and its own
+`vidocq.mainModule`. None of them needs a main class (<<entry-point>>).
+
+[source,xml]
+----
+<!-- orders/pom.xml -->
+<properties>
+    <vidocq.mainModule>com.acme.orders</vidocq.mainModule>
+</properties>
+
+<!-- billing/pom.xml -->
+<properties>
+    <vidocq.mainModule>com.acme.billing</vidocq.mainModule>
+</properties>
+----
+
+Run `mvn vidocq:idea` once from the reactor root: it writes `orders (dev)`, `orders (run)`, `orders (debug)` and
+the same three for `billing`, named after each module's `artifactId`, so two applications never collide. A
+module pom that sets `vidocq.idea.configurationName` gets that name instead, and `vidocq.idea.exclude=true` leaves
+a module out. Each `(dev)` and `(run)` configuration runs Maven on its own module's pom, so the sibling modules
+it depends on must be resolvable: `mvn install` the reactor once. When the plugin is only declared in the
+application modules, add it to the root `<pluginManagement>` so that the `vidocq:` prefix resolves there. See
+xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
+
+Give each application its own HTTP port in its `vidocq.properties` if you run them side by side.
 
 == MicroProfile configuration
 
