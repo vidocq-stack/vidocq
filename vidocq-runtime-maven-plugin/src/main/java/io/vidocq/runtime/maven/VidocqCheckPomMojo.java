@@ -64,9 +64,10 @@ import java.util.stream.Stream;
  *       Vauban indexer the parent wires, is absent from APT paths: an {@code <annotationProcessorPaths>}
  *       without {@code combine.children="append"} replaced it. Not checked under {@code <proc>none</proc>}.</li>
  *   <li><b>Missing codegen</b> — an extension is declared but its codegen bundle is absent
- *       from APT paths. The codegen artifact must actually exist in any reachable repository
- *       for this to flag (so extensions that legitimately ship no codegen, e.g. chappe, are
- *       silently ignored).</li>
+ *       from APT paths. The extension's {@code META-INF/vidocq/extension.properties} names the bundle, or
+ *       says there is none (Vidocq/vidocq#314). For an extension without that descriptor, the bundle is the
+ *       one its name gives by convention, and the codegen artifact must actually exist in any reachable
+ *       repository for this to flag (so extensions that legitimately ship no codegen are silently ignored).</li>
  *   <li><b>Orphan codegen</b> — a codegen bundle is in APT paths but the matching extension
  *       is not in the dependency list. Usually a leftover after removing an extension.</li>
  *   <li><b>Version drift</b> — an extension and its codegen are declared with mismatching
@@ -288,17 +289,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         for (Map.Entry<String, String> ext : extensions.entrySet()) {
             String extName = ext.getKey();
             String extVer = ext.getValue();
-            Matcher m = EXTENSION_PATTERN.matcher(extName);
-            if (!m.matches()) continue;
-            String codegenName = "vidocq-runtime-" + m.group(1) + "-extension-codegen";
-            if (codegenPaths.containsKey(codegenName)) continue;
-
-            // Silent-skip if the extension has no published codegen artifact. The codegen
-            // bundle lives under the same group as its runtime extension, so resolve it there.
-            if (!codegenArtifactExists(codegenName, extensionGroups.get(extName), extVer)) {
-                getLog().debug("Vidocq checkpom: '" + extName + "' has no companion codegen artifact, skipping.");
-                continue;
-            }
+            Optional<String> codegen = expectedCodegen(extName, extensionGroups.get(extName), extVer);
+            if (codegen.isEmpty() || codegenPaths.containsKey(codegen.get())) continue;
+            String codegenName = codegen.get();
 
             // What a missing bundle costs depends on the extension — a failed compilation for Ravel,
             // a reflective fallback for Cassini — and the bundle's own description says it. The
@@ -314,6 +307,31 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                     + "</path>");
         }
         return result;
+    }
+
+    /**
+     * The codegen bundle {@code extName} needs, under its group: the one its {@link ExtensionDescriptor} names
+     * (Vidocq/vidocq#314), none if the descriptor names none. An extension without a descriptor, such as a
+     * third-party one, needs the bundle its name gives by convention, when one is published.
+     */
+    private Optional<String> expectedCodegen(String extName, String groupId, String version) {
+        Dependency extension = new Dependency();
+        extension.setGroupId(groupId);
+        extension.setArtifactId(extName);
+        extension.setVersion(version);
+        Optional<ExtensionDescriptor> descriptor = resolvedJar(extension).flatMap(ExtensionDescriptor::of);
+        if (descriptor.isPresent()) {
+            return descriptor.get().codegen();
+        }
+        Matcher m = EXTENSION_PATTERN.matcher(extName);
+        if (!m.matches()) return Optional.empty();
+        String byConvention = "vidocq-runtime-" + m.group(1) + "-extension-codegen";
+        // The codegen bundle lives under the same group as its runtime extension, so resolve it there.
+        if (codegenArtifactExists(byConvention, groupId, version)) {
+            return Optional.of(byConvention);
+        }
+        getLog().debug("Vidocq checkpom: '" + extName + "' has no companion codegen artifact, skipping.");
+        return Optional.empty();
     }
 
     // ---- Check 2: Codegen path declared, no matching extension ----

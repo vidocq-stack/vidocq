@@ -31,14 +31,21 @@ import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.io.StringReader;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -283,6 +290,83 @@ class VidocqCheckPomMojoTest {
         assertTrue(warning.contains("<type>pom</type>"), warning);
         assertTrue(warning.contains("IntelliJ"), warning);
         assertTrue(warning.contains("Vidocq/vidocq#237"), warning);
+    }
+
+    /**
+     * Vidocq/vidocq#314: an extension that ships {@code META-INF/vidocq/extension.properties} names its codegen
+     * bundle there. checkpom asks for that bundle, whatever its name, and resolves nothing to find it.
+     */
+    @Test
+    void theExtensionDescriptorNamesTheCodegenBundle(@TempDir Path dir) throws Exception {
+        Path jar = jarWithDescriptor(dir, "id = cassini-rest\ncodegen = cassini-rest-processors\n");
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(cassini());
+        model.setBuild(compilerWith(CORE_CODEGEN_PATH));
+        List<String> errors = new ArrayList<>();
+
+        assertThrows(MojoFailureException.class, checkpomPublishingNoCodegen(new MavenProject(model), jar, errors)::execute);
+
+        assertEquals(1, errors.size(), errors.toString());
+        assertTrue(errors.getFirst().contains("<artifactId>cassini-rest-processors</artifactId>"), errors.getFirst());
+    }
+
+    /** Vidocq/vidocq#314: a descriptor without {@code codegen} says the extension ships no bundle. */
+    @Test
+    void anExtensionWhoseDescriptorNamesNoCodegenNeedsNone(@TempDir Path dir) throws Exception {
+        Path jar = jarWithDescriptor(dir, "id = cassini-rest\ndescription = Jakarta REST\n");
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(cassini());
+        model.setBuild(compilerWith(CORE_CODEGEN_PATH));
+
+        // Every codegen artifact resolves here: by convention, checkpom would ask for one.
+        assertDoesNotThrow(() -> strictCheckpom(new MavenProject(model), jar).execute());
+    }
+
+    /** A jar holding {@code descriptor} as its {@code META-INF/vidocq/extension.properties}. */
+    private static Path jarWithDescriptor(Path dir, String descriptor) throws IOException {
+        Path jar = dir.resolve("extension.jar");
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            out.putNextEntry(new ZipEntry(ExtensionDescriptor.RESOURCE));
+            out.write(descriptor.getBytes(StandardCharsets.ISO_8859_1));
+            out.closeEntry();
+        }
+        return jar;
+    }
+
+    /** A failing checkpom mojo for which no codegen artifact resolves, errors captured. */
+    private static VidocqCheckPomMojo checkpomPublishingNoCodegen(MavenProject project, Path jar, List<String> errors)
+            throws Exception {
+        VidocqCheckPomMojo mojo = new VidocqCheckPomMojo() {
+            @Override
+            Optional<Path> resolvedJar(Dependency d) {
+                return Optional.of(jar);
+            }
+
+            @Override
+            boolean codegenArtifactExists(String artifactId, String groupId, String version) {
+                return false;
+            }
+        };
+        setProject(mojo, project);
+        Field failOnMissing = VidocqCheckPomMojo.class.getDeclaredField("failOnMissing");
+        failOnMissing.setAccessible(true);
+        failOnMissing.set(mojo, true);
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void info(CharSequence content) {
+                // Only the errors matter here.
+            }
+
+            @Override
+            public void error(CharSequence content) {
+                errors.add(content.toString());
+            }
+        });
+        return mojo;
     }
 
     private static final String CORE_CODEGEN_PATH = "<path><groupId>io.vidocq.runtime</groupId>"
