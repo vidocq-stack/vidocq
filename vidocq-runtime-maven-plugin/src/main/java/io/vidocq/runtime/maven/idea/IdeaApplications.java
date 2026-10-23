@@ -115,32 +115,39 @@ final class IdeaApplications {
         Map<String, String> moduleNames = IntelliJModuleNames.firstImport(allProjects);
 
         for (MavenProject project : projects) {
-            String coordinates = project.getGroupId() + ":" + project.getArtifactId();
-            reportSkipProperty(project, coordinates, diagnostics);
-            Plugin plugin = candidatePlugin(project, coordinates, diagnostics);
-            if (plugin == null) {
-                continue;
-            }
-            // null when the runtime's own main boots the application: vidocq.mainModule is then enough.
-            String mainClass = ApplicationMainClass.normalize(ApplicationMainClass.declared(project));
-            if (mainClass == null && ApplicationMainClass.declaredMainModule(project) == null) {
-                reportNotAnApplication(plugin, coordinates, diagnostics);
-                continue;
-            }
-            IdeaApplication application = application(project, plugin, mainClass, directory, diagnostics, errors);
-            if (application == null) {
-                continue;
-            }
-            applications.add(application);
-
-            // The IntelliJ module only matters to Run on the main class, which needs one.
-            if (mainClass != null && project.getProperties().getProperty(MODULE_NAME_PROPERTY) == null) {
-                reportModuleName(project, coordinates, moduleNames, allProjects, diagnostics);
-            }
-            reportProfiles(project, coordinates, diagnostics);
+            discover(project, allProjects, directory, moduleNames, applications, diagnostics, errors);
         }
         reportIgnoredUserProperties(userProperties, diagnostics);
         return new Discovery(List.copyOf(applications), List.copyOf(diagnostics), List.copyOf(errors));
+    }
+
+    /** Adds the application {@code project} declares to {@code applications}, if any, with its diagnostics. */
+    private static void discover(MavenProject project, List<MavenProject> allProjects, Path directory,
+                                 Map<String, String> moduleNames, List<IdeaApplication> applications,
+                                 List<Diagnostic> diagnostics, List<String> errors) {
+        String coordinates = project.getGroupId() + ":" + project.getArtifactId();
+        reportSkipProperty(project, coordinates, diagnostics);
+        Plugin plugin = candidatePlugin(project, coordinates, diagnostics);
+        if (plugin == null) {
+            return;
+        }
+        // null when the runtime's own main boots the application: vidocq.mainModule is then enough.
+        String mainClass = ApplicationMainClass.normalize(ApplicationMainClass.declared(project));
+        if (mainClass == null && ApplicationMainClass.declaredMainModule(project) == null) {
+            reportNotAnApplication(plugin, coordinates, diagnostics);
+            return;
+        }
+        IdeaApplication application = application(project, plugin, mainClass, directory, diagnostics, errors);
+        if (application == null) {
+            return;
+        }
+        applications.add(application);
+
+        // The IntelliJ module only matters to Run on the main class, which needs one.
+        if (mainClass != null && project.getProperties().getProperty(MODULE_NAME_PROPERTY) == null) {
+            reportModuleName(project, coordinates, moduleNames, allProjects, diagnostics);
+        }
+        reportProfiles(project, coordinates, diagnostics);
     }
 
     /** Warns about {@value #SKIP_PROPERTY} declared in this pom, not inherited: the pom to fix is reported once. */
