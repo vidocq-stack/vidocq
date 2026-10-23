@@ -25,20 +25,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.vidocq.bodoni.core.testing.TldReader;
 
 /**
- * The fmt handlers share package-private support classes in {@code tags.fmt}: from outside that
- * package, as a container or generated page code calls them, every setter the TLD declares must
- * still be found on the public handler class and be invocable.
+ * The fmt and xml handlers share package-private support classes ({@code tags.fmt}, {@code tags.xml}):
+ * from outside those packages, as a container or generated page code calls them, every setter the TLD
+ * declares must still be found on the public handler class and be invocable.
  */
-class FmtSetterAccessTest {
+class SetterAccessTest {
 
-    @Test
-    void everyDeclaredSetterIsInvocableFromAnotherPackage() throws ReflectiveOperationException {
-        for (TldReader.Tag tag : TldReader.read("META-INF/fmt.tld").tags()) {
+    @ParameterizedTest
+    @CsvSource({ "META-INF/fmt.tld", "META-INF/x.tld" })
+    void everyDeclaredSetterIsInvocableFromAnotherPackage(String resource) throws ReflectiveOperationException {
+        for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());
             Object handler = type.getConstructor().newInstance();
             for (TldReader.Attribute a : tag.attributes()) {
@@ -47,7 +49,8 @@ class FmtSetterAccessTest {
                 Method method = type.getMethod(setter, parameter);
                 assertTrue(Modifier.isPublic(method.getDeclaringClass().getModifiers()),
                         tag.tagClass() + "." + setter + " is declared by a public class");
-                method.invoke(handler, defaultValue(parameter));
+                // The JSTL API's ConditionalTagSupport.setScope rejects null: give scope a legal value.
+                method.invoke(handler, a.name().startsWith("scope") ? "page" : defaultValue(parameter));
             }
         }
     }
