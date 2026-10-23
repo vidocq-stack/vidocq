@@ -144,6 +144,66 @@ class PomEditorTest {
         assertEquals(POM_WITH_DEPS, removed);
     }
 
+    /** BUG-20261023-07: remove left the empty {@code <dependencies>} that add created. */
+    @Test
+    void removeDropsTheDependenciesBlockAddCreated() {
+        String pom = """
+                <project>
+                    <artifactId>app</artifactId>
+                </project>
+                """;
+
+        String added = PomEditor.add(pom, KNOCK, "0.4.0").pom();
+
+        assertEquals(pom, PomEditor.remove(added, KNOCK).pom());
+    }
+
+    private static final String MANAGED_FIRST = """
+            <project>
+                <dependencyManagement>
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-core</artifactId>
+                            <version>1.0</version>
+                        </dependency>
+                    </dependencies>
+                </dependencyManagement>
+            %s</project>
+            """;
+
+    /** BUG-20261023-08: add wrote into the first {@code </dependencies>}, the dependencyManagement's. */
+    @Test
+    void addGoesToTheProjectDependenciesAfterADependencyManagement() {
+        String pom = MANAGED_FIRST.formatted("""
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-core</artifactId>
+                        </dependency>
+                    </dependencies>
+                """);
+
+        PomEditor.Result r = PomEditor.add(pom, KNOCK, "0.4.0");
+
+        assertTrue(PomDependencies.contains(r.pom(), KNOCK), r.pom());
+        String managed = r.pom().substring(0, r.pom().indexOf("</dependencyManagement>"));
+        assertFalse(managed.contains("knock"), r.pom());
+        assertEquals(pom, PomEditor.remove(r.pom(), KNOCK).pom());
+    }
+
+    /** BUG-20261023-08: with only a dependencyManagement, add creates the project's own {@code <dependencies>}. */
+    @Test
+    void addCreatesTheProjectDependenciesNextToADependencyManagement() {
+        String pom = MANAGED_FIRST.formatted("");
+
+        PomEditor.Result r = PomEditor.add(pom, KNOCK, "0.4.0");
+
+        assertTrue(PomDependencies.contains(r.pom(), KNOCK), r.pom());
+        assertFalse(r.pom().substring(0, r.pom().indexOf("</dependencyManagement>")).contains("knock"), r.pom());
+        assertEquals(pom, PomEditor.remove(r.pom(), KNOCK).pom());
+    }
+
     @Test
     void addPinsTheGivenVersion() {
         PomEditor.Result r = PomEditor.add(POM_WITH_DEPS, KNOCK, "0.4.0");

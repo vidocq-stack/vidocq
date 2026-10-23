@@ -885,3 +885,36 @@ where this whole bug class is invisible.
      is not a constant into `getModule().addUses(type)` + the call, with the Class-File API — generic, and would also
      lift the Collaboration Engine / LitTemplate limit, but it changes third-party bytecode (licence gate to review).
   3. Vaadin calls `ServiceLoader` only for real service types in `getOrCreate` (upstream, Vidocq/vidocq#256).
+
+## BUG-20261023-07 — `extension remove` leaves the empty `<dependencies>` that `extension add` created
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `feat/runtime-tooling`, #314)
+- **Affected module**: vidocq-runtime-tooling (`PomEditor.remove`, formerly in vidocq-runtime-cli)
+- **Symptom**: on a pom without project-level `<dependencies>`, `vidocq extension add knock-health` then
+  `vidocq extension remove knock-health` leaves `<dependencies></dependencies>` behind. Same family as
+  BUG-20261023-05, for the dependency rather than the processor path.
+- **Minimal reproduction**: `PomEditor.add` on `<project><artifactId>app</artifactId></project>`, then
+  `PomEditor.remove` on the result: the pom is not the original one.
+- **Cause**: `remove` deleted the `<dependency>` block only; the `<dependencies>` element `add` creates around it
+  was never considered.
+- **Investigations**:
+  - 2026-10-23: found by the `ExtensionEditor` tests written while moving the editors to the shared tooling module.
+    Fixed: when the removal leaves the project's `<dependencies>` empty, the element goes too.
+
+## BUG-20261023-08 — `extension add` writes into `<dependencyManagement>` when it comes first
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `feat/runtime-tooling`, #314)
+- **Affected module**: vidocq-runtime-tooling (`PomEditor.add`, formerly in vidocq-runtime-cli)
+- **Symptom**: on a pom whose `<dependencyManagement>` precedes the project's `<dependencies>`, the usual order,
+  `vidocq extension add knock-health` inserts the dependency into the managed list. The extension is then only
+  managed, never a dependency of the application, and `add` reports "Added knock-health". Without project-level
+  `<dependencies>`, it lands in the managed list too.
+- **Minimal reproduction**: `PomEditor.add` on a pom holding a `<dependencyManagement><dependencies>…` block
+  followed by an empty `<dependencies></dependencies>`: `PomDependencies.contains` is false for the coordinate.
+- **Cause**: `add` inserted before the first `</dependencies>` of the file, whichever element it closed; `remove`
+  already located the project's own `<dependencies>`, outside `<dependencyManagement>`.
+- **Investigations**:
+  - 2026-10-23: found by a test written for BUG-20261023-07. Fixed: `add` writes into the project's own
+    `<dependencies>`, as `remove` reads it, and creates that element when only a `<dependencyManagement>` has one.

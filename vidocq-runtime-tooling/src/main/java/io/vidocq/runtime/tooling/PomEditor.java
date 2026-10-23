@@ -67,8 +67,10 @@ public final class PomEditor {
         if (PomDependencies.contains(pom, coordinate)) {
             return new Result(pom, false);
         }
-        int close = pom.indexOf("</dependencies>");
-        if (close >= 0) {
+        // The project's own <dependencies>, never a dependencyManagement's (BUG-20261023-08).
+        int[] region = projectDependenciesRegion(pom);
+        if (region != null) {
+            int close = region[1] - DEPENDENCIES_CLOSE.length();
             int lineStart = pom.lastIndexOf('\n', close) + 1;
             String baseIndent = pom.substring(lineStart, close);
             String childIndent = isBlank(baseIndent) ? baseIndent + "    " : TWO_INDENTS;
@@ -126,7 +128,17 @@ public final class PomEditor {
                 search = blockEnd;
             }
         }
-        return new Result(sb.toString(), changed);
+        return new Result(changed ? withoutEmptyProjectDependencies(sb.toString()) : pom, changed);
+    }
+
+    /** The pom without its project-level {@code <dependencies>} when nothing is left in it (BUG-20261023-07). */
+    private static String withoutEmptyProjectDependencies(String pom) {
+        int[] region = projectDependenciesRegion(pom);
+        if (region == null
+                || !isBlank(pom.substring(region[0] + DEPENDENCIES_OPEN.length(), region[1] - DEPENDENCIES_CLOSE.length()))) {
+            return pom;
+        }
+        return withoutLines(pom, region[0], region[1]);
     }
 
     private static final String APT_OPEN = "<annotationProcessorPaths";
@@ -473,24 +485,42 @@ public final class PomEditor {
                 && coordinate.artifactId().equals(a.group(1).trim());
     }
 
+    private static final String DEPENDENCIES_OPEN = "<dependencies>";
+    private static final String DEPENDENCIES_CLOSE = "</dependencies>";
+
+    /** The elements whose own {@code <dependencies>} are not the project's: managed, a plugin's, a profile's. */
+    private static final List<String> NESTING_DEPENDENCIES = List.of("dependencyManagement", "build", "profiles");
+
     /**
-     * Locates the project-level {@code <dependencies>...</dependencies>} region,
-     * excluding a {@code <dependencyManagement>} block when present. Returns
-     * {@code [start, endExclusive]} or {@code null} if no project dependencies
-     * element exists (callers then scan the whole document).
+     * Locates the project-level {@code <dependencies>...</dependencies>} region, outside a
+     * {@code <dependencyManagement>}, a {@code <build>} (a plugin's dependencies) and {@code <profiles>}.
+     * Returns {@code [start, endExclusive]} or {@code null} if no project dependencies element exists.
      */
     private static int[] projectDependenciesRegion(String pom) {
-        int dmStart = pom.indexOf("<dependencyManagement>");
-        int dmEnd = dmStart < 0 ? -1 : pom.indexOf("</dependencyManagement>", dmStart);
+        List<int[]> nested = new ArrayList<>();
+        for (String element : NESTING_DEPENDENCIES) {
+            String open = "<" + element + ">";
+            String close = "</" + element + ">";
+            int from = 0;
+            int start;
+            while ((start = pom.indexOf(open, from)) >= 0) {
+                int end = pom.indexOf(close, start);
+                if (end < 0) {
+                    break;
+                }
+                nested.add(new int[]{start, end + close.length()});
+                from = end + close.length();
+            }
+        }
         int from = 0;
         int deps;
-        while ((deps = pom.indexOf("<dependencies>", from)) >= 0) {
-            boolean insideDm = dmStart >= 0 && dmEnd >= 0 && deps > dmStart && deps < dmEnd;
-            if (!insideDm) {
-                int end = pom.indexOf("</dependencies>", deps);
-                return end < 0 ? null : new int[]{deps, end + "</dependencies>".length()};
+        while ((deps = pom.indexOf(DEPENDENCIES_OPEN, from)) >= 0) {
+            int at = deps;
+            if (nested.stream().noneMatch(r -> at > r[0] && at < r[1])) {
+                int end = pom.indexOf(DEPENDENCIES_CLOSE, deps);
+                return end < 0 ? null : new int[]{deps, end + DEPENDENCIES_CLOSE.length()};
             }
-            from = deps + "<dependencies>".length();
+            from = deps + DEPENDENCIES_OPEN.length();
         }
         return null;
     }
