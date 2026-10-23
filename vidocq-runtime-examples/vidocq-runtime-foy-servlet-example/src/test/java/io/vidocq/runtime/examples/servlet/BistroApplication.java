@@ -71,13 +71,13 @@ final class BistroApplication {
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (true) {
-            try (Socket ignored = new Socket("127.0.0.1", port)) {
+            try (var _ = new Socket("127.0.0.1", port)) {
                 return new BistroApplication(process, log, base);
-            } catch (IOException notYet) {
-                if (!process.isAlive() || System.nanoTime() > deadline) {
+            } catch (IOException _) {
+                // Not listening yet: wait on the process, which also tells when it stopped.
+                if (process.waitFor(100, TimeUnit.MILLISECONDS) || System.nanoTime() > deadline) {
                     fail("the application did not listen on " + base + ":\n" + Files.readString(log));
                 }
-                Thread.sleep(100);
             }
         }
     }
