@@ -449,8 +449,9 @@ external reference itself, the JDK never fetches on its own:
   `the system id is not hierarchical` and `not a valid URI`;
   `<action>: external reference '<r>' cannot be read, system id '<id>': <cause>`. Other parse
   and transform failures end with `, line <n>, column <m>, system id '<id>'`, line and column
-  when the cause chain carries a SAX or XSLT location (the JDK's XSLT processor drops the
-  location of a document it parses during the transformation).
+  when a SAX or XSLT location knows them. The JDK's XSLT processor wraps the parse failure of
+  the document it transforms without keeping it as a cause: the reader of that document, an
+  `XMLFilterImpl` created per source, records it.
 - **DTD.** Validation is off. A DOCTYPE with an internal subset is accepted
   (`disallow-doctype-decl` is not set): TCK `positiveParseNoDTDValidationTest`. Must pass, B5:
   `positiveParseSystemIdTest`, `positiveTransformDocSystemIdTest`,

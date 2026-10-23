@@ -41,7 +41,7 @@ import org.xml.sax.SAXParseException;
 /** What the {@code x:} handlers share: the XPath context, the scopes and the failures. */
 final class XmlSupport {
 
-    /** Message of a failed document: action, cause message, line and column (when known), system id. */
+    /** Message of a failed document: action, cause message, line and column if known, system id. */
     private static final String DOCUMENT_FAILURE = "%s: %s%s, system id '%s'";
 
     /** Bound of a cause-chain walk, against cyclic chains. */
@@ -117,9 +117,10 @@ final class XmlSupport {
      * rewrite it on the way). Otherwise it is the message of the innermost meaningful cause
      * (wrappers that only repeat their cause are skipped), the line and column of the innermost
      * SAX or XSLT location that knows them, and the system id of the failing document: the
-     * innermost one a SAX or XSLT location names, else the first policy's. Either way the private bases given to the JDK are mapped back to what the page
-     * wrote ({@link SystemIdPolicy#pageView}). The cause is always {@code cause}, and a
-     * recorded failure that the cause chain does not reach is added as suppressed.
+     * innermost one a SAX or XSLT location names, else the first policy's. Either way the
+     * private bases given to the JDK are mapped back to what the page wrote
+     * ({@link SystemIdPolicy#pageView}). The cause is always {@code cause}, and a recorded
+     * failure that the cause chain does not reach is added as suppressed.
      *
      * @param action   the action name
      * @param cause    the parse or transform failure
@@ -128,6 +129,19 @@ final class XmlSupport {
      *                 names it
      */
     static JspException documentFailure(String action, Exception cause, SystemIdPolicy... policies) {
+        return documentFailure(action, cause, null, policies);
+    }
+
+    /**
+     * As {@link #documentFailure(String, Exception, SystemIdPolicy...)}, with the parse failure
+     * a reader recorded and the cause chain may not reach (the JDK's XSLT processor wraps the
+     * parse failure of the document it transforms without keeping it as a cause): it counts as
+     * the innermost location.
+     *
+     * @param parseFailure the recorded parse failure, {@code null} for none
+     */
+    static JspException documentFailure(String action, Exception cause, SAXParseException parseFailure,
+            SystemIdPolicy... policies) {
         for (SystemIdPolicy policy : policies) {
             JspException recorded = policy.recordedFailure();
             if (recorded != null) {
@@ -141,6 +155,9 @@ final class XmlSupport {
         Throwable reason = innermost(cause);
         String text = Objects.toString(reason.getMessage(), reason.getClass().getName());
         Location location = located(cause);
+        if (parseFailure != null) {
+            location = location.refinedBy(locationOf(parseFailure));
+        }
         String systemId = Objects.requireNonNullElse(location.systemId(), policies[0].parserSystemId());
         String message = DOCUMENT_FAILURE.formatted(action, text, location.position(), systemId);
         return new JspException(SystemIdPolicy.pageView(message, policies), cause);

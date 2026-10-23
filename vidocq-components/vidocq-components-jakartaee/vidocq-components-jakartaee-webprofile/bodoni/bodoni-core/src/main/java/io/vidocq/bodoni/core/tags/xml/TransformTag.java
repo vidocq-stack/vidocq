@@ -151,12 +151,12 @@ public class TransformTag extends DocumentTagSupport {
         try {
             transformer = transformer(stylesheet, xsltPolicy);
         } catch (TransformerException e) {
-            throw XmlSupport.documentFailure(ACTION, e, xsltPolicy, docPolicy);
+            throw XmlSupport.documentFailure(ACTION, e, XmlDocuments.parseFailure(stylesheet), xsltPolicy, docPolicy);
         }
         try {
             transform(transformer, docSource);
         } catch (TransformerException e) {
-            throw XmlSupport.documentFailure(ACTION, e, docPolicy, xsltPolicy);
+            throw XmlSupport.documentFailure(ACTION, e, XmlDocuments.parseFailure(docSource), docPolicy, xsltPolicy);
         }
         return EVAL_PAGE;
     }

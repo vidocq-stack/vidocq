@@ -413,11 +413,20 @@ class TransformTagTest {
     }
 
     /**
-     * A malformed stylesheet is parsed when the transformer is compiled, and its location is in
-     * the cause chain. A malformed document is parsed during the transformation, where the
-     * JDK's XSLT processor wraps the parse failure without keeping it as a cause: no line is
-     * known then.
+     * A malformed document is parsed during the transformation, where the JDK's XSLT processor
+     * wraps the parse failure without keeping it as a cause: Bodoni's reader records it.
      */
+    @Test
+    void aMalformedDocumentNamesTheLineAndColumn() {
+        TransformTag tag = transform("<a><b></a>", H4);
+        tag.setDocSystemId("/t/d.xml");
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertTrue(e.getMessage().matches("x:transform: .+, line 1, column 9, system id '/t/d\\.xml'"), e.getMessage());
+    }
+
+    /** A malformed stylesheet is parsed when the transformer is compiled; its location is in the cause chain. */
     @Test
     void aMalformedStylesheetNamesTheLineAndColumn() {
         TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + "><xsl:template match='/'>x</xsl:stylesheet>");

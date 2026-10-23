@@ -36,7 +36,10 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 import org.xml.sax.XMLFilter;
+import org.xml.sax.XMLReader;
+import org.xml.sax.helpers.XMLFilterImpl;
 
 /**
  * The XML documents of the {@code x:} library, read with the hardened JAXP objects of
@@ -161,12 +164,66 @@ public final class XmlDocuments {
     }
 
     /**
-     * A {@code SAXSource} over a {@code String} or a {@code Reader}: the reader keeps its
-     * entity resolver while the JDK transforms (probe: {@code JdkXmlFactsTest}).
+     * The parse failure the reader of a {@link #documentSource} or {@link #stylesheetSource}
+     * recorded while the JDK read it. The JDK's XSLT processor wraps the parse failure of the
+     * document it transforms without keeping it as a cause, so its location is only here.
+     *
+     * @param source a source of this class or of the page
+     * @return the first error or fatal error the reader reported, {@code null} for none or for
+     *         a source this class did not build
+     */
+    public static SAXParseException parseFailure(Source source) {
+        if (source instanceof SAXSource sax && sax.getXMLReader() instanceof RecordingReader reader) {
+            return reader.failure;
+        }
+        return null;
+    }
+
+    /**
+     * A {@code SAXSource} over a {@code String} or a {@code Reader}, read by a new
+     * {@link RecordingReader} over a hardened reader. The policy is the entity resolver of the
+     * recording reader itself: an {@code XMLFilterImpl} puts itself as its parent's resolver
+     * when it parses (probe: {@code JdkXmlFactsTest}).
      */
     private static SAXSource parsed(Object text, SystemIdPolicy policy) {
         InputSource input = new InputSource(text instanceof Reader reader ? reader : new StringReader((String) text));
         input.setSystemId(policy.parserSystemId());
-        return new SAXSource(XmlFactories.xmlReader(policy), input);
+        XMLReader hardened = XmlFactories.xmlReader(policy);
+        RecordingReader recording = new RecordingReader(hardened);
+        recording.setEntityResolver(policy);
+        recording.setErrorHandler(hardened.getErrorHandler());
+        return new SAXSource(recording, input);
+    }
+
+    /**
+     * Passes every event through and records the first error or fatal error before forwarding
+     * it to the error handler, the one the XSLT processor sets or else Bodoni's strict one.
+     * One per source, hence per action invocation: nothing is shared.
+     */
+    private static final class RecordingReader extends XMLFilterImpl {
+
+        private SAXParseException failure;
+
+        RecordingReader(XMLReader parent) {
+            super(parent);
+        }
+
+        @Override
+        public void error(SAXParseException exception) throws SAXException {
+            record(exception);
+            super.error(exception);
+        }
+
+        @Override
+        public void fatalError(SAXParseException exception) throws SAXException {
+            record(exception);
+            super.fatalError(exception);
+        }
+
+        private void record(SAXParseException exception) {
+            if (failure == null) {
+                failure = exception;
+            }
+        }
     }
 }

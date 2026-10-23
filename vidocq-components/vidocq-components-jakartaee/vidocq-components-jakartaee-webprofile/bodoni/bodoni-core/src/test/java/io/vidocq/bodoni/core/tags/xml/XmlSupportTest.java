@@ -110,6 +110,18 @@ class XmlSupportTest {
     }
 
     @Test
+    void aParseFailureOutsideTheChainGivesTheLocation() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/x/doc.xml", pc);
+        SAXParseException parse = new SAXParseException("unclosed", null, "bodoni-webapp:/x/doc.xml", 1, 9);
+        TransformerException cause = new TransformerException(new IllegalStateException("unclosed"));
+
+        JspException e = XmlSupport.documentFailure(ACTION, cause, parse, policy);
+
+        assertEquals("x:parse: unclosed, line 1, column 9, system id '/x/doc.xml'", e.getMessage());
+        assertSame(cause, e.getCause());
+    }
+
+    @Test
     void anXsltLocationGivesTheLineAndColumn() {
         SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/t/s.xsl", pc);
         SourceLocator locator = new Locator("bodoni-webapp:/t/s.xsl", 3, 7);

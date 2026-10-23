@@ -48,7 +48,10 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 /**
  * {@link XmlDocuments}: the {@code x:parse} paths without a tag (Tags 3.0 section 11.2) and the
@@ -172,6 +175,25 @@ class XmlDocumentsTest {
         assertSame(policy, source.getXMLReader().getEntityResolver());
         assertEquals("bodoni-webapp:/x/doc.xml", source.getSystemId());
         assertEquals("<a/>", read(source.getInputSource().getCharacterStream()));
+    }
+
+    @Test
+    void theReaderOfASourceRecordsItsFirstParseFailureAndStaysStrict() {
+        SAXSource source = (SAXSource) XmlDocuments.documentSource("<a/>", policy(null));
+        ErrorHandler reader = assertInstanceOf(ErrorHandler.class, source.getXMLReader());
+        SAXParseException first = new SAXParseException("first", null, null, 1, 2);
+        SAXParseException second = new SAXParseException("second", null, null, 1, 3);
+
+        assertNull(XmlDocuments.parseFailure(source));
+        assertThrows(SAXParseException.class, () -> reader.error(first));
+        assertThrows(SAXParseException.class, () -> reader.fatalError(second));
+        assertSame(first, XmlDocuments.parseFailure(source));
+    }
+
+    @Test
+    void aSourceTheClassDidNotBuildHasNoParseFailure() {
+        assertNull(XmlDocuments.parseFailure(new StreamSource(new StringReader("<a/>"))));
+        assertNull(XmlDocuments.parseFailure(new SAXSource(new InputSource(new StringReader("<a/>")))));
     }
 
     @Test
