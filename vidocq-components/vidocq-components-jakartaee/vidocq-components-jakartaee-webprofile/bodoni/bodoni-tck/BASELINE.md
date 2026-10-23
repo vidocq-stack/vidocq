@@ -53,7 +53,7 @@ By root cause (89 errors):
 | Root cause | Owner | Tests |
 |---|---|---:|
 | JSTL 1.0 `_rt` URIs not shipped | known decision (2026-10-23) | 40 |
-| Constant `${…}` on a deferred-value attribute calls a missing constructor | Ibarra | 32 |
+| Constant `${…}` on a deferred-value attribute: the Peano expression lacks the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 |
 | Translation-time constraints not enforced (BOD-006) | Bodoni | 9 |
 | `LocalizationContext` unreadable under `deny` (BOD-007) | Bodoni | 3 |
 | `fmt:message bundle` does not set the response locale (BOD-008) | Bodoni | 2 |
@@ -73,7 +73,7 @@ Class names are relative to `com.sun.ts.tests.jstl.`, each `….JSTLClientIT`.
 | `spec.core.general.outtag` | 7 | 7 | 0 | 0 | 0 | PASS |  |
 | `spec.core.general.remove` | 1 | 1 | 0 | 0 | 0 | PASS | smoke |
 | `spec.core.general.set` | 8 | 8 | 0 | 0 | 0 | PASS |  |
-| `spec.core.iteration.foreach` | 24 | 23 | 0 | 1 | 0 | FAIL | Ibarra defect: constant deferred attribute (1) |
+| `spec.core.iteration.foreach` | 24 | 23 | 0 | 1 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (1) |
 | `spec.core.iteration.fortokens` | 15 | 14 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-009) (1) |
 | `spec.core.iteration.loopstatus` | 1 | 1 | 0 | 0 | 0 | PASS |  |
 | `spec.core.urlresource.importtag` | 23 | 23 | 0 | 0 | 0 | PASS |  |
@@ -100,12 +100,12 @@ Class names are relative to `com.sun.ts.tests.jstl.`, each `….JSTLClientIT`.
 | `spec.fmt.i18n.responseencoding` | 2 | 0 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-008) (2) |
 | `spec.fmt.i18n.setbundle` | 7 | 4 | 0 | 3 | 0 | FAIL | Bodoni defect (BOD-007) (3) |
 | `spec.fmt.i18n.setlocale` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.sql.param` | 21 | 1 | 0 | 20 | 0 | FAIL | Ibarra defect: constant deferred attribute (20) |
+| `spec.sql.param` | 21 | 1 | 0 | 20 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (20) |
 | `spec.sql.query` | 26 | 26 | 0 | 0 | 0 | PASS |  |
-| `spec.sql.result` | 8 | 4 | 0 | 4 | 0 | FAIL | Ibarra defect: constant deferred attribute (4) |
+| `spec.sql.result` | 8 | 4 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) |
 | `spec.sql.setdatasource` | 22 | 22 | 0 | 0 | 0 | PASS | smoke |
-| `spec.sql.transaction` | 19 | 15 | 0 | 4 | 0 | FAIL | Ibarra defect: constant deferred attribute (4) |
-| `spec.sql.update` | 21 | 18 | 0 | 3 | 0 | FAIL | Ibarra defect: constant deferred attribute (3) |
+| `spec.sql.transaction` | 19 | 15 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) |
+| `spec.sql.update` | 21 | 18 | 0 | 3 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (3) |
 | `spec.xml.xconditional.xcwo` | 8 | 6 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) |
 | `spec.xml.xconditional.xforeach` | 9 | 9 | 0 | 0 | 0 | PASS |  |
 | `spec.xml.xconditional.xif` | 7 | 6 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) |
@@ -142,7 +142,7 @@ one category.
   "Ibarra: validation at init, not translation time (known deviation)" therefore has no test in
   this run.
 
-### Constant `${…}` on a deferred-value attribute — Ibarra defect
+### Constant `${…}` on a deferred-value attribute — Peano defect (COMP-010)
 
 - Tests (32): `spec.sql.param` 20 (every test but one), `spec.sql.result` 4
   (`positiveResultGetColumnNamesTest`, `…GetRowsByIndexTest`, `…GetRowsLowerCaseTest`,
@@ -159,13 +159,14 @@ one category.
   The line named is a constant expression on an attribute Bodoni's `c.tld` declares
   `rtexprvalue` with `<deferred-value>`, as the JSTL 3.0 TLD does: `<c:set var="expectedRows" value="${1}"/>`
   in the `sql` pages, `<c:forEach items="${'one,two,three'}" begin="2" end="1">` in `foreach`.
-- Cause: Ibarra's `PageGenerator.deferredAttribute` emits `new …$ExpressionN(ELContext, Class)`
-  for any `${…}` on such an attribute, while Peano's `ExpressionCompiler.compile` gives a
-  constant expression only a `(Class)` constructor. Not a Bodoni defect. Fixing it in Ibarra
-  (match the constructor Peano emits) or in Peano (always emit the context constructor) is the
-  maintainer's call.
-- Proposed issue title (Ibarra): "Constant `${…}` on an rtexprvalue deferred-value attribute
-  calls a missing `(ELContext, Class)` constructor of the Peano-compiled expression".
+- Cause (Peano, COMP-010): Peano's `ExpressionCompiler.compile` gave a constant expression only a
+  `(Class)` constructor, while every other compiled expression also has `(ELContext, Class)`. The
+  symptom appears in Ibarra-generated pages, because Ibarra's `PageGenerator.deferredAttribute`
+  calls `new …$ExpressionN(ELContext, Class)` for any `${…}` on such an attribute. Not a Bodoni
+  defect.
+- Fix: [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (constant expressions get
+  the `(ELContext, Class)` constructor), with the companion regression test IBARRA-156 on the
+  Ibarra branch `fix/deferred-constant-ctor`.
 
 ### Translation-time constraints not enforced — Bodoni defect (BOD-006)
 
@@ -200,7 +201,8 @@ one category.
   `charset: attribute set`). The page passes a `LocalizationContext` to
   `fmt:message bundle='<%= … %>'`; §8.4 makes "Any <fmt:message> action that establishes an i18n
   localization context" set the response locale. The `locale`, `bundle` and `setbundle` requests
-  of the same tests pass.
+  of the same tests pass. Whether a `bundle=` attribute "establishes" a localization context is
+  not spelled out by §8.4; the TCK is the arbiter, and it expects the response locale to be set.
 - See [BUG.md BOD-008](../BUG.md).
 
 ### `c:forTokens` deferred `items` — Bodoni defect (BOD-009)
@@ -270,12 +272,12 @@ the one the page describes:
 
 ## Upstream items
 
-Proposed titles for the maintainer; B5 files nothing in another repository.
+B5 files nothing in another repository.
 
-- Ibarra: "Constant `${…}` on an rtexprvalue deferred-value attribute calls a missing
-  `(ELContext, Class)` constructor of the Peano-compiled expression" (32 tests; the fix may
-  belong in Peano instead: the maintainer's call, companion branches).
-- Peano: none of its own in this run (see the Ibarra item).
+- Peano: COMP-010, constant expressions lacked the `(ELContext, Class)` constructor (32 tests),
+  fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61); companion regression
+  test IBARRA-156 on the Ibarra branch `fix/deferred-constant-ctor`.
+- Ibarra: none of its own in this run (the Peano item shows up in Ibarra-generated pages).
 - Foy: none.
 - Jakarta Tags TCK: "`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM',
   which the JDK 20+ `en_US` default style no longer accepts (no Java20Plus variant)" (2 tests).
