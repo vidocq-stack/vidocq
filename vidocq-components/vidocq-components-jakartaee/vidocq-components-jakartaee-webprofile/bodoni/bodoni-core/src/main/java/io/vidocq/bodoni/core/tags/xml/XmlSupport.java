@@ -81,6 +81,20 @@ final class XmlSupport {
         }
     }
 
+    /**
+     * The resolution policy of a system id attribute.
+     *
+     * @throws JspTagException with the policy's message, when {@code systemId} is not a URI
+     *                         or leaves the context root
+     */
+    static SystemIdPolicy policy(String action, String systemId, PageContext pc) throws JspTagException {
+        try {
+            return SystemIdPolicy.of(action, systemId, pc);
+        } catch (IllegalArgumentException e) {
+            throw new JspTagException(e.getMessage(), e);
+        }
+    }
+
     /** A {@code select} expression that cannot be evaluated, its cause kept. */
     static JspTagException xpathFailure(String action, String select, Exception cause) {
         return new JspTagException(action + ": cannot evaluate '" + select + "': " + cause.getMessage(), cause);

@@ -98,12 +98,7 @@ public class ParseTag extends DocumentTagSupport {
     @Override
     public int doEndTag() throws JspException {
         Reader input = reader(document());
-        SystemIdPolicy policy;
-        try {
-            policy = SystemIdPolicy.of(ACTION, systemId, pageContext);
-        } catch (IllegalArgumentException e) {
-            throw new JspTagException(e.getMessage(), e);
-        }
+        SystemIdPolicy policy = XmlSupport.policy(ACTION, systemId, pageContext);
         Document parsed;
         try {
             parsed = XmlDocuments.parse(input, policy, filter);

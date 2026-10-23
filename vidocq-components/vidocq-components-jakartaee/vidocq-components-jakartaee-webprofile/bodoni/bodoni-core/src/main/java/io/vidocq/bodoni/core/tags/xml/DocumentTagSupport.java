@@ -56,7 +56,7 @@ abstract class DocumentTagSupport extends TagSupport implements BodyTag {
         this.action = action;
     }
 
-    /** @param doc the XML document, a {@code String} or a {@code Reader}; the body is then ignored */
+    /** @param doc the XML document, of a type the action accepts; the body is then ignored */
     public void setDoc(Object doc) {
         this.doc = doc;
         this.docSpecified = true;
@@ -125,6 +125,11 @@ abstract class DocumentTagSupport extends TagSupport implements BodyTag {
     /** The {@link jakarta.servlet.jsp.PageContext} constant of the {@code scope} attribute. */
     final int scopeId() throws JspTagException {
         return XmlSupport.scopeId(action, scope);
+    }
+
+    /** Whether {@code var} was set. */
+    final boolean hasVar() {
+        return varName != null;
     }
 
     /** Stores {@code value} in {@code var} and {@code scope}; nothing without {@code var}. */
