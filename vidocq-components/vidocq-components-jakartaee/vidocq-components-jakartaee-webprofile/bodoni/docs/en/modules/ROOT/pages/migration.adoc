@@ -2,7 +2,7 @@
 :description: Coming to Bodoni from the GlassFish / Apache JSTL implementations — what will map.
 
 [.lead]
-Bodoni implements the `c:`, `fmt:` and `fn:` libraries today (B1, B2); `x:` and `sql:` follow in B3 and B4. This page records the contract so the expectation is clear.
+Bodoni implements the `c:`, `fmt:`, `x:` and `fn:` libraries today (B1 to B3); `sql:` follows in B4. This page records the contract so the expectation is clear.
 
 == The good news (target)
 
@@ -10,7 +10,8 @@ Pages that use the standard tags through the `jakarta.tags.*` URIs need no chang
 
 == What to check (target)
 
-* **JSTL 1.2 URIs** — `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt` and `http://java.sun.com/jsp/jstl/functions` are served by the same classes as the `jakarta.tags.*` URIs, so existing pages keep working. The JSTL 1.0 URIs (`_rt` variants, 1.0 EL TLDs) are not shipped. New pages should use `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql` (the last two arrive with B3 and B4).
+* **JSTL 1.2 URIs** — `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are served by the same classes as the `jakarta.tags.*` URIs, so existing pages keep working. The JSTL 1.0 URIs (`_rt` variants, 1.0 EL TLDs) are not shipped. New pages should use `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql` (`sql` arrives with B4).
 * **Implementation classes** — `org.apache.taglibs.standard.*` handlers, often extended by applications, have no Bodoni equivalent by name. Extend the API base classes (`LoopTagSupport`, `ConditionalTagSupport`) instead.
-* **XML engines** — Bodoni uses the JDK XPath/XSLT implementation; Xalan-specific extension functions are not available.
+* **XML engines** — Bodoni uses the JDK XML parser, XPath and XSLT 1.0 implementations (`java.xml`); Xalan-specific extension functions are not available, and the JDK secure processing mode disables extension functions altogether.
+* **XML external references** — a page that relied on a document, a DTD, `xsl:import`, `xsl:include` or `document()` reaching another host, or a local file outside the web application, must change: references are limited by a same-origin policy and refused without a system id. Load the remote document with `c:import` first, or give a system id of the same origin; see xref:reference.adoc#xml-external-references[XML external references]. `position()` and `last()` in a nested `select` of `x:forEach` do not see the loop (BOD-003): use `varStatus`.
 * **Resource bundles under Java Modules** — `fmt:` finds bundles by name through the thread context class loader, so a named application module must `opens` the bundle package, keep the bundles at the jar root or in a non-package directory, or supply a `LocalizationContext`; see xref:reference.adoc#bundles[Resource bundles under Java Modules].

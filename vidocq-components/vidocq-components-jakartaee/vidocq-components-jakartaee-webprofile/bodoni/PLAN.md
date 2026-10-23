@@ -1,9 +1,9 @@
 # Bodoni — Design plan
 
-> Status: **B2 delivered (2026-10-22)** -- the `fn:` functions, the `c:` core tags and the
-> `fmt:` i18n and formatting tags are implemented in `bodoni-core`, with unit tests and an
-> Ibarra integration test (`bodoni-it-ibarra`, `it-ibarra` profile). `x:` and `sql:` (B3, B4)
-> are not implemented. This document is the design of record for Bodoni, the
+> Status: **B3 delivered (2026-10-23)** -- the `fn:` functions, the `c:` core tags, the
+> `fmt:` i18n and formatting tags and the `x:` XML tags are implemented in `bodoni-core`, with
+> unit tests and an Ibarra integration test (`bodoni-it-ibarra`, `it-ibarra` profile). `sql:`
+> (B4) is not implemented. This document is the design of record for Bodoni, the
 > Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem,
 > required by Jakarta EE Web Profile 11 and tracked by
 > [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) (see
@@ -223,9 +223,9 @@ requirement and is out of scope.
 XPath **variable bindings over page scopes** (`$foo`, `$param:foo`, `$header:foo`,
 `$cookie:foo`, `$initParam:foo`, `$pageScope:foo`, …) — implemented with an
 `XPathVariableResolver` backed by the `PageContext`, plus the §11.1.6 empty-document
-default context node and the `x:forEach` context. Secure-processing defaults (external
-entities, `systemId` resolution via `ServletContext.getResource`, spec §11.1.7) need a
-decision on XXE hardening vs TCK expectations (open question 6).
+default context node and the `x:forEach` context. External references (entities, DTD,
+`xsl:import`, `xsl:include`, `document()`, spec §11.1.7) follow the same-origin policy
+decided in B3 (open question 6, "Decisions recorded in B3").
 
 ### `c:import` — no HTTP library
 
@@ -281,7 +281,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 | B0 | Scaffold: reactor, `bodoni-core` module descriptor, docs, this plan | `./mvnw -ntp clean install` green (needs the first commit, or `-Dmaven.gitcommitid.skip=true`) |
 | B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). BOD-001 fixed by `bodoni-peano` |
 | B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (BOD-002: fixed in Vidocq/foy, Foy BUG-20261022-06; Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix); open question 4 settled |
-| B3 | `x:` (§11–§13): JDK parser/XSLT/XPath, scope variable resolver, `x:forEach` context | unit tests; open question 6 settled |
+| B3 | **Done (2026-10-23).** `x:` (§11–§13): 10 handlers in `tags.xml` (`parse`, `out`, `set`, `if`, `choose`/`when`/`otherwise`, `forEach`, `transform`, `param`), `x.tld` and `x-1_2.tld`, JDK parser/XSLT/XPath, XPath variable bindings over the page scopes, same-origin resolution of external references, `RangeLoopTagSupport` shared with `c:forEach` and `c:forTokens` | unit tests; pages render on Ibarra in an IT (external references included); open question 6 settled; `requires transitive java.xml` settles the Bodoni side of open question 3 |
 | B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
 | B5 | `bodoni-tck` + `run-official-tck-tags-3.0.sh`, behind `-Ptck` | official suite green with standard handlers (open question 1 settled) |
 | B6 | Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
@@ -331,8 +331,9 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    implementation for the `jakarta.tags.*` URIs; does a WAR-bundled Bodoni win (Pages
    allows a container to provide alternate implementations for well-known URIs)? What does
    the WARNING block tell users to exclude? To be settled by `bodoni-it-openliberty`.
-6. **XML hardening** — secure-processing / external-entity defaults for `x:parse` and
-   `x:transform` vs spec §11.1.7 and TCK expectations.
+6. ~~**XML hardening**~~ -- decided in B3 (2026-10-23): same origin; see "Decisions recorded
+   in B3". Secure-processing / external-entity defaults for `x:parse` and `x:transform` vs
+   spec §11.1.7 and TCK expectations.
    Evidence (JDK 25, 2026-10-23), `JdkXmlFactsTest` (raw JAXP from `newDefaultInstance()`,
    `FEATURE_SECURE_PROCESSING` true, access properties `""`, kept as a regression test):
    - `doctypeWithInternalSubsetParses` — holds: the TCK `positiveParseNoDTDValidationTest`
@@ -401,6 +402,89 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 - **Bundle prefix**: the `prefix` of an enclosing `fmt:bundle` applies to every nested
   `fmt:message`, including one with an explicit `bundle` attribute (§8.6, "any nested
   `<fmt:message>` actions").
+
+## Decisions recorded in B3
+
+Decided with the maintainer on 2026-10-23.
+
+**Same-origin policy for XML external references** (open question 6). Every `x:parse` and
+`x:transform` runs with `XMLConstants.FEATURE_SECURE_PROCESSING` true on each
+`DocumentBuilderFactory`, `SAXParserFactory`, `TransformerFactory` and `XPathFactory` Bodoni
+creates (JDK expansion limits, no XSLT or XPath extension functions). Bodoni resolves every
+external reference itself, the JDK never fetches on its own:
+
+- **Resolvers.** An `EntityResolver2` for external entities and the external DTD subset, a
+  `URIResolver` for `xsl:import`, `xsl:include` and `document()`; both hand the JDK an opened
+  stream (`internal.SystemIdPolicy`).
+- **No system id**: every external reference is refused.
+- **Absolute system id**: a target must have the same scheme, host and port (scheme and host
+  compared case-insensitively, default port normalised). Targets open with
+  `URL.openConnection()`, connect and read timeouts set, HTTP redirects off, a 3xx or any other
+  non-2xx status is a failure. Under a `file:` system id, an empty-authority UNC target
+  (`file:////host/share`) is refused as not the same origin.
+- **Relative system id** (§11.1.7): targets stay inside the web application, read with
+  `ServletContext.getResourceAsStream`; absolute targets are refused. A path with a leading `/`
+  is context-relative, anything else is relative to the directory of the current page (the
+  request attribute `jakarta.servlet.include.servlet_path` when set, else
+  `HttpServletRequest.getServletPath()`), like `c:import`. A `.` or `..` segment is refused.
+- **Opaque system id** (`jar:` and the like): every reference is refused.
+- **The origin is fixed when the policy is built**, from the page's system id. The base a
+  parser or an XSLT processor passes only resolves the reference, so an `xml:base` in an
+  untrusted document cannot widen it.
+- **Failures.** A refused or failed reference ends the action with a `JspException` that names
+  the reference and the system id, cause kept. Formats:
+  `<action>: external reference '<r>' refused, system id '<id or (none)>': <reason>` with the
+  reasons `no system id`, `not the same origin`, `outside the web application`,
+  `the system id is not hierarchical` and `not a valid URI`;
+  `<action>: external reference '<r>' cannot be read, system id '<id>': <cause>`. Other parse
+  and transform failures end with `, system id '<id>'`.
+- **DTD.** Validation is off. A DOCTYPE with an internal subset is accepted
+  (`disallow-doctype-decl` is not set): TCK `positiveParseNoDTDValidationTest`. Must pass, B5:
+  `positiveParseSystemIdTest`, `positiveTransformDocSystemIdTest`,
+  `positiveTransformXmlAndXmlSystemIdTest`, `positiveTransformXsltSystemIdTest` (not run yet).
+
+**Evidence from the Task 1 probe** (open question 6, `JdkXmlFactsTest`) and what it led to:
+the JDK access properties `ACCESS_EXTERNAL_DTD`, `ACCESS_EXTERNAL_SCHEMA` (parsers) and
+`ACCESS_EXTERNAL_STYLESHEET` (XSLT) are set to `""` explicitly, because a stream supplied by
+Bodoni's resolvers still passes under `""`, and a system property or `jaxp.properties` then
+cannot reopen JDK-side fetching. Bodoni's resolvers never answer `null`: under a non-fetchable
+base the JDK silently drops an `xsl:import` that got a `null`, so they always refuse by
+throwing. The JDK passes a `null` entity name, never `[dtd]`, so the name cannot tell the
+external subset from an entity.
+
+**Private parser bases.** The parser is given `bodoni-webapp:<context-relative path>` for a
+relative system id and `bodoni-none:/doc/` when the page gives none, so the JDK never expands a
+reference against the JVM working directory. Messages that a page can see map them back to what
+the page wrote; JDK exceptions kept in the cause chain, and the output of
+`unparsed-entity-uri()`, may still show the private names (not sensitive). An exported
+`Document` has a `null` document URI when the page gave no system id.
+
+**Rulings of the B3 plan.**
+
+| Topic | Ruling |
+|---|---|
+| `java.xml` | `requires transitive java.xml`: Bodoni uses it directly and exported signatures expose `org.xml.sax.XMLFilter` and `javax.xml.transform.Result`; no reliance on the API module's `java.desktop` chain (open question 3) |
+| URIs | `jakarta.tags.xml` and `http://java.sun.com/jsp/jstl/xml`, same classes (`x.tld`, `x-1_2.tld`); not the 1.0 `xml` / `xml_rt` URIs; no `<validator>` (B1 precedent) |
+| Package | `io.vidocq.bodoni.core.tags.xml`, exported |
+| Parsing | Namespace-aware, XInclude off, error handlers that throw on errors and drop warnings (no `System.err` output); factories, builders, transformers and `XPath` objects created per use, none shared, no `Transformer` cache |
+| `select` | XPath, never EL (§2.3, §11.1.5): `rtexprvalue` false |
+| Exported types | `x:parse` `var` and `varDom`: the `org.w3c.dom.Document`; `x:set` of a node-set: an immutable `internal.NodeSet implements NodeList`; `x:forEach` `var`: the current `Node` |
+| Java to XPath | `Boolean`, `String`, `Node`, `NodeList` as is; `Number` to `Double`; any other object `String.valueOf` (§11.1.3 leaves it open) |
+| `$sessionScope:` without a session | Unbound, the evaluation fails, no session is created (as the i18n actions of B2) |
+| `x:choose` / `x:when` / `x:otherwise` | Own classes in `tags.xml`: `x:when` must check for an `x:choose` parent, and `c:choose`'s branch state is package-private |
+| `begin` / `end` / `step` | Public abstract `tags.core.RangeLoopTagSupport extends LoopTagSupport`, used by `c:forEach`, `c:forTokens` and `x:forEach` |
+| `x:transform` | `result` when set, else `var`, else the page; a page-supplied `Source` is passed as is; a `null` `x:param` value sets no parameter |
+| Readers | A page-supplied `Reader` is never closed by Bodoni |
+
+**Known limitation (BOD-003).** Inside `x:forEach`, `position()` and `last()` at the top level
+of a nested `select` evaluate against the context node alone (1 and 1): the JDK's
+`javax.xml.xpath` cannot set the context position and size of §12.6. `varStatus` (`count`,
+`last`) gives the position. Tracked in `BUG.md`.
+
+**Open interpretations, to settle with the TCK (B5).** An empty `x:forEach` `select` throws, per
+§12.6, while a TCK page that is packaged but not run expects no iteration. The translation-time
+checks (`x:choose` without `x:when`, and so on) are not done, since there is no TLV (B1
+precedent).
 
 ## Cross-repo item: BOD-001 (fixed)
 

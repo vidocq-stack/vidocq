@@ -2,7 +2,7 @@
 :description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
 
 [.lead]
-Bodoni implements three of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1, B2). The table gives the status of each.
+Bodoni implements four of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B3). The table gives the status of each.
 
 [cols="1,2,1,1",options="header"]
 |===
@@ -11,11 +11,11 @@ Bodoni implements three of the five tag libraries of Jakarta Standard Tag Librar
 | Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | implemented (B1)
 | Functions | `jakarta.tags.functions` | `fn` | implemented (B1)
 | I18N and formatting | `jakarta.tags.fmt` | `fmt` | implemented (B2)
-| XML processing | `jakarta.tags.xml` | `x` | planned (B3)
+| XML processing | `jakarta.tags.xml` | `x` | implemented (B3)
 | Relational database access | `jakarta.tags.sql` | `sql` | planned (B4)
 |===
 
-The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
+The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
 
 == Core library
 
@@ -50,6 +50,22 @@ The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/
 
 The directory `i18n-bundles` is not a Java package, so a named application module needs no `opens` for it. Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
 
+== XML library
+
+[source,jsp]
+----
+<%@ taglib prefix="x" uri="jakarta.tags.xml" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<x:parse var="catalog" systemId="/xml/catalog.xml"><catalog><book id="1"><title>Manuale</title></book></catalog></x:parse>
+<x:forEach select="$catalog//book" varStatus="s">
+  <p>${s.count}. <x:out select="title"/> (id <x:out select="@id"/>)</p>
+</x:forEach>
+<x:if select="count($catalog//book) > $param:min"><p>Enough books.</p></x:if>
+<x:transform doc="${catalog}" xslt="${stylesheet}" xsltSystemId="/xsl/list.xsl"/>
+----
+
+The `select` attributes are XPath 1.0 expressions, not EL; `$param:min` reads a request parameter. External references of a document or a stylesheet are limited by a same-origin policy: see xref:reference.adoc#xml-external-references[XML external references].
+
 == Functions library
 
 [source,jsp]
@@ -62,7 +78,7 @@ The directory `i18n-bundles` is not a Java package, so a named application modul
 
 == Configuration data
 
-The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]); the `sql:` settings matter from B4:
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:`, `x:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]); the `sql:` settings matter from B4:
 
 * `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
 * `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.

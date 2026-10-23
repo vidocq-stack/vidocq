@@ -79,3 +79,18 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix. With it,
   requests run with the application class loader as context class loader and the bundle ITs
   (one per placement) pass without any change to the host or to Bodoni.
+
+## BOD-003 · 2026-10-23 · `position()` and `last()` in the `select` of a nested `x:` action see a context of one node
+
+- Symptom: inside `x:forEach`, `position()` and `last()` at the top level of a nested `select`
+  answer `1` and `1` on every iteration, instead of the position and the size of the node-set
+  being iterated (Tags 3.0 section 12.6).
+- Minimal repro: `<x:parse var="d"><r><b/><b/><b/></r></x:parse>` then
+  `<x:forEach select="$d//b"><x:out select="position()"/></x:forEach>` prints `1` three times
+  (expected `1`, `2`, `3`).
+- Cause: Bodoni evaluates the nested `select` with `javax.xml.xpath`, whose API takes a context
+  node but cannot set the context position and size. Bodoni cannot provide them without leaving
+  the JDK XPath engine (no Xalan, no third-party library).
+- Workaround: read the position from `varStatus` (`count`, `last`), for example
+  `<x:forEach select="$d//b" varStatus="s"><c:out value="${s.count}"/></x:forEach>`.
+- Status: open (limitation, documented in the Reference page).

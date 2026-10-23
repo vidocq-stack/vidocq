@@ -1,5 +1,5 @@
 = Bodoni
-:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B2: `fn:`, `c:` and `fmt:` delivered.
+:description: Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, native Java Modules, portable tag handlers with optional build-time inlining by Ibarra. B3: `fn:`, `c:`, `fmt:` and `x:` delivered.
 
 // TODO: centred logo (image::bodoni-logo.png[Bodoni,300,role=module-logo]) once
 // modules/ROOT/images/bodoni-logo.png exists — tracked in tasks/todo.md.
@@ -9,7 +9,7 @@ Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vido
 
 [IMPORTANT]
 ====
-Milestone **B2** is delivered: the `c:` (core), `fn:` (functions) and `fmt:` (I18N and formatting) libraries are implemented. The `x:` and `sql:` libraries are not yet (B3, B4). Under Peano with `peano.reflection=deny`, add the optional `bodoni-peano` adapter: xref:reference.adoc#bod-001[BOD-001].
+Milestone **B3** is delivered: the `c:` (core), `fn:` (functions), `fmt:` (I18N and formatting) and `x:` (XML processing) libraries are implemented. The `sql:` library is not yet (B4). Under Peano with `peano.reflection=deny`, add the optional `bodoni-peano` adapter: xref:reference.adoc#bod-001[BOD-001].
 This documentation describes the `{project-version}` development line; every page states what exists today.
 The design of record is link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
 ====
@@ -29,7 +29,7 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.bodoni.core` — see xref:internals.adoc[Internals]
 | Runtime dependencies | None beyond the JSTL API (`compile`); Pages, Servlet and EL APIs are `provided` by the container
-| Status | B2 — `c:`, `fn:` and `fmt:` implemented; `x:`, `sql:` not yet; not released or certified
+| Status | B3 — `c:`, `fn:`, `fmt:` and `x:` implemented; `sql:` not yet; not released or certified
 | Official TCK | Not run yet — see xref:tck.adoc[TCK status]
 |===
 
