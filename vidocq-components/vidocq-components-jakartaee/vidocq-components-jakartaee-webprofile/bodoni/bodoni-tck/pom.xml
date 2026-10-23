@@ -136,6 +136,11 @@
                     <!-- Arquillian, ShrinkWrap and the TCK clients are not Java modules:
                          class path, like ibarra-tck. The deployments stay modular. -->
                     <useModulePath>false</useModulePath>
+                    <systemPropertyVariables>
+                        <!-- The TCK database's H2 server binds the loopback address its URL names,
+                             not the wildcard: H2 reads this once, when the JVM loads it. -->
+                        <h2.bindAddress>127.0.0.1</h2.bindAddress>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

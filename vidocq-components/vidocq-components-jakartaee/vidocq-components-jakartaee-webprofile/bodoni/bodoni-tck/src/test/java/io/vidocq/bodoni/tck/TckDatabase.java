@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.h2.engine.SysProperties;
 import org.h2.tools.Server;
 
 /**
@@ -42,12 +43,19 @@ import org.h2.tools.Server;
  * shuts it down, so a later {@link #start(Path)} in the same JVM sees only the DDL's rows. The server
  * accepts local connections only (no {@code -tcpAllowOthers}) and creates no database on demand (no
  * {@code -ifNotExists}).
+ *
+ * <p>The server binds {@value #LOOPBACK} itself, through H2's JVM-wide {@value #BIND_ADDRESS_PROPERTY}
+ * system property (the module's Surefire configuration sets it). On the wildcard address, another socket
+ * of any process could bind {@value #LOOPBACK} on the same port (Java sets {@code SO_REUSEADDR}), and
+ * the clients of {@link #url()} then reached that socket instead of H2.
  */
 final class TckDatabase implements AutoCloseable {
     static final String NAME = "jstl";
     static final String USER = "jstl";
     static final String PASSWORD = "jstl";
     static final String DRIVER = "org.h2.Driver";
+    static final String LOOPBACK = "127.0.0.1";
+    static final String BIND_ADDRESS_PROPERTY = "h2.bindAddress";
 
     private static final String DROP_TABLE = "drop table";
 
@@ -75,6 +83,7 @@ final class TckDatabase implements AutoCloseable {
      * so that they never share, nor shut down, the {@value #NAME} database of the listener.
      */
     static TckDatabase start(Path ddl, String name) throws IOException, SQLException {
+        requireLoopbackBinding(SysProperties.BIND_ADDRESS);
         List<String> statements = statements(Files.readString(ddl));
         Connection keeper = DriverManager.getConnection("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1", USER, PASSWORD);
         Server server;
@@ -128,9 +137,28 @@ final class TckDatabase implements AutoCloseable {
         return kept.toString();
     }
 
+    /** The port the server is bound to, on {@value #LOOPBACK}. */
+    int port() {
+        return server.getPort();
+    }
+
+    /**
+     * Refuses to start unless H2 binds its servers to {@value #LOOPBACK}. H2 reads the property once,
+     * when its {@code SysProperties} class loads, so it must be set when the JVM starts.
+     *
+     * @param bindAddress the bind address H2 uses, {@code null} when unset
+     * @throws IllegalStateException when it is not {@value #LOOPBACK}
+     */
+    static void requireLoopbackBinding(String bindAddress) {
+        if (!LOOPBACK.equals(bindAddress)) {
+            throw new IllegalStateException("The TCK database must bind " + LOOPBACK + ", the address of its URL;"
+                    + " start the JVM with -D" + BIND_ADDRESS_PROPERTY + "=" + LOOPBACK + " (found: " + bindAddress + ")");
+        }
+    }
+
     /** The URL the WARs connect with: loopback, the server's bound port, the in-memory database. */
     String url() {
-        return "jdbc:h2:tcp://127.0.0.1:" + server.getPort() + "/mem:" + name;
+        return "jdbc:h2:tcp://" + LOOPBACK + ":" + server.getPort() + "/mem:" + name;
     }
 
     /** The four non-empty system properties {@code SqlUrlClient} and {@code CompatAbstractUrlClient} need. */

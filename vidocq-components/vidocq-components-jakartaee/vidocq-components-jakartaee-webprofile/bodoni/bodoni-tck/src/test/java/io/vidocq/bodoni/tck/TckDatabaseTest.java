@@ -19,6 +19,9 @@
  */
 package io.vidocq.bodoni.tck;
 
+import java.net.BindException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -164,5 +167,30 @@ class TckDatabaseTest {
         database = TckDatabase.start(ddl, name);
 
         assertEquals(2, DdlFixture.countT1(database.url()));
+    }
+
+    /**
+     * The server owns the loopback port its URL names. Bound to the wildcard address, it let another
+     * socket bind {@code 127.0.0.1} on the same port (macOS, {@code SO_REUSEADDR}), and a client of the
+     * URL then reached that socket: "unexpected status 6148" is the header of an HTTP/2 SETTINGS frame.
+     */
+    @Test
+    void noOtherSocketCanTakeTheLoopbackPortOfTheUrl() throws Exception {
+        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
+        InetAddress loopback = InetAddress.getByName(TckDatabase.LOOPBACK);
+        int port = database.port();
+
+        assertThrows(BindException.class, () -> new ServerSocket(port, 0, loopback).close());
+        assertEquals(2, DdlFixture.countT1(database.url()));
+    }
+
+    @Test
+    void onlyALoopbackBindAddressIsAccepted() {
+        TckDatabase.requireLoopbackBinding(TckDatabase.LOOPBACK);
+
+        IllegalStateException unset = assertThrows(IllegalStateException.class,
+                () -> TckDatabase.requireLoopbackBinding(null));
+        assertTrue(unset.getMessage().contains("h2.bindAddress"), unset.getMessage());
+        assertThrows(IllegalStateException.class, () -> TckDatabase.requireLoopbackBinding("0.0.0.0"));
     }
 }
