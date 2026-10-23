@@ -54,10 +54,10 @@ import org.xml.sax.XMLReader;
  *
  * <p>Every factory comes from the JDK's {@code newDefaultInstance()} /
  * {@code newDefaultNSInstance()} (no {@code ServiceLoader} lookup), has
- * {@link javax.xml.XMLConstants#FEATURE_SECURE_PROCESSING} on (JDK expansion limits, no XSLT or
- * XPath extension functions) and the JDK access properties set to {@code ""}: the JDK opens
- * no external reference on its own, whatever a system property or {@code jaxp.properties}
- * says. External references reach the content only through the resolver handed in, which
+ * {@link javax.xml.XMLConstants#FEATURE_SECURE_PROCESSING} on (JDK expansion limits), XSLT and
+ * XPath extension functions off and the JDK access properties set to {@code ""}: the JDK opens
+ * no external reference and calls no extension on its own, whatever a system property or
+ * {@code jaxp.properties} says. External references reach the content only through the resolver handed in, which
  * returns an opened stream (probe: {@code JdkXmlFactsTest}). That resolver must refuse by
  * throwing, never by returning {@code null}: under a {@code bodoni-webapp:} base the JDK
  * drops an {@code xsl:import} whose resolver answered {@code null} without an error.
@@ -74,6 +74,13 @@ public final class XmlFactories {
 
     /** Access-property value that allows no protocol. */
     private static final String NO_ACCESS = "";
+
+    /**
+     * The JDK feature that allows XSLT and XPath extension functions (java.xml module
+     * summary, implementation-specific features). Secure processing turns it off by default,
+     * but the system property of the same name turns it back on: Bodoni sets it explicitly.
+     */
+    static final String ENABLE_EXTENSION_FUNCTIONS = "jdk.xml.enableExtensionFunctions";
 
     /** The shared error rule; stateless, hence safe to share. */
     private static final Strict STRICT = new Strict();
@@ -126,6 +133,7 @@ public final class XmlFactories {
         TransformerFactory factory = TransformerFactory.newDefaultInstance();
         try {
             factory.setFeature(FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature(ENABLE_EXTENSION_FUNCTIONS, false);
         } catch (TransformerConfigurationException e) {
             throw broken(e);
         }
@@ -192,6 +200,7 @@ public final class XmlFactories {
         XPathFactory factory = XPathFactory.newDefaultInstance();
         try {
             factory.setFeature(FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature(ENABLE_EXTENSION_FUNCTIONS, false);
         } catch (XPathFactoryConfigurationException e) {
             throw broken(e);
         }

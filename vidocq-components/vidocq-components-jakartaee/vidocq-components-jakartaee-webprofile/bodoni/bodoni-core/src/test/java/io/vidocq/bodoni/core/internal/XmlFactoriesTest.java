@@ -35,24 +35,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.transform.ErrorListener;
+import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.URIResolver;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathVariableResolver;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.io.TempDir;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.ErrorHandler;
@@ -66,6 +73,14 @@ class XmlFactoriesTest {
     private static final String EXTERNAL_ENTITY_DOC =
             "<!DOCTYPE r [<!ENTITY e SYSTEM \"parts/p.xml\">]><r>&e;</r>";
 
+    private static final String ENABLE_EXTENSION_FUNCTIONS = "jdk.xml.enableExtensionFunctions";
+
+    private static final String JAVA_CALL_XSLT =
+            "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
+            + " xmlns:rt='http://xml.apache.org/xalan/java/java.lang.System'>"
+            + "<xsl:template match='/'><xsl:value-of select=\"rt:getProperty('user.home')\"/></xsl:template>"
+            + "</xsl:stylesheet>";
+
     private final EntityResolver nullResolver = (publicId, systemId) -> null;
     private final URIResolver nullUriResolver = (href, base) -> null;
 
@@ -75,6 +90,8 @@ class XmlFactoriesTest {
         assertTrue(XmlFactories.saxParserFactory().getFeature(FEATURE_SECURE_PROCESSING));
         assertTrue(XmlFactories.transformerFactory(nullUriResolver).getFeature(FEATURE_SECURE_PROCESSING));
         assertTrue(XmlFactories.xpathFactory().getFeature(FEATURE_SECURE_PROCESSING));
+        assertFalse(XmlFactories.transformerFactory(nullUriResolver).getFeature(ENABLE_EXTENSION_FUNCTIONS));
+        assertFalse(XmlFactories.xpathFactory().getFeature(ENABLE_EXTENSION_FUNCTIONS));
     }
 
     @Test
@@ -185,6 +202,67 @@ class XmlFactoriesTest {
         assertSame(variables, xpath.getXPathVariableResolver());
         assertThrows(XPathExpressionException.class,
                 () -> xpath.evaluate("java:java.lang.System.nanoTime()", XmlFactories.emptyDocument()));
+    }
+
+    @Test
+    void extensionsStayOffWhenTheSystemPropertyEnablesThem(@TempDir Path dir) throws Throwable {
+        Path written = dir.resolve("written.txt");
+        XPath xpath = withSystemProperties(Map.of(ENABLE_EXTENSION_FUNCTIONS, "true"), () -> {
+            assertThrows(TransformerException.class, () -> transform(JAVA_CALL_XSLT));
+            assertThrows(TransformerException.class, () -> transform(redirectXslt(written)));
+            return XmlFactories.xpath(new JavaNamespace(), name -> null);
+        });
+
+        assertFalse(Files.exists(written));
+        assertThrows(XPathExpressionException.class,
+                () -> xpath.evaluate("java:java.lang.System.nanoTime()", XmlFactories.emptyDocument()));
+    }
+
+    @Test
+    void accessSystemPropertiesDoNotReopenJdkSideFetching() throws Throwable {
+        withSystemProperties(Map.of(
+                "javax.xml.accessExternalDTD", "all",
+                "javax.xml.accessExternalSchema", "all",
+                "javax.xml.accessExternalStylesheet", "all"), () -> {
+                    jdkSideFetchingIsClosed();
+                    return null;
+                });
+    }
+
+    /** Compiles and runs {@code xslt} on a one-element document with a factory of Bodoni. */
+    private static String transform(String xslt) throws TransformerException {
+        TransformerFactory factory = XmlFactories.transformerFactory((href, base) -> null);
+        Transformer transformer = factory.newTransformer(new StreamSource(new StringReader(xslt)));
+        transformer.setErrorListener(factory.getErrorListener());
+        StringWriter out = new StringWriter();
+        transformer.transform(new StreamSource(new StringReader("<a/>")), new StreamResult(out));
+        return out.toString();
+    }
+
+    /** A stylesheet whose {@code redirect:write} extension element writes {@code target}. */
+    private static String redirectXslt(Path target) {
+        return "<xsl:stylesheet version='1.0' xmlns:xsl='http://www.w3.org/1999/XSL/Transform'"
+                + " xmlns:redirect='http://xml.apache.org/xalan/redirect' extension-element-prefixes='redirect'>"
+                + "<xsl:template match='/'><redirect:write file='" + target + "'>written</redirect:write>"
+                + "</xsl:template></xsl:stylesheet>";
+    }
+
+    /** Runs {@code body} with {@code values} as system properties, then restores the previous ones. */
+    private static <T> T withSystemProperties(Map<String, String> values, ThrowingSupplier<T> body) throws Throwable {
+        Map<String, String> previous = new HashMap<>();
+        values.keySet().forEach(name -> previous.put(name, System.getProperty(name)));
+        try {
+            values.forEach(System::setProperty);
+            return body.get();
+        } finally {
+            previous.forEach((name, value) -> {
+                if (value == null) {
+                    System.clearProperty(name);
+                } else {
+                    System.setProperty(name, value);
+                }
+            });
+        }
     }
 
     private static InputSource source(String xml, String systemId) {
