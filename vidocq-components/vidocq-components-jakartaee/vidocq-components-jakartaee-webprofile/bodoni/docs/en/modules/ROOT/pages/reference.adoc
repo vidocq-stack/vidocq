@@ -1,5 +1,5 @@
 = Reference
-:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, x: tags and XML external references, sql: tags, data sources and database credentials, deployment notes — B1 to B4.
+:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, x: tags and XML external references, sql: tags, data sources and database credentials, deployment notes, test tooling of the TCK runner — B1 to B5.
 
 [.lead]
 Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `fmt:`, `sql:`, `x:` and `fn:`. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
@@ -29,6 +29,24 @@ Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `
 |===
 
 No build tooling dependency.
+
+[#test-tooling]
+=== Test tooling of the TCK runner
+
+The official TCK runner `bodoni-tck` (xref:tck.adoc[TCK status]) is built only under the `tck` profile and is never published. Its dependencies are test tooling, all at `test` scope in `bodoni-tck/pom.xml`, and are never shipped. Each is justified in the B5 pull request (workspace rule).
+
+[cols="2,1,3",options="header"]
+|===
+| Dependency | Scope | Note
+
+| `io.vidocq.ibarra:ibarra-arquillian:0.4.0-SNAPSHOT` | `test` | The Arquillian adapter that precompiles each TCK WAR with Ibarra and runs it on modular Foy. Brings the Arquillian container SPI, ShrinkWrap 1.2.6 (both Apache-2.0), the Ibarra compiler, Foy, Peano and Chappe.
+| `org.jboss.arquillian:arquillian-bom:1.9.4.Final` | `import` | One Arquillian version for the TCK clients, the JUnit 5 container and the adapter's SPI (Apache-2.0). Imported in the module's own `dependencyManagement`.
+| `org.jboss.arquillian.junit5:arquillian-junit5-container:1.9.4.Final` | `test` | The Arquillian JUnit 5 runtime the TCK clients run on (Apache-2.0).
+| `org.junit.platform:junit-platform-launcher` | `test` | The launcher API of the listener that starts the TCK database. Managed by `vidocq-parent`.
+| `com.h2database:h2:2.3.232` | `test` | The TCK database, served over TCP to the hosts (MPL-2.0 / EPL-1.0).
+| `jakarta.tck:tags-tck:11.0.3` | `test` | The official tests, under the `tck-official` profile only. Brings `jakarta.tck:common` 11.1.1, `commons-httpclient` 3.1 and `ant` 1.10.15. POM licence EPL-2.0 / GPL-2.0 with Classpath Exception; its `LICENSE.md` is the EFTL 1.1.
+| `jakarta-tags-tck-3.0.0.zip` | — | Not a Maven dependency: fetched by `run-official-tck-tags-3.0.sh` (or taken from `TAGS_TCK_ZIP`), SHA-256 pinned, read for the Derby DDL only, never committed. EFTL 1.0.
+|===
 
 == Tag libraries
 

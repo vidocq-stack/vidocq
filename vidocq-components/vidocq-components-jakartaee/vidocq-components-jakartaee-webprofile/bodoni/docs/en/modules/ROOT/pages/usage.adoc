@@ -2,7 +2,7 @@
 :description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
 
 [.lead]
-Bodoni implements the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B4). The table gives the status of each; the official TCK has not been run yet (B5).
+Bodoni implements the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B4). The table gives the status of each. The official Tags tests pass 452 of 541 in their first baseline (B5), a measurement, not a certification: see xref:tck.adoc[TCK status].
 
 [cols="1,2,1,1",options="header"]
 |===

@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B4 delivered — `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented; official TCK next (B5).** Read [PLAN.md](PLAN.md) before any
+**Status: B5 delivered — official TCK runner, first baseline 452/541; `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented, TCK fixes next.** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -68,8 +68,8 @@ sdk env
 ./mvnw -ntp clean install                          # default reactor (no TCK)
 ./mvnw test
 ./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify   # Ibarra IT (see note below)
-# planned (B5): ./mvnw -Ptck -pl bodoni-tck test
-# planned (B5): ./run-official-tck-tags-3.0.sh smoke|all|-Dtest=…
+./mvnw -ntp -Ptck -pl bodoni-tck test              # TCK runner's own tests
+./run-official-tck-tags-3.0.sh smoke|all|-Dtest=…  # official Tags TCK (--help: --no-prepare, --no-install)
 ```
 
 The `it-ibarra` profile is not part of the default build: it needs **local snapshots** of
@@ -82,8 +82,12 @@ application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the f
 The `sql:` pages run against an in-memory H2 database (test scope, from Maven Central); the
 host runs with `-Duser.timezone=Europe/Paris`, which guards BOD-005.
 
-`bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
-`./mvnw install` will neither build nor download anything TCK-related.
+`bodoni-tck` is **in-reactor behind the `tck` Maven profile**: a plain `./mvnw install`
+neither builds nor downloads anything TCK-related. `-Ptck` runs the runner's own tests;
+`-Ptck,tck-official` adds `jakarta.tck:tags-tck:11.0.3` and runs its classes. The script
+downloads the official `jakarta-tags-tck-3.0.0.zip` (or takes `TAGS_TCK_ZIP`), checks its
+pinned SHA-256 and extracts only the Derby DDL into `bodoni-tck/target/`; never commit a
+TCK file (EFTL). The `sql` tests run against H2 served over TCP on `127.0.0.1`.
 
 ## Architecture
 
@@ -93,8 +97,9 @@ bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
 bodoni-peano  ← optional engine adapter: LoopTagStatus and Result accessor tables for Peano
                 `peano.reflection=deny` (BOD-001); the only module allowed to depend on Peano
 bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
+bodoni-tck    ← official Tags TCK runner (jakarta.tck:tags-tck:11.0.3) on ibarra-arquillian,
+                in-reactor behind `tck`, not published, class path (no module-info)
 (planned)     bodoni-ibarra  ← optional build-time inliner for Ibarra (TagInliner SPI)
-(planned)     bodoni-tck     ← official Tags TCK runner, in-reactor behind `tck`
 (planned)     bodoni-it-other-containers/bodoni-it-openliberty ← portability proof
 ```
 
@@ -107,7 +112,7 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
    `bodoni-peano`, an optional engine adapter (engine-adapter exception of the ecosystem's
    brick/extension rule, like `cassini-chappe`): `peano-api` only, no `bodoni-core`.
 2. **Standard tag handlers are the portable reference.** They are what Jasper or Open
-   Liberty run and what the TCK certifies. Build-time inlining (`bodoni-ibarra`) is an
+   Liberty run and what the TCK measures. Build-time inlining (`bodoni-ibarra`) is an
    optional optimisation that must be behaviourally identical, tested differentially
    against the handlers.
 3. **Ibarra holds only the extension contract** (the `TagInliner` SPI, PLAN.md). JSTL code
@@ -150,9 +155,15 @@ Cite the spec section in commit messages / PR descriptions (e.g. "Tags 3.0 §6.2
 
 ## TCK — Technology Compatibility Kit
 
-Not run yet (B5). Once green, 100 % PASS is a merge gate; any challenge goes in a
-`TCK.md` with spec citation — created only if one is actually filed. Never claim
-certification from a partial or local run.
+B5 delivered the runner (`bodoni-tck`, `run-official-tck-tags-3.0.sh`) and the first full
+run: **452/541 (83.5 %)**, recorded with the triage of every failing test in
+[bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md). The suite is `jakarta.tck:tags-tck:11.0.3`
+(Tags tests of the Jakarta EE 11 Platform TCK); the formal `jakarta-tags-tck-3.0.0.zip` is the
+reference only and is not run. A result is a compatibility measurement on Bodoni + Ibarra +
+Foy + Peano: **never claim certification** from it, nor from a partial or local run. The
+`official-tags-tck-smoke` CI check runs the smoke set. Update `BASELINE.md` when a fix
+changes the result. Once green, 100 % PASS is a merge gate; any challenge goes in a
+`TCK.md` with spec citation — created only if one is actually filed.
 
 ## AI Principles — Collaboration on This Repository
 

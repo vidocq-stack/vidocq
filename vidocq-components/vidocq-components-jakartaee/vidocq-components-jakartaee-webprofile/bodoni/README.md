@@ -13,9 +13,12 @@
 
 ## Status
 
-**B4 delivered — `fn:`, `c:`, `fmt:`, `x:` and `sql:`.** The `c:` (core), `fn:` (functions), `fmt:` (i18n and formatting), `x:` (XML) and `sql:` (relational database access) libraries
-are implemented in `bodoni-core`. XML external references follow a same-origin policy; `sql:` binds values through `sql:param`, finds JDBC drivers through the context class loader and keeps database passwords out of its messages (see the Reference page). The official TCK has not been
-run (B5). Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that the properties of `varStatus` and of the `sql:query` `Result` can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
+**B5 delivered — official TCK runner, first baseline 452/541.** The `c:` (core), `fn:` (functions), `fmt:` (i18n and formatting), `x:` (XML) and `sql:` (relational database access) libraries
+are implemented in `bodoni-core`. XML external references follow a same-origin policy; `sql:` binds values through `sql:param`, finds JDBC drivers through the context class loader and keeps database passwords out of its messages (see the Reference page). The official Tags tests
+(`jakarta.tck:tags-tck:11.0.3`) run in `bodoni-tck`: the first baseline passes 452 of 541 tests
+(83.5 %), with every failure triaged in [bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md); the fixes
+follow until 100 %. It is a compatibility measurement on Bodoni + Ibarra + Foy + Peano, not a
+certification. Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that the properties of `varStatus` and of the `sql:query` `Result` can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
 [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266). The design of record is
 [PLAN.md](PLAN.md) (spec scope, brick rule, Java Modules layout, Ibarra build-time
 inlining, friction points, TCK plan, milestones B0–B7, open questions).
@@ -46,7 +49,7 @@ Bodoni follows the transverse Vidocq philosophy (see the workspace
 | `bodoni-peano` | Optional engine adapter: the `LoopTagStatus` and `Result` accessor tables Peano needs under `peano.reflection=deny` | B1 (`Result`: B4) |
 | `bodoni-it-ibarra` | Integration test: pages rendered on Ibarra + Foy + Peano, `sql:` pages against an in-memory H2 database (`it-ibarra` profile, not published) | B1 |
 | `bodoni-ibarra` | Optional build-time inliner for Ibarra (`TagInliner` SPI) | planned (B6) |
-| `bodoni-tck` | Official Tags TCK runner (`-Ptck` profile only) | planned (B5) |
+| `bodoni-tck` | Official Tags TCK runner on Ibarra's Arquillian adapter (in-reactor under `-Ptck` only, not published) | B5: first baseline 452/541 |
 | `bodoni-it-openliberty` | Portability proof on Open Liberty | planned (B7) |
 
 ## Build
@@ -60,6 +63,14 @@ Ibarra integration test (needs local snapshots of chappe, foy, peano and ibarra)
 
 ```bash
 ./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify
+```
+
+Official Tags TCK (Java 25; the first run downloads the official zip for its Derby DDL, or set
+`TAGS_TCK_ZIP`):
+
+```bash
+./mvnw -ntp -Ptck -pl bodoni-tck test                   # the runner's own tests
+./run-official-tck-tags-3.0.sh smoke|all|-Dtest=…       # official classes; --help for the flags
 ```
 
 Before the repository has its first commit, add `-Dmaven.gitcommitid.skip=true`

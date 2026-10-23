@@ -1,20 +1,112 @@
 = TCK status
-:description: Official Jakarta Standard Tag Library 3.0 TCK — not run yet (B5).
+:description: Official Jakarta Tags tests (jakarta.tck:tags-tck:11.0.3) on Bodoni + Ibarra + Foy + Peano — first baseline 452/541 (83.5 %), a compatibility measurement, not a certification.
 
 [.lead]
-The official TCK has **not been run** (milestone B5). The five libraries are covered by Bodoni's own unit and integration tests only. Nothing on this page is a TCK result or a certification claim.
+The first full run of the official Jakarta Tags tests passes **452 of 541 tests (83.5 %)**, with 33 of the 50 classes at 100 %: 0 assertion failures, 89 errors, 0 skipped, every class deployed. The 89 errors are triaged: the JSTL 1.0 `_rt` TLDs not shipped yet (40), a Peano defect (32), Bodoni defects (15) and two TCK pages that cannot pass on JDK 20 and later (2). The fixes follow in later pull requests until 100 %. This is a compatibility measurement, not a certification.
 
-== Plan of record
+== What a result means
+
+[cols="1,3",options="header"]
+|===
+| Item | What it is
+
+| Suite run | `jakarta.tck:tags-tck:11.0.3` from Maven Central: the Tags tests of the Jakarta EE 11 Platform TCK, 50 `JSTLClientIT` classes and 541 `@Test` methods on Arquillian and JUnit 5 (maintainer decision, 2026-10-23).
+| Formal TCK | `jakarta-tags-tck-3.0.0.zip` (JavaTest/Ant), linked from the {spec-tags-3-0}[Tags 3.0 specification page]. It is the formal reference only: it is **not run**. The runner reads one file from it, the Derby DDL of the `sql` tests.
+| Stack measured | Bodoni (`bodoni-core`, `bodoni-peano`) on Ibarra + Foy + Peano, every page precompiled by Ibarra, every host started with `-Dpeano.reflection=deny`.
+| Claim | A compatibility measurement on Bodoni + Ibarra + Foy + Peano, **not a certification**. A certification follows the Jakarta EE process with the formal TCK named by the specification.
+|===
+
+== Running it
+
+Prerequisites: Java 25 and Maven 3.9.16 (`sdk env`), and network access for the first download of the distribution zip, unless `TAGS_TCK_ZIP` names a local copy (a relative path is resolved against the current directory). The script checks the zip against a pinned SHA-256 and extracts the Derby DDL only, into `bodoni-tck/target/tags-tck-distribution/`. It never copies a TCK file into the repository (EFTL).
+
+[source,bash]
+----
+sdk env
+./run-official-tck-tags-3.0.sh                 # smoke (the default): six whole classes
+./run-official-tck-tags-3.0.sh all             # every official class
+./run-official-tck-tags-3.0.sh -Dtest=com.sun.ts.tests.jstl.spec.sql.query.JSTLClientIT
+./run-official-tck-tags-3.0.sh --help
+----
+
+[cols="1,3",options="header"]
+|===
+| Argument | Effect
+
+| `smoke` | Six whole classes, one per library plus the URI check (see <<smoke>>). The default.
+| `all` | `-Dtest=com.sun.ts.tests.jstl.**.*IT`: every official class.
+| `-Dtest=…` | A Surefire selection of official classes or methods.
+| `--no-prepare` | Reuses the DDL already extracted; refused (exit 2) when it is absent, so that the `sql` and compatibility classes cannot fail in their setup unnoticed.
+| `--no-install` | Skips `./mvnw clean install` of Bodoni; refused (exit 2) when the installed `bodoni-core` or `bodoni-peano` snapshot is missing or older than its sources, its `pom.xml` or the root `pom.xml`.
+| Other arguments starting with `-` | Passed to the last Maven call (write an option value attached to it: `-T4`, `-Dkey=value`).
+|===
+
+The script first runs the runner's own tests (`./mvnw -ntp -Ptck -pl bodoni-tck test`), then the official classes (`-Ptck,tck-official`). Before Maven runs it deletes `bodoni-tck/target/surefire-reports` and `bodoni-tck/target/pages-deployments`, so a partial selection cannot be mistaken for a full run. The Surefire reports land in `bodoni-tck/target/surefire-reports/`; each deployment keeps its `server.log` and `translation-errors.txt` under `bodoni-tck/target/pages-deployments/war-*/`.
+
+The host processes inherit the machine's time zone and locale. To check whether a failure depends on the zone, rerun it with `TZ=UTC ./run-official-tck-tags-3.0.sh -Dtest=…`: the Surefire JVM and the forked hosts both inherit `TZ`.
+
+== How it is wired
+
+* **Module and profiles.** `bodoni-tck` is a module of the root `tck` profile only, and is not published. `-Ptck` runs its own tests (its Arquillian configuration, the database, the script); `-Ptck,tck-official` adds the official jar and scans its `*IT` classes. A plain `./mvnw -ntp clean install` neither builds the runner nor resolves anything TCK-related.
+* **Adapter.** The published `io.vidocq.ibarra:ibarra-arquillian` adapter, at test scope, precompiles each WAR with Ibarra and runs it on modular Foy over Chappe in its own process. Foy, Peano and Chappe come from the adapter, on the versions Ibarra uses. Arquillian, ShrinkWrap and the TCK clients are not Java modules, so the clients run on the test class path; what the adapter deploys stays modular (named `tck.application` and `tck.host` modules, `--limit-modules`).
+* **Adapter properties** (`bodoni-tck/src/test/resources/arquillian.xml`):
+** `applicationLibraries` = `io.vidocq.bodoni.core,io.vidocq.bodoni.peano,jakarta.servlet.jsp.jstl,com.h2database`: Bodoni's handlers and TLDs, its Peano accessor tables under `peano.reflection=deny`, the JSTL API, and the H2 driver, all in the one class loader of the application layer, so the TCK's `Class.forName("org.h2.Driver")` and `DriverManager` see H2.
+** `jdkModules` = `java.sql,java.naming,jdk.localedata`: the host boot layer does not reach them on its own; Bodoni and the JSTL API require the first two, and `jdk.localedata` is a locale-data provider no `requires` reaches.
+** `applicationOpens` = `com.sun.ts.tests.jstl.common.resources`: every TCK WAR carries the TCK's common jar, whose resource bundles `fmt:` loads by name.
+* **Database.** The `sql` and compatibility classes need three tables. The runner loads the Derby DDL of the official zip (`tags-tck/sql/derby/derby.ddl.jstl.sql`, the schema and its rows), unchanged, into an in-memory H2 2.3.232 database, without a compatibility mode. A JUnit Platform `LauncherSessionListener` starts it once per test JVM when the `bodoni.tck.ddl` system property names the DDL (set by `tck-official` only), serves it through an H2 TCP server on an ephemeral port bound to `127.0.0.1` (`h2.bindAddress`), and sets the `jstl.db.url`, `jstl.db.user`, `jstl.db.password` and `jstl.db.driver` system properties the TCK clients send to the pages. One database per run: state carries from class to class, as in the formal harness, and a single-class rerun starts fresh.
+* **No parallel execution** (`junit.jupiter.execution.parallel.enabled=false`): the adapter keeps its deployments in one unsynchronised map.
+
+The test tooling dependencies are listed in xref:reference.adoc#test-tooling[Reference].
+
+== Baseline
+
+First full run on 2026-10-24 (Temurin 25, macOS arm64, zone `Europe/Paris`), with `./run-official-tck-tags-3.0.sh all`:
+
+[cols="2,1",options="header"]
+|===
+| Measure | Result
+
+| Official classes selected | 50
+| Declared `@Test` methods | 541
+| Passed | 452
+| Assertion failures | 0
+| Errors | 89
+| Skipped | 0
+| Classes at 100 % | 33/50
+| Pass rate | **452/541 (83.5 %)**
+|===
+
+The TCK client reports every failed check as an error, never as a failure. By library: `c` 111/115, `fn` and the extension tests 77/81, `fmt` 114/123, `sql` 86/117, `x` 62/67, JSTL 1.0 compatibility 2/38.
+
+[cols="3,1,1",options="header"]
+|===
+| Cause | Owner | Tests
+
+| JSTL 1.0 `_rt` URIs not shipped yet (they ship in a later Bodoni pull request, decided 2026-10-23) | known decision | 40
+| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010, fixed by https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]; Ibarra regression test IBARRA-156) | Peano | 32
+| Translation-time constraints not enforced (BOD-006) | Bodoni | 9
+| `LocalizationContext` unreadable under `peano.reflection=deny` (BOD-007) | Bodoni | 3
+| `fmt:message` with `bundle` does not set the response locale (BOD-008) | Bodoni | 2
+| `c:forTokens` does not accept a deferred `items` (BOD-009) | Bodoni | 1
+| Two `parsedate` pages expect the pre-CLDR `en_US` date-time format, which JDK 20 and later no longer parse | TCK input | 2
+|===
+
+The Bodoni defects are tracked in link:{repo-bodoni}/src/branch/main/BUG.md[BUG.md]. Each of the 17 failing classes was rerun alone and reported the same failing tests. Per-class results, evidence, the passing tests worth a note and the upstream items: link:{repo-bodoni}/src/branch/main/bodoni-tck/BASELINE.md[`bodoni-tck/BASELINE.md`].
+
+The four interpretations Bodoni recorded in B3 and B4 are not settled by this suite: the 11.0.3 `x:forEach` class has no test that requests its empty-`select` page, and `startRow < 0`, a blank `maxRows` setting and `limitedByMaxRows` at exactly `maxRows` rows are not exercised.
+
+[#smoke]
+== Smoke and CI
+
+`./run-official-tck-tags-3.0.sh smoke` runs six classes at 100 % in the baseline, 91 tests: `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
+
+== Plan
 
 [cols="1,3",options="header"]
 |===
 | Item | Configuration
 
-| Runner | `bodoni-tck` module, in the reactor only under the `-Ptck` Maven profile (same pattern as `peano-tck` and `ibarra-tck`); the official artefact resolved only under `-Ptck,tck-official`.
-| Artefact | Open question. Candidates: `jakarta-tags-tck-3.0.0.zip` from download.eclipse.org (linked from the Tags 3.0 spec page), or `jakarta.tck:tags-tck` 11.0.x on Maven Central (Arquillian + JUnit 5, built against the Jakarta EE 11 API levels).
-| Container | The suite deploys WARs with pages: Ibarra + Foy + Peano behind the Arquillian adapter of `ibarra-tck`, at test scope only.
-| Script | `run-official-tck-tags-3.0.sh` with `smoke` / `all` / `-Dtest=` modes.
-| Inlining | Run first with the standard handlers, then again with `bodoni-ibarra` inlining enabled.
-| SQL tests | The suite ships no DDL: the runner creates and fills the three tables the `sql` tests read, and passes the database URL, user, password and driver class as system properties. The driver must be visible to each test WAR's class loader. Details in the TCK plan of link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
+| Fixes | The `_rt` TLDs, BOD-006 to BOD-009 and a Peano snapshot with COMP-010 fixed, each in a later pull request, test first.
+| Inlining | Run first with the standard handlers (B5), then again with `bodoni-ibarra` inlining enabled (B6).
 | Merge gate | 100 % PASS once green; challenges, if any, in a `TCK.md`.
 |===

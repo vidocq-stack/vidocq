@@ -6,7 +6,7 @@ Two ideas shape Bodoni: the standard tag handlers are the reference everywhere, 
 
 == Standard handlers are the reference
 
-Every tag is a standard Jakarta Pages tag handler described by a TLD shipped in `bodoni-core`. Any Pages container — Ibarra, Jasper, Open Liberty — runs them through the normal tag lifecycle. They are what the official TCK certifies.
+Every tag is a standard Jakarta Pages tag handler described by a TLD shipped in `bodoni-core`. Any Pages container — Ibarra, Jasper, Open Liberty — runs them through the normal tag lifecycle. They are what the official TCK runs against.
 
 == Build-time inlining (planned)
 
