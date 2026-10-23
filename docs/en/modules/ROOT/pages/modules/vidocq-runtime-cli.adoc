@@ -370,7 +370,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 |===
 | Sub-command | Description
 
-| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both.
+| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list [.tag-new]#NEW#.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java` [.tag-new]#NEW#. The dependency and the codegen path carry the parent's version, written out [.tag-new]#NEW#.
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add` [.tag-new]#NEW#.
 |===
@@ -482,7 +482,9 @@ vidocq config list
 
 Inspects the local environment and current project and prints a ✔/⚠/✘ report. It exits
 non-zero when a blocking issue is found, so it doubles as a CI pre-flight gate
-(`vidocq doctor && vidocq build`).
+(`vidocq doctor && vidocq build`). Without the CLI,
+xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:doctor`] runs the same checks
+[.tag-new]#NEW#.
 
 [cols="1,3"]
 |===

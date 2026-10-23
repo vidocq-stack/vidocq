@@ -891,6 +891,48 @@
                 <runtimeVersion implementation="java.lang.String" default-value="${plugin.version}"/>
             </configuration>
         </mojo>
+        <mojo>
+            <goal>doctor</goal>
+            <description>Check the environment and the project, as vidocq doctor does: the JDK, JAVA_HOME, the Maven wrapper, the pom, vidocq.properties and the extensions of the runtime dependencies. A failed check fails the build. mvn vidocq:doctor [-Dvidocq.doctor.verbose]. No default phase.</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <implementation>io.vidocq.runtime.maven.VidocqDoctorMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
+                <parameter><name>verbose</name><type>boolean</type><required>false</required><editable>true</editable><description>Also give the hint of a check that passed</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <verbose implementation="boolean" default-value="false">${vidocq.doctor.verbose}</verbose>
+            </configuration>
+        </mojo>
+        <mojo>
+            <goal>list-extensions</goal>
+            <description>List the Vidocq extensions the project runs with, transitive ones marked, as vidocq extension list does; -Dvidocq.extensions.available adds the catalog. No default phase.</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <implementation>io.vidocq.runtime.maven.VidocqListExtensionsMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
+                <parameter><name>available</name><type>boolean</type><required>false</required><editable>true</editable><description>Also list the extensions of the catalog</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <available implementation="boolean" default-value="false">${vidocq.extensions.available}</available>
+            </configuration>
+        </mojo>
 
         <!-- vidocq:idea — experimental. IntelliJ IDEA shared run configurations (.run/*.run.xml) for the
              reactor's Vidocq applications. Aggregator with no default phase: run it from the directory

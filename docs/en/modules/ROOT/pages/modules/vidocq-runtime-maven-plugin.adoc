@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes fifteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes seventeen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -65,6 +65,12 @@
 
 | `vidocq:remove-extension` [.tag-new]#NEW#
 | Removes extensions, undoing `add-extension`, as `vidocq extension remove` does. See <<extension-goals>>.
+
+| `vidocq:list-extensions` [.tag-new]#NEW#
+| Lists the extensions the project runs with, as `vidocq extension list` does; `-Dvidocq.extensions.available` adds the catalog. See <<report-goals>>.
+
+| `vidocq:doctor` [.tag-new]#NEW#
+| Checks the environment and the project, as `vidocq doctor` does; a failed check fails the build. See <<report-goals>>.
 |===
 
 [NOTE]
@@ -102,6 +108,27 @@ mvn vidocq:remove-extension -Dextensions=knock-health
   elements it created included.
 * Neither goal has a phase. Each edits the project it runs on, once: in a multi-module build, run it on the
   module to change (`mvn -f app/pom.xml vidocq:add-extension …`).
+
+[#report-goals]
+== `vidocq:list-extensions` and `vidocq:doctor` goals [.tag-new]#NEW#
+
+The two goals give the reports of `vidocq extension list` and `vidocq doctor` in a build, from the same
+`vidocq-runtime-tooling` code (Vidocq/vidocq#314). Neither has a phase; each runs on every module of the build.
+
+[source,bash]
+----
+mvn vidocq:list-extensions                                  # the extensions the project runs with
+mvn vidocq:list-extensions -Dvidocq.extensions.available    # and the catalog
+mvn vidocq:doctor [-Dvidocq.doctor.verbose]                 # the checks of vidocq doctor
+----
+
+* `list-extensions` keeps the runtime dependencies whose module provides `io.vidocq.runtime.spi.VidocqExtension`,
+  names them by their catalog id, and marks `(transitive)` those the pom does not declare. The CLI runs Maven to
+  find the same list.
+* `doctor` runs the six checks of xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`]: the JDK that runs
+  Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions. A failed check (a JDK
+  older than 25) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the hint of the checks
+  that passed.
 
 [#generate]
 == `vidocq:generate` goal [.tag-new]#NEW#

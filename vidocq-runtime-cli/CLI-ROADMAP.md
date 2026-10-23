@@ -172,8 +172,9 @@ pre-flight gate (`vidocq doctor && vidocq build`).
   namespace (first segment after the prefix) against a catalogue of 30 recognised namespaces,
   catching typos like `vidocq.htpp.port`. Dynamic segments (`vidocq.pool.<ds>.url`) and an
   application's own non-`vidocq.` keys are never flagged.
-- **Testability** — checks live in a pure `doctor.Diagnostics` engine driven by an injectable
-  `DoctorContext` record. `CommandRunner` gathers the (impure) facts — JVM version, env,
+- **Testability** — checks live in a pure `Diagnostics` engine driven by an injectable
+  `DoctorContext` record, both in `vidocq-runtime-tooling` since #314, where `DoctorFacts` gathers the
+  facts for `vidocq doctor` and `vidocq:doctor` alike. Before, `CommandRunner` gathered the (impure) facts — JVM version, env,
   filesystem probes, ServiceLoader scan, `vidocq.properties` keys — then hands them to the pure
   engine and renders the `Diagnostic` list. The engine is fully unit-tested without touching the
   filesystem.

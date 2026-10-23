@@ -80,6 +80,23 @@ class ExtensionJarsTest {
         assertFalse(ExtensionJars.providesExtension(dir.resolve("missing.jar")));
     }
 
+    /** A reactor module resolves to its {@code target/classes}: a named one, or one with a service file. */
+    @Test
+    void aClassesDirectoryIsAnExtensionWhenItsModuleOrItsServiceFileSaysSo() throws IOException {
+        Path named = Files.createDirectories(dir.resolve("named"));
+        Files.write(named.resolve("module-info.class"), moduleInfo("com.acme.ext", "com.acme.ext.AcmeExtension", true));
+        Path withoutSpi = Files.createDirectories(dir.resolve("without"));
+        Files.write(withoutSpi.resolve("module-info.class"), moduleInfo("com.acme.lib", "com.acme.lib.Util", false));
+        Path services = Files.createDirectories(dir.resolve("services/META-INF/services"));
+        Files.writeString(services.resolve(SPI), "com.acme.auto.AutoExtension\n");
+        Path plain = Files.createDirectories(dir.resolve("plain/com/acme"));
+
+        assertTrue(ExtensionJars.providesExtension(named));
+        assertFalse(ExtensionJars.providesExtension(withoutSpi));
+        assertTrue(ExtensionJars.providesExtension(dir.resolve("services")));
+        assertFalse(ExtensionJars.providesExtension(plain.getParent().getParent()));
+    }
+
     @Test
     void aCatalogExtensionIsNamedByItsIdAnyOtherByItsArtifactId() {
         assertEquals("cassini-rest", KnownExtensions.idOf(new ExtensionCoordinate(
@@ -87,17 +104,20 @@ class ExtensionJarsTest {
         assertEquals("acme-extension", KnownExtensions.idOf(new ExtensionCoordinate("com.acme", "acme-extension")));
     }
 
-    private Path namedModuleJar(String name, String module, String clazz, boolean provides)
-            throws IOException {
+    private static byte[] moduleInfo(String module, String clazz, boolean provides) {
         ClassDesc type = ClassDesc.of(clazz);
-        byte[] moduleInfo = ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of(module), m -> {
+        return ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of(module), m -> {
             m.requires(ModuleDesc.of("java.base"), Set.of(AccessFlag.MANDATED), null);
             if (provides) {
                 m.provides(ClassDesc.of(SPI), type);
             }
         }));
+    }
+
+    private Path namedModuleJar(String name, String module, String clazz, boolean provides)
+            throws IOException {
         return jar(name, Map.of(
-                "module-info.class", moduleInfo,
+                "module-info.class", moduleInfo(module, clazz, provides),
                 clazz.replace('.', '/') + ".class", new byte[0]));
     }
 

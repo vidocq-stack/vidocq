@@ -19,7 +19,10 @@
  */
 package io.vidocq.runtime.tooling;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.module.FindException;
+import java.lang.module.InvalidModuleDescriptorException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Files;
@@ -38,9 +41,13 @@ public final class ExtensionJars {
 
     /**
      * Whether the jar's module — explicit {@code module-info} or, for an automatic module,
-     * {@code META-INF/services} — provides the extension SPI.
+     * {@code META-INF/services} — provides the extension SPI. A reactor module resolves to its classes directory,
+     * which is read the same way.
      */
     public static boolean providesExtension(Path jar) {
+        if (Files.isDirectory(jar)) {
+            return directoryProvidesExtension(jar);
+        }
         if (!Files.isRegularFile(jar)) {
             return false;
         }
@@ -50,6 +57,19 @@ public final class ExtensionJars {
                     .map(ModuleDescriptor.Provides::service)
                     .anyMatch(SPI::equals);
         } catch (FindException | SecurityException e) {
+            return false;
+        }
+    }
+
+    private static boolean directoryProvidesExtension(Path classes) {
+        Path moduleInfo = classes.resolve("module-info.class");
+        if (!Files.isRegularFile(moduleInfo)) {
+            return Files.isRegularFile(classes.resolve("META-INF/services/" + SPI));
+        }
+        try (InputStream in = Files.newInputStream(moduleInfo)) {
+            return ModuleDescriptor.read(in).provides().stream().map(ModuleDescriptor.Provides::service)
+                    .anyMatch(SPI::equals);
+        } catch (IOException | InvalidModuleDescriptorException e) {
             return false;
         }
     }
