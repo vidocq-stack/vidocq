@@ -207,15 +207,16 @@ class XmlFactoriesTest {
     @Test
     void extensionsStayOffWhenTheSystemPropertyEnablesThem(@TempDir Path dir) throws Throwable {
         Path written = dir.resolve("written.txt");
-        XPath xpath = withSystemProperties(Map.of(ENABLE_EXTENSION_FUNCTIONS, "true"), () -> {
+        withSystemProperties(Map.of(ENABLE_EXTENSION_FUNCTIONS, "true"), () -> {
             assertThrows(TransformerException.class, () -> transform(JAVA_CALL_XSLT));
             assertThrows(TransformerException.class, () -> transform(redirectXslt(written)));
-            return XmlFactories.xpath(new JavaNamespace(), name -> null);
+            XPath xpath = XmlFactories.xpath(new JavaNamespace(), name -> null);
+            assertThrows(XPathExpressionException.class,
+                    () -> xpath.evaluate("java:java.lang.System.nanoTime()", XmlFactories.emptyDocument()));
+            return null;
         });
 
         assertFalse(Files.exists(written));
-        assertThrows(XPathExpressionException.class,
-                () -> xpath.evaluate("java:java.lang.System.nanoTime()", XmlFactories.emptyDocument()));
     }
 
     @Test

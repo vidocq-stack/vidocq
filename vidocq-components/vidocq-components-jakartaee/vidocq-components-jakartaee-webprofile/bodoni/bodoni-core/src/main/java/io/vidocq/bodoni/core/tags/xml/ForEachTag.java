@@ -81,8 +81,9 @@ public class ForEachTag extends RangeLoopTagSupport {
     }
 
     /**
-     * {@inheritDoc} The selected nodes are dropped too: a pooled handler must not keep the
-     * document alive between invocations.
+     * {@inheritDoc} Bodoni's own iterator over the selected nodes is dropped too. The API base
+     * class keeps its last item and status in its own fields until the next run or
+     * {@code release()}, so a pooled handler may still reach the last node through them.
      */
     @Override
     public void doFinally() {

@@ -106,7 +106,7 @@ class ForEachTagTest {
     }
 
     @Test
-    void aPooledHandlerHoldsNoNodeAfterTheLoop() throws Exception {
+    void doFinallyDropsTheNodeIterator() throws Exception {
         twoB();
         ForEachTag tag = forEach(ALL_B);
         tag.setEnd(0);
