@@ -22,7 +22,7 @@
  * Bodoni — Jakarta Standard Tag Library 3.0 implementation.
  *
  * <p>The {@code functions} package and the tag-handler packages
- * ({@code tags.core} and {@code tags.fmt}; {@code xml} and {@code sql} to come) are
+ * ({@code tags.core}, {@code tags.fmt} and {@code tags.xml}; {@code sql} to come) are
  * exported unqualified: pages precompiled by Ibarra call {@code new} on
  * handlers from the application module, and other Pages containers
  * instantiate them by class name — neither needs {@code opens}. The
@@ -38,6 +38,10 @@
 module io.vidocq.bodoni.core {
     requires transitive jakarta.servlet.jsp.jstl;
 
+    // Exported handler signatures expose org.xml.sax and javax.xml.transform types; Bodoni
+    // does not rely on the API module's java.desktop chain to reach java.xml.
+    requires transitive java.xml;
+
     // c:import reads absolute http(s) URLs through java.net.http.
     requires java.net.http;
 
@@ -47,4 +51,5 @@ module io.vidocq.bodoni.core {
     // Tag handlers are instantiated by name by Pages containers and by new in precompiled pages.
     exports io.vidocq.bodoni.core.tags.core;
     exports io.vidocq.bodoni.core.tags.fmt;
+    exports io.vidocq.bodoni.core.tags.xml;
 }
