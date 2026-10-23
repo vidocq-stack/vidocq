@@ -21,8 +21,8 @@ package io.vidocq.runtime.cli.completion;
 
 import io.vidocq.runtime.cli.CliException;
 import io.vidocq.runtime.cli.CliParser;
-import io.vidocq.runtime.cli.ext.KnownExtensions;
-import io.vidocq.runtime.cli.ext.RegistryEntry;
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.RegistryEntry;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

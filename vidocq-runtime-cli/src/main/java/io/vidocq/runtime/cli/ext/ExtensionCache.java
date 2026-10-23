@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.PomDependencies;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

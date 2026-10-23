@@ -19,6 +19,7 @@
  */
 module io.vidocq.runtime.cli {
     requires io.vidocq.runtime.core;
+    requires io.vidocq.runtime.tooling;
     requires java.xml;
     requires java.net.http;
 

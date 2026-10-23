@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-tooling</artifactId>
+    <name>Vidocq :: Runtime :: Tooling</name>
+    <description>
+        Project editing shared by the Vidocq CLI and the Vidocq Maven plugin: the extension catalog built from
+        the extensions' descriptors, the text-based pom.xml and module-info.java editors, and the extension
+        add/remove flow, which reports through a Reporter each tool implements. Build tooling, never in an
+        application. Zero dependency — requires only java.xml.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Build tooling with no CDI bean: nothing for the Vauban indexer to process. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

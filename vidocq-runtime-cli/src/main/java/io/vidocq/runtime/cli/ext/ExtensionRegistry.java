@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.RegistryEntry;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

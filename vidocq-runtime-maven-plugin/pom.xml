@@ -26,6 +26,12 @@
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-codegen-commons</artifactId>
         </dependency>
+        <!-- The extension catalog, the pom / module-info editors and the extension add/remove flow, shared
+             with the Vidocq CLI: vidocq:add-extension and vidocq:remove-extension run them (#314). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-tooling</artifactId>
+        </dependency>
         <!-- Dev-mode service SPI: the dev goal loads DevService providers (from the app's
              <plugin><dependencies>) via ServiceLoader on this plugin classpath. -->
         <dependency>

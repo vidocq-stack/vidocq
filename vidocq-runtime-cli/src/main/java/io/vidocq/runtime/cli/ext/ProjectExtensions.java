@@ -19,6 +19,11 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.ExtensionCoordinate;
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.PomDependencies;
+import io.vidocq.runtime.tooling.RegistryEntry;
+
 import java.io.IOException;
 import java.lang.module.FindException;
 import java.lang.module.ModuleDescriptor;

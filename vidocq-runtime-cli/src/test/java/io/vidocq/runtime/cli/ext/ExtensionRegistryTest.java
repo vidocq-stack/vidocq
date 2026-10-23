@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.RegistryEntry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

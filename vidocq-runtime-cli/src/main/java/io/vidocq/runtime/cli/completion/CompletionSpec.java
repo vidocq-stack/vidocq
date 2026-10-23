@@ -20,8 +20,8 @@
 package io.vidocq.runtime.cli.completion;
 
 import io.vidocq.runtime.cli.build.BuildType;
-import io.vidocq.runtime.cli.ext.KnownExtensions;
-import io.vidocq.runtime.cli.ext.RegistryEntry;
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.RegistryEntry;
 
 import java.util.ArrayList;
 import java.util.Arrays;

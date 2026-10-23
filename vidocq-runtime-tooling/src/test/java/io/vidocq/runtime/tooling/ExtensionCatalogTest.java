@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.ext;
+package io.vidocq.runtime.tooling;
 
 import org.junit.jupiter.api.Test;
 
@@ -53,7 +53,7 @@ class ExtensionCatalogTest {
     private static final Path EXTENSIONS = Path.of("..", "vidocq-runtime-extensions");
     private static final Path COMMITTED = Path.of("src", "main", "resources", KnownExtensions.CATALOG_RESOURCE);
     private static final String REGENERATE =
-            "./mvnw -pl vidocq-runtime-cli test -Dtest=ExtensionCatalogTest -Dvidocq.catalog.write=true";
+            "./mvnw -pl vidocq-runtime-tooling test -Dtest=ExtensionCatalogTest -Dvidocq.catalog.write=true";
     private static final String GROUP_ID = "project/groupId";
     private static final String ARTIFACT_ID = "project/artifactId";
     private static final String PARENT_GROUP_ID = "project/parent/groupId";

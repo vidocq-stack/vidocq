@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import io.vidocq.runtime.tooling.ExtensionCoordinate;
+
 import java.nio.file.Path;
 import java.util.Objects;
 

@@ -19,7 +19,7 @@
  */
 package io.vidocq.runtime.cli;
 
-import io.vidocq.runtime.cli.ext.KnownExtensions;
+import io.vidocq.runtime.tooling.KnownExtensions;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;

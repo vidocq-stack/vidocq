@@ -22,8 +22,8 @@ package io.vidocq.runtime.cli.scaffold;
 import io.vidocq.runtime.cli.CliOutput;
 import io.vidocq.runtime.cli.Command;
 import io.vidocq.runtime.cli.Version;
-import io.vidocq.runtime.cli.ext.KnownExtensions;
-import io.vidocq.runtime.cli.ext.ModuleInfoEditor;
+import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.ModuleInfoEditor;
 
 import java.io.IOException;
 import java.nio.file.Files;
