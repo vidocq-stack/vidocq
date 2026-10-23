@@ -66,7 +66,7 @@ abstract class DocumentTagSupport extends TagSupport implements BodyTag {
      * @param xml the XML document
      * @deprecated the Tags 3.0 alias of {@link #setDoc(Object)}; use {@code doc}
      */
-    @Deprecated
+    @Deprecated(since = "JSTL 1.1")
     public void setXml(Object xml) {
         setDoc(xml);
     }

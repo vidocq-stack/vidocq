@@ -94,7 +94,7 @@ public class TransformTag extends DocumentTagSupport {
      * @param systemId the system identifier of the document
      * @deprecated the Tags 3.0 alias of {@link #setDocSystemId(String)}; use {@code docSystemId}
      */
-    @Deprecated
+    @Deprecated(since = "JSTL 1.1")
     public void setXmlSystemId(String systemId) {
         setDocSystemId(systemId);
     }
