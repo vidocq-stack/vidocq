@@ -20,8 +20,10 @@
 
 package io.vidocq.bodoni.core.testing;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.EventListener;
@@ -41,7 +43,8 @@ import jakarta.servlet.descriptor.JspConfigDescriptor;
 
 /**
  * A {@link ServletContext} double: application attributes, a context path (default
- * {@code /app}), foreign contexts for {@link #getContext(String)} and request dispatchers
+ * {@code /app}), foreign contexts for {@link #getContext(String)}, text resources for
+ * {@link #getResourceAsStream(String)} and request dispatchers
  * configured through {@link #dispatchers()}. Everything else throws
  * {@link UnsupportedOperationException}.
  */
@@ -50,6 +53,7 @@ public class TestServletContext implements ServletContext {
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private final Map<String, String> initParameters = new LinkedHashMap<>();
     private final Map<String, TestServletContext> foreign = new LinkedHashMap<>();
+    private final Map<String, String> resources = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
     private String contextPath = "/app";
 
@@ -62,6 +66,12 @@ public class TestServletContext implements ServletContext {
     /** Registers a foreign context, returned by {@code getContext(path)}. */
     public TestServletContext addContext(String path, TestServletContext other) {
         foreign.put(path, other);
+        return this;
+    }
+
+    /** Registers a web-application resource, served as UTF-8 bytes by {@code getResourceAsStream(path)}. */
+    public TestServletContext resource(String path, String content) {
+        resources.put(path, content);
         return this;
     }
 
@@ -146,7 +156,8 @@ public class TestServletContext implements ServletContext {
 
     @Override
     public InputStream getResourceAsStream(String path) {
-        throw nope();
+        String content = resources.get(path);
+        return content == null ? null : new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     }
 
     @Override

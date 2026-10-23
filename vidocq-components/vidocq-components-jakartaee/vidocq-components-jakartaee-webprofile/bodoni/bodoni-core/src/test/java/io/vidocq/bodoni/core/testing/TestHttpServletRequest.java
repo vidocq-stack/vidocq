@@ -48,7 +48,7 @@ import jakarta.servlet.http.Part;
 
 /**
  * An {@link HttpServletRequest} double: attributes, parameters, character encoding, a
- * context path (default {@code /app}), a session (present by default, see {@link #withoutSession()}), locales with their {@code Accept-Language}
+ * context path (default {@code /app}), a servlet path (default {@code /page.jsp}), a session (present by default, see {@link #withoutSession()}), locales with their {@code Accept-Language}
  * header (see {@link #withoutAcceptLanguage(Locale)}) and request dispatchers
  * configured through {@link #dispatchers()}. Everything else throws
  * {@link UnsupportedOperationException}.
@@ -65,6 +65,7 @@ public class TestHttpServletRequest implements HttpServletRequest {
     private final Map<String, String[]> parameters = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
     private String contextPath = "/app";
+    private String servletPath = "/page.jsp";
     private String characterEncoding;
 
     public TestHttpServletRequest(TestServletContext context) {
@@ -110,6 +111,12 @@ public class TestHttpServletRequest implements HttpServletRequest {
     /** Changes the context path. */
     public TestHttpServletRequest contextPath(String path) {
         this.contextPath = path;
+        return this;
+    }
+
+    /** Changes the servlet path, the context-relative path of the current page. */
+    public TestHttpServletRequest servletPath(String path) {
+        this.servletPath = path;
         return this;
     }
 
@@ -299,7 +306,7 @@ public class TestHttpServletRequest implements HttpServletRequest {
 
     @Override
     public String getServletPath() {
-        throw nope();
+        return servletPath;
     }
 
     @Override
