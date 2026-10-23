@@ -722,50 +722,12 @@ public final class CommandRunner {
                 CliOutput.error("Invalid extension id '" + id + "': " + e.getMessage());
                 return 1;
             }
-            PomEditor.Result result = add
-                    ? PomEditor.add(pom, coord, runtimeVersion)
-                    : PomEditor.remove(pom, coord);
+            PomEditor.Result result = editPomFor(pom, id, coord, runtimeVersion, add);
             pom = result.pom();
-            // Extensions shipping an APT codegen bundle need it on the compiler's
-            // annotationProcessorPaths, or vidocq:checkpom fails the next build; removing
-            // the extension removes it too.
-            var codegen = KnownExtensions.codegenBundle(id);
-            if (codegen.isPresent()) {
-                PomEditor.Result apt = add
-                        ? PomEditor.addAnnotationProcessorPath(pom, codegen.get(), runtimeVersion)
-                        : PomEditor.removeAnnotationProcessorPath(pom, codegen.get());
-                pom = apt.pom();
-                if (apt.changed()) {
-                    anyChange = true;
-                    CliOutput.success((add ? "Wired " : "Unwired ") + codegen.get().artifactId()
-                            + CliOutput.dim("  (annotationProcessorPaths)"));
-                }
-            }
-            if (result.changed()) {
-                anyChange = true;
-                CliOutput.success((add ? "Added " : "Removed ") + id
-                        + CliOutput.dim("  (" + coord + ")"));
-                if (add && !KnownExtensions.isKnown(id)) {
-                    CliOutput.println(CliOutput.dim(
-                            "       ↳ not a known extension — resolved by convention; verify the coordinate."));
-                }
-            } else if (add) {
-                CliOutput.println("  " + CliOutput.dim("• " + id + " already present — skipped."));
-            } else {
-                CliOutput.warning(id + " not found in pom.xml — skipped.");
-            }
+            anyChange |= result.changed();
         }
-
-        // Paths that replace the parent's drop the Vauban indexer (BUG-20261023-02); wiring a
-        // codegen bundle makes them append, anything else only warns.
         if (add && droppedInheritedPaths) {
-            if (PomEditor.dropsInheritedProcessorPaths(pom)) {
-                CliOutput.warning("annotationProcessorPaths replaces the parent's and so drops the Vauban indexer"
-                        + " (vidocq-runtime-core-codegen): declare it with combine.children=\"append\".");
-            } else {
-                CliOutput.success("annotationProcessorPaths now appends to the parent's"
-                        + CliOutput.dim("  (keeps the Vauban indexer, vidocq-runtime-core-codegen)"));
-            }
+            reportProcessorPathsMode(pom);
         }
 
         boolean moduleInfoChanged = updateModuleInfo(pomPath.getParent(), ids, add);
@@ -784,5 +746,61 @@ public final class CommandRunner {
         CliOutput.success("pom.xml updated.");
         CliOutput.println(CliOutput.dim("  Run 'mvn package' (or './mvnw package' if present) to fetch the new dependencies."));
         return 0;
+    }
+
+    /** Adds or removes one extension's dependency, with its codegen bundle's processor path. */
+    private static PomEditor.Result editPomFor(String pom, String id, ExtensionCoordinate coord,
+                                               String runtimeVersion, boolean add) {
+        PomEditor.Result result = add
+                ? PomEditor.add(pom, coord, runtimeVersion)
+                : PomEditor.remove(pom, coord);
+        PomEditor.Result apt = editProcessorPath(result.pom(), id, runtimeVersion, add);
+        if (result.changed()) {
+            CliOutput.success((add ? "Added " : "Removed ") + id
+                    + CliOutput.dim("  (" + coord + ")"));
+            if (add && !KnownExtensions.isKnown(id)) {
+                CliOutput.println(CliOutput.dim(
+                        "       ↳ not a known extension — resolved by convention; verify the coordinate."));
+            }
+        } else if (add) {
+            CliOutput.println("  " + CliOutput.dim("• " + id + " already present — skipped."));
+        } else {
+            CliOutput.warning(id + " not found in pom.xml — skipped.");
+        }
+        return new PomEditor.Result(apt.pom(), result.changed() || apt.changed());
+    }
+
+    /**
+     * Extensions shipping an APT codegen bundle need it on the compiler's
+     * annotationProcessorPaths, or vidocq:checkpom fails the next build; removing the
+     * extension removes it too.
+     */
+    private static PomEditor.Result editProcessorPath(String pom, String id, String runtimeVersion, boolean add) {
+        var codegen = KnownExtensions.codegenBundle(id);
+        if (codegen.isEmpty()) {
+            return new PomEditor.Result(pom, false);
+        }
+        PomEditor.Result apt = add
+                ? PomEditor.addAnnotationProcessorPath(pom, codegen.get(), runtimeVersion)
+                : PomEditor.removeAnnotationProcessorPath(pom, codegen.get());
+        if (apt.changed()) {
+            CliOutput.success((add ? "Wired " : "Unwired ") + codegen.get().artifactId()
+                    + CliOutput.dim("  (annotationProcessorPaths)"));
+        }
+        return apt;
+    }
+
+    /**
+     * Paths that replace the parent's drop the Vauban indexer (BUG-20261023-02); wiring a
+     * codegen bundle makes them append, anything else only warns.
+     */
+    private static void reportProcessorPathsMode(String pom) {
+        if (PomEditor.dropsInheritedProcessorPaths(pom)) {
+            CliOutput.warning("annotationProcessorPaths replaces the parent's and so drops the Vauban indexer"
+                    + " (vidocq-runtime-core-codegen): declare it with combine.children=\"append\".");
+        } else {
+            CliOutput.success("annotationProcessorPaths now appends to the parent's"
+                    + CliOutput.dim("  (keeps the Vauban indexer, vidocq-runtime-core-codegen)"));
+        }
     }
 }

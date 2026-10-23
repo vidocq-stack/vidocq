@@ -44,6 +44,8 @@ public final class PomEditor {
             Pattern.compile("<groupId>\\s*([^<\\s][^<]*?)\\s*</groupId>");
     private static final Pattern ARTIFACT_ID =
             Pattern.compile("<artifactId>\\s*([^<\\s][^<]*?)\\s*</artifactId>");
+    private static final String INDENT = "    ";
+    private static final String TWO_INDENTS = INDENT + INDENT;
 
     /**
      * Inserts {@code coordinate} as a project dependency. Idempotent: if the
@@ -68,7 +70,7 @@ public final class PomEditor {
         if (close >= 0) {
             int lineStart = pom.lastIndexOf('\n', close) + 1;
             String baseIndent = pom.substring(lineStart, close);
-            String childIndent = isBlank(baseIndent) ? baseIndent + "    " : "        ";
+            String childIndent = isBlank(baseIndent) ? baseIndent + "    " : TWO_INDENTS;
             String block = coordinate.dependencyXml(childIndent, version) + "\n";
             return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
         }
@@ -130,6 +132,12 @@ public final class PomEditor {
     private static final String APT_CLOSE = "</annotationProcessorPaths>";
     private static final String APPENDING_APT_OPEN = "<annotationProcessorPaths combine.children=\"append\">";
     private static final String COMPILER_ARTIFACT = "<artifactId>maven-compiler-plugin</artifactId>";
+    private static final String CONFIGURATION_OPEN = "<configuration>";
+    private static final String CONFIGURATION_CLOSE = "</configuration>";
+    private static final String PLUGIN_CLOSE = "</plugin>";
+
+    /** An element of the pom, as {@code [start, end)}. */
+    private record Span(int start, int end) {}
 
     /**
      * Wires an extension's APT codegen bundle into the compiler plugin's
@@ -146,23 +154,9 @@ public final class PomEditor {
     public static Result addAnnotationProcessorPath(String pom, ExtensionCoordinate codegen,
                                                     String version) {
         List<int[]> skipped = outsideProjectBuild(pom);
-        int[] plugin = compilerPlugin(pom, skipped);
+        Span plugin = compilerPlugin(pom, skipped);
         if (plugin != null) {
-            int aptOpen = indexWithin(pom, APT_OPEN, plugin, skipped);
-            if (aptOpen >= 0) {
-                return addToProcessorPaths(pom, aptOpen, codegen, version);
-            }
-            int configuration = indexWithin(pom, "<configuration>", plugin, skipped);
-            if (configuration >= 0) {
-                int close = indexOutside(pom, "</configuration>", configuration, skipped);
-                return new Result(insertBeforeLine(pom, close,
-                        processorPathsXml(codegen, version, childIndent(pom, close))), true);
-            }
-            int close = plugin[1] - "</plugin>".length();
-            String indent = childIndent(pom, close);
-            return new Result(insertBeforeLine(pom, close, indent + "<configuration>\n"
-                    + processorPathsXml(codegen, version, indent + "    ")
-                    + indent + "</configuration>\n"), true);
+            return addToCompilerPlugin(pom, plugin, skipped, codegen, version);
         }
 
         int pluginsClose = indexOutside(pom, "</plugins>", 0, skipped);
@@ -186,10 +180,30 @@ public final class PomEditor {
         String base = childIndent(pom, proj);
         String block = base + "<build>\n"
                 + base + "    <plugins>\n"
-                + compilerPluginXml(codegen, version, base + "        ")
+                + compilerPluginXml(codegen, version, base + TWO_INDENTS)
                 + base + "    </plugins>\n"
                 + base + "</build>\n";
         return new Result(insertBeforeLine(pom, proj, block), true);
+    }
+
+    /** Fills the compiler plugin already declared: its processor paths, else its configuration, else a new one. */
+    private static Result addToCompilerPlugin(String pom, Span plugin, List<int[]> skipped,
+                                              ExtensionCoordinate codegen, String version) {
+        int aptOpen = indexWithin(pom, APT_OPEN, plugin, skipped);
+        if (aptOpen >= 0) {
+            return addToProcessorPaths(pom, aptOpen, codegen, version);
+        }
+        int configuration = indexWithin(pom, CONFIGURATION_OPEN, plugin, skipped);
+        if (configuration >= 0) {
+            int close = indexOutside(pom, CONFIGURATION_CLOSE, configuration, skipped);
+            return new Result(insertBeforeLine(pom, close,
+                    processorPathsXml(codegen, version, childIndent(pom, close))), true);
+        }
+        int close = plugin.end() - PLUGIN_CLOSE.length();
+        String indent = childIndent(pom, close);
+        return new Result(insertBeforeLine(pom, close, indent + CONFIGURATION_OPEN + "\n"
+                + processorPathsXml(codegen, version, indent + INDENT)
+                + indent + CONFIGURATION_CLOSE + "\n"), true);
     }
 
     /**
@@ -199,7 +213,7 @@ public final class PomEditor {
      */
     public static boolean dropsInheritedProcessorPaths(String pom) {
         List<int[]> skipped = outsideProjectBuild(pom);
-        int[] plugin = compilerPlugin(pom, skipped);
+        Span plugin = compilerPlugin(pom, skipped);
         int aptOpen = plugin == null ? -1 : indexWithin(pom, APT_OPEN, plugin, skipped);
         int tagEnd = aptOpen < 0 ? -1 : pom.indexOf('>', aptOpen);
         return tagEnd >= 0 && !appends(pom.substring(aptOpen, tagEnd + 1));
@@ -227,8 +241,11 @@ public final class PomEditor {
         if (present && appends(tag)) {
             return new Result(pom, false);
         }
-        String edited = present ? pom : insertBeforeLine(pom, aptClose, pathXml(codegen, version,
-                isBlank(lineBefore(pom, aptClose)) ? childIndent(pom, aptClose) : "                    "));
+        String edited = pom;
+        if (!present) {
+            String indent = isBlank(lineBefore(pom, aptClose)) ? childIndent(pom, aptClose) : TWO_INDENTS + TWO_INDENTS + INDENT;
+            edited = insertBeforeLine(pom, aptClose, pathXml(codegen, version, indent));
+        }
         if (!appends(tag)) {
             edited = edited.substring(0, aptOpen) + APPENDING_APT_OPEN + edited.substring(tagEnd + 1);
         }
@@ -246,7 +263,7 @@ public final class PomEditor {
      */
     public static Result removeAnnotationProcessorPath(String pom, ExtensionCoordinate codegen) {
         List<int[]> skipped = outsideProjectBuild(pom);
-        int[] plugin = compilerPlugin(pom, skipped);
+        Span plugin = compilerPlugin(pom, skipped);
         int aptOpen = plugin == null ? -1 : indexWithin(pom, APT_OPEN, plugin, skipped);
         int aptClose = aptOpen < 0 ? -1 : pom.indexOf(APT_CLOSE, aptOpen);
         String marker = "<artifactId>" + codegen.artifactId() + "</artifactId>";
@@ -276,38 +293,38 @@ public final class PomEditor {
      * coordinates. Anything else the plugin configures keeps it.
      */
     private static String withoutEmptyCompilerPlugin(String pom) {
+        String withoutPaths = withoutEmptyElement(pom, APPENDING_APT_OPEN, APT_CLOSE);
+        if (withoutPaths == null) {
+            return pom;
+        }
+        String withoutConfiguration = withoutEmptyElement(withoutPaths, CONFIGURATION_OPEN, CONFIGURATION_CLOSE);
+        if (withoutConfiguration == null) {
+            return withoutPaths;
+        }
+        Span plugin = compilerPlugin(withoutConfiguration, outsideProjectBuild(withoutConfiguration));
+        if (plugin == null) {
+            return withoutConfiguration;
+        }
+        String block = withoutConfiguration.substring(plugin.start(), plugin.end()).replaceAll("\\s+", "");
+        if (!block.equals("<plugin><groupId>org.apache.maven.plugins</groupId>" + COMPILER_ARTIFACT + PLUGIN_CLOSE)) {
+            return withoutConfiguration;
+        }
+        return withoutLines(withoutConfiguration, plugin.start(), plugin.end());
+    }
+
+    /**
+     * The pom without the compiler plugin's {@code open...close} element when that element is
+     * empty, or null when the plugin has no such element or it holds something.
+     */
+    private static String withoutEmptyElement(String pom, String open, String close) {
         List<int[]> skipped = outsideProjectBuild(pom);
-        int[] plugin = compilerPlugin(pom, skipped);
-        int aptOpen = plugin == null ? -1 : indexWithin(pom, APPENDING_APT_OPEN, plugin, skipped);
-        if (aptOpen < 0) {
-            return pom;
+        Span plugin = compilerPlugin(pom, skipped);
+        int start = plugin == null ? -1 : indexWithin(pom, open, plugin, skipped);
+        int closeTag = start < 0 ? -1 : indexOutside(pom, close, start, skipped);
+        if (closeTag < 0 || !isBlank(pom.substring(start + open.length(), closeTag))) {
+            return null;
         }
-        int aptEnd = pom.indexOf(APT_CLOSE, aptOpen) + APT_CLOSE.length();
-        if (!isBlank(pom.substring(aptOpen + APPENDING_APT_OPEN.length(), aptEnd - APT_CLOSE.length()))) {
-            return pom;
-        }
-        pom = withoutLines(pom, aptOpen, aptEnd);
-
-        skipped = outsideProjectBuild(pom);
-        plugin = compilerPlugin(pom, skipped);
-        int configuration = indexWithin(pom, "<configuration>", plugin, skipped);
-        if (configuration < 0) {
-            return pom;
-        }
-        int configurationEnd = indexOutside(pom, "</configuration>", configuration, skipped)
-                + "</configuration>".length();
-        if (!isBlank(pom.substring(configuration + "<configuration>".length(),
-                configurationEnd - "</configuration>".length()))) {
-            return pom;
-        }
-        pom = withoutLines(pom, configuration, configurationEnd);
-
-        plugin = compilerPlugin(pom, outsideProjectBuild(pom));
-        String block = pom.substring(plugin[0], plugin[1]).replaceAll("\\s+", "");
-        if (!block.equals("<plugin><groupId>org.apache.maven.plugins</groupId>" + COMPILER_ARTIFACT + "</plugin>")) {
-            return pom;
-        }
-        return withoutLines(pom, plugin[0], plugin[1]);
+        return withoutLines(pom, start, closeTag + close.length());
     }
 
     private static String pathXml(ExtensionCoordinate codegen, String version, String indent) {
@@ -328,10 +345,10 @@ public final class PomEditor {
         return indent + "<plugin>\n"
                 + indent + "    <groupId>org.apache.maven.plugins</groupId>\n"
                 + indent + "    " + COMPILER_ARTIFACT + "\n"
-                + indent + "    <configuration>\n"
-                + processorPathsXml(codegen, version, indent + "        ")
-                + indent + "    </configuration>\n"
-                + indent + "</plugin>\n";
+                + indent + INDENT + CONFIGURATION_OPEN + "\n"
+                + processorPathsXml(codegen, version, indent + TWO_INDENTS)
+                + indent + INDENT + CONFIGURATION_CLOSE + "\n"
+                + indent + PLUGIN_CLOSE + "\n";
     }
 
     /**
@@ -364,39 +381,40 @@ public final class PomEditor {
     private static int indexOutside(String pom, String needle, int from, List<int[]> skipped) {
         int i = pom.indexOf(needle, from);
         while (i >= 0) {
-            int[] region = regionAt(i, skipped);
-            if (region == null) {
+            int regionEnd = regionEnd(i, skipped);
+            if (regionEnd < 0) {
                 return i;
             }
-            i = pom.indexOf(needle, region[1]);
+            i = pom.indexOf(needle, regionEnd);
         }
         return -1;
     }
 
-    private static int[] regionAt(int index, List<int[]> regions) {
+    /** The end of the region holding {@code index}, or -1 when none does. */
+    private static int regionEnd(int index, List<int[]> regions) {
         for (int[] region : regions) {
             if (index >= region[0] && index < region[1]) {
-                return region;
+                return region[1];
             }
         }
-        return null;
+        return -1;
     }
 
     /** Like {@link #indexOutside} but inside {@code element} only. */
-    private static int indexWithin(String pom, String needle, int[] element, List<int[]> skipped) {
-        int i = indexOutside(pom, needle, element[0], skipped);
-        return i >= 0 && i < element[1] ? i : -1;
+    private static int indexWithin(String pom, String needle, Span element, List<int[]> skipped) {
+        int i = indexOutside(pom, needle, element.start(), skipped);
+        return i >= 0 && i < element.end() ? i : -1;
     }
 
-    /** The project build's {@code maven-compiler-plugin} element as {@code [start, endExclusive]}, or null. */
-    private static int[] compilerPlugin(String pom, List<int[]> skipped) {
+    /** The project build's {@code maven-compiler-plugin} element, or null. */
+    private static Span compilerPlugin(String pom, List<int[]> skipped) {
         int artifact = indexOutside(pom, COMPILER_ARTIFACT, 0, skipped);
         if (artifact < 0) {
             return null;
         }
         int open = pom.lastIndexOf("<plugin>", artifact);
-        int close = pom.indexOf("</plugin>", artifact);
-        return open < 0 || close < 0 ? null : new int[]{open, close + "</plugin>".length()};
+        int close = pom.indexOf(PLUGIN_CLOSE, artifact);
+        return open < 0 || close < 0 ? null : new Span(open, close + PLUGIN_CLOSE.length());
     }
 
     /** Inserts {@code block} at the start of the line holding {@code index}. */

@@ -213,6 +213,7 @@ class VidocqCheckPomMojoTest {
         mojo.setLog(new SystemStreamLog() {
             @Override
             public void info(CharSequence content) {
+                // Only the errors matter here.
             }
 
             @Override
@@ -270,6 +271,7 @@ class VidocqCheckPomMojoTest {
 
             @Override
             public void info(CharSequence content) {
+                // Only the errors matter here.
             }
         });
 
@@ -309,6 +311,7 @@ class VidocqCheckPomMojoTest {
         mojo.setLog(new SystemStreamLog() {
             @Override
             public void info(CharSequence content) {
+                // Only the errors matter here.
             }
 
             @Override
@@ -392,6 +395,7 @@ class VidocqCheckPomMojoTest {
         mojo.setLog(new SystemStreamLog() {
             @Override
             public void info(CharSequence content) {
+                // Only the errors matter here.
             }
 
             @Override
@@ -419,6 +423,7 @@ class VidocqCheckPomMojoTest {
 
             @Override
             public void info(CharSequence content) {
+                // Only the errors matter here.
             }
         });
         return mojo;
