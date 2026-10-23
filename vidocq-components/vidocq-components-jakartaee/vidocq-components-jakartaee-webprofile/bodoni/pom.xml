@@ -80,13 +80,18 @@
         <!-- H2 — test scope only: the sql: unit tests and ITs run against a real JDBC
              driver in memory. Same version as Mansart and Noether. -->
         <h2.version>2.3.232</h2.version>
+
+        <!-- Ibarra — the it-ibarra and tck profiles only (ibarra-maven-plugin and
+             ibarra-api in bodoni-it-ibarra, the ibarra-arquillian TCK adapter in
+             bodoni-tck). One value for both, so they never drift apart. -->
+        <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
     </properties>
 
     <!--
-        Main reactor modules. Planned modules (PLAN.md, milestones B5-B7):
-        bodoni-tck joins the reactor only under the `tck` Maven profile, like
-        every other Vidocq sub-project; bodoni-ibarra (optional build-time
-        inliner) and bodoni-it-other-containers/bodoni-it-openliberty follow.
+        Main reactor modules. bodoni-it-ibarra and bodoni-tck join the reactor only
+        under their profiles (it-ibarra, tck). Planned modules (PLAN.md, milestones
+        B6-B7): bodoni-ibarra (optional build-time inliner) and
+        bodoni-it-other-containers/bodoni-it-openliberty.
     -->
     <modules>
         <module>bodoni-core</module>
@@ -171,9 +176,8 @@
     </dependencyManagement>
 
     <!--
-        Planned profiles (not wired until the module exists, PLAN.md "TCK plan"):
+        Planned profile (not wired until the module exists):
 
-            tck        adds bodoni-tck            ./mvnw -Ptck -pl bodoni-tck test
             quality    adds bodoni-coverage       aggregated JaCoCo report for SonarQube
     -->
     <profiles>
@@ -187,12 +191,25 @@
         <profile>
             <id>it-ibarra</id>
             <properties>
-                <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
                 <foy.version>0.4.0-SNAPSHOT</foy.version>
                 <chappe.version>0.4.0-SNAPSHOT</chappe.version>
             </properties>
             <modules>
                 <module>bodoni-it-ibarra</module>
+            </modules>
+        </profile>
+        <!--
+            tck adds bodoni-tck, the unpublished runner of the official Jakarta Tags TCK
+            on Ibarra's Arquillian adapter (PLAN.md "TCK plan", milestone B5):
+                ./mvnw -Ptck -pl bodoni-tck test                  the runner's own tests
+                ./mvnw -Ptck,tck-official -pl bodoni-tck test     plus the official TCK
+            The default build neither builds the module nor resolves anything
+            TCK-related.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>bodoni-tck</module>
             </modules>
         </profile>
     </profiles>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<arquillian xmlns="http://jboss.org/schema/arquillian">
+    <container qualifier="ibarra" default="true">
+        <configuration>
+            <!-- Deployed in every application layer, from the test class path: Bodoni's
+                 tags and TLDs (bodoni-core), its Peano accessor tables under
+                 peano.reflection=deny (bodoni-peano), the JSTL API they implement, and the
+                 H2 JDBC driver of the TCK database (an automatic module, runtime-only). One
+                 class loader holds them all, so the TCK's Class.forName("org.h2.Driver")
+                 and DriverManager see H2. -->
+            <property name="applicationLibraries">io.vidocq.bodoni.core,io.vidocq.bodoni.peano,jakarta.servlet.jsp.jstl,com.h2database</property>
+            <!-- JDK modules the host boot layer does not reach on its own: java.sql and
+                 java.naming are required by Bodoni and the JSTL API, and jdk.localedata
+                 is a locale-data service provider that no requires clause reaches (the
+                 fmt: classes format and parse in many locales). -->
+            <property name="jdkModules">java.sql,java.naming,jdk.localedata</property>
+            <!-- Every TCK WAR carries the jstltck-common jar (getCommonJarArchive), whose
+                 resource bundles in this package fmt: loads by name: opened so that
+                 ResourceBundle reaches them across modules. -->
+            <property name="applicationOpens">com.sun.ts.tests.jstl.common.resources</property>
+        </configuration>
+    </container>
+</arquillian>

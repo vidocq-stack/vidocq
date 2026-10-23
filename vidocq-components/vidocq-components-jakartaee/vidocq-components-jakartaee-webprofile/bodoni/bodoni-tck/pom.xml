@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    bodoni-tck — runner for the official Jakarta Tags TCK (Jakarta Standard Tag
+    Library 3.0). Not published.
+
+    In-reactor module gated by the `tck` Maven profile of bodoni-parent (same pattern
+    as every other Vidocq sub-project): a plain `mvn install` neither builds this
+    runner nor resolves anything TCK-related.
+
+    Two levels:
+      -Ptck                 runs the runner's own tests (its Arquillian configuration,
+                            checked against the adapter);
+      -Ptck,tck-official    additionally resolves the official TCK artefact and runs
+                            its JSTLClientIT classes.
+
+    The artefact (maintainer decision 1, 2026-10-23): jakarta.tck:tags-tck:11.0.3 from
+    Maven Central, the Tags tests of the Jakarta EE 11 Platform TCK, on Arquillian +
+    JUnit 5. The standalone jakarta-tags-tck-3.0.0.zip (JavaTest/Ant) is the formal
+    reference only: a result of this runner is not a certification claim.
+
+    Every TCK class deploys a WAR. The published io.vidocq.ibarra:ibarra-arquillian
+    adapter precompiles it with Ibarra and runs it on modular Foy over Chappe in a
+    separate process; Foy, Peano and Chappe come transitively from the adapter, on
+    the versions Ibarra uses. Arquillian, ShrinkWrap and the TCK clients are not Java
+    modules, so the clients run on the test class path (useModulePath false), like
+    ibarra-tck. What the adapter deploys stays strictly modular: a named
+    tck.application module and a named tck.host server module, started with
+    limit-modules, without compilers and with -Dpeano.reflection=deny.
+
+    The sql and compat classes need the TCK database. Its Derby DDL is never copied
+    into this repository (EFTL): the run script fetches the official zip, checks its
+    SHA-256 and extracts that one file into target/tags-tck-distribution/. The
+    tck-official profile passes its path as the bodoni.tck.ddl system property.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.bodoni</groupId>
+        <artifactId>bodoni-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bodoni-tck</artifactId>
+    <name>Bodoni :: TCK</name>
+    <description>Official Jakarta Tags TCK runner — on Ibarra's Arquillian adapter, modular Foy (not published)</description>
+
+    <properties>
+        <!-- Maintainer decision 1: the Tags tests of the Jakarta EE 11 Platform TCK, on Maven Central. -->
+        <tck.tags.groupId>jakarta.tck</tck.tags.groupId>
+        <tck.tags.artifactId>tags-tck</tck.tags.artifactId>
+        <tck.tags.version>11.0.3</tck.tags.version>
+
+        <!-- The Arquillian level of the TCK jar's embedded POM; ibarra-arquillian's
+             container SPI is binary-compatible with it (adapter README, "Arquillian alignment"). -->
+        <arquillian.version>1.9.4.Final</arquillian.version>
+
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- One Arquillian version for the TCK clients, the JUnit 5 container and the adapter's SPI. -->
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- The implementation under test: deployed in every application layer
+             (arquillian.xml applicationLibraries). -->
+        <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The Peano accessor tables Bodoni needs under peano.reflection=deny (BOD-001). -->
+        <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-peano</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The JDBC driver of the TCK database (sql and compat classes), deployed as an
+             automatic library module of the application layer. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The Arquillian adapter: precompiles each WAR, deploys it on modular Foy.
+             Test tooling: test scope only (adapter README). -->
+        <dependency>
+            <groupId>io.vidocq.ibarra</groupId>
+            <artifactId>ibarra-arquillian</artifactId>
+            <version>${ibarra.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The Arquillian JUnit 5 runtime the TCK clients run on (the TCK jar brings
+             only arquillian-junit5-core and the test APIs). -->
+        <dependency>
+            <groupId>org.jboss.arquillian.junit5</groupId>
+            <artifactId>arquillian-junit5-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The runner's own tests (versions from vidocq-parent's junit-bom). -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The JUnit Platform launcher API, for the TCK database's LauncherSessionListener. -->
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Arquillian, ShrinkWrap and the TCK clients are not Java modules:
+                         class path, like ibarra-tck. The deployments stay modular. -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>tck-official</id>
+            <dependencies>
+                <dependency>
+                    <groupId>${tck.tags.groupId}</groupId>
+                    <artifactId>${tck.tags.artifactId}</artifactId>
+                    <version>${tck.tags.version}</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <dependenciesToScan>
+                                <dependency>${tck.tags.groupId}:${tck.tags.artifactId}</dependency>
+                            </dependenciesToScan>
+                            <includes><include>**/*IT.class</include></includes>
+                            <failIfNoTests>true</failIfNoTests>
+                            <trimStackTrace>false</trimStackTrace>
+                            <systemPropertyVariables>
+                                <!-- The Derby DDL the run script extracts from the official zip. -->
+                                <bodoni.tck.ddl>${project.build.directory}/tags-tck-distribution/tags-tck/sql/derby/derby.ddl.jstl.sql</bodoni.tck.ddl>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
