@@ -35,7 +35,7 @@ xref:usage.adoc[the `@VidocqMain` trampoline].
 | REST application secured with MicroProfile JWT via `vidocq-runtime-cervantes-jwt-extension` — token validation and `@RolesAllowed` on Jakarta REST resources.
 
 | `vidocq-runtime-knock-health-example`
-| MicroProfile Health via `vidocq-runtime-knock-health-extension` — custom `@Liveness`/`@Readiness` checks exposed on `/health`.
+| MicroProfile Health via `vidocq-runtime-knock-health-extension` — custom `@Liveness`/`@Readiness` checks exposed on `/api/health` (`/live`, `/ready`, `/started`).
 
 | [[cyrano-rest-client-example]]`vidocq-runtime-cyrano-rest-client-example` [.tag-new]#NEW#
 | MicroProfile Rest Client via `vidocq-runtime-cyrano-rest-client-extension` and its `-codegen` bundle — `/api/relay` calls the application's own `/api/greeting` through an `@Inject @RestClient` interface. Every build links it with `vidocq:jlink`.
