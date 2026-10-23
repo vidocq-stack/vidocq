@@ -267,7 +267,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     }
 
     private InputStream openAbsolute(String reference, URI target) throws JspException {
-        if (!target.isAbsolute() || target.isOpaque() || !sameOrigin(target, origin)) {
+        if (!target.isAbsolute() || target.isOpaque() || hostInPath(target) || !sameOrigin(target, origin)) {
             throw refused(reference, NOT_SAME_ORIGIN);
         }
         try {
@@ -279,6 +279,24 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         } catch (IOException | IllegalArgumentException e) {
             throw unreadable(reference, e);
         }
+    }
+
+    /**
+     * Whether a target without authority has a decoded path starting with two separators
+     * ({@code /} or {@code \}), as in {@code file:////host/share/x}: its host compares as
+     * empty, yet the opened path names another host (a UNC path on Windows).
+     */
+    private static boolean hostInPath(URI target) {
+        String path = target.getPath();
+        return target.getRawAuthority() == null
+                && path != null
+                && path.length() >= 2
+                && isSeparator(path.charAt(0))
+                && isSeparator(path.charAt(1));
+    }
+
+    private static boolean isSeparator(char c) {
+        return c == '/' || c == '\\';
     }
 
     private static void requireSuccess(HttpURLConnection http) throws IOException {

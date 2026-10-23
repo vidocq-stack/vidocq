@@ -202,6 +202,56 @@ class SystemIdPolicyTest {
         assertEquals("<other/>", read(elsewhere));
     }
 
+    @Test
+    void aFileSystemIdRefusesUncTargets(@TempDir Path dir) {
+        String systemId = dir.resolve("doc.xml").toUri().toString();
+        // No authority, a path starting with two separators: a UNC path to another host on Windows.
+        for (String reference : new String[] {
+                "file:////evil/share/x", "file:/%2F%2Fevil/share/x", "file:/%5C%5Cevil/share/x"}) {
+            SystemIdPolicy policy = SystemIdPolicy.of(ACTION, systemId, pc);
+
+            assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
+
+            // "refused", not "cannot be read": nothing was opened.
+            assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + systemId + "': "
+                    + NOT_SAME_ORIGIN, policy.recordedFailure().getMessage());
+        }
+    }
+
+    @Test
+    void aFileSystemIdRefusesOpaqueTargets(@TempDir Path dir) {
+        String systemId = dir.resolve("doc.xml").toUri().toString();
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, systemId, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, "file:foo"));
+
+        assertTrue(policy.recordedFailure().getMessage().endsWith("'file:foo' refused, system id '" + systemId + "': "
+                + NOT_SAME_ORIGIN), policy.recordedFailure().getMessage());
+    }
+
+    @Test
+    void relativeTargetsWithAnAuthorityOrABackslashTraversalAreRefused() {
+        context.resource("/e.xml", BODY).resource("/shop/x", "x");
+        for (String reference : new String[] {"bodoni-webapp://x/e.xml", "..%5cx"}) {
+            SystemIdPolicy policy = SystemIdPolicy.of(ACTION, DOC, pc);
+
+            assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
+
+            assertEquals("x:parse: external reference '" + reference + "' refused, system id 'data/doc.xml': " + OUTSIDE,
+                    policy.recordedFailure().getMessage());
+        }
+    }
+
+    @Test
+    void anUnparsableReferenceIsRefused() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, DOC, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, "a b|c"));
+
+        assertEquals("x:parse: external reference 'a b|c' refused, system id 'data/doc.xml': not a valid URI",
+                policy.recordedFailure().getMessage());
+    }
+
     // ---- absolute http system id --------------------------------------------
 
     @Test
@@ -268,6 +318,9 @@ class SystemIdPolicyTest {
         assertTrue(SystemIdPolicy.sameOrigin(page, URI.create("http://EXAMPLE.org:80/b")));
         assertFalse(SystemIdPolicy.sameOrigin(page, URI.create("https://example.org/b")));
         assertFalse(SystemIdPolicy.sameOrigin(page, URI.create("http://example.org:8080/b")));
+        // Registry-based authorities (no parsed host) are compared as a whole.
+        assertFalse(SystemIdPolicy.sameOrigin(URI.create("http://a_b/"), URI.create("http://c_d/")));
+        assertTrue(SystemIdPolicy.sameOrigin(URI.create("http://a_b/x"), URI.create("http://A_B/y")));
     }
 
     @Test
