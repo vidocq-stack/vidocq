@@ -26,9 +26,10 @@ import io.vidocq.runtime.maven.JdwpAgent;
  *
  * @param coordinates       {@code groupId:artifactId} of its Maven project, for messages
  * @param mainClass         the application main class as the pom declares it (a binary name: a nested
- *                          class uses {@code $})
+ *                          class uses {@code $}), or {@code null} when the runtime's own main boots the
+ *                          application: only the Application kind needs one
  * @param configurationName the run configuration name, which also gives the file name
- * @param moduleName        the IntelliJ module that holds the main class
+ * @param moduleName        the IntelliJ module of the application, which holds its main class
  * @param pomPath           its pom, relative to the project directory, with {@code /} separators
  * @param generateGoal      the Maven goal of the before-launch step: {@code vidocq:generate}, or
  *                          {@code vidocq:generate@<execution>} when one execution carries the

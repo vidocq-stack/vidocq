@@ -49,7 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>A module is a Vidocq application when it is not an aggregator, declares
  * {@code vidocq-runtime-maven-plugin} in its build plugins (the before-launch step runs
  * {@code vidocq:generate} on its pom, which must resolve the plugin and its configuration there) and
- * declares an application main class. Everything is read from each module's own model: a command-line
+ * declares {@code vidocq.mainModule} or an application main class: the runtime's own main boots an
+ * application that has none. Everything is read from each module's own model: a command-line
  * {@code -D} would otherwise apply to every module of the aggregator at once, and the committed files
  * would depend on how Maven was invoked.
  */
@@ -116,8 +117,93 @@ class IdeaApplicationsTest {
         Discovery discovery = discover(library, runtimeMain);
 
         assertEquals(List.of(), discovery.applications());
-        assertHas(discovery, Level.DEBUG,
-                "Vidocq idea: com.example:library is not a Vidocq application: no application main class (vidocq.mainClass)");
+        assertHas(discovery, Level.DEBUG, "Vidocq idea: com.example:library is not a Vidocq application: neither"
+                + " vidocq.mainModule nor an application main class (vidocq.mainClass)");
+    }
+
+    /**
+     * The runtime's own main ({@code io.vidocq.runtime.core.Vidocq}) boots an application that has no main
+     * class of its own: {@code vidocq.mainModule} is all {@code vidocq:dev} and {@code vidocq:run} need, so the
+     * module is an application, named after its artifactId.
+     */
+    @Test
+    void aMainModuleWithoutMainClassIsAnApplicationNamedAfterItsArtifactId() throws IOException {
+        MavenProject module = mainModuleOnly("module-only");
+
+        Discovery discovery = discover(module);
+
+        assertEquals(List.of(new IdeaApplication("com.example:module-only", null, "module-only", "module-only",
+                "module-only/pom.xml", "vidocq:generate")), discovery.applications());
+        assertEquals(List.of(), discovery.errors());
+    }
+
+    @Test
+    void theRuntimeMainClassWithAMainModuleIsAnApplicationWithoutMainClass() throws IOException {
+        MavenProject runtimeMain = application("runtime-main", "io.vidocq.runtime.core.Vidocq");
+        runtimeMain.getProperties().setProperty("vidocq.mainModule", "com.example");
+
+        IdeaApplication application = discover(runtimeMain).applications().get(0);
+
+        assertEquals(null, application.mainClass());
+        assertEquals("runtime-main", application.configurationName());
+    }
+
+    @Test
+    void theConfigurationNameStillNamesAnApplicationWithoutMainClass() throws IOException {
+        MavenProject module = mainModuleOnly("module-only");
+        module.getProperties().setProperty("vidocq.idea.configurationName", "Shop server");
+
+        assertEquals("Shop server", discover(module).applications().get(0).configurationName());
+    }
+
+    /** One application per module: their artifactIds tell them apart, where two {@code App} classes would not. */
+    @Test
+    void twoApplicationsWithoutMainClassGetDistinctNames() throws IOException {
+        MavenProject shop = mainModuleOnly("apps/shop");
+        MavenProject backOffice = mainModuleOnly("apps/back-office");
+
+        Discovery discovery = discover(shop, backOffice);
+
+        assertEquals(List.of("shop", "back-office"),
+                discovery.applications().stream().map(IdeaApplication::configurationName).toList());
+    }
+
+    /** The IntelliJ module only matters to Run on a main class, which an application without one never gets. */
+    @Test
+    void noModuleNameWarningForAnApplicationWithoutMainClass() throws IOException {
+        MavenProject levels = mainModuleOnly("levels");
+        levels.getProperties().setProperty("maven.compiler.release", "25");
+        levels.getProperties().setProperty("maven.compiler.testRelease", "21");
+
+        Discovery discovery = discover(levels);
+
+        assertEquals(1, discovery.applications().size());
+        assertTrue(discovery.diagnostics().stream().noneMatch(d -> d.level() == Level.WARN),
+                "no warning: " + discovery.diagnostics());
+    }
+
+    /** The Application kind runs a main class: an application without one is left out, with the way out. */
+    @Test
+    void theApplicationKindLeavesOutAnApplicationWithoutMainClass() throws IOException {
+        MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
+        MavenProject module = mainModuleOnly("module-only");
+
+        Discovery discovery = IdeaApplications.forKind(discover(alpha, module), RunConfigurationRenderer.Kind.APPLICATION);
+
+        assertEquals(List.of("com.example:alpha"),
+                discovery.applications().stream().map(IdeaApplication::coordinates).toList());
+        assertHas(discovery, Level.WARN, "Vidocq idea: com.example:module-only has no application main class, which"
+                + " an Application configuration runs: it gets none. Declare <vidocq.mainClass> (a @VidocqMain"
+                + " trampoline) in its <properties>, or use the default Maven kind (vidocq.idea.kind=maven).");
+    }
+
+    @Test
+    void theMavenKindKeepsEveryApplication() throws IOException {
+        MavenProject alpha = application("alpha", "com.example.alpha.AlphaApp");
+        MavenProject module = mainModuleOnly("module-only");
+        Discovery discovery = discover(alpha, module);
+
+        assertEquals(discovery, IdeaApplications.forKind(discovery, RunConfigurationRenderer.Kind.MAVEN));
     }
 
     @Test
@@ -329,18 +415,6 @@ class IdeaApplicationsTest {
                 + " (and <vidocq.mainModule>) in its <properties> to get a run configuration.");
     }
 
-    @Test
-    void aMainModuleWithoutMainClassIsReported() throws IOException {
-        MavenProject module = project("module-only");
-        module.getModel().getBuild().addPlugin(vidocqPlugin());
-        module.getProperties().setProperty("vidocq.mainModule", "com.example");
-
-        Discovery discovery = discover(module);
-
-        assertHas(discovery, Level.INFO, "Vidocq idea: com.example:module-only sets vidocq.mainModule but no"
-                + " application main class; an IntelliJ Application configuration needs vidocq.mainClass.");
-    }
-
     /**
      * {@code lc4jcdi-on-vidocq}: {@code <scanDependencies>} at plugin level and an execution that only
      * binds {@code generate}. Maven copies the plugin-level configuration into every execution of the
@@ -545,6 +619,13 @@ class IdeaApplicationsTest {
         MavenProject project = project(directory);
         project.getModel().getBuild().addPlugin(vidocqPlugin());
         project.getProperties().setProperty("vidocq.mainClass", mainClass);
+        return project;
+    }
+
+    private MavenProject mainModuleOnly(String directory) throws IOException {
+        MavenProject project = project(directory);
+        project.getModel().getBuild().addPlugin(vidocqPlugin());
+        project.getProperties().setProperty("vidocq.mainModule", "com.example");
         return project;
     }
 

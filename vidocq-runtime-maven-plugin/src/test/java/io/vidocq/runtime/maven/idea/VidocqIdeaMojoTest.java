@@ -664,6 +664,13 @@ class VidocqIdeaMojoTest {
         return projectAt(root.resolve(directory), artifactId, packaging);
     }
 
+    private MavenProject mainModuleOnly(String directory) throws IOException {
+        MavenProject project = project(directory, "jar");
+        project.getModel().getBuild().addPlugin(IdeaApplicationsTest.vidocqPlugin());
+        project.getProperties().setProperty("vidocq.mainModule", "com.example." + directory);
+        return project;
+    }
+
     private static MavenProject projectAt(Path basedir, String artifactId, String packaging) throws IOException {
         Model model = new Model();
         model.setGroupId("com.example");
@@ -758,6 +765,62 @@ class VidocqIdeaMojoTest {
 
         assertTrue(log.has("INFO", "Vidocq idea: 6 run configuration(s) in " + root.toRealPath()
                 + "/.run are up to date."), log.toString());
+    }
+
+    /**
+     * An application without a main class of its own, booted by the runtime's main, gets the three Maven
+     * configurations, named after its artifactId: neither {@code vidocq:dev} nor {@code vidocq:run} needs one.
+     */
+    @Test
+    void theDefaultKindCoversAnApplicationWithoutMainClass() throws Exception {
+        projects.add(mainModuleOnly("gamma"));
+        VidocqIdeaMojo maven = new VidocqIdeaMojo();
+        maven.setLog(log);
+        maven.setCheck("false");
+
+        maven.run(projects, projects, new Properties(), root);
+
+        try (Stream<Path> files = Files.list(root.resolve(".run"))) {
+            assertEquals(List.of("gamma (debug).run.xml", "gamma (dev).run.xml", "gamma (run).run.xml"),
+                    files.map(p -> p.getFileName().toString()).filter(name -> name.startsWith("gamma")).sorted()
+                            .toList());
+        }
+        IdeaApplication gamma = new IdeaApplication("com.example:gamma", null, "gamma", "gamma", "gamma/pom.xml",
+                "vidocq:generate");
+        String dev = RunConfigurationRenderer.mavenBody(gamma, null, RunConfigurationRenderer.DEV_GOALS, "gamma (dev)");
+        assertEquals(RunConfigurationRenderer.markerLine(dev) + "\n" + dev, read("gamma (dev).run.xml"));
+        assertTrue(log.has("INFO", "Vidocq idea: created .run/gamma (dev).run.xml (com.example:gamma, no main class"
+                + " of its own, IntelliJ module gamma)"), log.toString());
+        assertTrue(log.has("INFO", "Vidocq idea: 9 run configuration(s): 9 created"), log.toString());
+    }
+
+    @Test
+    void theApplicationKindLeavesOutAnApplicationWithoutMainClass() throws Exception {
+        projects.add(mainModuleOnly("gamma"));
+
+        run();
+
+        try (Stream<Path> files = Files.list(root.resolve(".run"))) {
+            assertEquals(List.of("AlphaApp.run.xml", "Beta server.run.xml"),
+                    files.map(p -> p.getFileName().toString()).sorted().toList());
+        }
+        assertTrue(log.has("WARN", "Vidocq idea: com.example:gamma has no application main class, which an"
+                + " Application configuration runs: it gets none. Declare <vidocq.mainClass> (a @VidocqMain"
+                + " trampoline) in its <properties>, or use the default Maven kind (vidocq.idea.kind=maven)."),
+                log.toString());
+    }
+
+    @Test
+    void noApplicationOfTheMavenKindNamesTheMainModule() throws Exception {
+        VidocqIdeaMojo maven = new VidocqIdeaMojo();
+        maven.setLog(log);
+        maven.setCheck("false");
+
+        maven.run(List.of(projects.get(0), projects.get(3)), List.of(projects.get(0), projects.get(3)),
+                new Properties(), root);
+
+        assertTrue(log.has("WARN", "Vidocq idea: no Vidocq application in this build: a module needs"
+                + " vidocq-runtime-maven-plugin in its <build><plugins> and a vidocq.mainModule property."), log.toString());
     }
 
     /** The Application kind is unchanged: one file per application, no dev, run or debug configuration. */

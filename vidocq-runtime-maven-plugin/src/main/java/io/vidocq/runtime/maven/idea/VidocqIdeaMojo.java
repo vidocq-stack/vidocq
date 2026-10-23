@@ -60,8 +60,8 @@ import java.util.stream.Stream;
  * mvn vidocq:idea -Dvidocq.idea.check=true
  * mvn vidocq:idea -Dvidocq.idea.check=strict</pre>
  *
- * <p>By default each application gets three files (Vidocq/vidocq#143), named after the application and
- * suffixed: a <i>(dev)</i> configuration, an IntelliJ <b>Maven</b> run of {@code process-classes vidocq:dev}
+ * <p>By default each application gets three files (Vidocq/vidocq#143), named after the application (its
+ * main class, or its artifactId when the runtime's own main boots it) and suffixed: a <i>(dev)</i> configuration, an IntelliJ <b>Maven</b> run of {@code process-classes vidocq:dev}
  * (console, reload, continuous testing) on the application's own pom, as {@code vidocq dev} runs it; a
  * <i>(run)</i> configuration, the same Maven run of {@code vidocq:run} instead; and a <i>(debug)</i>
  * configuration, a Remote JVM Debug run that
@@ -70,7 +70,8 @@ import java.util.stream.Stream;
  * (Vidocq/vidocq#83) — the IDE's own build never runs {@code vidocq:generate}.
  * {@code -Dvidocq.idea.kind=application} writes a single <b>Application</b> run of
  * the main class instead, with two before-launch steps: IntelliJ's Make, then {@code vidocq:generate} on
- * the application's pom; {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves that second step out.
+ * the application's pom; {@code -Dvidocq.idea.generateBeforeLaunch=false} leaves that second step out. An
+ * application without a main class of its own gets no Application run, and a warning.
  *
  * <p>The goal writes nothing else: never {@code .idea/}, {@code *.iml} or any other project file, which
  * belong to IntelliJ's own Maven import (the retired {@code maven-idea-plugin} competed with it). It never
@@ -215,7 +216,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
         Path directory = projectDirectory(projects, executionRoot);
         boolean partialReactor = allProjects.size() > projects.size();
 
-        Discovery discovery = IdeaApplications.discover(projects, allProjects, directory, userProperties);
+        Discovery discovery = IdeaApplications.forKind(
+                IdeaApplications.discover(projects, allProjects, directory, userProperties), renderKind);
         discovery.diagnostics().forEach(this::log);
         if (!discovery.errors().isEmpty()) {
             discovery.errors().forEach(getLog()::error);
@@ -235,7 +237,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
         }
         if (targets.isEmpty()) {
             getLog().warn(PREFIX + "no Vidocq application in this build: a module needs vidocq-runtime-maven-plugin"
-                    + " in its <build><plugins> and a vidocq.mainClass property.");
+                    + " in its <build><plugins> and a "
+                    + (renderKind == Kind.MAVEN ? "vidocq.mainModule" : "vidocq.mainClass") + " property.");
             reportOrphans(runDirectory, targets);
             return;
         }
@@ -415,7 +418,8 @@ public class VidocqIdeaMojo extends AbstractMojo {
         int untouched = 0;
         for (Target target : targets) {
             IdeaApplication application = target.application();
-            String details = " (" + application.coordinates() + ", main class " + application.mainClass()
+            String details = " (" + application.coordinates() + (application.mainClass() == null
+                    ? ", no main class of its own" : ", main class " + application.mainClass())
                     + ", IntelliJ module " + application.moduleName() + ")";
             switch (target.state()) {
                 case UNCHANGED -> {

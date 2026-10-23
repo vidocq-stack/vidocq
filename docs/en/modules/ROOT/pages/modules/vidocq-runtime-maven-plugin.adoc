@@ -808,7 +808,8 @@ the goal by its coordinates (`mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:
 
 For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
 `<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, the Maven kind writes three files
-(Vidocq/vidocq#143):
+(Vidocq/vidocq#143). Without `vidocq.mainClass`, they would be named after the artifactId:
+`mcp-time-server (dev)`, and so on [.tag-new]#NEW#.
 
 [cols="2,3"]
 |===
@@ -916,7 +917,7 @@ agent itself, which `vidocq:dev` and `vidocq:idea` both read the same way.
 ==== The `application` kind
 
 `-Dvidocq.idea.kind=application` writes what the goal wrote before: one Application run configuration per
-application, of the main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
+application that declares a main class [.tag-new]#NEW#, of that main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
 application's own pom. Unlike the Maven kind's three files, there is only ever this one: the application runs
 in the JVM IntelliJ starts directly, never under `vidocq:dev`, so it never has the dev console or any `-dev`
 module [.tag-new]#NEW# (<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
@@ -961,12 +962,20 @@ A project of the build gets a run configuration when:
 . `vidocq-runtime-maven-plugin` is in its effective `<build><plugins>` (inherited declarations and active
   profiles count, `<pluginManagement>` alone does not): the before-launch step runs `vidocq:generate` on its pom;
 . its pom does not set `vidocq.idea.exclude` to `true`;
-. it declares an application main class: the plugin-level `<mainClass>` if set, otherwise the
-  `vidocq.mainClass` property. The runtime's own `io.vidocq.runtime.core.Vidocq` does not count, and a legacy
-  `module/Class` value keeps its class — the rule `vidocq:package` applies.
+. it declares `vidocq.mainModule` or an application main class [.tag-new]#NEW#. The main class is the
+  plugin-level `<mainClass>` if set, otherwise the `vidocq.mainClass` property. The runtime's own
+  `io.vidocq.runtime.core.Vidocq` does not count as one, and a legacy `module/Class` value keeps its class — the
+  rule `vidocq:package` applies.
+
+An application needs no main class of its own: the runtime's main boots it, and `vidocq.mainModule` is all
+`vidocq:dev` and `vidocq:run` read. Such an application gets the Maven kind's three files, named after its
+`artifactId` [.tag-new]#NEW#. That default also keeps apart the applications of a reactor with one application
+per module, where two `App` classes would collide. Only the `application` kind runs a main class: it leaves an
+application without one out, with a warning to declare `vidocq.mainClass` (a `@VidocqMain` trampoline) or to
+keep the Maven kind.
 
 A `<mainClass>` set on an execution (for example the `jlink` one) is not read; when it is the module's only main
-class, the goal warns. These values
+class and the module declares no `vidocq.mainModule`, the goal warns. These values
 are read from each module's pom, never from the command line: a `-Dvidocq.mainClass`, `-Dvidocq.mainModule`,
 `-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName`, `-Dvidocq.idea.exclude`, `-Dvidocq.dev.debugHost`
 or `-Dvidocq.dev.debugPort` [.tag-new]#NEW# is ignored with a warning, so that the committed files do not depend
@@ -977,12 +986,12 @@ on how Maven was invoked.
 | Module pom property | Default | Meaning
 
 | `vidocq.idea.configurationName`
-| simple name of the main class
+| simple name of the main class, or `artifactId` without one [.tag-new]#NEW#
 | Run configuration name, and file name.
 
 | `vidocq.idea.moduleName`
 | `artifactId`
-| IntelliJ module that holds the main class. Set it when IntelliJ names the module differently, for example
+| IntelliJ module that holds the main class, which only the `application` kind uses. Set it when IntelliJ names the module differently, for example
   `<artifactId>.main` when it splits main and test sources into two modules, or `beta (1) (com.example)` when
   another project has the same artifactId, ignoring case.
 

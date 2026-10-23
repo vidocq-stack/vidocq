@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.idea;
 
 import io.vidocq.runtime.maven.ApplicationMainClass;
+import io.vidocq.runtime.maven.idea.RunConfigurationRenderer.Kind;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
@@ -47,7 +48,10 @@ import java.util.regex.Pattern;
  *       active profiles count, {@code <pluginManagement>} alone does not): the before-launch step runs
  *       {@code vidocq:generate} on its pom, which must resolve the plugin and its configuration there;</li>
  *   <li>its pom does not set {@value #EXCLUDE_PROPERTY} to {@code true};</li>
- *   <li>it declares an application main class ({@link ApplicationMainClass#declared(MavenProject)}).</li>
+ *   <li>it declares {@value ApplicationMainClass#MODULE_PROPERTY} or an application main class
+ *       ({@link ApplicationMainClass#declared(MavenProject)}): without a main class of its own, the runtime's
+ *       main boots the application, which the Maven kind runs as well. The Application kind runs a main class
+ *       and leaves the others out ({@link #forKind}).</li>
  * </ol>
  * Every value is read from the project's own model, never from the command line: on an aggregator a
  * {@code -D} would apply to every module at once, and the committed files would depend on how Maven was
@@ -133,18 +137,19 @@ final class IdeaApplications {
                 continue;
             }
             String declared = ApplicationMainClass.declared(project);
+            // null when the runtime's own main boots the application: vidocq.mainModule is then enough.
             String mainClass = ApplicationMainClass.normalize(declared);
-            if (mainClass == null) {
-                reportNoMainClass(project, plugin, coordinates, diagnostics);
+            if (mainClass == null && ApplicationMainClass.declaredMainModule(project) == null) {
+                reportNotAnApplication(plugin, coordinates, diagnostics);
                 continue;
             }
 
             int errorsBefore = errors.size();
-            if (!JAVA_NAME.matcher(mainClass).matches()) {
+            if (mainClass != null && !JAVA_NAME.matcher(mainClass).matches()) {
                 errors.add(PREFIX + coordinates + ": the main class \"" + mainClass + "\" is not a Java class name.");
             }
             String configurationName = pomValue(project, "vidocq.idea.configurationName",
-                    simpleName(mainClass), coordinates, errors);
+                    mainClass == null ? project.getArtifactId() : simpleName(mainClass), coordinates, errors);
             String moduleName = pomValue(project, "vidocq.idea.moduleName", project.getArtifactId(),
                     coordinates, errors);
             String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
@@ -157,7 +162,8 @@ final class IdeaApplications {
             applications.add(new IdeaApplication(coordinates, mainClass, configurationName, moduleName, pomPath,
                     generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort));
 
-            if (project.getProperties().getProperty("vidocq.idea.moduleName") == null) {
+            // The IntelliJ module only matters to Run on the main class, which needs one.
+            if (mainClass != null && project.getProperties().getProperty("vidocq.idea.moduleName") == null) {
                 reportRenamedModule(project, coordinates, moduleNames, allProjects, diagnostics);
                 String reason = splitReason(project);
                 if (reason != null) {
@@ -190,8 +196,30 @@ final class IdeaApplications {
         return PREFIX + coordinates + " is not a Vidocq application: " + reason;
     }
 
-    private static void reportNoMainClass(MavenProject project, Plugin plugin, String coordinates,
-                                          List<Diagnostic> diagnostics) {
+    /**
+     * The applications {@code kind} renders: all of them for the Maven kind, which runs goals; for the
+     * Application kind, which runs a main class, those that declare one, each other one reported.
+     */
+    static Discovery forKind(Discovery discovery, Kind kind) {
+        if (kind == Kind.MAVEN) {
+            return discovery;
+        }
+        List<IdeaApplication> applications = new ArrayList<>();
+        List<Diagnostic> diagnostics = new ArrayList<>(discovery.diagnostics());
+        for (IdeaApplication application : discovery.applications()) {
+            if (application.mainClass() != null) {
+                applications.add(application);
+            } else {
+                diagnostics.add(new Diagnostic(Level.WARN, PREFIX + application.coordinates() + " has no application"
+                        + " main class, which an Application configuration runs: it gets none. Declare"
+                        + " <vidocq.mainClass> (a @VidocqMain trampoline) in its <properties>, or use the default"
+                        + " Maven kind (vidocq.idea.kind=maven)."));
+            }
+        }
+        return new Discovery(List.copyOf(applications), List.copyOf(diagnostics), discovery.errors());
+    }
+
+    private static void reportNotAnApplication(Plugin plugin, String coordinates, List<Diagnostic> diagnostics) {
         List<String> executions = new ArrayList<>();
         for (PluginExecution execution : plugin.getExecutions()) {
             Xpp3Dom configuration = dom(execution.getConfiguration());
@@ -205,12 +233,9 @@ final class IdeaApplications {
                     + " configuration of execution(s) " + String.join(", ", executions) + ", which vidocq:idea"
                     + " does not read. Declare <vidocq.mainClass> (and <vidocq.mainModule>) in its <properties>"
                     + " to get a run configuration."));
-        } else if (ApplicationMainClass.declaredMainModule(project) != null) {
-            diagnostics.add(new Diagnostic(Level.INFO, PREFIX + coordinates + " sets vidocq.mainModule but no"
-                    + " application main class; an IntelliJ Application configuration needs vidocq.mainClass."));
         } else {
             diagnostics.add(new Diagnostic(Level.DEBUG, notAnApplication(coordinates,
-                    "no application main class (vidocq.mainClass)")));
+                    "neither vidocq.mainModule nor an application main class (vidocq.mainClass)")));
         }
     }
 
