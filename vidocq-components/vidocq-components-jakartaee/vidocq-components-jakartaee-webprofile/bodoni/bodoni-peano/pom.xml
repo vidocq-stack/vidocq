@@ -12,7 +12,7 @@
 
     <artifactId>bodoni-peano</artifactId>
     <name>Bodoni :: Peano</name>
-    <description>Optional engine adapter — the LoopTagStatus accessor table Peano needs to read varStatus under peano.reflection=deny (BOD-001)</description>
+    <description>Optional engine adapter — the LoopTagStatus and Result accessor tables Peano needs to read varStatus and sql:query results under peano.reflection=deny (BOD-001)</description>
 
     <dependencies>
         <!-- The adapter's purpose: the Peano accessor SPI. bodoni-core never depends on it. -->
