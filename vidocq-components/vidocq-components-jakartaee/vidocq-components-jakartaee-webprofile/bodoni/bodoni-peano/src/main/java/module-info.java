@@ -23,8 +23,9 @@
  *
  * <p>Under {@code -Dpeano.reflection=deny} Peano reads bean properties only through
  * accessor tables. {@code LoopTagStatus}, the {@code varStatus} object of Tags 3.0
- * section 6.1, is implemented by an anonymous class of the JSTL API that no application
- * table can name, so this module contributes a table keyed on the interface. Nothing is
+ * section 6.1, and {@code Result}, the {@code var} object of {@code sql:query} (section 10.3),
+ * are implemented by classes of the JSTL API or of Bodoni that no application table can name,
+ * so this module contributes a table for each, keyed on the interface. Nothing is
  * exported: Peano discovers the provider through the service declaration.
  */
 module io.vidocq.bodoni.peano {
