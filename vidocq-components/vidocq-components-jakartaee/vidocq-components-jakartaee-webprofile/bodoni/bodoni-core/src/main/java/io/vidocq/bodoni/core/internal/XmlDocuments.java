@@ -65,10 +65,10 @@ public final class XmlDocuments {
      *
      * <p>The input carries {@link SystemIdPolicy#parserSystemId()}, which also becomes the
      * document URI when the page gave a system id; without one the document URI is
-     * {@code null}, never the policy's private base. The filter, when given, gets that reader as its parent and the policy as
-     * its own entity resolver: an {@code XMLFilterImpl} replaces its parent's resolver by
-     * itself when it parses, so a resolver left on the parent alone is never asked (probe:
-     * {@code JdkXmlFactsTest}). {@code input} is not closed.
+     * {@code null}, never the policy's private base. The filter, when given, gets that reader
+     * as its parent and the policy as its own entity resolver: an {@code XMLFilterImpl}
+     * replaces its parent's resolver by itself when it parses, so a resolver left on the parent
+     * alone is never asked (probe: {@code JdkXmlFactsTest}). {@code input} is not closed.
      *
      * @param input  the document
      * @param policy the resolution of the external references the document makes
