@@ -83,7 +83,7 @@ The TCK client reports every failed check as an error, never as a failure. By li
 | Cause | Owner | Tests
 
 | JSTL 1.0 `_rt` URIs not shipped yet (they ship in a later Bodoni pull request, decided 2026-10-23) | known decision | 40
-| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010, fixed by https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]; Ibarra regression test IBARRA-156) | Peano | 32
+| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010, fix proposed in https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61] (open); Ibarra regression test IBARRA-156 on branch `fix/deferred-constant-ctor`) | Peano | 32
 | Translation-time constraints not enforced (BOD-006) | Bodoni | 9
 | `LocalizationContext` unreadable under `peano.reflection=deny` (BOD-007) | Bodoni | 3
 | `fmt:message` with `bundle` does not set the response locale (BOD-008) | Bodoni | 2

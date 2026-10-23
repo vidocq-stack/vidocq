@@ -164,9 +164,10 @@ one category.
   symptom appears in Ibarra-generated pages, because Ibarra's `PageGenerator.deferredAttribute`
   calls `new …$ExpressionN(ELContext, Class)` for any `${…}` on such an attribute. Not a Bodoni
   defect.
-- Fix: [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (constant expressions get
-  the `(ELContext, Class)` constructor), with the companion regression test IBARRA-156 on the
-  Ibarra branch `fix/deferred-constant-ctor`.
+- Fix proposed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (open): constant expressions get the
+  `(ELContext, Class)` constructor; Ibarra regression test IBARRA-156 on branch
+  `fix/deferred-constant-ctor`. The 32 tests stay counted as failing here: the run predates the
+  fix.
 
 ### Translation-time constraints not enforced — Bodoni defect (BOD-006)
 
@@ -272,11 +273,11 @@ the one the page describes:
 
 ## Upstream items
 
-B5 files nothing in another repository.
+B5 files no issue; the COMP-010 fix went through Vidocq/peano#61.
 
 - Peano: COMP-010, constant expressions lacked the `(ELContext, Class)` constructor (32 tests),
-  fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61); companion regression
-  test IBARRA-156 on the Ibarra branch `fix/deferred-constant-ctor`.
+  fix proposed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (open); Ibarra
+  regression test IBARRA-156 on branch `fix/deferred-constant-ctor`.
 - Ibarra: none of its own in this run (the Peano item shows up in Ibarra-generated pages).
 - Foy: none.
 - Jakarta Tags TCK: "`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM',
