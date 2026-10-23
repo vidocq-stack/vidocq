@@ -67,14 +67,23 @@ byte[] bytes = ExpressionCompiler.compile("example.generated.Answer", "${42}");
 Files.write(output.resolve("example/generated/Answer.class"), bytes);
 ----
 
-The generated public class extends CompiledValueExpression in peano-api and has
-a public constructor receiving the expected result Class:
+The generated public class extends CompiledValueExpression in peano-api. Every
+compiled value expression class, whatever its tree shape, has two public constructors:
+one receiving the expected result Class, and one receiving the creation ELContext and
+the expected result Class:
 
 [source,java]
 ----
 ValueExpression answer = new example.generated.Answer(Long.class);
+ValueExpression same = new example.generated.Answer(context, Long.class);
 Long value = answer.getValue(context);
 ----
+
+The context form rejects a null context with NullPointerException("creationContext").
+Trees that reference names, properties, calls, functions or lambdas use it to capture
+creation-time bindings (see below). Constant trees ignore the context: both forms build
+equal expressions with the same metadata and serialized form. A caller such as a page
+compiler can therefore always use the context form without knowing the tree shape.
 
 The application module requires io.vidocq.peano.api. Neither peano-core nor
 peano-compiler is required by the emitted class; the caller supplies an ELContext.
@@ -121,8 +130,9 @@ modules must remain available when restoring them.
 Generated root classes run with core and compiler absent in both reflection modes;
 resolver implementations retain responsibility for their own member access.
 
-Standalone property trees extend CompiledPropertyValueExpression. Both constructor
-forms are available; the context form captures each distinct root/key binding once.
+Standalone property trees extend CompiledPropertyValueExpression. Like every compiled
+value expression, they have both constructor forms; the context form captures each
+distinct root/key binding once.
 Generated evaluation short-circuits null bases and keys. Metadata and writes reject
 null locations and evaluate parent/key expressions without reading the final getter.
 Property writes consult the resolver's type before caller conversion and assignment.

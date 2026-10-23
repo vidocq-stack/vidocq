@@ -19,6 +19,7 @@
  */
 package io.vidocq.peano.compiler;
 
+import java.lang.classfile.ClassBuilder;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.CodeBuilder;
 import java.lang.classfile.attribute.ConstantValueAttribute;
@@ -87,10 +88,14 @@ public final class ExpressionCompiler {
     }
 
     /**
-     * Emits a public CompiledValueExpression subclass with a public Class constructor.
-     * The constructor receives the expected result type; the caller owns output placement.
-     * This slice accepts scalar literals and operators, including comparisons, concatenation and sequences.
-     * Standalone root identifiers also support resolver metadata and creation-time variable capture.
+     * Emits a public CompiledValueExpression subclass; the caller owns output placement.
+     * Every emitted class, whatever the tree shape, declares two public constructors: (Class) receives
+     * the expected result type, and (ELContext, Class) also receives the creation context, which must not
+     * be null. Trees that reference names, properties, calls, functions or lambdas capture the context's
+     * variable and function bindings; constant trees ignore it, so both forms then build equal expressions
+     * with the same serialized form. Callers may therefore always use the (ELContext, Class) form.
+     * This slice accepts scalar literals and operators, including comparisons, concatenation and sequences,
+     * root identifiers, property paths, calls, functions and lambdas.
      * Other nodes fail at build time, with no interpreter fallback.
      *
      * @param binaryName qualified binary name of the application-owned emitted class
@@ -123,6 +128,7 @@ public final class ExpressionCompiler {
         ClassDesc owner=ClassDesc.of(binaryName);
         var compiler=new ExpressionCompiler(owner,template);
         ClassDesc resultType=rawType;
+        boolean literalText=template.kind()==Template.Kind.LITERAL;
         try {
             return ClassFile.of().build(owner,builder-> {
                 builder.withFlags(ClassFile.ACC_PUBLIC|ClassFile.ACC_FINAL|ClassFile.ACC_SUPER)
@@ -132,13 +138,8 @@ public final class ExpressionCompiler {
                                 .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
                 for (String field:compiler.strings.values())
                     builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_FINAL);
-                builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CLASS),ClassFile.ACC_PUBLIC,code-> {
-                    code.aload(0).ldc(source).ldc(identity.toString()).aload(1);
-                    if (template.kind()==Template.Kind.LITERAL) code.iconst_1(); else code.iconst_0();
-                    if (resultType==null) code.aconst_null(); else code.ldc(resultType);
-                    code.invokespecial(BASE,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,BOOLEAN,CLASS));
-                    compiler.initializeStrings(code); code.return_();
-                });
+                compiler.emitValueConstructors(builder,source,identity.toString(),
+                        (code,capture)->constantSuper(code,capture,literalText,resultType));
             builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                 if (template.parts().size()==1 && template.parts().getFirst() instanceof Template.Evaluation evaluation) {
                         compiler.emit(code,evaluation.body());
@@ -224,9 +225,7 @@ public final class ExpressionCompiler {
                     var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS,classesType) : MethodTypeDesc.of(VOID,CLASS,classesType);
                     builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
                         code.aload(0).ldc(source).ldc(identity.toString());
-                        if (capture) code.aload(1).ldc("creationContext").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
-                                MethodTypeDesc.of(OBJECT,OBJECT,STRING)).checkcast(CONTEXT);
-                        else code.aconst_null();
+                        if (capture) requireCreationContext(code); else code.aconst_null();
                         code.aload(capture ? 2 : 1).aload(capture ? 3 : 2).loadConstant(shape);
                         compiler.emitNames(code,names); compiler.emitNames(code,compiler.functionKeys);
                         code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CONTEXT,CLASS,classesType,
@@ -263,6 +262,40 @@ public final class ExpressionCompiler {
         }
     }
 
+    /** Emits the rest of a compiled value constructor once this, source, identity and expected type are pushed. */
+    @FunctionalInterface
+    private interface ConstructorTail { void emit(CodeBuilder code,boolean capture); }
+
+    /**
+     * Emits the uniform public (Class) and (ELContext, Class) constructor pair of a compiled value expression.
+     * Both push this, the source, the identity and the expected type; the tail invokes the superclass
+     * constructor and decides what the creation context contributes (nothing for constant trees).
+     */
+    private void emitValueConstructors(ClassBuilder builder,String source,String identity,ConstructorTail tail) {
+        for (boolean capture:new boolean[]{false,true}) {
+            var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS) : MethodTypeDesc.of(VOID,CLASS);
+            builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
+                code.aload(0).ldc(source).ldc(identity).aload(capture ? 2 : 1);
+                tail.emit(code,capture);
+                initializeStrings(code); code.return_();
+            });
+        }
+    }
+
+    /** Constant trees capture nothing: the creation context is only null-checked, then dropped. */
+    private static void constantSuper(CodeBuilder code,boolean capture,boolean literalText,ClassDesc resultType) {
+        if (capture) requireCreationContext(code).pop();
+        code.loadConstant(literalText ? 1 : 0);
+        if (resultType==null) code.aconst_null(); else code.ldc(resultType);
+        code.invokespecial(BASE,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,BOOLEAN,CLASS));
+    }
+
+    /** Pushes the creation context from slot 1, rejecting null with the "creationContext" message. */
+    private static CodeBuilder requireCreationContext(CodeBuilder code) {
+        return code.aload(1).ldc("creationContext").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
+                MethodTypeDesc.of(OBJECT,OBJECT,STRING)).checkcast(CONTEXT);
+    }
+
     private void initializeStrings(CodeBuilder code) {
         for (var entry:strings.entrySet()) {
             code.aload(0).new_(STRING).dup().ldc(entry.getKey().token().value())
@@ -287,9 +320,8 @@ public final class ExpressionCompiler {
                             .invokespecial(rootBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,STRING,CONTEXT)).return_();
                 });
                 builder.withMethodBody("<init>",MethodTypeDesc.of(VOID,CONTEXT,CLASS),ClassFile.ACC_PUBLIC,code-> {
-                    code.aload(0).ldc(source).ldc(identity.toString()).aload(2).ldc(name).aload(1)
-                            .ldc("creationContext").invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",
-                                    MethodTypeDesc.of(OBJECT,OBJECT,STRING)).checkcast(CONTEXT)
+                    code.aload(0).ldc(source).ldc(identity.toString()).aload(2).ldc(name);
+                    requireCreationContext(code)
                             .invokespecial(rootBase,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,STRING,CONTEXT)).return_();
                 });
             });
@@ -338,29 +370,21 @@ public final class ExpressionCompiler {
                                 .with(ConstantValueAttribute.of(serialVersion(identity.toString()))));
                 for (String field:compiler.strings.values())
                     builder.withField(field,STRING,ClassFile.ACC_PRIVATE|ClassFile.ACC_FINAL);
-                for (boolean capture:new boolean[]{false,true}) {
-                    var constructor=capture ? MethodTypeDesc.of(VOID,CONTEXT,CLASS) : MethodTypeDesc.of(VOID,CLASS);
-                    builder.withMethodBody("<init>",constructor,ClassFile.ACC_PUBLIC,code-> {
-                        code.aload(0).ldc(source).ldc(identity.toString()).aload(capture ? 2 : 1);
-                        if (capture) code.aload(1).ldc("creationContext")
-                                .invokestatic(ClassDesc.of("java.util.Objects"),"requireNonNull",MethodTypeDesc.of(OBJECT,OBJECT,STRING))
-                                .checkcast(CONTEXT);
-                        else code.aconst_null();
-                        code.loadConstant(names.size()).anewarray(STRING);
-                        int index=0;
-                        for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
-                        if (body==null) code.iconst_1(); else code.iconst_0();
-                        if (parent.equals(pathBase))
-                            code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN));
-                        else {
-                            code.loadConstant(compiler.functionKeys.size()).anewarray(STRING);
-                            int functionIndex=0;
-                            for (String key:compiler.functionKeys) code.dup().loadConstant(functionIndex++).ldc(key).aastore();
-                            code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN,namesType));
-                        }
-                        compiler.initializeStrings(code); code.return_();
-                    });
-                }
+                compiler.emitValueConstructors(builder,source,identity.toString(),(code,capture)-> {
+                    if (capture) requireCreationContext(code); else code.aconst_null();
+                    code.loadConstant(names.size()).anewarray(STRING);
+                    int index=0;
+                    for (String name:names) code.dup().loadConstant(index++).ldc(name).aastore();
+                    if (body==null) code.iconst_1(); else code.iconst_0();
+                    if (parent.equals(pathBase))
+                        code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN));
+                    else {
+                        code.loadConstant(compiler.functionKeys.size()).anewarray(STRING);
+                        int functionIndex=0;
+                        for (String key:compiler.functionKeys) code.dup().loadConstant(functionIndex++).ldc(key).aastore();
+                        code.invokespecial(parent,"<init>",MethodTypeDesc.of(VOID,STRING,STRING,CLASS,CONTEXT,namesType,BOOLEAN,namesType));
+                    }
+                });
                 builder.withMethodBody("evaluate",MethodTypeDesc.of(OBJECT,CONTEXT),ClassFile.ACC_PROTECTED,code-> {
                     if (body!=null) compiler.emit(code,body);
                     else {

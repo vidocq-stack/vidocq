@@ -312,7 +312,10 @@ No runtime parsing or bytecode generation is used for restoration.
 P7 first slice (2026-10-11): peano-compiler exports ExpressionCompiler.compile(binaryName,
 source), returning a fresh Java 25 class file. The emitted public class extends the
 peano-api CompiledValueExpression protocol base and has a public Class constructor for
-the expected result type. The compiler uses the prescribed qualified core syntax export;
+the expected result type. Since COMP-010 (2026-10-24) the constructor contract is uniform:
+every compiled value expression class, constant trees included, also has a public
+(ELContext, Class) constructor; constants null-check and ignore the context, so both forms
+build equal expressions with the same serialized form. The compiler uses the prescribed qualified core syntax export;
 no syntax is exported to applications and no opens are added. A scoped module-lint
 suppression accounts for the later-built compiler target during core-only javac.
 

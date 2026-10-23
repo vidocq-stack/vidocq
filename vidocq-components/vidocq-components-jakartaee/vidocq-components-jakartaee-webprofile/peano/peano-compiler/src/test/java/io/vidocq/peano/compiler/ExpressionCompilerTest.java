@@ -513,6 +513,123 @@ class ExpressionCompilerTest {
         assertTrue(migration.contains("PEANO_STALE_ARTIFACT_REJECTED"),migration);
     }
 
+    /** COMP-010: Ibarra builds deferred tag attributes with (ELContext, Class), constants included. */
+    @Test
+    void constantsAcceptTheCreationContextConstructorWithoutChangingTheirMeaning() throws Exception {
+        var sources=List.of("", "plain", "\\${escaped}", "${1}", "${'a'}", "${true}", "${null}", "${1+2}",
+                "${empty 'x'}", "${[1,2]}", "a${1}", "#{1}", "#{'a'}", "#{true}", "a#{1}");
+        Path classes=temporary.resolve("capture-classes");
+        Files.createDirectories(classes.resolve("demo"));
+        var checks=new StringBuilder();
+        for (int i=0;i<sources.size();i++) {
+            byte[] bytes=ExpressionCompiler.compile("demo.C"+i,sources.get(i));
+            assertTrue(ClassFile.of().verify(bytes).isEmpty(),sources.get(i)+": "+ClassFile.of().verify(bytes));
+            Files.write(classes.resolve("demo/C"+i+".class"),bytes);
+            checks.append("check(new C%1$d(Object.class),new C%1$d(context,Object.class),new C%1$d(String.class),new C%1$d(context,String.class));%n"
+                    .formatted(i));
+            checks.append("rejectsNullContext(()->new C%d(null,Object.class));%n".formatted(i));
+        }
+        Path source=temporary.resolve("capture-sources");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("module-info.java"),"module peano.captureconsumer { requires io.vidocq.peano.api; }");
+        Files.writeString(source.resolve("CaptureMain.java"),"""
+                package demo;
+                import jakarta.el.*;
+                public class CaptureMain {
+                    static final class Context extends ELContext {
+                        public ELResolver getELResolver(){ return new CompositeELResolver(); }
+                        public FunctionMapper getFunctionMapper(){ return null; }
+                        public VariableMapper getVariableMapper(){ return null; }
+                        @SuppressWarnings("unchecked")
+                        public <T> T convertToType(Object value,Class<T> type) {
+                            if (type==Object.class) return (T)value;
+                            if (type==String.class) return (T)(value==null ? "" : value.toString());
+                            if (type==boolean.class || type==Boolean.class) return (T)Boolean.valueOf(String.valueOf(value));
+                            if (type==Long.class) return (T)Long.valueOf(value==null ? 0L : ((Number)value).longValue());
+                            throw new ELException("Unsupported test conversion "+type);
+                        }
+                    }
+                    static final Context context=new Context();
+                    public static void main(String[] args) throws Exception {
+                        if (ModuleLayer.boot().findModule("io.vidocq.peano.core").isPresent()
+                                || ModuleLayer.boot().findModule("io.vidocq.peano.compiler").isPresent())
+                            throw new AssertionError("Build tooling was resolved at runtime");
+                        %s
+                        System.out.println("PEANO_CONSTANT_CAPTURE_OK");
+                    }
+                    static void check(ValueExpression plain,ValueExpression captured,ValueExpression typed,
+                            ValueExpression capturedTyped) throws Exception {
+                        String label=plain.getExpressionString();
+                        same(label,"value",plain.getValue(context),captured.getValue(context));
+                        same(label,"type",plain.getType(context),captured.getType(context));
+                        same(label,"literal text",plain.isLiteralText(),captured.isLiteralText());
+                        same(label,"expression string",label,captured.getExpressionString());
+                        same(label,"expected type",Object.class,captured.getExpectedType());
+                        same(label,"read-only",plain.isReadOnly(context),captured.isReadOnly(context));
+                        same(label,"typed expected type",String.class,capturedTyped.getExpectedType());
+                        same(label,"typed value",typed.getValue(context),capturedTyped.getValue(context));
+                        if (!plain.equals(captured) || !captured.equals(plain) || plain.hashCode()!=captured.hashCode())
+                            throw new AssertionError(label+": the capture constructor changed equality");
+                        if (!typed.equals(capturedTyped) || captured.equals(capturedTyped))
+                            throw new AssertionError(label+": the capture constructor ignored the expected type");
+                        byte[] plainBytes=serialize(plain),capturedBytes=serialize(captured);
+                        if (!java.util.Arrays.equals(plainBytes,capturedBytes))
+                            throw new AssertionError(label+": the capture constructor changed the serialized form");
+                        try (var input=new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(capturedBytes))) {
+                            var restored=(ValueExpression)input.readObject();
+                            if (!restored.equals(plain) || restored.hashCode()!=plain.hashCode()
+                                    || !java.util.Objects.equals(plain.getValue(context),restored.getValue(context)))
+                                throw new AssertionError(label+": serialization round trip mismatch");
+                        }
+                    }
+                    static void same(String label,String property,Object expected,Object actual) {
+                        if (!java.util.Objects.equals(expected,actual))
+                            throw new AssertionError(label+": "+property+" "+expected+" != "+actual);
+                    }
+                    static byte[] serialize(ValueExpression expression) throws Exception {
+                        var bytes=new java.io.ByteArrayOutputStream();
+                        try (var output=new java.io.ObjectOutputStream(bytes)) { output.writeObject(expression); }
+                        return bytes.toByteArray();
+                    }
+                    static void rejectsNullContext(java.util.function.Supplier<ValueExpression> creation) {
+                        try { creation.get(); throw new AssertionError("A null creation context was accepted"); }
+                        catch (NullPointerException expected) {
+                            if (!"creationContext".equals(expected.getMessage())) throw expected;
+                        }
+                    }
+                }
+                """.formatted(checks));
+        String modulePath=String.join(File.pathSeparator,location(ExpressionFactory.class).toString(),location(AccessorTable.class).toString());
+        run(List.of(javaBin("javac"),"--module-path",modulePath,"--patch-module","peano.captureconsumer="+classes,
+                "-d",classes.toString(),source.resolve("module-info.java").toString(),source.resolve("CaptureMain.java").toString()));
+        String output=run(List.of(javaBin("java"),"--module-path",modulePath+File.pathSeparator+classes,
+                "--module","peano.captureconsumer/demo.CaptureMain"));
+        assertTrue(output.contains("PEANO_CONSTANT_CAPTURE_OK"),output);
+    }
+
+    /** COMP-010: callers need not know which tree shape Peano chose to pick a constructor. */
+    @Test
+    void everyCompiledExpressionDeclaresBothConstructorForms() {
+        var valueForms=java.util.Set.of("(Ljava/lang/Class;)V","(Ljakarta/el/ELContext;Ljava/lang/Class;)V");
+        var values=List.of("", "plain", "${1}", "${'a'}", "${true}", "${null}", "${1+2}", "${empty 'x'}",
+                "${[1,2]}", "a${1}", "#{1}", "${x}", "#{x}", "${a.b}", "${x+1}", "a${x}",
+                "${f:sum(1,2)}", "${(v -> v+1)(2)}");
+        for (int i=0;i<values.size();i++)
+            assertEquals(valueForms,constructors(ExpressionCompiler.compile("demo.V"+i,values.get(i))),values.get(i));
+        var methodForms=java.util.Set.of("(Ljava/lang/Class;[Ljava/lang/Class;)V",
+                "(Ljakarta/el/ELContext;Ljava/lang/Class;[Ljava/lang/Class;)V");
+        var methods=List.of("literal", "#{x}", "#{a.b}", "#{a.b()}");
+        for (int i=0;i<methods.size();i++)
+            assertEquals(methodForms,constructors(ExpressionCompiler.compileMethod("demo.M"+i,methods.get(i))),methods.get(i));
+    }
+
+    private static java.util.Set<String> constructors(byte[] bytes) {
+        var forms=new java.util.HashSet<String>();
+        for (var method:ClassFile.of().parse(bytes).methods())
+            if (method.methodName().equalsString("<init>")) forms.add(method.methodType().stringValue());
+        return forms;
+    }
+
     @Test
     void rejectsInvalidSyntaxAndBinaryNamesAtBuildTime() {
         assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Invalid","${(x->)(1)}"));

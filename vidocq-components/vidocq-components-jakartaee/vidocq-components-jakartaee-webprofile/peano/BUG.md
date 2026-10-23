@@ -3,6 +3,38 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## COMP-010 · 2026-10-24 · Constant compiled expressions lacked the (ELContext, Class) constructor
+
+- Symptom: an Ibarra page passing a constant EL expression to a deferred-value tag attribute
+  (`<c:set var="x" value="${1}"/>`, `${'a'}`, `${true}`, `${null}`, `${1+2}`, `a${1}`,
+  `#{1}`, ...) failed to compile: "constructor $ExpressionN in class $ExpressionN cannot be
+  applied to given types; required: java.lang.Class; found: jakarta.el.ELContext,java.lang.Class".
+  Found by the Bodoni B5 official Tags TCK run (`spec.sql.result`, 4 tests, e.g.
+  `positiveResultGetRowsUpperCaseTest`); Ibarra symptom entry IBARRA-156.
+- Minimal reproduction: `ExpressionCompiler.compile("demo.C", "${1}")`, then compile
+  `new demo.C(context, Object.class)` against it: javac rejects the call. `${x}` or `${a.b}`
+  compile, because those trees take another emission path.
+- Cause: the constructor contract depended on the tree shape. The constant path of
+  ExpressionCompiler.compile emitted only `<init>(Class)`, while root, property, function and
+  lambda trees (and every compiled method expression, literal included) also emitted the
+  `(ELContext, Class)` creation-context form. Ibarra builds deferred-value attributes with
+  `pageContext.getELContext()` so that resolved trees keep creation-time bindings (IBARRA-077),
+  and cannot tell a constant tree apart without re-parsing EL.
+- Status: fixed on branch `fix/deferred-constant-ctor` (Ibarra regression test on the same
+  companion branch). Constant classes now also declare `(ELContext, Class)`: the context is
+  null-checked (NullPointerException "creationContext", like the other shapes) and dropped;
+  no field is added, so equality, hashCode, the serialized form and serialVersionUID are
+  unchanged and no emission-schema bump is needed. Constant and resolved trees share one
+  constructor-pair emitter. The Javadoc, reference page and PLAN.md now state the uniform
+  contract: every compiled value expression class has both constructors.
+- Evidence: ExpressionCompilerTest
+  `constantsAcceptTheCreationContextConstructorWithoutChangingTheirMeaning` (15 constant and
+  literal templates in an API-only consumer: same value, type, literal flag, expression string,
+  expected type, equality/hashCode, byte-identical serialization, null-context NPE) failed at
+  javac with the TCK's signature before the change; `everyCompiledExpressionDeclaresBothConstructorForms`
+  (constant, root, property, function, lambda and method outputs) failed on the constant
+  outputs before the change.
+
 ## EL-018 · 2026-10-22 · Deny mode cannot read Map entries or interface-typed beans
 
 - Symptom: under -Dpeano.reflection=deny, `${e.key}` on a Map.Entry fails with
