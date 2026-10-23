@@ -60,13 +60,12 @@ public final class XPathEngine {
     public static Object select(PageContext pc, Node context, String select) throws XPathExpressionException {
         XPathEvaluationResult<?> result = xpath(pc, select).evaluateExpression(select, contextOf(context));
         Object value = result.value();
+        // With type ANY the JDK reports BOOLEAN, NUMBER, STRING or NODESET (a path is a
+        // NODESET, never a NODE): every other result is a node-set.
         return switch (result.type()) {
             case BOOLEAN, STRING -> value;
             case NUMBER -> ((Number) value).doubleValue();
-            case NODESET -> NodeSet.of((XPathNodes) value);
-            case NODE -> NodeSet.of(List.of((Node) value));
-            default -> throw new XPathExpressionException("Unexpected XPath result type " + result.type()
-                    + " for: " + select);
+            default -> NodeSet.of((XPathNodes) value);
         };
     }
 
