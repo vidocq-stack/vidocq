@@ -19,12 +19,17 @@
  */
 package io.vidocq.bodoni.core.tags.xml;
 
+import javax.xml.xpath.XPathExpressionException;
+
 import io.vidocq.bodoni.core.internal.Scopes;
 import io.vidocq.bodoni.core.internal.SystemIdPolicy;
+import io.vidocq.bodoni.core.internal.XPathEngine;
 
 import jakarta.servlet.jsp.JspException;
 import jakarta.servlet.jsp.JspTagException;
+import jakarta.servlet.jsp.PageContext;
 import jakarta.servlet.jsp.tagext.Tag;
+import jakarta.servlet.jsp.tagext.TagSupport;
 
 import org.w3c.dom.Node;
 
@@ -35,13 +40,32 @@ final class XmlSupport {
     }
 
     /**
-     * The context node of an XPath expression evaluated by {@code tag}.
+     * The context node of an XPath expression evaluated by {@code tag}: the current node of
+     * the nearest enclosing {@code <x:forEach>} (Tags 3.0 section 12.6).
      *
      * @param tag the handler evaluating the expression
-     * @return {@code null}: the empty document of Tags 3.0 section 11.1.6 is the context
+     * @return that node, or {@code null} outside any {@code <x:forEach>}: the empty document
+     *         of section 11.1.6 is then the context
      */
     static Node contextNode(Tag tag) {
+        if (TagSupport.findAncestorWithClass(tag, ForEachTag.class) instanceof ForEachTag loop) {
+            return (Node) loop.getCurrent();
+        }
         return null;
+    }
+
+    /**
+     * The test of {@code <x:if>} and {@code <x:when>}: {@code select} converted by the XPath
+     * {@code boolean()} function (Tags 3.0 section 12.1).
+     *
+     * @throws JspTagException naming the action, when {@code select} cannot be evaluated
+     */
+    static boolean test(String action, Tag tag, PageContext pc, String select) throws JspTagException {
+        try {
+            return XPathEngine.bool(pc, contextNode(tag), select);
+        } catch (XPathExpressionException e) {
+            throw xpathFailure(action, select, e);
+        }
     }
 
     /**
