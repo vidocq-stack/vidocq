@@ -19,6 +19,7 @@
  */
 package io.vidocq.bodoni.tck;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +29,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -54,6 +56,10 @@ class OfficialTckRunnerTest {
     private static final String INVOCATION_END = "--invocation-end--";
     private static final String STALE_REPORTS = "stale-reports";
     private static final String DDL = "bodoni-tck/target/tags-tck-distribution/tags-tck/sql/derby/derby.ddl.jstl.sql";
+    private static final String CACHED_ZIP = "bodoni-tck/target/tags-tck-distribution/jakarta-tags-tck-3.0.0.zip";
+    private static final String TAGS_TCK_ZIP = "TAGS_TCK_ZIP";
+    private static final String PATH = "PATH";
+    private static final String CHECKSUM_MISMATCH = "checksum mismatch";
     private static final String PACKAGE = "com.sun.ts.tests.jstl.";
     private static final String CLIENT = ".JSTLClientIT";
     private static final String SMOKE = "-Dtest=" + String.join(",",
@@ -199,20 +205,24 @@ class OfficialTckRunnerTest {
     @Test
     void noInstallRefusesAMissingSnapshot() throws Exception {
         Files.delete(snapshotJar("bodoni-peano"));
+        fakeCurl("exit 99");
 
-        Run run = run(NO_PREPARE, NO_INSTALL);
+        // With prepare on: the cheap snapshot refusal comes before any download.
+        Run run = run(Map.of(PATH, fakePath()), NO_INSTALL);
 
         assertEquals(2, run.exitCode(), run.output());
         assertTrue(run.output().contains("bodoni-peano"), run.output());
         assertTrue(run.output().contains("run without --no-install"), run.output());
         assertTrue(run.invocations().isEmpty(), run.log());
+        assertFalse(Files.exists(curlLog()), "no download before the snapshot check");
     }
 
     @Test
     void noPrepareNeedsThePreparedDdl() throws Exception {
         Files.delete(checkout.resolve(DDL));
 
-        Run run = run(NO_PREPARE, NO_INSTALL);
+        // Without --no-install: the refusal comes before the reactor build.
+        Run run = run(NO_PREPARE);
 
         assertEquals(2, run.exitCode(), run.output());
         assertTrue(run.output().contains("run without --no-prepare"), run.output());
@@ -221,27 +231,128 @@ class OfficialTckRunnerTest {
 
     @Test
     void prepareRefusesAZipWithAnotherChecksum() throws Exception {
-        Path zip = work.resolve("other.zip");
-        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
-            out.putNextEntry(new ZipEntry("tags-tck/sql/derby/derby.ddl.jstl.sql"));
-            out.write("create table t (c int);\n".getBytes(StandardCharsets.UTF_8));
-            out.closeEntry();
-        }
+        Path zip = otherZip(work.resolve("other.zip"));
 
-        Run run = run(Map.of("TAGS_TCK_ZIP", zip.toString()), NO_INSTALL);
+        Run run = run(Map.of(TAGS_TCK_ZIP, zip.toString()), NO_INSTALL);
 
         assertEquals(1, run.exitCode(), run.output());
-        assertTrue(run.output().contains("checksum mismatch"), run.output());
+        assertTrue(run.output().contains(CHECKSUM_MISMATCH), run.output());
         assertTrue(run.invocations().isEmpty(), run.log());
         assertTrue(Files.isRegularFile(zip), "a zip the script did not download is kept");
     }
 
     @Test
+    void aBadZipFailsBeforeTheInstall() throws Exception {
+        Path zip = otherZip(work.resolve("other.zip"));
+
+        Run run = run(Map.of(TAGS_TCK_ZIP, zip.toString()));
+
+        assertEquals(1, run.exitCode(), run.output());
+        assertTrue(run.invocations().isEmpty(), "no clean install before the checksum: " + run.log());
+    }
+
+    @Test
+    void aRelativeLocalZipIsResolvedAgainstTheCallerDirectory() throws Exception {
+        otherZip(work.resolve("other.zip"));
+
+        // The script runs from work/, then moves to the checkout: other.zip is work/other.zip.
+        Run run = run(Map.of(TAGS_TCK_ZIP, "other.zip"), NO_INSTALL);
+
+        assertEquals(1, run.exitCode(), run.output());
+        assertTrue(run.output().contains(CHECKSUM_MISMATCH), run.output());
+    }
+
+    @Test
     void prepareRefusesAMissingLocalZip() throws Exception {
-        Run run = run(Map.of("TAGS_TCK_ZIP", work.resolve("absent.zip").toString()), NO_INSTALL);
+        Run run = run(Map.of(TAGS_TCK_ZIP, work.resolve("absent.zip").toString()), NO_INSTALL);
 
         assertEquals(2, run.exitCode(), run.output());
-        assertTrue(run.output().contains("TAGS_TCK_ZIP"), run.output());
+        assertTrue(run.output().contains(TAGS_TCK_ZIP), run.output());
+        assertTrue(run.invocations().isEmpty(), run.log());
+    }
+
+    @Test
+    void aCachedZipWithAnotherChecksumNamesTheFileToDelete() throws Exception {
+        Path cached = otherZip(checkout.resolve(CACHED_ZIP));
+        fakeCurl("exit 99");
+
+        Run run = run(Map.of(PATH, fakePath()), NO_INSTALL);
+
+        assertEquals(1, run.exitCode(), run.output());
+        assertTrue(run.output().contains("delete " + CACHED_ZIP), run.output());
+        assertTrue(Files.isRegularFile(cached), "a cached zip is not deleted by the script");
+        assertFalse(Files.exists(curlLog()), "a cached zip is not downloaded again");
+    }
+
+    @Test
+    void downloadsOverHttpsOnlyAndDeletesADownloadWithAnotherChecksum() throws Exception {
+        fakeCurl("printf 'not the distribution' > \"$output\"");
+
+        Run run = run(Map.of(PATH, fakePath()), NO_INSTALL);
+
+        assertEquals(1, run.exitCode(), run.output());
+        assertTrue(run.output().contains(CHECKSUM_MISMATCH), run.output());
+        List<String> curl = Files.readAllLines(curlLog());
+        assertTrue(Collections.indexOfSubList(curl, List.of("<--proto>", "<=https>")) >= 0, curl.toString());
+        assertTrue(Collections.indexOfSubList(curl, List.of("<--proto-redir>", "<=https>")) >= 0, curl.toString());
+        assertTrue(curl.contains("<https://download.eclipse.org/jakartaee/tags/3.0/jakarta-tags-tck-3.0.0.zip>"),
+                curl.toString());
+        assertFalse(Files.exists(checkout.resolve(CACHED_ZIP)), "a download with another checksum is deleted");
+        assertFalse(Files.exists(checkout.resolve(CACHED_ZIP + ".part")));
+    }
+
+    @Test
+    void aFailedDownloadLeavesNoPartialFile() throws Exception {
+        fakeCurl("printf 'half' > \"$output\"; exit 22");
+
+        Run run = run(Map.of(PATH, fakePath()), NO_INSTALL);
+
+        assertEquals(1, run.exitCode(), run.output());
+        assertTrue(run.output().contains("download failed"), run.output());
+        assertFalse(Files.exists(checkout.resolve(CACHED_ZIP + ".part")), "the partial download is removed");
+        assertFalse(Files.exists(checkout.resolve(CACHED_ZIP)));
+        assertTrue(run.invocations().isEmpty(), run.log());
+    }
+
+    @Test
+    void refusesToPrepareWithoutUnzip() throws Exception {
+        Path tools = Files.createDirectories(work.resolve("tools"));
+        for (String tool : List.of("dirname", "awk", "find", "mkdir", "rm", "mv", "shasum", "sha256sum", "perl")) {
+            Path found = onPath(tool);
+            if (found != null) {
+                Files.createSymbolicLink(tools.resolve(tool), found);
+            }
+        }
+        Path zip = otherZip(work.resolve("other.zip"));
+
+        Run run = run(Map.of(PATH, tools.toString(), TAGS_TCK_ZIP, zip.toString()), NO_INSTALL);
+
+        assertEquals(2, run.exitCode(), run.output());
+        assertTrue(run.output().contains("unzip"), run.output());
+        assertTrue(run.invocations().isEmpty(), run.log());
+    }
+
+    @Test
+    void refusesAJavaOtherThan25() throws Exception {
+        Path javaHome = work.resolve("jdk21");
+        Path java = javaHome.resolve("bin/java");
+        Files.createDirectories(java.getParent());
+        Files.writeString(java, "#!/bin/sh\necho 'openjdk version \"21.0.2\" 2024-01-16' >&2\n");
+        assertTrue(java.toFile().setExecutable(true));
+
+        Run run = run(Map.of("JAVA_HOME", javaHome.toString()), NO_PREPARE, NO_INSTALL);
+
+        assertEquals(2, run.exitCode(), run.output());
+        assertTrue(run.output().contains("Select Java 25"), run.output());
+        assertTrue(run.invocations().isEmpty(), run.log());
+    }
+
+    @Test
+    void helpSaysMavenValuesAreAttached() throws Exception {
+        Run run = run("--help");
+
+        assertEquals(0, run.exitCode(), run.output());
+        assertTrue(run.output().contains("-T4"), run.output());
         assertTrue(run.invocations().isEmpty(), run.log());
     }
 
@@ -275,7 +386,7 @@ class OfficialTckRunnerTest {
         // Started from elsewhere: the script must move to its own directory.
         ProcessBuilder builder = new ProcessBuilder(command).directory(work.toFile()).redirectErrorStream(true);
         Map<String, String> env = builder.environment();
-        env.remove("TAGS_TCK_ZIP");
+        env.remove(TAGS_TCK_ZIP);
         env.put("JAVA_HOME", System.getProperty("java.home"));
         env.put("MAVEN_ARGS_LOG", argumentLog.toString());
         env.put("BODONI_M2_REPOSITORY", repository.toString());
@@ -302,6 +413,53 @@ class OfficialTckRunnerTest {
             }
         }
         return invocations;
+    }
+
+    /** A one-entry zip with the DDL's name and another checksum than the official distribution. */
+    private static Path otherZip(Path zip) throws IOException {
+        Files.createDirectories(zip.getParent());
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip))) {
+            out.putNextEntry(new ZipEntry("tags-tck/sql/derby/derby.ddl.jstl.sql"));
+            out.write("create table t (c int);\n".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+        return zip;
+    }
+
+    /** A curl on the fake PATH that logs its arguments, finds its --output path, then runs {@code body}. */
+    private void fakeCurl(String body) throws IOException {
+        Path curl = work.resolve("bin/curl");
+        Files.createDirectories(curl.getParent());
+        Files.writeString(curl, """
+                #!/bin/sh
+                printf '<%%s>\\n' "$@" >> "%s"
+                output=
+                previous=
+                for arg in "$@"; do
+                    if [ "$previous" = --output ]; then output="$arg"; fi
+                    previous="$arg"
+                done
+                %s
+                """.formatted(curlLog(), body));
+        assertTrue(curl.toFile().setExecutable(true));
+    }
+
+    private Path curlLog() {
+        return work.resolve("curl-args.log");
+    }
+
+    private String fakePath() {
+        return work.resolve("bin") + File.pathSeparator + System.getenv(PATH);
+    }
+
+    private static Path onPath(String tool) {
+        for (String directory : System.getenv(PATH).split(File.pathSeparator)) {
+            Path candidate = Path.of(directory, tool);
+            if (Files.isExecutable(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private Path snapshotJar(String module) {

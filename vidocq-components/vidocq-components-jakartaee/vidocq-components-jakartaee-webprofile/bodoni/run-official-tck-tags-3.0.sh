@@ -7,12 +7,22 @@
 # extracted into bodoni-tck/target/ after a SHA-256 check. Run from this checkout after sdk env.
 #
 #   ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepare] [--no-install] [Maven arguments...]
-#
-# TAGS_TCK_ZIP          a local copy of the distribution zip, used instead of the download
-# BODONI_M2_REPOSITORY  the local repository --no-install checks (default: $HOME/.m2/repository)
 set -euo pipefail
 
-usage="Usage: ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepare] [--no-install] [Maven arguments...]"
+usage='Usage: ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepare] [--no-install] [Maven arguments...]
+
+  smoke              a few whole classes, one per library (default)
+  all                every official class
+  -Dtest=...         a Surefire selection of official classes or methods
+  --no-prepare       reuse the Derby DDL already extracted into bodoni-tck/target/
+  --no-install       reuse the installed bodoni-core and bodoni-peano snapshots (refused if stale)
+  Maven arguments    any other argument starting with "-", passed to the last Maven call;
+                     write an option value attached to it (-T4, -Dkey=value), not as a separate word
+
+Environment:
+  TAGS_TCK_ZIP          a local copy of the distribution zip instead of the download
+                        (a relative path is resolved against the current directory)
+  BODONI_M2_REPOSITORY  the local repository --no-install checks (default: $HOME/.m2/repository)'
 zip_url='https://download.eclipse.org/jakartaee/tags/3.0/jakarta-tags-tck-3.0.0.zip'
 zip_sha256='996c9abc6561134cea986107da0648c2a33277d2f765475994ff9b16da70cb5a'
 distribution_dir='bodoni-tck/target/tags-tck-distribution'
@@ -33,10 +43,18 @@ for arg in "$@"; do
         --no-install) install=false ;;
         -Dtest=*) selection="$arg" ;;
         -*) extra+=("$arg") ;;
-        *) echo "Unknown mode: $arg" >&2; echo "$usage" >&2; exit 2 ;;
+        *)
+            echo "Unknown mode: $arg (a Maven option value is written attached to it, e.g. -T4)" >&2
+            echo "$usage" >&2
+            exit 2
+            ;;
     esac
 done
 
+# Resolve a relative TAGS_TCK_ZIP against the caller's directory before moving to the checkout.
+if [[ -n "${TAGS_TCK_ZIP:-}" && "$TAGS_TCK_ZIP" != /* ]]; then
+    TAGS_TCK_ZIP="$PWD/$TAGS_TCK_ZIP"
+fi
 cd "$(dirname "$0")"
 if [[ ! -f bodoni-tck/pom.xml || ! -x ./mvnw ]]; then
     echo "Run this script from the Bodoni checkout root." >&2
@@ -48,7 +66,8 @@ if [[ -n "${JAVA_HOME:-}" ]]; then
     java_bin="$JAVA_HOME/bin/java"
 fi
 java_version="$("$java_bin" -version 2>&1 || true)"
-if [[ ! "$java_version" =~ version\ \"25[.\"] ]]; then
+java_25='version "25[."]'
+if [[ ! "$java_version" =~ $java_25 ]]; then
     echo "Select Java 25 with sdk env before running the official TCK." >&2
     exit 2
 fi
@@ -89,6 +108,10 @@ prepare_distribution() {
         echo "Neither shasum nor sha256sum is available to check the distribution." >&2
         exit 2
     fi
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "unzip is not available to extract the Derby DDL from the distribution." >&2
+        exit 2
+    fi
     mkdir -p "$distribution_dir"
     local zip="${TAGS_TCK_ZIP:-$distribution_dir/jakarta-tags-tck-3.0.0.zip}"
     local downloaded=false
@@ -97,28 +120,38 @@ prepare_distribution() {
             echo "TAGS_TCK_ZIP does not identify an existing distribution archive: $zip" >&2
             exit 2
         fi
-        curl --fail --location --silent --show-error --output "$zip.part" "$zip_url"
+        if ! curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+            --output "$zip.part" "$zip_url"; then
+            rm -f "$zip.part"
+            echo "Distribution download failed: $zip_url" >&2
+            exit 1
+        fi
         mv "$zip.part" "$zip"
         downloaded=true
     fi
     if [[ "$(sha256_of "$zip")" != "$zip_sha256" ]]; then
         echo "Distribution checksum mismatch: $zip" >&2
-        if "$downloaded"; then rm -f "$zip"; fi
+        if "$downloaded"; then
+            rm -f "$zip"
+        elif [[ -n "${TAGS_TCK_ZIP:-}" ]]; then
+            echo "TAGS_TCK_ZIP must name the official jakarta-tags-tck-3.0.0.zip." >&2
+        else
+            echo "This zip was cached by an earlier run: delete $zip to download it again." >&2
+        fi
         exit 1
     fi
     unzip -q -o "$zip" "$ddl_entry" -d "$distribution_dir"
 }
 
-if "$install"; then
-    ./mvnw -ntp clean install
-else
-    check_installed_snapshots
-fi
+# Every refusal comes before the reactor build: the snapshot check (cheap) first, then the
+# distribution, so a bad or missing zip fails fast.
+if ! "$install"; then check_installed_snapshots; fi
 if "$prepare"; then prepare_distribution; fi
 if [[ ! -f "$ddl" ]]; then
     echo "The official Derby DDL is missing; run without --no-prepare." >&2
     exit 2
 fi
+if "$install"; then ./mvnw -ntp clean install; fi
 
 # Clear old reports so a partial selection cannot be mistaken for a full run. No module clean:
 # target/tags-tck-distribution must survive.
