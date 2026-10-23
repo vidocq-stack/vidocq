@@ -395,6 +395,35 @@ added line ends with `// vidocq:<id>`, which is what `remove` takes back — nev
 hand, except a `requires` of the removed extension's own module, which no longer resolves.
 `vidocq create -x` writes the same directives.
 
+[#extension-descriptor]
+==== For extension authors [.tag-new]#NEW#
+
+The catalog comes from the extensions themselves. Each first-party extension ships
+`src/main/resources/META-INF/vidocq/extension.properties`, and the CLI's catalog,
+`META-INF/vidocq/extension-catalog.properties`, is built from those descriptors, with the groupId, artifactId
+and module that each extension's `pom.xml` and `module-info.java` declare. A test of `vidocq-runtime-cli`
+rebuilds the catalog from the reactor and fails when it no longer matches; it says how to regenerate it. The
+catalog lists the extensions sorted by id.
+
+[source,properties]
+----
+# The short id of `vidocq extension add <id>` and `vidocq create -x <id>`
+id = cassini-rest
+description = Jakarta REST (JAX-RS) endpoints
+# The APT bundle that goes on the annotationProcessorPaths, with the extension's groupId and version
+codegen = vidocq-runtime-cassini-rest-extension-codegen
+# What the application's module-info.java needs besides `requires` of the extension's module
+module-info.requires.static = java.compiler
+module-info.requires = jakarta.cdi, jakarta.inject, jakarta.ws.rs, jakarta.json.bind, io.vidocq.cassini.api
+# Opens the application package, once it holds a class
+module-info.opens-application-package = true
+----
+
+Only `id` and `description` are required. The `module-info.*` keys are what `add` writes for a new
+application. They are not checks: the directives a build must hold, which
+xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:check-module-info`] enforces, go in
+`META-INF/vidocq/module-requirements.properties`.
+
 [.tag-new]#NEW# `list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
 with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
 JAR whose module provides `io.vidocq.runtime.spi.VidocqExtension`. An extension pulled in by

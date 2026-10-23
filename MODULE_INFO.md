@@ -66,6 +66,12 @@ that needs it. Today the schema-migration extension
 (`io.vidocq.runtime.extensions.essentials.migration`) ships `opens db.migration`; it is the module a
 migrating app always depends on, regardless of the Flyway/Liquibase backend.
 
+Not to be confused with `META-INF/vidocq/extension.properties`, which each first-party extension also ships
+(Vidocq/vidocq#314): the Vidocq CLI builds its extension catalog from it, and its `module-info.*` keys are what
+`vidocq extension add` writes for a new application. Nothing checks those keys, which is why the Cassini
+directives (`requires jakarta.ws.rs`, …) live there and not here: `check-module-info` runs on every module and
+compares `requires` too.
+
 ## Design notes
 
 **Only `opens` is enforced.** A `requires` is frequently satisfied *transitively* (e.g. the H2

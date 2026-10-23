@@ -79,7 +79,8 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
   reported so the user knows whether the data is live, cached, or offline.
 
 **Components** (pure/injectable where possible): `ext/ExtensionCoordinate` (GA value type +
-dependency XML), `ext/RegistryEntry`, `ext/KnownExtensions` (catalog + resolver),
+dependency XML), `ext/RegistryEntry`, `ext/KnownExtensions` (catalog + resolver; the catalog is built from each
+extension's `META-INF/vidocq/extension.properties`, #314),
 `ext/PomDependencies` (StAX reader), `ext/PomEditor` (pure text add/remove returning
 `Result(pom, changed)`), `ext/MiniJson` (tiny zero-dep JSON reader),
 `ext/ExtensionRegistry` (remote→cache→catalog strategy with an injectable `Fetcher`),

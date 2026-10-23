@@ -56,11 +56,11 @@ class CompletionScriptsTest {
             assertTrue(script.contains("_vidocq_spec() {"), shell + " lacks _vidocq_spec");
             assertTrue(script.contains("extension) echo \"list add remove\" ;;"), shell + " lacks sub-commands");
             assertTrue(script.contains("\"extension list\") echo \"--installed --available --all --refresh\" ;;"));
-            assertTrue(script.contains("\"create -x\") echo \"chappe-webserver "), shell + " lacks extension ids");
+            assertTrue(script.contains("\"create -x\") echo \"cassini-rest "), shell + " lacks extension ids");
             assertTrue(script.contains("@pom-extensions)"), shell + " lacks the pom.xml lookup");
             assertTrue(script.contains("\"extension add\") _vidocq_addable \"$@\" ;;"),
                     shell + " must filter what extension add offers");
-            assertTrue(script.contains("for id in chappe-webserver "), shell + " lacks the catalog to filter");
+            assertTrue(script.contains("for id in cassini-rest "), shell + " lacks the catalog to filter");
         }
     }
 

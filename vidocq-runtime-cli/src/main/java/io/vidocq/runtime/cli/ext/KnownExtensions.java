@@ -19,10 +19,13 @@
  */
 package io.vidocq.runtime.cli.ext;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 
 /**
  * Built-in, offline catalog of first-party Vidocq extensions, and the resolver
@@ -31,103 +34,62 @@ import java.util.Optional;
  * <p>This catalog is the offline fallback for {@code extension list --available}
  * when the remote registry is unreachable, and the lookup table that lets
  * {@code extension add <short-id>} inject the correct (category-specific) groupId.</p>
+ *
+ * <p>The extensions describe themselves: each ships {@value #DESCRIPTOR}, and the
+ * {@value #CATALOG_RESOURCE} this class reads is built from those descriptors and
+ * checked against them by {@code ExtensionCatalogTest} (vidocq#314).</p>
  */
 public final class KnownExtensions {
 
     private KnownExtensions() {}
 
-    private static final String ESSENTIALS = "io.vidocq.runtime.extensions.essentials";
-    private static final String JAKARTAEE_CORE = "io.vidocq.runtime.extensions.jakartaee.core";
-    private static final String JAKARTAEE_WEB = "io.vidocq.runtime.extensions.jakartaee.web";
-    private static final String MICROPROFILE = "io.vidocq.runtime.extensions.microprofile";
+    /** The descriptor each first-party extension ships: its short id, description, codegen bundle, directives. */
+    static final String DESCRIPTOR = "META-INF/vidocq/extension.properties";
 
-    private static final List<RegistryEntry> CATALOG = List.of(
-            new RegistryEntry("chappe-webserver",
-                    ESSENTIALS,
-                    "vidocq-runtime-chappe-webserver-extension",
-                    "Chappe HTTP web server"),
-            new RegistryEntry("ravel-config",
-                    MICROPROFILE,
-                    "vidocq-runtime-ravel-config-extension",
-                    "MicroProfile Config"),
-            new RegistryEntry("peano-el",
-                    JAKARTAEE_CORE,
-                    "vidocq-runtime-peano-el-extension",
-                    "Jakarta Expression Language 6.0"),
-            new RegistryEntry("cassini-rest",
-                    JAKARTAEE_CORE,
-                    "vidocq-runtime-cassini-rest-extension",
-                    "Jakarta REST (JAX-RS) endpoints"),
-            new RegistryEntry("grimm-openapi",
-                    MICROPROFILE,
-                    "vidocq-runtime-grimm-openapi-extension",
-                    "MicroProfile OpenAPI document (/openapi)"),
-            new RegistryEntry("grimm-openapi-ui",
-                    MICROPROFILE,
-                    "vidocq-runtime-grimm-openapi-ui-extension",
-                    "Swagger UI for the OpenAPI document"),
-            new RegistryEntry("cyrano-rest-client",
-                    MICROPROFILE,
-                    "vidocq-runtime-cyrano-rest-client-extension",
-                    "MicroProfile REST Client"),
-            new RegistryEntry("cervantes-jwt",
-                    MICROPROFILE,
-                    "vidocq-runtime-cervantes-jwt-extension",
-                    "MicroProfile JWT authentication"),
-            new RegistryEntry("humboldt-telemetry",
-                    MICROPROFILE,
-                    "vidocq-runtime-humboldt-telemetry-extension",
-                    "MicroProfile Telemetry (tracing)"),
-            new RegistryEntry("knock-health",
-                    MICROPROFILE,
-                    "vidocq-runtime-knock-health-extension",
-                    "MicroProfile Health checks"),
-            new RegistryEntry("dirac-metrics",
-                    MICROPROFILE,
-                    "vidocq-runtime-dirac-metrics-extension",
-                    "MicroProfile Metrics"),
-            new RegistryEntry("heisenberg-fault-tolerance",
-                    MICROPROFILE,
-                    "vidocq-runtime-heisenberg-fault-tolerance-extension",
-                    "MicroProfile Fault Tolerance"),
-            new RegistryEntry("foy-servlet",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-foy-servlet-extension",
-                    "Jakarta Servlet (servlets, filters, HTTP sessions)"),
-            new RegistryEntry("ibarra-pages",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-ibarra-pages-extension",
-                    "Jakarta Pages (JSP), compiled at build time"),
-            new RegistryEntry("naming",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-naming-extension",
-                    "JNDI java: names declared in vidocq.properties, answered by CDI beans"),
-            new RegistryEntry("mansart-data",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-mansart-data-extension",
-                    "Jakarta Persistence (JPA)"),
-            new RegistryEntry("mansart-pool",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-mansart-pool-extension",
-                    "JDBC connection pooling"),
-            new RegistryEntry("migration",
-                    ESSENTIALS,
-                    "vidocq-runtime-migration-extension",
-                    "Schema migrations applied at boot"),
-            new RegistryEntry("flyway-migration",
-                    ESSENTIALS,
-                    "vidocq-runtime-flyway-migration-extension",
-                    "Flyway schema migrations"),
-            new RegistryEntry("liquibase-migration",
-                    ESSENTIALS,
-                    "vidocq-runtime-liquibase-migration-extension",
-                    "Liquibase schema migrations"),
-            new RegistryEntry("mansart-transactions",
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-mansart-transactions-extension",
-                    "Jakarta Transactions (JTA)"));
+    /** The catalog built from those descriptors (see {@code ExtensionCatalogTest}). */
+    static final String CATALOG_RESOURCE = "META-INF/vidocq/extension-catalog.properties";
 
-    /** The immutable built-in catalog. */
+    private static final String ARTIFACT_ID = ".artifactId";
+
+    /** Every catalog key, prefixed by the extension's short id, e.g. {@code knock-health.groupId}. */
+    private static final Properties DESCRIPTORS = load();
+
+    private static final List<RegistryEntry> CATALOG = DESCRIPTORS.stringPropertyNames().stream()
+            .filter(key -> key.endsWith(ARTIFACT_ID))
+            .map(key -> key.substring(0, key.length() - ARTIFACT_ID.length()))
+            .sorted()
+            .map(id -> new RegistryEntry(id, property(id, "groupId"), property(id, "artifactId"),
+                    property(id, "description")))
+            .toList();
+
+    private static Properties load() {
+        Properties props = new Properties();
+        try (InputStream in = KnownExtensions.class.getResourceAsStream("/" + CATALOG_RESOURCE)) {
+            if (in == null) {
+                throw new IllegalStateException(CATALOG_RESOURCE + " is missing from the Vidocq CLI");
+            }
+            props.load(in);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read " + CATALOG_RESOURCE, e);
+        }
+        return props;
+    }
+
+    private static String property(String id, String key) {
+        return DESCRIPTORS.getProperty(id + "." + key, "").strip();
+    }
+
+    private static List<String> csv(String value) {
+        List<String> out = new ArrayList<>();
+        for (String token : value.split(",")) {
+            if (!token.isBlank()) {
+                out.add(token.strip());
+            }
+        }
+        return out;
+    }
+
+    /** The immutable built-in catalog, sorted by id. */
     public static List<RegistryEntry> catalog() {
         return CATALOG;
     }
@@ -174,99 +136,40 @@ public final class KnownExtensions {
     /**
      * The APT codegen bundle that MUST sit on the compiler's
      * {@code annotationProcessorPaths} when the matching extension is on the
-     * dependencies (enforced by {@code vidocq:checkpom}). Empty for extensions
-     * that do not ship one.
+     * dependencies (enforced by {@code vidocq:checkpom}). It shares the extension's
+     * groupId. Empty for extensions that do not ship one.
      */
     public static Optional<ExtensionCoordinate> codegenBundle(String id) {
-        return switch (id == null ? "" : id.trim().toLowerCase()) {
-            case "peano-el" -> Optional.of(new ExtensionCoordinate(
-                    JAKARTAEE_CORE,
-                    "vidocq-runtime-peano-el-extension-codegen"));
-            case "cassini-rest" -> Optional.of(new ExtensionCoordinate(
-                    JAKARTAEE_CORE,
-                    "vidocq-runtime-cassini-rest-extension-codegen"));
-            case "foy-servlet" -> Optional.of(new ExtensionCoordinate(
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-foy-servlet-extension-codegen"));
-            case "mansart-data" -> Optional.of(new ExtensionCoordinate(
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-mansart-data-extension-codegen"));
-            case "mansart-transactions" -> Optional.of(new ExtensionCoordinate(
-                    JAKARTAEE_WEB,
-                    "vidocq-runtime-mansart-transactions-extension-codegen"));
-            case "ravel-config" -> Optional.of(new ExtensionCoordinate(
-                    MICROPROFILE,
-                    "vidocq-runtime-ravel-config-extension-codegen"));
-            case "cyrano-rest-client" -> Optional.of(new ExtensionCoordinate(
-                    MICROPROFILE,
-                    "vidocq-runtime-cyrano-rest-client-extension-codegen"));
-            default -> Optional.empty();
-        };
+        return byId(id).flatMap(e -> Optional.of(property(e.id(), "codegen"))
+                .filter(bundle -> !bundle.isEmpty())
+                .map(bundle -> new ExtensionCoordinate(e.groupId(), bundle)));
     }
 
-    /** The Java module each catalog extension ships, which an application {@code requires}. */
-    private static final Map<String, String> MODULES = Map.ofEntries(
-            Map.entry("chappe-webserver", "io.vidocq.runtime.extensions.essentials.chappe"),
-            Map.entry("ravel-config", "io.vidocq.runtime.extensions.microprofile.ravel"),
-            Map.entry("peano-el", "io.vidocq.runtime.extensions.jakartaee.core.peano"),
-            Map.entry("cassini-rest", "io.vidocq.runtime.extensions.jakartaee.core.cassini"),
-            Map.entry("grimm-openapi", "io.vidocq.runtime.extensions.microprofile.grimm.openapi"),
-            Map.entry("grimm-openapi-ui", "io.vidocq.runtime.extensions.microprofile.grimm.openapi.ui"),
-            Map.entry("cyrano-rest-client", "io.vidocq.runtime.extensions.microprofile.cyrano"),
-            Map.entry("cervantes-jwt", "io.vidocq.runtime.extensions.microprofile.cervantes"),
-            Map.entry("humboldt-telemetry", "io.vidocq.runtime.extensions.microprofile.humboldt"),
-            Map.entry("knock-health", "io.vidocq.runtime.extensions.microprofile.knock"),
-            Map.entry("dirac-metrics", "io.vidocq.runtime.extensions.microprofile.dirac"),
-            Map.entry("heisenberg-fault-tolerance", "io.vidocq.runtime.extensions.microprofile.heisenberg"),
-            Map.entry("foy-servlet", "io.vidocq.runtime.extensions.jakartaee.web.foy"),
-            Map.entry("ibarra-pages", "io.vidocq.runtime.extensions.jakartaee.web.ibarra"),
-            Map.entry("naming", "io.vidocq.runtime.extensions.jakartaee.web.naming"),
-            Map.entry("mansart-data", "io.vidocq.runtime.extensions.jakartaee.web.mansart.data"),
-            Map.entry("mansart-pool", "io.vidocq.runtime.extensions.jakartaee.web.mansart.pool"),
-            Map.entry("migration", "io.vidocq.runtime.extensions.essentials.migration"),
-            Map.entry("flyway-migration", "io.vidocq.runtime.extensions.essentials.migration.flyway"),
-            Map.entry("liquibase-migration", "io.vidocq.runtime.extensions.essentials.migration.liquibase"),
-            Map.entry("mansart-transactions", "io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions"));
-
-    /** The module a catalog extension ships; empty for an id outside the catalog. */
+    /** The module a catalog extension ships, which an application {@code requires}; empty outside the catalog. */
     public static Optional<String> moduleName(String id) {
-        return Optional.ofNullable(id == null ? null : MODULES.get(id.trim().toLowerCase()));
+        return byId(id).map(e -> property(e.id(), "module")).filter(module -> !module.isEmpty());
     }
 
     /**
      * The {@code module-info.java} directives (without the trailing {@code ;}) an application
      * needs to use {@code id}: its module, which re-exports most extension APIs transitively,
-     * plus what the extension leaves to the application — Cassini does not re-export
-     * Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
-     * {@code opens} is added only for an existing {@code applicationPackage}, which JAX-RS,
-     * JSON-B and Jakarta Persistence reflect on. Empty for an id outside the catalog.
+     * plus what the extension's descriptor says it leaves to the application — Cassini does not
+     * re-export Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
+     * {@code opens} is added only for an existing {@code applicationPackage}, when the descriptor
+     * asks for it (JAX-RS, JSON-B and Jakarta Persistence reflect on it). Empty for an id outside the catalog.
      */
     public static List<String> moduleDirectives(String id, String applicationPackage) {
         Optional<String> module = moduleName(id);
         if (module.isEmpty()) {
             return List.of();
         }
+        String key = byId(id).orElseThrow().id();
         List<String> directives = new ArrayList<>();
-        boolean opens = false;
-        switch (id.trim().toLowerCase()) {
-            case "peano-el" -> directives.addAll(List.of("requires " + module.get(),"requires io.vidocq.peano.api"));
-            // vidocq:generate compiles the pages into the application module, which must read these APIs itself.
-            case "ibarra-pages" -> directives.addAll(List.of("requires " + module.get(),
-                    "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"));
-            case "cassini-rest" -> {
-                directives.addAll(List.of("requires static java.compiler", "requires jakarta.cdi",
-                        "requires jakarta.inject", "requires jakarta.ws.rs", "requires jakarta.json.bind",
-                        "requires " + module.get(),
-                        "requires io.vidocq.cassini.api"));
-                opens = true;
-            }
-            case "mansart-data" -> {
-                directives.addAll(List.of("requires static java.compiler", "requires " + module.get()));
-                opens = true;
-            }
-            default -> directives.add("requires " + module.get());
-        }
-        if (opens && applicationPackage != null && !applicationPackage.isBlank()) {
+        csv(property(key, "module-info.requires.static")).forEach(m -> directives.add("requires static " + m));
+        directives.add("requires " + module.get());
+        csv(property(key, "module-info.requires")).forEach(m -> directives.add("requires " + m));
+        if (Boolean.parseBoolean(property(key, "module-info.opens-application-package"))
+                && applicationPackage != null && !applicationPackage.isBlank()) {
             directives.add("opens " + applicationPackage);
         }
         return List.copyOf(directives);

@@ -186,7 +186,7 @@ class KnownExtensionsTest {
         assertFalse(published.isEmpty(), "no extension module found under " + extensions.toAbsolutePath());
         Set<String> missing = new TreeSet<>(published);
         missing.removeAll(catalog);
-        assertTrue(missing.isEmpty(), "published extensions missing from KnownExtensions: " + missing);
+        assertTrue(missing.isEmpty(), "published extensions without a " + KnownExtensions.DESCRIPTOR + ": " + missing);
     }
 
     @Test
@@ -194,6 +194,13 @@ class KnownExtensionsTest {
         for (RegistryEntry e : KnownExtensions.catalog()) {
             assertTrue(KnownExtensions.moduleName(e.id()).isPresent(), e.id() + " has no module name");
         }
+    }
+
+    /** vidocq#314: the catalog is built from the extensions' descriptors, so it has no hand-picked order. */
+    @Test
+    void catalogIsSortedById() {
+        List<String> ids = KnownExtensions.catalog().stream().map(RegistryEntry::id).toList();
+        assertEquals(ids.stream().sorted().toList(), ids);
     }
 
     @Test
