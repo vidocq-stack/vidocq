@@ -57,10 +57,11 @@ import org.xml.sax.XMLReader;
  * {@link javax.xml.XMLConstants#FEATURE_SECURE_PROCESSING} on (JDK expansion limits), XSLT and
  * XPath extension functions off and the JDK access properties set to {@code ""}: the JDK opens
  * no external reference and calls no extension on its own, whatever a system property or
- * {@code jaxp.properties} says. External references reach the content only through the resolver handed in, which
- * returns an opened stream (probe: {@code JdkXmlFactsTest}). That resolver must refuse by
- * throwing, never by returning {@code null}: under a {@code bodoni-webapp:} base the JDK
- * drops an {@code xsl:import} whose resolver answered {@code null} without an error.
+ * {@code jaxp.properties} says. External references reach the content only through the
+ * resolver handed in, which returns an opened stream (probe: {@code JdkXmlFactsTest}). That
+ * resolver must refuse by throwing, never by returning {@code null}: under a
+ * {@code bodoni-webapp:} base the JDK drops an {@code xsl:import} whose resolver answered
+ * {@code null} without an error.
  *
  * <p>Parsing is namespace-aware (XPath 1.0 semantics), not validating, XInclude off; a
  * DOCTYPE with an internal subset is accepted. Warnings are dropped, errors and fatal errors
