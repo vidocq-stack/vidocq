@@ -517,6 +517,48 @@ of a nested `select` evaluate against the context node alone (1 and 1): the JDK'
 checks (`x:choose` without `x:when`, and so on) are not done, since there is no TLV (B1
 precedent).
 
+## Decisions recorded in B4
+
+Decided with the maintainer on 2026-10-23.
+
+**Driver discovery for a JDBC parameter string** (§10.1.1, §10.2). `internal.DriverManagerDataSource`
+is unpooled: every `getConnection` opens a new connection. It captures a class loader at
+construction, the thread context class loader, else its own. A named driver class is loaded
+there with `Class.forName(driver, true, loader)` (not found: `SQLException`, SQLState `08001`).
+`getConnection` takes the first driver of `ServiceLoader.load(Driver.class, loader)` that
+accepts the URL and whose `connect` answers a connection, else the first such driver
+`DriverManager.drivers()` hands Bodoni (drivers registered by hand, or visible to Bodoni's
+own class loader). A provider that fails to load is skipped. No driver: Bodoni's own
+`SQLException`, SQLState `08001`, without cause, naming the URL redacted
+(`JdbcParameters.redactedUrl()`: cut at the first `;` or `?`, no user information); a driver
+failure keeps the driver's exception as cause. The module `uses java.sql.Driver` and
+`requires transitive java.sql`. A pre-JDBC 4 driver without
+`META-INF/services/java.sql.Driver`, in a class loader Bodoni cannot see, is not supported.
+
+**Evidence (JDK 25, 2026-10-23)**, `JdbcDriverFactsTest` with H2 2.3.232, split-loader layout
+`platform <- bodoni <- app (H2)`:
+
+- `h2IsOnTheClassPathOfTheTestRun`: holds, H2 is in an unnamed module of the test run.
+- `platformLoaderHandsBootLayerModulePackagesToTheAppLoader`: holds, a parent-first loader
+  under the platform class loader never defines its own copy of a class of a boot-layer module
+  package; the test loaders are child first.
+- `driverManagerRefusesADriverItsCallerCannotSee`: holds, `DriverManager.getConnection` called
+  from the `bodoni` loader refuses the H2 driver of `app` (even registered, even with `app` as
+  the context loader): `SQLException`, SQLState `08001`, its message repeating the full URL.
+- `serviceLoaderOnTheContextLoaderFindsTheDriver`: holds, `ServiceLoader.load(Driver.class, app)`
+  called from `bodoni` yields `org.h2.Driver`, which connects.
+- `connectAnswersNullForAForeignUrl`: holds, H2's `acceptsURL` is false and `connect` answers
+  `null` for a URL it does not handle.
+- `driverManagerSeesADriverOfItsOwnLoader`: holds, `DriverManager` connects when its caller's
+  loader sees the driver.
+- `namedModuleServiceLoaderFindsTheDriver`: fails with `ServiceConfigurationError` ("does not
+  declare `uses`") until the module `uses java.sql.Driver`, then holds.
+
+The rule it led to: `DriverManager` alone breaks a web application whose driver sits in the
+WAR while Bodoni sits in the server's lib, so the context loader's `ServiceLoader` comes first
+and `DriverManager` second, the same rule as Mansart's pool (mansart#42). No reflective
+instantiation: the providers instantiate the drivers.
+
 ## Cross-repo item: BOD-001 (fixed)
 
 Under Peano with `peano.reflection=deny`, a precompiled page could not read `${s.index}` (or any

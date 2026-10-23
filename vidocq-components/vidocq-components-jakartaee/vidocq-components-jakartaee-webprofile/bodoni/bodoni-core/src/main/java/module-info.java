@@ -34,7 +34,14 @@
  * {@code requires transitive java.xml} itself: the {@code x:} handlers use it
  * directly and their exported signatures expose {@code org.xml.sax} and
  * {@code javax.xml.transform} types, so it does not rely on the API module
- * reaching {@code java.xml} through {@code java.desktop}. At the Maven
+ * reaching {@code java.xml} through {@code java.desktop}. For the same reason
+ * it {@code requires transitive java.sql}: pages hand {@code javax.sql.DataSource}
+ * objects to the {@code sql:} actions and read {@code java.sql} values from
+ * {@code Result} rows. It {@code uses java.sql.Driver}: the JDBC driver of a
+ * {@code url[,driver[,user[,password]]]} data source is found through the
+ * {@code ServiceLoader} of the thread context class loader, since
+ * {@code DriverManager} refuses a driver its caller's class loader cannot see
+ * (a driver in a WAR, Bodoni in the server's lib). At the Maven
  * level the Pages, Servlet and EL APIs are {@code provided}: the container
  * supplies them. Bodoni never depends on an EL, Pages or Servlet
  * implementation (see PLAN.md).
@@ -45,6 +52,13 @@ module io.vidocq.bodoni.core {
     // Exported handler signatures expose org.xml.sax and javax.xml.transform types; Bodoni
     // does not rely on the API module's java.desktop chain to reach java.xml.
     requires transitive java.xml;
+
+    // Pages hand javax.sql.DataSource objects to the sql: actions and read java.sql values from
+    // Result rows; Bodoni does not rely on the API module's descriptor for java.sql.
+    requires transitive java.sql;
+
+    // JDBC drivers of the application are found through the thread context class loader.
+    uses java.sql.Driver;
 
     // c:import reads absolute http(s) URLs through java.net.http.
     requires java.net.http;
