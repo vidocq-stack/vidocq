@@ -25,8 +25,11 @@ import java.io.IOException;
 import io.vidocq.bodoni.core.internal.Scopes;
 
 import jakarta.servlet.jsp.JspTagException;
+import jakarta.servlet.jsp.JspWriter;
 import jakarta.servlet.jsp.jstl.core.Config;
-import jakarta.servlet.jsp.tagext.BodyTagSupport;
+import jakarta.servlet.jsp.tagext.BodyContent;
+import jakarta.servlet.jsp.tagext.BodyTag;
+import jakarta.servlet.jsp.tagext.TagSupport;
 
 /**
  * The {@code var} and {@code scope} attributes of the i18n and formatting actions that export
@@ -36,10 +39,18 @@ import jakarta.servlet.jsp.tagext.BodyTagSupport;
  * <p>The attributes persist until {@link #release()}, as the {@code Tag} lifecycle lets a
  * container reuse an instance without calling the setters of unchanged attributes again. The
  * public setters reach other packages through the bridges javac emits in each public handler.
+ *
+ * <p>It implements {@link BodyTag} itself rather than extending {@code BodyTagSupport}, which keeps
+ * the handler hierarchy within five parents; {@code doAfterBody} ({@code SKIP_BODY}) and
+ * {@code doEndTag} ({@code EVAL_PAGE}) come from {@link TagSupport}, with the values
+ * {@code BodyTagSupport} returns.
  */
-abstract class VarTagSupport extends BodyTagSupport {
+abstract class VarTagSupport extends TagSupport implements BodyTag {
 
     private static final long serialVersionUID = 1L;
+
+    /** The current body content, or {@code null} when no body was evaluated. */
+    protected transient BodyContent bodyContent;
 
     private final String action;
     private String varName;
@@ -61,7 +72,28 @@ abstract class VarTagSupport extends BodyTagSupport {
     }
 
     @Override
+    public void setBodyContent(BodyContent b) {
+        this.bodyContent = b;
+    }
+
+    @Override
+    public void doInitBody() {
+        // Nothing to prepare: the body is read from bodyContent once evaluated.
+    }
+
+    /** @return the current body content, or {@code null} when no body was evaluated */
+    public BodyContent getBodyContent() {
+        return bodyContent;
+    }
+
+    /** @return the writer enclosing the body content */
+    public JspWriter getPreviousOut() {
+        return bodyContent.getEnclosingWriter();
+    }
+
+    @Override
     public void release() {
+        bodyContent = null;
         super.release();
         varName = null;
         scope = null;
