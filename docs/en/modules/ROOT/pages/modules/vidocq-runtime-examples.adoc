@@ -12,6 +12,13 @@
 | Build | `cd vidocq-runtime-examples/<example> && ./mvnw -ntp package`
 |===
 
+[.tag-new]#NEW# No example has a main class. Each pom declares `vidocq.mainModule` only, and the runtime's own
+main boots the module under `vidocq:dev`, `vidocq:run`, the `vidocq:package` launchers and the `vidocq:jlink` /
+`vidocq:jpackage` images (see
+xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class]). A main class
+is for an application that wants a right-click Run in the IDE or logic after boot: see
+xref:usage.adoc[the `@VidocqMain` trampoline].
+
 == Catalogue
 
 [cols="2,3"]

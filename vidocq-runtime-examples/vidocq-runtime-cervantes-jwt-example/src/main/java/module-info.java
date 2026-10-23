@@ -24,8 +24,6 @@ module io.vidocq.runtime.examples.jwt {
     requires jakarta.annotation;            // @RolesAllowed / @PermitAll
     requires jakarta.json.bind;
 
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Pulls all of cervantes transitively (api/core/cdi-vauban/jaxrs + ravel) and registers the
     // JWT BuildCompatibleExtension.

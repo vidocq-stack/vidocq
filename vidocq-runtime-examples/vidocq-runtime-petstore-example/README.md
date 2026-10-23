@@ -19,18 +19,9 @@ catégorie et des tags, assemblage du `PetView`).
 
 ## Comment l'application démarre
 
-Il n'y a **pas de `main` dans les resources** : le point d'entrée est `PetstoreApp` —
-
-```java
-// io.vidocq.runtime.examples.petstore.PetstoreApp
-public static void main(String[] args) {
-    Vidocq.main(args);
-}
-```
-
-`Vidocq.main(...)` démarre le `VidocqBootstrap`, qui découvre toutes les extensions présentes
-sur le module path (via `ServiceLoader` / `provides VidocqExtension`) et les orchestre dans
-l'ordre de priorité :
+Il n'y a **pas de classe `main`** : la `main` du runtime, `io.vidocq.runtime.core.Vidocq`,
+démarre le `VidocqBootstrap`, qui découvre toutes les extensions présentes sur le module path
+(via `ServiceLoader` / `provides VidocqExtension`) et les orchestre dans l'ordre de priorité :
 
 1. `mansart-pool` (200) — ouvre le pool H2 depuis `vidocq.pool.*` et publie le `DataSource`.
 2. `mansart-data` (300) — câble les interfaces `@Repository` (impl générées par APT).
@@ -40,13 +31,12 @@ l'ordre de priorité :
 `SchemaInitializer` (un `@Observes @Initialized(ApplicationScoped.class)`) crée le schéma et
 les données de démo une fois le conteneur CDI prêt.
 
-La classe d'entrée est déclarée une seule fois dans le `pom.xml` et consommée par tous les
-goals de packaging :
+Le module de l'application est déclaré une seule fois dans le `pom.xml` et consommé par tous
+les goals (`vidocq:dev`, `vidocq:package`, `vidocq:jlink`, `vidocq:jpackage`) :
 
 ```xml
 <properties>
     <vidocq.mainModule>io.vidocq.runtime.examples.petstore</vidocq.mainModule>
-    <vidocq.mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</vidocq.mainClass>
 </properties>
 ```
 

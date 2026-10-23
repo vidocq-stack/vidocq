@@ -15,6 +15,11 @@
     <description>JWT-secured REST example — validates the cervantes CDI modules on the strict
         module path without `opens … to io.vidocq.vauban.core`</description>
 
+    <properties>
+        <!-- No main class: the runtime's own main boots this module, under every Vidocq goal. -->
+        <vidocq.mainModule>io.vidocq.runtime.examples.jwt</vidocq.mainModule>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
@@ -142,8 +147,6 @@
                                     <goal>jlink</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.jwt</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.jwt.JwtExampleApp</mainClass>
                                     <launcher>jwt-app</launcher>
                                 </configuration>
                             </execution>
@@ -153,8 +156,6 @@
                                     <goal>jpackage</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.jwt</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.jwt.JwtExampleApp</mainClass>
                                     <appName>jwt-app</appName>
                                     <appVersion>1.0.0</appVersion>
                                     <type>app-image</type>

@@ -23,8 +23,6 @@ module io.vidocq.runtime.examples.rest {
     requires jakarta.ws.rs;
     requires jakarta.json.bind;
 
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Required by cassini-processor APT output: $$CassiniAdapter implements
     // io.vidocq.cassini.spi.gen.ResourceAdapter and uses InjectionSupport/ParamKind.

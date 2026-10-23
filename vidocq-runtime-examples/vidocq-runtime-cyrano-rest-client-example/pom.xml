@@ -14,6 +14,11 @@
     <name>Vidocq :: Examples :: Rest Client (Cyrano)</name>
     <description>MicroProfile Rest Client example: a REST endpoint that calls another one through an injected @RestClient</description>
 
+    <properties>
+        <!-- No main class: the runtime's own main boots this module, under every Vidocq goal. -->
+        <vidocq.mainModule>io.vidocq.runtime.examples.restclient</vidocq.mainModule>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
@@ -74,8 +79,6 @@
                             <goal>jlink</goal>
                         </goals>
                         <configuration>
-                            <mainModule>io.vidocq.runtime.examples.restclient</mainModule>
-                            <mainClass>io.vidocq.runtime.examples.restclient.RestClientExampleApp</mainClass>
                             <launcher>rest-client-app</launcher>
                         </configuration>
                     </execution>

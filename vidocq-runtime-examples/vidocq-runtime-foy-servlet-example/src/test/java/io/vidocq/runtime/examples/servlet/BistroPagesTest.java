@@ -49,7 +49,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 class BistroPagesTest {
 
-    private static final String MAIN = "io.vidocq.runtime.examples.servlet/io.vidocq.runtime.examples.servlet.BistroApp";
+    private static final String MODULE = "io.vidocq.runtime.examples.servlet";
+    private static final String MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
 
     private static Process application;
     private static Path log;
@@ -68,7 +69,8 @@ class BistroPagesTest {
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
                 "-Dvidocq.chappe.listener.default.port=" + port,
                 "-Dpeano.reflection=deny",
-                "-p", System.getProperty("jdk.module.path"), "-m", MAIN)
+                "-Dvidocq.app.module=" + MODULE,
+                "-p", System.getProperty("jdk.module.path"), "--add-modules", MODULE, "-m", MAIN)
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (true) {

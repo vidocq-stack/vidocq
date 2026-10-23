@@ -84,7 +84,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     private String mainModule;
 
     /**
-     * Fully qualified application main class (e.g. {@code io.vidocq.runtime.examples.rest.RestExampleApp}).
+     * Fully qualified application main class, a {@code @VidocqMain} trampoline (e.g. {@code com.acme.app.App}).
      * Optional: without one, the launcher runs the runtime's own main ({@link ImageLaunch}).
      */
     @Parameter(property = "vidocq.mainClass")

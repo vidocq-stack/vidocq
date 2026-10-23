@@ -16,12 +16,12 @@
         JSON via Champollion (JSON-B/JSON-P), packaged as a native jpackage app-image.</description>
 
     <!--
-        Vidocq main-module coordinates — consumed by every Vidocq goal that needs to know how to
-        launch the app (vidocq:dev, vidocq:jlink, vidocq:jpackage, vidocq:docker).
+        Vidocq main module — consumed by every Vidocq goal that needs to know how to launch the app
+        (vidocq:dev, vidocq:jlink, vidocq:jpackage, vidocq:docker). No main class: the runtime's own
+        main boots this module.
     -->
     <properties>
         <vidocq.mainModule>io.vidocq.runtime.examples.petstore</vidocq.mainModule>
-        <vidocq.mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</vidocq.mainClass>
     </properties>
 
     <dependencies>
@@ -199,8 +199,6 @@
                                     <goal>jlink</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.petstore</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</mainClass>
                                     <launcher>petstore-app</launcher>
                                 </configuration>
                             </execution>
@@ -210,8 +208,6 @@
                                     <goal>jpackage</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.petstore</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.petstore.PetstoreApp</mainClass>
                                     <appName>petstore-app</appName>
                                     <!-- macOS app-image rejects 0.x.y → pin 1.0.0; bump per release. -->
                                     <appVersion>1.0.0</appVersion>

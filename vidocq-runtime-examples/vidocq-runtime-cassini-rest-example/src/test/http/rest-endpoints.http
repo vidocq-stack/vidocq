@@ -1,5 +1,5 @@
 // ### Vidocq REST Example — Tests des endpoints
-// ### Lancer RestExampleApp puis executer ces requetes depuis IntelliJ
+// ### Lancer l'exemple (mvn vidocq:dev) puis executer ces requetes depuis IntelliJ
 ### HelloSimpleJaxRSResource (@Path sans scope CDI — enrichi par BCE)
 GET http://localhost:8080/hello-simple-jaxrs
 Accept: text/plain

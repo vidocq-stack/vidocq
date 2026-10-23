@@ -15,9 +15,8 @@
     <description>Servlet web application example using Foy on Chappe, with CDI request and session scopes</description>
 
     <properties>
-        <!-- Read by vidocq:dev and vidocq:run. -->
+        <!-- Read by vidocq:dev and vidocq:run. No main class: the runtime's own main boots this module. -->
         <vidocq.mainModule>io.vidocq.runtime.examples.servlet</vidocq.mainModule>
-        <vidocq.mainClass>io.vidocq.runtime.examples.servlet.BistroApp</vidocq.mainClass>
     </properties>
 
     <dependencies>

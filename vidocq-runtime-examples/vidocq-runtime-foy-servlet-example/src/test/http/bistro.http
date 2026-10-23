@@ -1,4 +1,4 @@
-// Vidocq Bistro — start BistroApp, then run these requests from IntelliJ.
+// Vidocq Bistro — start it (mvn vidocq:dev), then run these requests from IntelliJ.
 
 ### The menu
 GET http://localhost:8080/

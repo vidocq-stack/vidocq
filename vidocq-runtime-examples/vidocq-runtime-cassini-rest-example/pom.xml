@@ -14,6 +14,11 @@
     <name>Vidocq :: Examples :: REST (Cassini)</name>
     <description>REST service example using the Cassini JAX-RS runtime on Chappe</description>
 
+    <properties>
+        <!-- No main class: the runtime's own main boots this module, under every Vidocq goal. -->
+        <vidocq.mainModule>io.vidocq.runtime.examples.rest</vidocq.mainModule>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
@@ -134,8 +139,6 @@
                                     <goal>jlink</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.rest</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.rest.RestExampleApp</mainClass>
                                     <launcher>todo-app</launcher>
                                 </configuration>
                             </execution>
@@ -145,8 +148,6 @@
                                     <goal>jpackage</goal>
                                 </goals>
                                 <configuration>
-                                    <mainModule>io.vidocq.runtime.examples.rest</mainModule>
-                                    <mainClass>io.vidocq.runtime.examples.rest.RestExampleApp</mainClass>
                                     <appName>todo-app</appName>
                                     <!-- macOS app-image rejects 0.x.y → we pin 1.0.0; to be
                                          bumped on every release of the example. -->

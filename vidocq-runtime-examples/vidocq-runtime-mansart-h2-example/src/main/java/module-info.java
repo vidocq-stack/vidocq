@@ -33,8 +33,8 @@ module io.vidocq.runtime.examples.mansart {
     requires jakarta.data;
     requires jakarta.transaction;
 
+    // Only the tests, patched into this module, boot VidocqBootstrap in-process.
     requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Required by cassini-processor APT output: $$CassiniAdapter implements
     // io.vidocq.cassini.spi.gen.ResourceAdapter and uses InjectionSupport/ParamKind.

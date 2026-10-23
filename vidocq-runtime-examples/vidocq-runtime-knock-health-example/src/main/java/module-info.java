@@ -24,8 +24,6 @@ module io.vidocq.runtime.examples.knock {
     requires jakarta.annotation;
     requires jakarta.json.bind;
 
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     // Pulls all of knock transitively (api/core/cdi-vauban/jaxrs) and activates the
     // @Liveness/@Readiness/@Startup discovery BCE + the auto-mounted KnockHealthResource.

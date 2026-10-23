@@ -48,14 +48,16 @@ import static org.junit.jupiter.api.Assertions.fail;
  * the kitchen, logs out, and is asked to log in again. With BASIC authentication the browser kept the credentials
  * until it closed, and no page could sign the user out.
  *
- * <p>The application runs as it is launched, {@code java -p ... -m <module>/BistroApp}, in a child JVM on this test's
- * module path and a free port: {@code Vidocq.run} then builds the application layer, which reads the providers the
- * processors listed in {@code META-INF/services}. Booted in this JVM, the module would stay in the boot layer, where
- * those files count for nothing.
+ * <p>The application runs as a jlink image launches it, the runtime's own main with {@code --add-modules <module>
+ * -Dvidocq.app.module=<module>}, in a child JVM on this test's module path and a free port: the runtime then builds
+ * the application layer from that module, which reads the providers the processors listed in
+ * {@code META-INF/services}. Booted in this JVM, the module would stay in the boot layer, where those files count for
+ * nothing.
  */
 class KitchenLoginTest {
 
-    private static final String MAIN = "io.vidocq.runtime.examples.servlet/io.vidocq.runtime.examples.servlet.BistroApp";
+    private static final String MODULE = "io.vidocq.runtime.examples.servlet";
+    private static final String MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
 
     private static Process application;
     private static Path log;
@@ -73,7 +75,8 @@ class KitchenLoginTest {
         application = new ProcessBuilder(java,
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
                 "-Dvidocq.chappe.listener.default.port=" + port,
-                "-p", System.getProperty("jdk.module.path"), "-m", MAIN)
+                "-Dvidocq.app.module=" + MODULE,
+                "-p", System.getProperty("jdk.module.path"), "--add-modules", MODULE, "-m", MAIN)
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
         while (true) {

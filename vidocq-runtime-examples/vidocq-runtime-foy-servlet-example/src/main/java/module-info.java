@@ -22,8 +22,6 @@ module io.vidocq.runtime.examples.servlet {
     requires jakarta.inject;
     requires jakarta.servlet;
 
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
     // JSP pages: vidocq:generate compiles them into this module, which reads what they use.
     requires io.vidocq.runtime.extensions.jakartaee.web.ibarra;

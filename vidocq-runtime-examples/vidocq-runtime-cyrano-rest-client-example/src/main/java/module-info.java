@@ -22,8 +22,6 @@ module io.vidocq.runtime.examples.restclient {
     requires jakarta.inject;
     requires jakarta.ws.rs;
 
-    requires io.vidocq.runtime.core;
-    requires io.vidocq.runtime.spi;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     requires io.vidocq.runtime.extensions.microprofile.cyrano;
     requires io.vidocq.cassini.api;
