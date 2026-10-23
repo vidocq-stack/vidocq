@@ -849,8 +849,9 @@ where this whole bug class is invisible.
 ## BUG-20261023-06 — in a jlink image, a Vaadin `AppShellConfigurator` makes every page answer with a reset connection
 
 - **Date**: 2026-10-23
-- **Status**: OPEN — documented workaround (`vaadin.adoc`, troubleshooting); a shipped fix needs a decision
-  (see Fix options)
+- **Status**: FIXED (2026-10-24, option 1) — `vidocq-runtime-vaadin-extension` ships the module-aware
+  `LookupInitializer`; the application adds the dependency and `requires io.vidocq.runtime.extensions.jakartaee.web.vaadin`
+  (`vaadin.adoc` `#jlink-app-shell`, `vidocq-runtime-extensions.adoc` `#vaadin`)
 - **Affected module**: the jlink image of a Vaadin application (`vidocq:jlink` + `vauban:modularize` with
   `vauban.modularize.forceExplicit=true`); `vidocq:dev`, `vidocq:run` and `vidocq:package` are not affected
 - **Symptom**: the image boots (`Application layer ready`, `Started in …`), then the first request to `/` gets no
@@ -878,7 +879,14 @@ where this whole bug class is invisible.
     (Vaadin picks a single non-default `AbstractLookupInitializer` among the `@HandlesTypes` classes, which Foy
     passes) whose `LookupImpl` loads through its own module after `addUses`: jlink image `GET /` 200 with the app
     shell's stylesheet links in the page; `vidocq:package` unchanged (200).
-- **Fix options** (none shipped):
+  - 2026-10-24: the same initializer, shipped in `vidocq-runtime-vaadin-extension`. Foy hands it to Vaadin through the
+    `META-INF/foy/class-index.list` Foy's processor writes into the extension's jar. Under `vidocq:package` its
+    `io.vidocq` module name first kept it, and `flow.server` it requires, in the runtime's layer, away from Vaadin's
+    SLF4J (`NoClassDefFoundError: org/slf4j/Logger` at boot): the jar now carries `Vidocq-Application-Layer: true`,
+    which `LayerSplit` reads to leave it to the application layer. Same application, its `AppShell` kept, the
+    extension as its only addition: jlink image `GET /` 200 with the stylesheet links, `vidocq:package` 200 with
+    them; without the extension the image still fails.
+- **Fix options** (option 1 shipped):
   1. Ship that `LookupInitializer` in a Vidocq Vaadin integration module the application depends on — Vaadin-specific,
      a new artifact.
   2. `vauban:modularize` rewrites, in the copies it patches, every `ServiceLoader.load(Class…)` call whose service type

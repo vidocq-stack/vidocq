@@ -30,6 +30,7 @@
         <module>vidocq-runtime-foy-servlet-extension-dev</module>
         <module>vidocq-runtime-ibarra-pages-extension</module>
         <module>vidocq-runtime-naming-extension</module>
+        <module>vidocq-runtime-vaadin-extension</module>
     </modules>
 
     <build>

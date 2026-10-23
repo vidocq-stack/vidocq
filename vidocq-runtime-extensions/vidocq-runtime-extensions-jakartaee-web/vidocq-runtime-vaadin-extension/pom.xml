@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-vaadin-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Vaadin</name>
+    <description>Vidocq Runtime integration of a Vaadin Flow application: a Vaadin lookup that loads services
+        from a module of its own, so an AppShellConfigurator works in a jlink image</description>
+
+    <properties>
+        <!-- Compiled against; the application's Vaadin BOM picks the version it runs with. -->
+        <vaadin.flow.version>25.3.4</vaadin.flow.version>
+    </properties>
+
+    <dependencies>
+        <!-- provided: the application brings Vaadin, at the version of its own BOM. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>flow-server</artifactId>
+            <version>${vaadin.flow.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- LookupInitializer.initialize declares ServletException. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Foy's processor writes META-INF/foy/class-index.list: through it Foy hands
+                         ModuleLookupInitializer to Vaadin's @HandlesTypes initializer. -->
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.foy</groupId>
+                            <artifactId>foy-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Vaadin lives in the application layer (vidocq.app.layer=all): this module goes with it, where
+                 its io.vidocq name would keep it, and flow.server it requires, in the runtime's layer. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Vidocq-Application-Layer>true</Vidocq-Application-Layer>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+            <!-- The tests read their providers from META-INF/services, which only the class path offers. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

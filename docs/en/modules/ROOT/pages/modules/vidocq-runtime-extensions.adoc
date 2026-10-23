@@ -62,6 +62,10 @@
 | `jakartaee-web`
 | Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
 
+| `vidocq-runtime-vaadin-extension` [.tag-new]#NEW#
+| `jakartaee-web`
+| What a Vaadin Flow application needs from Vidocq: a Vaadin lookup that loads services from a module of its own, so an `AppShellConfigurator` works in a jlink image. See <<vaadin>>.
+
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
 | JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
@@ -368,6 +372,29 @@ The `naming` section of the startup report says which factory answers `java:` na
 An application or a library can also declare names in code, with a `JndiBindings` bean, and answer names not known in advance with a `JndiNameProvider` bean: see xref:vauban::jndi.adoc[Vauban Naming].
 
 Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-ref` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
+
+[[vaadin]]
+== Vaadin [.tag-new]#NEW#
+
+A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Vaadin guide]). `vidocq-runtime-vaadin-extension` is the part Vaadin needs from Vidocq itself: today, a Vaadin lookup that lets an `AppShellConfigurator` work in a jlink image (BUG-20261023-06).
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-vaadin-extension</artifactId>
+</dependency>
+----
+
+The application's module requires `io.vidocq.runtime.extensions.jakartaee.web.vaadin`, which resolves the extension in its layer; `vidocq extension add vaadin` adds the dependency and that directive. No codegen bundle.
+
+*What it does.* Vaadin creates the app shell, among others, with `Lookup.lookup(type)`, and its own lookup calls `ServiceLoader.load(type)` from `flow.server` for a type it registered no service for, the application's `AppShellConfigurator` included. `ServiceLoader` accepts only the types the calling module declares with `uses`, and the descriptor `vauban:modularize` writes for `flow.server` in a jlink image cannot name an application class without a dependency cycle. The extension's `ModuleLookupInitializer` replaces Vaadin's lookup: the services Vaadin registered come first, and any other type is loaded by `ServiceLoader` from the extension's module, which first declares the use with `Module.addUses` (a module may add a use to itself). On an automatic `flow.server`, under `vidocq:dev`, `vidocq:run` and `vidocq:package`, it changes nothing.
+
+*How Vaadin finds it.* Vaadin uses the one `AbstractLookupInitializer` its `@HandlesTypes` finds besides its own. The extension is compiled with Foy's processor, so its jar ships `META-INF/foy/class-index.list`, and Foy hands the class to Vaadin as it does the application's classes. An application that ships a `LookupInitializer` of its own cannot add the extension: Vaadin refuses two.
+
+*Its layer.* Vaadin must be in the application layer (`vidocq.app.layer=all`, see xref:vaadin.adoc#app-layer[the guide]). A module named `io.vidocq.…` stays in the runtime's layer, with what it requires, so the extension's jar carries the `Vidocq-Application-Layer: true` manifest attribute: it goes to the application layer with Vaadin instead of keeping `flow.server` out of it (xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]).
+
+*Dependencies.* The extension depends on Vaadin's `flow-server` at `provided` scope: the application brings Vaadin, at the version its Vaadin BOM chooses, and the extension is compiled against Flow 25.3.4 without imposing it. This is the one third-party API it names, as the workspace rule on what ships requires.
 
 == Typical lifecycle — Chappe example
 
