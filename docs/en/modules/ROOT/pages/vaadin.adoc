@@ -386,7 +386,97 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
 | Every request answers 500 with _Unable to find index.html_.
 | Vaadin is outside the application layer.
 | Set `vidocq.app.layer=all`. See <<app-layer>>.
+
+| [.tag-new]#NEW# In a jlink image only, the first request gets no answer, and the log shows
+_ServiceConfigurationError: com.example.app.AppShell: module flow.server does not declare `uses`_.
+| The application has an `AppShellConfigurator`. Vaadin looks it up through `ServiceLoader` from `flow.server`, which
+the descriptor of a jlink image cannot let use an application class.
+| Add the lookup initializer of <<jlink-app-shell>>.
 |===
+
+[#jlink-app-shell]
+=== An app shell in a jlink image [.tag-new]#NEW#
+
+Vaadin creates the app shell with `Instantiator.getOrCreate`, which first asks its `Lookup` for an implementation of
+the class, and the default `Lookup` calls `ServiceLoader.load` from `flow.server`. `ServiceLoader` accepts only the
+service types the calling module declares with `uses`. `vidocq:package` keeps `flow-server` automatic, and an
+automatic module may use any service, but in a jlink image `flow.server` has a descriptor, and that descriptor cannot
+name a class of your application without a dependency cycle (Vidocq/vidocq BUG-20261023-06).
+
+A module may add a `uses` to itself at run time, with `Module.addUses`. Until Vidocq does it for you, add this class
+to the application. Vaadin uses a `LookupInitializer` subclass it finds in the application in place of its own, and
+this one calls `ServiceLoader` from your module once it has declared the use:
+
+[source,java]
+----
+package com.example.app;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.function.BiFunction;
+
+import com.vaadin.flow.di.Lookup;
+import com.vaadin.flow.di.LookupInitializer;
+import com.vaadin.flow.server.VaadinContext;
+
+/** Looks services up from this module, which may declare any use at run time. */
+public class ModuleLookupInitializer extends LookupInitializer {
+
+    @Override
+    protected Lookup createLookup(VaadinContext context, Map<Class<?>, Collection<Class<?>>> services) {
+        return new ModuleLookup(services, this::instantiate);
+    }
+
+    static final class ModuleLookup extends LookupImpl {
+
+        ModuleLookup(Map<Class<?>, Collection<Class<?>>> services, BiFunction<Class<?>, Class<?>, Object> factory) {
+            super(services, factory);
+        }
+
+        @Override
+        public <T> T lookup(Class<T> serviceClass) {
+            Collection<Object> registered = serviceMap.get(serviceClass);
+            if (registered != null && !registered.isEmpty()) {
+                return super.lookup(serviceClass);
+            }
+            List<T> found = load(serviceClass);
+            if (found.size() > 1) {
+                throw new IllegalStateException("Several implementations of " + serviceClass + ": " + found);
+            }
+            return found.isEmpty() ? null : found.get(0);
+        }
+
+        @Override
+        public <T> Collection<T> lookupAll(Class<T> serviceClass) {
+            List<T> result = new ArrayList<>();
+            Collection<Object> registered = serviceMap.get(serviceClass);
+            if (registered != null) {
+                registered.forEach(service -> result.add(serviceClass.cast(service)));
+            }
+            for (T next : load(serviceClass)) {
+                if (result.stream().noneMatch(r -> r.getClass().equals(next.getClass()))) {
+                    result.add(next);
+                }
+            }
+            return result;
+        }
+
+        private static <T> List<T> load(Class<T> serviceClass) {
+            ModuleLookup.class.getModule().addUses(serviceClass);
+            List<T> found = new ArrayList<>();
+            ServiceLoader.load(serviceClass).forEach(found::add);
+            return found;
+        }
+    }
+}
+----
+
+The class changes nothing under `vidocq:dev`, `vidocq:run` or `vidocq:package`. It was checked with one
+`AppShellConfigurator` (its stylesheet links reach the page); whether it also lifts the Collaboration Engine and
+LitTemplate limit below was not checked.
 
 [#limits]
 == Known limits [.tag-new]#NEW#
@@ -395,5 +485,6 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
   round-trips, push, websockets and the routes of a real application were not exercised in this setup.
 * `vidocq.app.layer=classes` does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
+* [.tag-new]#NEW# In a jlink image, an `AppShellConfigurator` needs the lookup initializer of <<jlink-app-shell>>.
 * What only Vaadin can change (the shared resource directory, stable module names, the `Lookup` cycle, resource lookups
   through the context class loader) is collected in Vidocq/vidocq#256.

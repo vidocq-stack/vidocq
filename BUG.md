@@ -845,3 +845,43 @@ where this whole bug class is invisible.
     follow-up of #307.
 - **Fix**: once the bare compiler plugin is gone, the project build's `plugins` and then `build` are
   removed too when empty.
+
+## BUG-20261023-06 — in a jlink image, a Vaadin `AppShellConfigurator` makes every page answer with a reset connection
+
+- **Date**: 2026-10-23
+- **Status**: OPEN — documented workaround (`vaadin.adoc`, troubleshooting); a shipped fix needs a decision
+  (see Fix options)
+- **Affected module**: the jlink image of a Vaadin application (`vidocq:jlink` + `vauban:modularize` with
+  `vauban.modularize.forceExplicit=true`); `vidocq:dev`, `vidocq:run` and `vidocq:package` are not affected
+- **Symptom**: the image boots (`Application layer ready`, `Started in …`), then the first request to `/` gets no
+  answer and the log shows
+  `java.util.ServiceConfigurationError: org.tlr.AppShell: module flow.server does not declare 'uses'`, from
+  `LookupInitializer$LookupImpl.lookup` ← `DefaultInstantiator.getOrCreate` ← `AppShellRegistry.modifyIndexHtml`
+  ← `IndexHtmlRequestHandler`. Identical with or without a `@VidocqMain` trampoline; gone when the
+  application has no `AppShellConfigurator` class.
+- **Minimal reproduction**: a Vaadin 25.3 application of the `vaadin.adoc` setup, with one class
+  `public class AppShell implements AppShellConfigurator { … }`, `vauban:modularize` in `all-automatic` mode, then
+  `mvn clean package vidocq:jlink -Dvidocq.jlink.mergeSharedResources=true -Dvauban.modularize.forceExplicit=true`,
+  `JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true target/dist/bin/<app>`, `curl localhost:8080/`.
+- **Cause**: Vaadin creates the app shell with `Instantiator.getOrCreate(appShellClass)`, and
+  `DefaultInstantiator.getOrCreate` first asks `Lookup.lookup(type)`, which runs `ServiceLoader.load(type)` from
+  `flow.server` for any type it has no registered service for — here the application's own class. `ServiceLoader`
+  checks that the calling module declares `uses` for the type. An automatic `flow.server` (`vidocq:package`) may use
+  any service; the descriptor `vauban:modularize` gives it for `jlink` can only list the service types the bytecode
+  names (`I18NProvider`, `RoutePathProvider`, …), never an application class, which would need a dependency cycle.
+  Same family as the documented Collaboration Engine / LitTemplate limit (`Lookup.lookupAll` on behalf of other
+  modules).
+- **Investigations**:
+  - 2026-10-23: reproduced on a copy of a Vaadin 25.3.3 application, main-less and with a trampoline (identical).
+    `Module.addUses` is allowed when the caller is the module itself, so a `ServiceLoader` call made from a module
+    that first calls `getModule().addUses(type)` passes. Proof: a `LookupInitializer` subclass in the application
+    (Vaadin picks a single non-default `AbstractLookupInitializer` among the `@HandlesTypes` classes, which Foy
+    passes) whose `LookupImpl` loads through its own module after `addUses`: jlink image `GET /` 200 with the app
+    shell's stylesheet links in the page; `vidocq:package` unchanged (200).
+- **Fix options** (none shipped):
+  1. Ship that `LookupInitializer` in a Vidocq Vaadin integration module the application depends on — Vaadin-specific,
+     a new artifact.
+  2. `vauban:modularize` rewrites, in the copies it patches, every `ServiceLoader.load(Class…)` call whose service type
+     is not a constant into `getModule().addUses(type)` + the call, with the Class-File API — generic, and would also
+     lift the Collaboration Engine / LitTemplate limit, but it changes third-party bytecode (licence gate to review).
+  3. Vaadin calls `ServiceLoader` only for real service types in `getOrCreate` (upstream, Vidocq/vidocq#256).
