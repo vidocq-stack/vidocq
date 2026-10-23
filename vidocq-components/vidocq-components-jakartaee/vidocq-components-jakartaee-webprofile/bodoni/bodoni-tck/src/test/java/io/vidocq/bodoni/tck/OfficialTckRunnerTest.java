@@ -63,12 +63,12 @@ class OfficialTckRunnerTest {
     private static final String PACKAGE = "com.sun.ts.tests.jstl.";
     private static final String CLIENT = ".JSTLClientIT";
     private static final String SMOKE = "-Dtest=" + String.join(",",
-            PACKAGE + "spec.core.general.outtag" + CLIENT,
+            PACKAGE + "spec.core.general.remove" + CLIENT,
             PACKAGE + "spec.etu.functions" + CLIENT,
             PACKAGE + "spec.etu.uri" + CLIENT,
-            PACKAGE + "spec.fmt.i18n.bundle" + CLIENT,
-            PACKAGE + "spec.xml.xmlcore.xout" + CLIENT,
-            PACKAGE + "spec.sql.result" + CLIENT);
+            PACKAGE + "spec.fmt.i18n.param" + CLIENT,
+            PACKAGE + "spec.sql.setdatasource" + CLIENT,
+            PACKAGE + "spec.xml.xmlcore.bindings" + CLIENT);
     private static final List<String> RUNNER_TESTS = List.of("-ntp", "-Ptck", "-pl", "bodoni-tck", "test");
     private static final List<String> OFFICIAL_SUITE =
             List.of("-ntp", "-Ptck,tck-official", "-pl", "bodoni-tck", "test");

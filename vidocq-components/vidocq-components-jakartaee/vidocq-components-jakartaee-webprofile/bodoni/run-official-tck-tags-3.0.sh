@@ -28,7 +28,7 @@ zip_sha256='996c9abc6561134cea986107da0648c2a33277d2f765475994ff9b16da70cb5a'
 distribution_dir='bodoni-tck/target/tags-tck-distribution'
 ddl_entry='tags-tck/sql/derby/derby.ddl.jstl.sql'
 ddl="$distribution_dir/$ddl_entry"
-smoke_selection='-Dtest=com.sun.ts.tests.jstl.spec.core.general.outtag.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.functions.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.uri.JSTLClientIT,com.sun.ts.tests.jstl.spec.fmt.i18n.bundle.JSTLClientIT,com.sun.ts.tests.jstl.spec.xml.xmlcore.xout.JSTLClientIT,com.sun.ts.tests.jstl.spec.sql.result.JSTLClientIT'
+smoke_selection='-Dtest=com.sun.ts.tests.jstl.spec.core.general.remove.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.functions.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.uri.JSTLClientIT,com.sun.ts.tests.jstl.spec.fmt.i18n.param.JSTLClientIT,com.sun.ts.tests.jstl.spec.sql.setdatasource.JSTLClientIT,com.sun.ts.tests.jstl.spec.xml.xmlcore.bindings.JSTLClientIT'
 
 prepare=true
 install=true

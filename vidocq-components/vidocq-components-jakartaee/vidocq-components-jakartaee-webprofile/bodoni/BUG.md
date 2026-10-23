@@ -140,3 +140,93 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `sql:dateParam` bind `java.sql.Date`, `Time` and `Timestamp` values with
   `setDate` / `setTime` / `setTimestamp` and a fresh default-zone `Calendar`, which JDBC
   defines as equivalent to the plain setter. Other values keep `setObject`.
+
+## BOD-006 · 2026-10-24 · Translation-time constraints are not enforced: `c:choose` / `x:choose` structure and `scope` without `var`
+
+- Symptom: pages that the spec rejects run and answer HTTP 200. A `c:choose` (or `x:choose`)
+  with no `when`, or with a `when` after the `otherwise`, renders its body; a `scope` without
+  `var` on `x:if`, `x:parse`, `fmt:formatDate` and `fmt:formatNumber` is ignored (the action
+  writes its result to the page). Tags 3.0 §2.7: "Constraints, as defined in the constraints
+  section of each action, must also be reported at translation time"; §5.4 (`c:choose` "can
+  only contain" white space, one or more `c:when` before an optional, last `c:otherwise`),
+  §12.3, §9.7, §9.9 and §12.2 ("If scope is specified, var must also be specified"), §11.2
+  (syntax `{var [scope] | varDom [scopeDom]}`). Found by the B5 baseline (official Tags TCK,
+  9 tests).
+- Minimal repro (official TCK, `jakarta.tck:tags-tck:11.0.3`, each `…JSTLClientIT`):
+  `spec.core.conditional.cwo` and `spec.xml.xconditional.xcwo`
+  `#negativeCWONoWhenActionsTest` (a `choose` holding only a comment) and
+  `#negativeCWOWhenBeforeOtherwiseTest` (`otherwise` before `when`; the page prints
+  "Body improperly processed."); `spec.xml.xconditional.xif#negativeIfScopeVarTest`
+  (`<x:if select="$doc//a" scope="page"/>`); `spec.xml.xmlcore.parse#negativeParseScopeVarSyntaxTest`
+  and `#negativeParseScopeVarDomSyntaxTest` (`<x:parse scope="page">`; the second client method
+  requests the same page as the first); `spec.fmt.format.fmtdate#negativeFDScopeNoVarTest`
+  (`<fmt:formatDate value='<%= new java.util.Date() %>' scope="page"/>` prints the date) and
+  `spec.fmt.format.fmtnum#negativeFNScopeNoVarTest` (`<fmt:formatNumber value="1234" scope="page"/>`
+  prints `1234`). Each expects HTTP 500 and gets 200. Run with
+  `./run-official-tck-tags-3.0.sh -Dtest=<class>`.
+- Cause: Bodoni's TLDs declare no `<validator>` and no `<tei-class>` (B1 decision, PLAN.md
+  "Open interpretations"), and the handlers of these actions do not check the combination at
+  run time either. Where a handler checks at run time (the `sql:` actions, `c:when` /
+  `c:otherwise` outside `choose`, an invalid `scope`), the negative test passes through the
+  run-time `JspTagException`. `fmt:parseDate` and `fmt:parseNumber` have the same gap: their
+  scope-without-var tests pass only because the page sets no locale and the action fails with
+  "no formatting locale". Ibarra runs TLD validators at page `init()` (IBARRA-087), so a
+  `TagLibraryValidator`, or a run-time check in each handler, would turn the 9 tests into
+  HTTP 500.
+- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first.
+
+## BOD-007 · 2026-10-24 · `LocalizationContext` properties are unreadable in Ibarra pages with Peano reflection denied
+
+- Symptom: under `-Dpeano.reflection=deny`, a page that reads `${ctx.resourceBundle}` (or
+  `${ctx.locale}`) of a `LocalizationContext` exported by `fmt:setBundle` answers HTTP 500:
+  `jakarta.el.ELException: Reflection fallback denied for jakarta.servlet.jsp.jstl.fmt.LocalizationContext; register a generated accessor provider or a custom resolver`.
+  Found by the B5 baseline (official Tags TCK, 3 tests); same family as BOD-001.
+- Minimal repro:
+  ```jsp
+  <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+  <fmt:setBundle basename="Resources" var="b"/>${b.resourceBundle == null}
+  ```
+  Official TCK: `spec.fmt.i18n.setbundle.JSTLClientIT#positiveSetBundleFallbackLocaleTest`,
+  `#positiveSetBundleLocaleConfigurationTest` and `#positiveSetBundleBasenameNullEmptyTest`.
+- Cause: `bodoni-peano` registers accessor tables for `LoopTagStatus` and `Result` only
+  (BOD-001); `jakarta.servlet.jsp.jstl.fmt.LocalizationContext` (Tags 3.0 §8.1.1, properties
+  `resourceBundle` and `locale`) has none, so Peano falls back to reflection, which `deny`
+  refuses. Not a handler defect (the `allow` mode was not run by the B5 baseline).
+- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first (a
+  `LocalizationContext` table in `bodoni-peano`).
+
+## BOD-008 · 2026-10-24 · `fmt:message` with a `bundle` attribute does not set the response locale
+
+- Symptom: `<fmt:message key="k" bundle="${ctx}"/>` prints the right message, but never calls
+  `ServletResponse.setLocale` with the locale of `ctx`, so the response locale and the
+  `jakarta.servlet.jsp.jstl.fmt.request.charset` session attribute are not set. Tags 3.0 §8.4:
+  "Any i18n action that establishes a localization context is responsible for setting the
+  response's locale of its page", including "Any <fmt:message> action that establishes an i18n
+  localization context". Found by the B5 baseline (official Tags TCK, 2 tests).
+- Minimal repro: official TCK `spec.fmt.i18n.responseencoding.JSTLClientIT`
+  `#positiveResponseEncodingTest` and `#positiveResponseSetCharEncodingAttrTest`, fourth request
+  (`?action=message`): the page passes the `LocalizationContext` that an earlier `fmt:setBundle`
+  stored in application scope to `fmt:message bundle='<%= … %>'`. The response body is right
+  (`en message`), but the expected `setlocale: en` header (respectively `charset: attribute set`)
+  is missing. The `locale`, `bundle` and `setbundle` requests of the same tests pass.
+- Cause: `MessageTag.resolve()` takes the `bundle` attribute's context as is; only the enclosing
+  `fmt:bundle` and the default-context path (`FmtSupport.defaultContext`) call
+  `I18n.setResponseLocale`.
+- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first.
+
+## BOD-009 · 2026-10-24 · `c:forTokens` does not accept a deferred `items`
+
+- Symptom: `<c:forTokens items="#{golf}" delims="[]" var="item">` fails to translate:
+  `Page translation failed: /positiveForTokensDeferredValueTest.jsp:29:4: Deferred action attributes require tag-handler support`.
+  Tags 3.0 §6.3 "Deferred Values": "See Section "Deferred Values" for <c:forEach>. Same comments
+  apply here" (§6.2: a deferred `items` makes the iteration variable available as a deferred
+  value through the `VariableMapper`). Found by the B5 baseline (official Tags TCK, 1 test).
+- Minimal repro: official TCK
+  `spec.core.iteration.fortokens.JSTLClientIT#positiveForTokensDeferredValueTest`
+  (`<c:set var="golf" value="#{'[Tiger Woods][Robert Trent Jones][Pebble Beach]'}"/>`, then
+  `c:forTokens items="#{golf}"` with `<tck:save attr="#{item}"/>` in the body).
+- Cause: Bodoni's `c.tld` declares `c:forTokens` `items` as `rtexprvalue` of type
+  `java.lang.String` without `<deferred-value>` (`c:forEach` `items` and `c:set` `value` have it),
+  and `ForTokensTag.setItems(String)` takes no `ValueExpression`, so Ibarra rejects the `#{…}`
+  value at translation time.
+- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first (TLD and handler).
