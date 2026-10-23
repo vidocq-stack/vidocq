@@ -29,10 +29,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A recording {@link Connection} double: {@link #proxy()} delegates every call to a real
@@ -41,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code commit()}, {@code rollback()}, {@code close()}) in call order, a call being logged
  * before it runs. The statements it creates, and the result sets those return, are proxies
  * too, so that {@link #failOn(String)} reaches them and {@link #unclosed()} can count them.
+ * Single-threaded, as the tests that use it.
  */
 public final class RecordingConnection implements InvocationHandler {
 
@@ -49,10 +49,11 @@ public final class RecordingConnection implements InvocationHandler {
 
     private final Connection real;
     private final Connection proxy;
-    private final List<String> log = Collections.synchronizedList(new ArrayList<>());
-    private final Set<String> failing = ConcurrentHashMap.newKeySet();
-    private final List<Tracked> tracked = Collections.synchronizedList(new ArrayList<>());
-    private volatile Integer isolation;
+    private final List<String> log = new ArrayList<>();
+    private final Set<String> failing = new HashSet<>();
+    private final Set<String> failingOnConnection = new HashSet<>();
+    private final List<Tracked> tracked = new ArrayList<>();
+    private Integer isolation;
 
     RecordingConnection(Connection real) {
         this.real = real;
@@ -85,11 +86,18 @@ public final class RecordingConnection implements InvocationHandler {
         return this;
     }
 
+    /**
+     * Makes the method named {@code method} of the connection only, not of its statements and
+     * result sets, throw {@code SQLException("injected <method>")} from now on.
+     */
+    public RecordingConnection failOnConnection(String method) {
+        failingOnConnection.add(method);
+        return this;
+    }
+
     /** The number of statements and result sets created through this connection and not closed. */
     public int unclosed() {
-        synchronized (tracked) {
-            return (int) tracked.stream().filter(t -> !t.closed).count();
-        }
+        return (int) tracked.stream().filter(t -> !t.closed).count();
     }
 
     @Override
@@ -99,6 +107,9 @@ public final class RecordingConnection implements InvocationHandler {
             log.add(name + "(" + (args == null ? "" : args[0]) + ")");
         }
         failIfAsked(name);
+        if (failingOnConnection.contains(name)) {
+            throw new SQLException("injected " + name);
+        }
         if (isolation != null && name.equals("getTransactionIsolation")) {
             return isolation;
         }
@@ -136,7 +147,7 @@ public final class RecordingConnection implements InvocationHandler {
     private final class Tracked implements InvocationHandler {
 
         private final Object target;
-        private volatile boolean closed;
+        private boolean closed;
 
         Tracked(Object target) {
             this.target = target;

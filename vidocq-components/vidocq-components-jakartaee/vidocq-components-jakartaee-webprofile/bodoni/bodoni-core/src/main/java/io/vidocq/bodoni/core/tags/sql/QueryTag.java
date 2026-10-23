@@ -48,6 +48,9 @@ public class QueryTag extends ExecutionTagSupport {
     private boolean maxRowsSpecified;
     private int startRow;
 
+    /** The limit of the current invocation: the attribute, else the setting, else {@code -1}. */
+    private int limit = -1;
+
     /** Creates the handler. */
     public QueryTag() {
         super(ACTION);
@@ -64,24 +67,25 @@ public class QueryTag extends ExecutionTagSupport {
         this.startRow = startRow;
     }
 
+    /** Checks {@code var}, {@code maxRows} and {@code startRow}, before any connection is opened. */
     @Override
     public int doStartTag() throws JspException {
         int result = super.doStartTag();
         if (!hasVar()) {
             throw new JspTagException(ACTION + ": var must be set");
         }
-        return result;
-    }
-
-    @Override
-    protected Object execute(PreparedStatement statement) throws SQLException, JspTagException {
-        int limit = maxRowsSpecified ? maxRows : SqlSupport.maxRowsSetting(pageContext);
+        limit = maxRowsSpecified ? maxRows : SqlSupport.maxRowsSetting(pageContext);
         if (limit < -1) {
             throw new JspTagException(ACTION + ": maxRows must be -1 or more, got " + limit);
         }
         if (startRow < 0) {
             throw new JspTagException(ACTION + ": startRow must be 0 or more, got " + startRow);
         }
+        return result;
+    }
+
+    @Override
+    protected Object execute(PreparedStatement statement) throws SQLException {
         if (limit != -1) {
             long fetched = (long) startRow + limit + 1;
             if (fetched <= Integer.MAX_VALUE) {

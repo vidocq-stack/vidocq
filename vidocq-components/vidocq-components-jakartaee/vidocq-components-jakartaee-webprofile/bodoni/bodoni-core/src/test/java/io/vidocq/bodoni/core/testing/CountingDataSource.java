@@ -26,7 +26,6 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -43,8 +42,8 @@ public final class CountingDataSource implements DataSource {
     private static final String USER = "sa";
 
     private final String url;
-    private final List<RecordingConnection> connections = Collections.synchronizedList(new ArrayList<>());
-    private volatile Consumer<RecordingConnection> onOpen = c -> { };
+    private final List<RecordingConnection> connections = new ArrayList<>();
+    private Consumer<RecordingConnection> onOpen = c -> { };
 
     public CountingDataSource(String url) {
         this.url = url;

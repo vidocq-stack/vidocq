@@ -36,7 +36,6 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
-import io.vidocq.bodoni.core.internal.DriverManagerDataSource;
 import io.vidocq.bodoni.core.testing.CountingDataSource;
 import io.vidocq.bodoni.core.testing.TestDatabase;
 import io.vidocq.bodoni.core.testing.TestHttpServletRequest;
@@ -77,45 +76,51 @@ class SqlSupportTest {
 
     @Test
     void aSpecifiedNullDataSourceFails() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.dataSource(ACTION, true, null, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, null, pc));
         assertEquals("sql:query: dataSource is null", e.getMessage());
     }
 
     @Test
     void noAttributeAndNoSettingFails() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.dataSource(ACTION, false, null, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, false, null, pc));
         assertEquals("sql:query: no data source: neither the dataSource attribute nor "
                 + "jakarta.servlet.jsp.jstl.sql.dataSource is set", e.getMessage());
     }
 
     @Test
-    void theSettingIsUsedWithoutAnAttribute() throws JspException {
-        DataSource ds = new CountingDataSource(db.url());
+    void theSettingIsUsedWithoutAnAttribute() throws JspException, SQLException {
+        CountingDataSource ds = new CountingDataSource(db.url());
         Config.set(pc, Config.SQL_DATA_SOURCE, ds, PageContext.REQUEST_SCOPE);
-        assertSame(ds, SqlSupport.dataSource(ACTION, false, null, pc));
+        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc);
+        try (Connection c = opened.connection()) {
+            assertSame(ds.connections().get(0).proxy(), c);
+        }
+        assertEquals(CountingDataSource.class.getName(), opened.source());
     }
 
     @Test
     void theContextParameterIsAJdbcParameterString() throws JspException, SQLException {
         context.initParameter(Config.SQL_DATA_SOURCE, db.jdbcParameters());
-        DataSource ds = SqlSupport.dataSource(ACTION, false, null, pc);
-        assertInstanceOf(DriverManagerDataSource.class, ds);
-        try (Connection c = ds.getConnection()) {
+        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc);
+        try (Connection c = opened.connection()) {
             assertFalse(c.isClosed());
         }
+        assertTrue(opened.source().startsWith("jdbc:h2:mem:bodoni-"), opened.source());
     }
 
     /** TCK {@code positiveQueryDataSourceConfigPrecedenceTest}. */
     @Test
-    void theAttributeWinsOverTheSetting() throws JspException {
-        DataSource attribute = new CountingDataSource(db.url());
+    void theAttributeWinsOverTheSetting() throws JspException, SQLException {
+        CountingDataSource attribute = new CountingDataSource(db.url());
         Config.set(pc, Config.SQL_DATA_SOURCE, new Books.Unconfigured(), PageContext.REQUEST_SCOPE);
-        assertSame(attribute, SqlSupport.dataSource(ACTION, true, attribute, pc));
+        try (Connection c = SqlSupport.open(ACTION, true, attribute, pc).connection()) {
+            assertSame(attribute.connections().get(0).proxy(), c);
+        }
     }
 
     @Test
     void aResolutionFailureNamesTheAction() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.dataSource(ACTION, true, 1, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, 1, pc));
         assertTrue(e.getMessage().startsWith("sql:query: "), e.getMessage());
         assertTrue(e.getMessage().contains("java.lang.Integer"), e.getMessage());
         assertInstanceOf(SQLException.class, e.getCause());

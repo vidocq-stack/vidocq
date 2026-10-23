@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
+import java.util.ArrayList;
 import java.util.List;
 
 import io.vidocq.bodoni.core.testing.Body;
@@ -154,6 +155,27 @@ class TransactionTagTest {
     }
 
     @Test
+    void aFailingRollbackIsSuppressedOnTheRethrownFailure() {
+        ds.onOpen(c -> c.failOn("rollback"));
+        TransactionTag tx = transaction(null);
+        Body body = running(tx, update(DUPLICATE));
+        JspException e = assertThrows(JspException.class, () -> TagHarness.run(tx, pc, body));
+        assertTrue(e.getMessage().startsWith("sql:update: cannot execute"), e.getMessage());
+        assertEquals(1, e.getSuppressed().length);
+        assertEquals("injected rollback", e.getSuppressed()[0].getMessage());
+        assertEquals(List.of(GET_ISOLATION, GET_AUTO_COMMIT, AUTO_COMMIT_OFF, ROLLBACK, AUTO_COMMIT_ON, CLOSE), log(0));
+    }
+
+    @Test
+    void aFailureWhileStartingClosesTheConnection() {
+        ds.onOpen(c -> c.failOn("getAutoCommit"));
+        TransactionTag tx = transaction(null);
+        JspException e = assertThrows(JspException.class, () -> TagHarness.run(tx, pc, Body.EMPTY));
+        assertEquals("sql:transaction: cannot start the transaction: injected getAutoCommit", e.getMessage());
+        assertEquals(List.of(GET_ISOLATION, GET_AUTO_COMMIT, CLOSE), log(0));
+    }
+
+    @Test
     void aFailingCommitRollsBack() {
         ds.onOpen(c -> c.failOn("commit"));
         TransactionTag tx = transaction(null);
@@ -224,7 +246,14 @@ class TransactionTagTest {
         QueryTag query = new QueryTag();
         query.setSql(NEW_BOOKS);
         query.setVar("r");
-        TagHarness.run(tx, pc, running(tx, update(INSERT_4), query));
+        List<List<Object>> seenOutside = new ArrayList<>();
+        Body body = p -> {
+            running(tx, update(INSERT_4)).render(p);
+            seenOutside.addAll(db.rows(NEW_BOOKS));
+            running(tx, query).render(p);
+        };
+        TagHarness.run(tx, pc, body);
+        assertEquals(List.of(), seenOutside);
         Result result = (Result) pc.getAttribute("r");
         assertEquals("Bodoni", result.getRows()[0].get("title"));
         assertEquals(1, ds.opened());

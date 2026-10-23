@@ -171,6 +171,15 @@ class QueryTagTest {
         tag.setMaxRows(-5);
         JspTagException e = assertThrows(JspTagException.class, () -> run(tag, Body.NONE));
         assertEquals("sql:query: maxRows must be -1 or more, got -5", e.getMessage());
+        assertEquals(0, ds.opened());
+    }
+
+    @Test
+    void anInvalidMaxRowsSettingFailsBeforeConnecting() {
+        context.initParameter(Config.SQL_MAX_ROWS, "invalid");
+        QueryTag tag = query(Books.ALL);
+        assertThrows(JspTagException.class, () -> run(tag, Body.NONE));
+        assertEquals(0, ds.opened());
     }
 
     @Test
@@ -194,7 +203,9 @@ class QueryTagTest {
     void maxRowsZeroGivesAnEmptyResult() throws Exception {
         QueryTag tag = query(Books.ALL);
         tag.setMaxRows(0);
-        assertEquals(0, run(tag, Body.NONE).getRowCount());
+        Result result = run(tag, Body.NONE);
+        assertEquals(0, result.getRowCount());
+        assertTrue(result.isLimitedByMaxRows());
     }
 
     @Test
@@ -211,6 +222,7 @@ class QueryTagTest {
         tag.setStartRow(-1);
         JspTagException e = assertThrows(JspTagException.class, () -> run(tag, Body.NONE));
         assertEquals("sql:query: startRow must be 0 or more, got -1", e.getMessage());
+        assertEquals(0, ds.opened());
     }
 
     /** TCK {@code positiveQueryEmptyResultTest}. */
@@ -332,6 +344,25 @@ class QueryTagTest {
         JspException e = assertThrows(JspException.class, () -> run(query(Books.ALL), Body.NONE));
         assertEquals("injected getObject", e.getCause().getMessage());
         assertReleased();
+    }
+
+    @Test
+    void aFailingCloseIsReportedAsSuch() {
+        ds.onOpen(c -> c.failOnConnection("close"));
+        JspException e = assertThrows(JspException.class, () -> run(query(Books.ALL), Body.NONE));
+        assertEquals("sql:query: cannot close the connection to " + CountingDataSource.class.getName()
+                + ": injected close", e.getMessage());
+        assertInstanceOf(SQLException.class, e.getCause());
+        assertEquals(0, ds.connections().get(0).unclosed());
+    }
+
+    @Test
+    void aFailingCloseAfterAFailingStatementIsSuppressed() {
+        ds.onOpen(c -> c.failOnConnection("close"));
+        JspException e = assertThrows(JspException.class, () -> run(query(BAD_SQL), Body.NONE));
+        assertTrue(e.getMessage().startsWith("sql:query: cannot execute \"" + BAD_SQL + "\": "), e.getMessage());
+        assertEquals(1, e.getSuppressed().length);
+        assertEquals("injected close", e.getSuppressed()[0].getMessage());
     }
 
     // ---- reuse: per-invocation state is reset ---------------------------------------------------

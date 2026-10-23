@@ -136,10 +136,9 @@ abstract class ExecutionTagSupport extends BodyTagSupport implements SQLExecutio
      *
      * @param statement the statement, closed by the caller
      * @return the value exported to {@code var}
-     * @throws SQLException    when the database fails
-     * @throws JspTagException when an attribute of the action is invalid
+     * @throws SQLException when the database fails
      */
-    protected abstract Object execute(PreparedStatement statement) throws SQLException, JspTagException;
+    protected abstract Object execute(PreparedStatement statement) throws SQLException;
 
     /** Whether {@code var} was set. */
     final boolean hasVar() {
@@ -159,13 +158,18 @@ abstract class ExecutionTagSupport extends BodyTagSupport implements SQLExecutio
         return bodyContent == null ? null : bodyContent.getString().trim();
     }
 
-    /** Runs {@code statement} on a connection of its own, closed here. */
+    /**
+     * Runs {@code statement} on a connection of its own, closed here. A failure to close it is
+     * reported as such; after a failing statement it is suppressed on the statement's failure.
+     */
     private Object executeOwned(String statement) throws JspException {
-        try (Connection connection = SqlSupport.open(action, dataSourceSpecified, dataSource, pageContext)) {
+        SqlSupport.Opened opened = SqlSupport.open(action, dataSourceSpecified, dataSource, pageContext);
+        try (Connection connection = opened.connection()) {
             return executeOn(connection, statement);
         } catch (SQLException e) {
-            // only closing the connection can fail here
-            throw failure(statement, e);
+            // executeOn turns its own SQLExceptions into JspExceptions: this one comes from close()
+            throw new JspException(action + ": cannot close the connection to " + opened.source() + ": "
+                    + e.getMessage(), e);
         }
     }
 
@@ -173,7 +177,8 @@ abstract class ExecutionTagSupport extends BodyTagSupport implements SQLExecutio
     private Object executeShared(TransactionTag transaction, String statement) throws JspException {
         Connection connection = transaction.connection();
         if (connection == null) {
-            throw new JspTagException(action + ": the enclosing <sql:transaction> has no open connection");
+            throw new IllegalStateException("an enclosing sql:transaction always holds an open connection "
+                    + "while its body runs: its doStartTag opens it before the body");
         }
         return executeOn(connection, statement);
     }

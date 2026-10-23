@@ -56,30 +56,30 @@ final class SqlSupport {
     }
 
     /**
-     * The data source of an action, Tags 3.0 §10.2: the {@code dataSource} attribute when it was
-     * specified, else the {@link Config#SQL_DATA_SOURCE} setting.
+     * A connection the caller owns and closes, with the description of its source for messages.
+     *
+     * @param connection the open connection
+     * @param source     the data source the page gave, described without credentials
+     */
+    record Opened(Connection connection, String source) {
+    }
+
+    /**
+     * Opens a connection on the data source of an action, Tags 3.0 §10.2: the {@code dataSource}
+     * attribute when it was specified, else the {@link Config#SQL_DATA_SOURCE} setting.
      *
      * @param action    the action name, for messages
      * @param specified whether the {@code dataSource} attribute was set, even to {@code null}
      * @param attribute the attribute value
      * @param pc        the page context the setting is looked up in
-     * @return the resolved data source
-     * @throws JspException when the attribute is {@code null}, nothing is configured, or the
-     *                      source cannot be resolved
+     * @return the connection, which the caller closes, and its described source
+     * @throws JspException when the attribute is {@code null}, nothing is configured, the source
+     *                      cannot be resolved or no connection can be obtained
      */
-    static DataSource dataSource(String action, boolean specified, Object attribute, PageContext pc)
-            throws JspException {
-        return resolve(action, source(action, specified, attribute, pc));
-    }
-
-    /**
-     * Opens a connection on the data source of an action ({@link #dataSource}, then
-     * {@link #connect}); the caller closes it.
-     */
-    static Connection open(String action, boolean specified, Object attribute, PageContext pc)
+    static Opened open(String action, boolean specified, Object attribute, PageContext pc)
             throws JspException {
         Object source = source(action, specified, attribute, pc);
-        return connect(action, resolve(action, source), source);
+        return new Opened(connect(action, resolve(action, source), source), DataSources.describe(source));
     }
 
     /**
