@@ -78,13 +78,14 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
   on-disk cache (`~/.vidocq/registry-cache.json`) → built-in offline catalog. The source is
   reported so the user knows whether the data is live, cached, or offline.
 
-**Components** (pure/injectable where possible): `ext/ExtensionCoordinate` (GA value type +
-dependency XML), `ext/RegistryEntry`, `ext/KnownExtensions` (catalog + resolver; the catalog is built from each
-extension's `META-INF/vidocq/extension.properties`, #314),
-`ext/PomDependencies` (StAX reader), `ext/PomEditor` (pure text add/remove returning
-`Result(pom, changed)`), `ext/MiniJson` (tiny zero-dep JSON reader),
+**Components** (pure/injectable where possible): `ext/MiniJson` (tiny zero-dep JSON reader),
 `ext/ExtensionRegistry` (remote→cache→catalog strategy with an injectable `Fetcher`),
-`ext/HttpRegistryFetcher` (real `HttpClient` fetch). Wired in `CommandRunner`.
+`ext/HttpRegistryFetcher` (real `HttpClient` fetch). Wired in `CommandRunner`. Since #314 the editing
+lives in `vidocq-runtime-tooling`, shared with `vidocq:add-extension` / `remove-extension`:
+`ExtensionCoordinate` (GA value type + dependency XML), `RegistryEntry`, `KnownExtensions` (catalog +
+resolver; the catalog is built from each extension's `META-INF/vidocq/extension.properties`),
+`PomDependencies` (StAX reader), `PomEditor` (pure text add/remove returning `Result(pom, changed)`),
+`ModuleInfoEditor`, and `ExtensionEditor`, the add/remove flow, which reports through a `Reporter`.
 
 > **Scope (honest):** the registry endpoint (`registry.vidocq.dev`) is not yet live, so in
 > practice `list --available` serves the built-in catalog; the remote + cache paths are

@@ -43,6 +43,7 @@ Root reactor modules (`pom.xml`):
 - `vidocq-runtime-core` — lifecycle orchestrator, `ServiceLoader` discovery, bean scan.
 - `vidocq-runtime-core-codegen` — Vauban indexer APT bundle (wired globally via root `pluginManagement`).
 - `vidocq-runtime-extensions/` — delivered extensions, grouped by domain: `*-essentials` (Chappe HTTP), `*-jakartaee-core` (Cassini REST), `*-jakartaee-web` (Mansart data/pool/transactions), `*-microprofile` (config, rest-client, jwt, telemetry, health, metrics, openapi), `*-jpms-repackaged` (third-party JPMS repackages).
+- `vidocq-runtime-tooling` — project editing shared by the CLI and the plugin (extension catalog, pom and `module-info.java` editors), `java.xml` only.
 - `vidocq-runtime-maven-plugin`, `vidocq-runtime-cli`, `vidocq-runtime-integration-tests` (Arquillian ITs), `vidocq-runtime-examples`.
 
 ## Extension model & codenames
@@ -93,7 +94,8 @@ on every change, keys `r`/`f`/`q`), `idea` (experimental, command line only: Int
 `.run/`, never `.idea/`; by default, per application, a Maven run of `vidocq:dev` suffixed ` (dev)`, one of `vidocq:run`
 suffixed ` (run)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
 Application run of the main class instead, with no console). `package`, `jlink`, `jpackage` and `docker` all
-drop a dev-only jar even if declared, with a warning.
+drop a dev-only jar even if declared, with a warning. `add-extension` / `remove-extension` (`-Dextensions=…`) make the
+edits of `vidocq extension add|remove`: both tools run the same `vidocq-runtime-tooling` code (Vidocq/vidocq#314).
 
 ## Documentation (Antora) conventions
 

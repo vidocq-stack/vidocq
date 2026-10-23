@@ -362,7 +362,9 @@ vidocq build -- -Dvidocq.docker.build=true   # extra args after --
 === `vidocq extension`
 
 Manages project-level extensions by editing `./pom.xml` in place (text-based, preserving
-formatting; idempotent thanks to a StAX dependency scan).
+formatting; idempotent thanks to a StAX dependency scan). Without the CLI,
+xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-extension` and
+`vidocq:remove-extension`] make the same edits [.tag-new]#NEW#: both run the code of `vidocq-runtime-tooling`.
 
 [cols="1,2"]
 |===
@@ -401,7 +403,7 @@ hand, except a `requires` of the removed extension's own module, which no longer
 The catalog comes from the extensions themselves. Each first-party extension ships
 `src/main/resources/META-INF/vidocq/extension.properties`, and the CLI's catalog,
 `META-INF/vidocq/extension-catalog.properties`, is built from those descriptors, with the groupId, artifactId
-and module that each extension's `pom.xml` and `module-info.java` declare. A test of `vidocq-runtime-cli`
+and module that each extension's `pom.xml` and `module-info.java` declare. A test of `vidocq-runtime-tooling`
 rebuilds the catalog from the reactor and fails when it no longer matches; it says how to regenerate it. The
 catalog lists the extensions sorted by id.
 

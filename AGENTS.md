@@ -43,6 +43,7 @@ Root reactor modules (`pom.xml`):
 - `vidocq-runtime-core` — lifecycle orchestrator, `ServiceLoader` discovery, bean scan.
 - `vidocq-runtime-core-codegen` — Vauban indexer APT bundle (wired globally via root `pluginManagement`).
 - `vidocq-runtime-extensions/` — delivered extensions, grouped by domain: `*-essentials` (Chappe HTTP), `*-jakartaee-core` (Cassini REST), `*-jakartaee-web` (Mansart data/pool/transactions), `*-microprofile` (config, rest-client, jwt, telemetry, health, metrics, openapi), `*-jpms-repackaged` (third-party JPMS repackages).
+- `vidocq-runtime-tooling` — project editing shared by the CLI and the plugin (extension catalog, pom and `module-info.java` editors), `java.xml` only.
 - `vidocq-runtime-maven-plugin`, `vidocq-runtime-cli`, `vidocq-runtime-integration-tests` (Arquillian ITs), `vidocq-runtime-examples`.
 
 ## Extension model & codenames
@@ -83,7 +84,9 @@ inherited indexer entry is preserved. Canonical example:
 (wired in `validate` via `pluginManagement`), `jlink`, `jpackage`, `docker`, `dev`,
 `run` (one forked run, after a forked lifecycle up to `process-classes`: compiles and indexes first),
 `idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`;
-a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind).
+a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind),
+`add-extension` / `remove-extension` (`-Dextensions=…`: the edits of `vidocq extension add|remove`, through the
+same `vidocq-runtime-tooling` code, #314).
 
 ## Documentation (Antora) conventions
 

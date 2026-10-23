@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twelve goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes fifteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -59,6 +59,12 @@
 
 | `vidocq:idea` [.tag-new]#NEW#
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
+
+| `vidocq:add-extension` [.tag-new]#NEW#
+| Adds extensions to the project, as `vidocq extension add` does: the dependency, the codegen bundle on the compiler's `annotationProcessorPaths` when the extension ships one, and its directives in `src/main/java/module-info.java`. See <<extension-goals>>.
+
+| `vidocq:remove-extension` [.tag-new]#NEW#
+| Removes extensions, undoing `add-extension`, as `vidocq extension remove` does. See <<extension-goals>>.
 |===
 
 [NOTE]
@@ -72,6 +78,30 @@ use that copy in place of the original. Only a jar that cannot be given a module
 its original, its classes attached with `--patch-module`. Zero configuration. See
 xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-module applications].
 ====
+
+[#extension-goals]
+== `vidocq:add-extension` and `vidocq:remove-extension` goals [.tag-new]#NEW#
+
+The two goals edit the project the way `vidocq extension add` and `vidocq extension remove` do, for a build
+that has Maven and no Vidocq CLI, in CI or in an IDE. Both tools run the same code, from
+`vidocq-runtime-tooling`, so they make the same edit (Vidocq/vidocq#314):
+
+[source,bash]
+----
+mvn vidocq:add-extension -Dextensions=cassini-rest,knock-health
+mvn vidocq:remove-extension -Dextensions=knock-health
+----
+
+* `-Dextensions` takes catalog ids, comma-separated, or `groupId:artifactId` coordinates; any other name is
+  resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`, with a note in the log.
+* `add-extension` writes the dependency, the codegen bundle into the compiler plugin of the project's own build,
+  and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It pins the version the
+  pom's `vidocq-runtime-parent` gives, else the plugin's own. See
+  xref:modules/vidocq-runtime-cli.adoc#extension[`vidocq extension`] for each of these edits.
+* `remove-extension` takes back what `add-extension` wrote, the `<dependencies>`, `<build>` and `<plugins>`
+  elements it created included.
+* Neither goal has a phase. Each edits the project it runs on, once: in a multi-module build, run it on the
+  module to change (`mvn -f app/pom.xml vidocq:add-extension …`).
 
 [#generate]
 == `vidocq:generate` goal [.tag-new]#NEW#
