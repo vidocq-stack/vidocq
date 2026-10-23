@@ -211,7 +211,23 @@ class SetDataSourceTagTest {
         query.setDataSource(ds);
         query.setSql("SELECT 1");
         JspException e = assertThrows(JspException.class, () -> TagHarness.run(query, pc, Body.NONE));
-        assertFalse(e.getMessage().contains("s3cret"), e.getMessage());
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            assertFalse(String.valueOf(t.getMessage()).contains("s3cret"), t.toString());
+            assertFalse(t.toString().contains("s3cret"), t.toString());
+            for (Throwable s : t.getSuppressed()) {
+                assertFalse(s.toString().contains("s3cret"), s.toString());
+            }
+        }
+    }
+
+    @Test
+    void varAndScopeExportToTheRequestedScope() throws Exception {
+        SetDataSourceTag tag = urlTag();
+        tag.setVar(DS);
+        tag.setScope("session");
+        run(tag);
+        assertInstanceOf(DataSource.class, pc.getAttribute(DS, PageContext.SESSION_SCOPE));
+        assertNull(pc.getAttribute(DS, PageContext.PAGE_SCOPE));
     }
 
     @Test

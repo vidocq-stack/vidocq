@@ -125,7 +125,13 @@ class DateParamTagTest {
     }
 
     @Test
-    void aTimestampIsConvertedToADate() throws Exception {
+    void aTimeIsConvertedToATimestampAndADateToATime() throws Exception {
+        assertInstanceOf(Timestamp.class, bound(new Time(moment.getTime()), "timestamp"));
+        assertInstanceOf(Time.class, bound(new Date(moment.getTime()), "time"));
+    }
+
+    @Test
+    void aTimestampIsConvertedToADate()throws Exception {
         Object value = bound(moment, "date");
         assertInstanceOf(Date.class, value);
         assertEquals(moment.getTime(), ((Date) value).getTime());

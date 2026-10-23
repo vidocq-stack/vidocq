@@ -145,6 +145,25 @@ class ParamTagTest {
     }
 
     @Test
+    void aBodyValuedParamInsideAnUpdateBinds() throws Exception {
+        UpdateTag parent = new UpdateTag();
+        parent.setDataSource(new CountingDataSource(db.url()));
+        parent.setSql("UPDATE book SET title = 'Y' WHERE title = ?");
+        parent.setVar("n");
+        ParamTag param = new ParamTag();
+        TagHarness.run(parent, pc, p -> TagHarness.run(param, pc, parent, q -> q.getOut().print(" Parma ")));
+        assertEquals(1, pc.getAttribute("n"));
+    }
+
+    /** An evaluated but empty body is the empty string, not NULL (§10.7). */
+    @Test
+    void anEmptyBodyBindsTheEmptyString() throws Exception {
+        Recorder parent = new Recorder();
+        TagHarness.run(new ParamTag(), pc, parent, Body.EMPTY);
+        assertEquals("", parent.received.get(0));
+    }
+
+    @Test
     void withoutAnExecutionAncestorItFails() {
         ParamTag param = value(1);
         JspTagException e = assertThrows(JspTagException.class,
