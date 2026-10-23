@@ -245,8 +245,6 @@ class SystemIdPolicyTest {
                 "/%2557EB-INF/%25zz.xml",
                 // Doubled slashes and backslashes.
                 "/%2FWEB-INF/web.xml", "/%5CWEB-INF%5Cweb.xml",
-                // A leading blank segment a container could drop.
-                "/%2520/WEB-INF/web.xml",
                 // The directory itself.
                 "/WEB-INF", "/WEB-INF/"}) {
             assertProtected(CATALOG, reference);
@@ -274,6 +272,26 @@ class SystemIdPolicyTest {
                 "/%252E/WEB-INF/web.xml"}) {
             assertOutside(CATALOG, reference);
         }
+    }
+
+    @Test
+    void aSegmentOfDotsAndBlanksIsADotSegment() {
+        // A Windows file layer strips trailing dots and spaces: these segments become "..".
+        for (String reference : new String[] {
+                "/data/.../WEB-INF/web.xml", "/data/..%20/WEB-INF/web.xml", "/data/..%2520/WEB-INF/web.xml", "/.../etc/x",
+                // A blank segment, empty once stripped.
+                "/%2520/WEB-INF/web.xml"}) {
+            assertOutside(CATALOG, reference);
+        }
+    }
+
+    @Test
+    void aSegmentThatIsOnlyAPathParameterIsNotADotSegment() throws Exception {
+        context.resource("/;jsessionid=1/x", BODY);
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, CATALOG, pc);
+
+        assertEquals(BODY, read(policy.resolveEntity(null, null, null, "/;jsessionid=1/x")));
+        assertNull(policy.recordedFailure());
     }
 
     @Test

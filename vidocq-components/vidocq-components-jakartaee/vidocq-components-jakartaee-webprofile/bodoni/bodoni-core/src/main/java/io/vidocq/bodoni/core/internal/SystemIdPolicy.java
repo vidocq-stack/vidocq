@@ -434,10 +434,16 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         return decoded != null && !hasDotSegment(path) && !hasDotSegment(decoded);
     }
 
-    /** Whether a decoded path has a {@code .} or {@code ..} segment, a backslash also counting as a separator. */
+    /**
+     * Whether a decoded path has a dot segment, a backslash also counting as a separator: a
+     * {@code .} or {@code ..}, or any non-empty segment made only of dots and blanks
+     * ({@code ...}, {@code ..} and a space), which a Windows file layer, stripping trailing dots and
+     * spaces, turns into {@code ..}. A segment is only stripped here, not cut at {@code ;}, so
+     * {@code /;jsessionid=1/x} stays a plain path.
+     */
     private static boolean hasDotSegment(String path) {
         for (String segment : SEPARATORS.split(path)) {
-            if (segment.equals(".") || segment.equals("..")) {
+            if (!segment.isEmpty() && withoutTrailingDotsAndBlanks(segment, segment.length()).isEmpty()) {
                 return true;
             }
         }
@@ -492,10 +498,16 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
                 break;
             }
         }
-        while (end > 0 && (segment.charAt(end - 1) == '.' || segment.charAt(end - 1) <= ' ')) {
-            end--;
+        return withoutTrailingDotsAndBlanks(segment, end);
+    }
+
+    /** The first {@code end} characters of {@code segment} without their trailing dots, spaces and control characters. */
+    private static String withoutTrailingDotsAndBlanks(String segment, int end) {
+        int length = end;
+        while (length > 0 && (segment.charAt(length - 1) == '.' || segment.charAt(length - 1) <= ' ')) {
+            length--;
         }
-        return segment.substring(0, end);
+        return segment.substring(0, length);
     }
 
     /**
