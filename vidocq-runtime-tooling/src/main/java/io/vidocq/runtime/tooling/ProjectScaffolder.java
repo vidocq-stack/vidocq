@@ -17,13 +17,8 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.scaffold;
+package io.vidocq.runtime.tooling;
 
-import io.vidocq.runtime.cli.CliOutput;
-import io.vidocq.runtime.cli.Command;
-import io.vidocq.runtime.cli.Version;
-import io.vidocq.runtime.tooling.KnownExtensions;
-import io.vidocq.runtime.tooling.ModuleInfoEditor;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,7 +28,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Generates a minimal Vidocq Maven project on disk from a {@link Command.Create} descriptor.
+ * Generates a minimal Vidocq Maven project on disk from a {@link ProjectSpec}: {@code vidocq create} and
+ * {@code vidocq:create} both run it, so they write the same project (Vidocq/vidocq#314).
  *
  * <pre>
  * &lt;name&gt;/
@@ -71,11 +67,12 @@ public final class ProjectScaffolder {
 
     private ProjectScaffolder() {}
 
-    public static void scaffold(Command.Create create) throws IOException {
-        scaffold(create, Path.of(""));
-    }
-
-    public static void scaffold(Command.Create create, Path baseDir) throws IOException {
+    /**
+     * Writes the project {@code create} describes into {@code baseDir/<name>}. Its parent, dependencies and codegen
+     * paths carry {@code create.parentVersion()}, else {@code runtimeVersion}, the tool's own runtime version.
+     */
+    public static void scaffold(ProjectSpec create, Path baseDir, String runtimeVersion, Reporter reporter)
+            throws IOException {
         Path root     = baseDir.resolve(create.name());
         Path javaRoot = root.resolve("src/main/java");
         Path srcPkg   = javaRoot.resolve(packageToPath(create.pkg()));
@@ -87,8 +84,8 @@ public final class ProjectScaffolder {
         Files.createDirectories(srcPkg);
         Files.createDirectories(res);
 
-        write(root.resolve("pom.xml"),                               buildPom(create));
-        write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create));
+        write(root.resolve("pom.xml"),                               buildPom(create, runtimeVersion, reporter));
+        write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create, reporter));
         if (create.main()) {
             write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
         }
@@ -103,17 +100,13 @@ public final class ProjectScaffolder {
      * open a package that holds one: an empty package compiles with a warning, then the JVM
      * refuses the module ("Package … not found in module").
      */
-    private static boolean writesApplicationClass(Command.Create c) {
+    private static boolean writesApplicationClass(ProjectSpec c) {
         return c.main() || c.extensions().contains(REST_EXTENSION);
     }
 
     // -------------------------------------------------------------------------
     // Template builders
     // -------------------------------------------------------------------------
-
-    private static String buildPom(Command.Create c) {
-        return buildPom(c, Version.runtime());
-    }
 
     /**
      * Builds the pom with an explicit runtime parent version — the
@@ -122,11 +115,11 @@ public final class ProjectScaffolder {
      * runtime of a CLI installed from a SNAPSHOT) is not on Maven Central: the pom
      * then declares the Central snapshot repository for dependencies and plugins.
      */
-    static String buildPom(Command.Create c, String runtimeVersion) {
+    static String buildPom(ProjectSpec c, String runtimeVersion, Reporter reporter) {
         String parentVersion = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
         boolean snapshot = parentVersion.endsWith("-SNAPSHOT");
         if (snapshot) {
-            CliOutput.info("Parent version " + parentVersion + " is a SNAPSHOT: the project resolves"
+            reporter.note("Parent version " + parentVersion + " is a SNAPSHOT: the project resolves"
                     + " Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
         }
         return """
@@ -189,7 +182,7 @@ public final class ProjectScaffolder {
     }
 
     /** The {@code vidocq.mainClass} of a {@code --main} scaffold: its trampoline. */
-    private static String mainClassProperty(Command.Create c) {
+    private static String mainClassProperty(ProjectSpec c) {
         return "        <vidocq.mainClass>" + c.pkg() + "." + appClassName(c.name()) + "</vidocq.mainClass>\n";
     }
 
@@ -271,7 +264,7 @@ public final class ProjectScaffolder {
      * makes, so a scaffolded extension and an added one end up declared alike. The application
      * package is opened only when the scaffold writes a class into it.
      */
-    private static String buildModuleInfo(Command.Create c) {
+    private static String buildModuleInfo(ProjectSpec c, Reporter reporter) {
         String source = c.main()
                 ? """
                 module %s {
@@ -293,18 +286,18 @@ public final class ProjectScaffolder {
         for (String id : ordered) {
             source = ModuleInfoEditor.add(source, id, KnownExtensions.moduleDirectives(id, openable)).source();
             if (openable == null && KnownExtensions.moduleDirectives(id, c.pkg()).contains("opens " + c.pkg())) {
-                CliOutput.warning(id + " reflects on the application package, which has no class yet: add "
-                        + CliOutput.cyan("opens " + c.pkg() + ";") + " to module-info.java once it has one.");
+                reporter.warning(id + " reflects on the application package, which has no class yet: add opens "
+                        + c.pkg() + "; to module-info.java once it has one.");
             }
         }
         return source;
     }
 
-    private static String moduleName(Command.Create c) {
+    private static String moduleName(ProjectSpec c) {
         return c.pkg().replace('-', '.');
     }
 
-    private static String buildApp(Command.Create c) {
+    private static String buildApp(ProjectSpec c) {
         String className = appClassName(c.name());
         return """
                 package %s;
@@ -331,7 +324,7 @@ public final class ProjectScaffolder {
                 """.formatted(c.pkg(), className);
     }
 
-    private static String buildHelloResource(Command.Create c) {
+    private static String buildHelloResource(ProjectSpec c) {
         return """
                 package %s;
 

@@ -17,17 +17,12 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.scaffold;
+package io.vidocq.runtime.tooling;
 
-import io.vidocq.runtime.cli.Command;
-import io.vidocq.runtime.cli.Version;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
@@ -37,16 +32,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectScaffolderVersionTest {
 
-    private static Command.Create create(String parentVersion) {
-        return new Command.Create("demo", "com.acme", "com.acme.demo", Set.of(), parentVersion, false);
+    private static final String RUNTIME = "1.2.3";
+    private static final Reporter SILENT = new RecordingReporter();
+
+    private static ProjectSpec create(String parentVersion) {
+        return new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of(), parentVersion, false);
     }
 
     @Test
     void scaffoldedPomInheritsRuntimeParentVersion(@TempDir Path dir) throws IOException {
-        ProjectScaffolder.scaffold(create(null), dir);
+        ProjectScaffolder.scaffold(create(null), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
-        assertTrue(pom.contains("<version>" + Version.runtime() + "</version>"),
+        assertTrue(pom.contains("<version>" + RUNTIME + "</version>"),
                 "scaffolded parent version must be the runtime parent version, pom was:\n" + pom);
         assertFalse(pom.contains("${project."),
                 "pom must not rely on ${project.*} for versions — the parent's "
@@ -59,7 +57,7 @@ class ProjectScaffolderVersionTest {
         // ${project.version}. An app declaring its own version would re-evaluate that
         // to itself and break transitive resolution (e.g. vidocq-runtime-spi), so the
         // scaffolded pom must NOT declare a version of its own.
-        ProjectScaffolder.scaffold(create(null), dir);
+        ProjectScaffolder.scaffold(create(null), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertFalse(pom.contains("<artifactId>demo</artifactId>\n    <version>"),
@@ -68,7 +66,7 @@ class ProjectScaffolderVersionTest {
 
     @Test
     void explicitParentVersionOverridesRuntimeVersion(@TempDir Path dir) throws IOException {
-        ProjectScaffolder.scaffold(create("9.9.9"), dir);
+        ProjectScaffolder.scaffold(create("9.9.9"), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<version>9.9.9</version>"),
@@ -80,8 +78,8 @@ class ProjectScaffolderVersionTest {
         // The released parent's dependencyManagement uses ${project.version}, which
         // re-evaluates to the app's own version — dependencies must pin explicitly.
         ProjectScaffolder.scaffold(
-                new Command.Create("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "2.2.2", false), dir);
+                new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                        Set.of("cassini-rest"), "2.2.2", false), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-core</artifactId>\n"
@@ -94,7 +92,7 @@ class ProjectScaffolderVersionTest {
 
     @Test
     void snapshotParentDeclaresTheCentralSnapshotRepository() {
-        String pom = ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0");
+        String pom = ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0", SILENT);
 
         String repository = """
                     <repositories>
@@ -119,7 +117,7 @@ class ProjectScaffolderVersionTest {
     @Test
     void snapshotRuntimeOfTheCliDeclaresTheCentralSnapshotRepository() {
         // A CLI installed from a SNAPSHOT scaffolds with its own SNAPSHOT runtime.
-        String pom = ProjectScaffolder.buildPom(create(null), "0.4.0-SNAPSHOT");
+        String pom = ProjectScaffolder.buildPom(create(null), "0.4.0-SNAPSHOT", SILENT);
 
         assertTrue(pom.contains("<id>central-snapshots</id>"),
                 "the CLI's SNAPSHOT runtime must resolve from Central snapshots, pom was:\n" + pom);
@@ -127,7 +125,7 @@ class ProjectScaffolderVersionTest {
 
     @Test
     void releaseParentDeclaresNoRepository() {
-        String pom = ProjectScaffolder.buildPom(create(null), "0.3.0");
+        String pom = ProjectScaffolder.buildPom(create(null), "0.3.0", SILENT);
 
         assertFalse(pom.contains("<repositories>"),
                 "a released parent resolves from Maven Central alone, pom was:\n" + pom);
@@ -137,27 +135,19 @@ class ProjectScaffolderVersionTest {
 
     @Test
     void tellsWhereSnapshotArtifactsComeFrom() {
-        String out = captureStdout(() -> ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0"));
+        RecordingReporter reporter = new RecordingReporter();
+        ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0", reporter);
+        String out = String.join("\n", reporter.lines);
         assertTrue(out.contains("https://central.sonatype.com/repository/maven-snapshots/"),
                 "a SNAPSHOT parent must say where its artifacts come from, got: " + out);
     }
 
     @Test
     void saysNothingForReleaseParentVersion() {
-        String out = captureStdout(() -> ProjectScaffolder.buildPom(create(null), "0.2.0"));
+        RecordingReporter reporter = new RecordingReporter();
+        ProjectScaffolder.buildPom(create(null), "0.2.0", reporter);
+        String out = String.join("\n", reporter.lines);
         assertFalse(out.contains("SNAPSHOT"),
                 "a release parent must not trigger a note, got: " + out);
-    }
-
-    private static String captureStdout(Runnable action) {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
-        try {
-            action.run();
-        } finally {
-            System.setOut(original);
-        }
-        return buffer.toString(StandardCharsets.UTF_8);
     }
 }

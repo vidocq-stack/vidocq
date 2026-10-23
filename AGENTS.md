@@ -87,7 +87,7 @@ inherited indexer entry is preserved. Canonical example:
 a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind),
 `add-extension` / `remove-extension` (`-Dextensions=…`: the edits of `vidocq extension add|remove`, through the
 same `vidocq-runtime-tooling` code, #314), `list-extensions` and `doctor` (the reports of `vidocq extension list`
-and `vidocq doctor`).
+and `vidocq doctor`), `create` (no project needed: the project of `vidocq create`).
 
 ## Documentation (Antora) conventions
 

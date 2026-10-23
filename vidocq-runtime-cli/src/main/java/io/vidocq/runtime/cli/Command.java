@@ -69,14 +69,8 @@ public sealed interface Command {
     }
 
     /** {@code main}: write an {@code @VidocqMain} trampoline; without it the runtime's own main boots the app. */
-    record Create(
-            String name,
-            String groupId,
-            String pkg,
-            Set<String> extensions,
-            String parentVersion,
-            boolean main
-    ) implements Command {}
+    /** {@code vidocq create}: the project {@link io.vidocq.runtime.tooling.ProjectScaffolder} writes. */
+    record Create(io.vidocq.runtime.tooling.ProjectSpec spec) implements Command {}
 
     record Build(
             BuildType type,

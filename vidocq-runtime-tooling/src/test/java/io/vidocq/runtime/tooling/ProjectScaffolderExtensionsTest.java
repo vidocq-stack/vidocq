@@ -17,9 +17,8 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.scaffold;
+package io.vidocq.runtime.tooling;
 
-import io.vidocq.runtime.cli.Command;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -33,9 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectScaffolderExtensionsTest {
 
+    private static final String RUNTIME = "1.2.3";
+    private static final Reporter SILENT = new RecordingReporter();
+
     private static String scaffoldPom(Path dir, Set<String> extensions) throws IOException {
         ProjectScaffolder.scaffold(
-                new Command.Create("demo", "com.acme", "com.acme.demo", extensions, null, false), dir);
+                new ProjectSpec("demo", "com.acme", "com.acme.demo", extensions, null, false), dir, RUNTIME, SILENT);
         return Files.readString(dir.resolve("demo/pom.xml"));
     }
 
@@ -97,8 +99,8 @@ class ProjectScaffolderExtensionsTest {
     @Test
     void cassiniRestScaffoldsAReadyModuleInfo(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(
-                new Command.Create("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), null, false), dir);
+                new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                        Set.of("cassini-rest"), null, false), dir, RUNTIME, SILENT);
 
         String moduleInfo = Files.readString(dir.resolve("demo/src/main/java/module-info.java"));
         assertTrue(moduleInfo.contains("requires jakarta.ws.rs;"),

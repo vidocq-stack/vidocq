@@ -30,7 +30,6 @@ import io.vidocq.runtime.cli.ext.ExtensionCache;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
-import io.vidocq.runtime.cli.scaffold.ProjectScaffolder;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
@@ -44,6 +43,7 @@ import io.vidocq.runtime.tooling.DoctorFacts;
 import io.vidocq.runtime.tooling.ExtensionEditor;
 import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.PropertiesText;
+import io.vidocq.runtime.tooling.ProjectScaffolder;
 import io.vidocq.runtime.tooling.RegistryEntry;
 import io.vidocq.runtime.tooling.Reporter;
 
@@ -231,19 +231,19 @@ public final class CommandRunner {
 
     /** {@code vidocq create} in {@code baseDir}. */
     static int runCreate(Command.Create create, Path baseDir) {
-        CliOutput.info("Scaffolding project '" + CliOutput.bold(create.name()) + "'…");
+        CliOutput.info("Scaffolding project '" + CliOutput.bold(create.spec().name()) + "'…");
         try {
-            ProjectScaffolder.scaffold(create, baseDir);
+            ProjectScaffolder.scaffold(create.spec(), baseDir, Version.runtime(), CLI_REPORTER);
         } catch (Exception e) {
             CliOutput.error("Failed to create project: " + e.getMessage());
             return 1;
         }
-        CliOutput.success("Project '" + create.name() + "' created.");
+        CliOutput.success("Project '" + create.spec().name() + "' created.");
         CliOutput.println();
-        CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.name()));
+        CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.spec().name()));
         CliOutput.println("  Build:     " + CliOutput.cyan("mvn package"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
-        if (!create.main()) {
+        if (!create.spec().main()) {
             CliOutput.println();
             CliOutput.println("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
                     + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp).")));

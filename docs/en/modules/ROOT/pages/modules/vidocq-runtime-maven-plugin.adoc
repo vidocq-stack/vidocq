@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes seventeen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes eighteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -71,6 +71,9 @@
 
 | `vidocq:doctor` [.tag-new]#NEW#
 | Checks the environment and the project, as `vidocq doctor` does; a failed check fails the build. See <<report-goals>>.
+
+| `vidocq:create` [.tag-new]#NEW#
+| Scaffolds a new project, as `vidocq create` does; needs no project. See <<create-goal>>.
 |===
 
 [NOTE]
@@ -129,6 +132,34 @@ mvn vidocq:doctor [-Dvidocq.doctor.verbose]                 # the checks of vido
   Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions. A failed check (a JDK
   older than 25) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the hint of the checks
   that passed.
+[#create-goal]
+== `vidocq:create` goal [.tag-new]#NEW#
+
+Scaffolds a new Vidocq project the way `vidocq create` does, for a machine that has Maven and no Vidocq CLI.
+Both run the scaffolder of `vidocq-runtime-tooling`, so they write the same `pom.xml`, `module-info.java`,
+`vidocq.properties` and classes (Vidocq/vidocq#314). The goal needs no project; outside one, the plugin is named
+in full, as Maven resolves the `vidocq` prefix only for a project that declares the plugin:
+
+[source,bash]
+----
+mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}:create \
+    -Dname=my-api -DgroupId=com.acme -Dextensions=cassini-rest,knock-health
+----
+
+[cols="1,3"]
+|===
+| Property | Meaning
+
+| `name` | The project directory and artifactId. Required.
+| `groupId` | The Maven groupId; `io.example` by default.
+| `package` | The root Java package, which is also the module name; `<groupId>.<name>` by default. It must be a valid Java package name.
+| `extensions` | The catalog ids of the extensions to enable, comma-separated, written in this order.
+| `parentVersion` | The `vidocq-runtime-parent` version; the plugin's own by default.
+| `main` | `true` also writes an `@VidocqMain` trampoline, for an IDE Run or a `VidocqApp`.
+|===
+
+The project is created in the current directory, which must not hold a directory of that name yet. See
+xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`] for what each file holds.
 
 [#generate]
 == `vidocq:generate` goal [.tag-new]#NEW#

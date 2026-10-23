@@ -17,9 +17,8 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.scaffold;
+package io.vidocq.runtime.tooling;
 
-import io.vidocq.runtime.cli.Command;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -33,9 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectScaffolderAppTest {
 
+    private static final String RUNTIME = "1.2.3";
+    private static final Reporter SILENT = new RecordingReporter();
+
     private static Path scaffold(Path dir, Set<String> extensions, boolean main) throws IOException {
         ProjectScaffolder.scaffold(
-                new Command.Create("demo", "com.acme", "com.acme.demo", extensions, null, main), dir);
+                new ProjectSpec("demo", "com.acme", "com.acme.demo", extensions, null, main), dir, RUNTIME, SILENT);
         return dir.resolve("demo");
     }
 

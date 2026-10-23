@@ -96,7 +96,8 @@ suffixed ` (run)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.ki
 Application run of the main class instead, with no console). `package`, `jlink`, `jpackage` and `docker` all
 drop a dev-only jar even if declared, with a warning. `add-extension` / `remove-extension` (`-Dextensions=…`) make the
 edits of `vidocq extension add|remove`: both tools run the same `vidocq-runtime-tooling` code (Vidocq/vidocq#314); `list-extensions` and
-`doctor` give the reports of `vidocq extension list` and `vidocq doctor` the same way.
+`doctor` give the reports of `vidocq extension list` and `vidocq doctor` the same way; `create` (no project needed) writes the
+project of `vidocq create`.
 
 ## Documentation (Antora) conventions
 

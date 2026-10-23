@@ -41,7 +41,7 @@ class CliParserCreateTest {
     void parentVersionDefaultsToNull() {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "demo"}));
-        assertNull(c.parentVersion());
+        assertNull(c.spec().parentVersion());
     }
 
     @Test
@@ -49,21 +49,21 @@ class CliParserCreateTest {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "demo",
                         "--parent-version", "1.2.3"}));
-        assertEquals("1.2.3", c.parentVersion());
+        assertEquals("1.2.3", c.spec().parentVersion());
     }
 
     @Test
     void noApplicationMainClassByDefault() {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "demo"}));
-        assertFalse(c.main());
+        assertFalse(c.spec().main());
     }
 
     @Test
     void mainOptionAsksForAVidocqMainTrampoline() {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "demo", "--main"}));
-        assertTrue(c.main());
+        assertTrue(c.spec().main());
     }
 
     @Test
@@ -91,7 +91,7 @@ class CliParserCreateTest {
     void acceptsAValidPackageForANameWithDigits() {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "ft-030", "--package", "io.example.ft030"}));
-        assertEquals("io.example.ft030", c.pkg());
+        assertEquals("io.example.ft030", c.spec().pkg());
     }
 
     /** BUG-20261023-04: "-x rest" resolved by convention to an artifact that does not exist. */

@@ -933,6 +933,39 @@
                 <available implementation="boolean" default-value="false">${vidocq.extensions.available}</available>
             </configuration>
         </mojo>
+        <mojo>
+            <goal>create</goal>
+            <description>Scaffold a new Vidocq project, as vidocq create does: the pom, module-info.java, vidocq.properties and, with cassini-rest, a HelloResource. Needs no project: mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:&lt;version&gt;:create -Dname=my-api -DgroupId=com.acme -Dextensions=cassini-rest.</description>
+            <requiresDependencyResolution>none</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>false</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <implementation>io.vidocq.runtime.maven.VidocqCreateMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>basedir</name><type>java.io.File</type><required>true</required><editable>false</editable><description>Where the project directory is created: the current directory</description></parameter>
+                <parameter><name>name</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The project directory and artifactId</description></parameter>
+                <parameter><name>groupId</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The Maven groupId; io.example by default</description></parameter>
+                <parameter><name>pkg</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The root Java package, also the module name; &lt;groupId&gt;.&lt;name&gt; by default</description></parameter>
+                <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions to enable, comma-separated catalog ids</description></parameter>
+                <parameter><name>parentVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The vidocq-runtime-parent version; this plugin's own by default</description></parameter>
+                <parameter><name>main</name><type>boolean</type><required>false</required><editable>true</editable><description>Also write an @VidocqMain trampoline</description></parameter>
+                <parameter><name>runtimeVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>This plugin's own version</description></parameter>
+            </parameters>
+            <configuration>
+                <basedir implementation="java.io.File" default-value="${basedir}"/>
+                <name implementation="java.lang.String">${name}</name>
+                <groupId implementation="java.lang.String">${groupId}</groupId>
+                <pkg implementation="java.lang.String">${package}</pkg>
+                <extensions implementation="java.lang.String">${extensions}</extensions>
+                <parentVersion implementation="java.lang.String">${parentVersion}</parentVersion>
+                <main implementation="boolean" default-value="false">${main}</main>
+                <runtimeVersion implementation="java.lang.String" default-value="${plugin.version}"/>
+            </configuration>
+        </mojo>
 
         <!-- vidocq:idea — experimental. IntelliJ IDEA shared run configurations (.run/*.run.xml) for the
              reactor's Vidocq applications. Aggregator with no default phase: run it from the directory

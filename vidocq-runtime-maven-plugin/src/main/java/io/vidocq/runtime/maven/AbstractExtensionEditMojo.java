@@ -20,10 +20,8 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.tooling.ExtensionEditor;
-import io.vidocq.runtime.tooling.Reporter;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Parameter;
 
 import java.io.File;
@@ -72,30 +70,6 @@ abstract class AbstractExtensionEditMojo extends AbstractMojo {
             getLog().info("pom.xml updated.");
         } else {
             getLog().info(outcome.moduleInfoChanged() ? "pom.xml left untouched." : "No changes — pom.xml left untouched.");
-        }
-    }
-
-    /** The shared editing's reports, in the build log. */
-    private record LogReporter(Log log) implements Reporter {
-
-        @Override
-        public void success(String message, String detail) {
-            log.info(detail.isEmpty() ? message : message + " (" + detail + ")");
-        }
-
-        @Override
-        public void note(String message) {
-            log.info("  " + message);
-        }
-
-        @Override
-        public void warning(String message) {
-            log.warn(message);
-        }
-
-        @Override
-        public void error(String message) {
-            log.error(message);
         }
     }
 }

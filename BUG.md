@@ -926,3 +926,17 @@ where this whole bug class is invisible.
 - **Investigations**:
   - 2026-10-23: found by a test written for BUG-20261023-07. Fixed: `add` writes into the project's own
     `<dependencies>`, as `remove` reads it, and creates that element when only a `<dependencyManagement>` has one.
+
+## BUG-20261024-01 — `vidocq create -x a -x b` writes the extensions in an order that changes from run to run
+
+- **Date**: 2026-10-24
+- **Status**: FIXED (branch `feat/create-goal`, #314)
+- **Affected module**: vidocq-runtime-tooling (`ProjectSpec`, formerly `Command.Create` in vidocq-runtime-cli)
+- **Symptom**: two runs of `vidocq create -n demo -x cassini-rest -x mansart-data -x knock-health` can write the
+  dependencies and the codegen paths of the pom in different orders, and neither is the order given. Found by
+  comparing the project of `vidocq:create` with the one of `vidocq create`: same files, dependencies swapped.
+- **Minimal reproduction**: `Set.copyOf(new LinkedHashSet<>(List.of("cassini-rest", "mansart-data", "knock-health")))`
+  iterated in two JVMs.
+- **Cause**: the parser stored the extensions with `Set.copyOf`, whose iteration order depends on a per-JVM salt.
+- **Investigations**:
+  - 2026-10-24: fixed: the spec keeps the extensions in a `LinkedHashSet`, in the order given.

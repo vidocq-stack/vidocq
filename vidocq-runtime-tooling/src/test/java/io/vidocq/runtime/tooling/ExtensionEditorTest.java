@@ -25,7 +25,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,7 +69,7 @@ class ExtensionEditorTest {
     @TempDir
     Path project;
 
-    private final Recorder reporter = new Recorder();
+    private final RecordingReporter reporter = new RecordingReporter();
 
     @Test
     void addWritesTheDependencyTheCodegenPathAndTheModuleDirectives() throws IOException {
@@ -245,30 +244,5 @@ class ExtensionEditorTest {
 
     private String pom() throws IOException {
         return Files.readString(project.resolve("pom.xml"));
-    }
-
-    /** Every report, as {@code kind: message (detail)}. */
-    private static final class Recorder implements Reporter {
-        final List<String> lines = new ArrayList<>();
-
-        @Override
-        public void success(String message, String detail) {
-            lines.add("success: " + message + (detail.isEmpty() ? "" : " (" + detail + ")"));
-        }
-
-        @Override
-        public void note(String message) {
-            lines.add("note: " + message);
-        }
-
-        @Override
-        public void warning(String message) {
-            lines.add("warning: " + message);
-        }
-
-        @Override
-        public void error(String message) {
-            lines.add("error: " + message);
-        }
     }
 }

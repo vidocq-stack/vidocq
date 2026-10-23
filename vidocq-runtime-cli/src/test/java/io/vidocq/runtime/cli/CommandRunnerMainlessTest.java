@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.tooling.ProjectSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -39,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CommandRunnerMainlessTest {
 
     private static Command.Create create(boolean main) {
-        return new Command.Create("demo", "com.acme", "com.acme.demo", Set.of(), null, main);
+        return new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of(), null, main));
     }
 
     @Test

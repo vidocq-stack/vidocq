@@ -260,7 +260,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 === `vidocq create`
 
 Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.properties`, plus a
-`HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`).
+`HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`). Without the CLI,
+xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project
+[.tag-new]#NEW#. The extensions are written in the order given [.tag-new]#NEW#.
 
 [cols="1,2"]
 |===
@@ -490,6 +492,10 @@ or offline).
 Reads and writes the project's `vidocq.properties` (project root, falling back to
 `src/main/resources`). `set` preserves comments, blank lines, key order and separator
 spacing, and creates the file when none exists.
+
+The Maven plugin has no `config` goal: in a build, `vidocq.properties` is a file of the sources, edited like the
+others, and xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`vidocq:doctor`] reports the keys it does not
+recognize (Vidocq/vidocq#314).
 
 [cols="1,2"]
 |===
