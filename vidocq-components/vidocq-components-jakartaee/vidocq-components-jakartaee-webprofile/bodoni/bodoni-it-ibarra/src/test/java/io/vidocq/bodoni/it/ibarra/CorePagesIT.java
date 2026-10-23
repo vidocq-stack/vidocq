@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.tools.ToolProvider;
@@ -50,9 +51,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Renders pages precompiled by Ibarra (at {@code process-classes}) on a forked Foy-over-Chappe
- * host and checks Bodoni's {@code c:}, {@code fmt:}, {@code x:} and {@code fn:} libraries under
- * both the {@code jakarta.tags.*} URIs and the JSTL 1.2 {@code http://java.sun.com/jsp/jstl/*} URIs
- * (Tags 3.0 §2, §4–§13, §15).
+ * host and checks Bodoni's {@code c:}, {@code fmt:}, {@code x:}, {@code sql:} and {@code fn:}
+ * libraries under both the {@code jakarta.tags.*} URIs and the JSTL 1.2
+ * {@code http://java.sun.com/jsp/jstl/*} URIs (Tags 3.0 §2, §4–§15).
  *
  * <p>The host runs strictly on the module path with {@code -Dpeano.reflection=deny} and
  * without any compiler module: the pages only use {@code String}, arrays, {@code List} and
@@ -63,6 +64,11 @@ import org.junit.jupiter.api.Test;
  * one from {@code bodoni-peano} and the {@code Map.Entry} one built into Peano (BUG.md BOD-001).
  * The {@code x:} pages hand EL only {@code Document}, {@code Node}, {@code NodeList},
  * {@code String} values and exceptions printed through {@code toString()}: no new accessor table.
+ * The {@code sql:} pages run against an in-memory H2 database deployed with the application; they
+ * read {@code Result} properties ({@code rows}, {@code rowsByIndex}, {@code columnNames},
+ * {@code rowCount}, {@code limitedByMaxRows}) through the {@code Result} accessor table of
+ * {@code bodoni-peano}, rows through Peano's {@code Map} support and failures through
+ * {@code toString()}.
  */
 class CorePagesIT {
 
@@ -75,16 +81,23 @@ class CorePagesIT {
             "io.vidocq.foy.api", "io.vidocq.foy.core", "io.vidocq.peano.api", "io.vidocq.peano.core",
             "jakarta.servlet", "jakarta.servlet.jsp", "jakarta.el");
 
-    /** Modules deployed with the application, like the jars of a WAR's WEB-INF/lib. */
+    /**
+     * Modules deployed with the application, like the jars of a WAR's WEB-INF/lib. H2
+     * ({@code com.h2database}) is an automatic module, as a JDBC driver in WEB-INF/lib would be:
+     * {@code resolveAndBind} binds its {@code java.sql.Driver} provider through Bodoni's
+     * {@code uses java.sql.Driver}.
+     */
     private static final Set<String> APPLICATION_LIBRARIES = Set.of(
-            "io.vidocq.bodoni.core", "io.vidocq.bodoni.peano", "jakarta.servlet.jsp.jstl");
+            "io.vidocq.bodoni.core", "io.vidocq.bodoni.peano", "jakarta.servlet.jsp.jstl", "com.h2database");
 
     /**
      * JDK modules the application layer reads through the JSTL API and Bodoni. The host runs with
      * {@code --limit-modules}: {@code jdk.localedata} provides the CLDR locale data (French, ...)
-     * the fmt pages format with.
+     * the fmt pages format with. {@code java.naming} is read by Bodoni's data-source resolution
+     * (the {@code java:comp/env} lookup of a data-source string, Tags 3.0 §10.1.1).
      */
-    private static final String JDK_MODULES = "java.desktop,java.sql,java.xml,java.net.http,jdk.localedata";
+    private static final String JDK_MODULES =
+            "java.desktop,java.sql,java.naming,java.xml,java.net.http,jdk.localedata";
 
     /** "345 987,246": the French group separator of the JDK's CLDR data is U+202F. */
     private static final String FRENCH_NUMBER = "345\u202f987,246";
@@ -122,8 +135,11 @@ class CorePagesIT {
         runtime.add(hostClasses);
 
         log = work.resolve("host.log");
+        // UTC: the sql page binds 1788-01-01. Before 1900 the legacy java.util calendar and java.time
+        // (which H2 converts a java.sql.Date with) disagree on most zones' offsets (Europe/Paris:
+        // CET against local mean time), which would shift the bound date by a day.
         host = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-Dpeano.reflection=deny",
+                "-Dpeano.reflection=deny", "-Duser.timezone=UTC",
                 "--module-path", join(runtime),
                 "--limit-modules", "bodoni.it.host,io.vidocq.chappe.core," + JDK_MODULES,
                 "--add-modules", "io.vidocq.chappe.core," + JDK_MODULES,
@@ -378,6 +394,53 @@ class CorePagesIT {
     }
 
     @Test
+    void sqlQueryBindsAParameterAndReadsRowsCaseInsensitively() throws Exception {
+        // Tags 3.0 §10.3, §10.7: sql:param binds the request parameter; a row is a Map whose keys
+        // ignore case (Result.getRows Javadoc).
+        assertEquals("Tipografico|Tipografico", paragraph(sqlPage(), "param"));
+    }
+
+    @Test
+    void sqlConfigDataSourceObjectExposesColumnsAndRows() throws Exception {
+        // Tags 3.0 §10.8: sql:setDataSource without var stores the DataSource object as the
+        // page-scope setting; Result exposes its row count, column names and rows by index.
+        String page = sqlPage();
+        assertEquals("3", paragraph(page, "count"));
+        assertEquals("ID;TITLE;", paragraph(page, "columns"));
+        assertEquals("1:Manuale;2:Tipografico;3:Parma;", paragraph(page, "rows"));
+    }
+
+    @Test
+    void sqlStartRowAndMaxRowsPageTheResult() throws Exception {
+        // Tags 3.0 §10.3: one row is skipped, one is kept, and the third row proves the limit cut.
+        assertEquals("1:Tipografico:true", paragraph(sqlPage(), "paging"));
+    }
+
+    @Test
+    void sqlDateParamBindsADate() throws Exception {
+        // Tags 3.0 §10.7: a java.util.Date from fmt:parseDate bound as a java.sql.Date.
+        assertEquals("Manuale", paragraph(sqlPage(), "date"));
+    }
+
+    @Test
+    void sqlUpdateReturnsTheCountAndTransactionsCommitOrRollBack() throws Exception {
+        // Tags 3.0 §10.4, §10.5: rows 4 and 5 are committed and updated; the failed transaction
+        // rolls row 6 back and its JspException names the failing statement.
+        String page = sqlPage();
+        assertEquals("2", paragraph(page, "updated"));
+        assertEquals("5", paragraph(page, "after"));
+        String failure = paragraph(page, "failure");
+        assertTrue(failure.contains("INSERT INTO book VALUES (6,'Duplicate',NULL)"), failure);
+    }
+
+    @Test
+    void sqlLegacyUriQueriesThroughAJdbcString() throws Exception {
+        // Tags 3.0 §10.1.1: a dataSource attribute in the url,driver,user,password form.
+        setUpBooks();
+        assertEquals("3", paragraph(get("/sql-legacy.jsp"), "legacy"));
+    }
+
+    @Test
     void denyModeIsActive() throws Exception {
         // Guards the premise of this IT: the host runs with peano.reflection=deny, so reading a
         // bean property of a plain public class without a registered accessor fails.
@@ -397,6 +460,20 @@ class CorePagesIT {
         String cross = "http://localhost:" + port + CONTEXT + "/xml-part.jsp";
         return get("/xml-entities.jsp?base=" + URLEncoder.encode(base, StandardCharsets.UTF_8)
                 + "&cross=" + URLEncoder.encode(cross, StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Recreates the book table (rows 1 to 3) through the web.xml data source, so every sql test
+     * starts from the same rows whatever the test order.
+     */
+    private static void setUpBooks() throws Exception {
+        assertEquals("ok", paragraph(get("/sql-setup.jsp"), "setup"));
+    }
+
+    /** The sql page for book 2, on a freshly set-up table. */
+    private static String sqlPage() throws Exception {
+        setUpBooks();
+        return get("/sql.jsp?id=2");
     }
 
     private static HttpResponse<String> send(String page) throws Exception {
@@ -427,7 +504,10 @@ class CorePagesIT {
         }
     }
 
-    /** Explicit Java modules on the test class path (the IT itself runs on the class path). */
+    /**
+     * Explicit Java modules on the test class path (the IT itself runs on the class path), plus the
+     * jars whose {@code Automatic-Module-Name} is one of the {@link #APPLICATION_LIBRARIES}.
+     */
     private static List<ModuleReference> modularEntries() throws IOException {
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         List<Path> modular = new ArrayList<>();
@@ -440,7 +520,8 @@ class CorePagesIT {
             if (Files.isRegularFile(path) && item.endsWith(".jar")) {
                 try (JarFile jar = new JarFile(path.toFile())) {
                     explicit = jar.getJarEntry("module-info.class") != null
-                            || jar.stream().anyMatch(e -> e.getName().matches("META-INF/versions/\\d+/module-info.class"));
+                            || jar.stream().anyMatch(e -> e.getName().matches("META-INF/versions/\\d+/module-info.class"))
+                            || isApplicationAutomaticModule(jar);
                 }
             }
             if (explicit) {
@@ -448,6 +529,12 @@ class CorePagesIT {
             }
         }
         return List.copyOf(ModuleFinder.of(modular.toArray(Path[]::new)).findAll());
+    }
+
+    private static boolean isApplicationAutomaticModule(JarFile jar) throws IOException {
+        Manifest manifest = jar.getManifest();
+        return manifest != null && APPLICATION_LIBRARIES.contains(
+                manifest.getMainAttributes().getValue("Automatic-Module-Name"));
     }
 
     /** Compiles the host sources shipped as test resources against the runtime modules. */

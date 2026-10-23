@@ -23,7 +23,7 @@
     </parent>
     <artifactId>bodoni-it-ibarra</artifactId>
     <name>Bodoni :: IT :: Ibarra</name>
-    <description>Integration test — core, fmt and x pages precompiled by Ibarra and rendered on Foy (not published)</description>
+    <description>Integration test — core, fmt, x and sql pages precompiled by Ibarra and rendered on Foy (not published)</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -91,6 +91,14 @@
             <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-core</artifactId>
             <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The JDBC driver of the sql: pages (an in-memory database), deployed with the
+             application like a driver in a WAR's WEB-INF/lib: CorePagesIT puts it on the
+             application layer's module path. Version from the root POM. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
