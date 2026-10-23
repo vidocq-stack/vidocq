@@ -434,11 +434,20 @@ external reference itself, the JDK never fetches on its own:
   not a valid URI, or a relative one that climbs above the context root, ends the action with a
   `JspTagException` before anything is read.
 - **Opaque system id** (`jar:` and the like): every reference is refused.
-- **The origin is what the system id names as a whole.** Under a relative system id the whole
-  web application is the origin, `/WEB-INF/` and `/META-INF/` included: an untrusted document
-  can pull `/WEB-INF/web.xml` into the output. Under an absolute `file:` system id it is the
-  whole local filesystem, under an `http(s):` one the whole origin server. The Reference page
-  advises giving no system id for an untrusted document.
+- **The origin is what the system id names as a whole.** Under a relative system id the web
+  application is the origin, except `/WEB-INF/` and `/META-INF/` (below). Under an absolute
+  `file:` system id it is the whole local filesystem, under an `http(s):` one the whole origin
+  server. The Reference page advises giving no system id for an untrusted document.
+- **Protected directories (maintainer decision 2026-10-23):** under a relative system id, a
+  target may enter `/WEB-INF/` or `/META-INF/` only when the page's system id is already inside
+  that same directory; otherwise it is refused with the reason
+  `inside /WEB-INF/ or /META-INF/ while the system id is not`. The rule is per policy, so in
+  `x:transform` a stylesheet under `/WEB-INF/` imports its siblings while a public document
+  cannot reach into `/WEB-INF/`. "Inside" is decided by one function for the target and the
+  origin (`SystemIdPolicy.protectedDirectory`): the first non-empty segment of the path,
+  decoded again until no escape is left, split on `/` and `\`, cut at `;` or `:`, without
+  trailing dots, spaces or control characters, compared ignoring case. Absolute system ids and
+  the no-system-id mode are unchanged.
 - **The origin is fixed when the policy is built**, from the page's system id. The base a
   parser or an XSLT processor passes only resolves the reference, so an `xml:base` in an
   untrusted document cannot widen it.
@@ -446,6 +455,7 @@ external reference itself, the JDK never fetches on its own:
   the reference and the system id, cause kept. Formats:
   `<action>: external reference '<r>' refused, system id '<id or (none)>': <reason>` with the
   reasons `no system id`, `not the same origin`, `outside the web application`,
+  `inside /WEB-INF/ or /META-INF/ while the system id is not`,
   `the system id is not hierarchical` and `not a valid URI`;
   `<action>: external reference '<r>' cannot be read, system id '<id>': <cause>`. Other parse
   and transform failures end with `, line <n>, column <m>, system id '<id>'`, line and column

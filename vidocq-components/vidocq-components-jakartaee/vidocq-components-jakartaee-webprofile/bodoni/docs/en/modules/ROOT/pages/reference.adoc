@@ -178,15 +178,15 @@ An untrusted XML document or stylesheet can read local files or reach internal h
 
 * **No system id**: every external reference is refused.
 * **Absolute system id** (`https://example.org/data/doc.xml`): a reference must have the same scheme, host and port. The connection has connect and read timeouts, does not follow HTTP redirects, and a redirect or any non-2xx status is a failure. Under a `file:` system id a UNC target (`file:////host/share`) is refused.
-* **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference is refused. The reference is resolved against the system id first, so `../x.xml` is accepted when the result is still inside the application; it is refused when the result leaves the web application (above the context root) or hides a dot segment in an encoding (`%2e%2e`, `..%2f`, `..%5c`). An opaque system id (`jar:`) allows no reference at all.
+* **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference is refused. The reference is resolved against the system id first, so `../x.xml` is accepted when the result is still inside the application; it is refused when the result leaves the web application (above the context root) or hides a dot segment in an encoding (`%2e%2e`, `..%2f`, `..%5c`). A reference into `/WEB-INF/` or `/META-INF/` is refused unless the system id is inside that same directory (see below). An opaque system id (`jar:`) allows no reference at all.
 
 The origin is the whole of what the system id names, not the directory of the document:
 
-* under a relative system id, the whole web application is the origin, `/WEB-INF/` and `/META-INF/` included: an untrusted document can pull `/WEB-INF/web.xml` into the output;
+* under a relative system id, the web application is the origin, but a reference may enter `/WEB-INF/` or `/META-INF/` only when the system id is already inside that same directory. A stylesheet kept under `/WEB-INF/` still imports its siblings: with `xsltSystemId="/WEB-INF/xsl/main.xsl"`, `<xsl:import href="common.xsl"/>` reads `/WEB-INF/xsl/common.xsl`. A public document cannot reach it: with `systemId="/data/catalog.xml"`, an entity to `/WEB-INF/web.xml` is refused (reason `inside /WEB-INF/ or /META-INF/ while the system id is not`). The directory names are matched on the first path segment, ignoring case, path parameters (`;x`), trailing dots and spaces, and a second level of percent encoding;
 * under an absolute `file:` system id, the whole local filesystem is the origin;
 * under an absolute `http:` or `https:` system id, the whole origin server is.
 
-So give no system id when you parse or transform an untrusted document: its external references are then all refused.
+So give no system id when you parse or transform an untrusted document: its external references are then all refused. A document whose system id is itself under `/WEB-INF/` still reaches the rest of `/WEB-INF/`.
 
 A refused or unreadable reference ends the action with a `JspException` that names the reference and the system id, with the cause kept. A system id attribute that is not a valid URI, or a relative one that climbs above the context root, is not a reference: the action ends with a `JspTagException` carrying the message of the `IllegalArgumentException`, before anything is read.
 
