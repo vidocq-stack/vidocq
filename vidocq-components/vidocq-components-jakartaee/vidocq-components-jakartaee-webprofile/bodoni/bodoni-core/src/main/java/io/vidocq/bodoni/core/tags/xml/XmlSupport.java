@@ -156,7 +156,7 @@ final class XmlSupport {
         String text = Objects.toString(reason.getMessage(), reason.getClass().getName());
         Location location = located(cause);
         if (parseFailure != null) {
-            location = location.refinedBy(locationOf(parseFailure));
+            location = location.refinedBy(parseLocation(parseFailure));
         }
         String systemId = Objects.requireNonNullElse(location.systemId(), policies[0].parserSystemId());
         String message = DOCUMENT_FAILURE.formatted(action, text, location.position(), systemId);
@@ -197,13 +197,18 @@ final class XmlSupport {
     /** The location a SAX or XSLT failure carries, {@code null} for any other throwable. */
     private static Location locationOf(Throwable t) {
         if (t instanceof SAXParseException parse) {
-            return new Location(parse.getSystemId(), parse.getLineNumber(), parse.getColumnNumber());
+            return parseLocation(parse);
         }
         if (t instanceof TransformerException transform && transform.getLocator() != null) {
             SourceLocator locator = transform.getLocator();
             return new Location(locator.getSystemId(), locator.getLineNumber(), locator.getColumnNumber());
         }
         return null;
+    }
+
+    /** The location a SAX parse failure carries. */
+    private static Location parseLocation(SAXParseException parse) {
+        return new Location(parse.getSystemId(), parse.getLineNumber(), parse.getColumnNumber());
     }
 
     /** Where a document failed; a line or column below 1 is unknown. */

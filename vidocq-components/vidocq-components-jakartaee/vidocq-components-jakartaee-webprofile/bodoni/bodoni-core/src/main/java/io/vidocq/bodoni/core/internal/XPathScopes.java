@@ -32,12 +32,10 @@ import javax.xml.namespace.NamespaceContext;
  * Tags 3.0 section 11.1.2 ({@code $param:foo}, {@code $sessionScope:foo}, ...), each bound
  * to a Bodoni namespace that {@link PageVariableResolver} recognises, plus the reserved
  * {@code xml} and {@code xmlns} prefixes of the {@link NamespaceContext} contract. Any
- * other prefix is unbound ({@link XMLConstants#NULL_NS_URI}). Immutable, hence shared.
+ * other prefix is unbound ({@link XMLConstants#NULL_NS_URI}). Stateless and cheap: each
+ * {@link XPathEngine} evaluator gets its own.
  */
 public final class XPathScopes implements NamespaceContext {
-
-    /** The single instance. */
-    public static final XPathScopes INSTANCE = new XPathScopes();
 
     /** The namespace of the scope prefix {@code p} is this base followed by {@code p}. */
     static final String BASE = "https://vidocq.dev/ns/bodoni/xpath/";
@@ -63,7 +61,9 @@ public final class XPathScopes implements NamespaceContext {
             XMLConstants.XML_NS_PREFIX, XMLConstants.XML_NS_URI,
             XMLConstants.XMLNS_ATTRIBUTE, XMLConstants.XMLNS_ATTRIBUTE_NS_URI);
 
-    private XPathScopes() {
+    /** The bindings above. */
+    XPathScopes() {
+        // Stateless: the bindings are the shared constant table.
     }
 
     @Override

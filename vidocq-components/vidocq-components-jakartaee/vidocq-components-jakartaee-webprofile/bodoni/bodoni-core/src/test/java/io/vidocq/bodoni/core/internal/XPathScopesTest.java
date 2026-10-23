@@ -38,7 +38,7 @@ class XPathScopesTest {
     private static final List<String> SCOPES = List.of("param", "header", "cookie", "initParam", "pageScope",
             "requestScope", "sessionScope", "applicationScope");
 
-    private final XPathScopes scopes = XPathScopes.INSTANCE;
+    private final XPathScopes scopes = new XPathScopes();
 
     @Test
     void bindsTheSection1112PrefixesToBodoniNamespaces() {

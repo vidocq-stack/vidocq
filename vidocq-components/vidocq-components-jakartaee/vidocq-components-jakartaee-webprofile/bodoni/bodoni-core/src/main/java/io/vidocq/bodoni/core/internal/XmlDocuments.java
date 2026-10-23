@@ -210,17 +210,17 @@ public final class XmlDocuments {
 
         @Override
         public void error(SAXParseException exception) throws SAXException {
-            record(exception);
+            keepFirst(exception);
             super.error(exception);
         }
 
         @Override
         public void fatalError(SAXParseException exception) throws SAXException {
-            record(exception);
+            keepFirst(exception);
             super.fatalError(exception);
         }
 
-        private void record(SAXParseException exception) {
+        private void keepFirst(SAXParseException exception) {
             if (failure == null) {
                 failure = exception;
             }

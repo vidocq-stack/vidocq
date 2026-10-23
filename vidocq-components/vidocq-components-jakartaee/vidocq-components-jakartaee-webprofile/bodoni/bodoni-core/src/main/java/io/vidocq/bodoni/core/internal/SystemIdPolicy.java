@@ -122,7 +122,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     static final String NOT_FOUND = "not found";
 
     /** The system id shown in messages when the page gave none. */
-    private static final String NONE = "(none)";
+    private static final String SHOWN_NONE = "(none)";
 
     /**
      * A URI of a private scheme inside a JDK message. A {@code :} ends it, as in
@@ -222,7 +222,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
             }
         }
         String rest = uri.startsWith(NONE_BASE) ? uri.substring(NONE_BASE.length()) : uri.substring(uri.indexOf(':') + 1);
-        return rest.isEmpty() ? NONE : rest;
+        return rest.isEmpty() ? SHOWN_NONE : rest;
     }
 
     /** No external subset is supplied for a document without one. */
@@ -447,7 +447,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     private JspException refused(String reference, String reason) {
         String shown = mode == Mode.NONE ? asWritten(reference) : reference;
-        return record(new JspException(REFUSED.formatted(action, shown, shownSystemId(), reason)));
+        return keepFirst(new JspException(REFUSED.formatted(action, shown, shownSystemId(), reason)));
     }
 
     /**
@@ -470,10 +470,10 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     private JspException unreadable(String reference, Exception cause) {
         String message = Objects.toString(cause.getMessage(), cause.getClass().getName());
-        return record(new JspException(UNREADABLE.formatted(action, reference, shownSystemId(), message), cause));
+        return keepFirst(new JspException(UNREADABLE.formatted(action, reference, shownSystemId(), message), cause));
     }
 
-    private JspException record(JspException exception) {
+    private JspException keepFirst(JspException exception) {
         if (failure == null) {
             failure = exception;
         }
@@ -481,7 +481,7 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     }
 
     private String shownSystemId() {
-        return systemId == null ? NONE : systemId;
+        return systemId == null ? SHOWN_NONE : systemId;
     }
 
     private static IllegalArgumentException invalid(String action, String systemId, URISyntaxException cause) {

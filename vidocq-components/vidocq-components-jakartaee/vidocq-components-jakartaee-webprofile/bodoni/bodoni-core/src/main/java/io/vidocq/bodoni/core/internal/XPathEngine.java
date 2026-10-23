@@ -116,7 +116,7 @@ public final class XPathEngine {
         if (select == null || select.isEmpty()) {
             throw new XPathExpressionException("Missing XPath expression");
         }
-        return XmlFactories.xpath(XPathScopes.INSTANCE, new PageVariableResolver(pc));
+        return XmlFactories.xpath(new XPathScopes(),new PageVariableResolver(pc));
     }
 
     private static Node contextOf(Node context) {
