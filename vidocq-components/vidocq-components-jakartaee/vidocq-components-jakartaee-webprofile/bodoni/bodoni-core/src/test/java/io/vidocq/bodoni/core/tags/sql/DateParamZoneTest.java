@@ -20,6 +20,7 @@
 package io.vidocq.bodoni.core.tags.sql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -39,18 +40,17 @@ import jakarta.servlet.jsp.jstl.sql.Result;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.parallel.Isolated;
 
 /**
  * {@code <sql:dateParam>} values before 1891 in Europe/Paris (Tags 3.0 §10.8, BUG.md BOD-005).
  *
  * <p>The legacy {@code java.util} zone data gives Paris CET (+1:00) before 1891 while
  * {@code java.time} gives local mean time (+0:09:21); a driver converting a {@code java.sql.Date}
- * with {@code java.time} rules (H2) would bind the day before. The test switches the JVM default
- * zone, so it runs isolated; the H2 session zone is set to the same zone, since H2 may have cached
- * the default zone of an earlier test.
+ * with {@code java.time} rules (H2) would bind the day before. The test needs Europe/Paris as the
+ * JVM default zone: the {@code europe-paris-zone} surefire execution runs it in its own JVM started
+ * in that zone. It never switches the default zone itself, since H2 caches the zone it first sees
+ * and a switch would leak into later tests; outside that execution it is skipped.
  */
-@Isolated
 class DateParamZoneTest {
 
     private static final String PARIS = "Europe/Paris";
@@ -58,13 +58,12 @@ class DateParamZoneTest {
     private final TestServletContext context = new TestServletContext();
     private final TestPageContext pc =
             new TestPageContext(new TestHttpServletRequest(context), new TestHttpServletResponse(), context);
-    private TimeZone saved;
     private TestDatabase db;
 
     @BeforeEach
     void setUp() {
-        saved = TimeZone.getDefault();
-        TimeZone.setDefault(TimeZone.getTimeZone(PARIS));
+        assumeTrue(PARIS.equals(TimeZone.getDefault().getID()),
+                "runs in the europe-paris-zone surefire execution, whose JVM starts in " + PARIS);
         db = TestDatabase.create(
                 "CREATE TABLE t4(id INT, d DATE, t TIME, ts TIMESTAMP)",
                 "INSERT INTO t4 VALUES (1, DATE '1788-01-01', TIME '12:00:00', TIMESTAMP '1788-01-01 12:00:00')");
@@ -72,10 +71,8 @@ class DateParamZoneTest {
 
     @AfterEach
     void tearDown() {
-        try {
+        if (db != null) {
             db.close();
-        } finally {
-            TimeZone.setDefault(saved);
         }
     }
 
@@ -86,7 +83,7 @@ class DateParamZoneTest {
 
     private int found(String column, java.util.Date value, String type) throws Exception {
         QueryTag parent = new QueryTag();
-        parent.setDataSource(new CountingDataSource(db.url() + ";TIME ZONE=" + PARIS));
+        parent.setDataSource(new CountingDataSource(db.url()));
         parent.setSql("SELECT id FROM t4 WHERE " + column + " = ?");
         parent.setVar("r");
         DateParamTag param = new DateParamTag();

@@ -129,7 +129,9 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   <sql:query var="r">SELECT title FROM book WHERE published = ?<sql:dateParam value="${d}" type="date"/></sql:query>
   ```
   finds nothing for a row published `DATE '1788-01-01'`. Unit test: `DateParamZoneTest`
-  (`tags.sql`); IT: `CorePagesIT.sqlDateParamBindsADate`, host in `Europe/Paris`.
+  (`tags.sql`, its own surefire execution `europe-paris-zone`, a JVM started in
+  `Europe/Paris`: switching the default zone in a shared JVM leaks into later tests, as H2
+  caches the zone it first sees); IT: `CorePagesIT.sqlDateParamBindsADate`, host in `Europe/Paris`.
 - Cause: `fmt:parseDate` and `sql:dateParam` build the right instant from the legacy
   `java.util` zone data (CET, +1:00). H2's `setObject` / `setDate` without a `Calendar` convert
   the `java.sql.Date` / `Timestamp` millis with `java.time` zone rules (Paris local mean time,

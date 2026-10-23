@@ -59,6 +59,32 @@
                          instantiates the test InitialContextFactory (TestNaming.Factory) by name. -->
                     <argLine>@{argLine} --add-opens io.vidocq.bodoni.core/io.vidocq.bodoni.core.testing=jakarta.el,java.naming</argLine>
                 </configuration>
+                <executions>
+                    <execution>
+                        <!-- DateParamZoneTest needs Europe/Paris as the JVM default zone (BUG.md
+                             BOD-005). It gets its own JVM, started in that zone: switching the
+                             default zone inside a shared JVM leaks into later tests, because H2
+                             caches the zone it first sees. -->
+                        <id>default-test</id>
+                        <configuration>
+                            <excludes>
+                                <exclude>**/DateParamZoneTest.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>europe-paris-zone</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>**/DateParamZoneTest.java</include>
+                            </includes>
+                            <argLine>@{argLine} --add-opens io.vidocq.bodoni.core/io.vidocq.bodoni.core.testing=jakarta.el,java.naming -Duser.timezone=Europe/Paris</argLine>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
