@@ -28,9 +28,11 @@ import java.io.IOException;
 import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReference;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -48,9 +50,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Renders pages precompiled by Ibarra (at {@code process-classes}) on a forked Foy-over-Chappe
- * host and checks Bodoni's {@code c:} and {@code fn:} libraries under both the
- * {@code jakarta.tags.*} URIs and the JSTL 1.2 {@code http://java.sun.com/jsp/jstl/*} URIs
- * (Tags 3.0 §2, §4–§7, §15).
+ * host and checks Bodoni's {@code c:}, {@code fmt:}, {@code x:} and {@code fn:} libraries under
+ * both the {@code jakarta.tags.*} URIs and the JSTL 1.2 {@code http://java.sun.com/jsp/jstl/*} URIs
+ * (Tags 3.0 §2, §4–§13, §15).
  *
  * <p>The host runs strictly on the module path with {@code -Dpeano.reflection=deny} and
  * without any compiler module: the pages only use {@code String}, arrays, {@code List} and
@@ -59,6 +61,8 @@ import org.junit.jupiter.api.Test;
  * {@code LoopTagStatus} properties and the {@code entries} page reads {@code Map.Entry}
  * properties: under deny mode both are served by accessor tables, the {@code LoopTagStatus}
  * one from {@code bodoni-peano} and the {@code Map.Entry} one built into Peano (BUG.md BOD-001).
+ * The {@code x:} pages hand EL only {@code Document}, {@code Node}, {@code NodeList},
+ * {@code String} values and exceptions printed through {@code toString()}: no new accessor table.
  */
 class CorePagesIT {
 
@@ -80,7 +84,7 @@ class CorePagesIT {
      * {@code --limit-modules}: {@code jdk.localedata} provides the CLDR locale data (French, ...)
      * the fmt pages format with.
      */
-    private static final String JDK_MODULES = "java.desktop,java.sql,java.net.http,jdk.localedata";
+    private static final String JDK_MODULES = "java.desktop,java.sql,java.xml,java.net.http,jdk.localedata";
 
     /** "345 987,246": the French group separator of the JDK's CLDR data is U+202F. */
     private static final String FRENCH_NUMBER = "345\u202f987,246";
@@ -292,6 +296,75 @@ class CorePagesIT {
     }
 
     @Test
+    void xmlOutSelectsWithARequestParameterVariable() throws Exception {
+        // Tags 3.0 §11.1.3, §11.3: $param:id is bound to the request parameter.
+        assertEquals("Tipografico", paragraph(get("/xml.jsp?id=2"), "out"));
+    }
+
+    @Test
+    void xmlForEachSetsTheContextNodeAndExposesVarStatus() throws Exception {
+        // Tags 3.0 §12.6: the body's relative XPath is evaluated against the current node.
+        assertEquals("1:Manuale;2:Tipografico;", paragraph(get("/xml.jsp?id=2"), "loop"));
+    }
+
+    @Test
+    void xmlConditionalsUseXPathBooleanConversion() throws Exception {
+        // Tags 3.0 §12.2–§12.5: a non-empty node-set is true; x:choose runs its first true branch.
+        String page = get("/xml.jsp?id=2");
+        assertEquals("found", paragraph(page, "if"));
+        assertEquals("second", paragraph(page, "when"));
+        assertEquals("none", paragraph(page, "otherwise"));
+    }
+
+    @Test
+    void xmlSetExportsANodeSetThatOutConvertsToItsFirstNode() throws Exception {
+        // Tags 3.0 §11.4: x:set stores the node-set; x:out takes its string value (§11.1.4).
+        assertEquals("Manuale", paragraph(get("/xml.jsp?id=2"), "titles"));
+    }
+
+    @Test
+    void xmlTransformImportsAStylesheetThroughARelativeSystemId() throws Exception {
+        // Tags 3.0 §13.1, §11.1.7: xsl:import of common.xsl resolves against /xml/main.xsl inside
+        // the web application; x:param reaches the stylesheet.
+        assertEquals("[Manuale]|[Tipografico]", paragraph(get("/xml.jsp?id=2"), "transform"));
+    }
+
+    @Test
+    void xmlLegacyUriParsesAndSelects() throws Exception {
+        assertEquals("Parma", paragraph(get("/xml-legacy.jsp"), "city"));
+    }
+
+    @Test
+    void xmlParseResolvesAnEntityInsideTheWebApplicationWithARelativeSystemId() throws Exception {
+        assertEquals("Relative", paragraph(entitiesPage(), "relative"));
+    }
+
+    @Test
+    void xmlParseReadsAnEntityOfTheSameOriginWithAnAbsoluteSystemId() throws Exception {
+        // The page fetches xml-part.jsp from this server while it serves the request.
+        assertEquals("Absolute", paragraph(entitiesPage(), "absolute"));
+    }
+
+    @Test
+    void xmlParseRefusesAnEntityOfAnotherOrigin() throws Exception {
+        String caught = paragraph(entitiesPage(), "cross");
+        assertTrue(caught.contains("refused") && caught.contains("not the same origin") && caught.contains("localhost"),
+                caught);
+    }
+
+    @Test
+    void xmlParseDoesNotFollowARedirect() throws Exception {
+        String caught = paragraph(entitiesPage(), "redirect");
+        assertTrue(caught.contains("cannot be read") && caught.contains("HTTP status 302"), caught);
+    }
+
+    @Test
+    void xmlParseRefusesAnEntityWithoutASystemId() throws Exception {
+        String caught = paragraph(entitiesPage(), "none");
+        assertTrue(caught.contains("refused") && caught.contains("no system id"), caught);
+    }
+
+    @Test
     void denyModeIsActive() throws Exception {
         // Guards the premise of this IT: the host runs with peano.reflection=deny, so reading a
         // bean property of a plain public class without a registered accessor fails.
@@ -300,6 +373,17 @@ class CorePagesIT {
         String diagnostics = response.body() + hostLog();
         assertTrue(diagnostics.contains("Reflection fallback denied for jakarta.servlet.jsp.JspTagException"),
                 () -> response.body() + "\n--- host log ---\n" + hostLog());
+    }
+
+    /**
+     * The entities page with its two absolute system ids, built here from the host's port: {@code base}
+     * on this server, {@code cross} the same server under another host name (another origin).
+     */
+    private static String entitiesPage() throws Exception {
+        String base = "http://127.0.0.1:" + port + CONTEXT + "/xml-doc.xml";
+        String cross = "http://localhost:" + port + CONTEXT + "/xml-part.jsp";
+        return get("/xml-entities.jsp?base=" + URLEncoder.encode(base, StandardCharsets.UTF_8)
+                + "&cross=" + URLEncoder.encode(cross, StandardCharsets.UTF_8));
     }
 
     private static HttpResponse<String> send(String page) throws Exception {
