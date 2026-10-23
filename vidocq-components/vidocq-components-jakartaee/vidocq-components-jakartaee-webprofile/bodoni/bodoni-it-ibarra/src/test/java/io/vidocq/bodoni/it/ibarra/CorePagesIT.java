@@ -402,7 +402,7 @@ class CorePagesIT {
 
     @Test
     void sqlConfigDataSourceObjectExposesColumnsAndRows() throws Exception {
-        // Tags 3.0 §10.8: sql:setDataSource without var stores the DataSource object as the
+        // Tags 3.0 §10.6: sql:setDataSource without var stores the DataSource object as the
         // page-scope setting; Result exposes its row count, column names and rows by index.
         String page = sqlPage();
         assertEquals("3", paragraph(page, "count"));

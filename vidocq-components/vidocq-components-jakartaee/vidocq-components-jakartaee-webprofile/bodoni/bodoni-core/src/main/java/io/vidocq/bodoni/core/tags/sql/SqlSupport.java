@@ -79,14 +79,16 @@ final class SqlSupport {
      * @param specified whether the {@code dataSource} attribute was set, even to {@code null}
      * @param attribute the attribute value
      * @param pc        the page context the setting is looked up in
+     * @param statement the SQL statement the connection is for, named in a connection failure
+     *                  (§10.3, §10.4); {@code null} for {@code <sql:transaction>}
      * @return the connection, which the caller closes, and its described source
      * @throws JspException when the attribute is {@code null}, nothing is configured, the source
      *                      cannot be resolved or no connection can be obtained
      */
-    static Opened open(String action, boolean specified, Object attribute, PageContext pc)
+    static Opened open(String action, boolean specified, Object attribute, PageContext pc, String statement)
             throws JspException {
         Object source = source(action, specified, attribute, pc);
-        return new Opened(connect(action, resolve(action, source), source), DataSources.describe(source));
+        return new Opened(connect(action, resolve(action, source), source, statement), DataSources.describe(source));
     }
 
     /**
@@ -95,11 +97,15 @@ final class SqlSupport {
      * @param action the action name, for messages
      * @param ds     the data source
      * @param source what the page gave, described in a failure without its credentials
+     * @param statement the SQL statement the connection is for, named in a failure; {@code null}
+     *                  when there is none
      * @return the connection
      * @throws JspException when the data source fails, with its exception as the cause
      */
-    static Connection connect(String action, DataSource ds, Object source) throws JspException {
-        String failure = action + ": cannot get a connection from " + DataSources.describe(source) + ": ";
+    static Connection connect(String action, DataSource ds, Object source, String statement)
+            throws JspException {
+        String failure = action + ": cannot get a connection from " + DataSources.describe(source)
+                + (statement == null ? "" : " to execute \"" + statement + "\"") + ": ";
         Connection connection;
         try {
             connection = ds.getConnection();
@@ -113,18 +119,23 @@ final class SqlSupport {
     }
 
     /**
-     * The {@link Config#SQL_MAX_ROWS} setting: an {@code Integer} or other {@code Number}, or a
-     * {@code String} holding an integer; unset or blank means no limit.
+     * The {@link Config#SQL_MAX_ROWS} setting: an {@code Integer}, {@code Short}, {@code Byte}
+     * or a {@code Long} within the {@code int} range, or a {@code String} holding an integer;
+     * unset or blank means no limit.
      *
      * @return the setting, {@code -1} for no limit
-     * @throws JspTagException for another type, a non-integer string or a value below {@code -1}
+     * @throws JspTagException for another type (another {@code Number} included), a non-integer
+     *                         string, a {@code Long} outside the {@code int} range or a value
+     *                         below {@code -1}
      */
     static int maxRowsSetting(PageContext pc) throws JspTagException {
         Object value = Config.find(pc, Config.SQL_MAX_ROWS);
         int rows;
         if (value == null) {
             return -1;
-        } else if (value instanceof Number number) {
+        } else if (value instanceof Integer || value instanceof Short || value instanceof Byte) {
+            rows = ((Number) value).intValue();
+        } else if (value instanceof Long number && number == number.intValue()) {
             rows = number.intValue();
         } else if (value instanceof String text && text.isBlank()) {
             return -1;

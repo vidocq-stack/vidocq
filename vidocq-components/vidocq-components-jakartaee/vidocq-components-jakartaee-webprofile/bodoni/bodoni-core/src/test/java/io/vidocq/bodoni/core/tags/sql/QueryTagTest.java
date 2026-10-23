@@ -265,7 +265,8 @@ class QueryTagTest {
         QueryTag tag = query(Books.ALL);
         tag.setDataSource(new Books.Unconfigured());
         JspException e = assertThrows(JspException.class, () -> run(tag, Body.NONE));
-        assertTrue(e.getMessage().contains(Books.Unconfigured.class.getName()), e.getMessage());
+        assertEquals("sql:query: cannot get a connection from " + Books.Unconfigured.class.getName()
+                + " to execute \"" + Books.ALL + "\": no URL configured", e.getMessage());
         assertInstanceOf(SQLException.class, e.getCause());
     }
 
@@ -351,7 +352,7 @@ class QueryTagTest {
         ds.onOpen(c -> c.failOnConnection("close"));
         JspException e = assertThrows(JspException.class, () -> run(query(Books.ALL), Body.NONE));
         assertEquals("sql:query: cannot close the connection to " + CountingDataSource.class.getName()
-                + ": injected close", e.getMessage());
+                + " after \"" + Books.ALL + "\": injected close", e.getMessage());
         assertInstanceOf(SQLException.class, e.getCause());
         assertEquals(0, ds.connections().get(0).unclosed());
     }

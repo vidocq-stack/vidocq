@@ -84,7 +84,7 @@ public class TransactionTag extends TagSupport implements TryCatchFinally {
     @Override
     public int doStartTag() throws JspException {
         int level = level(isolation);
-        connection = SqlSupport.open(ACTION, dataSourceSpecified, dataSource, pageContext).connection();
+        connection = SqlSupport.open(ACTION, dataSourceSpecified, dataSource, pageContext, null).connection();
         try {
             begin(level);
         } catch (SQLException e) {

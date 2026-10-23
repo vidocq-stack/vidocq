@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
 
@@ -138,6 +139,70 @@ class JdbcParametersTest {
         JdbcParameters parameters = JdbcParameters.parse("jdbc:oracle:thin:scott/tiger@//host:1521/svc");
         assertEquals("jdbc:oracle:thin:@//host:1521/svc", parameters.redactedUrl());
         assertEquals(Set.of("tiger"), parameters.secrets());
+    }
+
+    @Test
+    void userInfoPasswordWithASemicolon() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:mysql://u:pa;ss@host/db");
+        assertEquals("jdbc:mysql://host/db", parameters.redactedUrl());
+        assertEquals(Set.of("pa;ss"), parameters.secrets());
+    }
+
+    @Test
+    void userInfoPasswordWithAQuestionMark() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:mysql://u:pa?ss@host/db");
+        assertEquals("jdbc:mysql://host/db", parameters.redactedUrl());
+        assertEquals(Set.of("pa?ss"), parameters.secrets());
+    }
+
+    @Test
+    void oraclePasswordWithASemicolon() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:oracle:thin:scott/ti;ger@host:1521:db");
+        assertEquals("jdbc:oracle:thin:@host:1521:db", parameters.redactedUrl());
+        assertEquals(Set.of("ti;ger"), parameters.secrets());
+    }
+
+    @Test
+    void propertiesAfterAUserInfoPasswordWithASemicolonAreCut() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:x://u:pa;ss@h/db;password=prop");
+        assertEquals("jdbc:x://h/db", parameters.redactedUrl());
+        assertEquals(Set.of("pa;ss", "prop"), parameters.secrets());
+    }
+
+    /** An {@code @} in a password property is no user information: no fragment of it shows. */
+    @Test
+    void passwordPropertyWithAnAt() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:x://h/db?password=p@ss");
+        String redacted = parameters.redactedUrl();
+        assertFalse(redacted.contains("ss"), redacted);
+        assertTrue(parameters.secrets().contains("p@ss"), parameters.secrets().toString());
+    }
+
+    /** User information followed by a password property with an {@code @}: neither shows. */
+    @Test
+    void userInfoThenPasswordPropertyWithAnAt() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:x://u:" + SECRET + "@h/db;PWD=q@r");
+        String redacted = parameters.redactedUrl();
+        assertFalse(redacted.contains(SECRET), redacted);
+        assertFalse(redacted.contains("r"), redacted);
+        assertTrue(parameters.secrets().containsAll(Set.of(SECRET, "q@r")), parameters.secrets().toString());
+    }
+
+    /** An {@code @} in another property may cut more than the credentials, never less. */
+    @Test
+    void userInfoThenAnotherPropertyWithAnAt() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:x://u:" + SECRET + "@h/db;USER=a@b");
+        String redacted = parameters.redactedUrl();
+        assertFalse(redacted.contains(SECRET), redacted);
+        assertTrue(parameters.secrets().contains(SECRET), parameters.secrets().toString());
+    }
+
+    /** A {@code //} and an {@code @} that only occur in the properties are no user information. */
+    @Test
+    void anAuthorityInThePropertiesIsNoUserInfo() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:x:h;password=" + SECRET + ";url=//a@b");
+        assertEquals("jdbc:x:h", parameters.redactedUrl());
+        assertTrue(parameters.secrets().contains(SECRET), parameters.secrets().toString());
     }
 
     @Test

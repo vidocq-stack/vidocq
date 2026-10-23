@@ -159,17 +159,19 @@ abstract class ExecutionTagSupport extends BodyTagSupport implements SQLExecutio
     }
 
     /**
-     * Runs {@code statement} on a connection of its own, closed here. A failure to close it is
-     * reported as such; after a failing statement it is suppressed on the statement's failure.
+     * Runs {@code statement} on a connection of its own, closed here. A failure to get or to
+     * close it names the statement (§10.3, §10.4); a failure to close it after a failing
+     * statement is suppressed on the statement's failure.
      */
     private Object executeOwned(String statement) throws JspException {
-        SqlSupport.Opened opened = SqlSupport.open(action, dataSourceSpecified, dataSource, pageContext);
+        SqlSupport.Opened opened =
+                SqlSupport.open(action, dataSourceSpecified, dataSource, pageContext, statement);
         try (Connection connection = opened.connection()) {
             return executeOn(connection, statement);
         } catch (SQLException e) {
             // executeOn turns its own SQLExceptions into JspExceptions: this one comes from close()
-            throw new JspException(action + ": cannot close the connection to " + opened.source() + ": "
-                    + e.getMessage(), e);
+            throw new JspException(action + ": cannot close the connection to " + opened.source() + " after \""
+                    + statement + "\": " + e.getMessage(), e);
         }
     }
 

@@ -57,15 +57,15 @@ module io.vidocq.bodoni.core {
     // Result rows; Bodoni does not rely on the API module's descriptor for java.sql.
     requires transitive java.sql;
 
-    // JDBC drivers of the application are found through the thread context class loader.
-    uses java.sql.Driver;
-
     // String data sources of the sql: actions are looked up under java:comp/env; no exported
     // signature exposes a javax.naming type.
     requires java.naming;
 
     // c:import reads absolute http(s) URLs through java.net.http.
     requires java.net.http;
+
+    // JDBC drivers of the application are found through the thread context class loader.
+    uses java.sql.Driver;
 
     // The fn: functions are called directly by generated pages.
     exports io.vidocq.bodoni.core.functions;

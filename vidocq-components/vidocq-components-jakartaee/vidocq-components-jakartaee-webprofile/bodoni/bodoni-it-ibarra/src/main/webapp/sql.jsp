@@ -9,7 +9,7 @@
 <sql:setDataSource var="jdbc" url="jdbc:h2:mem:bodoni;DB_CLOSE_DELAY=-1" driver="org.h2.Driver" user="sa" password=""/>
 <sql:query var="one" dataSource="${jdbc}">SELECT title FROM book WHERE id = ?<sql:param value="${param.id}"/></sql:query>
 <p id="param">${one.rows[0].title}|${one.rows[0].TITLE}</p>
-<%-- The DataSource object becomes the page-scope data source setting (§10.8). --%>
+<%-- The DataSource object becomes the page-scope data source setting (§10.6). --%>
 <sql:setDataSource dataSource="${jdbc}"/>
 <sql:query var="all">SELECT id, title FROM book ORDER BY id</sql:query>
 <p id="count">${all.rowCount}</p>

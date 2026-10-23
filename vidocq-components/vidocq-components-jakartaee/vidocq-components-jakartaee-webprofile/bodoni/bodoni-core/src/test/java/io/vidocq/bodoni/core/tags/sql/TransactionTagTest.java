@@ -166,6 +166,16 @@ class TransactionTagTest {
         assertEquals(List.of(GET_ISOLATION, GET_AUTO_COMMIT, AUTO_COMMIT_OFF, ROLLBACK, AUTO_COMMIT_ON, CLOSE), log(0));
     }
 
+    /** The transaction's own connection failure has no statement to name. */
+    @Test
+    void aConnectionFailureNamesTheSourceOnly() {
+        TransactionTag tx = new TransactionTag();
+        tx.setDataSource(new Books.Unconfigured());
+        JspException e = assertThrows(JspException.class, () -> TagHarness.run(tx, pc, Body.EMPTY));
+        assertEquals("sql:transaction: cannot get a connection from " + Books.Unconfigured.class.getName()
+                + ": no URL configured", e.getMessage());
+    }
+
     @Test
     void aFailureWhileStartingClosesTheConnection() {
         ds.onOpen(c -> c.failOn("getAutoCommit"));

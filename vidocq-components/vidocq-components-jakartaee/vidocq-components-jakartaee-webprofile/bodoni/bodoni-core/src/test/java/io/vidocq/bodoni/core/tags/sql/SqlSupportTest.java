@@ -27,12 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
@@ -52,6 +55,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /** Data-source and setting resolution shared by the {@code sql:} actions (Tags 3.0 §10.2, §10.9, §2.8). */
@@ -76,13 +80,13 @@ class SqlSupportTest {
 
     @Test
     void aSpecifiedNullDataSourceFails() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, null, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, null, pc, null));
         assertEquals("sql:query: dataSource is null", e.getMessage());
     }
 
     @Test
     void noAttributeAndNoSettingFails() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, false, null, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, false, null, pc, null));
         assertEquals("sql:query: no data source: neither the dataSource attribute nor "
                 + "jakarta.servlet.jsp.jstl.sql.dataSource is set", e.getMessage());
     }
@@ -91,7 +95,7 @@ class SqlSupportTest {
     void theSettingIsUsedWithoutAnAttribute() throws JspException, SQLException {
         CountingDataSource ds = new CountingDataSource(db.url());
         Config.set(pc, Config.SQL_DATA_SOURCE, ds, PageContext.REQUEST_SCOPE);
-        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc);
+        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc, null);
         try (Connection c = opened.connection()) {
             assertSame(ds.connections().get(0).proxy(), c);
         }
@@ -101,7 +105,7 @@ class SqlSupportTest {
     @Test
     void theContextParameterIsAJdbcParameterString() throws JspException, SQLException {
         context.initParameter(Config.SQL_DATA_SOURCE, db.jdbcParameters());
-        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc);
+        SqlSupport.Opened opened = SqlSupport.open(ACTION, false, null, pc, null);
         try (Connection c = opened.connection()) {
             assertFalse(c.isClosed());
         }
@@ -113,14 +117,14 @@ class SqlSupportTest {
     void theAttributeWinsOverTheSetting() throws JspException, SQLException {
         CountingDataSource attribute = new CountingDataSource(db.url());
         Config.set(pc, Config.SQL_DATA_SOURCE, new Books.Unconfigured(), PageContext.REQUEST_SCOPE);
-        try (Connection c = SqlSupport.open(ACTION, true, attribute, pc).connection()) {
+        try (Connection c = SqlSupport.open(ACTION, true, attribute, pc, null).connection()) {
             assertSame(attribute.connections().get(0).proxy(), c);
         }
     }
 
     @Test
     void aResolutionFailureNamesTheAction() {
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, 1, pc));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.open(ACTION, true, 1, pc, null));
         assertTrue(e.getMessage().startsWith("sql:query: "), e.getMessage());
         assertTrue(e.getMessage().contains("java.lang.Integer"), e.getMessage());
         assertInstanceOf(SQLException.class, e.getCause());
@@ -130,7 +134,7 @@ class SqlSupportTest {
     void aConnectionFailureDescribesTheSourceWithoutItsPassword() {
         String secret = "jdbc:none:x;PASSWORD=hunter2,,sa,hunter2";
         DataSource ds = new Books.Unconfigured();
-        JspException e = assertThrows(JspException.class, () -> SqlSupport.connect(ACTION, ds, secret));
+        JspException e = assertThrows(JspException.class, () -> SqlSupport.connect(ACTION, ds, secret, null));
         assertTrue(e.getMessage().startsWith("sql:query: cannot get a connection from "), e.getMessage());
         assertTrue(e.getMessage().endsWith(": no URL configured"), e.getMessage());
         assertFalse(e.getMessage().contains("hunter2"), e.getMessage());
@@ -165,6 +169,31 @@ class SqlSupportTest {
     @ValueSource(strings = {"invalid", "-5"})
     void anInvalidMaxRowsSettingFails(String value) {
         context.initParameter(Config.SQL_MAX_ROWS, value);
+        JspTagException e = assertThrows(JspTagException.class, () -> SqlSupport.maxRowsSetting(pc));
+        assertEquals("sql:query: jakarta.servlet.jsp.jstl.sql.maxRows must be an integer of -1 or more, got '"
+                + value + "'", e.getMessage());
+    }
+
+    static Stream<Number> integralMaxRows() {
+        return Stream.of((short) 7, (byte) 7, 7L);
+    }
+
+    @ParameterizedTest
+    @MethodSource("integralMaxRows")
+    void maxRowsSettingAcceptsAnIntegralNumberInIntRange(Number value) throws JspTagException {
+        Config.set(pc, Config.SQL_MAX_ROWS, value, PageContext.PAGE_SCOPE);
+        assertEquals(7, SqlSupport.maxRowsSetting(pc));
+    }
+
+    static Stream<Number> nonIntegerMaxRows() {
+        return Stream.of(4294967296L, (long) Integer.MIN_VALUE - 1, 2.5d, 2.0f, new BigDecimal("3"),
+                BigInteger.TWO);
+    }
+
+    @ParameterizedTest
+    @MethodSource("nonIntegerMaxRows")
+    void aMaxRowsSettingThatIsNoIntFails(Number value) {
+        Config.set(pc, Config.SQL_MAX_ROWS, value, PageContext.PAGE_SCOPE);
         JspTagException e = assertThrows(JspTagException.class, () -> SqlSupport.maxRowsSetting(pc));
         assertEquals("sql:query: jakarta.servlet.jsp.jstl.sql.maxRows must be an integer of -1 or more, got '"
                 + value + "'", e.getMessage());

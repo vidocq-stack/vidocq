@@ -169,6 +169,27 @@ class UpdateTagTest {
         assertEquals(0, ds.connections().get(0).unclosed());
     }
 
+    /** Tags 3.0 §10.4: the message of a failure includes the SQL statement. */
+    @Test
+    void aConnectionFailureNamesTheStatement() {
+        UpdateTag tag = update(INSERT);
+        tag.setDataSource(new Books.Unconfigured());
+        JspException e = assertThrows(JspException.class, () -> run(tag, Body.NONE));
+        assertEquals("sql:update: cannot get a connection from " + Books.Unconfigured.class.getName()
+                + " to execute \"" + INSERT + "\": no URL configured", e.getMessage());
+        assertInstanceOf(SQLException.class, e.getCause());
+    }
+
+    /** Tags 3.0 §10.4: the message of a failure includes the SQL statement. */
+    @Test
+    void aFailingCloseNamesTheStatement() {
+        ds.onOpen(c -> c.failOnConnection("close"));
+        JspException e = assertThrows(JspException.class, () -> run(update(INSERT), Body.NONE));
+        assertEquals("sql:update: cannot close the connection to " + CountingDataSource.class.getName()
+                + " after \"" + INSERT + "\": injected close", e.getMessage());
+        assertInstanceOf(SQLException.class, e.getCause());
+    }
+
     @Test
     void aNullDataSourceFails() {
         UpdateTag tag = update(INSERT);

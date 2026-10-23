@@ -94,59 +94,113 @@ public record JdbcParameters(String url, String driver, String user, String pass
     }
 
     /**
-     * The URL without what may carry a secret: cut at its first {@code ;} or {@code ?}, then
-     * without its user information, which always ends at the last {@code @}. When a
-     * {@code //} comes before that {@code @}, the user information runs from after the
-     * {@code //} and the {@code @} goes too ({@code jdbc:x://u:p@h/db} gives
-     * {@code jdbc:x://h/db}). Otherwise (the Oracle form) it runs from after the last {@code :}
-     * before the first {@code /}, or before the first {@code @} when no {@code /} comes
-     * earlier, and the {@code @} stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db} gives
-     * {@code jdbc:oracle:thin:@host:1521:db}). It may cut more than the credentials, never
-     * less.
+     * The URL without what may carry a secret: without its user information, then cut at the
+     * first {@code ;} or {@code ?} of what follows it. The user information is found on the
+     * whole URL, so a password holding {@code ;} or {@code ?} goes entirely, and always ends at
+     * the last {@code @}. When a {@code //} comes before that {@code @}, the user information
+     * runs from after the {@code //} and the {@code @} goes too ({@code jdbc:x://u:p@h/db}
+     * gives {@code jdbc:x://h/db}). Otherwise (the Oracle form) it runs from after the last
+     * {@code :} before the first {@code /}, or before the first {@code @} when no {@code /}
+     * comes earlier, and the {@code @} stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db}
+     * gives {@code jdbc:oracle:thin:@host:1521:db}). When that {@code @} falls in the value of a
+     * password property ({@code jdbc:x://h/db?password=p@ss}), what follows it is a piece of
+     * that password: the URL is then cut where the user information would start
+     * ({@code jdbc:x://}). It may cut more than the credentials, never less.
      */
     public String redactedUrl() {
-        String cut = url.substring(0, propertiesStart());
-        UserInfo info = userInfo(cut);
-        if (info == null) {
-            return cut;
+        UserInfo info = userInfo(url);
+        if (info == null || propertiesStart(url) < info.start()) {
+            // No user information, or what looked like one lies in the properties.
+            return withoutUserInfo(beforeProperties());
         }
-        int resume = info.authority() ? info.at() + 1 : info.at();
-        return cut.substring(0, info.start()) + cut.substring(resume);
+        String prefix = url.substring(0, info.start());
+        if (inPasswordProperty(info.at())) {
+            return prefix;
+        }
+        return prefix + withoutProperties(url.substring(info.authority() ? info.at() + 1 : info.at()));
+    }
+
+    /** {@code text}, a URL without properties, without its user information. */
+    private static String withoutUserInfo(String text) {
+        UserInfo info = userInfo(text);
+        if (info == null) {
+            return text;
+        }
+        return text.substring(0, info.start()) + text.substring(info.authority() ? info.at() + 1 : info.at());
+    }
+
+    private static String withoutProperties(String text) {
+        return text.substring(0, propertiesStart(text));
+    }
+
+    /** The URL cut at its first {@code ;} or {@code ?}: what a driver may repeat of it alone. */
+    String beforeProperties() {
+        return withoutProperties(url);
     }
 
     /**
      * The secrets a driver message might repeat: the password field when not empty, the
      * password of the URL's user information ({@code //user:password@} or
-     * {@code user/password@}) and the value of every URL property, after the first {@code ;}
+     * {@code user/password@}), read both on the whole URL and on the URL cut at its first
+     * {@code ;} or {@code ?}, and the value of every URL property, after that first {@code ;}
      * or {@code ?}, whose key contains {@code password} or {@code pwd} whatever its case; a
-     * value in braces counts with and without them.
+     * value in braces counts with and without them. Reading the user information both ways
+     * covers a password holding {@code ;}, {@code ?} or {@code @} as well as a property value
+     * holding {@code @}: a few more secrets, never fewer.
      */
     Set<String> secrets() {
         Set<String> secrets = new HashSet<>();
         addSecret(secrets, password);
-        int propertiesStart = propertiesStart();
-        String cut = url.substring(0, propertiesStart);
-        UserInfo info = userInfo(cut);
-        if (info != null) {
-            String userInfo = cut.substring(info.start(), info.at());
-            int separator = userInfo.indexOf(info.authority() ? ':' : '/');
-            if (separator >= 0) {
-                addSecret(secrets, userInfo.substring(separator + 1));
-            }
-        }
-        for (String property : PROPERTY_SEPARATORS.split(url.substring(propertiesStart))) {
+        String cut = beforeProperties();
+        addUserInfoSecret(secrets, url);
+        addUserInfoSecret(secrets, cut);
+        for (String property : PROPERTY_SEPARATORS.split(url.substring(cut.length()))) {
             addPropertySecret(secrets, property);
         }
         return Set.copyOf(secrets);
     }
 
+    private static void addUserInfoSecret(Set<String> secrets, String text) {
+        UserInfo info = userInfo(text);
+        if (info != null) {
+            String userInfo = text.substring(info.start(), info.at());
+            int separator = userInfo.indexOf(info.authority() ? ':' : '/');
+            if (separator >= 0) {
+                addSecret(secrets, userInfo.substring(separator + 1));
+            }
+        }
+    }
+
+    /**
+     * Whether the {@code @} at {@code at} falls in the value of a password property: a
+     * {@code ;} or {@code ?} comes before it, and the property it is part of has a key
+     * containing {@code password} or {@code pwd}.
+     */
+    private boolean inPasswordProperty(int at) {
+        int start = propertiesStart(url);
+        if (start >= at) {
+            return false;
+        }
+        int last = start;
+        for (int index = start + 1; index < at; index++) {
+            char current = url.charAt(index);
+            if (current == ';' || current == '?' || current == '&') {
+                last = index;
+            }
+        }
+        String property = url.substring(last + 1, at);
+        int equals = property.indexOf('=');
+        return equals > 0 && isPasswordKey(property.substring(0, equals));
+    }
+
+    private static boolean isPasswordKey(String key) {
+        String lower = key.toLowerCase(Locale.ROOT);
+        return lower.contains(PASSWORD_KEY) || lower.contains(PWD_KEY);
+    }
+
     private static void addPropertySecret(Set<String> secrets, String property) {
         int equals = property.indexOf('=');
-        if (equals <= 0) {
-            return;
-        }
-        String key = property.substring(0, equals).toLowerCase(Locale.ROOT);
-        if (!key.contains(PASSWORD_KEY) && !key.contains(PWD_KEY)) {
+        if (equals <= 0 || !isPasswordKey(property.substring(0, equals))) {
             return;
         }
         String value = property.substring(equals + 1);
@@ -162,18 +216,18 @@ public record JdbcParameters(String url, String driver, String user, String pass
         }
     }
 
-    /** The index of the first {@code ;} or {@code ?} of the URL, else its length. */
-    private int propertiesStart() {
-        for (int index = 0; index < url.length(); index++) {
-            char current = url.charAt(index);
+    /** The index of the first {@code ;} or {@code ?} of {@code text}, else its length. */
+    private static int propertiesStart(String text) {
+        for (int index = 0; index < text.length(); index++) {
+            char current = text.charAt(index);
             if (current == ';' || current == '?') {
                 return index;
             }
         }
-        return url.length();
+        return text.length();
     }
 
-    /** The user information of a URL cut before its properties, {@code null} when it has none. */
+    /** The user information of a URL, {@code null} when it has none. */
     private static UserInfo userInfo(String cut) {
         int at = cut.lastIndexOf('@');
         if (at < 0) {

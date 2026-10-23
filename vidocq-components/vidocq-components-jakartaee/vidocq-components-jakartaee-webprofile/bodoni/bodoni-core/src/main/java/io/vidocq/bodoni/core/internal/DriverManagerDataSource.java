@@ -177,6 +177,11 @@ public final class DriverManagerDataSource implements DataSource {
         if (!parameters.url().isEmpty()) {
             scrubbed = scrubbed.replace(parameters.url(), parameters.redactedUrl());
         }
+        // A driver may repeat the URL without its properties, cut inside a password holding ';'.
+        String beforeProperties = parameters.beforeProperties();
+        if (!beforeProperties.isEmpty()) {
+            scrubbed = scrubbed.replace(beforeProperties, parameters.redactedUrl());
+        }
         List<String> secrets = new ArrayList<>(parameters.secrets());
         if (password != null && !password.isEmpty()) {
             secrets.add(password);

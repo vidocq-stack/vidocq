@@ -48,6 +48,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -152,6 +153,15 @@ class DriverManagerDataSourceTest {
     }
 
     @Test
+    void userInfoPasswordWithASemicolonIsNowhereInTheFailure() throws SQLException {
+        DataSource dataSource = dataSource("jdbc:h2:tcp://u:pa;ss@nohost.invalid/db");
+        SQLException failure = assertThrows(SQLException.class, dataSource::getConnection);
+        assertTrue(failure.getMessage().startsWith(
+                "JDBC driver org.h2.Driver cannot connect to 'jdbc:h2:tcp://nohost.invalid/db': "), failure.getMessage());
+        assertNoneInChain(failure, "pa;ss", "ss@", "u:pa");
+    }
+
+    @Test
     void passwordFieldIsScrubbedFromTheDriverMessage() throws SQLException {
         DataSource dataSource = dataSource("jdbc:bodoni-manual:echo,,sa," + SECRET);
         ManualDriver driver = ManualDriver.echoingThePassword();
@@ -245,12 +255,23 @@ class DriverManagerDataSourceTest {
 
     /** No throwable reachable from {@code failure} (causes, next exceptions, suppressed) shows the secret. */
     private static void assertNoSecretInChain(Throwable failure) {
+        assertNoneInChain(failure, SECRET);
+    }
+
+    /**
+     * No throwable reachable from {@code failure} (causes, next exceptions, suppressed) shows any
+     * of {@code fragments}, whatever its case.
+     */
+    private static void assertNoneInChain(Throwable failure, String... fragments) {
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         Deque<Throwable> pending = new ArrayDeque<>(List.of(failure));
         while (!pending.isEmpty()) {
             Throwable current = pending.pop();
             if (seen.add(current)) {
-                assertFalse(String.valueOf(current).contains(SECRET), String.valueOf(current));
+                String text = String.valueOf(current).toLowerCase(Locale.ROOT);
+                for (String fragment : fragments) {
+                    assertFalse(text.contains(fragment.toLowerCase(Locale.ROOT)), String.valueOf(current));
+                }
                 if (current.getCause() != null) {
                     pending.push(current.getCause());
                 }
