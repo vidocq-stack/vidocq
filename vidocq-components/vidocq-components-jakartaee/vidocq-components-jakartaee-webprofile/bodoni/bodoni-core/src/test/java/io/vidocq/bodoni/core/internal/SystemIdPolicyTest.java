@@ -186,6 +186,21 @@ class SystemIdPolicyTest {
     }
 
     @Test
+    void aResourceLookupThatThrowsIsAReadFailure() {
+        IllegalArgumentException lookup = new IllegalArgumentException("invalid path");
+        context.failingResource("/shop/data/bad.xml", lookup);
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, DOC, pc);
+
+        SAXException thrown = assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, "bad.xml"));
+
+        JspException recorded = policy.recordedFailure();
+        assertEquals("x:parse: external reference 'bad.xml' cannot be read, system id 'data/doc.xml': invalid path",
+                recorded.getMessage());
+        assertSame(lookup, recorded.getCause());
+        assertSame(recorded, thrown.getCause());
+    }
+
+    @Test
     void aMissingResourceIsAReadFailure() {
         SystemIdPolicy policy = SystemIdPolicy.of(ACTION, DOC, pc);
 

@@ -54,6 +54,7 @@ public class TestServletContext implements ServletContext {
     private final Map<String, String> initParameters = new LinkedHashMap<>();
     private final Map<String, TestServletContext> foreign = new LinkedHashMap<>();
     private final Map<String, String> resources = new LinkedHashMap<>();
+    private final Map<String, RuntimeException> failingResources = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
     private String contextPath = "/app";
 
@@ -72,6 +73,12 @@ public class TestServletContext implements ServletContext {
     /** Registers a web-application resource, served as UTF-8 bytes by {@code getResourceAsStream(path)}. */
     public TestServletContext resource(String path, String content) {
         resources.put(path, content);
+        return this;
+    }
+
+    /** Makes {@code getResourceAsStream(path)} throw {@code failure}, as a container may for a malformed path. */
+    public TestServletContext failingResource(String path, RuntimeException failure) {
+        failingResources.put(path, failure);
         return this;
     }
 
@@ -156,6 +163,10 @@ public class TestServletContext implements ServletContext {
 
     @Override
     public InputStream getResourceAsStream(String path) {
+        RuntimeException failure = failingResources.get(path);
+        if (failure != null) {
+            throw failure;
+        }
         String content = resources.get(path);
         return content == null ? null : new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
     }

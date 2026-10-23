@@ -233,8 +233,8 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
 
     /** Resolves an expanded entity system id, against {@link #parserSystemId()} when relative. */
     @Override
-    public InputSource resolveEntity(String publicId, String reference) throws SAXException {
-        return resolveEntity(null, publicId, null, reference);
+    public InputSource resolveEntity(String publicId, String systemId) throws SAXException {
+        return resolveEntity(null, publicId, null, systemId);
     }
 
     /**
@@ -245,9 +245,9 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
      *                      recorded {@link JspException}
      */
     @Override
-    public InputSource resolveEntity(String name, String publicId, String baseURI, String reference) throws SAXException {
+    public InputSource resolveEntity(String name, String publicId, String baseURI, String systemId) throws SAXException {
         try {
-            InputSource source = open(reference, baseURI);
+            InputSource source = open(systemId, baseURI);
             source.setPublicId(publicId);
             return source;
         } catch (JspException e) {
@@ -362,7 +362,13 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         if (!insideWebApp(target)) {
             throw refused(reference, OUTSIDE_WEB_APPLICATION);
         }
-        InputStream in = pageContext.getServletContext().getResourceAsStream(target.getPath());
+        InputStream in;
+        try {
+            in = pageContext.getServletContext().getResourceAsStream(target.getPath());
+        } catch (RuntimeException e) {
+            // A container may reject a path it cannot map (an IllegalArgumentException for a NUL).
+            throw unreadable(reference, e);
+        }
         if (in == null) {
             throw unreadable(reference, new FileNotFoundException(NOT_FOUND));
         }
