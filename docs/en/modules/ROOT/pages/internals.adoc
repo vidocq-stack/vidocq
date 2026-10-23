@@ -68,7 +68,8 @@ Key mechanics (implemented in `vauban-classloader`, consumed by
   (`io.vidocq.cassini.runtime.CassiniMaintenance`).
 * **Compatibility net** — a legacy main that boots the runtime without the layer still
   works: unwoven beans are handled by the Vauban load-time weaving agent (dynamic
-  attach, with the JDK's warning).
+  attach, with the JDK's warning), and the warning hints at a trampoline main that
+  re-layers the application.
 
 The full engine documentation (source/transformer SPI, weaving tiers, diagnostics
 options) lives in the Vauban documentation, Internals → Class loading.

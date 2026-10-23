@@ -94,8 +94,9 @@ container creates itself (Vidocq/vidocq#201). In the application layer, the usua
 export by itself.
 
 A legacy main that boots the runtime directly (through `VidocqBootstrap`) still works — unwoven beans are then
-covered by the load-time weaving agent (with the JDK's dynamic-agent warning). Delete it, or turn it into a
-trampoline if you need one of the two cases above.
+covered by the load-time weaving agent (with the JDK's dynamic-agent warning), and Vauban's warning hints at a
+trampoline that re-layers the application. Delete the legacy main — the runtime's own main re-layers it too — or
+turn it into a trampoline if you need one of the two cases above.
 
 One more benefit: applications never declare generated providers in
 `module-info.java`. The annotation processors emit standard `META-INF/services` files
