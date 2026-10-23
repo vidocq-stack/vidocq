@@ -426,7 +426,11 @@ external reference itself, the JDK never fetches on its own:
   `ServletContext.getResourceAsStream`; absolute targets are refused. A path with a leading `/`
   is context-relative, anything else is relative to the directory of the current page (the
   request attribute `jakarta.servlet.include.servlet_path` when set, else
-  `HttpServletRequest.getServletPath()`), like `c:import`. A `.` or `..` segment is refused.
+  `HttpServletRequest.getServletPath()`), like `c:import`. The reference is resolved first (`./x.xml` and `../x.xml` are normalised
+  against the base): it is refused when the result leaves the web application (above the context
+  root) or keeps an encoded dot segment (`%2e%2e`, `..%2f`, `..%5c`). A page `systemId` that is
+  not a valid URI, or a relative one that climbs above the context root, ends the action with a
+  `JspTagException` before anything is read.
 - **Opaque system id** (`jar:` and the like): every reference is refused.
 - **The origin is fixed when the policy is built**, from the page's system id. The base a
   parser or an XSLT processor passes only resolves the reference, so an `xml:base` in an

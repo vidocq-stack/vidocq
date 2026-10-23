@@ -139,7 +139,7 @@ A module-aware lookup, where generated code runs inside the application module, 
 
 === XML tags (`x:`)
 
-The handlers of `io.vidocq.bodoni.core.tags.xml`, with the attributes of `x.tld` (spec chapters 11 to 13). Attributes marked * are required. `select` is an XPath 1.0 expression evaluated by the JDK (`javax.xml.xpath`), never an EL expression; the other attributes except `var`, `scope`, `varDom` and `scopeDom` accept a runtime expression.
+The handlers of `io.vidocq.bodoni.core.tags.xml`, with the attributes of `x.tld` (spec chapters 11 to 13). Attributes marked * are required. `select` is an XPath 1.0 expression evaluated by the JDK (`javax.xml.xpath`), never an EL expression; the other attributes except `var`, `varStatus`, `scope`, `varDom` and `scopeDom` accept a runtime expression.
 
 [cols="1,3",options="header"]
 |===
@@ -178,9 +178,9 @@ An untrusted XML document or stylesheet can read local files or reach internal h
 
 * **No system id**: every external reference is refused.
 * **Absolute system id** (`https://example.org/data/doc.xml`): a reference must have the same scheme, host and port. The connection has connect and read timeouts, does not follow HTTP redirects, and a redirect or any non-2xx status is a failure. Under a `file:` system id a UNC target (`file:////host/share`) is refused.
-* **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference, or a path with a `.` or `..` segment, is refused. An opaque system id (`jar:`) allows no reference at all.
+* **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference is refused. The reference is resolved against the system id first, so `../x.xml` is accepted when the result is still inside the application; it is refused when the result leaves the web application (above the context root) or hides a dot segment in an encoding (`%2e%2e`, `..%2f`, `..%5c`). An opaque system id (`jar:`) allows no reference at all.
 
-A refused or unreadable reference ends the action with a `JspException` that names the reference and the system id, with the cause kept.
+A refused or unreadable reference ends the action with a `JspException` that names the reference and the system id, with the cause kept. A system id attribute that is not a valid URI, or a relative one that climbs above the context root, is not a reference: the action ends with a `JspTagException` carrying the message of the `IllegalArgumentException`, before anything is read.
 
 The JDK secure processing mode is on for every parser, transformer and XPath: its entity expansion limits apply and XSLT and XPath extension functions are disabled. The JDK access properties for external DTDs, schemas and stylesheets are set to the empty string, so a system property cannot reopen the fetching.
 
