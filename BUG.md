@@ -113,7 +113,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261012-01 — an IntelliJ build drops the annotation processor output, and Maven does not restore it
 
 - **Date**: 2026-10-12
-- **Status**: OPEN (vidocq#237), fix in progress on `fix/apt-output-clobbered-by-ide`
+- **Status**: FIXED (vidocq#238, vidocq#239; vidocq#237 closed)
 - **Symptom**: `vidocq-runtime-foy-servlet-example` started from the IntelliJ Dev run configuration
   (`vidocq:dev`) mounts no servlet; the Servlet panel of the dev console is empty. `target/classes`
   holds the hand-written classes only: no `$$FoyComponent`, `_VaubanComponents` or `META-INF/services`.
@@ -126,7 +126,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   IntelliJ Dev configuration ran `vidocq:dev` without `process-classes`, unlike the CLI.
 - **Fix**: the Dev configuration of `vidocq:idea` runs `process-classes vidocq:dev`; `vidocq:dev` and
   `vidocq:run` compare the compiler's `createdFiles.lst` with `target/classes`, and on a gap reset the
-  compiler's incremental state and recompile once. IntelliJ's own build running the processors: follow-up.
+  compiler's incremental state and recompile once (vidocq#238). The codegen bundles are published as
+  jars, so IntelliJ's import builds a real annotation-processor profile and its own build runs the
+  processors (vidocq#239).
 
 ## VIDOCQ-PEANO-003 — Maven processor paths do not discover Peano's module-only processor
 
