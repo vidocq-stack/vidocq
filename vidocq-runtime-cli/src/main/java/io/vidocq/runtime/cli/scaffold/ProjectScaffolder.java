@@ -60,6 +60,15 @@ public final class ProjectScaffolder {
     /** The extension whose scaffold writes a {@code HelloResource}. */
     private static final String REST_EXTENSION = "cassini-rest";
 
+    /** The trampoline launch of {@code vidocq:package}, for a {@code --main} scaffold. */
+    private static final String PACKAGE_MAIN_CLASS = """
+                                        <configuration>
+                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
+                                                 module option, which needs module/class (BUG-20260710-02). -->
+                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
+                                        </configuration>
+                """;
+
     private ProjectScaffolder() {}
 
     public static void scaffold(Command.Create create) throws IOException {
@@ -175,24 +184,13 @@ public final class ProjectScaffolder {
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", parentVersion,
                 extensionDeps(c.extensions(), parentVersion),
-                c.main() ? packageMainClass() : "",
+                c.main() ? PACKAGE_MAIN_CLASS : "",
                 aptCodegenPlugin(c.extensions(), parentVersion));
     }
 
     /** The {@code vidocq.mainClass} of a {@code --main} scaffold: its trampoline. */
     private static String mainClassProperty(Command.Create c) {
         return "        <vidocq.mainClass>" + c.pkg() + "." + appClassName(c.name()) + "</vidocq.mainClass>\n";
-    }
-
-    /** The trampoline launch of {@code vidocq:package}, for a {@code --main} scaffold. */
-    private static String packageMainClass() {
-        return """
-                                        <configuration>
-                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
-                                                 module option, which needs module/class (BUG-20260710-02). -->
-                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
-                                        </configuration>
-                """;
     }
 
     /**

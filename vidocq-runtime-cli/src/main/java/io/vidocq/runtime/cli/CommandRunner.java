@@ -274,9 +274,14 @@ public final class CommandRunner {
     }
 
     private static int runCreate(Command.Create create) {
+        return runCreate(create, Path.of(""));
+    }
+
+    /** {@code vidocq create} in {@code baseDir}. */
+    static int runCreate(Command.Create create, Path baseDir) {
         CliOutput.info("Scaffolding project '" + CliOutput.bold(create.name()) + "'…");
         try {
-            ProjectScaffolder.scaffold(create);
+            ProjectScaffolder.scaffold(create, baseDir);
         } catch (Exception e) {
             CliOutput.error("Failed to create project: " + e.getMessage());
             return 1;
@@ -658,7 +663,7 @@ public final class CommandRunner {
      *
      * @return whether the file changed
      */
-    private static boolean updateModuleInfo(Path projectDir, List<String> ids, boolean add) {
+    static boolean updateModuleInfo(Path projectDir, List<String> ids, boolean add) {
         Path file = projectDir.resolve("src").resolve("main").resolve("java").resolve("module-info.java");
         if (!Files.isRegularFile(file)) {
             return false;
