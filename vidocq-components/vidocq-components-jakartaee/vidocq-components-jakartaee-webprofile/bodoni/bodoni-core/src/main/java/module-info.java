@@ -60,6 +60,10 @@ module io.vidocq.bodoni.core {
     // JDBC drivers of the application are found through the thread context class loader.
     uses java.sql.Driver;
 
+    // String data sources of the sql: actions are looked up under java:comp/env; no exported
+    // signature exposes a javax.naming type.
+    requires java.naming;
+
     // c:import reads absolute http(s) URLs through java.net.http.
     requires java.net.http;
 
