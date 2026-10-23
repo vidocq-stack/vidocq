@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.StringReader;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -102,6 +103,19 @@ class ForEachTagTest {
         assertEquals("btext1", assertInstanceOf(Node.class, seen.get(0)).getTextContent());
         assertEquals("btext2", assertInstanceOf(Node.class, seen.get(1)).getTextContent());
         assertNull(pc.getAttribute(ITER, PageContext.PAGE_SCOPE));
+    }
+
+    @Test
+    void aPooledHandlerHoldsNoNodeAfterTheLoop() throws Exception {
+        twoB();
+        ForEachTag tag = forEach(ALL_B);
+        tag.setEnd(0);
+
+        assertEquals("btext1", TagHarness.run(tag, pc, PRINT_ITER));
+
+        Field nodes = ForEachTag.class.getDeclaredField("nodes");
+        nodes.setAccessible(true);
+        assertNull(nodes.get(tag));
     }
 
     @Test

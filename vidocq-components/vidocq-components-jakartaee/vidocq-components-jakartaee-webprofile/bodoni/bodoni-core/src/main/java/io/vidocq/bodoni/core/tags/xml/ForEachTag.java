@@ -80,6 +80,16 @@ public class ForEachTag extends RangeLoopTagSupport {
         return nodes.next();
     }
 
+    /**
+     * {@inheritDoc} The selected nodes are dropped too: a pooled handler must not keep the
+     * document alive between invocations.
+     */
+    @Override
+    public void doFinally() {
+        super.doFinally();
+        nodes = null;
+    }
+
     @Override
     public void release() {
         super.release();
