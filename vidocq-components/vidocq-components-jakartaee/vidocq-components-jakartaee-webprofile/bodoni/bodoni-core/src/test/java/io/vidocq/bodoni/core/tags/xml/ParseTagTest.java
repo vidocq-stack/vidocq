@@ -270,6 +270,13 @@ class ParseTagTest {
                 e.getMessage());
     }
 
+    @Test
+    void aMalformedDocumentNamesTheLineAndColumn() {
+        JspException e = assertThrows(JspException.class, () -> run(parse("<a><b></a>")));
+
+        assertTrue(e.getMessage().matches("x:parse: .+, line 1, column \\d+, system id '\\(none\\)'"), e.getMessage());
+    }
+
     // ---- no DTD validation --------------------------------------------------
 
     @Test

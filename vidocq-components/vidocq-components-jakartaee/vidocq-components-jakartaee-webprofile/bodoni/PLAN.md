@@ -441,7 +441,9 @@ external reference itself, the JDK never fetches on its own:
   reasons `no system id`, `not the same origin`, `outside the web application`,
   `the system id is not hierarchical` and `not a valid URI`;
   `<action>: external reference '<r>' cannot be read, system id '<id>': <cause>`. Other parse
-  and transform failures end with `, system id '<id>'`.
+  and transform failures end with `, line <n>, column <m>, system id '<id>'`, line and column
+  when the cause chain carries a SAX or XSLT location (the JDK's XSLT processor drops the
+  location of a document it parses during the transformation).
 - **DTD.** Validation is off. A DOCTYPE with an internal subset is accepted
   (`disallow-doctype-decl` is not set): TCK `positiveParseNoDTDValidationTest`. Must pass, B5:
   `positiveParseSystemIdTest`, `positiveTransformDocSystemIdTest`,

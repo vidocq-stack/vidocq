@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 
+import javax.xml.transform.SourceLocator;
 import javax.xml.transform.TransformerException;
 
 import io.vidocq.bodoni.core.internal.SystemIdPolicy;
@@ -94,7 +95,7 @@ class XmlSupportTest {
 
         JspException e = XmlSupport.documentFailure(ACTION, cause, policy);
 
-        assertEquals("x:parse: unclosed, system id '/x/doc.xml'", e.getMessage());
+        assertEquals("x:parse: unclosed, line 1, column 4, system id '/x/doc.xml'", e.getMessage());
         assertSame(cause, e.getCause());
     }
 
@@ -105,7 +106,53 @@ class XmlSupportTest {
 
         JspException e = XmlSupport.documentFailure(ACTION, new TransformerException("wrapped", parse), policy);
 
-        assertEquals("x:parse: wrapped, system id '/t/inc.xsl'", e.getMessage());
+        assertEquals("x:parse: wrapped, line 1, column 1, system id '/t/inc.xsl'", e.getMessage());
+    }
+
+    @Test
+    void anXsltLocationGivesTheLineAndColumn() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/t/s.xsl", pc);
+        SourceLocator locator = new Locator("bodoni-webapp:/t/s.xsl", 3, 7);
+
+        JspException e = XmlSupport.documentFailure(ACTION, new TransformerException("bad select", locator), policy);
+
+        assertEquals("x:parse: bad select, line 3, column 7, system id '/t/s.xsl'", e.getMessage());
+    }
+
+    @Test
+    void anUnknownLineOrColumnIsLeftOut() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/t/s.xsl", pc);
+        TransformerException noLine = new TransformerException("no line", new Locator(null, -1, -1));
+        TransformerException noColumn = new TransformerException("no column", new Locator(null, 2, -1));
+
+        assertEquals("x:parse: no line, system id '/t/s.xsl'",
+                XmlSupport.documentFailure(ACTION, noLine, policy).getMessage());
+        assertEquals("x:parse: no column, line 2, system id '/t/s.xsl'",
+                XmlSupport.documentFailure(ACTION, noColumn, policy).getMessage());
+    }
+
+    /** A fixed XSLT location. */
+    private record Locator(String systemId, int line, int column) implements SourceLocator {
+
+        @Override
+        public String getPublicId() {
+            return null;
+        }
+
+        @Override
+        public String getSystemId() {
+            return systemId;
+        }
+
+        @Override
+        public int getLineNumber() {
+            return line;
+        }
+
+        @Override
+        public int getColumnNumber() {
+            return column;
+        }
     }
 
     @Test

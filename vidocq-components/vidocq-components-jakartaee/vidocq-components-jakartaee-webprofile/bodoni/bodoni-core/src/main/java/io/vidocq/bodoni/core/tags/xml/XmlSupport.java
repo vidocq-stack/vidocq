@@ -21,6 +21,7 @@ package io.vidocq.bodoni.core.tags.xml;
 
 import java.util.Objects;
 
+import javax.xml.transform.SourceLocator;
 import javax.xml.transform.TransformerException;
 import javax.xml.xpath.XPathExpressionException;
 
@@ -40,8 +41,8 @@ import org.xml.sax.SAXParseException;
 /** What the {@code x:} handlers share: the XPath context, the scopes and the failures. */
 final class XmlSupport {
 
-    /** Message of a failed document: action, cause message, system id. */
-    private static final String DOCUMENT_FAILURE = "%s: %s, system id '%s'";
+    /** Message of a failed document: action, cause message, line and column (when known), system id. */
+    private static final String DOCUMENT_FAILURE = "%s: %s%s, system id '%s'";
 
     /** Bound of a cause-chain walk, against cyclic chains. */
     private static final int MAX_DEPTH = 32;
@@ -114,9 +115,9 @@ final class XmlSupport {
      * A document that cannot be parsed or transformed. When a policy recorded a refused or
      * unreadable external reference, the message is that failure's (the JDK may wrap or
      * rewrite it on the way). Otherwise it is the message of the innermost meaningful cause
-     * (wrappers that only repeat their cause are skipped) followed by the system id of the
-     * failing document: the innermost one a SAX or XSLT location names, else the first
-     * policy's. Either way the private bases given to the JDK are mapped back to what the page
+     * (wrappers that only repeat their cause are skipped), the line and column of the innermost
+     * SAX or XSLT location that knows them, and the system id of the failing document: the
+     * innermost one a SAX or XSLT location names, else the first policy's. Either way the private bases given to the JDK are mapped back to what the page
      * wrote ({@link SystemIdPolicy#pageView}). The cause is always {@code cause}, and a
      * recorded failure that the cause chain does not reach is added as suppressed.
      *
@@ -139,8 +140,10 @@ final class XmlSupport {
         }
         Throwable reason = innermost(cause);
         String text = Objects.toString(reason.getMessage(), reason.getClass().getName());
-        String systemId = Objects.requireNonNullElse(locatedSystemId(cause), policies[0].parserSystemId());
-        return new JspException(SystemIdPolicy.pageView(DOCUMENT_FAILURE.formatted(action, text, systemId), policies), cause);
+        Location location = located(cause);
+        String systemId = Objects.requireNonNullElse(location.systemId(), policies[0].parserSystemId());
+        String message = DOCUMENT_FAILURE.formatted(action, text, location.position(), systemId);
+        return new JspException(SystemIdPolicy.pageView(message, policies), cause);
     }
 
     /** The first cause that is not a mere wrapper repeating the message of its own cause. */
@@ -158,22 +161,52 @@ final class XmlSupport {
         return message == null || message.equals(cause.toString()) || message.equals(cause.getMessage());
     }
 
-    /** The system id of the innermost SAX or XSLT location in the chain, {@code null} for none. */
-    private static String locatedSystemId(Throwable failure) {
-        String located = null;
+    /**
+     * The SAX or XSLT locations of the chain: the innermost system id, and the innermost known
+     * line with its column; {@code null} and {@code -1} for none.
+     */
+    private static Location located(Throwable failure) {
+        Location located = Location.NONE;
         Throwable t = failure;
         for (int depth = 0; depth < MAX_DEPTH && t != null; depth++, t = t.getCause()) {
-            String systemId = null;
-            if (t instanceof SAXParseException parse) {
-                systemId = parse.getSystemId();
-            } else if (t instanceof TransformerException transform && transform.getLocator() != null) {
-                systemId = transform.getLocator().getSystemId();
-            }
-            if (systemId != null) {
-                located = systemId;
+            Location here = locationOf(t);
+            if (here != null) {
+                located = located.refinedBy(here);
             }
         }
         return located;
+    }
+
+    /** The location a SAX or XSLT failure carries, {@code null} for any other throwable. */
+    private static Location locationOf(Throwable t) {
+        if (t instanceof SAXParseException parse) {
+            return new Location(parse.getSystemId(), parse.getLineNumber(), parse.getColumnNumber());
+        }
+        if (t instanceof TransformerException transform && transform.getLocator() != null) {
+            SourceLocator locator = transform.getLocator();
+            return new Location(locator.getSystemId(), locator.getLineNumber(), locator.getColumnNumber());
+        }
+        return null;
+    }
+
+    /** Where a document failed; a line or column below 1 is unknown. */
+    private record Location(String systemId, int line, int column) {
+
+        static final Location NONE = new Location(null, -1, -1);
+
+        /** This location with the system id and the line (with its column) {@code inner} knows. */
+        Location refinedBy(Location inner) {
+            String id = inner.systemId() != null ? inner.systemId() : systemId;
+            return inner.line() > 0 ? new Location(id, inner.line(), inner.column()) : new Location(id, line, column);
+        }
+
+        /** {@code ", line <n>, column <m>"}, without the unknown parts. */
+        String position() {
+            if (line < 1) {
+                return "";
+            }
+            return column < 1 ? ", line " + line : ", line " + line + ", column " + column;
+        }
     }
 
     private static boolean reaches(Throwable chain, Throwable target) {

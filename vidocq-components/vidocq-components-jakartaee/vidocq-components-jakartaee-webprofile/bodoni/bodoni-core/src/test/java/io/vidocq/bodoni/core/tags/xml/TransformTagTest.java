@@ -412,6 +412,22 @@ class TransformTagTest {
                 e.getMessage());
     }
 
+    /**
+     * A malformed stylesheet is parsed when the transformer is compiled, and its location is in
+     * the cause chain. A malformed document is parsed during the transformation, where the
+     * JDK's XSLT processor wraps the parse failure without keeping it as a cause: no line is
+     * known then.
+     */
+    @Test
+    void aMalformedStylesheetNamesTheLineAndColumn() {
+        TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + "><xsl:template match='/'>x</xsl:stylesheet>");
+        tag.setXsltSystemId("/t/s.xsl");
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertTrue(e.getMessage().matches("x:transform: .+, line 1, column \\d+, system id '/t/s\\.xsl'"), e.getMessage());
+    }
+
     // ---- external references ------------------------------------------------
 
     @Test
