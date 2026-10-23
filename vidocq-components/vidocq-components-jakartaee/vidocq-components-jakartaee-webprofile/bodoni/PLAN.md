@@ -524,14 +524,26 @@ Decided with the maintainer on 2026-10-23.
 **Driver discovery for a JDBC parameter string** (§10.1.1, §10.2). `internal.DriverManagerDataSource`
 is unpooled: every `getConnection` opens a new connection. It captures a class loader at
 construction, the thread context class loader, else its own. A named driver class is loaded
-there with `Class.forName(driver, true, loader)` (not found: `SQLException`, SQLState `08001`).
-`getConnection` takes the first driver of `ServiceLoader.load(Driver.class, loader)` that
-accepts the URL and whose `connect` answers a connection, else the first such driver
-`DriverManager.drivers()` hands Bodoni (drivers registered by hand, or visible to Bodoni's
-own class loader). A provider that fails to load is skipped. No driver: Bodoni's own
-`SQLException`, SQLState `08001`, without cause, naming the URL redacted
-(`JdbcParameters.redactedUrl()`: cut at the first `;` or `?`, no user information); a driver
-failure keeps the driver's exception as cause. The module `uses java.sql.Driver` and
+there with `Class.forName(driver, true, loader)` (`JDBC driver class '<driver>' not found`,
+or `cannot be loaded` for a `LinkageError` such as a failed static initialiser; SQLState
+`08001`, cause kept: a class-loading error carries no URL). `getConnection` takes the first
+driver of `ServiceLoader.load(Driver.class, loader)` that accepts the URL and whose `connect`
+answers a connection, else iterates `DriverManager.drivers()` the same way (drivers
+registered by hand, or visible to Bodoni's own class loader): not
+`DriverManager.getConnection`, whose own "No suitable driver" (SQLState `08001`, full URL in
+the message) cannot be told from a driver failure. A provider that fails to load is skipped.
+No driver: Bodoni's own `SQLException`, SQLState `08001`, without cause, naming the URL
+redacted (`JdbcParameters.redactedUrl()`: cut at the first `;` or `?`, then without the user
+information, `//user:password@` up to the last `@`, or the Oracle form `user/password@` after
+the last `:` before the first `@`; it may cut more, never less). A driver failure is Bodoni's
+own `SQLException`, also **without cause** (a driver exception may repeat the password
+anywhere in its chain: H2 2.3.232 puts `s3cret@nohost.invalid` there for
+`jdbc:h2:tcp://u:s3cret@nohost.invalid/db`), message
+`JDBC driver <class> cannot connect to '<redactedUrl>': <driver message, scrubbed>`, the
+driver's SQLState and vendor code kept. Scrubbing replaces the full URL by the redacted one,
+then every known secret by `***`: the password field or the password given to
+`getConnection(user, password)`, the password of the URL's user information, and the values
+of its `password` properties, whatever their case. The module `uses java.sql.Driver` and
 `requires transitive java.sql`. A pre-JDBC 4 driver without
 `META-INF/services/java.sql.Driver`, in a class loader Bodoni cannot see, is not supported.
 

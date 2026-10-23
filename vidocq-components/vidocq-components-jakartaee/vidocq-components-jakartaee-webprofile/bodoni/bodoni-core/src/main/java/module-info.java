@@ -38,7 +38,7 @@
  * it {@code requires transitive java.sql}: pages hand {@code javax.sql.DataSource}
  * objects to the {@code sql:} actions and read {@code java.sql} values from
  * {@code Result} rows. It {@code uses java.sql.Driver}: the JDBC driver of a
- * {@code url[,driver[,user[,password]]]} data source is found through the
+ * {@code url[,[driver][,[user][,password]]]} data source is found through the
  * {@code ServiceLoader} of the thread context class loader, since
  * {@code DriverManager} refuses a driver its caller's class loader cannot see
  * (a driver in a WAR, Bodoni in the server's lib). At the Maven

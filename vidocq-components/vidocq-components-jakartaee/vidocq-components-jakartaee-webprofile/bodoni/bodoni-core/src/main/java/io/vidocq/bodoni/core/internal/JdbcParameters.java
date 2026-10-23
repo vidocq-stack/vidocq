@@ -21,7 +21,10 @@
 package io.vidocq.bodoni.core.internal;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The JDBC parameters of a string data source, {@code url[,[driver][,[user][,password]]]}
@@ -38,6 +41,8 @@ public record JdbcParameters(String url, String driver, String user, String pass
     private static final char ESCAPE = '\\';
     private static final int FIELDS = 4;
     private static final String AUTHORITY = "//";
+    private static final String PASSWORD_PROPERTY = "password";
+    private static final Pattern PROPERTY_SEPARATORS = Pattern.compile("[;?&]");
 
     /**
      * Parses a JDBC parameter string. It splits on unescaped {@code ,} into at most four
@@ -87,29 +92,87 @@ public record JdbcParameters(String url, String driver, String user, String pass
     }
 
     /**
-     * The URL without what may carry a secret: cut at its first {@code ;} or {@code ?}, and
-     * without the user information of a {@code //user:password@host} authority.
+     * The URL without what may carry a secret: cut at its first {@code ;} or {@code ?}, then
+     * without its user information. With a {@code //} the user information runs from after
+     * the {@code //} to the last {@code @}, which goes too ({@code jdbc:x://u:p@h/db} gives
+     * {@code jdbc:x://h/db}); without one, from after the last {@code :} before the first
+     * {@code @} to that {@code @}, which stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db}
+     * gives {@code jdbc:oracle:thin:@host:1521:db}). It may cut more than the credentials,
+     * never less.
      */
     public String redactedUrl() {
-        String cut = url;
-        for (int index = 0; index < cut.length(); index++) {
-            char current = cut.charAt(index);
-            if (current == ';' || current == '?') {
-                cut = cut.substring(0, index);
-                break;
-            }
-        }
-        int slashes = cut.indexOf(AUTHORITY);
-        if (slashes < 0) {
+        String cut = url.substring(0, propertiesStart());
+        UserInfo info = userInfo(cut);
+        if (info == null) {
             return cut;
         }
-        int start = slashes + AUTHORITY.length();
-        int end = cut.indexOf('/', start);
-        if (end < 0) {
-            end = cut.length();
+        int resume = info.authority() ? info.at() + 1 : info.at();
+        return cut.substring(0, info.start()) + cut.substring(resume);
+    }
+
+    /**
+     * The secrets a driver message might repeat: the password field when not empty, the
+     * password of the URL's user information ({@code //user:password@} or
+     * {@code user/password@}) and the values of its {@code password} properties, after the
+     * first {@code ;} or {@code ?}, whatever their case.
+     */
+    Set<String> secrets() {
+        Set<String> secrets = new HashSet<>();
+        addSecret(secrets, password);
+        int propertiesStart = propertiesStart();
+        String cut = url.substring(0, propertiesStart);
+        UserInfo info = userInfo(cut);
+        if (info != null) {
+            String userInfo = cut.substring(info.start(), info.at());
+            int separator = userInfo.indexOf(info.authority() ? ':' : '/');
+            if (separator >= 0) {
+                addSecret(secrets, userInfo.substring(separator + 1));
+            }
         }
-        int at = cut.lastIndexOf('@', end - 1);
-        return at < start ? cut : cut.substring(0, start) + cut.substring(at + 1);
+        for (String property : PROPERTY_SEPARATORS.split(url.substring(propertiesStart))) {
+            int equals = property.indexOf('=');
+            if (equals > 0 && PASSWORD_PROPERTY.equalsIgnoreCase(property.substring(0, equals).trim())) {
+                addSecret(secrets, property.substring(equals + 1));
+            }
+        }
+        return Set.copyOf(secrets);
+    }
+
+    private static void addSecret(Set<String> secrets, String secret) {
+        if (secret != null && !secret.isEmpty()) {
+            secrets.add(secret);
+        }
+    }
+
+    /** The index of the first {@code ;} or {@code ?} of the URL, else its length. */
+    private int propertiesStart() {
+        for (int index = 0; index < url.length(); index++) {
+            char current = url.charAt(index);
+            if (current == ';' || current == '?') {
+                return index;
+            }
+        }
+        return url.length();
+    }
+
+    /** The user information of a URL cut before its properties, {@code null} when it has none. */
+    private static UserInfo userInfo(String cut) {
+        int slashes = cut.indexOf(AUTHORITY);
+        if (slashes >= 0) {
+            int start = slashes + AUTHORITY.length();
+            int at = cut.lastIndexOf('@');
+            return at >= start ? new UserInfo(start, at, true) : null;
+        }
+        int at = cut.indexOf('@');
+        int colon = at < 0 ? -1 : cut.lastIndexOf(':', at);
+        return colon < 0 ? null : new UserInfo(colon + 1, at, false);
+    }
+
+    /**
+     * User information from {@code start} (inclusive) to the {@code @} at {@code at}, in a
+     * {@code //} authority or not.
+     */
+    private record UserInfo(int start, int at, boolean authority) {
     }
 
     /** The redacted URL and the driver, never the user nor the password. */

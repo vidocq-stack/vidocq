@@ -26,7 +26,10 @@ import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.ServiceConfigurationError;
@@ -51,15 +54,18 @@ import javax.sql.DataSource;
  * is skipped. A pre-JDBC 4 driver without {@code META-INF/services/java.sql.Driver}, in a
  * class loader Bodoni cannot see, is not supported.
  *
- * <p>No message or {@code toString()} built here carries the password: the URL is shown
- * {@linkplain JdbcParameters#redactedUrl() redacted}, and when no driver accepts the URL the
- * exception has no cause ({@code DriverManager}'s own message repeats the full URL).
+ * <p>No message, cause or {@code toString()} built here carries the password: the URL is
+ * shown {@linkplain JdbcParameters#redactedUrl() redacted}; when no driver accepts the URL,
+ * or a driver fails, the exception has no cause, and a driver's message is kept scrubbed of
+ * the full URL and of every known secret.
  */
 public final class DriverManagerDataSource implements DataSource {
 
     private static final String NO_CONNECTION_STATE = "08001";
     private static final String USER = "user";
     private static final String PASSWORD = "password";
+    private static final String DRIVER_CLASS = "JDBC driver class '";
+    private static final String MASK = "***";
 
     private final JdbcParameters parameters;
     private final ClassLoader loader;
@@ -78,7 +84,10 @@ public final class DriverManagerDataSource implements DataSource {
             try {
                 Class.forName(driver, true, loader);
             } catch (ClassNotFoundException e) {
-                throw new SQLException("JDBC driver class '" + driver + "' not found", NO_CONNECTION_STATE, e);
+                throw new SQLException(DRIVER_CLASS + driver + "' not found", NO_CONNECTION_STATE, e);
+            } catch (LinkageError e) {
+                // ExceptionInInitializerError, NoClassDefFoundError...: a class-loading error carries no URL
+                throw new SQLException(DRIVER_CLASS + driver + "' cannot be loaded", NO_CONNECTION_STATE, e);
             }
         }
     }
@@ -134,14 +143,43 @@ public final class DriverManagerDataSource implements DataSource {
         }
     }
 
+    /**
+     * The driver's connection, {@code null} when it does not accept the URL. A driver failure
+     * becomes Bodoni's own exception, the driver's SQLState and vendor code kept, its message
+     * scrubbed, and no cause: a driver exception may repeat the URL or the password anywhere
+     * in its chain.
+     */
     private Connection open(Driver driver, Properties properties) throws SQLException {
         String url = parameters.url();
         try {
             return driver.acceptsURL(url) ? driver.connect(url, properties) : null;
         } catch (SQLException e) {
+            String reason = e.getMessage() == null
+                    ? ""
+                    : ": " + scrub(e.getMessage(), properties.getProperty(PASSWORD));
             throw new SQLException("JDBC driver " + driver.getClass().getName() + " cannot connect to '"
-                    + parameters.redactedUrl() + "'", e.getSQLState(), e.getErrorCode(), e);
+                    + parameters.redactedUrl() + "'" + reason, e.getSQLState(), e.getErrorCode());
         }
+    }
+
+    /**
+     * {@code message} with the full URL replaced by the redacted one and every known secret
+     * (those of the parameter string, and {@code password}) by {@code ***}, longest first.
+     */
+    private String scrub(String message, String password) {
+        String scrubbed = message;
+        if (!parameters.url().isEmpty()) {
+            scrubbed = scrubbed.replace(parameters.url(), parameters.redactedUrl());
+        }
+        List<String> secrets = new ArrayList<>(parameters.secrets());
+        if (password != null && !password.isEmpty()) {
+            secrets.add(password);
+        }
+        secrets.sort(Comparator.comparingInt(String::length).reversed());
+        for (String secret : secrets) {
+            scrubbed = scrubbed.replace(secret, MASK);
+        }
+        return scrubbed;
     }
 
     /** {@code null}: this data source does not log. */

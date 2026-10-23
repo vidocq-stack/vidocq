@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 
 /** The JDBC parameter string of a data source, Tags 3.0 §10.1.1 and §10.2. */
@@ -98,6 +100,31 @@ class JdbcParametersTest {
     void redactedUrlDropsUserInfoAndQuery() {
         assertEquals("jdbc:x://h:5432/db",
                 JdbcParameters.parse("jdbc:x://u:" + SECRET + "@h:5432/db?password=" + SECRET).redactedUrl());
+    }
+
+    @Test
+    void redactedUrlDropsUserInfoWithASlashInThePassword() {
+        assertEquals("jdbc:x://h/db", JdbcParameters.parse("jdbc:x://u:pa/ss@h/db").redactedUrl());
+    }
+
+    @Test
+    void redactedUrlDropsOracleCredentials() {
+        assertEquals("jdbc:oracle:thin:@host:1521:db",
+                JdbcParameters.parse("jdbc:oracle:thin:scott/tiger@host:1521:db").redactedUrl());
+    }
+
+    @Test
+    void redactedUrlKeepsAnOracleUrlWithoutCredentials() {
+        assertEquals("jdbc:oracle:thin:@host:1521:db",
+                JdbcParameters.parse("jdbc:oracle:thin:@host:1521:db").redactedUrl());
+    }
+
+    @Test
+    void secretsAreThePasswordFieldAndThePasswordsOfTheUrl() {
+        assertEquals(Set.of("field", "info", "prop", "query"),
+                JdbcParameters.parse("jdbc:x://u:info@h/db;PASSWORD=prop?password=query,d,sa,field").secrets());
+        assertEquals(Set.of("tiger"), JdbcParameters.parse("jdbc:oracle:thin:scott/tiger@host:1521:db").secrets());
+        assertEquals(Set.of(), JdbcParameters.parse("jdbc:h2:mem:x;USER=sa,,sa,").secrets());
     }
 
     @Test

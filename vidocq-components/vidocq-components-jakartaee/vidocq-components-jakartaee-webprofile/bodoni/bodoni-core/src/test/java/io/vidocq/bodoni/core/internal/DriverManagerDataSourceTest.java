@@ -33,16 +33,31 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Statement;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.sql.DataSource;
 
+import io.vidocq.bodoni.core.testing.ManualDriver;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** The data source of a JDBC parameter string, Tags 3.0 §10.1.1, §10.2 and §10.6. */
 class DriverManagerDataSourceTest {
@@ -112,14 +127,121 @@ class DriverManagerDataSourceTest {
     }
 
     @Test
-    void driverFailureIsKeptAsCause() throws SQLException {
+    void driverFailureKeepsNoCauseAndTheScrubbedDriverMessage() throws SQLException {
         DataSource dataSource = dataSource(url + ",,sa,");
         try (Connection open = dataSource.getConnection()) {
             assertEquals(42, selectFortyTwo(open));
             SQLException failure = assertThrows(SQLException.class, () -> dataSource.getConnection("sa", SECRET));
-            SQLException cause = assertInstanceOf(SQLException.class, failure.getCause());
-            assertTrue(cause.getClass().getName().startsWith("org.h2."), cause.getClass().getName());
-            assertFalse(failure.getMessage().contains(SECRET), failure.getMessage());
+            assertTrue(failure.getMessage().startsWith("JDBC driver org.h2.Driver cannot connect to '"
+                    + url.substring(0, url.indexOf(';')) + "': "), failure.getMessage());
+            assertTrue(failure.getMessage().contains("Wrong user name or password"), failure.getMessage());
+            assertEquals("28000", failure.getSQLState());
+            assertNull(failure.getCause());
+            assertNoSecretInChain(failure);
+        }
+    }
+
+    @Test
+    void passwordOfTheUrlUserInfoIsNowhereInTheFailure() throws SQLException {
+        DataSource dataSource = dataSource("jdbc:h2:tcp://u:" + SECRET + "@nohost.invalid/db");
+        SQLException failure = assertThrows(SQLException.class, dataSource::getConnection);
+        assertTrue(failure.getMessage().startsWith(
+                "JDBC driver org.h2.Driver cannot connect to 'jdbc:h2:tcp://nohost.invalid/db': "), failure.getMessage());
+        assertNull(failure.getCause());
+        assertNoSecretInChain(failure);
+    }
+
+    @Test
+    void passwordFieldIsScrubbedFromTheDriverMessage() throws SQLException {
+        DataSource dataSource = dataSource("jdbc:bodoni-manual:echo,,sa," + SECRET);
+        ManualDriver driver = ManualDriver.echoingThePassword();
+        DriverManager.registerDriver(driver);
+        try {
+            SQLException failure = assertThrows(SQLException.class, dataSource::getConnection);
+            assertEquals("JDBC driver " + ManualDriver.class.getName()
+                    + " cannot connect to 'jdbc:bodoni-manual:echo': refused password *** for jdbc:bodoni-manual:echo",
+                    failure.getMessage());
+            assertEquals(ManualDriver.REFUSED_STATE, failure.getSQLState());
+            assertEquals(ManualDriver.REFUSED_CODE, failure.getErrorCode());
+            assertNoSecretInChain(failure);
+        } finally {
+            DriverManager.deregisterDriver(driver);
+        }
+    }
+
+    @Test
+    void aDriverRegisteredByHandIsFoundThroughDriverManager() throws SQLException {
+        ManualDriver driver = ManualDriver.delegatingTo(url);
+        DriverManager.registerDriver(driver);
+        try {
+            DataSource dataSource = dataSource("jdbc:bodoni-manual:x,,sa,");
+            try (Connection connection = dataSource.getConnection()) {
+                assertEquals(42, selectFortyTwo(connection));
+            }
+            assertEquals(1, driver.connections());
+        } finally {
+            DriverManager.deregisterDriver(driver);
+        }
+    }
+
+    @Test
+    void aProviderThatFailsToLoadIsSkipped(@TempDir Path services) throws Exception {
+        Path file = services.resolve("META-INF/services/" + Driver.class.getName());
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "org.nope.MissingDriver\n" + H2_DRIVER + "\n");
+        ClassLoader platform = ClassLoader.getPlatformClassLoader();
+        try (URLClassLoader bodoni = isolated("bodoni", platform, location(DriverManagerDataSource.class));
+                URLClassLoader app = isolated("app", bodoni, services.toUri().toURL(),
+                        location(Class.forName(H2_DRIVER)))) {
+            Iterator<Driver> providers = ServiceLoader.load(Driver.class, app).iterator();
+            assertTrue(providers.hasNext());
+            assertThrows(ServiceConfigurationError.class, providers::next);
+            DataSource dataSource = withContextLoader(app, () -> isolatedDataSource(bodoni, url + ",,sa,"));
+            try (Connection connection = dataSource.getConnection()) {
+                assertEquals(42, selectFortyTwo(connection));
+            }
+        }
+    }
+
+    @Test
+    void aDriverClassThatFailsToInitialiseCannotBeLoaded() {
+        String name = Exploding.class.getName();
+        JdbcParameters parameters = JdbcParameters.parse(url + "," + name);
+        SQLException failure = assertThrows(SQLException.class, () -> new DriverManagerDataSource(parameters));
+        assertEquals("JDBC driver class '" + name + "' cannot be loaded", failure.getMessage());
+        assertEquals(NO_DRIVER_STATE, failure.getSQLState());
+        assertInstanceOf(LinkageError.class, failure.getCause());
+    }
+
+    /** A class whose initialisation fails, as a broken driver's would. */
+    static final class Exploding {
+
+        static final int VALUE = explode();
+
+        private Exploding() {
+        }
+
+        private static int explode() {
+            throw new IllegalStateException("broken driver");
+        }
+    }
+
+    /** No throwable reachable from {@code failure} (causes, next exceptions, suppressed) shows the secret. */
+    private static void assertNoSecretInChain(Throwable failure) {
+        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Throwable> pending = new ArrayDeque<>(List.of(failure));
+        while (!pending.isEmpty()) {
+            Throwable current = pending.pop();
+            if (seen.add(current)) {
+                assertFalse(String.valueOf(current).contains(SECRET), String.valueOf(current));
+                if (current.getCause() != null) {
+                    pending.push(current.getCause());
+                }
+                if (current instanceof SQLException sql && sql.getNextException() != null) {
+                    pending.push(sql.getNextException());
+                }
+                pending.addAll(List.of(current.getSuppressed()));
+            }
         }
     }
 
