@@ -302,6 +302,19 @@ class OfficialTckRunnerTest {
     }
 
     @Test
+    void theDownloadRetriesAndBoundsTheConnectTime() throws Exception {
+        fakeCurl("printf 'not the distribution' > \"$output\"");
+
+        Run run = run(Map.of(PATH, fakePath()), NO_INSTALL);
+
+        assertEquals(1, run.exitCode(), run.output());
+        List<String> curl = Files.readAllLines(curlLog());
+        assertTrue(Collections.indexOfSubList(curl, List.of("<--retry>", "<3>")) >= 0, curl.toString());
+        assertTrue(Collections.indexOfSubList(curl, List.of("<--retry-delay>", "<5>")) >= 0, curl.toString());
+        assertTrue(Collections.indexOfSubList(curl, List.of("<--connect-timeout>", "<30>")) >= 0, curl.toString());
+    }
+
+    @Test
     void aFailedDownloadLeavesNoPartialFile() throws Exception {
         fakeCurl("printf 'half' > \"$output\"; exit 22");
 

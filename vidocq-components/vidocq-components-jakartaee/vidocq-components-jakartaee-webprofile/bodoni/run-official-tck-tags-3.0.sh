@@ -121,6 +121,7 @@ prepare_distribution() {
             exit 2
         fi
         if ! curl --fail --location --silent --show-error --proto '=https' --proto-redir '=https' \
+            --retry 3 --retry-delay 5 --connect-timeout 30 \
             --output "$zip.part" "$zip_url"; then
             rm -f "$zip.part"
             echo "Distribution download failed: $zip_url" >&2
