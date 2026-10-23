@@ -352,15 +352,15 @@ public final class EnrichedJars {
                 manifest = new Manifest(in.getManifest());
             }
             for (JarEntry entry : Collections.list(in.entries())) {
+                String name = entry.getName();
                 if (entry.isDirectory()) {
-                    sourceFolders.add(entry.getName());
-                    continue;
+                    sourceFolders.add(name);
                 }
-                if (entry.getName().equals(JarFile.MANIFEST_NAME) || isSignature(entry.getName())) {
-                    continue;
-                }
-                try (InputStream is = in.getInputStream(entry)) {
-                    entries.put(entry.getName(), is.readAllBytes());
+                // A file, except the manifest and the signature files the enriched jar must not carry.
+                if (!entry.isDirectory() && !name.equals(JarFile.MANIFEST_NAME) && !isSignature(name)) {
+                    try (InputStream is = in.getInputStream(entry)) {
+                        entries.put(name, is.readAllBytes());
+                    }
                 }
             }
         }
