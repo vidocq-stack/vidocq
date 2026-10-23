@@ -24,10 +24,12 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.EventListener;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -45,7 +47,8 @@ import jakarta.servlet.descriptor.JspConfigDescriptor;
  * A {@link ServletContext} double: application attributes, a context path (default
  * {@code /app}), foreign contexts for {@link #getContext(String)}, text resources for
  * {@link #getResourceAsStream(String)} and request dispatchers
- * configured through {@link #dispatchers()}. Everything else throws
+ * configured through {@link #dispatchers()} and a log read back through {@link #logged()}.
+ * Everything else throws
  * {@link UnsupportedOperationException}.
  */
 public class TestServletContext implements ServletContext {
@@ -56,6 +59,7 @@ public class TestServletContext implements ServletContext {
     private final Map<String, String> resources = new LinkedHashMap<>();
     private final Map<String, RuntimeException> failingResources = new LinkedHashMap<>();
     private final TestDispatchers dispatchers = new TestDispatchers();
+    private final List<String> logged = new ArrayList<>();
     private String contextPath = "/app";
 
     /** Changes the context path. */
@@ -178,12 +182,17 @@ public class TestServletContext implements ServletContext {
 
     @Override
     public void log(String msg) {
-        throw nope();
+        logged.add(msg);
     }
 
     @Override
     public void log(String message, Throwable throwable) {
-        throw nope();
+        logged.add(message + " [" + throwable + "]");
+    }
+
+    /** The messages logged so far, in order; a throwable is appended to its message in brackets. */
+    public List<String> logged() {
+        return List.copyOf(logged);
     }
 
     @Override
