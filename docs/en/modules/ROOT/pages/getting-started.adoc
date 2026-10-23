@@ -64,7 +64,7 @@ todo/
 
 [.tag-new]#NEW# There is no main class: the runtime's own main boots the application from
 `vidocq.mainModule`. `vidocq create --main` adds an `@VidocqMain` trampoline, for a right-click
-Run in the IDE, logic after boot (a `VidocqApp`), or `vidocq:jlink` / `vidocq:jpackage`. See
+Run in the IDE or logic after boot (a `VidocqApp`). See
 xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
 TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, `--main`, …).

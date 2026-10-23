@@ -320,9 +320,8 @@ public final class ProjectScaffolder {
                  * image alike. Put no code before it: it would run outside that layer.
                  *
                  * <p>The runtime's own main boots the application without this class. Keep it for a
-                 * right-click Run in the IDE, for logic after boot (pass a {@code VidocqApp} to
-                 * {@code Vidocq.run(Class, String...)}), and for {@code vidocq:jlink} and
-                 * {@code vidocq:jpackage}, which launch {@code vidocq.mainClass}.
+                 * right-click Run in the IDE, or for logic after boot (pass a {@code VidocqApp} to
+                 * {@code Vidocq.run(Class, String...)}).
                  */
                 @VidocqMain
                 public final class %s {

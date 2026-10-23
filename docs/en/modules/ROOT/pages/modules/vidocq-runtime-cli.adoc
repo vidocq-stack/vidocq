@@ -112,9 +112,11 @@ gets no `opens`: the JVM refuses to open a package with no class, and `create` t
 the directive once the package has one.
 
 `--main` also writes an `@VidocqMain` trampoline, sets `vidocq.mainClass` to it and adds
-`requires io.vidocq.runtime.core;`. Ask for it when you want a right-click Run in the IDE, logic
-after boot (a `VidocqApp`), or `vidocq:jlink` / `vidocq:jpackage`, which launch
-`vidocq.mainClass`. The trampoline re-resolves the application into the Vauban layer, which reads
+`requires io.vidocq.runtime.core;`. Ask for it when you want a right-click Run in the IDE, or
+logic after boot (a `VidocqApp`). `vidocq:jlink` and `vidocq:jpackage` do not need it: without a
+main class they launch the runtime's own main, which re-layers `vidocq.mainModule` (see
+xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class]).
+The trampoline re-resolves the application into the Vauban layer, which reads
 the build-time generated code through `META-INF/services` without a `provides` in your
 `module-info.java`, the same way in the IDE, with `vidocq start` and in a jlink image:
 
@@ -131,9 +133,8 @@ import io.vidocq.runtime.spi.VidocqMain;
  * image alike. Put no code before it: it would run outside that layer.
  *
  * <p>The runtime's own main boots the application without this class. Keep it for a
- * right-click Run in the IDE, for logic after boot (pass a {@code VidocqApp} to
- * {@code Vidocq.run(Class, String...)}), and for {@code vidocq:jlink} and
- * {@code vidocq:jpackage}, which launch {@code vidocq.mainClass}.
+ * right-click Run in the IDE, or for logic after boot (pass a {@code VidocqApp} to
+ * {@code Vidocq.run(Class, String...)}).
  */
 @VidocqMain
 public final class HelloWorldApp {
@@ -264,7 +265,7 @@ Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.pro
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.
 | `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits, and of every Vidocq dependency it declares (default: the runtime version of the CLI).
-| `--main` [.tag-new]#NEW# | Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE, a `VidocqApp`, or `vidocq:jlink` / `vidocq:jpackage`.
+| `--main` [.tag-new]#NEW# | Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
 |===
 
 [source,bash]

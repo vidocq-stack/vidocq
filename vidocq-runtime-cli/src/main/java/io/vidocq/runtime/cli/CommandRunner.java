@@ -289,7 +289,7 @@ public final class CommandRunner {
         if (!create.main()) {
             CliOutput.println();
             CliOutput.println("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
-                    + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp, vidocq:jlink/jpackage).")));
+                    + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp).")));
         }
         return 0;
     }

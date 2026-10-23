@@ -68,7 +68,8 @@ class ProjectScaffolderAppTest {
         assertFalse(app.contains("VidocqBootstrap"), app);
         // The Javadoc says when a trampoline is worth having.
         assertTrue(app.contains("VidocqApp"), app);
-        assertTrue(app.contains("vidocq:jlink"), app);
+        // vidocq:jlink and vidocq:jpackage link a main-less application: not a reason for one.
+        assertFalse(app.contains("vidocq:jlink"), app);
 
         String pom = Files.readString(project.resolve("pom.xml"));
         assertTrue(pom.contains("<vidocq.mainClass>com.acme.demo.DemoApp</vidocq.mainClass>"), pom);

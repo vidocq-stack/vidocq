@@ -365,7 +365,7 @@ public final class CliParser {
                 opt("--parent-version <version>", "Vidocq runtime parent version   (default: the CLI's runtime version)");
                 opt("",                           "a SNAPSHOT adds the Central snapshot repository to the pom");
                 opt("--main",                     "Also write an @VidocqMain trampoline (default: none, the runtime");
-                opt("",                           "boots the app) — for IDE Run, a VidocqApp, vidocq:jlink/jpackage");
+                opt("",                           "boots the app) — for an IDE Run or a VidocqApp");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(
