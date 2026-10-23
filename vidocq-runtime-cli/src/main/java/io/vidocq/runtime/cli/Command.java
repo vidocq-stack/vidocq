@@ -53,6 +53,17 @@ public sealed interface Command {
         static Dev defaults() { return new Dev(8080, false, "dev", false); }
     }
 
+    /** {@code vidocq test}: the tests on every change, without the application ({@code mvn vidocq:test}). */
+    record ContinuousTest() implements Command {}
+
+    /**
+     * {@code vidocq idea}: the IntelliJ run configurations ({@code mvn vidocq:idea}).
+     *
+     * @param check {@code null} to write them, {@code "true"} or {@code "strict"} to only check them
+     * @param kind  {@code null} for the goal's default, else {@code maven} or {@code application}
+     */
+    record Idea(String check, String kind) implements Command {}
+
     record Doctor(boolean verbose) implements Command {
         static Doctor defaults() { return new Doctor(false); }
     }

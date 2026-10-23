@@ -46,6 +46,8 @@ public final class CliParser {
             case "start"                      -> parseStart(args, 1);
             case "dev"                        -> parseDev(args, 1);
             case "doctor"                     -> parseDoctor(args, 1);
+            case "test"                       -> parseTest(args, 1);
+            case "idea"                       -> parseIdea(args, 1);
             case "create"                     -> parseCreate(args, 1);
             case "build"                      -> parseBuild(args, 1);
             case "clean"                      -> parseClean(args, 1);
@@ -91,6 +93,27 @@ public final class CliParser {
             }
         }
         return new Command.Dev(port, portExplicit, profile, debug);
+    }
+
+    private static Command.ContinuousTest parseTest(String[] args, int from) {
+        if (args.length > from) {
+            unknownOpt(args[from], "test");
+        }
+        return new Command.ContinuousTest();
+    }
+
+    private static Command.Idea parseIdea(String[] args, int from) {
+        String check = null;
+        String kind = null;
+        for (int i = from; i < args.length; i++) {
+            switch (args[i]) {
+                case "--check"  -> check = "true";
+                case "--strict" -> check = "strict";
+                case "--kind"   -> kind  = value(args, ++i, "--kind");
+                default         -> unknownOpt(args[i], "idea");
+            }
+        }
+        return new Command.Idea(check, kind);
     }
 
     private static Command.Doctor parseDoctor(String[] args, int from) {
@@ -302,6 +325,8 @@ public final class CliParser {
         cmd("info",             "Display runtime, JVM, and extension information.");
         cmd("start",            "Build and run the project's application (mvn vidocq:run).");
         cmd("dev",              "Run the project in dev mode with live reload (mvn vidocq:dev).");
+        cmd("test",             "Run the tests on every change, without the application (mvn vidocq:test).");
+        cmd("idea",             "Write the IntelliJ run configurations into .run/ (mvn vidocq:idea).");
         cmd("doctor",           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
@@ -343,6 +368,24 @@ public final class CliParser {
                 opt("--port, -p <n>",      "HTTP listening port, over the project's own setting");
                 opt("--profile, -P <name>","Config profile to activate (default: dev)");
                 opt("--debug",             "Force the debug agent on (it is on by default in dev)");
+            }
+            case "test" -> {
+                CliOutput.println(CliOutput.bold("vidocq test") + " — Continuous testing");
+                CliOutput.println();
+                CliOutput.println("Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then");
+                CliOutput.println("again on each change of the main or test sources, without the application.");
+                CliOutput.println("Keys: r runs every test, f the failed ones, q quits.");
+            }
+            case "idea" -> {
+                CliOutput.println(CliOutput.bold("vidocq idea") + " — IntelliJ run configurations (experimental)");
+                CliOutput.println();
+                CliOutput.println("Runs 'mvn vidocq:idea' in the project (./mvnw when present): one dev, run and");
+                CliOutput.println("debug configuration per application, in .run/, never .idea/.");
+                CliOutput.println();
+                CliOutput.println("Options:");
+                opt("--check",          "Only check that .run/ matches the poms (for CI)");
+                opt("--strict",         "Check, and also fail on files written or edited by hand");
+                opt("--kind <kind>",    "maven (default) or application: an Application run of the main class");
             }
             case "doctor" -> {
                 CliOutput.println(CliOutput.bold("vidocq doctor") + " — Environment & project health checks");

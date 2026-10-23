@@ -55,4 +55,18 @@ class RunGoalsTest {
                         "-Dvidocq.run.debug=true"),
                 RunGoals.start(true, 9090, config, true));
     }
+
+    /** Vidocq/vidocq#314: the commands of the goals the CLI had none for. */
+    @Test
+    void testRunsTheContinuousTestingGoal() {
+        assertEquals(List.of("vidocq:test"), RunGoals.test());
+    }
+
+    @Test
+    void ideaWritesTheRunConfigurationsOrChecksThem() {
+        assertEquals(List.of("vidocq:idea"), RunGoals.idea(null, null));
+        assertEquals(List.of("vidocq:idea", "-Dvidocq.idea.check=true"), RunGoals.idea("true", null));
+        assertEquals(List.of("vidocq:idea", "-Dvidocq.idea.check=strict", "-Dvidocq.idea.kind=application"),
+                RunGoals.idea("strict", "application"));
+    }
 }

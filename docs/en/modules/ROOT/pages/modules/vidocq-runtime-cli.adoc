@@ -225,6 +225,12 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq start [--port] [--config] [--debug]`
 | Build and run the project's application, `mvn vidocq:run` (see <<start>>).
 
+| `vidocq test` [.tag-new]#NEW#
+| Run the tests on every change, without the application, `mvn vidocq:test` (see <<test>>).
+
+| `vidocq idea [--check\|--strict] [--kind <kind>]` [.tag-new]#NEW#
+| Write, or check, the IntelliJ run configurations in `.run/`, `mvn vidocq:idea` (see <<idea>>).
+
 | `vidocq build [type] …`
 | Build/package the project, wrapping the Maven plugin goals (see <<build>>).
 
@@ -321,6 +327,30 @@ project and starts the application with its dependencies and extensions on the m
 | `--config, -c <file>` | Path to an external `vidocq.properties` file.
 | `--debug` | Open a debug agent on port `5005` (`-Dvidocq.run.debug=true`).
 |===
+
+[#test]
+=== `vidocq test` [.tag-new]#NEW#
+
+Runs `mvn vidocq:test` in the project, through `./mvnw` when there is one: every test, then again on each change
+of the main or test sources, without starting the application. `r` runs every test, `f` the failed ones, `q`
+quits. See xref:continuous-testing.adoc[Continuous testing].
+
+[#idea]
+=== `vidocq idea` [.tag-new]#NEW#
+
+Runs `mvn vidocq:idea`: one IntelliJ run configuration per application for `vidocq:dev`, `vidocq:run` and a remote
+debug, in `.run/`, never `.idea/`. Experimental, as the goal is.
+
+[source,bash]
+----
+vidocq idea                      # write or update .run/*.run.xml
+vidocq idea --check              # CI: fail when .run/ does not match the poms
+vidocq idea --strict             # CI: also fail on files written or edited by hand
+vidocq idea --kind application   # an Application run of the main class instead
+----
+
+The options map to `-Dvidocq.idea.check=true`, `-Dvidocq.idea.check=strict` and `-Dvidocq.idea.kind`; see
+xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
 [#build]
 === `vidocq build` & `vidocq clean`

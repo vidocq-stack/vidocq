@@ -100,6 +100,14 @@ class CompletionSpecTest {
     }
 
     @Test
+    void ideaOffersItsOptionsAndTheTwoKinds() {
+        assertTrue(after().containsAll(List.of("test", "idea")));
+        assertEquals(List.of("--check", "--strict", "--kind"), after("idea"));
+        assertEquals(List.of("maven", "application"), after("idea", "--kind"));
+        assertEquals(List.of(), after("test"));
+    }
+
+    @Test
     void unknownCommandOffersNothing() {
         assertTrue(after("frobnicate").isEmpty());
     }

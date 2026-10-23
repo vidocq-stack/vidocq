@@ -58,6 +58,26 @@ public final class RunGoals {
         return List.copyOf(args);
     }
 
+    /** {@code vidocq:test}, which compiles through the {@code test-compile} of each run. */
+    public static List<String> test() {
+        return List.of("vidocq:test");
+    }
+
+    /**
+     * {@code vidocq:idea}; {@code check} ({@code true} or {@code strict}) only checks the configurations, and
+     * {@code kind} picks the kind of run configuration. Null leaves the goal's default.
+     */
+    public static List<String> idea(String check, String kind) {
+        List<String> args = new ArrayList<>(List.of("vidocq:idea"));
+        if (check != null) {
+            args.add("-Dvidocq.idea.check=" + check);
+        }
+        if (kind != null) {
+            args.add("-Dvidocq.idea.kind=" + kind);
+        }
+        return List.copyOf(args);
+    }
+
     /** {@code vidocq:run}, which forks the lifecycle up to {@code process-classes} itself. */
     public static List<String> start(boolean portExplicit, int port, Path configFile, boolean debug) {
         List<String> args = new ArrayList<>(List.of("vidocq:run"));

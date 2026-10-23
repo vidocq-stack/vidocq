@@ -22,6 +22,8 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq extension add <id…>` | ✅ M3 | Injects `<dependency>` into pom.xml (idempotent) |
 | `vidocq extension remove <id…>` | ✅ M3 | Removes the matching `<dependency>` from pom.xml |
 | `vidocq doctor [--verbose]` | ✅ M6 | Environment & project health checks (see M6) |
+| `vidocq test` | ✅ #314 | Delegates to `mvn vidocq:test` (continuous testing) |
+| `vidocq idea [--check\|--strict] [--kind]` | ✅ #314 | Delegates to `mvn vidocq:idea` |
 | `vidocq build [type] [-o] [--skip-tests] [--dry-run]` | ✅ M4 | Wraps Maven `package`/`jlink`/`jpackage`/`docker` (see M4) |
 | `vidocq clean [-o] [--dry-run]` | ✅ M4 | Wraps `mvn clean` |
 | `vidocq config get\|set\|list` | ✅ M5 | Read/write `vidocq.properties` (see M5) |

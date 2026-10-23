@@ -78,6 +78,7 @@ public final class CompletionSpec {
             "start", List.of("--port", "--config", "--debug"),
             "dev", List.of("--port", "--profile", "--debug"),
             "doctor", List.of("--verbose"),
+            "idea", List.of("--check", "--strict", "--kind"),
             "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
@@ -90,13 +91,14 @@ public final class CompletionSpec {
     static final Map<String, List<String>> OPTION_VALUES = ordered(
             "create --extension", extensionIds(),
             "create -x", extensionIds(),
+            "idea --kind", List.of("maven", "application"),
             "start --config", List.of(FILES),
             "start -c", List.of(FILES));
 
     /** Options followed by a value — nothing is offered for a free-form one. */
     static final Set<String> VALUE_OPTIONS = Set.of(
             "--port", "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
-            "--group-id", "-g", "--package", "--extension", "-x", "--parent-version");
+            "--group-id", "-g", "--package", "--extension", "-x", "--parent-version", "--kind");
 
     private CompletionSpec() {}
 
