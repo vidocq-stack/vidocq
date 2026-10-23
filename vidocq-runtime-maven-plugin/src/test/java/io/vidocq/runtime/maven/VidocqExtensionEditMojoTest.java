@@ -120,7 +120,7 @@ class VidocqExtensionEditMojoTest {
     }
 
     @Test
-    void anErrorFailsTheBuild(@TempDir Path dir) throws Exception {
+    void anErrorFailsTheBuild(@TempDir Path dir) {
         MojoFailureException failure = assertThrows(MojoFailureException.class,
                 () -> mojo(new VidocqRemoveExtensionMojo(), dir, "knock-health").execute());
 
