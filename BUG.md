@@ -827,3 +827,21 @@ where this whole bug class is invisible.
 - **Investigations**:
   - 2026-10-23: found while reviewing the APT wiring of `extension add`.
 - **Fix**: the example reads `-x cassini-rest -x knock-health`; a test checks its ids against the catalog.
+
+## BUG-20261023-05 — `extension remove` leaves the empty `<build><plugins>` that `extension add` created
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `fix/cli-apt-wiring-sonar`)
+- **Affected module**: vidocq-runtime-cli (`PomEditor.removeAnnotationProcessorPath`)
+- **Symptom**: on a pom without `<build>`, `vidocq extension add cassini-rest` then
+  `vidocq extension remove cassini-rest` leaves `<build><plugins></plugins></build>` behind. #307 said
+  `remove` undoes exactly what `add` added; that held only for a pom that already had `<plugins>`.
+- **Minimal reproduction**: `PomEditor.addAnnotationProcessorPath` on `<project><artifactId>bare</artifactId></project>`,
+  then `removeAnnotationProcessorPath` on the result: the pom is not the original one.
+- **Cause**: the cleanup after the last path stopped at the compiler plugin; the `plugins` and `build`
+  elements `add` creates around it were never considered.
+- **Investigations**:
+  - 2026-10-23: found by the first test of `CommandRunner.editPom`, written to cover the SonarQube
+    follow-up of #307.
+- **Fix**: once the bare compiler plugin is gone, the project build's `plugins` and then `build` are
+  removed too when empty.

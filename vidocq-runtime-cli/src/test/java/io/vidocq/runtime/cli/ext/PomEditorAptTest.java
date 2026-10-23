@@ -168,6 +168,29 @@ class PomEditorAptTest {
         assertEquals(POM_WITH_BUILD, PomEditor.removeAnnotationProcessorPath(added, CASSINI_CODEGEN).pom());
     }
 
+    /** BUG-20261023-05: the build and plugins elements add created stayed behind, empty. */
+    @Test
+    void removingTheLastPathDropsTheBuildAddCreated() {
+        String added = PomEditor.addAnnotationProcessorPath(POM_MINIMAL, CASSINI_CODEGEN, "0.4.0").pom();
+
+        assertEquals(POM_MINIMAL, PomEditor.removeAnnotationProcessorPath(added, CASSINI_CODEGEN).pom());
+    }
+
+    /** BUG-20261023-05: a build that holds something else keeps it, without the plugins add created. */
+    @Test
+    void removingTheLastPathDropsThePluginsAddCreated() {
+        String pom = """
+                <project>
+                    <build>
+                        <finalName>app</finalName>
+                    </build>
+                </project>
+                """;
+        String added = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0").pom();
+
+        assertEquals(pom, PomEditor.removeAnnotationProcessorPath(added, CASSINI_CODEGEN).pom());
+    }
+
     @Test
     void removingTheLastPathKeepsACompilerPluginThatConfiguresMore() {
         String pom = POM_WITH_APT.replace("<configuration>", "<configuration>\n<release>25</release>");

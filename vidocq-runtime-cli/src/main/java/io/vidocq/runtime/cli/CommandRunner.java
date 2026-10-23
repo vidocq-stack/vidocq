@@ -638,11 +638,11 @@ public final class CommandRunner {
     }
 
     private static int runExtensionAdd(Command.Extension.Add add) {
-        return editPom(add.ids(), true);
+        return editPom(Path.of("").toAbsolutePath(), add.ids(), true);
     }
 
     private static int runExtensionRemove(Command.Extension.Remove remove) {
-        return editPom(remove.ids(), false);
+        return editPom(Path.of("").toAbsolutePath(), remove.ids(), false);
     }
 
     /**
@@ -689,8 +689,9 @@ public final class CommandRunner {
         return Files.isDirectory(javaRoot.resolve(name.replace('.', '/'))) ? name : null;
     }
 
-    private static int editPom(List<String> ids, boolean add) {
-        Path pomPath = Path.of("").toAbsolutePath().resolve("pom.xml");
+    /** {@code vidocq extension add} ({@code add}) or {@code remove} on the project in {@code projectDir}. */
+    static int editPom(Path projectDir, List<String> ids, boolean add) {
+        Path pomPath = projectDir.resolve("pom.xml");
         if (!Files.isRegularFile(pomPath)) {
             CliOutput.error("No pom.xml in the current directory — run from a Vidocq project root.");
             return 1;

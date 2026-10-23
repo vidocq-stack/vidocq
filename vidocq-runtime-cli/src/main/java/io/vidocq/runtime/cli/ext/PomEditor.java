@@ -21,6 +21,7 @@ package io.vidocq.runtime.cli.ext;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -290,37 +291,57 @@ public final class PomEditor {
      * Undoes what {@link #addAnnotationProcessorPath} wrapped around a path once the last
      * one is gone: an empty appending {@code annotationProcessorPaths}, then a
      * {@code configuration} left empty, then a compiler plugin left with nothing but its
-     * coordinates. Anything else the plugin configures keeps it.
+     * coordinates, then the project build's {@code plugins} and {@code build} once empty
+     * (BUG-20261023-05). Anything else the plugin configures keeps it.
      */
     private static String withoutEmptyCompilerPlugin(String pom) {
-        String withoutPaths = withoutEmptyElement(pom, APPENDING_APT_OPEN, APT_CLOSE);
-        if (withoutPaths == null) {
-            return pom;
+        List<UnaryOperator<String>> steps = List.of(
+                p -> withoutEmptyPluginElement(p, APPENDING_APT_OPEN, APT_CLOSE),
+                p -> withoutEmptyPluginElement(p, CONFIGURATION_OPEN, CONFIGURATION_CLOSE),
+                PomEditor::withoutBareCompilerPlugin,
+                p -> withoutEmptyBuildElement(p, "<plugins>", "</plugins>"),
+                p -> withoutEmptyBuildElement(p, "<build>", "</build>"));
+        String cleaned = pom;
+        for (UnaryOperator<String> step : steps) {
+            String next = step.apply(cleaned);
+            if (next == null) {
+                break;
+            }
+            cleaned = next;
         }
-        String withoutConfiguration = withoutEmptyElement(withoutPaths, CONFIGURATION_OPEN, CONFIGURATION_CLOSE);
-        if (withoutConfiguration == null) {
-            return withoutPaths;
-        }
-        Span plugin = compilerPlugin(withoutConfiguration, outsideProjectBuild(withoutConfiguration));
-        if (plugin == null) {
-            return withoutConfiguration;
-        }
-        String block = withoutConfiguration.substring(plugin.start(), plugin.end()).replaceAll("\\s+", "");
-        if (!block.equals("<plugin><groupId>org.apache.maven.plugins</groupId>" + COMPILER_ARTIFACT + PLUGIN_CLOSE)) {
-            return withoutConfiguration;
-        }
-        return withoutLines(withoutConfiguration, plugin.start(), plugin.end());
+        return cleaned;
+    }
+
+    /** The pom without its compiler plugin when only its coordinates are left, else null. */
+    private static String withoutBareCompilerPlugin(String pom) {
+        Span plugin = compilerPlugin(pom, outsideProjectBuild(pom));
+        boolean bare = plugin != null && pom.substring(plugin.start(), plugin.end())
+                .replaceAll("\\s+", "")
+                .equals("<plugin><groupId>org.apache.maven.plugins</groupId>" + COMPILER_ARTIFACT + PLUGIN_CLOSE);
+        return bare ? withoutLines(pom, plugin.start(), plugin.end()) : null;
     }
 
     /**
      * The pom without the compiler plugin's {@code open...close} element when that element is
      * empty, or null when the plugin has no such element or it holds something.
      */
-    private static String withoutEmptyElement(String pom, String open, String close) {
+    private static String withoutEmptyPluginElement(String pom, String open, String close) {
         List<int[]> skipped = outsideProjectBuild(pom);
         Span plugin = compilerPlugin(pom, skipped);
         int start = plugin == null ? -1 : indexWithin(pom, open, plugin, skipped);
-        int closeTag = start < 0 ? -1 : indexOutside(pom, close, start, skipped);
+        return start < 0 ? null : withoutEmptyElementAt(pom, start, open, close, skipped);
+    }
+
+    /** Like {@link #withoutEmptyPluginElement}, for an element of the project build. */
+    private static String withoutEmptyBuildElement(String pom, String open, String close) {
+        List<int[]> skipped = outsideProjectBuild(pom);
+        int start = indexOutside(pom, open, 0, skipped);
+        return start < 0 ? null : withoutEmptyElementAt(pom, start, open, close, skipped);
+    }
+
+    private static String withoutEmptyElementAt(String pom, int start, String open, String close,
+                                                List<int[]> skipped) {
+        int closeTag = indexOutside(pom, close, start, skipped);
         if (closeTag < 0 || !isBlank(pom.substring(start + open.length(), closeTag))) {
             return null;
         }
