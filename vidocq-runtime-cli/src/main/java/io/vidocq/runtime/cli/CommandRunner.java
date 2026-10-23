@@ -61,6 +61,8 @@ import java.util.regex.Pattern;
  */
 public final class CommandRunner {
 
+    private static final String POM_XML = "pom.xml";
+
     private CommandRunner() {}
 
     public static int run(Command command) {
@@ -124,7 +126,7 @@ public final class CommandRunner {
     private static int printProjectExtensions(String title, boolean refresh) {
         CliOutput.println(CliOutput.bold(title));
         Path cwd = Path.of("").toAbsolutePath();
-        if (!Files.isRegularFile(cwd.resolve("pom.xml"))) {
+        if (!Files.isRegularFile(cwd.resolve(POM_XML))) {
             CliOutput.println(CliOutput.dim("  (no pom.xml in the current directory)"));
             return 1;
         }
@@ -216,7 +218,7 @@ public final class CommandRunner {
         Path cwd = Path.of("").toAbsolutePath();
         String javaHome = System.getenv("JAVA_HOME");
         boolean javaHomeDir = javaHome != null && Files.isDirectory(Path.of(javaHome));
-        Path pom = cwd.resolve("pom.xml");
+        Path pom = cwd.resolve(POM_XML);
         boolean pomPresent = Files.isRegularFile(pom);
         Path config = ConfigFile.locate(cwd, Files::isRegularFile).orElse(null);
         boolean configPresent = config != null;
@@ -691,7 +693,7 @@ public final class CommandRunner {
 
     /** {@code vidocq extension add} ({@code add}) or {@code remove} on the project in {@code projectDir}. */
     static int editPom(Path projectDir, List<String> ids, boolean add) {
-        Path pomPath = projectDir.resolve("pom.xml");
+        Path pomPath = projectDir.resolve(POM_XML);
         if (!Files.isRegularFile(pomPath)) {
             CliOutput.error("No pom.xml in the current directory — run from a Vidocq project root.");
             return 1;
