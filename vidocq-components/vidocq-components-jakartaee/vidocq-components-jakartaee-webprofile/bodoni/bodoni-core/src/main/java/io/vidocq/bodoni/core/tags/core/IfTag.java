@@ -20,6 +20,8 @@
 
 package io.vidocq.bodoni.core.tags.core;
 
+import io.vidocq.bodoni.core.internal.Scopes;
+
 import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.jstl.core.ConditionalTagSupport;
 
@@ -32,14 +34,30 @@ public class IfTag extends ConditionalTagSupport {
     private static final long serialVersionUID = 1L;
 
     private boolean test;
+    private String scopeName;
 
     /** @param test the condition */
     public void setTest(boolean test) {
         this.test = test;
     }
 
+    /**
+     * {@inheritDoc} The name is checked when the action runs: an unknown one is a
+     * {@link JspTagException}, where the base class would accept it.
+     */
+    @Override
+    public void setScope(String scope) {
+        super.setScope(scope);
+        this.scopeName = scope;
+    }
+
     @Override
     protected boolean condition() throws JspTagException {
+        try {
+            Scopes.of(scopeName);
+        } catch (IllegalArgumentException e) {
+            throw new JspTagException("c:if: " + e.getMessage(), e);
+        }
         return test;
     }
 
@@ -47,5 +65,6 @@ public class IfTag extends ConditionalTagSupport {
     public void release() {
         super.release();
         test = false;
+        scopeName = null;
     }
 }

@@ -21,10 +21,14 @@
 package io.vidocq.bodoni.core.tags.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.vidocq.bodoni.core.testing.TagHarness;
 import io.vidocq.bodoni.core.testing.TestPageContext;
 
+import jakarta.servlet.jsp.JspTagException;
 import jakarta.servlet.jsp.PageContext;
 
 import org.junit.jupiter.api.Test;
@@ -66,5 +70,34 @@ class IfTagTest {
         tag.setVar("r");
         assertEquals("", TagHarness.run(tag, pc, p -> p.getOut().print("x")));
         assertEquals(Boolean.FALSE, pc.getAttribute("r", PageContext.PAGE_SCOPE));
+    }
+
+    @Test
+    void anInvalidScopeIsATagException() {
+        TestPageContext pc = TestPageContext.create();
+        IfTag tag = new IfTag();
+        tag.setTest(true);
+        tag.setVar("r");
+        tag.setScope("invalid");
+
+        JspTagException e = assertThrows(JspTagException.class,
+                () -> TagHarness.run(tag, pc, p -> p.getOut().print("body")));
+
+        assertEquals("c:if: Invalid scope: invalid", e.getMessage());
+        assertInstanceOf(IllegalArgumentException.class, e.getCause());
+        assertNull(pc.getAttribute("r", PageContext.PAGE_SCOPE));
+    }
+
+    @Test
+    void releaseForgetsTheScope() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        IfTag tag = new IfTag();
+        tag.setScope("invalid");
+        tag.release();
+        tag.setTest(true);
+        tag.setVar("r");
+
+        assertEquals("body", TagHarness.run(tag, pc, p -> p.getOut().print("body")));
+        assertEquals(Boolean.TRUE, pc.getAttribute("r", PageContext.PAGE_SCOPE));
     }
 }

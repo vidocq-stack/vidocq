@@ -94,3 +94,24 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Workaround: read the position from `varStatus` (`count`, `last`), for example
   `<x:forEach select="$d//b" varStatus="s"><c:out value="${s.count}"/></x:forEach>`.
 - Status: open (limitation, documented in the Reference page).
+
+## BOD-004 · 2026-10-23 · `c:if` accepts an unknown `scope` and exports its result in page scope
+
+- Symptom: `c:if` with `var` and an unknown `scope` renders its body and stores the test
+  result in page scope, where `c:set` with the same `scope` fails with
+  `JspTagException: c:set: Invalid scope: invalid` (Tags 3.0 §5.3: `scope` is one of `page`,
+  `request`, `session`, `application`). Found by the B3 final review (B1 handler).
+- Minimal repro:
+  ```jsp
+  <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+  <c:if test="${true}" var="r" scope="invalid">body</c:if>${r}
+  ```
+  prints `bodytrue` instead of failing. Unit test:
+  `IfTagTest.anInvalidScopeIsATagException` (`tags.core`).
+- Cause: the scope name is handled by the JSTL API's `ConditionalTagSupport`, which does
+  not validate it (observed: an unknown name exports in page scope); Bodoni's `c:if` did not
+  check the name itself. `x:if` was fixed the same way in B3; `c:when` and `x:when` have
+  no `scope` attribute.
+- Status: fixed (2026-10-23, branch `feat/b3-xml`). `c:if` keeps the name it is given and
+  checks it when the action runs: an unknown name is a `JspTagException`
+  (`c:if: Invalid scope: invalid`, cause kept) and nothing is exported.
