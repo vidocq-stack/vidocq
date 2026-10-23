@@ -216,8 +216,8 @@ class JdkXmlFactsTest {
         PrintStream err = System.err;
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
         Transformer dropped;
-        try {
-            System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try (PrintStream capture = new PrintStream(captured, true, StandardCharsets.UTF_8)) {
+            System.setErr(capture);
             dropped = refusing.newTransformer(new StreamSource(new StringReader(main), WEBAPP_XSL));
         } finally {
             System.setErr(err);

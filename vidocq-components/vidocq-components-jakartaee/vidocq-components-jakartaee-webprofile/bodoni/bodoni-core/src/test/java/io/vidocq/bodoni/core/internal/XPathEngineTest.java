@@ -32,8 +32,6 @@ import java.util.List;
 
 import javax.xml.xpath.XPathExpressionException;
 
-import jakarta.servlet.jsp.PageContext;
-
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;

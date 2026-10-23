@@ -276,8 +276,8 @@ class XmlFactoriesTest {
     private static String stderrOf(Executable body) throws Throwable {
         PrintStream err = System.err;
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
-        try {
-            System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try (PrintStream capture = new PrintStream(captured, true, StandardCharsets.UTF_8)) {
+            System.setErr(capture);
             body.execute();
         } finally {
             System.setErr(err);
