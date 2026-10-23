@@ -33,6 +33,7 @@ import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.SortedMap;
 
 import io.vidocq.bodoni.core.testing.TestDatabase;
 import org.junit.jupiter.api.AfterEach;
@@ -153,7 +154,8 @@ class QueryResultTest {
         assertEquals("ID", r.getColumnNames()[0]);
         r.getRowsByIndex()[0][0] = null;
         assertEquals(1, r.getRowsByIndex()[0][0]);
-        assertThrows(UnsupportedOperationException.class, () -> r.getRows()[0].put("x", 1));
+        SortedMap<String, Object> row = r.getRows()[0];
+        assertThrows(UnsupportedOperationException.class, () -> row.put("x", 1));
     }
 
     @Test

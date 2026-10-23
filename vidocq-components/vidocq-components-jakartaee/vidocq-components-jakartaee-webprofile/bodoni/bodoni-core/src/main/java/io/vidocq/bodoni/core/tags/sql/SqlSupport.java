@@ -106,16 +106,11 @@ final class SqlSupport {
             throws JspException {
         String failure = action + ": cannot get a connection from " + DataSources.describe(source)
                 + (statement == null ? "" : " to execute \"" + statement + "\"") + ": ";
-        Connection connection;
         try {
-            connection = ds.getConnection();
+            return ds.getConnection();
         } catch (SQLException e) {
             throw new JspException(failure + e.getMessage(), e);
         }
-        if (connection == null) {
-            throw new JspException(failure + "the data source returned no connection");
-        }
-        return connection;
     }
 
     /**

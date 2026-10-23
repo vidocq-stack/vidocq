@@ -66,7 +66,7 @@ class ParamTagTest {
         db.close();
     }
 
-    private QueryTag query(String sql) throws Exception {
+    private QueryTag query(String sql) {
         QueryTag tag = new QueryTag();
         tag.setDataSource(new CountingDataSource(db.url()));
         tag.setSql(sql);
