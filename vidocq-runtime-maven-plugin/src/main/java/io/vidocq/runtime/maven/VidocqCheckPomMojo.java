@@ -325,13 +325,18 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         }
         Matcher m = EXTENSION_PATTERN.matcher(extName);
         if (!m.matches()) return Optional.empty();
-        String byConvention = "vidocq-runtime-" + m.group(1) + "-extension-codegen";
+        String byConvention = extensionArtifact(m.group(1)) + "-codegen";
         // The codegen bundle lives under the same group as its runtime extension, so resolve it there.
         if (codegenArtifactExists(byConvention, groupId, version)) {
             return Optional.of(byConvention);
         }
         getLog().debug("Vidocq checkpom: '" + extName + "' has no companion codegen artifact, skipping.");
         return Optional.empty();
+    }
+
+    /** The artifactId of the runtime extension {@code name}, e.g. {@code vidocq-runtime-cassini-rest-extension}. */
+    private static String extensionArtifact(String name) {
+        return "vidocq-runtime-" + name + "-extension";
     }
 
     // ---- Check 2: Codegen path declared, no matching extension ----
@@ -343,7 +348,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             if (CORE_CODEGEN.equals(codegenName)) continue;  // universal
             Matcher m = CODEGEN_PATTERN.matcher(codegenName);
             if (!m.matches()) continue;
-            String extName = "vidocq-runtime-" + m.group(1) + "-extension";
+            String extName = extensionArtifact(m.group(1));
             if (!extensions.containsKey(extName)) {
                 result.add("Codegen bundle '" + codegenName + "' is in annotationProcessorPaths "
                         + "but its runtime extension '" + extName + "' is not declared as a "
@@ -364,7 +369,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             if (CORE_CODEGEN.equals(codegenName)) continue;
             Matcher m = CODEGEN_PATTERN.matcher(codegenName);
             if (!m.matches()) continue;
-            String extName = "vidocq-runtime-" + m.group(1) + "-extension";
+            String extName = extensionArtifact(m.group(1));
             String extVer = extensions.get(extName);
             if (extVer == null || codegenVer == null) continue;
             if (!Objects.equals(extVer, codegenVer)) {

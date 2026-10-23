@@ -73,7 +73,8 @@ final class ExtensionDescriptor {
                     return Optional.of(load(in));
                 }
             }
-        } catch (IOException unreadable) {
+        } catch (IOException _) {
+            // An unreadable artifact describes nothing.
             return Optional.empty();
         }
     }
