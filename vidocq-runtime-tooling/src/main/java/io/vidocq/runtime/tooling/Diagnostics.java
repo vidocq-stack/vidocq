@@ -17,9 +17,8 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.doctor;
+package io.vidocq.runtime.tooling;
 
-import io.vidocq.runtime.cli.config.ConfigKeys;
 
 import java.util.List;
 

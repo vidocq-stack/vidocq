@@ -128,6 +128,15 @@ public final class KnownExtensions {
                                 "vidocq-runtime-" + trimmed + "-extension"));
     }
 
+    /** The catalog id of the extension at {@code coordinate}, else its artifactId. */
+    public static String idOf(ExtensionCoordinate coordinate) {
+        return CATALOG.stream()
+                .filter(e -> e.coordinate().equals(coordinate))
+                .map(RegistryEntry::id)
+                .findFirst()
+                .orElse(coordinate.artifactId());
+    }
+
     /** Whether {@code id} maps to a known first-party extension. */
     public static boolean isKnown(String id) {
         return byId(id).isPresent();

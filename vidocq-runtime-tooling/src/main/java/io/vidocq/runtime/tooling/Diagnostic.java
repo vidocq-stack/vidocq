@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.cli.doctor;
+package io.vidocq.runtime.tooling;
 
 /**
  * Result of a single environment / project health check.

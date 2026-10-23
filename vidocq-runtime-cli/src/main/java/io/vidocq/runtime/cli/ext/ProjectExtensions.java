@@ -20,21 +20,16 @@
 package io.vidocq.runtime.cli.ext;
 
 import io.vidocq.runtime.tooling.ExtensionCoordinate;
+import io.vidocq.runtime.tooling.ExtensionJars;
 import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.PomDependencies;
-import io.vidocq.runtime.tooling.RegistryEntry;
 
 import java.io.IOException;
-import java.lang.module.FindException;
-import java.lang.module.ModuleDescriptor;
-import java.lang.module.ModuleFinder;
-import java.lang.module.ModuleReference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Finds the Vidocq extensions a project actually runs with — the ones it declares and
@@ -45,8 +40,6 @@ import java.util.Set;
  * and the project's dependencies are not on its module path.</p>
  */
 public final class ProjectExtensions {
-
-    static final String SPI = "io.vidocq.runtime.spi.VidocqExtension";
 
     /**
      * An extension present in the project's runtime classpath.
@@ -165,39 +158,12 @@ public final class ProjectExtensions {
                                          List<ExtensionCoordinate> declared) {
         List<Installed> result = new ArrayList<>();
         for (ResolvedArtifact artifact : resolved) {
-            if (providesExtension(artifact.file())) {
-                result.add(new Installed(idOf(artifact), artifact,
+            if (ExtensionJars.providesExtension(artifact.file())) {
+                result.add(new Installed(KnownExtensions.idOf(artifact.coordinate()), artifact,
                         declared.contains(artifact.coordinate())));
             }
         }
         return result;
-    }
-
-    /**
-     * Whether the JAR's module — explicit {@code module-info} or, for an automatic
-     * module, {@code META-INF/services} — provides the extension SPI.
-     */
-    public static boolean providesExtension(Path jar) {
-        if (!Files.isRegularFile(jar)) {
-            return false;
-        }
-        try {
-            Set<ModuleReference> modules = ModuleFinder.of(jar).findAll();
-            return modules.stream()
-                    .flatMap(ref -> ref.descriptor().provides().stream())
-                    .map(ModuleDescriptor.Provides::service)
-                    .anyMatch(SPI::equals);
-        } catch (FindException | SecurityException e) {
-            return false;
-        }
-    }
-
-    private static String idOf(ResolvedArtifact artifact) {
-        return KnownExtensions.catalog().stream()
-                .filter(e -> e.coordinate().equals(artifact.coordinate()))
-                .map(RegistryEntry::id)
-                .findFirst()
-                .orElse(artifact.artifactId());
     }
 
     private static String lastLines(Path log) {

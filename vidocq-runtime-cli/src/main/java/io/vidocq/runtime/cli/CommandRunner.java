@@ -26,11 +26,6 @@ import io.vidocq.runtime.cli.completion.CommandCatalog;
 import io.vidocq.runtime.cli.completion.CompletionScripts;
 import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.completion.ShellSetup;
-import io.vidocq.runtime.cli.config.ConfigFile;
-import io.vidocq.runtime.cli.config.PropertiesText;
-import io.vidocq.runtime.cli.doctor.Diagnostic;
-import io.vidocq.runtime.cli.doctor.Diagnostics;
-import io.vidocq.runtime.cli.doctor.DoctorContext;
 import io.vidocq.runtime.cli.ext.ExtensionCache;
 import io.vidocq.runtime.cli.ext.ExtensionRegistry;
 import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
@@ -41,8 +36,14 @@ import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
 import io.vidocq.runtime.cli.update.HttpDownloads;
 import io.vidocq.runtime.cli.update.UpdatePlan;
+import io.vidocq.runtime.tooling.ConfigFile;
+import io.vidocq.runtime.tooling.Diagnostic;
+import io.vidocq.runtime.tooling.Diagnostics;
+import io.vidocq.runtime.tooling.DoctorContext;
+import io.vidocq.runtime.tooling.DoctorFacts;
 import io.vidocq.runtime.tooling.ExtensionEditor;
 import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.PropertiesText;
 import io.vidocq.runtime.tooling.RegistryEntry;
 import io.vidocq.runtime.tooling.Reporter;
 
@@ -213,61 +214,10 @@ public final class CommandRunner {
 
     private static DoctorContext gatherDoctorContext() {
         Path cwd = Path.of("").toAbsolutePath();
-        String javaHome = System.getenv("JAVA_HOME");
-        boolean javaHomeDir = javaHome != null && Files.isDirectory(Path.of(javaHome));
-        Path pom = cwd.resolve(POM_XML);
-        boolean pomPresent = Files.isRegularFile(pom);
-        Path config = ConfigFile.locate(cwd, Files::isRegularFile).orElse(null);
-        boolean configPresent = config != null;
-        List<String> configKeys = configPresent ? readConfigKeys(config) : List.of();
-        boolean vidocqProject = pomPresent && pomReferencesVidocq(pom);
-        int extensionCount = 0;
-        String extensionsError = null;
-        if (vidocqProject) {
-            switch (resolveProjectExtensions(cwd, false)) {
-                case ProjectExtensions.Resolution.Resolved r -> extensionCount = r.extensions().size();
-                case ProjectExtensions.Resolution.Failed f   -> extensionsError = f.reason();
-            }
-        }
-        return new DoctorContext(
-                Runtime.version().feature(),
-                System.getProperty("java.version"),
-                Diagnostics.MINIMUM_JAVA_VERSION,
-                javaHome,
-                javaHomeDir,
-                hasMavenWrapper(cwd),
-                pomPresent,
-                vidocqProject,
-                extensionCount,
-                configPresent,
-                configKeys,
-                extensionsError);
-    }
-
-    private static List<String> readConfigKeys(Path config) {
-        try {
-            return List.copyOf(PropertiesText.entries(Files.readString(config)).keySet());
-        } catch (IOException e) {
-            return List.of();
-        }
-    }
-
-    private static boolean hasMavenWrapper(Path start) {
-        for (Path dir = start; dir != null; dir = dir.getParent()) {
-            if (Files.isRegularFile(dir.resolve("mvnw"))
-                    || Files.isRegularFile(dir.resolve("mvnw.cmd"))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean pomReferencesVidocq(Path pom) {
-        try {
-            return Files.readString(pom).contains("io.vidocq.runtime");
-        } catch (IOException e) {
-            return false;
-        }
+        return DoctorFacts.gather(cwd, System.getenv("JAVA_HOME"), () -> switch (resolveProjectExtensions(cwd, false)) {
+            case ProjectExtensions.Resolution.Resolved r -> DoctorFacts.Extensions.found(r.extensions().size());
+            case ProjectExtensions.Resolution.Failed f   -> DoctorFacts.Extensions.failed(f.reason());
+        });
     }
 
     private static int runCreate(Command.Create create) {

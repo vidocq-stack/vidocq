@@ -31,7 +31,6 @@ import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ModuleDesc;
 import java.lang.reflect.AccessFlag;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -41,7 +40,6 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectExtensionsTest {
@@ -50,37 +48,6 @@ class ProjectExtensionsTest {
 
     @TempDir
     Path dir;
-
-    @Test
-    void namedModuleProvidingTheSpiIsAnExtension() throws IOException {
-        Path jar = namedModuleJar("ext-named.jar", "com.acme.ext", "com.acme.ext.AcmeExtension", true);
-
-        assertTrue(ProjectExtensions.providesExtension(jar));
-    }
-
-    @Test
-    void namedModuleWithoutTheSpiIsNotAnExtension() throws IOException {
-        Path jar = namedModuleJar("lib-named.jar", "com.acme.lib", "com.acme.lib.Util", false);
-
-        assertFalse(ProjectExtensions.providesExtension(jar));
-    }
-
-    @Test
-    void automaticModuleDeclaringTheServiceFileIsAnExtension() throws IOException {
-        Path jar = jar("ext-auto.jar", Map.of(
-                "META-INF/services/" + SPI, "com.acme.auto.AutoExtension\n".getBytes(StandardCharsets.UTF_8),
-                "com/acme/auto/AutoExtension.class", new byte[0]));
-
-        assertTrue(ProjectExtensions.providesExtension(jar));
-    }
-
-    @Test
-    void plainJarAndMissingFileAreNotExtensions() throws IOException {
-        Path plain = jar("plain.jar", Map.of("com/acme/plain/Plain.class", new byte[0]));
-
-        assertFalse(ProjectExtensions.providesExtension(plain));
-        assertFalse(ProjectExtensions.providesExtension(dir.resolve("missing.jar")));
-    }
 
     @Test
     void detectsDirectAndTransitiveExtensionsAndNamesThemFromTheCatalog() throws IOException {
