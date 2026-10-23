@@ -31,6 +31,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -48,6 +49,7 @@ public final class TestHttpServer implements AutoCloseable {
 
     private final ServerSocket socket;
     private final Map<String, Route> routes = new ConcurrentHashMap<>();
+    private final Set<String> dropped = ConcurrentHashMap.newKeySet();
     private final List<String> requestedPaths = new CopyOnWriteArrayList<>();
 
     private TestHttpServer(ServerSocket socket) {
@@ -68,6 +70,12 @@ public final class TestHttpServer implements AutoCloseable {
     /** Answers {@code GET path} with {@code status}, the extra {@code headers} and {@code body} (UTF-8). */
     public TestHttpServer route(String path, int status, Map<String, String> headers, String body) {
         routes.put(path, new Route(status, Map.copyOf(headers), body));
+        return this;
+    }
+
+    /** Closes the connection of {@code GET path} once the request is read, without any response. */
+    public TestHttpServer drop(String path) {
+        dropped.add(path);
         return this;
     }
 
@@ -116,6 +124,9 @@ public final class TestHttpServer implements AutoCloseable {
             String[] parts = requestLine.split(" ");
             String path = parts.length > 1 ? parts[1] : "";
             requestedPaths.add(path);
+            if (dropped.contains(path)) {
+                return;
+            }
             respond(connection.getOutputStream(), routes.getOrDefault(path, NOT_FOUND));
         } catch (IOException _) {
             // The client went away: nothing to answer.

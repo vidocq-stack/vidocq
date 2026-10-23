@@ -322,13 +322,31 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
             throw refused(reference, NOT_SAME_ORIGIN);
         }
         try {
-            URLConnection connection = prepare(target.toURL().openConnection());
+            return read(target.toURL().openConnection());
+        } catch (IOException | IllegalArgumentException e) {
+            throw unreadable(reference, e);
+        }
+    }
+
+    /**
+     * Prepares {@code connection} ({@link #prepare}), requires a 2xx status on HTTP and opens
+     * its stream. On any failure an HTTP connection is disconnected, so its socket does not
+     * wait for a timeout or the garbage collector.
+     *
+     * @throws IOException if the connection fails, answers another status or cannot be read
+     */
+    static InputStream read(URLConnection connection) throws IOException {
+        try {
+            prepare(connection);
             if (connection instanceof HttpURLConnection http) {
                 requireSuccess(http);
             }
             return connection.getInputStream();
-        } catch (IOException | IllegalArgumentException e) {
-            throw unreadable(reference, e);
+        } catch (IOException | RuntimeException e) {
+            if (connection instanceof HttpURLConnection http) {
+                http.disconnect();
+            }
+            throw e;
         }
     }
 
@@ -353,7 +371,6 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     private static void requireSuccess(HttpURLConnection http) throws IOException {
         int status = http.getResponseCode();
         if (status < 200 || status >= 300) {
-            http.disconnect();
             throw new IOException("HTTP status " + status);
         }
     }

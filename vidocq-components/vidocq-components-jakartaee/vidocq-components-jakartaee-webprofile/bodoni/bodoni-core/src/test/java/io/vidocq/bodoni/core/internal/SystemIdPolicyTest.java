@@ -352,6 +352,30 @@ class SystemIdPolicyTest {
         assertInstanceOf(IOException.class, policy.recordedFailure().getCause());
     }
 
+    @Test
+    void aConnectionClosedBeforeTheResponseIsAReadFailure() {
+        server = TestHttpServer.start().drop("/ctx/dropped.xml");
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, importXml(), pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, "dropped.xml"));
+
+        String message = policy.recordedFailure().getMessage();
+        assertTrue(message.startsWith("x:parse: external reference 'dropped.xml' cannot be read, "), message);
+        assertInstanceOf(IOException.class, policy.recordedFailure().getCause());
+        assertTrue(server.requestedPaths().contains("/ctx/dropped.xml"), server.requestedPaths().toString());
+    }
+
+    @Test
+    void aFailedHttpReadDisconnects() throws Exception {
+        for (boolean statusFails : new boolean[] {true, false}) {
+            FailingConnection connection = new FailingConnection(statusFails);
+
+            assertThrows(IOException.class, () -> SystemIdPolicy.read(connection));
+
+            assertTrue(connection.disconnected, "status fails: " + statusFails);
+        }
+    }
+
     // ---- origin and connections ---------------------------------------------
 
     @Test
@@ -450,6 +474,46 @@ class SystemIdPolicyTest {
     private static String read(InputSource source) throws IOException {
         try (InputStream in = source.getByteStream()) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /** An HTTP connection whose status or stream fails, recording whether it was disconnected. */
+    private static final class FailingConnection extends HttpURLConnection {
+
+        private final boolean statusFails;
+        private boolean disconnected;
+
+        FailingConnection(boolean statusFails) throws IOException {
+            super(URI.create("http://127.0.0.1/x.xml").toURL());
+            this.statusFails = statusFails;
+        }
+
+        @Override
+        public int getResponseCode() throws IOException {
+            if (statusFails) {
+                throw new IOException("no status line");
+            }
+            return HTTP_OK;
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            throw new IOException("connection reset");
+        }
+
+        @Override
+        public void connect() {
+            // Nothing to connect: the failures are simulated.
+        }
+
+        @Override
+        public void disconnect() {
+            disconnected = true;
+        }
+
+        @Override
+        public boolean usingProxy() {
+            return false;
         }
     }
 }
