@@ -580,21 +580,24 @@ or `cannot be loaded` for a `LinkageError` such as a failed static initialiser; 
 `08001`, cause kept: a class-loading error carries no URL). `getConnection` takes the first
 driver of `ServiceLoader.load(Driver.class, loader)` that accepts the URL and whose `connect`
 answers a connection, else iterates `DriverManager.drivers()` the same way (drivers
-registered by hand, or visible to Bodoni's own class loader): not
+registered with `DriverManager` and loadable by Bodoni's class loader: `DriverManager.drivers()`
+filters every registered driver by its caller's class loader): not
 `DriverManager.getConnection`, whose own "No suitable driver" (SQLState `08001`, full URL in
 the message) cannot be told from a driver failure. A provider that fails to load is skipped.
 No driver: Bodoni's own `SQLException`, SQLState `08001`, without cause, naming the URL
-redacted (`JdbcParameters.redactedUrl()`: cut at the first `;` or `?`, then without the user
-information, which ends at the last `@`: `//user:password@` when a `//` precedes it, else the
-Oracle form `user/password@` from after the last `:` before the first `/`, the `@` kept, so a
-password may hold `:`, `/` or `@`; it may cut more, never less). A driver failure is Bodoni's
+redacted (`JdbcParameters.redactedUrl()`: without the user information, found on the whole
+URL and ending at the last `@` (`//user:password@` when a `//` precedes it, else the Oracle
+form `user/password@` from after the last `:` before the first `/`, the `@` kept, so a
+password may hold `:`, `/`, `@`, `;` or `?`), then cut at the first `;` or `?` of what
+follows; when that `@` falls in a password property, cut where the user information would
+start; it may cut more, never less). A driver failure is Bodoni's
 own `SQLException`, also **without cause** (a driver exception may repeat the password
 anywhere in its chain: H2 2.3.232 puts `s3cret@nohost.invalid` there for
 `jdbc:h2:tcp://u:s3cret@nohost.invalid/db`), message
 `JDBC driver <class> cannot connect to '<redactedUrl>': <driver message, scrubbed>`, the
-driver's SQLState and vendor code kept. Scrubbing replaces the full URL by the redacted one,
-then every known secret by `***`: the password field or the password given to
-`getConnection(user, password)`, the password of the URL's user information, and the value
+driver's SQLState and vendor code kept. Scrubbing replaces the full URL, and the URL cut at its
+first `;` or `?`, by the redacted one, then every known secret by `***`: the password field and
+the password given to `getConnection(user, password)`, the password of the URL's user information, and the value
 of every URL property whose key contains `password` or `pwd` whatever its case (`sslpassword`,
 `trustStorePassword`, `PWD`; a `{…}` value with and without its braces). A `RuntimeException`
 of a driver's `acceptsURL` or `connect` is handled the same way, SQLState `08001`. Known
@@ -650,7 +653,7 @@ instantiation: the providers instantiate the drivers.
 | Translation-time constraints | Checked at run time (no TLV, B1 precedent): `scope` without `var`, an empty `var`, a missing `var` on `sql:query`, and a `dataSource` attribute on `sql:query` / `sql:update` inside `sql:transaction` → `JspTagException` |
 | `isolation`, `type` values | Exact lowercase as the spec lists them; an invalid `isolation` → `JspTagException` before any connection is opened, an invalid `type` → `JspTagException` before the value is handed to the enclosing action |
 | `sql:transaction` | `doStartTag` refuses a connection whose isolation is `TRANSACTION_NONE`, then switches auto-commit off and sets the isolation only when it differs from the current one. `doCatch` rolls back only once auto-commit was switched off (rolling back a connection still in auto-commit means nothing; a rollback failure is added as suppressed) and rethrows. `doFinally` restores the isolation, then the auto-commit mode, then closes, each step in its own `try`; a failure there goes to `ServletContext.log(message, cause)`, never thrown; the connection is always closed |
-| Exceptions | Data-source and SQL failures: `JspException` with the cause (`<action>: cannot get a connection from <source>: …`, `<action>: cannot execute "<statement>": …`); a failure to close an owned connection: `<action>: cannot close the connection to <source>: …`, suppressed on the statement failure when both happen; attribute errors: `JspTagException` (§10.3–§10.6 "Null & Error Handling"). `<source>` is the redacted string, `DriverManagerDataSource[<redacted URL>]` for a data source exported by `sql:setDataSource` with `url` or a JDBC string, else the class name of the `DataSource` object |
+| Exceptions | Data-source and SQL failures: `JspException`, cause kept when there is one: `<action>: dataSource is null`, `<action>: no data source: …`, `<action>: <resolution message>` (`SqlSupport.resolve`), `<action>: cannot get a connection from <source> to execute "<statement>": …` (`sql:query`, `sql:update`: §10.3 and §10.4 ask the message to include the statement) or `sql:transaction: cannot get a connection from <source>: …`, `<action>: cannot execute "<statement>": …`, `sql:transaction: cannot start the transaction: …`, `sql:transaction: commit failed: …`; a failure to close an owned connection: `<action>: cannot close the connection to <source> after "<statement>": …`, suppressed on the statement failure when both happen; attribute errors: `JspTagException` (§10.3–§10.6 "Null & Error Handling"). The no-password guarantee covers resolution and connecting; after that, a statement failure keeps the driver's exception as cause and the `sql:transaction` cleanup logs it through `ServletContext.log`, unscrubbed. `<source>` is the redacted string, `DriverManagerDataSource[<redacted URL>]` for a data source exported by `sql:setDataSource` with `url` or a JDBC string, else the class name of the `DataSource` object |
 | JNDI in the IT | Not in `bodoni-it-ibarra`: unit tests cover it with the test `InitialContextFactory`. Foy has no naming implementation, and a host-side one would have to reach the driver of the application layer and prove less than the unit tests; Vidocq's naming extension (#297) brings its own IT |
 | IT wiring | The host runs with `-Duser.timezone=Europe/Paris` (it guards BOD-005); H2, an automatic module (`com.h2database`), sits in the application layer, like a driver in `WEB-INF/lib`, and is bound through Bodoni's `uses java.sql.Driver`; the host's JDK modules gain `java.naming`; `fmt:parseDate` in `sql.jsp` takes `parseLocale="en"` because the IT client sends no `Accept-Language` |
 

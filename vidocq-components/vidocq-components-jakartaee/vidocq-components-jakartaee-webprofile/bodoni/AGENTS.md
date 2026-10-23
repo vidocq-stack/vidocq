@@ -114,7 +114,9 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
    never moves into Ibarra (Ibarra's AGENTS.md rule 6). Changes to Ibarra are cross-repo
    items proposed in Ibarra's own repository.
 4. **No reflection** beyond what the EL implementation already does when evaluating
-   expressions; no `setAccessible`, no `opens`.
+   expressions; no `setAccessible`, no `opens`. The one exception is spec-mandated:
+   `Class.forName(driver, true, loader)` loads the JDBC driver class a `sql:` data source
+   names (Tags 3.0 §10.2), "the one reflective act" of PLAN.md and the Reference page.
 5. **No `synchronized`, no `ThreadLocal`** — tag state travels in the handler instance and
    the `PageContext`; caches are `ConcurrentHashMap`.
 6. **JDK modules only** for XML (`java.xml`), SQL (`java.sql`, `java.naming`) and HTTP (`java.net.http` or

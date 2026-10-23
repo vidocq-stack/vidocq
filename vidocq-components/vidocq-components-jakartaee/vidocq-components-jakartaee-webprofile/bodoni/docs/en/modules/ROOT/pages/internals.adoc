@@ -28,9 +28,9 @@ module io.vidocq.bodoni.core {
     requires transitive jakarta.servlet.jsp.jstl;
     requires transitive java.xml;
     requires transitive java.sql;
-    uses java.sql.Driver;
     requires java.naming;
     requires java.net.http;
+    uses java.sql.Driver;
 }
 ----
 
