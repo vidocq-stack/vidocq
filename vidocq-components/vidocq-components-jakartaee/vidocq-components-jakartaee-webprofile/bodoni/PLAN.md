@@ -410,7 +410,9 @@ Decided with the maintainer on 2026-10-23.
 **Same-origin policy for XML external references** (open question 6). Every `x:parse` and
 `x:transform` runs with `XMLConstants.FEATURE_SECURE_PROCESSING` true on each
 `DocumentBuilderFactory`, `SAXParserFactory`, `TransformerFactory` and `XPathFactory` Bodoni
-creates (JDK expansion limits, no XSLT or XPath extension functions). Bodoni resolves every
+creates (JDK expansion limits), and `jdk.xml.enableExtensionFunctions` set to `false` on the
+`TransformerFactory` and the `XPathFactory`, which the system property of the same name could
+otherwise turn back on (final review of B3). Bodoni resolves every
 external reference itself, the JDK never fetches on its own:
 
 - **Resolvers.** An `EntityResolver2` for external entities and the external DTD subset, a
@@ -432,6 +434,11 @@ external reference itself, the JDK never fetches on its own:
   not a valid URI, or a relative one that climbs above the context root, ends the action with a
   `JspTagException` before anything is read.
 - **Opaque system id** (`jar:` and the like): every reference is refused.
+- **The origin is what the system id names as a whole.** Under a relative system id the whole
+  web application is the origin, `/WEB-INF/` and `/META-INF/` included: an untrusted document
+  can pull `/WEB-INF/web.xml` into the output. Under an absolute `file:` system id it is the
+  whole local filesystem, under an `http(s):` one the whole origin server. The Reference page
+  advises giving no system id for an untrusted document.
 - **The origin is fixed when the policy is built**, from the page's system id. The base a
   parser or an XSLT processor passes only resolves the reference, so an `xml:base` in an
   untrusted document cannot widen it.

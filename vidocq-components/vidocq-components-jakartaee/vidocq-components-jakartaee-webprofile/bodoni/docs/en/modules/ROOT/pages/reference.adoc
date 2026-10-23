@@ -180,9 +180,19 @@ An untrusted XML document or stylesheet can read local files or reach internal h
 * **Absolute system id** (`https://example.org/data/doc.xml`): a reference must have the same scheme, host and port. The connection has connect and read timeouts, does not follow HTTP redirects, and a redirect or any non-2xx status is a failure. Under a `file:` system id a UNC target (`file:////host/share`) is refused.
 * **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference is refused. The reference is resolved against the system id first, so `../x.xml` is accepted when the result is still inside the application; it is refused when the result leaves the web application (above the context root) or hides a dot segment in an encoding (`%2e%2e`, `..%2f`, `..%5c`). An opaque system id (`jar:`) allows no reference at all.
 
+The origin is the whole of what the system id names, not the directory of the document:
+
+* under a relative system id, the whole web application is the origin, `/WEB-INF/` and `/META-INF/` included: an untrusted document can pull `/WEB-INF/web.xml` into the output;
+* under an absolute `file:` system id, the whole local filesystem is the origin;
+* under an absolute `http:` or `https:` system id, the whole origin server is.
+
+So give no system id when you parse or transform an untrusted document: its external references are then all refused.
+
 A refused or unreadable reference ends the action with a `JspException` that names the reference and the system id, with the cause kept. A system id attribute that is not a valid URI, or a relative one that climbs above the context root, is not a reference: the action ends with a `JspTagException` carrying the message of the `IllegalArgumentException`, before anything is read.
 
-The JDK secure processing mode is on for every parser, transformer and XPath: its entity expansion limits apply and XSLT and XPath extension functions are disabled. The JDK access properties for external DTDs, schemas and stylesheets are set to the empty string, so a system property cannot reopen the fetching.
+The JDK secure processing mode is on for every parser, transformer and XPath: its entity expansion limits apply. XSLT and XPath extension functions are turned off explicitly, so the `jdk.xml.enableExtensionFunctions` system property cannot turn them back on. The JDK access properties for external DTDs, schemas and stylesheets are set to the empty string, so a system property cannot reopen the fetching.
+
+An `XMLFilter` passed to `x:parse` must not be shared across concurrent requests: Bodoni sets its parent and its entity resolver on each parse.
 
 To use a trusted remote document, load it first with `c:import` and give the text to `x:parse` or `x:transform`, or give the page a system id of the same origin as the references.
 ====
