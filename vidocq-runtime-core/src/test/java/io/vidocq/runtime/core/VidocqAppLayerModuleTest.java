@@ -83,6 +83,26 @@ class VidocqAppLayerModuleTest {
     }
 
     @Test
+    @DisplayName("a named boot-layer module without an application archive is left in place")
+    void aModuleWithoutApplicationArchiveIsLeftInPlace() {
+        // java.logging lives in the runtime image (jrt:): there is no archive to re-layer.
+        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "java.logging");
+        try {
+            assertFalse(VidocqAppLayer.installFromModuleIfConfigured());
+            assertFalse(VidocqAppLayer.alreadyInLayer());
+        } finally {
+            restore(previous);
+        }
+    }
+
+    @Test
+    @DisplayName("the trampoline path detects from the caller's module as the property path does from the named one")
+    void theTrampolinePathDetectsFromTheCallerModule() {
+        assertFalse(VidocqAppLayer.installFromBootLayer(java.util.logging.Logger.class));
+        assertFalse(VidocqAppLayer.alreadyInLayer());
+    }
+
+    @Test
     @DisplayName("the named module is the application module the banner and the startup report name")
     void theNamedModuleIsTheApplicationModule() {
         String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "java.logging");

@@ -172,7 +172,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
             copyResources();
             getLog().info("jlink image ready: " + distDir.toPath().toAbsolutePath());
             getLog().info("Run with: " + distDir.toPath().toAbsolutePath() + "/bin/" + launcher);
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             throw new MojoExecutionException("Failed to create jlink image", e);
         }
     }
@@ -391,24 +391,26 @@ public class VidocqJlinkMojo extends AbstractMojo {
         return args;
     }
 
-    private void runJlink(String addModules, ImageLaunch launch) throws IOException, InterruptedException {
-        Path output = distDir.toPath();
-        deleteRecursive(output);
-
-        String javaHome = System.getProperty("java.home");
-        String modulePath = modsDir.toPath() + File.pathSeparator + javaHome + "/jmods";
-
+    /** The arguments of the {@code jlink} run: the staged modules, the launcher of {@code launch}, the options. */
+    List<String> jlinkArgs(String addModules, ImageLaunch launch) {
+        String modulePath = modsDir.toPath() + File.pathSeparator + System.getProperty("java.home") + "/jmods";
         List<String> args = new ArrayList<>();
         args.add("--module-path"); args.add(modulePath);
         args.add("--add-modules"); args.add(addModules);
         args.addAll(launcherArgs(launcher, launch));
-        args.add("--output"); args.add(output.toString());
+        args.add("--output"); args.add(distDir.toPath().toString());
         args.add("--no-header-files");
         args.add("--no-man-pages");
         if (stripDebug) args.add("--strip-debug");
         if (compress != null && !compress.isBlank()) {
             args.add("--compress=" + compress);
         }
+        return args;
+    }
+
+    private void runJlink(String addModules, ImageLaunch launch) throws IOException {
+        deleteRecursive(distDir.toPath());
+        List<String> args = jlinkArgs(addModules, launch);
 
         ToolProvider jlink = ToolProvider.findFirst("jlink")
                 .orElseThrow(() -> new IOException("jlink tool is not available in this JDK"));
