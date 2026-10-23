@@ -44,6 +44,12 @@ public final class LayerSplit {
     public static final String PINNED_PROPERTY = "vidocq.app.layer.pinned";
     /** Manifest attribute by which a jar pins modules to the parent layer: comma-separated patterns. */
     public static final String PARENT_LAYER_ATTRIBUTE = "Vidocq-Parent-Layer";
+    /**
+     * Manifest attribute ({@code true}) by which a Vidocq jar asks to be the application's: a module that integrates
+     * an application framework (Vaadin) rides in the application layer with it, where the name rule would keep it,
+     * and the framework it reads, in the parent layer.
+     */
+    public static final String APPLICATION_LAYER_ATTRIBUTE = "Vidocq-Application-Layer";
 
     private static final String EXTENSION_SERVICE = "io.vidocq.runtime.spi.VidocqExtension";
     private static final List<String> RUNTIME_PREFIXES = List.of(
@@ -72,11 +78,19 @@ public final class LayerSplit {
      * @param location            the jar or directory it comes from
      * @param coordinates         {@code groupId:artifactId}, or {@code null} when unknown (an IDE launch)
      * @param parentLayerPatterns the patterns of its {@value #PARENT_LAYER_ATTRIBUTE} manifest attribute
+     * @param applicationLayer    its {@value #APPLICATION_LAYER_ATTRIBUTE} manifest attribute: the runtime rules do
+     *                            not keep it in the parent layer
      */
     public record Candidate(ModuleDescriptor descriptor, Path location, String coordinates,
-                            List<String> parentLayerPatterns) {
+                            List<String> parentLayerPatterns, boolean applicationLayer) {
         public Candidate {
             parentLayerPatterns = List.copyOf(parentLayerPatterns);
+        }
+
+        /** A candidate without {@value #APPLICATION_LAYER_ATTRIBUTE}. */
+        public Candidate(ModuleDescriptor descriptor, Path location, String coordinates,
+                         List<String> parentLayerPatterns) {
+            this(descriptor, location, coordinates, parentLayerPatterns, false);
         }
     }
 
@@ -150,7 +164,7 @@ public final class LayerSplit {
             if (pin != null) {
                 pinned.put(name, pin);
                 seedReason.put(name, pin);
-            } else if (isRuntime(c.descriptor())) {
+            } else if (!c.applicationLayer() && isRuntime(c.descriptor())) {
                 seedReason.put(name, "a runtime module");
             }
         }
@@ -190,7 +204,10 @@ public final class LayerSplit {
         return new Result(parent, application, pinned);
     }
 
-    /** The module of {@code jarOrDir}, with its {@value #PARENT_LAYER_ATTRIBUTE} patterns. */
+    /**
+     * The module of {@code jarOrDir}, with its {@value #PARENT_LAYER_ATTRIBUTE} patterns and its
+     * {@value #APPLICATION_LAYER_ATTRIBUTE}.
+     */
     public static Candidate candidate(Path jarOrDir, String coordinates) throws IOException {
         ModuleDescriptor descriptor;
         try {
@@ -200,7 +217,9 @@ public final class LayerSplit {
         } catch (FindException e) {
             throw new IOException("Cannot read the module of " + jarOrDir.getFileName() + ": " + e.getMessage(), e);
         }
-        return new Candidate(descriptor, jarOrDir, coordinates, patterns(manifestValue(jarOrDir)));
+        return new Candidate(descriptor, jarOrDir, coordinates,
+                patterns(manifestValue(jarOrDir, PARENT_LAYER_ATTRIBUTE)),
+                Boolean.parseBoolean(manifestValue(jarOrDir, APPLICATION_LAYER_ATTRIBUTE)));
     }
 
     /** The non-blank entries of a comma-separated list; empty for {@code null}. */
@@ -304,19 +323,19 @@ public final class LayerSplit {
                 : pattern.equals(value);
     }
 
-    private static String manifestValue(Path jarOrDir) throws IOException {
+    private static String manifestValue(Path jarOrDir, String attribute) throws IOException {
         if (Files.isDirectory(jarOrDir)) {
             Path file = jarOrDir.resolve(JarFile.MANIFEST_NAME);
             if (!Files.isRegularFile(file)) {
                 return null;
             }
             try (InputStream in = Files.newInputStream(file)) {
-                return new Manifest(in).getMainAttributes().getValue(PARENT_LAYER_ATTRIBUTE);
+                return new Manifest(in).getMainAttributes().getValue(attribute);
             }
         }
         try (JarFile jar = new JarFile(jarOrDir.toFile(), false)) {
             Manifest manifest = jar.getManifest();
-            return manifest == null ? null : manifest.getMainAttributes().getValue(PARENT_LAYER_ATTRIBUTE);
+            return manifest == null ? null : manifest.getMainAttributes().getValue(attribute);
         }
     }
 }

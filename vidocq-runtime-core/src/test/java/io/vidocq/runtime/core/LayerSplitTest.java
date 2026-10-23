@@ -233,7 +233,48 @@ class LayerSplitTest {
         assertEquals("acme:acme-lib", candidate.coordinates());
     }
 
+    @Test
+    @DisplayName("a Vidocq module marked Vidocq-Application-Layer moves, and so does the framework it reads")
+    void aVidocqModuleMarkedForTheApplicationLayerMoves() {
+        var core = explicit("io.vidocq.runtime.core");
+        var vaadin = automatic("flow.server");
+        var integration = new LayerSplit.Candidate(ModuleDescriptor.newModule(
+                "io.vidocq.runtime.extensions.jakartaee.web.vaadin").requires("flow.server")
+                .packages(Set.of("io.vidocq.runtime.extensions.jakartaee.web.vaadin")).build(),
+                Path.of("/libs/vaadin-extension.jar"), null, List.of(), true);
+        var result = LayerSplit.split(List.of(core, vaadin, integration), Set.of("acme.app"), List.of(), Map.of());
+
+        assertEquals(List.of("io.vidocq.runtime.core"), names(result.parent()));
+        assertEquals(List.of("flow.server", "io.vidocq.runtime.extensions.jakartaee.web.vaadin"),
+                names(result.application()), "the integration stays with Vaadin, which needs the application layer");
+    }
+
+    @Test
+    @DisplayName("Vidocq-Application-Layer is read from the jar's manifest; a jar without it is not marked")
+    void applicationLayerAttributeFromAJar(@TempDir Path dir) throws Exception {
+        Path marked = jar(dir.resolve("marked.jar"), "acme.marked", "true");
+        Path plain = jar(dir.resolve("plain.jar"), "acme.plain", null);
+
+        assertTrue(LayerSplit.candidate(marked, null).applicationLayer());
+        assertTrue(!LayerSplit.candidate(plain, null).applicationLayer());
+    }
+
     // ---------------------------------------------------------------- fixtures
+
+    private static Path jar(Path jar, String moduleName, String applicationLayer) throws Exception {
+        var manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().putValue("Automatic-Module-Name", moduleName);
+        if (applicationLayer != null) {
+            manifest.getMainAttributes().putValue(LayerSplit.APPLICATION_LAYER_ATTRIBUTE, applicationLayer);
+        }
+        try (var out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            out.putNextEntry(new ZipEntry(moduleName.replace('.', '/') + "/Lib.class"));
+            out.write(new byte[] {(byte) 0xCA, (byte) 0xFE});
+            out.closeEntry();
+        }
+        return jar;
+    }
 
     private static List<String> names(List<LayerSplit.Candidate> candidates) {
         return candidates.stream().map(c -> c.descriptor().name()).toList();
