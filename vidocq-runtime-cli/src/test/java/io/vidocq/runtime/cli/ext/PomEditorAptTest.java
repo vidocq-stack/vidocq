@@ -180,4 +180,183 @@ class PomEditorAptTest {
         assertTrue(removed.contains("<release>25</release>"), "pom was:\n" + removed);
         assertTrue(removed.contains("maven-compiler-plugin"), "pom was:\n" + removed);
     }
+
+    /** An application that configures its compiler plugin, without any processor path yet. */
+    private static final String POM_WITH_COMPILER = """
+            <project>
+                <build>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <configuration>
+                                <compilerArgs><arg>-Xlint:all</arg></compilerArgs>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </build>
+            </project>
+            """;
+
+    /** BUG-20261023-01: Maven warns on a second maven-compiler-plugin declaration. */
+    @Test
+    void fillsTheCompilerPluginAlreadyDeclared() {
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_COMPILER, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.changed());
+        assertEquals(1, occurrences(r.pom(), "<artifactId>maven-compiler-plugin</artifactId>"), r.pom());
+        assertTrue(r.pom().contains("<compilerArgs><arg>-Xlint:all</arg></compilerArgs>"), r.pom());
+        assertTrue(r.pom().contains("<annotationProcessorPaths combine.children=\"append\">"), r.pom());
+        assertTrue(r.pom().indexOf(PATH_XML) < r.pom().indexOf("</configuration>"), r.pom());
+        assertEquals(POM_WITH_COMPILER, PomEditor.removeAnnotationProcessorPath(r.pom(), CASSINI_CODEGEN).pom(),
+                "removing restores the pom as it was before adding");
+    }
+
+    @Test
+    void fillsACompilerPluginThatHasNoConfiguration() {
+        String pom = POM_WITH_COMPILER.replaceAll("(?s)<configuration>.*</configuration>", "<version>3.15.0</version>");
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertEquals(1, occurrences(r.pom(), "<artifactId>maven-compiler-plugin</artifactId>"), r.pom());
+        assertTrue(r.pom().indexOf(PATH_XML) < r.pom().indexOf("</plugin>"), r.pom());
+        assertEquals(pom, PomEditor.removeAnnotationProcessorPath(r.pom(), CASSINI_CODEGEN).pom());
+    }
+
+    /**
+     * BUG-20261023-02: without combine.children="append", the application's paths replace the parent's
+     * vidocq-runtime-core-codegen entry, and the Vauban indexer no longer runs.
+     */
+    @Test
+    void makesTheProcessorPathsAppendToTheParentEntry() {
+        String pom = POM_WITH_APT.replace(" combine.children=\"append\"", "");
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.pom().contains("<annotationProcessorPaths combine.children=\"append\">"), r.pom());
+        assertTrue(r.pom().contains("vidocq-runtime-mansart-data-extension-codegen"), r.pom());
+        assertTrue(r.pom().contains(PATH_XML), r.pom());
+        assertFalse(PomEditor.dropsInheritedProcessorPaths(r.pom()), r.pom());
+        assertTrue(PomEditor.dropsInheritedProcessorPaths(pom));
+    }
+
+    @Test
+    void anOverridingProcessorPathsBlockAlsoDropsTheParentEntry() {
+        String pom = POM_WITH_APT.replace("combine.children=\"append\"", "combine.self=\"override\"");
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(PomEditor.dropsInheritedProcessorPaths(pom));
+        assertTrue(r.pom().contains("<annotationProcessorPaths combine.children=\"append\">"), r.pom());
+        assertFalse(r.pom().contains("combine.self"), r.pom());
+    }
+
+    @Test
+    void anApplicationWithoutProcessorPathsKeepsTheParentEntry() {
+        assertFalse(PomEditor.dropsInheritedProcessorPaths(POM_WITH_BUILD));
+        assertFalse(PomEditor.dropsInheritedProcessorPaths(POM_WITH_APT));
+    }
+
+    /** A profile, before build, whose compiler plugin declares processor paths of its own. */
+    private static final String POM_WITH_PROFILE = """
+            <project>
+                <profiles>
+                    <profile>
+                        <id>lombok</id>
+                        <build>
+                            <plugins>
+                                <plugin>
+                                    <artifactId>maven-compiler-plugin</artifactId>
+                                    <configuration>
+                                        <annotationProcessorPaths combine.children="append">
+                                            <path>
+                                                <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                                                <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                                                <version>0.3.0</version>
+                                            </path>
+                                        </annotationProcessorPaths>
+                                    </configuration>
+                                </plugin>
+                            </plugins>
+                        </build>
+                    </profile>
+                </profiles>
+                <build>
+                    <plugins>
+                        <plugin>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                        </plugin>
+                    </plugins>
+                </build>
+            </project>
+            """;
+
+    /** BUG-20261023-03: an inactive profile's processor paths do not reach the default build. */
+    @Test
+    void wiresTheProjectBuildRatherThanAProfile() {
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(POM_WITH_PROFILE, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.changed(), "the profile's path does not count, pom was:\n" + r.pom());
+        String profile = r.pom().substring(0, r.pom().indexOf("</profiles>"));
+        String build = r.pom().substring(r.pom().indexOf("</profiles>"));
+        assertEquals(POM_WITH_PROFILE.substring(0, POM_WITH_PROFILE.indexOf("</profiles>")), profile);
+        assertTrue(build.contains(PATH_XML) && build.contains("<version>0.4.0</version>"), r.pom());
+        assertEquals(POM_WITH_PROFILE, PomEditor.removeAnnotationProcessorPath(r.pom(), CASSINI_CODEGEN).pom(),
+                "removing leaves the profile alone");
+    }
+
+    @Test
+    void wiresTheProjectBuildRatherThanPluginManagement() {
+        String pom = POM_WITH_PROFILE
+                .replace("<profiles>\n        <profile>\n            <id>lombok</id>\n            <build>",
+                        "<build>\n        <pluginManagement>")
+                .replace("        </build>\n        </profile>\n    </profiles>\n    <build>",
+                        "        </pluginManagement>");
+        assertEquals(1, occurrences(pom, "<build>"), pom);
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.changed(), r.pom());
+        String managed = r.pom().substring(0, r.pom().indexOf("</pluginManagement>"));
+        assertEquals(pom.substring(0, pom.indexOf("</pluginManagement>")), managed);
+        assertTrue(r.pom().lastIndexOf(PATH_XML) > r.pom().indexOf("</pluginManagement>"), r.pom());
+    }
+
+    @Test
+    void addsPluginsToABuildThatHasNone() {
+        String pom = """
+                <project>
+                    <build>
+                        <finalName>app</finalName>
+                    </build>
+                </project>
+                """;
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertEquals(1, occurrences(r.pom(), "<build>"), r.pom());
+        assertTrue(r.pom().indexOf(PATH_XML) < r.pom().indexOf("</plugins>"), r.pom());
+    }
+
+    @Test
+    void aCommentedOutCompilerPluginIsNotEdited() {
+        String pom = POM_WITH_BUILD.replace("<plugins>", "<plugins>\n<!-- <plugin><artifactId>maven-compiler-plugin"
+                + "</artifactId><configuration><annotationProcessorPaths></annotationProcessorPaths>"
+                + "</configuration></plugin> -->");
+
+        PomEditor.Result r = PomEditor.addAnnotationProcessorPath(pom, CASSINI_CODEGEN, "0.4.0");
+
+        assertTrue(r.pom().contains("<annotationProcessorPaths></annotationProcessorPaths>"
+                + "</configuration></plugin> -->"), r.pom());
+        assertTrue(r.pom().lastIndexOf(PATH_XML) > r.pom().indexOf("-->"), r.pom());
+    }
+
+    private static int occurrences(String text, String needle) {
+        int count = 0;
+        for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length())) {
+            count++;
+        }
+        return count;
+    }
 }

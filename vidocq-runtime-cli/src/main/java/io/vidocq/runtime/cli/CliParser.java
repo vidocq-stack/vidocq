@@ -365,7 +365,7 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(
-                        "vidocq create --name my-api -g com.acme -x rest -x health"));
+                        "vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health"));
             }
             case "build" -> {
                 CliOutput.println(CliOutput.bold("vidocq build") + " — Build & package the project");

@@ -58,8 +58,11 @@ import java.util.stream.Stream;
  * dependencies has its companion {@code vidocq-runtime-<name>-extension-codegen} bundle
  * in the {@code maven-compiler-plugin}'s {@code <annotationProcessorPaths>}, and vice versa.
  *
- * <p>Three checks are performed:</p>
+ * <p>Four checks are performed:</p>
  * <ol>
+ *   <li><b>Missing core codegen</b> — an extension is declared but {@code vidocq-runtime-core-codegen}, the
+ *       Vauban indexer the parent wires, is absent from APT paths: an {@code <annotationProcessorPaths>}
+ *       without {@code combine.children="append"} replaced it. Not checked under {@code <proc>none</proc>}.</li>
  *   <li><b>Missing codegen</b> — an extension is declared but its codegen bundle is absent
  *       from APT paths. The codegen artifact must actually exist in any reachable repository
  *       for this to flag (so extensions that legitimately ship no codegen, e.g. chappe, are
@@ -87,6 +90,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     private static final String VIDOCQ_RUNTIME_GROUP = "io.vidocq.runtime";
     private static final String CORE_CODEGEN = "vidocq-runtime-core-codegen";
     private static final String MAVEN_JAR_KEY = "org.apache.maven.plugins:maven-jar-plugin";
+    private static final String MAVEN_COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     /** Matches a runtime extension artifact, e.g. {@code vidocq-runtime-cassini-rest-extension}. */
     private static final Pattern EXTENSION_PATTERN =
             Pattern.compile("^vidocq-runtime-(.+)-extension$");
@@ -223,6 +227,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         // A dev-only module (a -dev companion) reads its runtime extension's live API and generates nothing: its
         // extension needs no codegen bundle there (#147). Orphans and drifts are still checked.
         if (!devOnly) {
+            findMissingCoreCodegen(extensions, codegenPaths).ifPresent(issues::add);
             issues.addAll(findMissingCodegens(extensions, extensionGroups, codegenPaths));
         }
         issues.addAll(findOrphanCodegens(extensions, codegenPaths));
@@ -242,6 +247,36 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             throw new MojoFailureException("Vidocq checkpom found " + issues.size()
                     + " issue(s). Fix them or downgrade to warnings via -Dvidocq.checkpom.failOnMissing=false.");
         }
+    }
+
+    // ---- Check 0: Extension declared, core codegen missing ----
+
+    /**
+     * The parent wires {@code vidocq-runtime-core-codegen}, the Vauban indexer; an application's
+     * {@code <annotationProcessorPaths>} without {@code combine.children="append"} replaces that entry, and the
+     * application's beans get no generated factory (BUG-20261023-02). A module running no processor is left alone.
+     */
+    private Optional<String> findMissingCoreCodegen(Map<String, String> extensions,
+                                                    Map<String, String> codegenPaths) {
+        if (extensions.isEmpty() || codegenPaths.containsKey(CORE_CODEGEN) || annotationProcessingDisabled()) {
+            return Optional.empty();
+        }
+        return Optional.of("'" + CORE_CODEGEN + "' (the Vauban indexer) is missing from"
+                + " maven-compiler-plugin/annotationProcessorPaths, so the application's beans get no generated"
+                + " factory. The vidocq-runtime-parent declares it: an <annotationProcessorPaths> without"
+                + " combine.children=\"append\" replaces that entry. Declare"
+                + " <annotationProcessorPaths combine.children=\"append\">, or add it yourself:\n"
+                + "<path>\n"
+                + "    <groupId>" + VIDOCQ_RUNTIME_GROUP + "</groupId>\n"
+                + "    <artifactId>" + CORE_CODEGEN + "</artifactId>\n"
+                + "</path>");
+    }
+
+    private boolean annotationProcessingDisabled() {
+        Plugin compiler = project.getPlugin(MAVEN_COMPILER_KEY);
+        if (compiler == null || !(compiler.getConfiguration() instanceof Xpp3Dom configuration)) return false;
+        Xpp3Dom proc = configuration.getChild("proc");
+        return proc != null && proc.getValue() != null && "none".equals(proc.getValue().strip());
     }
 
     // ---- Check 1: Extension declared, codegen missing ----

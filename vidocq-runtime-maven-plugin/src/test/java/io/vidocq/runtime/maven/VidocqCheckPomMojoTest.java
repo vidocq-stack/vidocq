@@ -26,6 +26,7 @@ import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.codehaus.plexus.util.xml.Xpp3DomBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -183,6 +184,7 @@ class VidocqCheckPomMojoTest {
         Model plainModel = new Model();
         plainModel.setPackaging("jar");
         plainModel.addDependency(dependency("vidocq-runtime-knock-health-extension", "compile"));
+        plainModel.setBuild(compilerWith(CORE_CODEGEN_PATH));
 
         assertDoesNotThrow(() -> strictCheckpom(new MavenProject(devModel), plain).execute());
         MojoFailureException failure = assertThrows(MojoFailureException.class,
@@ -205,6 +207,7 @@ class VidocqCheckPomMojoTest {
         ravel.setArtifactId("vidocq-runtime-ravel-config-extension");
         ravel.setVersion("0.4.0");
         model.addDependency(ravel);
+        model.setBuild(compilerWith(CORE_CODEGEN_PATH));
         List<String> errors = new ArrayList<>();
         VidocqCheckPomMojo mojo = strictCheckpom(new MavenProject(model), plain);
         mojo.setLog(new SystemStreamLog() {
@@ -278,6 +281,95 @@ class VidocqCheckPomMojoTest {
         assertTrue(warning.contains("<type>pom</type>"), warning);
         assertTrue(warning.contains("IntelliJ"), warning);
         assertTrue(warning.contains("Vidocq/vidocq#237"), warning);
+    }
+
+    private static final String CORE_CODEGEN_PATH = "<path><groupId>io.vidocq.runtime</groupId>"
+            + "<artifactId>vidocq-runtime-core-codegen</artifactId><version>0.4.0</version></path>";
+
+    private static final String CASSINI_CODEGEN_PATH = "<path><groupId>io.vidocq.runtime.extensions.jakartaee.core"
+            + "</groupId><artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"
+            + "<version>0.4.0</version></path>";
+
+    /**
+     * BUG-20261023-02: an application's annotationProcessorPaths without combine.children="append" replaces the
+     * parent's vidocq-runtime-core-codegen entry, so the Vauban indexer generates no bean factory. checkpom said
+     * "all aligned".
+     */
+    @Test
+    void aMissingCoreCodegenIsReported(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "cassini.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(cassini());
+        model.setBuild(compilerWith("<path><groupId>org.mapstruct</groupId>"
+                + "<artifactId>mapstruct-processor</artifactId><version>1.6.3</version></path>"
+                + CASSINI_CODEGEN_PATH));
+        List<String> errors = new ArrayList<>();
+        VidocqCheckPomMojo mojo = strictCheckpom(new MavenProject(model), plain);
+        mojo.setLog(new SystemStreamLog() {
+            @Override
+            public void info(CharSequence content) {
+            }
+
+            @Override
+            public void error(CharSequence content) {
+                errors.add(content.toString());
+            }
+        });
+
+        assertThrows(MojoFailureException.class, mojo::execute);
+
+        assertEquals(1, errors.size(), errors.toString());
+        assertTrue(errors.getFirst().contains("'vidocq-runtime-core-codegen'"), errors.getFirst());
+        assertTrue(errors.getFirst().contains("combine.children=\"append\""), errors.getFirst());
+    }
+
+    @Test
+    void theCoreCodegenFromTheParentSatisfiesTheCheck(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "cassini.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(cassini());
+        model.setBuild(compilerWith(CORE_CODEGEN_PATH + CASSINI_CODEGEN_PATH));
+
+        assertDoesNotThrow(() -> strictCheckpom(new MavenProject(model), plain).execute());
+    }
+
+    /** A module that turns annotation processing off runs no processor at all: no indexer to miss. */
+    @Test
+    void aModuleWithoutAnnotationProcessingNeedsNoCoreCodegen(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "cassini.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        model.addDependency(cassini());
+        Build build = compilerWith(CASSINI_CODEGEN_PATH);
+        Xpp3Dom configuration = (Xpp3Dom) build.getPlugins().getFirst().getConfiguration();
+        Xpp3Dom proc = new Xpp3Dom("proc");
+        proc.setValue("none");
+        configuration.addChild(proc);
+        model.setBuild(build);
+
+        assertDoesNotThrow(() -> strictCheckpom(new MavenProject(model), plain).execute());
+    }
+
+    private static Dependency cassini() {
+        Dependency cassini = new Dependency();
+        cassini.setGroupId("io.vidocq.runtime.extensions.jakartaee.core");
+        cassini.setArtifactId("vidocq-runtime-cassini-rest-extension");
+        cassini.setVersion("0.4.0");
+        return cassini;
+    }
+
+    /** A build whose maven-compiler-plugin lists {@code paths} in its annotationProcessorPaths. */
+    private static Build compilerWith(String paths) throws Exception {
+        Plugin compiler = new Plugin();
+        compiler.setGroupId("org.apache.maven.plugins");
+        compiler.setArtifactId("maven-compiler-plugin");
+        compiler.setConfiguration(Xpp3DomBuilder.build(new StringReader(
+                "<configuration><annotationProcessorPaths>" + paths + "</annotationProcessorPaths></configuration>")));
+        Build build = new Build();
+        build.addPlugin(compiler);
+        return build;
     }
 
     /** A checkpom mojo failing on its issues, every codegen bundle published, every dependency resolving to jar. */

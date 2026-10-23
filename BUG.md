@@ -742,3 +742,86 @@ where this whole bug class is invisible.
   - 2026-10-22: found while writing `vidocq-runtime-it-naming` (vidocq#297); the IT annotates a type instead.
     A fix has to pick a package for a module anchor (for instance the module's first package, or refuse
     `MODULE` in `@Target`).
+
+## BUG-20261023-01 — `extension add` declares a second `maven-compiler-plugin`
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `fix/cli-apt-wiring`)
+- **Affected module**: vidocq-runtime-cli (`PomEditor.addAnnotationProcessorPath`)
+- **Symptom**: on a pom whose `<build><plugins>` already holds a `maven-compiler-plugin` without
+  `<annotationProcessorPaths>`, `vidocq extension add cassini-rest` appends a second
+  `maven-compiler-plugin` block. Maven merges both, so the build works, but warns
+  `'build.plugins.plugin.(groupId:artifactId)' must be unique but found duplicate declaration of plugin
+  org.apache.maven.plugins:maven-compiler-plugin`.
+- **Minimal reproduction**:
+  ```
+  vidocq create -n app -g com.acme -x chappe-webserver && cd app
+  # add a maven-compiler-plugin with only <compilerArgs> under <build><plugins>
+  vidocq extension add cassini-rest && mvn -o validate
+  ```
+- **Cause**: the method only looks for an existing `<annotationProcessorPaths>`; with none, it writes a new
+  plugin block before `</plugins>` instead of filling the compiler plugin already declared.
+- **Investigations**:
+  - 2026-10-23: reproduced with Maven 3.9 on a scaffolded project (effective pom keeps `-Xlint:all`, the
+    core codegen and the Cassini bundle; only the warning is wrong).
+- **Fix**: `addAnnotationProcessorPath` fills the project build's compiler plugin: its `annotationProcessorPaths`,
+  else its `<configuration>`, else a new one; `remove` takes back what `add` wrapped around the path.
+
+## BUG-20261023-02 — A processor path block without `combine.children="append"` loses the Vauban indexer silently
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `fix/cli-apt-wiring`)
+- **Affected module**: vidocq-runtime-cli (`PomEditor.addAnnotationProcessorPath`),
+  vidocq-runtime-maven-plugin (`VidocqCheckPomMojo`)
+- **Symptom**: when the application's `<annotationProcessorPaths>` has no `combine.children="append"`
+  (for instance a hand-added `mapstruct-processor`), the parent's `vidocq-runtime-core-codegen` entry is
+  replaced, so the Vauban indexer does not run. `vidocq extension add` writes its bundle into that block and
+  reports "Wired", and `vidocq:checkpom` reports "all aligned": nothing tells the user.
+- **Minimal reproduction**:
+  ```
+  vidocq create -n app -g com.acme -x chappe-webserver && cd app
+  # add a maven-compiler-plugin whose <annotationProcessorPaths> (no combine.children) lists mapstruct-processor
+  vidocq extension add cassini-rest && mvn -o validate
+  # effective pom: [mapstruct-processor, vidocq-runtime-cassini-rest-extension-codegen], no core-codegen
+  ```
+- **Cause**: the CLI does not check the attribute of the block it edits, and `checkpom` treats
+  `vidocq-runtime-core-codegen` as optional: it never reports it missing.
+- **Investigations**:
+  - 2026-10-23: reproduced with Maven 3.9 (`help:effective-pom`, `validate`).
+  - 2026-10-23: with a bean in the application, the build without `append` has no `_VaubanComponents`, no
+    `*_Factory`, no `META-INF/vauban-beans.list`.
+- **Fix**: `add` writes `combine.children="append"` on the block it fills (and says so), and warns when it adds
+  an extension without codegen to a pom whose block still replaces the parent's; `checkpom` fails a module that
+  declares an extension without `vidocq-runtime-core-codegen`, unless it runs no processor (`<proc>none</proc>`).
+
+## BUG-20261023-03 — `extension add` may wire the codegen bundle into a profile or `pluginManagement`
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `fix/cli-apt-wiring`)
+- **Affected module**: vidocq-runtime-cli (`PomEditor.addAnnotationProcessorPath`,
+  `PomEditor.removeAnnotationProcessorPath`)
+- **Symptom**: the first `<annotationProcessorPaths` of the file wins, wherever it is: when it sits in a
+  `<profile>` (or in `<pluginManagement>`), the bundle lands there, and the default build does not run it
+  while the profile is inactive. `remove` looks at the same first block only.
+- **Minimal reproduction**: `PomEditor.addAnnotationProcessorPath(pom, cassiniCodegen, "0.4.0")` on a pom
+  whose `<profiles>` section, before `<build>`, declares a compiler plugin with `annotationProcessorPaths`:
+  the path is appended to the profile's block.
+- **Cause**: `pom.indexOf("<annotationProcessorPaths")` scans the whole document.
+- **Investigations**:
+  - 2026-10-23: reproduced on `PomEditor` directly; not run through Maven.
+- **Fix**: the editor skips comments, `<profiles>`, `<pluginManagement>`, `<reporting>` and plugin `<executions>`
+  when it looks for the compiler plugin, its paths, or `</plugins>` and `</build>`.
+
+## BUG-20261023-04 — `vidocq help create` shows extension ids that do not exist
+
+- **Date**: 2026-10-23
+- **Status**: FIXED (branch `fix/cli-apt-wiring`)
+- **Affected module**: vidocq-runtime-cli (help text of `create`)
+- **Symptom**: the example `vidocq create --name my-api -g com.acme -x rest -x health` uses `rest` and
+  `health`, which are not catalog ids: they resolve by convention to
+  `io.vidocq.runtime:vidocq-runtime-rest-extension`, an artifact that does not exist.
+- **Minimal reproduction**: `vidocq help create`.
+- **Cause**: the example predates the catalog's `<codename>-<spec>` ids (`cassini-rest`, `knock-health`).
+- **Investigations**:
+  - 2026-10-23: found while reviewing the APT wiring of `extension add`.
+- **Fix**: the example reads `-x cassini-rest -x knock-health`; a test checks its ids against the catalog.

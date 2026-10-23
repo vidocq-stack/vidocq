@@ -354,6 +354,15 @@ formatting; idempotent thanks to a StAX dependency scan).
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add` [.tag-new]#NEW#.
 |===
 
+[#extension-codegen-path]
+The codegen path goes into the compiler plugin of the project's own build [.tag-new]#NEW#: the
+`maven-compiler-plugin` the pom already declares, if any, rather than a second one, and never the one of a profile
+or of `pluginManagement`, which the default build does not run. Its `annotationProcessorPaths` must append to the
+parent's, where `vidocq-runtime-core-codegen`, the Vauban indexer, is wired: without
+`combine.children="append"`, the application's beans get no generated factory. `add` writes the attribute on the
+block it fills, and warns when it adds an extension without a codegen bundle to a pom whose block still replaces
+the parent's; xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:checkpom`] fails such a build.
+
 An id may be a known short name (e.g. `cassini-rest`; the catalog now has `grimm-openapi`, `grimm-openapi-ui`,
 `migration`, `flyway-migration` and `liquibase-migration` too [.tag-new]#NEW#), an explicit `groupId:artifactId`, or
 any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).

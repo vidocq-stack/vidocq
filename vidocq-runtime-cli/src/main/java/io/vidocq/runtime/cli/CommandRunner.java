@@ -712,6 +712,7 @@ public final class CommandRunner {
             CliOutput.error(e.getMessage());
             return 1;
         }
+        boolean droppedInheritedPaths = PomEditor.dropsInheritedProcessorPaths(pom);
         boolean anyChange = false;
         for (String id : ids) {
             ExtensionCoordinate coord;
@@ -752,6 +753,18 @@ public final class CommandRunner {
                 CliOutput.println("  " + CliOutput.dim("• " + id + " already present — skipped."));
             } else {
                 CliOutput.warning(id + " not found in pom.xml — skipped.");
+            }
+        }
+
+        // Paths that replace the parent's drop the Vauban indexer (BUG-20261023-02); wiring a
+        // codegen bundle makes them append, anything else only warns.
+        if (add && droppedInheritedPaths) {
+            if (PomEditor.dropsInheritedProcessorPaths(pom)) {
+                CliOutput.warning("annotationProcessorPaths replaces the parent's and so drops the Vauban indexer"
+                        + " (vidocq-runtime-core-codegen): declare it with combine.children=\"append\".");
+            } else {
+                CliOutput.success("annotationProcessorPaths now appends to the parent's"
+                        + CliOutput.dim("  (keeps the Vauban indexer, vidocq-runtime-core-codegen)"));
             }
         }
 

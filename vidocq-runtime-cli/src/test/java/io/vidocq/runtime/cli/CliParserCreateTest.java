@@ -19,7 +19,14 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.ext.KnownExtensions;
 import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -65,5 +72,26 @@ class CliParserCreateTest {
         Command.Create c = assertInstanceOf(Command.Create.class,
                 CliParser.parse(new String[]{"create", "--name", "ft-030", "--package", "io.example.ft030"}));
         assertEquals("io.example.ft030", c.pkg());
+    }
+
+    /** BUG-20261023-04: "-x rest" resolved by convention to an artifact that does not exist. */
+    @Test
+    void theHelpExampleEnablesCatalogExtensions() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
+        try {
+            CliParser.printHelp("create");
+        } finally {
+            System.setOut(original);
+        }
+        Matcher example = Pattern.compile("vidocq create --name [^\\n]*").matcher(buffer.toString(StandardCharsets.UTF_8));
+        assertTrue(example.find(), buffer.toString(StandardCharsets.UTF_8));
+        Matcher ids = Pattern.compile("-x (\\S+)").matcher(example.group());
+
+        assertTrue(ids.find(), example.group());
+        do {
+            assertTrue(KnownExtensions.isKnown(ids.group(1)), ids.group(1) + " is not a catalog id");
+        } while (ids.find());
     }
 }
