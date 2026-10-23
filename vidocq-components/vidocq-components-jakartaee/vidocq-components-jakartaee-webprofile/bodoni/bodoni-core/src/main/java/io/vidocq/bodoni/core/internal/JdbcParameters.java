@@ -23,6 +23,7 @@ package io.vidocq.bodoni.core.internal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -41,7 +42,8 @@ public record JdbcParameters(String url, String driver, String user, String pass
     private static final char ESCAPE = '\\';
     private static final int FIELDS = 4;
     private static final String AUTHORITY = "//";
-    private static final String PASSWORD_PROPERTY = "password";
+    private static final String PASSWORD_KEY = "password";
+    private static final String PWD_KEY = "pwd";
     private static final Pattern PROPERTY_SEPARATORS = Pattern.compile("[;?&]");
 
     /**
@@ -93,12 +95,14 @@ public record JdbcParameters(String url, String driver, String user, String pass
 
     /**
      * The URL without what may carry a secret: cut at its first {@code ;} or {@code ?}, then
-     * without its user information. With a {@code //} the user information runs from after
-     * the {@code //} to the last {@code @}, which goes too ({@code jdbc:x://u:p@h/db} gives
-     * {@code jdbc:x://h/db}); without one, from after the last {@code :} before the first
-     * {@code @} to that {@code @}, which stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db}
-     * gives {@code jdbc:oracle:thin:@host:1521:db}). It may cut more than the credentials,
-     * never less.
+     * without its user information, which always ends at the last {@code @}. When a
+     * {@code //} comes before that {@code @}, the user information runs from after the
+     * {@code //} and the {@code @} goes too ({@code jdbc:x://u:p@h/db} gives
+     * {@code jdbc:x://h/db}). Otherwise (the Oracle form) it runs from after the last {@code :}
+     * before the first {@code /}, or before the first {@code @} when no {@code /} comes
+     * earlier, and the {@code @} stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db} gives
+     * {@code jdbc:oracle:thin:@host:1521:db}). It may cut more than the credentials, never
+     * less.
      */
     public String redactedUrl() {
         String cut = url.substring(0, propertiesStart());
@@ -113,8 +117,9 @@ public record JdbcParameters(String url, String driver, String user, String pass
     /**
      * The secrets a driver message might repeat: the password field when not empty, the
      * password of the URL's user information ({@code //user:password@} or
-     * {@code user/password@}) and the values of its {@code password} properties, after the
-     * first {@code ;} or {@code ?}, whatever their case.
+     * {@code user/password@}) and the value of every URL property, after the first {@code ;}
+     * or {@code ?}, whose key contains {@code password} or {@code pwd} whatever its case; a
+     * value in braces counts with and without them.
      */
     Set<String> secrets() {
         Set<String> secrets = new HashSet<>();
@@ -130,12 +135,25 @@ public record JdbcParameters(String url, String driver, String user, String pass
             }
         }
         for (String property : PROPERTY_SEPARATORS.split(url.substring(propertiesStart))) {
-            int equals = property.indexOf('=');
-            if (equals > 0 && PASSWORD_PROPERTY.equalsIgnoreCase(property.substring(0, equals).trim())) {
-                addSecret(secrets, property.substring(equals + 1));
-            }
+            addPropertySecret(secrets, property);
         }
         return Set.copyOf(secrets);
+    }
+
+    private static void addPropertySecret(Set<String> secrets, String property) {
+        int equals = property.indexOf('=');
+        if (equals <= 0) {
+            return;
+        }
+        String key = property.substring(0, equals).toLowerCase(Locale.ROOT);
+        if (!key.contains(PASSWORD_KEY) && !key.contains(PWD_KEY)) {
+            return;
+        }
+        String value = property.substring(equals + 1);
+        addSecret(secrets, value);
+        if (value.length() > 2 && value.startsWith("{") && value.endsWith("}")) {
+            addSecret(secrets, value.substring(1, value.length() - 1));
+        }
     }
 
     private static void addSecret(Set<String> secrets, String secret) {
@@ -157,14 +175,17 @@ public record JdbcParameters(String url, String driver, String user, String pass
 
     /** The user information of a URL cut before its properties, {@code null} when it has none. */
     private static UserInfo userInfo(String cut) {
-        int slashes = cut.indexOf(AUTHORITY);
-        if (slashes >= 0) {
-            int start = slashes + AUTHORITY.length();
-            int at = cut.lastIndexOf('@');
-            return at >= start ? new UserInfo(start, at, true) : null;
+        int at = cut.lastIndexOf('@');
+        if (at < 0) {
+            return null;
         }
-        int at = cut.indexOf('@');
-        int colon = at < 0 ? -1 : cut.lastIndexOf(':', at);
+        int slashes = cut.indexOf(AUTHORITY);
+        if (slashes >= 0 && slashes + AUTHORITY.length() <= at) {
+            return new UserInfo(slashes + AUTHORITY.length(), at, true);
+        }
+        int slash = cut.indexOf('/');
+        int anchor = slash >= 0 && slash < at ? slash : cut.indexOf('@');
+        int colon = cut.lastIndexOf(':', anchor);
         return colon < 0 ? null : new UserInfo(colon + 1, at, false);
     }
 

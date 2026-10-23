@@ -147,19 +147,25 @@ public final class DriverManagerDataSource implements DataSource {
      * The driver's connection, {@code null} when it does not accept the URL. A driver failure
      * becomes Bodoni's own exception, the driver's SQLState and vendor code kept, its message
      * scrubbed, and no cause: a driver exception may repeat the URL or the password anywhere
-     * in its chain.
+     * in its chain. A {@code RuntimeException} of the driver is treated the same way, with
+     * SQLState {@code 08001} and vendor code {@code 0}.
      */
     private Connection open(Driver driver, Properties properties) throws SQLException {
         String url = parameters.url();
         try {
             return driver.acceptsURL(url) ? driver.connect(url, properties) : null;
         } catch (SQLException e) {
-            String reason = e.getMessage() == null
-                    ? ""
-                    : ": " + scrub(e.getMessage(), properties.getProperty(PASSWORD));
-            throw new SQLException("JDBC driver " + driver.getClass().getName() + " cannot connect to '"
-                    + parameters.redactedUrl() + "'" + reason, e.getSQLState(), e.getErrorCode());
+            throw failure(driver, e.getMessage(), properties, e.getSQLState(), e.getErrorCode());
+        } catch (RuntimeException e) {
+            throw failure(driver, e.getMessage(), properties, NO_CONNECTION_STATE, 0);
         }
+    }
+
+    /** Bodoni's own exception for a driver failure: scrubbed message, no cause. */
+    private SQLException failure(Driver driver, String message, Properties properties, String state, int code) {
+        String reason = message == null ? "" : ": " + scrub(message, properties.getProperty(PASSWORD));
+        return new SQLException("JDBC driver " + driver.getClass().getName() + " cannot connect to '"
+                + parameters.redactedUrl() + "'" + reason, state, code);
     }
 
     /**

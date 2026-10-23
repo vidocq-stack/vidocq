@@ -33,8 +33,9 @@ import java.util.logging.Logger;
 /**
  * A JDBC driver for {@code jdbc:bodoni-manual:} URLs that a test registers with
  * {@link DriverManager} by hand: it is not listed in {@code META-INF/services}, so only the
- * {@code DriverManager} fallback finds it. It either delegates to another URL or refuses
- * every connection with a message that repeats the password and the URL.
+ * {@code DriverManager} fallback finds it. It either delegates to another URL, refuses every
+ * connection with an {@link SQLException} that repeats the password and the URL, or crashes
+ * with an {@link IllegalStateException} that repeats the password.
  */
 public final class ManualDriver implements Driver {
 
@@ -45,21 +46,32 @@ public final class ManualDriver implements Driver {
 
     private static final String PREFIX = "jdbc:bodoni-manual:";
 
+    private static final String PASSWORD = "password";
+
+    private enum Mode { DELEGATE, REFUSE, CRASH }
+
+    private final Mode mode;
     private final String target;
     private final AtomicInteger connections = new AtomicInteger();
 
-    private ManualDriver(String target) {
+    private ManualDriver(Mode mode, String target) {
+        this.mode = mode;
         this.target = target;
     }
 
     /** A driver that opens {@code target} through {@link DriverManager} for every accepted URL. */
     public static ManualDriver delegatingTo(String target) {
-        return new ManualDriver(target);
+        return new ManualDriver(Mode.DELEGATE, target);
     }
 
     /** A driver that refuses every accepted URL with {@code refused password <password> for <url>}. */
     public static ManualDriver echoingThePassword() {
-        return new ManualDriver(null);
+        return new ManualDriver(Mode.REFUSE, null);
+    }
+
+    /** A driver that throws {@code IllegalStateException("crashed with password <password>")}. */
+    public static ManualDriver crashingWithThePassword() {
+        return new ManualDriver(Mode.CRASH, null);
     }
 
     /** How many connections this driver opened. */
@@ -72,9 +84,12 @@ public final class ManualDriver implements Driver {
         if (!acceptsURL(url)) {
             return null;
         }
-        if (target == null) {
-            throw new SQLException("refused password " + info.getProperty("password") + " for " + url,
+        if (mode == Mode.REFUSE) {
+            throw new SQLException("refused password " + info.getProperty(PASSWORD) + " for " + url,
                     REFUSED_STATE, REFUSED_CODE);
+        }
+        if (mode == Mode.CRASH) {
+            throw new IllegalStateException("crashed with password " + info.getProperty(PASSWORD));
         }
         Connection connection = DriverManager.getConnection(target, info);
         connections.incrementAndGet();

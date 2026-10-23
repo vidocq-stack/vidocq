@@ -170,6 +170,23 @@ class DriverManagerDataSourceTest {
     }
 
     @Test
+    void aDriverRuntimeExceptionIsScrubbedToo() throws SQLException {
+        DataSource dataSource = dataSource("jdbc:bodoni-manual:crash,,sa," + SECRET);
+        ManualDriver driver = ManualDriver.crashingWithThePassword();
+        DriverManager.registerDriver(driver);
+        try {
+            SQLException failure = assertThrows(SQLException.class, dataSource::getConnection);
+            assertEquals("JDBC driver " + ManualDriver.class.getName()
+                    + " cannot connect to 'jdbc:bodoni-manual:crash': crashed with password ***", failure.getMessage());
+            assertEquals(NO_DRIVER_STATE, failure.getSQLState());
+            assertNull(failure.getCause());
+            assertNoSecretInChain(failure);
+        } finally {
+            DriverManager.deregisterDriver(driver);
+        }
+    }
+
+    @Test
     void aDriverRegisteredByHandIsFoundThroughDriverManager() throws SQLException {
         ManualDriver driver = ManualDriver.delegatingTo(url);
         DriverManager.registerDriver(driver);

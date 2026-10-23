@@ -120,6 +120,34 @@ class JdbcParametersTest {
     }
 
     @Test
+    void oraclePasswordWithAColon() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:oracle:thin:scott/ti:ger@host:1521:db");
+        assertEquals("jdbc:oracle:thin:@host:1521:db", parameters.redactedUrl());
+        assertEquals(Set.of("ti:ger"), parameters.secrets());
+    }
+
+    @Test
+    void oraclePasswordWithAnAt() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:oracle:thin:scott/p@ss@host:1521:db");
+        assertEquals("jdbc:oracle:thin:@host:1521:db", parameters.redactedUrl());
+        assertEquals(Set.of("p@ss"), parameters.secrets());
+    }
+
+    @Test
+    void oracleCredentialsBeforeAnEzConnectAuthority() {
+        JdbcParameters parameters = JdbcParameters.parse("jdbc:oracle:thin:scott/tiger@//host:1521/svc");
+        assertEquals("jdbc:oracle:thin:@//host:1521/svc", parameters.redactedUrl());
+        assertEquals(Set.of("tiger"), parameters.secrets());
+    }
+
+    @Test
+    void everyPasswordLikePropertyIsASecret() {
+        JdbcParameters parameters = JdbcParameters.parse(
+                "jdbc:x://h/db;sslpassword=one;trustStorePassword=two?PWD={three};user=sa&Pwd=four");
+        assertEquals(Set.of("one", "two", "{three}", "three", "four"), parameters.secrets());
+    }
+
+    @Test
     void secretsAreThePasswordFieldAndThePasswordsOfTheUrl() {
         assertEquals(Set.of("field", "info", "prop", "query"),
                 JdbcParameters.parse("jdbc:x://u:info@h/db;PASSWORD=prop?password=query,d,sa,field").secrets());

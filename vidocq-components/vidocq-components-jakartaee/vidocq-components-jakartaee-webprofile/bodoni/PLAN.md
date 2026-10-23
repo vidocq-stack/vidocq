@@ -534,16 +534,21 @@ registered by hand, or visible to Bodoni's own class loader): not
 the message) cannot be told from a driver failure. A provider that fails to load is skipped.
 No driver: Bodoni's own `SQLException`, SQLState `08001`, without cause, naming the URL
 redacted (`JdbcParameters.redactedUrl()`: cut at the first `;` or `?`, then without the user
-information, `//user:password@` up to the last `@`, or the Oracle form `user/password@` after
-the last `:` before the first `@`; it may cut more, never less). A driver failure is Bodoni's
+information, which ends at the last `@`: `//user:password@` when a `//` precedes it, else the
+Oracle form `user/password@` from after the last `:` before the first `/`, the `@` kept, so a
+password may hold `:`, `/` or `@`; it may cut more, never less). A driver failure is Bodoni's
 own `SQLException`, also **without cause** (a driver exception may repeat the password
 anywhere in its chain: H2 2.3.232 puts `s3cret@nohost.invalid` there for
 `jdbc:h2:tcp://u:s3cret@nohost.invalid/db`), message
 `JDBC driver <class> cannot connect to '<redactedUrl>': <driver message, scrubbed>`, the
 driver's SQLState and vendor code kept. Scrubbing replaces the full URL by the redacted one,
 then every known secret by `***`: the password field or the password given to
-`getConnection(user, password)`, the password of the URL's user information, and the values
-of its `password` properties, whatever their case. The module `uses java.sql.Driver` and
+`getConnection(user, password)`, the password of the URL's user information, and the value
+of every URL property whose key contains `password` or `pwd` whatever its case (`sslpassword`,
+`trustStorePassword`, `PWD`; a `{…}` value with and without its braces). A `RuntimeException`
+of a driver's `acceptsURL` or `connect` is handled the same way, SQLState `08001`. Known
+limit: masking is literal, so a driver that quotes, escapes or encodes the secret in its
+message is not masked; the Reference security note (Task 9) repeats it. The module `uses java.sql.Driver` and
 `requires transitive java.sql`. A pre-JDBC 4 driver without
 `META-INF/services/java.sql.Driver`, in a class loader Bodoni cannot see, is not supported.
 
