@@ -1,8 +1,8 @@
 = Reference
-:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, x: tags and XML external references, deployment notes — B1 to B3.
+:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, x: tags and XML external references, sql: tags, data sources and database credentials, deployment notes — B1 to B4.
 
 [.lead]
-Bodoni publishes the `c:`, `fmt:`, `x:` and `fn:` libraries of Jakarta Standard Tag Library 3.0. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
+Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `fmt:`, `sql:`, `x:` and `fn:`. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
 
 == Coordinates
 
@@ -24,6 +24,8 @@ Bodoni publishes the `c:`, `fmt:`, `x:` and `fn:` libraries of Jakarta Standard 
 | `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0` | `provided` | Brought by the Pages container.
 | `jakarta.servlet:jakarta.servlet-api:6.1.0` | `provided` | Brought by the container.
 | `jakarta.el:jakarta.el-api:6.0.1` | `provided` | Brought by the container.
+| `com.h2database:h2:2.3.232` | `test` | In-memory database of the unit tests of `bodoni-core` and of the Ibarra IT; never shipped.
+| `org.junit.jupiter:junit-jupiter` | `test` | Managed by `vidocq-parent`.
 |===
 
 No build tooling dependency.
@@ -38,11 +40,12 @@ Each library is served under two URIs, both mapped to the same classes. The JSTL
 
 | Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core`
 | I18N and formatting | `fmt` | `jakarta.tags.fmt`, `http://java.sun.com/jsp/jstl/fmt`
+| Relational database access | `sql` | `jakarta.tags.sql`, `http://java.sun.com/jsp/jstl/sql`
 | XML processing | `x` | `jakarta.tags.xml`, `http://java.sun.com/jsp/jstl/xml`
 | Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions`
 |===
 
-The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fmt.tld`, `fmt-1_2.tld`, `x.tld`, `x-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
+The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fmt.tld`, `fmt-1_2.tld`, `sql.tld`, `sql-1_2.tld`, `x.tld`, `x-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
 
 === Core tags (`c:`)
 
@@ -136,6 +139,113 @@ For an application that is a named module, pick one of these placements:
 An application on the class path, such as a WAR, needs none of this.
 
 A module-aware lookup, where generated code runs inside the application module, is deferred to `bodoni-ibarra` (B6).
+
+[#sql]
+=== SQL tags (`sql:`)
+
+The six handlers of `io.vidocq.bodoni.core.tags.sql`, with the attributes of `sql.tld` (spec chapter 10). Attributes marked * are required. Every attribute except `var` and `scope` accepts a runtime expression.
+
+[cols="1,3",options="header"]
+|===
+| Tag | Attributes
+
+| `sql:query` | `sql`, `dataSource`, `maxRows`, `startRow`, `var`*, `scope`
+| `sql:update` | `sql`, `dataSource`, `var`, `scope`
+| `sql:transaction` | `dataSource`, `isolation`
+| `sql:param` | `value`
+| `sql:dateParam` | `value`*, `type`
+| `sql:setDataSource` | `dataSource`, `driver`, `url`, `user`, `password`, `var`, `scope`
+|===
+
+* **Statement (10.3, 10.4).** The `sql` attribute when it is set, and the body then only runs the nested parameter actions; otherwise the trimmed body. An empty statement is a `JspTagException`. The text goes to `Connection.prepareStatement` exactly as the page wrote it, and the `?` markers are bound in order by the nested `sql:param` and `sql:dateParam` actions.
+* **`sql:query` (10.3).** Exports a disconnected `jakarta.servlet.jsp.jstl.sql.Result` (see <<sql-result>>) to `var`, in `scope` (page by default). `maxRows` comes from the attribute, else from the `jakarta.servlet.jsp.jstl.sql.maxRows` setting, else there is no limit (`-1`). `startRow` rows are skipped first (`0` by default). A `maxRows` below `-1`, a `startRow` below `0` and an invalid setting are a `JspTagException`, raised before any connection is opened.
+* **`sql:update` (10.4).** Exports the number of rows affected, an `Integer`, to `var` when it is set; `0` for a statement that returns nothing, such as DDL.
+* **`sql:transaction` (10.5).** `isolation` is `read_committed`, `read_uncommitted`, `repeatable_read` or `serializable`, lowercase; another value is a `JspTagException`, raised before any connection is opened. The action opens one connection, refuses it when its isolation level is `TRANSACTION_NONE`, switches auto-commit off, and sets the isolation only when it differs from the current one. The nested `sql:query` and `sql:update` actions run on that connection and must not have a `dataSource` attribute (`JspTagException`). The transaction commits at the end of the body. An exception from the body rolls it back, once auto-commit was switched off, and is rethrown; a rollback failure is added to it as suppressed. Then the isolation level and the auto-commit mode are restored and the connection is closed, always; a failure in these steps is written to the servlet context log (`ServletContext.log`), never thrown.
+* **`sql:param` (10.7).** Binds the `value` attribute; a `null` value is the SQL `NULL`, set with `setNull` and the type the driver reports for the marker (`Types.NULL` when it cannot tell). Without `value`, the trimmed body is the value: a body that evaluates to empty text binds `""`, not `NULL`; an element without a body (`<sql:param/>`) binds `NULL`.
+* **`sql:dateParam` (10.8).** Converts the `java.util.Date` value to a `java.sql.Date`, `Time` or `Timestamp` as `type` says (`date`, `time` or `timestamp`, the default); a value already of that type is passed as is, and a `null` value is the SQL `NULL`. Another `type` is a `JspTagException`.
+* **Dates, times and timestamps.** A `java.sql.Date`, `Time` or `Timestamp` parameter, from `sql:dateParam` or `sql:param`, is bound with `setDate`, `setTime` or `setTimestamp` and a default-zone `Calendar`, which JDBC defines as equivalent to the plain setters. Some drivers (H2) convert the plain form with `java.time` zone rules, which differ from the legacy `java.util` rules before 1891 in zones such as `Europe/Paris`, so a date of 1788 reached the database as the day before (BOD-005 in `BUG.md`, fixed). Any other value is bound with `setObject`.
+* **Parameter actions** must be nested in an action that implements `SQLExecutionTag`, such as `sql:query` and `sql:update`; otherwise they fail with a `JspTagException`.
+* **`sql:setDataSource` (10.6).** Builds a data source from `dataSource` (an object, a JNDI path or a JDBC parameter string, see <<sql-data-sources>>) or, without it, from `url`, `driver`, `user` and `password`, with no JNDI lookup; an empty `driver` means none. With neither `dataSource` nor `url`, or with `dataSource` set to `null`, it fails with a `JspException`. The source is resolved at once (JNDI lookup, or driver class loaded) but no connection is opened. The resolved `javax.sql.DataSource` is exported to `var` in `scope` or, without `var`, set as the `jakarta.servlet.jsp.jstl.sql.dataSource` setting in `scope` (page by default). The password stays inside the data source and appears in no message.
+* **Not checked at translation time.** Bodoni has no tag library validator for `sql:` (B1 precedent): `scope` without `var`, an empty `var`, a `sql:query` without `var` and a `dataSource` attribute inside `sql:transaction` are reported at run time, as a `JspTagException`. A container that checks the required attributes of the TLD reports the missing `var` of `sql:query` at translation time.
+* **Errors (10.3 to 10.6, "Null & Error Handling").** Data-source and database failures end the action with a `JspException`, cause kept: `<action>: cannot get a connection from <source>: <message>`, `<action>: cannot execute "<statement>": <message>`, and `<action>: cannot close the connection to <source>: <message>` for a failure to close the connection the action opened (suppressed on the statement failure when both happen). Attribute errors are `JspTagException`s. `<source>` never carries a password: it is the redacted string, `DriverManagerDataSource[<redacted URL>]`, or the class name of a `DataSource` object.
+
+[#sql-data-sources]
+==== Data sources
+
+An action finds its data source in this order (10.1.1, 10.2), on every invocation; nothing is cached or pooled:
+
+. the `dataSource` attribute when the page specified it (specified as `null`, the action fails), else the `jakarta.servlet.jsp.jstl.sql.dataSource` setting, read through `Config.find` (page, request, session and application scope, then the context initialisation parameter); with neither, the action fails;
+. a `javax.sql.DataSource` is used as is;
+. a `String` is looked up as `java:comp/env/<string>` through `new InitialContext()`. A `DataSource` bound there is used; a name bound to anything else is an error. A blank string fails before any lookup;
+. when the lookup fails with any `NamingException` (no naming provider, name not found) or finds `null`, the string is read as a JDBC parameter string;
+. any other type is an error.
+
+*JDBC parameter string.* `url[,[driver][,[user][,password]]]`. The string is split on unescaped commas into at most four fields; the password takes the rest of the string, commas included. `\,` stands for a comma and `+\\+` for a backslash, in every field; a backslash before any other character is kept. An absent or empty driver means none; an absent user or password is the empty string. For example `jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1,org.h2.Driver,sa,` (no password), or `jdbc:postgresql://db/shop,,app,pa\,ss` (no driver class, password `pa,ss`).
+
+*Driver discovery.* The data source of a JDBC parameter string captures the thread context class loader when it is created (Bodoni's own class loader when there is none). A named driver class is loaded there with `Class.forName(driver, true, loader)`; a class that is not found is an `SQLException` `JDBC driver class '<driver>' not found`, one whose initialisation fails `JDBC driver class '<driver>' cannot be loaded` (SQLState `08001`, cause kept). Each connection then comes from the first driver of `ServiceLoader.load(java.sql.Driver.class, loader)` that accepts the URL and connects, else from the first such driver that `DriverManager.drivers()` hands Bodoni (drivers registered by hand, or visible to Bodoni's own class loader). A JDBC 4 driver, which declares itself in `META-INF/services/java.sql.Driver`, is therefore found in the web application's `WEB-INF/lib` or in the application layer even when Bodoni sits elsewhere, as long as the container runs the request with the application class loader as thread context class loader (as for `fmt:` bundles). **A pre-JDBC 4 driver must be visible to Bodoni's own class loader**: `DriverManager` hands a driver only to a caller whose class loader can load it.
+
+This data source is meant for prototypes (10.1.1): it has no pool, every `getConnection` opens a new connection, and its login timeout is the driver's own (`setLoginTimeout` is ignored).
+
+*Connection failures.* When no driver accepts the URL, the `SQLException` reads `no JDBC driver accepts '<redacted URL>' (…)`, SQLState `08001`, without cause. When a driver fails, Bodoni throws its own `SQLException`, without cause, `JDBC driver <class> cannot connect to '<redacted URL>': <driver message>`, with the driver's SQLState and vendor code (`08001` and `0` for a `RuntimeException` of the driver). The driver's exception is not kept, because a driver may repeat the URL or the password anywhere in its cause chain.
+
+*Redaction.* Every message shows a JDBC URL cut at its first `;` or `?` and without its user information: `jdbc:x://user:secret@host/db` shows as `jdbc:x://host/db`, `jdbc:oracle:thin:scott/tiger@host:1521:db` as `jdbc:oracle:thin:@host:1521:db`. The user information ends at the last `@`, so an `@` in the path of a URL can shorten what is shown: redaction hides more than the credentials rather than less. In a driver's message, the full URL is replaced by the redacted one and every known secret by `***`: the password field, the password of the URL's user information, and the value of every URL property whose key contains `password` or `pwd` in any case (`password`, `sslpassword`, `trustStorePassword`, `PWD`), a `{…}` value both with and without its braces. Masking is literal: a driver that quotes, escapes or encodes the secret in its message is not masked, and a short password masks every occurrence of its text.
+
+[#sql-result]
+==== The `Result` of `sql:query`
+
+`sql:query` reads the rows into a disconnected `jakarta.servlet.jsp.jstl.sql.Result` before the connection is closed:
+
+[cols="1,3",options="header"]
+|===
+| Property | Value
+
+| `rows` | One `SortedMap` per row, keyed by the column label (an `AS` alias wins), case-insensitive (`String.CASE_INSENSITIVE_ORDER`) and unmodifiable: `${r.rows[0].title}` and `${r.rows[0].TITLE}` read the same column. A label that occurs twice keeps the first column in the map.
+| `rowsByIndex` | One `Object[]` per row, every column in order.
+| `columnNames` | The column labels, in order.
+| `rowCount` | The number of rows in the result.
+| `limitedByMaxRows` | `true` when a limit applies (`maxRows` other than `-1`) and the query had at least one more row than the result holds.
+|===
+
+* **Values** are those of `ResultSet.getObject`: the driver's types (`java.sql.Date`, `Timestamp`, `BigDecimal`, `byte[]`, …).
+* **`maxRows` and `startRow`.** With a limit, the driver is asked for at most `startRow + maxRows + 1` rows (`Statement.setMaxRows`, skipped when the sum exceeds `Integer.MAX_VALUE`). `startRow` rows are skipped, at most `maxRows` rows are kept, and the one extra row only tells whether the limit cut the result: a query that returns exactly `maxRows` rows after `startRow` is **not** limited. `maxRows="0"` gives no row, limited when the query had any row after `startRow`. A `startRow` past the last row gives an empty, unlimited result.
+* **Copies.** Each call to `getRows`, `getRowsByIndex` and `getColumnNames` returns new arrays, and the row maps cannot be modified. The cell values themselves, such as a `byte[]` or a `java.util.Date`, are the same objects on every call: do not modify them.
+* Under Peano with `peano.reflection=deny`, the properties of `Result` are read through the table of `bodoni-peano` (see <<bod-001>>).
+
+[#sql-config]
+==== Configuration settings
+
+The `sql:` handlers read these settings through `Config.find`: page, request, session and application scope, then the context initialisation parameter of the same name.
+
+[cols="2,3",options="header"]
+|===
+| Setting | Role
+
+| `jakarta.servlet.jsp.jstl.sql.dataSource` | Default data source of `sql:query`, `sql:update` and `sql:transaction` when they have no `dataSource` attribute: a `javax.sql.DataSource`, a JNDI path or a JDBC parameter string. `sql:setDataSource` without `var` sets it (10.1.1, 10.9.1)
+| `jakarta.servlet.jsp.jstl.sql.maxRows` | Default `maxRows` of `sql:query` (10.9.2): an `Integer` or another `Number` (its `intValue()`), or a `String` holding an integer, trimmed. Unset, blank or `-1` means no limit. Another type, a string that is not an integer, or a value below `-1` is a `JspTagException` naming the setting and the value, raised before any connection is opened
+|===
+
+[#sql-security]
+[CAUTION]
+.SQL injection and database credentials
+====
+*SQL injection.* A value written into the statement text is executed as SQL. In `SELECT * FROM book WHERE title = '${param.title}'`, the request parameter becomes part of the statement, and a value such as `' OR '1'='1` changes what it does. Write a `?` marker instead and bind the value with `sql:param` or `sql:dateParam`: Bodoni prepares every statement with `PreparedStatement` and passes a bound value to the driver as a value, never as SQL.
+
+[source,jsp]
+----
+<sql:query var="books">SELECT title FROM book WHERE title = ?<sql:param value="${param.title}"/></sql:query>
+----
+
+*Database credentials.* A JDBC parameter string in a context parameter (`jakarta.servlet.jsp.jstl.sql.dataSource`) or in a page (`dataSource`, `sql:setDataSource password="…"`) carries the database password in clear. Any code of the application can read it: a page through `${initParam[…]}`, Java code through `ServletContext.getInitParameter` or `Config.find`. Bodoni keeps it out of its own messages (see <<sql-data-sources>>), not out of the application. Prefer a `javax.sql.DataSource` provided by the container, through JNDI or as an object the application sets as the setting, and a database account limited to what the pages need.
+
+The JDBC-string data source has no pool and opens a connection for each action: it is meant for prototypes (spec 10.1.1).
+====
+
+[#sql-jndi-vidocq]
+[NOTE]
+.JNDI under Vidocq
+====
+Bodoni does the standard `new InitialContext()` lookup and ships no naming implementation. Under Vidocq, `java:comp` comes from the runtime's naming extension, which is not available yet (link:https://codefloe.com/Vidocq/vidocq/issues/297[vidocq#297]): until then a JNDI path such as `jdbc/shop` is read as a JDBC parameter string and fails with `no JDBC driver accepts 'jdbc/shop'`. The `DataSource` object and JDBC-string forms work.
+====
 
 === XML tags (`x:`)
 
@@ -232,15 +342,15 @@ The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
 
 == Spec-mandated dynamic behaviour
 
-* `sql:setDataSource driver="…"` loads a JDBC driver class by name, as the spec requires (`sql:` arrives with B4).
-* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni ships no naming implementation: the lookup relies on the one the application server or the Vidocq runtime provides.
+* The `driver` of `sql:setDataSource` or of a JDBC parameter string is a class name: Bodoni loads it with `Class.forName(driver, true, loader)`, `loader` being the thread context class loader, because the spec asks that the driver class be loaded (10.2). It is the only class Bodoni loads by name for `sql:`; the drivers themselves are instantiated by `ServiceLoader` or by `DriverManager`, never by Bodoni (see <<sql-data-sources>>).
+* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni ships no naming implementation: the lookup relies on the one the application server or the Vidocq runtime provides (see <<sql-jndi-vidocq>>).
 
 [#bod-001]
 == Peano deny mode: bodoni-peano (BOD-001)
 
-Under Peano with `peano.reflection=deny`, Peano reads bean properties only through accessor tables. The `varStatus` object of `c:forEach` and `c:forTokens` (Tags 3.0 section 6.1) is an anonymous `LoopTagStatus` implementation of the JSTL API that no application table can name, so reading `${s.index}` fails with "Reflection fallback denied".
+Under Peano with `peano.reflection=deny`, Peano reads bean properties only through accessor tables. The `varStatus` object of `c:forEach` and `c:forTokens` (Tags 3.0 section 6.1) is an anonymous `LoopTagStatus` implementation of the JSTL API that no application table can name, so reading `${s.index}` fails with "Reflection fallback denied". The `Result` that `sql:query` exports (section 10.3) is an internal Bodoni class in the same position.
 
-Add `bodoni-peano` to the application when it runs on Peano with `peano.reflection=deny`. It is an optional engine adapter: its Java module `io.vidocq.bodoni.peano` requires `jakarta.servlet.jsp.jstl` and `io.vidocq.peano.api`, exports nothing, and provides Peano's `AccessorProvider` service with a read-only table keyed on `LoopTagStatus` (`current`, `index`, `count`, `first`, `last`, `begin`, `end`, `step`). It is the only Bodoni module that depends on Peano (`peano-api`); `bodoni-core` does not. The Bodoni Vidocq runtime extension will declare it. With `peano.reflection=allow`, or on another Pages container, it is not needed.
+Add `bodoni-peano` to the application when it runs on Peano with `peano.reflection=deny`. It is an optional engine adapter: its Java module `io.vidocq.bodoni.peano` requires `jakarta.servlet.jsp.jstl` and `io.vidocq.peano.api`, exports nothing, and provides Peano's `AccessorProvider` service with two read-only tables, keyed on the API interfaces: `LoopTagStatus` (`current`, `index`, `count`, `first`, `last`, `begin`, `end`, `step`) and `Result` (`rows`, `rowsByIndex`, `columnNames`, `rowCount`, `limitedByMaxRows`). It is the only Bodoni module that depends on Peano (`peano-api`); `bodoni-core` does not. The Bodoni Vidocq runtime extension will declare it. With `peano.reflection=allow`, or on another Pages container, it is not needed.
 
 The `key` and `value` of the `Map.Entry` items of a `c:forEach` over a `Map` need no Bodoni module: Peano resolves tables through superclasses and interfaces and ships its own `Map.Entry` table.
 
@@ -255,5 +365,6 @@ To be written and tested in milestone B7 by `bodoni-it-openliberty`. Known so fa
 * **Java**: 25 (LTS).
 * **Maven**: 3.9.16 (Model 4.0.0).
 * **Java Modules**: strict, every module has a `module-info.java`.
-* **Virtual threads**: no `synchronized`, no `ThreadLocal`.
+* **Virtual threads**: no `synchronized`, no `ThreadLocal`. The JDBC calls of `sql:` run on the thread that renders the page.
+* **Runtime image**: a `jlink` image, or a runtime started with `--limit-modules`, must contain the JDK modules `bodoni-core` requires: `java.xml`, `java.sql`, `java.naming` and `java.net.http` (with `java.desktop`, which the JSTL API module requires).
 * **Specs**: targets {spec-tags-3-0}[Jakarta Standard Tag Library 3.0] on Jakarta Pages 4.0, Servlet 6.1 and Expression Language 6.0.

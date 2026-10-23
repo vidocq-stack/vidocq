@@ -2,7 +2,7 @@
 :description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
 
 [.lead]
-Bodoni implements four of the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B3). The table gives the status of each.
+Bodoni implements the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B4). The table gives the status of each; the official TCK has not been run yet (B5).
 
 [cols="1,2,1,1",options="header"]
 |===
@@ -12,10 +12,10 @@ Bodoni implements four of the five tag libraries of Jakarta Standard Tag Library
 | Functions | `jakarta.tags.functions` | `fn` | implemented (B1)
 | I18N and formatting | `jakarta.tags.fmt` | `fmt` | implemented (B2)
 | XML processing | `jakarta.tags.xml` | `x` | implemented (B3)
-| Relational database access | `jakarta.tags.sql` | `sql` | planned (B4)
+| Relational database access | `jakarta.tags.sql` | `sql` | implemented (B4)
 |===
 
-The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
+The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/sql`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. The JSTL 1.0 URIs are not shipped.
 
 == Core library
 
@@ -50,6 +50,28 @@ The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/
 
 The directory `i18n-bundles` is not a Java package, so a named application module needs no `opens` for it. Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
 
+== SQL library
+
+[source,jsp]
+----
+<%@ taglib prefix="sql" uri="jakarta.tags.sql" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<sql:query var="books" maxRows="20">
+  SELECT id, title FROM book WHERE author = ? ORDER BY title
+  <sql:param value="${param.author}"/>
+</sql:query>
+<c:forEach items="${books.rows}" var="book">
+  <p>${book.id}: <c:out value="${book.title}"/></p>
+</c:forEach>
+<c:if test="${books.limitedByMaxRows}"><p>More books exist.</p></c:if>
+<sql:transaction>
+  <sql:update>UPDATE book SET stock = stock - 1 WHERE id = ?<sql:param value="${param.id}"/></sql:update>
+  <sql:update>INSERT INTO sale (book_id) VALUES (?)<sql:param value="${param.id}"/></sql:update>
+</sql:transaction>
+----
+
+The actions take the data source of the `jakarta.servlet.jsp.jstl.sql.dataSource` setting, here a context parameter or an object the application sets; a `dataSource` attribute overrides it. The request parameter is bound to the `?` marker by `sql:param`, never written into the statement: see xref:reference.adoc#sql-security[SQL injection and database credentials]. Row keys are the column labels, case-insensitive. Both updates commit together, or roll back together when one fails. Data sources, the JDBC parameter string and driver discovery: xref:reference.adoc#sql-data-sources[Data sources].
+
 == XML library
 
 [source,jsp]
@@ -78,7 +100,7 @@ The `select` attributes are XPath 1.0 expressions, not EL; `$param:min` reads a 
 
 == Configuration data
 
-The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:`, `x:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]); the `sql:` settings matter from B4:
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:`, `x:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]), the `sql:` library the two `jakarta.servlet.jsp.jstl.sql.*` settings (see xref:reference.adoc#sql-config[the reference]):
 
 * `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
 * `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.

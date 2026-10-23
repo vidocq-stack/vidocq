@@ -1,9 +1,9 @@
 # Bodoni — Design plan
 
-> Status: **B3 delivered (2026-10-23)** -- the `fn:` functions, the `c:` core tags, the
-> `fmt:` i18n and formatting tags and the `x:` XML tags are implemented in `bodoni-core`, with
-> unit tests and an Ibarra integration test (`bodoni-it-ibarra`, `it-ibarra` profile). `sql:`
-> (B4) is not implemented. This document is the design of record for Bodoni, the
+> Status: **B4 delivered (2026-10-23)** -- the `fn:` functions, the `c:` core tags, the
+> `fmt:` i18n and formatting tags, the `x:` XML tags and the `sql:` database tags are
+> implemented in `bodoni-core`, with unit tests and an Ibarra integration test
+> (`bodoni-it-ibarra`, `it-ibarra` profile). This document is the design of record for Bodoni, the
 > Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vidocq ecosystem,
 > required by Jakarta EE Web Profile 11 and tracked by
 > [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) (see
@@ -21,7 +21,7 @@ pages are precompiled by Ibarra, lets the most common core tags be **inlined at 
 time** through an optional module:
 
 - **zero third-party dependency** at run time: the JSTL API jar (which brings Pages,
-  Servlet and EL) and JDK modules (`java.xml`, `java.sql`, `java.net.http`) only — no
+  Servlet and EL) and JDK modules (`java.xml`, `java.sql`, `java.naming`, `java.net.http`) only — no
   Xalan, no Apache Taglibs, no Commons;
 - **strict Java Modules**: one `module-info.java` per artefact, no `opens`;
 - **a brick depends on APIs**: no Ibarra, Peano or Foy dependency in the runtime jar;
@@ -132,8 +132,8 @@ Ibarra + Peano and, optionally, puts `bodoni-ibarra` on the precompilation path.
 
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
-| `bodoni-core` | `io.vidocq.bodoni.core` | runtime | `transitive jakarta.servlet.jsp.jstl` (brings `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql`, `java.desktop` → `java.xml`); later `java.net.http` if `c:import` uses it, `java.naming` for `sql:` | the tag-handler and function packages (unqualified: generated pages and other containers instantiate handlers); `…core.internal.*` not exported |
-| `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table) |
+| `bodoni-core` | `io.vidocq.bodoni.core` | runtime | `transitive jakarta.servlet.jsp.jstl` (brings `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql`, `java.desktop` → `java.xml`); `transitive java.xml` (B3); `transitive java.sql` (B4: pages hand `javax.sql.DataSource` objects to the actions and read `java.sql` values from `Result` rows); `java.naming` (B4, not transitive: only `internal.DataSources` uses it); `java.net.http` (`c:import`, B1); `uses java.sql.Driver` (B4: the JDBC driver of a JDBC parameter string is found through the `ServiceLoader` of the context class loader) | the tag-handler packages `tags.core`, `tags.fmt`, `tags.xml`, `tags.sql` and the `functions` package (unqualified: generated pages and other containers instantiate handlers); `…core.internal.*` not exported |
+| `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table, B1; `Result` table, B4) |
 | `bodoni-ibarra` (planned) | `io.vidocq.bodoni.ibarra` | build only | `io.vidocq.bodoni.core`, Ibarra's compiler-side SPI module | nothing — `provides` the `TagInliner` SPI |
 | `bodoni-tck` (planned) | — | test, `-Ptck` | Ibarra + Peano + Foy (test scope), official TCK | — |
 | `bodoni-it-openliberty` (planned) | — (WAR) | test | `bodoni-core` | — |
@@ -195,14 +195,34 @@ Spec §10.1.1 / §10.6 (verified 2026-10-22): the `dataSource` attribute (or the
 settable as a context parameter or scoped attribute) is either a `javax.sql.DataSource`
 object, or a `String` that is
 1. a **JNDI relative path** under `java:comp/env` (e.g. `jdbc/myDatabase`), or
-2. a **JDBC parameter string** `url[,[driver][,[user][,password]]]` (`\` escapes `,`) for
-   `DriverManager`.
+2. a **JDBC parameter string** `url[,[driver][,[user][,password]]]` (`\` escapes `,` and
+   itself) for a `DriverManager`-style connection.
 
-Bodoni does exactly what any implementation does on any server: `new InitialContext()`
-and `lookup("java:comp/env/" + path)`; on lookup failure, fall back to the JDBC parameter
-form; `DriverManager` for the latter (the `driver` attribute loads a class by name: the
-one reflective act the spec mandates, recorded in the Reference page). Bodoni **does not
-provide** a naming implementation.
+Order implemented in B4 (`internal.DataSources`, `tags.sql.SqlSupport`):
+
+1. the `dataSource` attribute when the page specified it (specified as `null`: the action
+   fails), else `Config.find(pc, Config.SQL_DATA_SOURCE)` (page, request, session and
+   application scope, then the context parameter); neither: the action fails;
+2. a `javax.sql.DataSource` is used as is;
+3. a `String` that is blank fails; any other string is looked up as `java:comp/env/<string>`
+   through `new InitialContext()` (closed after the lookup); a `DataSource` bound there is
+   used, anything else bound there fails (a wrong binding is a configuration error);
+4. when the lookup throws any `NamingException` (no naming provider, name not found) or
+   answers `null`, the string is parsed as a JDBC parameter string and wrapped in Bodoni's
+   internal, unpooled `DriverManagerDataSource`;
+5. any other type fails.
+
+Each action resolves its data source on every invocation: no cache, no pool.
+
+Driver discovery for a JDBC parameter string (rule and evidence in "Decisions recorded in
+B4"): the data source captures the thread context class loader (else Bodoni's own) when it is
+created; the named `driver` class, if any, is loaded there with
+`Class.forName(driver, true, loader)`, the one reflective act the spec mandates (§10.2,
+"ensure it is loaded"); a connection comes from the first driver of
+`ServiceLoader.load(Driver.class, loader)` that accepts the URL and connects, else from the
+first such driver of `DriverManager.drivers()`. A pre-JDBC 4 driver without
+`META-INF/services/java.sql.Driver` is found only when Bodoni's own class loader can see it.
+Bodoni **does not provide** a naming implementation.
 
 **Decided (2026-10-22):** under Vidocq, JNDI `java:comp` is provided by the runtime, in
 `vidocq-runtime-naming-extension` — a read-only `java:` context backed by CDI, where a
@@ -273,6 +293,26 @@ bundle / time-zone state lives in scoped attributes via `Config`.
     EL 6.0.1 and `jakarta.tck:common` 11.1.1 (POM read 2026-10-22) — the EE 11 levels.
   Which one a Web Profile 11 compatibility claim must cite is unverified.
 - Gate: 100 % PASS is the merge gate once green; challenges, if filed, go to a `TCK.md`.
+- **For B5, the `sql` tests** (read from the TCK sources at the end of B4, not run):
+  - the TCK ships no DDL: the runner must create and fill `jstl_tab1` (`idNum`,
+    `firstName`, `lastName`; 10 rows, row 1 = `1, Lance, Andersen`; web.xml
+    `JSTL_TAB1_ROWS=10`, `JSTL_TAB1_COLUMNS=3`), `jstl_tab2` (`idNum`, `dob DATE`,
+    `firstName`, `lastName`, `rank`, `rating`; `rank` may need H2's `NON_KEYWORDS`) and
+    `jstl_tab3` (`idNum`, `aDate`, `aTime`, `aTimestamp`);
+  - the client needs the system properties `jstl.db.url`, `jstl.db.user`,
+    `jstl.db.password` and `jstl.db.driver`, all non-empty (a non-empty password), sent as
+    request headers;
+  - each WAR's `JstlDbFilter` builds `TckDataSourceWrapper`s (`jstlDS`, `logDS`) with
+    `Class.forName(driver).newInstance()` and `DriverManager` from `WEB-INF/lib`, so the
+    driver must be visible to the WAR's class loader;
+  - the JDBC-string tests join `url,driver,user,password` unescaped, so the URL must contain
+    no comma;
+  - `TckDataSourceWrapper` throws on everything but `getConnection()`;
+  - `logDS` checks the exact `sql:transaction` connection lifecycle;
+  - the translation-error tests (`negativeQueryVarAttributeTest`,
+    `negativeQueryNoVarAttributeTest`, `negativeTx*DataSourceAttributeTest`,
+    `negativeTxIsolationLevelAttributeTest` with an unknown `isolationLevel` attribute)
+    expect HTTP 500.
 
 ## Milestones (TDD — test first, every milestone)
 
@@ -282,7 +322,7 @@ bundle / time-zone state lives in scoped attributes via `Config`.
 | B1 | **Done (2026-10-22).** `fn:` functions + TLD; `c:` core (§4–§7) handlers + TLD, `Config`, scoped-variable rules (§2.2) | unit tests per tag on `PageContext` doubles; pages render on Ibarra in an IT (`bodoni-it-ibarra`, `-Pit-ibarra`). BOD-001 fixed by `bodoni-peano` |
 | B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (BOD-002: fixed in Vidocq/foy, Foy BUG-20261022-06; Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix); open question 4 settled |
 | B3 | **Done (2026-10-23).** `x:` (§11–§13): 10 handlers in `tags.xml` (`parse`, `out`, `set`, `if`, `choose`/`when`/`otherwise`, `forEach`, `transform`, `param`), `x.tld` and `x-1_2.tld`, JDK parser/XSLT/XPath, XPath variable bindings over the page scopes, same-origin resolution of external references, `RangeLoopTagSupport` shared with `c:forEach` and `c:forTokens` | unit tests; pages render on Ibarra in an IT (external references included); open question 6 settled; `requires transitive java.xml` settles the Bodoni side of open question 3 |
-| B4 | `sql:` (§10): data-source resolution (object / JNDI / JDBC string), query, update, transaction, params, `Result` | unit tests on an in-memory `DataSource` double; JNDI path tested with a test-only `InitialContextFactory` |
+| B4 | **Done (2026-10-23).** `sql:` (§10): 6 handlers in `tags.sql` (`query`, `update`, `transaction`, `param`, `dateParam`, `setDataSource`), `sql.tld` and `sql-1_2.tld`, data-source resolution (object / JNDI / JDBC parameter string) with driver discovery through the context class loader and credentials kept out of messages, a disconnected `Result` (`internal.QueryResult`), the `Result` accessor table in `bodoni-peano` | unit tests against H2 in memory (test scope); JNDI path tested with a test-only `InitialContextFactory`; pages render on Ibarra in an IT against H2 (BOD-005 found and fixed); open question 8 settled |
 | B5 | `bodoni-tck` + `run-official-tck-tags-3.0.sh`, behind `-Ptck` | official suite green with standard handlers (open question 1 settled) |
 | B6 | Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
 | B7 | `bodoni-it-other-containers/bodoni-it-openliberty` + Reference "Deploying on an application server" block | WAR with the documented dependencies passes on Open Liberty |
@@ -374,10 +414,11 @@ The Vidocq runtime extension (vidocq repository) follows B5.
 7. ~~**JNDI `java:comp` under Vidocq**~~ — decided: `vidocq-runtime-naming-extension`,
    [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) (see "`sql:` — DataSource
    resolution"). Not a Bodoni design item.
-8. **Module split** — one `bodoni-core` jar (all five libraries, like the reference
-   implementation) or separate `bodoni-sql` / `bodoni-xml` artefacts? The API module
-   already reads `java.sql` and `java.xml`, so a split would not shrink the module graph.
-   Default: one jar. (to validate)
+8. ~~**Module split**~~ — decided (maintainer, 2026-10-23): one jar. `bodoni-core` holds
+   all five libraries, like the reference implementation; `sql:` lives in the exported
+   package `io.vidocq.bodoni.core.tags.sql`. The API module already reads `java.sql` and
+   `java.xml`, so separate `bodoni-sql` / `bodoni-xml` artefacts would not have shrunk the
+   module graph.
 9. **`TagInliner` SPI shape** — owned by Ibarra; to be designed there (cross-repo item).
 
 ## Decisions recorded in B1
@@ -521,6 +562,16 @@ precedent).
 
 Decided with the maintainer on 2026-10-23.
 
+| Topic | Decision |
+|---|---|
+| Module split (open question 8) | **One jar.** `sql:` lives in `bodoni-core`, exported package `io.vidocq.bodoni.core.tags.sql`; the shared machinery is in `io.vidocq.bodoni.core.internal` (not exported) or package-private in `tags.sql` |
+| Data-source resolution | Spec §10.1.1 / §10.2, in the order of "`sql:` — DataSource resolution" above. Bodoni provides no naming implementation. Under Vidocq the JNDI form fails until [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) lands (open question 7); the object and JDBC-string forms work |
+| JDBC driver loading | Settled by the probe below; the JDBC-string `DataSource` is internal and unpooled |
+| Tests | H2 in memory at test scope (`bodoni-core` unit tests and `bodoni-it-ibarra`); JNDI tested with a test-only `InitialContextFactory` |
+| URIs | `jakarta.tags.sql` **and** `http://java.sun.com/jsp/jstl/sql`, same classes (`sql.tld`, `sql-1_2.tld`); no `<validator>` (B1 precedent) |
+| EL under `peano.reflection=deny` | `Result` is an API interface: `bodoni-peano` ships its accessor table, as for `LoopTagStatus` (BOD-001) |
+| Security | Statements are `PreparedStatement`s bound by `sql:param` / `sql:dateParam`; the Reference page states that values concatenated into the SQL text are an injection risk and that JDBC credentials in context parameters are readable by the application |
+
 **Driver discovery for a JDBC parameter string** (§10.1.1, §10.2). `internal.DriverManagerDataSource`
 is unpooled: every `getConnection` opens a new connection. It captures a class loader at
 construction, the thread context class loader, else its own. A named driver class is loaded
@@ -548,7 +599,7 @@ of every URL property whose key contains `password` or `pwd` whatever its case (
 `trustStorePassword`, `PWD`; a `{…}` value with and without its braces). A `RuntimeException`
 of a driver's `acceptsURL` or `connect` is handled the same way, SQLState `08001`. Known
 limit: masking is literal, so a driver that quotes, escapes or encodes the secret in its
-message is not masked; the Reference security note (Task 9) repeats it. The module `uses java.sql.Driver` and
+message is not masked; the Reference page repeats it. The module `uses java.sql.Driver` and
 `requires transitive java.sql`. A pre-JDBC 4 driver without
 `META-INF/services/java.sql.Driver`, in a class loader Bodoni cannot see, is not supported.
 
@@ -576,6 +627,42 @@ WAR while Bodoni sits in the server's lib, so the context loader's `ServiceLoade
 and `DriverManager` second, the same rule as Mansart's pool (mansart#42). No reflective
 instantiation: the providers instantiate the drivers.
 
+**Rulings of the B4 plan.**
+
+| Topic | Ruling |
+|---|---|
+| H2 in `bodoni-core` unit tests | H2 2.3.232 at test scope rather than hand-written `ResultSet` / `ResultSetMetaData` doubles, which would be large and would not check real JDBC behaviour; small hand-written doubles stay where a double is the better test (`CountingDataSource`, `RecordingConnection`, `ManualDriver`) |
+| `java.sql` | `requires transitive java.sql`: pages and application code hand `javax.sql.DataSource` objects to the actions and read `java.sql.Date` / `Time` / `Timestamp` values from `Result` rows; as for `java.xml` in B3, Bodoni does not rely on the API descriptor (open question 3) |
+| `java.naming` | `requires java.naming`, not transitive: only `internal.DataSources` uses `javax.naming`, and no exported signature exposes a `javax.naming` type (the `dataSource` setters take `Object`) |
+| Driver discovery | `uses java.sql.Driver`; context class loader `ServiceLoader` first, then `DriverManager.drivers()`, as stated above |
+| No suitable driver | Bodoni's own `SQLException`, SQLState `08001`, **no cause**: `DriverManager`'s own message repeats the full URL, which may carry `;PASSWORD=` |
+| Driver failures | Bodoni's own `SQLException`, **no cause**, the driver's message scrubbed, its SQLState and vendor code kept (above). `JdbcParameters.redactedUrl()` may hide more than the credentials, never less: an `@` in a URL path can shorten what a message shows |
+| String resolution | JNDI first for every string, as §10.2 orders; any `NamingException` falls back to the JDBC form; a name bound to something that is not a `DataSource` fails; a blank string fails before any lookup; another type fails |
+| `sql:setDataSource` | Resolves at once (JNDI lookup, or driver class loaded; no connection opened) and exports the resolved `DataSource`, as `var` or as `Config.SQL_DATA_SOURCE` in `scope`. `dataSource` wins over `url`; neither → `JspException`. With `url`, no JNDI lookup: `url`, `driver` (empty means none), `user` and `password` make the JDBC data source directly. A `DataSource` export never exposes the password as a string |
+| `Result` | Own `internal.QueryResult`, not `ResultSupport.toResult`: `ResultSupport` has no `startRow`, and how it moves the cursor is not documented |
+| Columns | Names from `ResultSetMetaData.getColumnLabel` (an `AS` alias wins); values from `getObject`; rows are unmodifiable `TreeMap`s ordered by `String.CASE_INSENSITIVE_ORDER` (Javadoc of `Result.getRows`); a duplicated label keeps the first column in the row map, `rowsByIndex` keeps every column; the three arrays and each `rowsByIndex` row are copied on every call, the cell values (a `byte[]`, a `java.util.Date`) are not |
+| `maxRows` / `startRow` | `maxRows` attribute, else `Config.SQL_MAX_ROWS`, else `-1`. `Statement.setMaxRows(startRow + maxRows + 1)` only when `maxRows != -1` and the `long` sum is at most `Integer.MAX_VALUE`; `startRow` rows are skipped on the cursor; at most `maxRows` rows are kept, and one more row is read only to learn whether the limit cut the result. `limitedByMaxRows` is true when `maxRows != -1` and such an extra row exists: a result of exactly `maxRows` rows is **not** limited (controller ruling, 2026-10-23: the spec's "limited by a maximum row setting" read literally; tested both ways). `maxRows < -1` and `startRow < 0` → `JspTagException`, checked in `doStartTag` before any connection is opened |
+| `maxRows` setting conversion (§2.8) | `Integer` / other `Number` → `intValue()`; `String` → `Integer.parseInt` of the trimmed text, blank → no limit; any other type, a non-integer string or a value below `-1` → `JspTagException` naming the setting and the value |
+| Statement text | The `sql` attribute when set (a body then only runs the nested parameter actions, its text is ignored), else the trimmed body; `null` or blank → `JspTagException`. Passed to `Connection.prepareStatement` exactly as given, never concatenated with anything |
+| `null` parameter | `setNull(index, type)`, `type` from `getParameterMetaData().getParameterType(index)`, `Types.NULL` when that call throws `SQLException` (§10.7) |
+| Empty `sql:param` body | An evaluated but empty body binds `""`, not NULL: §10.7 makes NULL only of a `null` value (execution ruling, Task 5). Without `value` and without body content (`<sql:param/>`), the value is `null` |
+| Dates, times and timestamps | `java.sql.Date`, `Time` and `Timestamp` parameters, from `sql:dateParam` or `sql:param`, are bound with `setDate` / `setTime` / `setTimestamp` and a fresh default-zone `Calendar`, which JDBC defines as equivalent to the plain setters; any other value with `setObject` (BOD-005, below) |
+| Translation-time constraints | Checked at run time (no TLV, B1 precedent): `scope` without `var`, an empty `var`, a missing `var` on `sql:query`, and a `dataSource` attribute on `sql:query` / `sql:update` inside `sql:transaction` → `JspTagException` |
+| `isolation`, `type` values | Exact lowercase as the spec lists them; an invalid `isolation` → `JspTagException` before any connection is opened, an invalid `type` → `JspTagException` before the value is handed to the enclosing action |
+| `sql:transaction` | `doStartTag` refuses a connection whose isolation is `TRANSACTION_NONE`, then switches auto-commit off and sets the isolation only when it differs from the current one. `doCatch` rolls back only once auto-commit was switched off (rolling back a connection still in auto-commit means nothing; a rollback failure is added as suppressed) and rethrows. `doFinally` restores the isolation, then the auto-commit mode, then closes, each step in its own `try`; a failure there goes to `ServletContext.log(message, cause)`, never thrown; the connection is always closed |
+| Exceptions | Data-source and SQL failures: `JspException` with the cause (`<action>: cannot get a connection from <source>: …`, `<action>: cannot execute "<statement>": …`); a failure to close an owned connection: `<action>: cannot close the connection to <source>: …`, suppressed on the statement failure when both happen; attribute errors: `JspTagException` (§10.3–§10.6 "Null & Error Handling"). `<source>` is the redacted string, `DriverManagerDataSource[<redacted URL>]` for a data source exported by `sql:setDataSource` with `url` or a JDBC string, else the class name of the `DataSource` object |
+| JNDI in the IT | Not in `bodoni-it-ibarra`: unit tests cover it with the test `InitialContextFactory`. Foy has no naming implementation, and a host-side one would have to reach the driver of the application layer and prove less than the unit tests; Vidocq's naming extension (#297) brings its own IT |
+| IT wiring | The host runs with `-Duser.timezone=Europe/Paris` (it guards BOD-005); H2, an automatic module (`com.h2database`), sits in the application layer, like a driver in `WEB-INF/lib`, and is bound through Bodoni's `uses java.sql.Driver`; the host's JDK modules gain `java.naming`; `fmt:parseDate` in `sql.jsp` takes `parseLocale="en"` because the IT client sends no `Accept-Language` |
+
+**Bug found and fixed (BOD-005).** In a JVM whose default zone used local mean time before
+1891 (`Europe/Paris`), H2 shifted a pre-1891 `java.sql.Date` or `Timestamp` bound with
+`setObject` by the local-mean-time offset; Bodoni now binds those types with a default-zone
+`Calendar`. Details in `BUG.md`.
+
+**Open interpretations, to settle with the TCK (B5).** `startRow < 0` is an error
+(`JspTagException`). A blank `jakarta.servlet.jsp.jstl.sql.maxRows` setting means no limit.
+Whether the TCK expects either is unverified.
+
 ## Cross-repo item: BOD-001 (fixed)
 
 Under Peano with `peano.reflection=deny`, a precompiled page could not read `${s.index}` (or any
@@ -584,5 +671,5 @@ property) of the `varStatus` variable of `c:forEach` / `c:forTokens`, nor `${e.k
 Peano (`Vidocq/peano`, branch `feat/accessor-supertype-lookup`) looks tables up through
 superclasses and interfaces and ships the `Map.Entry` table; `bodoni-peano`, an optional engine
 adapter (engine-adapter exception of the brick/extension rule; `bodoni-core` stays free of
-Peano), ships the `LoopTagStatus` table. The Bodoni Vidocq runtime extension will declare
+Peano), ships the `LoopTagStatus` table (and, since B4, the `Result` table of `sql:query`). The Bodoni Vidocq runtime extension will declare
 `bodoni-peano`. Tracked in `BUG.md` (BOD-001).

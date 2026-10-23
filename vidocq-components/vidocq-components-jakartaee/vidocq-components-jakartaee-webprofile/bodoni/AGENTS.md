@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B3 delivered — `fn:`, `c:`, `fmt:` and `x:` implemented; `sql:` not yet.** Read [PLAN.md](PLAN.md) before any
+**Status: B4 delivered — `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented; official TCK next (B5).** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -74,11 +74,13 @@ sdk env
 
 The `it-ibarra` profile is not part of the default build: it needs **local snapshots** of
 chappe, foy, peano and ibarra (`0.4.0-SNAPSHOT`) in `~/.m2`. The IT runs under
-`peano.reflection=deny` (`denyModeIsActive` proves it); its `varStatus` and `Map.Entry`
-tests (BUG.md BOD-001, fixed) need the `bodoni-peano` adapter and a Peano with
+`peano.reflection=deny` (`denyModeIsActive` proves it); its `varStatus`, `Map.Entry` and
+`sql:query` `Result` tests (BUG.md BOD-001, fixed) need the `bodoni-peano` adapter and a Peano with
 supertype lookup. BOD-002 is fixed in Vidocq/foy (Foy BUG-20261022-06, [Vidocq/foy#76](https://codefloe.com/Vidocq/foy/pulls/76)). Foy builds that
 predate it leave the request thread's context class loader unset, so `fmt:` cannot find
 application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
+The `sql:` pages run against an in-memory H2 database (test scope, from Maven Central); the
+host runs with `-Duser.timezone=Europe/Paris`, which guards BOD-005.
 
 `bodoni-tck` will be **in-reactor behind the `tck` Maven profile** from day one: a plain
 `./mvnw install` will neither build nor download anything TCK-related.
@@ -87,8 +89,8 @@ application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the f
 
 ```
 bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
-                c:, fmt:, fn:, x:, sql:  (B3: c:, fn:, fmt: and x:)
-bodoni-peano  ← optional engine adapter: LoopTagStatus accessor table for Peano
+                c:, fmt:, fn:, x:, sql:  (all five since B4)
+bodoni-peano  ← optional engine adapter: LoopTagStatus and Result accessor tables for Peano
                 `peano.reflection=deny` (BOD-001); the only module allowed to depend on Peano
 bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
 (planned)     bodoni-ibarra  ← optional build-time inliner for Ibarra (TagInliner SPI)
@@ -115,10 +117,11 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
    expressions; no `setAccessible`, no `opens`.
 5. **No `synchronized`, no `ThreadLocal`** — tag state travels in the handler instance and
    the `PageContext`; caches are `ConcurrentHashMap`.
-6. **JDK modules only** for XML (`java.xml`), SQL (`java.sql`) and HTTP (`java.net.http` or
+6. **JDK modules only** for XML (`java.xml`), SQL (`java.sql`, `java.naming`) and HTTP (`java.net.http` or
    `URLConnection`) — no third-party XPath/XSLT/HTTP library.
 7. **JNDI is the standard `InitialContext` lookup**, exactly as on any server. Bodoni does
-   not provide a naming implementation (PLAN.md open question on `java:comp`).
+   not provide a naming implementation (PLAN.md open question 7: under Vidocq, `java:comp`
+   comes from the runtime, vidocq#297).
 8. **JUnit 6** (`junit-bom` managed by `vidocq-parent`), no Mockito — hand-written
    fixtures and `PageContext` / servlet doubles only.
 9. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
@@ -132,7 +135,7 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
   (artifact `bodoni-peano`); planned
   `io.vidocq.bodoni.ibarra` (artifact `bodoni-ibarra`).
 - **Packages** (fixed in B1): `io.vidocq.bodoni.core.tags.<library>` (exported tag
-  handlers; `tags.core`, `tags.fmt` and `tags.xml` today, `sql` to come), `io.vidocq.bodoni.core.functions`
+  handlers: `tags.core`, `tags.fmt`, `tags.xml` and `tags.sql`), `io.vidocq.bodoni.core.functions`
   (exported `fn:` functions) and `io.vidocq.bodoni.core.internal` = implementation, not exported.
 - Licence header from `etc/license-header.txt` on every `.java` file.
 - Commits: see "Ecosystem rules" above.

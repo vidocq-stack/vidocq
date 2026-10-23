@@ -2,7 +2,7 @@
 :description: Coming to Bodoni from the GlassFish / Apache JSTL implementations — what will map.
 
 [.lead]
-Bodoni implements the `c:`, `fmt:`, `x:` and `fn:` libraries today (B1 to B3); `sql:` follows in B4. This page records the contract so the expectation is clear.
+Bodoni implements the five libraries, `c:`, `fmt:`, `sql:`, `x:` and `fn:` (B1 to B4). This page records the contract so the expectation is clear.
 
 == The good news (target)
 
@@ -10,8 +10,13 @@ Pages that use the standard tags through the `jakarta.tags.*` URIs need no chang
 
 == What to check (target)
 
-* **JSTL 1.2 URIs** — `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are served by the same classes as the `jakarta.tags.*` URIs, so existing pages keep working. The JSTL 1.0 URIs (`_rt` variants, 1.0 EL TLDs) are not shipped. New pages should use `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql` (`sql` arrives with B4).
+* **JSTL 1.2 URIs** — `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/sql`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are served by the same classes as the `jakarta.tags.*` URIs, so existing pages keep working. The JSTL 1.0 URIs (`_rt` variants, 1.0 EL TLDs) are not shipped. New pages should use `jakarta.tags.core`, `jakarta.tags.fmt`, `jakarta.tags.functions`, `jakarta.tags.xml`, `jakarta.tags.sql`.
 * **Implementation classes** — `org.apache.taglibs.standard.*` handlers, often extended by applications, have no Bodoni equivalent by name. Extend the API base classes (`LoopTagSupport`, `ConditionalTagSupport`) instead.
 * **XML engines** — Bodoni uses the JDK XML parser, XPath and XSLT 1.0 implementations (`java.xml`); Xalan-specific extension functions are not available, and the JDK secure processing mode disables extension functions altogether.
 * **XML external references** — a page that relied on a document, a DTD, `xsl:import`, `xsl:include` or `document()` reaching another host, or a local file outside the web application, must change: references are limited by a same-origin policy and refused without a system id. Load the remote document with `c:import` first, or give a system id of the same origin; see xref:reference.adoc#xml-external-references[XML external references]. `position()` and `last()` in a nested `select` of `x:forEach` do not see the loop (BOD-003): use `varStatus`.
 * **Resource bundles under Java Modules** — `fmt:` finds bundles by name through the thread context class loader, so a named application module must `opens` the bundle package, keep the bundles at the jar root or in a non-package directory, or supply a `LocalizationContext`; see xref:reference.adoc#bundles[Resource bundles under Java Modules].
+* **JDBC parameter strings are not pooled** — a `dataSource` or `jakarta.servlet.jsp.jstl.sql.dataSource` given as `url[,[driver][,[user][,password]]]` opens a new connection for every action, as the spec intends for prototypes. Applications that relied on a pool behind such a string should give the actions a container `DataSource` (JNDI or an object set by the application); see xref:reference.adoc#sql-data-sources[Data sources].
+* **JDBC driver discovery** — the driver of a JDBC parameter string is found through `ServiceLoader` on the thread context class loader, then through `DriverManager`. A JDBC 4 driver in `WEB-INF/lib` or in the application's module path is found; a pre-JDBC 4 driver, without `META-INF/services/java.sql.Driver`, must be visible to Bodoni's own class loader.
+* **JNDI under Vidocq** — a JNDI path (`jdbc/shop`) needs the `java:comp` naming context of the container. Under Vidocq it is not available yet (link:https://codefloe.com/Vidocq/vidocq/issues/297[vidocq#297]): use a `DataSource` object or a JDBC parameter string until then; see xref:reference.adoc#sql-jndi-vidocq[JNDI under Vidocq].
+* **`Result` rows are keyed by column label** — the keys of `rows` are the JDBC column labels, so an `AS` alias wins over the column name; they are case-insensitive. A label that occurs twice keeps the first column in the row map; `rowsByIndex` has every column. `limitedByMaxRows` is `true` only when the query had more rows than `maxRows` after `startRow`: a result of exactly `maxRows` rows is not limited.
+* **Driver error messages** — a connection failure keeps the driver's message, SQLState and vendor code, but not the driver's exception as cause, and the URL and known secrets are masked in the message; see xref:reference.adoc#sql-data-sources[Data sources].

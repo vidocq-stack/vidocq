@@ -13,9 +13,9 @@
 
 ## Status
 
-**B3 delivered — `fn:`, `c:`, `fmt:` and `x:`.** The `c:` (core), `fn:` (functions), `fmt:` (i18n and formatting) and `x:` (XML) libraries
-are implemented in `bodoni-core`; `sql:` is not yet (B4). XML external references follow a same-origin policy (see the Reference page). The official TCK has not been
-run. Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that `varStatus` properties can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
+**B4 delivered — `fn:`, `c:`, `fmt:`, `x:` and `sql:`.** The `c:` (core), `fn:` (functions), `fmt:` (i18n and formatting), `x:` (XML) and `sql:` (relational database access) libraries
+are implemented in `bodoni-core`. XML external references follow a same-origin policy; `sql:` binds values through `sql:param`, finds JDBC drivers through the context class loader and keeps database passwords out of its messages (see the Reference page). The official TCK has not been
+run (B5). Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that the properties of `varStatus` and of the `sql:query` `Result` can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
 [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266). The design of record is
 [PLAN.md](PLAN.md) (spec scope, brick rule, Java Modules layout, Ibarra build-time
 inlining, friction points, TCK plan, milestones B0–B7, open questions).
@@ -42,9 +42,9 @@ Bodoni follows the transverse Vidocq philosophy (see the workspace
 
 | Module | Role | State |
 |---|---|---|
-| `bodoni-core` | Tag handlers, functions and TLDs of `c:`, `fmt:`, `fn:`, `x:`, `sql:` | B3: `c:`, `fn:`, `fmt:` and `x:` implemented; `sql:` not yet |
-| `bodoni-peano` | Optional engine adapter: the `LoopTagStatus` accessor table Peano needs under `peano.reflection=deny` | B1 |
-| `bodoni-it-ibarra` | Integration test: pages rendered on Ibarra + Foy + Peano (`it-ibarra` profile, not published) | B1 |
+| `bodoni-core` | Tag handlers, functions and TLDs of `c:`, `fmt:`, `fn:`, `x:`, `sql:` | B4: all five implemented |
+| `bodoni-peano` | Optional engine adapter: the `LoopTagStatus` and `Result` accessor tables Peano needs under `peano.reflection=deny` | B1 (`Result`: B4) |
+| `bodoni-it-ibarra` | Integration test: pages rendered on Ibarra + Foy + Peano, `sql:` pages against an in-memory H2 database (`it-ibarra` profile, not published) | B1 |
 | `bodoni-ibarra` | Optional build-time inliner for Ibarra (`TagInliner` SPI) | planned (B6) |
 | `bodoni-tck` | Official Tags TCK runner (`-Ptck` profile only) | planned (B5) |
 | `bodoni-it-openliberty` | Portability proof on Open Liberty | planned (B7) |

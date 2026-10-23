@@ -2,7 +2,7 @@
 :description: Official Jakarta Standard Tag Library 3.0 TCK — not run yet (B5).
 
 [.lead]
-The official TCK has **not been run** (milestone B5). The `c:` and `fn:` libraries are covered by Bodoni's own unit and integration tests only. Nothing on this page is a TCK result or a certification claim.
+The official TCK has **not been run** (milestone B5). The five libraries are covered by Bodoni's own unit and integration tests only. Nothing on this page is a TCK result or a certification claim.
 
 == Plan of record
 
@@ -15,5 +15,6 @@ The official TCK has **not been run** (milestone B5). The `c:` and `fn:` librari
 | Container | The suite deploys WARs with pages: Ibarra + Foy + Peano behind the Arquillian adapter of `ibarra-tck`, at test scope only.
 | Script | `run-official-tck-tags-3.0.sh` with `smoke` / `all` / `-Dtest=` modes.
 | Inlining | Run first with the standard handlers, then again with `bodoni-ibarra` inlining enabled.
+| SQL tests | The suite ships no DDL: the runner creates and fills the three tables the `sql` tests read, and passes the database URL, user, password and driver class as system properties. The driver must be visible to each test WAR's class loader. Details in the TCK plan of link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
 | Merge gate | 100 % PASS once green; challenges, if any, in a `TCK.md`.
 |===

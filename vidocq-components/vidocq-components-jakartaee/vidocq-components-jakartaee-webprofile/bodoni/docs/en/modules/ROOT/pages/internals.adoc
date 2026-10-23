@@ -1,8 +1,8 @@
 = Internals
-:description: Maven modules, Java modules and the JDK modules Bodoni relies on — B1 to B3.
+:description: Maven modules, Java modules and the JDK modules Bodoni relies on — B1 to B4.
 
 [.lead]
-Today `bodoni-core` holds the `c:`, `fmt:`, `x:` and `fn:` libraries (milestones B1 to B3). The `bodoni-it-ibarra` module is an integration test behind the `it-ibarra` profile. The planned layout is below.
+Today `bodoni-core` holds the five libraries, `c:`, `fmt:`, `sql:`, `x:` and `fn:` (milestones B1 to B4). The `bodoni-it-ibarra` module is an integration test behind the `it-ibarra` profile. The planned layout is below.
 
 == Modules
 
@@ -10,9 +10,9 @@ Today `bodoni-core` holds the `c:`, `fmt:`, `x:` and `fn:` libraries (milestones
 |===
 | Artefact | Java module | Role | State
 
-| `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B3: `c:`, `fn:`, `fmt:` and `x:`
-| `bodoni-peano` | `io.vidocq.bodoni.peano` | Optional engine adapter: `LoopTagStatus` accessor table for Peano `peano.reflection=deny` | B1
-| `bodoni-it-ibarra` | `io.vidocq.bodoni.it.ibarra` | Renders pages on Ibarra + Foy + Peano; not published, `it-ibarra` profile only | B1
+| `bodoni-core` | `io.vidocq.bodoni.core` | Tag handlers, functions and TLDs of the five libraries | B4: all five
+| `bodoni-peano` | `io.vidocq.bodoni.peano` | Optional engine adapter: `LoopTagStatus` and `Result` accessor tables for Peano `peano.reflection=deny` | B1 (`Result`: B4)
+| `bodoni-it-ibarra` | `io.vidocq.bodoni.it.ibarra` | Renders pages on Ibarra + Foy + Peano, the `sql:` pages against an in-memory H2 database; not published, `it-ibarra` profile only | B1
 | `bodoni-ibarra` | `io.vidocq.bodoni.ibarra` | Build-time inliners for Ibarra (`TagInliner` SPI, never at run time) | planned (B6)
 | `bodoni-tck` | — | Official Tags TCK runner, `-Ptck` profile only | planned (B5)
 | `bodoni-it-openliberty` | — (WAR) | Portability proof on Open Liberty | planned (B7)
@@ -27,6 +27,9 @@ Today `bodoni-core` holds the `c:`, `fmt:`, `x:` and `fn:` libraries (milestones
 module io.vidocq.bodoni.core {
     requires transitive jakarta.servlet.jsp.jstl;
     requires transitive java.xml;
+    requires transitive java.sql;
+    uses java.sql.Driver;
+    requires java.naming;
     requires java.net.http;
 }
 ----
@@ -35,9 +38,10 @@ module io.vidocq.bodoni.core {
 
 * `io.vidocq.bodoni.core.tags.core` -- the `c:` tag handlers (exported).
 * `io.vidocq.bodoni.core.tags.fmt` -- the `fmt:` tag handlers (exported).
+* `io.vidocq.bodoni.core.tags.sql` -- the `sql:` tag handlers (exported).
 * `io.vidocq.bodoni.core.tags.xml` -- the `x:` tag handlers (exported).
 * `io.vidocq.bodoni.core.functions` -- the `fn:` functions (exported).
-* `io.vidocq.bodoni.core.internal` -- support code (scoped variables, URLs, external resources, hardened JAXP factories, XPath variable bindings, the same-origin policy for XML external references); not exported.
+* `io.vidocq.bodoni.core.internal` -- support code (scoped variables, URLs, external resources, hardened JAXP factories, XPath variable bindings, the same-origin policy for XML external references, data-source resolution, the JDBC-string data source and the `Result` of `sql:query`); not exported.
 
 == XML internals
 
@@ -48,10 +52,18 @@ module io.vidocq.bodoni.core {
 * `SystemIdPolicy` gives the parser a private base: `bodoni-webapp:<context-relative path>` for a relative system id, `bodoni-none:/doc/` when the page gives none, so the JDK never expands a reference against the JVM working directory. The messages a page sees map these names back to what the page wrote. A JDK exception kept in a cause chain, and the output of the XSLT function `unparsed-entity-uri()`, may still show them; they hold no sensitive data.
 * An exported `Document` has a `null` document URI when the page gave no system id.
 
+== SQL internals
+
+* **Module directives.** `requires transitive java.sql`: pages and application code hand `javax.sql.DataSource` objects to the actions and read `java.sql.Date`, `Time` and `Timestamp` values from `Result` rows, so Bodoni does not rely on the JSTL API module's descriptor for `java.sql`, as for `java.xml`. `requires java.naming`, not transitive: only `internal.DataSources` uses `javax.naming`, and no exported signature exposes one of its types (the `dataSource` setters take `Object`). `uses java.sql.Driver`: the driver of a JDBC parameter string is found through `ServiceLoader` on the thread context class loader, and a named module may only load services it declares it uses.
+* **Handlers.** `sql:query` and `sql:update` extend the package-private `ExecutionTagSupport` (a `BodyTagSupport` that implements `SQLExecutionTag`): it collects the parameters of the nested actions, takes the statement from the `sql` attribute or the trimmed body, and runs it either on a connection of its own, closed before the action ends, or on the connection of the enclosing `sql:transaction`, left open. The public setters it declares reach other packages through the bridge methods javac emits in the public `QueryTag` and `UpdateTag`. The package-private `SqlSupport` holds what the handlers share: the data-source order, opening a connection, the `maxRows` setting and parameter binding. `TransactionTag` implements `TryCatchFinally` to roll back and to restore and close its connection.
+* **Internal classes.** `DataSources` resolves an object or a string (JNDI lookup, then the JDBC parameter string) and describes a source for messages without its credentials. `JdbcParameters` parses `url[,[driver][,[user][,password]]]`, redacts the URL and lists the secrets a driver message might repeat. `DriverManagerDataSource` is the unpooled `DataSource` of a JDBC parameter string: it captures the context class loader and finds the driver through `ServiceLoader`, then `DriverManager`. `QueryResult` is the disconnected `Result`, read entirely from the `ResultSet` before the connection closes.
+* **Resources.** Every `Connection`, `PreparedStatement` and `ResultSet` Bodoni opens is closed on every path, in try-with-resources or in `TransactionTag.doFinally`. Nothing is cached: a data source is resolved, and a connection opened, on every invocation.
+* **Reflection.** The one reflective act is `Class.forName(driver, true, loader)` for a named driver class (spec 10.2). Drivers are instantiated by `ServiceLoader` or registered by themselves with `DriverManager`.
+
 == JDK modules only
 
 * `x:` — `javax.xml.parsers`, `javax.xml.transform`, `javax.xml.xpath` (`java.xml`); XPath variables resolved over the page scopes. Secure processing on, external references resolved by Bodoni (see xref:reference.adoc#xml-external-references[Reference]).
-* `sql:` — `java.sql`; JNDI data sources through the standard `InitialContext` (`java.naming`).
+* `sql:` — `java.sql` (`PreparedStatement` for every statement, drivers through `ServiceLoader` and `DriverManager`); JNDI data sources through the standard `InitialContext` (`java.naming`), with no naming implementation of Bodoni's own.
 * `c:import` — `java.net.http` (`HttpClient`) for `http` and `https`, `URLConnection` for other absolute schemes; `RequestDispatcher` for context URLs.
 
 No `synchronized`, no `ThreadLocal`: state lives in the handler instance and in the `PageContext` scopes.
