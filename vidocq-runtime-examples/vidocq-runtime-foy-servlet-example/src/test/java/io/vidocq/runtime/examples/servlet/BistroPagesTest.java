@@ -27,73 +27,34 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * The Bistro's JSP pages, compiled by Ibarra at build time and served by Foy, with expressions evaluated by Peano.
- * The application runs as it is launched, in a child JVM on the module path, its module in the application layer,
- * with {@code -Dpeano.reflection=deny}: an expression on a {@code @ELAccessible} record must go through the accessor
+ * The application runs as it is launched ({@link BistroApplication}), its module in the application layer, with
+ * {@code -Dpeano.reflection=deny}: an expression on a {@code @ELAccessible} record must go through the accessor
  * Peano generated, never through reflection.
  */
 class BistroPagesTest {
 
-    private static final String MODULE = "io.vidocq.runtime.examples.servlet";
-    private static final String MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
-
-    private static Process application;
-    private static Path log;
+    private static BistroApplication application;
     private static String base;
 
     @BeforeAll
     static void launch() throws Exception {
-        int port;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            port = probe.getLocalPort();
-        }
-        base = "http://127.0.0.1:" + port;
-        log = Files.createTempFile("bistro-pages", ".log");
-        String java = ProcessHandle.current().info().command().orElseThrow();
-        application = new ProcessBuilder(java,
-                "-Dvidocq.chappe.listener.default.host=127.0.0.1",
-                "-Dvidocq.chappe.listener.default.port=" + port,
-                "-Dpeano.reflection=deny",
-                "-Dvidocq.app.module=" + MODULE,
-                "-p", System.getProperty("jdk.module.path"), "--add-modules", MODULE, "-m", MAIN)
-                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
-        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
-        while (true) {
-            try (Socket ignored = new Socket("127.0.0.1", port)) {
-                return;
-            } catch (IOException notYet) {
-                if (!application.isAlive() || System.nanoTime() > deadline) {
-                    fail("the application did not listen on " + base + ":\n" + Files.readString(log));
-                }
-                Thread.sleep(100);
-            }
-        }
+        application = BistroApplication.start("bistro-pages", "-Dpeano.reflection=deny");
+        base = application.base();
     }
 
     @AfterAll
     static void stop() throws Exception {
         if (application != null) {
-            application.destroy();
-            application.waitFor(10, TimeUnit.SECONDS);
-            application.destroyForcibly();
-        }
-        if (log != null) {
-            Files.deleteIfExists(log);
+            application.stop();
         }
     }
 
@@ -101,7 +62,7 @@ class BistroPagesTest {
     void theAboutPageIsAJspWithATagLibraryFunction() throws IOException {
         Response about = new Browser().get("/about.jsp?from=IntelliJ");
 
-        assertEquals(200, about.status(), about.body() + "\n" + Files.readString(log));
+        assertEquals(200, about.status(), about.body() + "\n" + application.log());
         assertTrue(about.body().contains("Welcome, visitor from IntelliJ"), about.body());
         assertTrue(about.body().contains("€18.50"), "bistro:euros formats the price: " + about.body());
     }
@@ -115,7 +76,7 @@ class BistroPagesTest {
 
         Response receipt = browser.get("/receipt");
 
-        assertEquals(200, receipt.status(), receipt.body() + "\n" + Files.readString(log));
+        assertEquals(200, receipt.status(), receipt.body() + "\n" + application.log());
         assertTrue(receipt.body().contains("2 × French onion soup"), receipt.body());
         assertTrue(receipt.body().contains("1 × Tarte Tatin"), receipt.body());
         assertTrue(receipt.body().contains("Total €23.00"), receipt.body());

@@ -27,79 +27,37 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * The kitchen's FORM login, end to end: a client that keeps its session cookie, as a browser does, logs in, reaches
  * the kitchen, logs out, and is asked to log in again. With BASIC authentication the browser kept the credentials
  * until it closed, and no page could sign the user out.
  *
- * <p>The application runs as a jlink image launches it, the runtime's own main with {@code --add-modules <module>
- * -Dvidocq.app.module=<module>}, in a child JVM on this test's module path and a free port: the runtime then builds
- * the application layer from that module, which reads the providers the processors listed in
- * {@code META-INF/services}. Booted in this JVM, the module would stay in the boot layer, where those files count for
- * nothing.
+ * <p>The application runs as a jlink image launches it ({@link BistroApplication}).
  */
 class KitchenLoginTest {
 
-    private static final String MODULE = "io.vidocq.runtime.examples.servlet";
-    private static final String MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
-
-    private static Process application;
-    private static Path log;
+    private static BistroApplication application;
     private static String base;
 
     @BeforeAll
     static void launch() throws Exception {
-        int port;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            port = probe.getLocalPort();
-        }
-        base = "http://127.0.0.1:" + port;
-        log = Files.createTempFile("bistro", ".log");
-        String java = ProcessHandle.current().info().command().orElseThrow();
-        application = new ProcessBuilder(java,
-                "-Dvidocq.chappe.listener.default.host=127.0.0.1",
-                "-Dvidocq.chappe.listener.default.port=" + port,
-                "-Dvidocq.app.module=" + MODULE,
-                "-p", System.getProperty("jdk.module.path"), "--add-modules", MODULE, "-m", MAIN)
-                .redirectErrorStream(true).redirectOutput(log.toFile()).start();
-        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
-        while (true) {
-            try (Socket ignored = new Socket("127.0.0.1", port)) {
-                return;
-            } catch (IOException notYet) {
-                if (!application.isAlive() || System.nanoTime() > deadline) {
-                    fail("the application did not listen on " + base + ":\n" + Files.readString(log));
-                }
-                Thread.sleep(100);
-            }
-        }
+        application = BistroApplication.start("bistro");
+        base = application.base();
     }
 
     @AfterAll
     static void stop() throws Exception {
         if (application != null) {
-            application.destroy();
-            application.waitFor(10, TimeUnit.SECONDS);
-            application.destroyForcibly();
-        }
-        if (log != null) {
-            Files.deleteIfExists(log);
+            application.stop();
         }
     }
 
