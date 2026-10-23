@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,6 +49,12 @@ class TckDatabaseTest {
     @TempDir
     Path directory;
 
+    /**
+     * A database of this test's own: never {@code mem:jstl}, which a listener-started database of the
+     * same JVM would share, and which this test's {@code close()} would shut down.
+     */
+    private final String name = DdlFixture.uniqueName();
+
     private TckDatabase database;
 
     @AfterEach
@@ -63,8 +70,26 @@ class TckDatabaseTest {
     }
 
     @Test
+    void lineCommentsAreStrippedOutsideQuotesBeforeSplitting() {
+        String script = """
+                -- a header; with a semicolon
+                drop table t1 ; -- trailing
+                INSERT INTO t1 VALUES(1, 'a--b') ;
+                """;
+
+        assertEquals(List.of("drop table t1", "INSERT INTO t1 VALUES(1, 'a--b')"), TckDatabase.statements(script));
+    }
+
+    @Test
+    void aLeadingCommentKeepsTheDropTolerated() throws Exception {
+        database = TckDatabase.start(DdlFixture.write(directory, "-- Bodoni's own fixture\n" + DdlFixture.SCRIPT), name);
+
+        assertEquals(2, DdlFixture.countT1(database.url()));
+    }
+
+    @Test
     void loadsTheScriptIgnoringDropsOfMissingTables() throws Exception {
-        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT));
+        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
 
         assertEquals(2, DdlFixture.countT1(database.url()));
     }
@@ -75,16 +100,16 @@ class TckDatabaseTest {
         // the fixture's "create table t2" below would fail.
         Path broken = DdlFixture.write(directory, "create table t2(idNum INT NOT NULL) ;\ncreate table x(");
 
-        SQLException failure = assertThrows(SQLException.class, () -> TckDatabase.start(broken));
+        SQLException failure = assertThrows(SQLException.class, () -> TckDatabase.start(broken, name));
 
         assertTrue(failure.getMessage().contains("create table x("), failure.getMessage());
-        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT));
+        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
         assertEquals(2, DdlFixture.countT1(database.url()));
     }
 
     @Test
     void clientPropertiesAreNonEmptyAndTheUrlHasNoComma() throws Exception {
-        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT));
+        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
 
         Map<String, String> properties = database.clientProperties();
 
@@ -95,13 +120,15 @@ class TckDatabaseTest {
         assertEquals("org.h2.Driver", properties.get("jstl.db.driver"));
         String url = properties.get(DB_URL);
         assertEquals(database.url(), url);
-        assertTrue(url.matches("jdbc:h2:tcp://127\\.0\\.0\\.1:\\d+/mem:jstl"), url);
+        assertTrue(url.matches("jdbc:h2:tcp://127\\.0\\.0\\.1:\\d+/mem:" + Pattern.quote(name)), url);
         assertFalse(url.contains(","), url);
+        // start(Path), which the listener uses, serves this name: the WARs' jdbc:h2:tcp://…/mem:jstl.
+        assertEquals("jstl", TckDatabase.NAME);
     }
 
     @Test
     void anotherJvmSeesTheRowsThroughTheTcpServer() throws Exception {
-        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT));
+        database = TckDatabase.start(DdlFixture.write(directory, DdlFixture.SCRIPT), name);
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         Path java = Path.of(System.getProperty("java.home"), "bin", "java");
         Path out = directory.resolve("probe.out");
@@ -126,7 +153,7 @@ class TckDatabaseTest {
     @Test
     void restartGivesAFreshDatabase() throws Exception {
         Path ddl = DdlFixture.write(directory, DdlFixture.SCRIPT);
-        database = TckDatabase.start(ddl);
+        database = TckDatabase.start(ddl, name);
         try (Connection connection = DriverManager.getConnection(database.url(), TckDatabase.USER, TckDatabase.PASSWORD);
              Statement statement = connection.createStatement()) {
             statement.executeUpdate("INSERT INTO t1 VALUES(3, 'Parma')");
@@ -134,7 +161,7 @@ class TckDatabaseTest {
         assertEquals(3, DdlFixture.countT1(database.url()));
 
         database.close();
-        database = TckDatabase.start(ddl);
+        database = TckDatabase.start(ddl, name);
 
         assertEquals(2, DdlFixture.countT1(database.url()));
     }

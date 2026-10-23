@@ -97,7 +97,7 @@ class TckDatabaseListenerTest {
     void configuredDdlStartsTheDatabaseAndPublishesTheClientProperties() throws Exception {
         String ddl = DdlFixture.write(directory, DdlFixture.SCRIPT).toString();
 
-        database = TckDatabaseListener.startIfConfigured(ddl).orElseThrow();
+        database = TckDatabaseListener.startIfConfigured(ddl, DdlFixture.uniqueName()).orElseThrow();
 
         assertEquals(database.url(), System.getProperty(DB_URL));
         database.clientProperties().forEach((name, value) -> assertEquals(value, System.getProperty(name), name));

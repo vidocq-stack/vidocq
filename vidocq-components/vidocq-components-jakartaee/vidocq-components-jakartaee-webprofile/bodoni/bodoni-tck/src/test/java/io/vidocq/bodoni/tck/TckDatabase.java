@@ -49,34 +49,43 @@ final class TckDatabase implements AutoCloseable {
     static final String PASSWORD = "jstl";
     static final String DRIVER = "org.h2.Driver";
 
-    private static final String KEEPER_URL = "jdbc:h2:mem:" + NAME + ";DB_CLOSE_DELAY=-1";
     private static final String DROP_TABLE = "drop table";
 
+    private final String name;
     private final Connection keeper;
     private final Server server;
 
-    private TckDatabase(Connection keeper, Server server) {
+    private TckDatabase(String name, Connection keeper, Server server) {
+        this.name = name;
         this.keeper = keeper;
         this.server = server;
     }
 
     /**
-     * Loads {@code ddl} into a fresh in-memory database and starts the TCP server. A failing
-     * {@code drop table} is ignored (the official DDL drops its tables first, which fails on a fresh
-     * database); any other failure shuts the database down and stops the start.
+     * Loads {@code ddl} into a fresh in-memory database {@value #NAME} and starts the TCP server. A
+     * failing {@code drop table} is ignored (the official DDL drops its tables first, which fails on a
+     * fresh database); any other failure shuts the database down and stops the start.
      */
     static TckDatabase start(Path ddl) throws IOException, SQLException {
+        return start(ddl, NAME);
+    }
+
+    /**
+     * {@link #start(Path)} under another in-memory database name: the runner's own tests use their own,
+     * so that they never share, nor shut down, the {@value #NAME} database of the listener.
+     */
+    static TckDatabase start(Path ddl, String name) throws IOException, SQLException {
         List<String> statements = statements(Files.readString(ddl));
-        Connection keeper = DriverManager.getConnection(KEEPER_URL, USER, PASSWORD);
+        Connection keeper = DriverManager.getConnection("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1", USER, PASSWORD);
         Server server;
         try {
             load(keeper, statements);
             server = Server.createTcpServer("-tcpPort", "0").start();
-        } catch (SQLException failure) {
+        } catch (SQLException | RuntimeException failure) {
             shutDownAfter(keeper, failure);
             throw failure;
         }
-        var database = new TckDatabase(keeper, server);
+        var database = new TckDatabase(name, keeper, server);
         String url = database.url();
         if (url.indexOf(',') >= 0) {
             database.close();
@@ -86,17 +95,42 @@ final class TckDatabase implements AutoCloseable {
         return database;
     }
 
-    /** The script split on {@code ;}, each statement stripped, blank ones dropped. */
+    /**
+     * The script without its {@code --} line comments, split on {@code ;}, each statement stripped,
+     * blank ones dropped. Stripping comments first keeps a commented {@code drop table} a tolerated
+     * {@code drop table}, and a comment's {@code ;} from splitting.
+     */
     static List<String> statements(String script) {
-        return Arrays.stream(script.split(";"))
+        return Arrays.stream(withoutLineComments(script).split(";"))
                 .map(String::strip)
                 .filter(statement -> !statement.isEmpty())
                 .toList();
     }
 
+    /** Removes each {@code --} that is outside a {@code '…'} literal, up to the end of its line. */
+    private static String withoutLineComments(String script) {
+        var kept = new StringBuilder(script.length());
+        boolean quoted = false;
+        int i = 0;
+        while (i < script.length()) {
+            if (!quoted && script.startsWith("--", i)) {
+                int end = script.indexOf('\n', i);
+                i = end < 0 ? script.length() : end;
+            } else {
+                char c = script.charAt(i);
+                if (c == '\'') {
+                    quoted = !quoted;
+                }
+                kept.append(c);
+                i++;
+            }
+        }
+        return kept.toString();
+    }
+
     /** The URL the WARs connect with: loopback, the server's bound port, the in-memory database. */
     String url() {
-        return "jdbc:h2:tcp://127.0.0.1:" + server.getPort() + "/mem:" + NAME;
+        return "jdbc:h2:tcp://127.0.0.1:" + server.getPort() + "/mem:" + name;
     }
 
     /** The four non-empty system properties {@code SqlUrlClient} and {@code CompatAbstractUrlClient} need. */
@@ -133,7 +167,7 @@ final class TckDatabase implements AutoCloseable {
         }
     }
 
-    private static void shutDownAfter(Connection keeper, SQLException failure) {
+    private static void shutDownAfter(Connection keeper, Exception failure) {
         try {
             shutDown(keeper);
         } catch (SQLException suppressed) {

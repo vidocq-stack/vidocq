@@ -27,6 +27,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.UUID;
 
 /**
  * A small Derby-style DDL of Bodoni's own, for the runner's tests: never the TCK file (EFTL). Like the
@@ -44,6 +45,11 @@ final class DdlFixture {
             """;
 
     private DdlFixture() {
+    }
+
+    /** A database name no other test, and no listener-started database, uses. */
+    static String uniqueName() {
+        return TckDatabase.NAME + "-" + UUID.randomUUID();
     }
 
     /** Writes {@code script} to {@code ddl.sql} in {@code directory} and returns its path. */

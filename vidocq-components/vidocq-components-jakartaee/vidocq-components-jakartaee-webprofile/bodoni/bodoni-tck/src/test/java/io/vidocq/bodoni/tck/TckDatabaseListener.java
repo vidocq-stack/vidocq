@@ -72,6 +72,14 @@ public final class TckDatabaseListener implements LauncherSessionListener {
      *         instead of failing every sql and compat test in its setup
      */
     static Optional<TckDatabase> startIfConfigured(String ddl) throws IOException, SQLException {
+        return startIfConfigured(ddl, TckDatabase.NAME);
+    }
+
+    /**
+     * {@link #startIfConfigured(String)} under another in-memory database name, for the runner's own
+     * tests (see {@link TckDatabase#start(Path, String)}).
+     */
+    static Optional<TckDatabase> startIfConfigured(String ddl, String name) throws IOException, SQLException {
         if (ddl == null || ddl.isBlank()) {
             return Optional.empty();
         }
@@ -80,7 +88,7 @@ public final class TckDatabaseListener implements LauncherSessionListener {
             throw new IllegalStateException(DDL_PROPERTY + " names no file: " + ddl
                     + "; run ./run-official-tck-tags-3.0.sh, which fetches the official Derby DDL");
         }
-        TckDatabase database = TckDatabase.start(path);
+        TckDatabase database = TckDatabase.start(path, name);
         database.clientProperties().forEach(System::setProperty);
         return Optional.of(database);
     }
