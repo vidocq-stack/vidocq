@@ -19,6 +19,9 @@
  */
 package io.vidocq.bodoni.core.tags.xml;
 
+import java.util.Objects;
+
+import javax.xml.transform.TransformerException;
 import javax.xml.xpath.XPathExpressionException;
 
 import io.vidocq.bodoni.core.internal.Scopes;
@@ -32,9 +35,16 @@ import jakarta.servlet.jsp.tagext.Tag;
 import jakarta.servlet.jsp.tagext.TagSupport;
 
 import org.w3c.dom.Node;
+import org.xml.sax.SAXParseException;
 
 /** What the {@code x:} handlers share: the XPath context, the scopes and the failures. */
 final class XmlSupport {
+
+    /** Message of a failed document: action, cause message, system id. */
+    private static final String DOCUMENT_FAILURE = "%s: %s, system id '%s'";
+
+    /** Bound of a cause-chain walk, against cyclic chains. */
+    private static final int MAX_DEPTH = 32;
 
     private XmlSupport() {
     }
@@ -103,25 +113,67 @@ final class XmlSupport {
     /**
      * A document that cannot be parsed or transformed. When a policy recorded a refused or
      * unreadable external reference, the message is that failure's (the JDK may wrap or
-     * rewrite it on the way); the cause is always {@code cause}, and a recorded failure that
-     * the cause chain does not reach is added as suppressed.
+     * rewrite it on the way). Otherwise it is the message of the innermost meaningful cause
+     * (wrappers that only repeat their cause are skipped) followed by the system id of the
+     * failing document: the innermost one a SAX or XSLT location names, else the first
+     * policy's. Either way the private bases given to the JDK are mapped back to what the page
+     * wrote ({@link SystemIdPolicy#pageView}). The cause is always {@code cause}, and a
+     * recorded failure that the cause chain does not reach is added as suppressed.
      *
      * @param action   the action name
      * @param cause    the parse or transform failure
-     * @param policies the policies of the documents involved, the first recorded failure wins
+     * @param policies the policies of the documents involved, at least one; the first recorded
+     *                 failure wins, and the first is the failing document's when no location
+     *                 names it
      */
     static JspException documentFailure(String action, Exception cause, SystemIdPolicy... policies) {
         for (SystemIdPolicy policy : policies) {
             JspException recorded = policy.recordedFailure();
             if (recorded != null) {
-                JspException failure = new JspException(recorded.getMessage(), cause);
+                JspException failure = new JspException(SystemIdPolicy.pageView(recorded.getMessage(), policies), cause);
                 if (!reaches(cause, recorded)) {
                     failure.addSuppressed(recorded);
                 }
                 return failure;
             }
         }
-        return new JspException(action + ": " + cause.getMessage(), cause);
+        Throwable reason = innermost(cause);
+        String text = Objects.toString(reason.getMessage(), reason.getClass().getName());
+        String systemId = Objects.requireNonNullElse(locatedSystemId(cause), policies[0].parserSystemId());
+        return new JspException(SystemIdPolicy.pageView(DOCUMENT_FAILURE.formatted(action, text, systemId), policies), cause);
+    }
+
+    /** The first cause that is not a mere wrapper repeating the message of its own cause. */
+    private static Throwable innermost(Throwable failure) {
+        Throwable current = failure;
+        for (int depth = 0; depth < MAX_DEPTH && current.getCause() != null && isWrapper(current); depth++) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static boolean isWrapper(Throwable t) {
+        String message = t.getMessage();
+        Throwable cause = t.getCause();
+        return message == null || message.equals(cause.toString()) || message.equals(cause.getMessage());
+    }
+
+    /** The system id of the innermost SAX or XSLT location in the chain, {@code null} for none. */
+    private static String locatedSystemId(Throwable failure) {
+        String located = null;
+        Throwable t = failure;
+        for (int depth = 0; depth < MAX_DEPTH && t != null; depth++, t = t.getCause()) {
+            String systemId = null;
+            if (t instanceof SAXParseException parse) {
+                systemId = parse.getSystemId();
+            } else if (t instanceof TransformerException transform && transform.getLocator() != null) {
+                systemId = transform.getLocator().getSystemId();
+            }
+            if (systemId != null) {
+                located = systemId;
+            }
+        }
+        return located;
     }
 
     private static boolean reaches(Throwable chain, Throwable target) {

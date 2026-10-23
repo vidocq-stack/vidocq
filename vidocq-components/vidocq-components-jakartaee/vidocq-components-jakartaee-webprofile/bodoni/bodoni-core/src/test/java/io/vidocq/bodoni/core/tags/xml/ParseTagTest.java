@@ -20,6 +20,7 @@
 package io.vidocq.bodoni.core.tags.xml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -49,6 +50,7 @@ import jakarta.servlet.jsp.PageContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXException;
@@ -249,6 +251,23 @@ class ParseTagTest {
 
         assertEquals("x:parse: the system id '/../outside.xml' leaves the context root", e.getMessage());
         assertInstanceOf(IllegalArgumentException.class, e.getCause());
+    }
+
+    @ParameterizedTest(name = "system id {0}, filter {1}")
+    @CsvSource(nullValues = "null", value = {"null, false", "null, true", "/x/doc.xml, false", "/x/doc.xml, true"})
+    void aMalformedDocumentNamesTheSystemIdThePageGaveNotAPrivateBase(String systemId, boolean filtered) {
+        ParseTag tag = parse("<a>");
+        tag.setSystemId(systemId);
+        if (filtered) {
+            tag.setFilter(new AttributeAddingFilter());
+        }
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertFalse(e.getMessage().contains("bodoni-none"), e.getMessage());
+        assertFalse(e.getMessage().contains("bodoni-webapp"), e.getMessage());
+        assertTrue(e.getMessage().endsWith(", system id '" + (systemId == null ? "(none)" : systemId) + "'"),
+                e.getMessage());
     }
 
     // ---- no DTD validation --------------------------------------------------

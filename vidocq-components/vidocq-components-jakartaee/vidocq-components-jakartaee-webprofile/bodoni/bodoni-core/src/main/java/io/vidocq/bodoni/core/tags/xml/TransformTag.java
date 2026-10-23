@@ -146,8 +146,15 @@ public class TransformTag extends DocumentTagSupport {
         } catch (IllegalArgumentException e) {
             throw new JspTagException(ACTION + ": " + e.getMessage(), e);
         }
+        // The failing document comes first: it names the system id when no location does.
+        Transformer transformer;
         try {
-            transform(transformer(stylesheet, xsltPolicy), docSource);
+            transformer = transformer(stylesheet, xsltPolicy);
+        } catch (TransformerException e) {
+            throw XmlSupport.documentFailure(ACTION, e, xsltPolicy, docPolicy);
+        }
+        try {
+            transform(transformer, docSource);
         } catch (TransformerException e) {
             throw XmlSupport.documentFailure(ACTION, e, docPolicy, xsltPolicy);
         }

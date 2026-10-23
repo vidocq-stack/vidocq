@@ -26,6 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 
+import javax.xml.transform.TransformerException;
+
 import io.vidocq.bodoni.core.internal.SystemIdPolicy;
 import io.vidocq.bodoni.core.testing.TestPageContext;
 
@@ -33,6 +35,7 @@ import jakarta.servlet.jsp.JspException;
 
 import org.junit.jupiter.api.Test;
 import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 /** {@link XmlSupport#documentFailure}: the message and the causes of a failed document. */
 class XmlSupportTest {
@@ -55,7 +58,7 @@ class XmlSupportTest {
 
         JspException e = XmlSupport.documentFailure(ACTION, cause, SystemIdPolicy.of(ACTION, null, pc));
 
-        assertEquals("x:parse: broken", e.getMessage());
+        assertEquals("x:parse: broken, system id '(none)'", e.getMessage());
         assertSame(cause, e.getCause());
     }
 
@@ -81,5 +84,40 @@ class XmlSupportTest {
         assertEquals(REFUSED, e.getMessage());
         assertSame(cause, e.getCause());
         assertArrayEquals(new Throwable[] {policy.recordedFailure()}, e.getSuppressed());
+    }
+
+    @Test
+    void aWrapperIsUnwrappedToTheParseFailureItsSystemIdNamedAsThePageGaveIt() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/x/doc.xml", pc);
+        SAXParseException parse = new SAXParseException("unclosed", null, "bodoni-webapp:/x/doc.xml", 1, 4);
+        TransformerException cause = new TransformerException(parse);
+
+        JspException e = XmlSupport.documentFailure(ACTION, cause, policy);
+
+        assertEquals("x:parse: unclosed, system id '/x/doc.xml'", e.getMessage());
+        assertSame(cause, e.getCause());
+    }
+
+    @Test
+    void theLocatedSystemIdWinsOverThePolicyOne() {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, "/t/s.xsl", pc);
+        SAXParseException parse = new SAXParseException("bad", null, "bodoni-webapp:/t/inc.xsl", 1, 1);
+
+        JspException e = XmlSupport.documentFailure(ACTION, new TransformerException("wrapped", parse), policy);
+
+        assertEquals("x:parse: wrapped, system id '/t/inc.xsl'", e.getMessage());
+    }
+
+    @Test
+    void thePrivateBasesInAMessageAreMappedBackToWhatThePageWrote() {
+        SystemIdPolicy none = SystemIdPolicy.of(ACTION, null, pc);
+        SystemIdPolicy relative = SystemIdPolicy.of(ACTION, "/t/s.xsl", pc);
+        IOException cause = new IOException(
+                "bodoni-none:/doc/: line 1: bad; see bodoni-webapp:/t/s.xsl, bodoni-webapp:/t/inc.xsl and bodoni-none:/doc/e.xml");
+
+        JspException e = XmlSupport.documentFailure(ACTION, cause, none, relative);
+
+        assertEquals("x:parse: (none): line 1: bad; see /t/s.xsl, /t/inc.xsl and e.xml, system id '(none)'",
+                e.getMessage());
     }
 }

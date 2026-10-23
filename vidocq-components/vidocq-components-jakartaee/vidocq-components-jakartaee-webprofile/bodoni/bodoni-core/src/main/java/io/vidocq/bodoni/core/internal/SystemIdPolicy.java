@@ -29,6 +29,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLConnection;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.xml.transform.Source;
 import javax.xml.transform.TransformerException;
@@ -122,6 +124,13 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     /** The system id shown in messages when the page gave none. */
     private static final String NONE = "(none)";
 
+    /**
+     * A URI of a private scheme inside a JDK message. A {@code :} ends it, as in
+     * {@code bodoni-none:/doc/: line 1}: the paths these schemes carry have none in practice.
+     */
+    private static final Pattern PRIVATE_URI =
+            Pattern.compile("\\b(?:" + WEBAPP_SCHEME + '|' + NONE_SCHEME + "):[^\\s'\"<>;,:]*");
+
     private enum Mode { NONE, OPAQUE, ABSOLUTE, WEBAPP }
 
     private final String action;
@@ -185,6 +194,35 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
     /** The first refused or unreadable reference, {@code null} while there is none. */
     public JspException recordedFailure() {
         return failure;
+    }
+
+    /**
+     * {@code text} as a page may see it: the private bases given to the JDK
+     * ({@link #parserSystemId()}) and the references it expanded under them are mapped back to
+     * what the page wrote. The {@code parserSystemId()} of one of {@code policies} becomes that
+     * policy's system id, {@code (none)} without one; any other {@code bodoni-webapp:} URI becomes
+     * its context-relative path, any other {@code bodoni-none:} URI the reference relative to
+     * {@link #NONE_BASE}.
+     *
+     * @param text     a message, {@code null} for none
+     * @param policies the policies of the documents involved, the first match wins
+     * @return the mapped message, {@code null} for {@code null}
+     */
+    public static String pageView(String text, SystemIdPolicy... policies) {
+        if (text == null) {
+            return null;
+        }
+        return PRIVATE_URI.matcher(text).replaceAll(m -> Matcher.quoteReplacement(shown(m.group(), policies)));
+    }
+
+    private static String shown(String uri, SystemIdPolicy[] policies) {
+        for (SystemIdPolicy policy : policies) {
+            if (uri.equals(policy.parserSystemId())) {
+                return policy.shownSystemId();
+            }
+        }
+        String rest = uri.startsWith(NONE_BASE) ? uri.substring(NONE_BASE.length()) : uri.substring(uri.indexOf(':') + 1);
+        return rest.isEmpty() ? NONE : rest;
     }
 
     /** No external subset is supplied for a document without one. */

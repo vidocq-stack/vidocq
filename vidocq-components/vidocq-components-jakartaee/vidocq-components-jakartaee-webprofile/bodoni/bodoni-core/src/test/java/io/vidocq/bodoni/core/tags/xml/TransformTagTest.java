@@ -20,6 +20,7 @@
 package io.vidocq.bodoni.core.tags.xml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,6 +51,7 @@ import jakarta.servlet.jsp.tagext.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.w3c.dom.Document;
 
@@ -91,6 +93,17 @@ class TransformTagTest {
 
     private static final String IMPORTED = "<xsl:stylesheet " + XSL_NS + ">"
             + "<xsl:template name='imported'>imported</xsl:template></xsl:stylesheet>";
+
+    /** A stylesheet whose template text is the external entity {@code ent.xml}. */
+    private static final String ENTITY_XSL = "<!DOCTYPE xsl:stylesheet [<!ENTITY e SYSTEM 'ent.xml'>]>"
+            + "<xsl:stylesheet " + XSL_NS + "><xsl:output method='text'/><xsl:template match='/'>&e;</xsl:template>"
+            + "</xsl:stylesheet>";
+
+    /** A document whose text is an absolute {@code file:} entity. */
+    private static final String FILE_ENTITY_DOC = "<!DOCTYPE r [<!ENTITY e SYSTEM 'file:///etc/hosts'>]><r>&e;</r>";
+
+    private static final String FILE_ENTITY_REFUSED = "x:transform: external reference 'file:///etc/hosts' refused, "
+            + "system id '/t/s.xsl': outside the web application";
 
     private static final String REFUSED_IMPORT =
             "x:transform: external reference 'xfiles/resolve.xsl' refused, system id '(none)': no system id";
@@ -353,6 +366,52 @@ class TransformTagTest {
         assertInstanceOf(IllegalArgumentException.class, e.getCause());
     }
 
+    @ParameterizedTest(name = "{0} stylesheet, system id {1}")
+    @CsvSource(nullValues = "null", value = {
+        "not well-formed, null", "not well-formed, /t/s.xsl", "invalid XSLT, null", "invalid XSLT, /t/s.xsl"})
+    void aStylesheetFailureNamesTheSystemIdThePageGaveNotAPrivateBase(String kind, String systemId) {
+        String body = kind.equals("invalid XSLT") ? "<xsl:template match='/'><xsl:bogus/></xsl:template>" : "<xsl:template>";
+        TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + ">" + body + "</xsl:stylesheet>");
+        tag.setXsltSystemId(systemId);
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertNamesNoPrivateBase(e.getMessage());
+        assertTrue(e.getMessage().endsWith(", system id '" + (systemId == null ? "(none)" : systemId) + "'"),
+                e.getMessage());
+    }
+
+    /**
+     * The JDK's XSLT compiler reports an error of an included stylesheet without any location
+     * (probe: no locator, no system id in the message), so the message names the stylesheet the
+     * page gave.
+     */
+    @Test
+    void anIncludedStylesheetFailureNamesTheXsltSystemIdThePageGave() {
+        context.resource("/t/inc.xsl", "<xsl:stylesheet " + XSL_NS + "><xsl:template match='/'><xsl:bogus/>"
+                + "</xsl:template></xsl:stylesheet>");
+        TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + "><xsl:include href='inc.xsl'/></xsl:stylesheet>");
+        tag.setXsltSystemId("/t/s.xsl");
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertNamesNoPrivateBase(e.getMessage());
+        assertTrue(e.getMessage().endsWith(", system id '/t/s.xsl'"), e.getMessage());
+    }
+
+    @ParameterizedTest(name = "system id {0}")
+    @CsvSource(nullValues = "null", value = {"null", "/t/d.xml"})
+    void aDocumentFailureNamesTheSystemIdThePageGaveNotAPrivateBase(String systemId) {
+        TransformTag tag = transform("<a>", H4);
+        tag.setDocSystemId(systemId);
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertNamesNoPrivateBase(e.getMessage());
+        assertTrue(e.getMessage().endsWith(", system id '" + (systemId == null ? "(none)" : systemId) + "'"),
+                e.getMessage());
+    }
+
     // ---- external references ------------------------------------------------
 
     @Test
@@ -434,6 +493,85 @@ class TransformTagTest {
         assertTrue(server.requestedPaths().isEmpty());
     }
 
+    @Test
+    void anEntityOfAStringStylesheetIsRefusedWithoutXsltSystemId() {
+        TransformTag tag = transform(DOC, ENTITY_XSL);
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals("x:transform: external reference 'ent.xml' refused, system id '(none)': no system id",
+                e.getMessage());
+    }
+
+    @Test
+    void anEntityOfAStringStylesheetResolvesThroughARelativeXsltSystemId() throws Exception {
+        context.resource("/t/ent.xml", "from entity");
+        TransformTag tag = transform(DOC, ENTITY_XSL);
+        tag.setXsltSystemId("/t/s.xsl");
+
+        assertEquals("from entity", run(tag));
+    }
+
+    @Test
+    void anEntityOfADocumentFunctionTargetIsUnderThePolicy() {
+        context.resource("/t/data.xml", FILE_ENTITY_DOC);
+        TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + "><xsl:output method='text'/>"
+                + "<xsl:template match='/'><xsl:value-of select=\"document('data.xml')/r\"/></xsl:template>"
+                + "</xsl:stylesheet>");
+        tag.setXsltSystemId("/t/s.xsl");
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals(FILE_ENTITY_REFUSED, e.getMessage());
+    }
+
+    @Test
+    void anEntityOfAnImportedStylesheetIsUnderThePolicy() {
+        context.resource("/t/xfiles/resolve.xsl", "<!DOCTYPE xsl:stylesheet [<!ENTITY e SYSTEM 'file:///etc/hosts'>]>"
+                + "<xsl:stylesheet " + XSL_NS + "><xsl:template name='imported'>&e;</xsl:template></xsl:stylesheet>");
+        TransformTag tag = transform(DOC, IMPORTING);
+        tag.setXsltSystemId("/t/s.xsl");
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals(FILE_ENTITY_REFUSED, e.getMessage());
+    }
+
+    @Test
+    void aCrossOriginEntityOfAnImportedStylesheetIsRefusedWithoutAConnection() {
+        server = TestHttpServer.start();
+        String target = "http://localhost:" + server.port() + "/e.xml";
+        String systemId = "http://127.0.0.1:" + server.port() + "/t/s.xsl";
+        server.route("/t/xfiles/resolve.xsl", 200, Map.of(), "<!DOCTYPE xsl:stylesheet [<!ENTITY e SYSTEM '" + target
+                + "'>]><xsl:stylesheet " + XSL_NS + "><xsl:template name='imported'>&e;</xsl:template></xsl:stylesheet>");
+        TransformTag tag = transform(DOC, IMPORTING);
+        tag.setXsltSystemId(systemId);
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals("x:transform: external reference '" + target + "' refused, system id '" + systemId
+                + "': not the same origin", e.getMessage());
+        assertEquals(List.of("/t/xfiles/resolve.xsl"), server.requestedPaths());
+    }
+
+    @Test
+    void aCrossOriginEntityOfADocumentFunctionTargetIsRefusedWithoutAConnection() {
+        server = TestHttpServer.start();
+        String target = "http://localhost:" + server.port() + "/e.xml";
+        String systemId = "http://127.0.0.1:" + server.port() + "/t/s.xsl";
+        server.route("/t/data.xml", 200, Map.of(), "<!DOCTYPE r [<!ENTITY e SYSTEM '" + target + "'>]><r>&e;</r>");
+        TransformTag tag = transform(DOC, "<xsl:stylesheet " + XSL_NS + "><xsl:output method='text'/>"
+                + "<xsl:template match='/'><xsl:value-of select=\"document('data.xml')/r\"/></xsl:template>"
+                + "</xsl:stylesheet>");
+        tag.setXsltSystemId(systemId);
+
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+
+        assertEquals("x:transform: external reference '" + target + "' refused, system id '" + systemId
+                + "': not the same origin", e.getMessage());
+        assertEquals(List.of("/t/data.xml"), server.requestedPaths());
+    }
+
     // ---- reuse --------------------------------------------------------------
 
     @Test
@@ -468,6 +606,11 @@ class TransformTagTest {
         JspException e = assertThrows(JspException.class, () -> run(tag));
 
         assertEquals(NULL_OR_EMPTY_DOC, e.getMessage());
+    }
+
+    private static void assertNamesNoPrivateBase(String message) {
+        assertFalse(message.contains("bodoni-none"), message);
+        assertFalse(message.contains("bodoni-webapp"), message);
     }
 
     /** {@code out} without the line break the HTML output method ends with. */
