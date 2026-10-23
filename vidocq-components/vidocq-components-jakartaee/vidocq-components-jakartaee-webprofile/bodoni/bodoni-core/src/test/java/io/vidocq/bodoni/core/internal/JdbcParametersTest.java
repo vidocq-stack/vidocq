@@ -197,6 +197,20 @@ class JdbcParametersTest {
         assertTrue(parameters.secrets().contains(SECRET), parameters.secrets().toString());
     }
 
+    /** An {@code @} in any property value is no user information: no part of the value shows. */
+    @Test
+    void anAtInAnyPropertyValueShowsNoneOfIt() {
+        assertNoneShown("jdbc:x://h/db;passwd=p@ss", "ss");
+        assertNoneShown("jdbc:x://h/db;pass=se@cret;x=1", "cret");
+        assertNoneShown("jdbc:x://h/db;token=abc@def", "def");
+    }
+
+    private static void assertNoneShown(String url, String fragment) {
+        String redacted = JdbcParameters.parse(url).redactedUrl();
+        assertEquals("jdbc:x://", redacted);
+        assertFalse(redacted.contains(fragment), redacted);
+    }
+
     /** A {@code //} and an {@code @} that only occur in the properties are no user information. */
     @Test
     void anAuthorityInThePropertiesIsNoUserInfo() {

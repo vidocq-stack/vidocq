@@ -589,7 +589,7 @@ redacted (`JdbcParameters.redactedUrl()`: without the user information, found on
 URL and ending at the last `@` (`//user:password@` when a `//` precedes it, else the Oracle
 form `user/password@` from after the last `:` before the first `/`, the `@` kept, so a
 password may hold `:`, `/`, `@`, `;` or `?`), then cut at the first `;` or `?` of what
-follows; when that `@` falls in a password property, cut where the user information would
+follows; when that `@` falls in a property value, whatever its key, cut where the user information would
 start; it may cut more, never less). A driver failure is Bodoni's
 own `SQLException`, also **without cause** (a driver exception may repeat the password
 anywhere in its chain: H2 2.3.232 puts `s3cret@nohost.invalid` there for

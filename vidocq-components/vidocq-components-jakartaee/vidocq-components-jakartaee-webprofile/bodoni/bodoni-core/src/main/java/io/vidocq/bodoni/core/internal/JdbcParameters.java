@@ -102,10 +102,10 @@ public record JdbcParameters(String url, String driver, String user, String pass
      * gives {@code jdbc:x://h/db}). Otherwise (the Oracle form) it runs from after the last
      * {@code :} before the first {@code /}, or before the first {@code @} when no {@code /}
      * comes earlier, and the {@code @} stays ({@code jdbc:oracle:thin:scott/tiger@host:1521:db}
-     * gives {@code jdbc:oracle:thin:@host:1521:db}). When that {@code @} falls in the value of a
-     * password property ({@code jdbc:x://h/db?password=p@ss}), what follows it is a piece of
-     * that password: the URL is then cut where the user information would start
-     * ({@code jdbc:x://}). It may cut more than the credentials, never less.
+     * gives {@code jdbc:oracle:thin:@host:1521:db}). When that {@code @} falls in a property
+     * value, whatever its key ({@code jdbc:x://h/db?password=p@ss}, {@code ;token=abc@def}),
+     * what follows it is a piece of that value: the URL is then cut where the user information
+     * would start ({@code jdbc:x://}). It may cut more than the credentials, never less.
      */
     public String redactedUrl() {
         UserInfo info = userInfo(url);
@@ -114,7 +114,7 @@ public record JdbcParameters(String url, String driver, String user, String pass
             return withoutUserInfo(beforeProperties());
         }
         String prefix = url.substring(0, info.start());
-        if (inPasswordProperty(info.at())) {
+        if (inProperty(info.at())) {
             return prefix;
         }
         return prefix + withoutProperties(url.substring(info.authority() ? info.at() + 1 : info.at()));
@@ -172,25 +172,14 @@ public record JdbcParameters(String url, String driver, String user, String pass
     }
 
     /**
-     * Whether the {@code @} at {@code at} falls in the value of a password property: a
-     * {@code ;} or {@code ?} comes before it, and the property it is part of has a key
-     * containing {@code password} or {@code pwd}.
+     * Whether the {@code @} at {@code at} falls in a property value, whatever its key: a
+     * {@code ;} or {@code ?} comes before it and a {@code =} lies between the two. A password
+     * holding {@code ;} or {@code ?} but no {@code =} ({@code u:pa;ss@host}) is user information.
      */
-    private boolean inPasswordProperty(int at) {
+    private boolean inProperty(int at) {
         int start = propertiesStart(url);
-        if (start >= at) {
-            return false;
-        }
-        int last = start;
-        for (int index = start + 1; index < at; index++) {
-            char current = url.charAt(index);
-            if (current == ';' || current == '?' || current == '&') {
-                last = index;
-            }
-        }
-        String property = url.substring(last + 1, at);
-        int equals = property.indexOf('=');
-        return equals > 0 && isPasswordKey(property.substring(0, equals));
+        int equals = url.indexOf('=', start);
+        return start < at && equals >= 0 && equals < at;
     }
 
     private static boolean isPasswordKey(String key) {
