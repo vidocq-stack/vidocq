@@ -245,8 +245,8 @@ class SystemIdPolicyTest {
                 "/%2557EB-INF/%25zz.xml",
                 // Doubled slashes and backslashes.
                 "/%2FWEB-INF/web.xml", "/%5CWEB-INF%5Cweb.xml",
-                // Leading segments a container could drop.
-                "/%252E/WEB-INF/web.xml", "/%2520/WEB-INF/web.xml",
+                // A leading blank segment a container could drop.
+                "/%2520/WEB-INF/web.xml",
                 // The directory itself.
                 "/WEB-INF", "/WEB-INF/"}) {
             assertProtected(CATALOG, reference);
@@ -264,6 +264,28 @@ class SystemIdPolicyTest {
             assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + CATALOG + "': " + OUTSIDE,
                     policy.recordedFailure().getMessage());
         }
+    }
+
+    @Test
+    void aDotSegmentHiddenUnderASecondEncodingIsOutsideTheWebApplication() {
+        // A container that decodes the path once more would see a dot segment: refused, nothing read.
+        for (String reference : new String[] {
+                "/data/%252e%252e/WEB-INF/web.xml", "/data%252F..%252FWEB-INF/web.xml", "/data/..%252f/WEB-INF/x",
+                "/%252E/WEB-INF/web.xml"}) {
+            assertOutside(CATALOG, reference);
+        }
+    }
+
+    @Test
+    void anEscapeLeftAfterTheLastDecodingRoundIsOutsideTheWebApplication() {
+        // Seven levels of encoding: still an escape after the bounded rounds, so refused conservatively.
+        assertOutside(CATALOG, "/%2525252525252557EB-INF/web.xml");
+    }
+
+    @Test
+    void anOriginWithAnEscapeLeftIsNotInsideAProtectedDirectory() {
+        // Least privilege for the origin: it counts as public.
+        assertProtected("/%2525252525252557EB-INF/xsl/main.xsl", "/WEB-INF/xsl/common.xsl");
     }
 
     @Test
@@ -593,6 +615,16 @@ class SystemIdPolicyTest {
         assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
 
         assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + systemId + "': " + PROTECTED,
+                policy.recordedFailure().getMessage());
+    }
+
+    /** {@code reference}, resolved against the page's {@code systemId}, is refused as outside the web application. */
+    private void assertOutside(String systemId, String reference) {
+        SystemIdPolicy policy = SystemIdPolicy.of(ACTION, systemId, pc);
+
+        assertThrows(SAXException.class, () -> policy.resolveEntity(null, null, null, reference), reference);
+
+        assertEquals("x:parse: external reference '" + reference + "' refused, system id '" + systemId + "': " + OUTSIDE,
                 policy.recordedFailure().getMessage());
     }
 

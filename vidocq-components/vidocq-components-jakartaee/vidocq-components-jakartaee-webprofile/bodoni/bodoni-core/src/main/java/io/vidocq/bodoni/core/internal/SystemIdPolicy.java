@@ -73,7 +73,7 @@ import org.xml.sax.ext.EntityResolver2;
  *       {@code bodoni-webapp:<context-relative path>} (a leading {@code /} is
  *       context-relative, anything else relative to the directory of the current page), and a
  *       target must stay a {@code bodoni-webapp:} URI whose decoded path has no {@code .} or
- *       {@code ..} segment; it is read with {@code ServletContext.getResourceAsStream}. A target
+ *       {@code ..} segment, even once decoded again; it is read with {@code ServletContext.getResourceAsStream}. A target
  *       inside {@code /WEB-INF/} or {@code /META-INF/} is refused unless the system id is inside
  *       that same directory ({@link #protectedDirectory}): a stylesheet kept under
  *       {@code /WEB-INF/} imports its siblings, a public document cannot read them.</li>
@@ -127,18 +127,21 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
      */
     static final String INSIDE_PROTECTED_DIRECTORY = "inside /WEB-INF/ or /META-INF/ while the system id is not";
 
-    private static final String WEB_INF = "WEB-INF";
-
-    private static final String META_INF = "META-INF";
-
-    /** How many times {@link #protectedDirectory} percent-decodes a path again, at most. */
-    private static final int MAX_DECODING_ROUNDS = 4;
-
     /** Refusal reason: the reference, or the base it is resolved against, is not a URI. */
     static final String NOT_A_URI = "not a valid URI";
 
     /** Read failure: no web-application resource at the target path. */
     static final String NOT_FOUND = "not found";
+
+    private static final String WEB_INF = "WEB-INF";
+
+    private static final String META_INF = "META-INF";
+
+    /** How many times a decoded path is percent-decoded again, at most ({@link #decodedAgain}). */
+    private static final int MAX_DECODING_ROUNDS = 4;
+
+    /** The separators of path segments: a backslash counts as one, as it may on the container's file system. */
+    private static final Pattern SEPARATORS = Pattern.compile("[/\\\\]");
 
     /** The system id shown in messages when the page gave none. */
     private static final String SHOWN_NONE = "(none)";
@@ -415,19 +418,25 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         return in;
     }
 
-    /** A {@code bodoni-webapp:} URI without authority whose decoded path is absolute and has no dot segment. */
+    /**
+     * A {@code bodoni-webapp:} URI without authority whose decoded path is absolute and has no
+     * dot segment, neither as decoded nor once decoded again ({@link #decodedAgain}): a container
+     * that decodes the path a second time must not see a {@code ..} either. A path that still
+     * has an escape after the last decoding round is refused too.
+     */
     private static boolean insideWebApp(URI target) {
         String path = target.getPath();
-        return WEBAPP_SCHEME.equalsIgnoreCase(target.getScheme())
-                && target.getRawAuthority() == null
-                && path != null
-                && path.startsWith("/")
-                && !hasDotSegment(path);
+        if (!WEBAPP_SCHEME.equalsIgnoreCase(target.getScheme()) || target.getRawAuthority() != null
+                || path == null || !path.startsWith("/")) {
+            return false;
+        }
+        String decoded = decodedAgain(path);
+        return decoded != null && !hasDotSegment(path) && !hasDotSegment(decoded);
     }
 
     /** Whether a decoded path has a {@code .} or {@code ..} segment, a backslash also counting as a separator. */
     private static boolean hasDotSegment(String path) {
-        for (String segment : path.split("[/\\\\]")) {
+        for (String segment : SEPARATORS.split(path)) {
             if (segment.equals(".") || segment.equals("..")) {
                 return true;
             }
@@ -448,9 +457,16 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
      *   <li>a segment left empty ({@code .}, {@code ..}, blanks) is skipped, the next one is first;</li>
      *   <li>the name is compared ignoring case (case-insensitive file systems).</li>
      * </ul>
+     * A path that still has an escape after the last decoding round names none: an origin then
+     * counts as public (least privilege), and {@link #insideWebApp} has already refused such a
+     * target.
      */
     static String protectedDirectory(String path) {
-        for (String segment : decodedAgain(path).split("[/\\\\]")) {
+        String decoded = decodedAgain(path);
+        if (decoded == null) {
+            return null;
+        }
+        for (String segment : SEPARATORS.split(decoded)) {
             String name = segmentName(segment);
             if (!name.isEmpty()) {
                 return protectedName(name);
@@ -482,13 +498,25 @@ public final class SystemIdPolicy implements EntityResolver2, URIResolver {
         return segment.substring(0, end);
     }
 
-    /** {@code path} percent-decoded again until no escape is left (bounded rounds). */
+    /**
+     * {@code path} percent-decoded again until no well-formed escape is left, {@code null} when
+     * one is still left after {@link #MAX_DECODING_ROUNDS} rounds.
+     */
     private static String decodedAgain(String path) {
         String decoded = path;
-        for (int round = 0; round < MAX_DECODING_ROUNDS && decoded.indexOf('%') >= 0; round++) {
+        for (int round = 0; round < MAX_DECODING_ROUNDS && hasEscape(decoded); round++) {
             decoded = percentDecoded(decoded);
         }
-        return decoded;
+        return hasEscape(decoded) ? null : decoded;
+    }
+
+    private static boolean hasEscape(String text) {
+        for (int i = text.indexOf('%'); i >= 0; i = text.indexOf('%', i + 1)) {
+            if (escapedByte(text, i) >= 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
