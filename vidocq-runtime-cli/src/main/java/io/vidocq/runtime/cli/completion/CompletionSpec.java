@@ -78,7 +78,7 @@ public final class CompletionSpec {
             "start", List.of("--port", "--config", "--debug"),
             "dev", List.of("--port", "--profile", "--debug"),
             "doctor", List.of("--verbose"),
-            "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version"),
+            "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
             "update", List.of("--check"),

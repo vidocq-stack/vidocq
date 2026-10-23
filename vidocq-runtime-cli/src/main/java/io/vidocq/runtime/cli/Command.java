@@ -57,12 +57,14 @@ public sealed interface Command {
         static Doctor defaults() { return new Doctor(false); }
     }
 
+    /** {@code main}: write an {@code @VidocqMain} trampoline; without it the runtime's own main boots the app. */
     record Create(
             String name,
             String groupId,
             String pkg,
             Set<String> extensions,
-            String parentVersion
+            String parentVersion,
+            boolean main
     ) implements Command {}
 
     record Build(

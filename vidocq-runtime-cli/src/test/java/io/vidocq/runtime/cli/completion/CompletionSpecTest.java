@@ -67,6 +67,8 @@ class CompletionSpecTest {
         List<String> ids = KnownExtensions.catalog().stream().map(RegistryEntry::id).toList();
         assertEquals(ids, after("create", "--name", "todo", "-x"));
         assertTrue(after("create").contains("--group-id"));
+        assertTrue(after("create").contains("--main"));
+        assertFalse(CompletionSpec.takesValue("--main"), "--main is a flag");
     }
 
     @Test

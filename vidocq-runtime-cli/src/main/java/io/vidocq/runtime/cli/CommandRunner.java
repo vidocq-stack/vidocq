@@ -286,6 +286,11 @@ public final class CommandRunner {
         CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.name()));
         CliOutput.println("  Build:     " + CliOutput.cyan("mvn package"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
+        if (!create.main()) {
+            CliOutput.println();
+            CliOutput.println("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
+                    + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp, vidocq:jlink/jpackage).")));
+        }
         return 0;
     }
 
@@ -667,6 +672,9 @@ public final class CommandRunner {
                         ? ModuleInfoEditor.add(updated, id, KnownExtensions.moduleDirectives(id, pkg))
                         : ModuleInfoEditor.remove(updated, id, KnownExtensions.moduleName(id).orElse(null)))
                         .source();
+                if (add && pkg == null) {
+                    warnUnopenedPackage(id, moduleName(source));
+                }
             }
             if (updated.equals(source)) {
                 return false;
@@ -681,14 +689,39 @@ public final class CommandRunner {
         }
     }
 
-    /** The module's name when it is also a package of the sources (the scaffold's layout), else null. */
-    private static String applicationPackage(String moduleInfo, Path javaRoot) {
-        var m = Pattern.compile("\\bmodule\\s+([A-Za-z0-9_.]+)\\s*\\{").matcher(moduleInfo);
-        if (!m.find()) {
+    /**
+     * The module's name when it is also a package of the sources that holds a class (the
+     * scaffold's layout), else null. An empty package, or one with only a
+     * {@code package-info.java}, is not in the compiled module: opening it compiles with a
+     * warning, then the JVM refuses the module ("Package … not found in module").
+     */
+    static String applicationPackage(String moduleInfo, Path javaRoot) throws IOException {
+        String name = moduleName(moduleInfo);
+        if (name == null) {
             return null;
         }
-        String name = m.group(1);
-        return Files.isDirectory(javaRoot.resolve(name.replace('.', '/'))) ? name : null;
+        Path dir = javaRoot.resolve(name.replace('.', '/'));
+        if (!Files.isDirectory(dir)) {
+            return null;
+        }
+        try (var files = Files.list(dir)) {
+            return files.map(f -> f.getFileName().toString())
+                    .anyMatch(f -> f.endsWith(".java") && !f.equals("package-info.java")) ? name : null;
+        }
+    }
+
+    /** The name a {@code module-info.java} declares, else null. */
+    private static String moduleName(String moduleInfo) {
+        var m = Pattern.compile("\\bmodule\\s+([A-Za-z0-9_.]+)\\s*\\{").matcher(moduleInfo);
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** Tells the user to open the package once it has a class, when {@code id} would have opened it. */
+    private static void warnUnopenedPackage(String id, String pkg) {
+        if (pkg != null && KnownExtensions.moduleDirectives(id, pkg).contains("opens " + pkg)) {
+            CliOutput.warning(id + " reflects on the application package, which has no class yet: add "
+                    + CliOutput.cyan("opens " + pkg + ";") + " to module-info.java once it has one.");
+        }
     }
 
     /** {@code vidocq extension add} ({@code add}) or {@code remove} on the project in {@code projectDir}. */

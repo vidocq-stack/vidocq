@@ -41,15 +41,24 @@ import java.util.Set;
  *   src/main/java/
  *     module-info.java
  *     &lt;package&gt;/
- *       &lt;ClassName&gt;App.java
+ *       &lt;ClassName&gt;App.java     (--main only)
+ *       HelloResource.java      (cassini-rest only)
  *   src/main/resources/
  *     vidocq.properties
  * </pre>
+ *
+ * <p>No application main class by default: the runtime's own main boots the application
+ * from {@code vidocq.mainModule}, under {@code vidocq:dev}, {@code vidocq:run} and the
+ * {@code vidocq:package} launchers alike. {@code --main} adds an {@code @VidocqMain}
+ * trampoline and the {@code vidocq.mainClass} that names it.
  */
 public final class ProjectScaffolder {
 
     /** Where the Vidocq SNAPSHOTs are published, on every build of {@code main}. */
     static final String SNAPSHOT_REPOSITORY_URL = "https://central.sonatype.com/repository/maven-snapshots/";
+
+    /** The extension whose scaffold writes a {@code HelloResource}. */
+    private static final String REST_EXTENSION = "cassini-rest";
 
     private ProjectScaffolder() {}
 
@@ -71,8 +80,22 @@ public final class ProjectScaffolder {
 
         write(root.resolve("pom.xml"),                               buildPom(create));
         write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create));
-        write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
+        if (create.main()) {
+            write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
+        }
+        if (create.extensions().contains(REST_EXTENSION)) {
+            write(srcPkg.resolve("HelloResource.java"),              buildHelloResource(create));
+        }
         write(res.resolve("vidocq.properties"),                      buildProperties());
+    }
+
+    /**
+     * Whether the scaffold writes a class into the application package. The module can only
+     * open a package that holds one: an empty package compiles with a warning, then the JVM
+     * refuses the module ("Package … not found in module").
+     */
+    private static boolean writesApplicationClass(Command.Create c) {
+        return c.main() || c.extensions().contains(REST_EXTENSION);
     }
 
     // -------------------------------------------------------------------------
@@ -117,8 +140,7 @@ public final class ProjectScaffolder {
 
                     <properties>
                         <vidocq.mainModule>%s</vidocq.mainModule>
-                        <vidocq.mainClass>%s.%s</vidocq.mainClass>
-                    </properties>
+                %s    </properties>
                 %s
                     <dependencies>
                         <dependency>
@@ -143,22 +165,34 @@ public final class ProjectScaffolder {
                                         <goals>
                                             <goal>package</goal>
                                         </goals>
-                                        <configuration>
-                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
-                                                 module option, which needs module/class (BUG-20260710-02). -->
-                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
-                                        </configuration>
-                                    </execution>
+                %s                    </execution>
                                 </executions>
                             </plugin>
                 %s        </plugins>
                     </build>
                 </project>
                 """.formatted(parentVersion, c.groupId(), c.name(), c.name(),
-                moduleName(c), c.pkg(), appClassName(c.name()),
+                moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", parentVersion,
                 extensionDeps(c.extensions(), parentVersion),
+                c.main() ? packageMainClass() : "",
                 aptCodegenPlugin(c.extensions(), parentVersion));
+    }
+
+    /** The {@code vidocq.mainClass} of a {@code --main} scaffold: its trampoline. */
+    private static String mainClassProperty(Command.Create c) {
+        return "        <vidocq.mainClass>" + c.pkg() + "." + appClassName(c.name()) + "</vidocq.mainClass>\n";
+    }
+
+    /** The trampoline launch of {@code vidocq:package}, for a {@code --main} scaffold. */
+    private static String packageMainClass() {
+        return """
+                                        <configuration>
+                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
+                                                 module option, which needs module/class (BUG-20260710-02). -->
+                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
+                                        </configuration>
+                """;
     }
 
     /**
@@ -234,16 +268,23 @@ public final class ProjectScaffolder {
     }
 
     /**
-     * The core requirement, then each selected extension's directives in catalog order —
-     * the same {@link ModuleInfoEditor} edit {@code vidocq extension add} makes, so a
-     * scaffolded extension and an added one end up declared alike.
+     * The core requirement of the trampoline, then each selected extension's directives in
+     * catalog order — the same {@link ModuleInfoEditor} edit {@code vidocq extension add}
+     * makes, so a scaffolded extension and an added one end up declared alike. The application
+     * package is opened only when the scaffold writes a class into it.
      */
     private static String buildModuleInfo(Command.Create c) {
-        String source = """
+        String source = c.main()
+                ? """
                 module %s {
                     requires io.vidocq.runtime.core;
                 }
+                """.formatted(moduleName(c))
+                : """
+                module %s {
+                }
                 """.formatted(moduleName(c));
+        String openable = writesApplicationClass(c) ? c.pkg() : null;
         List<String> ordered = new ArrayList<>();
         KnownExtensions.catalog().forEach(e -> {
             if (c.extensions().contains(e.id())) {
@@ -252,7 +293,11 @@ public final class ProjectScaffolder {
         });
         c.extensions().stream().filter(id -> !ordered.contains(id)).sorted().forEach(ordered::add);
         for (String id : ordered) {
-            source = ModuleInfoEditor.add(source, id, KnownExtensions.moduleDirectives(id, c.pkg())).source();
+            source = ModuleInfoEditor.add(source, id, KnownExtensions.moduleDirectives(id, openable)).source();
+            if (openable == null && KnownExtensions.moduleDirectives(id, c.pkg()).contains("opens " + c.pkg())) {
+                CliOutput.warning(id + " reflects on the application package, which has no class yet: add "
+                        + CliOutput.cyan("opens " + c.pkg() + ";") + " to module-info.java once it has one.");
+            }
         }
         return source;
     }
@@ -273,6 +318,11 @@ public final class ProjectScaffolder {
                  * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
                  * into the Vauban layer and boots it there, from the IDE, {@code vidocq start} or a jlink
                  * image alike. Put no code before it: it would run outside that layer.
+                 *
+                 * <p>The runtime's own main boots the application without this class. Keep it for a
+                 * right-click Run in the IDE, for logic after boot (pass a {@code VidocqApp} to
+                 * {@code Vidocq.run(Class, String...)}), and for {@code vidocq:jlink} and
+                 * {@code vidocq:jpackage}, which launch {@code vidocq.mainClass}.
                  */
                 @VidocqMain
                 public final class %s {
@@ -282,6 +332,30 @@ public final class ProjectScaffolder {
                     }
                 }
                 """.formatted(c.pkg(), className);
+    }
+
+    private static String buildHelloResource(Command.Create c) {
+        return """
+                package %s;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.Produces;
+                import jakarta.ws.rs.core.MediaType;
+
+                /** A first REST resource: {@code GET /hello}. */
+                @ApplicationScoped
+                @Path("/hello")
+                @Produces(MediaType.TEXT_PLAIN)
+                public class HelloResource {
+
+                    @GET
+                    public String hello() {
+                        return "Hello from Vidocq!";
+                    }
+                }
+                """.formatted(c.pkg());
     }
 
     private static String buildProperties() {

@@ -50,23 +50,28 @@ cd todo
 [source]
 ----
 todo/
-  pom.xml                      <1>
+  pom.xml                            <1>
   src/main/java/
-    module-info.java           <2>
-    com/acme/todo/TodoApp.java <3>
+    module-info.java                 <2>
+    com/acme/todo/HelloResource.java <3>
   src/main/resources/
-    vidocq.properties          <4>
+    vidocq.properties                <4>
 ----
-<1> Inherits `io.vidocq.runtime:vidocq-runtime-parent:{release-version}` and wires the `vidocq-runtime-maven-plugin` so `mvn package` produces a runnable distribution.
+<1> Inherits `io.vidocq.runtime:vidocq-runtime-parent:{release-version}`, sets `vidocq.mainModule` and wires the `vidocq-runtime-maven-plugin` so `mvn package` produces a runnable distribution.
 <2> Module descriptor, pre-filled with the `requires`/`opens` a REST app needs.
-<3> The entry point — boots the runtime with `VidocqBootstrap`.
+<3> A first resource, written for `cassini-rest` (Step 3).
 <4> MicroProfile-style configuration (`vidocq.http.port=8080`, …).
 
-TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, …).
+[.tag-new]#NEW# There is no main class: the runtime's own main boots the application from
+`vidocq.mainModule`. `vidocq create --main` adds an `@VidocqMain` trampoline, for a right-click
+Run in the IDE, logic after boot (a `VidocqApp`), or `vidocq:jlink` / `vidocq:jpackage`. See
+xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
-== Step 3 — Write your first resource
+TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, `--main`, …).
 
-Create `src/main/java/com/acme/todo/HelloResource.java`:
+== Step 3 — Your first resource
+
+`vidocq create` wrote `src/main/java/com/acme/todo/HelloResource.java`:
 
 [source,java]
 ----
@@ -78,19 +83,20 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
-@Path("/hello")
+/** A first REST resource: {@code GET /hello}. */
 @ApplicationScoped
+@Path("/hello")
+@Produces(MediaType.TEXT_PLAIN)
 public class HelloResource {
 
     @GET
-    @Produces(MediaType.TEXT_PLAIN)
     public String hello() {
         return "Hello from Vidocq!";
     }
 }
 ----
 
-No further wiring: the Cassini annotation processor generates the dispatch adapter at compile time — no runtime reflection.
+No further wiring: the Cassini annotation processor generates the dispatch adapter at compile time — no runtime reflection. Add your own resources next to it, in the same package: `module-info.java` already opens it.
 
 == Step 4 — Build and run
 
@@ -122,7 +128,7 @@ INFOS: Vidocq - Started in 90.940 ms (process running for 135 ms)
 mvn vidocq:dev
 ----
 
-Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` / `vidocq.mainClass` properties already set in the generated pom.
+Dev mode launches the application on its module path and watches your sources. It uses the `vidocq.mainModule` property already set in the generated pom (and `vidocq.mainClass`, when `--main` set it).
 
 Nothing to add: since `todo` already has the Chappe HTTP server (through `cassini-rest`), `mvn vidocq:dev` also serves the xref:dev-console.adoc[dev console] on its own [.tag-new]#NEW#: `Vidocq dev console: http://127.0.0.1:8888/` opens the startup report of the running application and the live values of its extensions.
 
@@ -184,7 +190,6 @@ The CLI is a convenience, not a requirement. The project above is plain Maven �
 
     <properties>
         <vidocq.mainModule>com.acme.todo</vidocq.mainModule>
-        <vidocq.mainClass>com.acme.todo.TodoApp</vidocq.mainClass>
     </properties>
 
     <dependencies>
@@ -213,9 +218,6 @@ The CLI is a convenience, not a requirement. The project above is plain Maven �
                         <goals>
                             <goal>package</goal>
                         </goals>
-                        <configuration>
-                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
-                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -240,7 +242,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven �
 
 NOTE: From 0.4.0, the codegen bundle is a jar: leave out the `<type>pom</type>` line, which IntelliJ's build cannot read (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). It stays for {release-version}, where the bundle is a pom.
 
-NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The two `vidocq-runtime-maven-plugin` configuration blocks work around known 0.2.0 issues (fixed in 0.3.0).
+NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The `jvmArgs` configuration of `vidocq-runtime-maven-plugin` works around a known 0.2.0 issue (fixed in 0.3.0).
 
 `src/main/java/module-info.java`:
 
@@ -255,7 +257,6 @@ module com.acme.todo {
     requires jakarta.ws.rs;
     requires jakarta.json.bind;
 
-    requires io.vidocq.runtime.core;
     requires io.vidocq.runtime.extensions.jakartaee.core.cassini;
     requires io.vidocq.cassini.api;
 
@@ -266,35 +267,12 @@ module com.acme.todo {
 
 [TIP]
 ====
-This `opens` works because the resources live in the *same* module as the main class. In a
+This `opens` works because the resources live in *this* module. In a
 multi-module application (e.g. hexagonal, resources in their own Java module), the module
 system only lets a module open packages it owns: the `opens` must move into the module that contains the classes,
 and the runtime module scans it with `<scanDependencies>`. See
 xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-module applications].
 ====
-
-`src/main/java/com/acme/todo/TodoApp.java`:
-
-[source,java]
-----
-package com.acme.todo;
-
-import io.vidocq.runtime.core.Vidocq;
-import io.vidocq.runtime.spi.VidocqMain;
-
-/**
- * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
- * into the Vauban layer and boots it there, from the IDE, {@code vidocq start} or a jlink
- * image alike. Put no code before it: it would run outside that layer.
- */
-@VidocqMain
-public final class TodoApp {
-
-    public static void main(String[] args) {
-        Vidocq.run(args);
-    }
-}
-----
 
 `src/main/resources/vidocq.properties`:
 

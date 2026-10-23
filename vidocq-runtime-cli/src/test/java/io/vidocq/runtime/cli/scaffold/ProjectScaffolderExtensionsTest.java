@@ -35,7 +35,7 @@ class ProjectScaffolderExtensionsTest {
 
     private static String scaffoldPom(Path dir, Set<String> extensions) throws IOException {
         ProjectScaffolder.scaffold(
-                new Command.Create("demo", "com.acme", "com.acme.demo", extensions, null), dir);
+                new Command.Create("demo", "com.acme", "com.acme.demo", extensions, null, false), dir);
         return Files.readString(dir.resolve("demo/pom.xml"));
     }
 
@@ -65,17 +65,13 @@ class ProjectScaffolderExtensionsTest {
         String pom = scaffoldPom(dir, Set.of());
 
         assertTrue(pom.contains("<vidocq.mainModule>com.acme.demo</vidocq.mainModule>"),
-                "vidocq:dev/jlink need the main module coordinates, pom was:\n" + pom);
-        assertTrue(pom.contains("<vidocq.mainClass>com.acme.demo.DemoApp</vidocq.mainClass>"));
+                "vidocq:dev/run/package boot the application from its main module, pom was:\n" + pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-maven-plugin</artifactId>"),
                 "the vidocq plugin must be active so mvn package produces a runnable dist");
         assertTrue(pom.contains("<goal>package</goal>"));
-        // Workarounds for the released 0.2.0 plugin (see BUG.md): jvmArgs NPEs when
-        // absent, and the launcher script needs the module/class --module syntax.
+        // Workaround for the released 0.2.0 plugin (see BUG.md): jvmArgs NPEs when absent.
         assertTrue(pom.contains("<jvmArgs>"),
                 "vidocq:package 0.2.0 NPEs when jvmArgs is not configured");
-        assertTrue(pom.contains("<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>"),
-                "vidocq:package 0.2.0 emits --module <mainClass> verbatim; it needs module/class");
     }
 
     @Test
@@ -102,7 +98,7 @@ class ProjectScaffolderExtensionsTest {
     void cassiniRestScaffoldsAReadyModuleInfo(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(
                 new Command.Create("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), null), dir);
+                        Set.of("cassini-rest"), null, false), dir);
 
         String moduleInfo = Files.readString(dir.resolve("demo/src/main/java/module-info.java"));
         assertTrue(moduleInfo.contains("requires jakarta.ws.rs;"),

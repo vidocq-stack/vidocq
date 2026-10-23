@@ -17,7 +17,7 @@ Zero external dependencies — hand-rolled arg parser, pure Java 25, JPMS-native
 | `vidocq help [command]` | ✅ | Top-level + per-command help |
 | `vidocq start [--port] [--config] [--debug]` | ✅ | Delegates to `VidocqBootstrap` |
 | `vidocq dev [--port] [--profile] [--debug]` | ✅ M2 | Boots + watches sources; in-process reload on change (see M2) |
-| `vidocq create --name … [-g] [--package] [-x …]` | ✅ | Scaffolds pom.xml + App + module-info |
+| `vidocq create --name … [-g] [--package] [-x …] [--main]` | ✅ | Scaffolds pom.xml + module-info (+ HelloResource with `cassini-rest`); `--main` adds an `@VidocqMain` trampoline |
 | `vidocq extension list [--installed\|--available\|--all]` | ✅ | ServiceLoader scan |
 | `vidocq extension add <id…>` | ✅ M3 | Injects `<dependency>` into pom.xml (idempotent) |
 | `vidocq extension remove <id…>` | ✅ M3 | Removes the matching `<dependency>` from pom.xml |

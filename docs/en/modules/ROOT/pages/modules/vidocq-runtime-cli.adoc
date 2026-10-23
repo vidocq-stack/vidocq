@@ -94,17 +94,29 @@ This generates a ready-to-build Maven project:
 [source]
 ----
 hello-world/
-├── pom.xml                                  # inherits vidocq-runtime-parent, depends on core
+├── pom.xml                                  # inherits vidocq-runtime-parent, depends on core, sets vidocq.mainModule
 └── src/main/
     ├── java/
-    │   ├── module-info.java                 # module com.example.hello.world { requires io.vidocq.runtime.core; }
-    │   └── com/example/hello/world/
-    │       └── HelloWorldApp.java            # main() that boots the runtime
+    │   ├── module-info.java                 # module com.example.hello.world { }
+    │   └── com/example/hello/world/         # your application package
     └── resources/
         └── vidocq.properties                 # vidocq.http.port=8080
 ----
 
-The generated entry point is a complete, runnable Vidocq application. Its `main` is a `Vidocq.run` trampoline: the runtime re-resolves the application into the Vauban layer, which reads the build-time generated code through `META-INF/services` without a `provides` in your `module-info.java`, the same way in the IDE, with `vidocq start` and in a jlink image:
+[.tag-new]#NEW# There is no application main class: the runtime's own main boots the application
+from `vidocq.mainModule`, under `vidocq dev`, `vidocq start` and the `bin/` launchers of
+`mvn package` alike. With `-x cassini-rest`, the package also gets a `HelloResource`
+(`GET /hello`), and `module-info.java` opens it to JAX-RS and JSON-B. An extension that
+reflects on the package without the scaffold writing a class into it (`mansart-data` alone)
+gets no `opens`: the JVM refuses to open a package with no class, and `create` tells you to add
+the directive once the package has one.
+
+`--main` also writes an `@VidocqMain` trampoline, sets `vidocq.mainClass` to it and adds
+`requires io.vidocq.runtime.core;`. Ask for it when you want a right-click Run in the IDE, logic
+after boot (a `VidocqApp`), or `vidocq:jlink` / `vidocq:jpackage`, which launch
+`vidocq.mainClass`. The trampoline re-resolves the application into the Vauban layer, which reads
+the build-time generated code through `META-INF/services` without a `provides` in your
+`module-info.java`, the same way in the IDE, with `vidocq start` and in a jlink image:
 
 [source,java]
 ----
@@ -117,6 +129,11 @@ import io.vidocq.runtime.spi.VidocqMain;
  * Entry point. {@code main} is a trampoline: {@code Vidocq.run} resolves the application
  * into the Vauban layer and boots it there, from the IDE, {@code vidocq start} or a jlink
  * image alike. Put no code before it: it would run outside that layer.
+ *
+ * <p>The runtime's own main boots the application without this class. Keep it for a
+ * right-click Run in the IDE, for logic after boot (pass a {@code VidocqApp} to
+ * {@code Vidocq.run(Class, String...)}), and for {@code vidocq:jlink} and
+ * {@code vidocq:jpackage}, which launch {@code vidocq.mainClass}.
  */
 @VidocqMain
 public final class HelloWorldApp {
@@ -129,8 +146,8 @@ public final class HelloWorldApp {
 
 [NOTE]
 ====
-The project name is converted to a `PascalCase` class name with an `App` suffix
-(`hello-world` → `HelloWorldApp`) and the default package is `<groupId>.<name>` with dashes
+With `--main`, the project name is converted to a `PascalCase` class name with an `App` suffix
+(`hello-world` → `HelloWorldApp`). The default package is `<groupId>.<name>` with dashes
 turned into dots (`com.example.hello.world`). That package is also the module name, so every
 dot-separated part must be a Java identifier that is not a keyword: `create` refuses a name such
 as `ft-030` (`io.example.ft.030`) and asks for `--package`. Override the package with `--package`
@@ -235,8 +252,8 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 [#create]
 === `vidocq create`
 
-Scaffolds a minimal Maven project (`pom.xml`, `module-info.java`, an `…App` entry point and
-`vidocq.properties`).
+Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.properties`, plus a
+`HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`).
 
 [cols="1,2"]
 |===
@@ -247,6 +264,7 @@ Scaffolds a minimal Maven project (`pom.xml`, `module-info.java`, an `…App` en
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.
 | `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits, and of every Vidocq dependency it declares (default: the runtime version of the CLI).
+| `--main` [.tag-new]#NEW# | Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE, a `VidocqApp`, or `vidocq:jlink` / `vidocq:jpackage`.
 |===
 
 [source,bash]

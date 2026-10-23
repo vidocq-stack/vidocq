@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProjectScaffolderVersionTest {
 
     private static Command.Create create(String parentVersion) {
-        return new Command.Create("demo", "com.acme", "com.acme.demo", Set.of(), parentVersion);
+        return new Command.Create("demo", "com.acme", "com.acme.demo", Set.of(), parentVersion, false);
     }
 
     @Test
@@ -81,7 +81,7 @@ class ProjectScaffolderVersionTest {
         // re-evaluates to the app's own version — dependencies must pin explicitly.
         ProjectScaffolder.scaffold(
                 new Command.Create("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "2.2.2"), dir);
+                        Set.of("cassini-rest"), "2.2.2", false), dir);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-core</artifactId>\n"

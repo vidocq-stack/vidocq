@@ -29,6 +29,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,6 +50,25 @@ class CliParserCreateTest {
                 CliParser.parse(new String[]{"create", "--name", "demo",
                         "--parent-version", "1.2.3"}));
         assertEquals("1.2.3", c.parentVersion());
+    }
+
+    @Test
+    void noApplicationMainClassByDefault() {
+        Command.Create c = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo"}));
+        assertFalse(c.main());
+    }
+
+    @Test
+    void mainOptionAsksForAVidocqMainTrampoline() {
+        Command.Create c = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo", "--main"}));
+        assertTrue(c.main());
+    }
+
+    @Test
+    void theHelpListsTheMainOption() {
+        assertTrue(help("create").contains("--main"), help("create"));
     }
 
     @Test
@@ -77,21 +97,26 @@ class CliParserCreateTest {
     /** BUG-20261023-04: "-x rest" resolved by convention to an artifact that does not exist. */
     @Test
     void theHelpExampleEnablesCatalogExtensions() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
-        try {
-            CliParser.printHelp("create");
-        } finally {
-            System.setOut(original);
-        }
-        Matcher example = Pattern.compile("vidocq create --name [^\\n]*").matcher(buffer.toString(StandardCharsets.UTF_8));
-        assertTrue(example.find(), buffer.toString(StandardCharsets.UTF_8));
+        String help = help("create");
+        Matcher example = Pattern.compile("vidocq create --name [^\\n]*").matcher(help);
+        assertTrue(example.find(), help);
         Matcher ids = Pattern.compile("-x (\\S+)").matcher(example.group());
 
         assertTrue(ids.find(), example.group());
         do {
             assertTrue(KnownExtensions.isKnown(ids.group(1)), ids.group(1) + " is not a catalog id");
         } while (ids.find());
+    }
+
+    private static String help(String command) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buffer, true, StandardCharsets.UTF_8));
+        try {
+            CliParser.printHelp(command);
+        } finally {
+            System.setOut(original);
+        }
+        return buffer.toString(StandardCharsets.UTF_8);
     }
 }

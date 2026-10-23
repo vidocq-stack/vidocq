@@ -106,6 +106,7 @@ public final class CliParser {
 
     private static Command.Create parseCreate(String[] args, int from) {
         String name = null, groupId = null, pkg = null, parentVersion = null;
+        boolean main = false;
         Set<String> extensions = new LinkedHashSet<>();
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
@@ -114,6 +115,7 @@ public final class CliParser {
                 case "--package"         -> pkg     = value(args, ++i, "--package");
                 case "--extension", "-x" -> extensions.add(value(args, ++i, "--extension"));
                 case "--parent-version"  -> parentVersion = value(args, ++i, "--parent-version");
+                case "--main"            -> main = true;
                 default                  -> unknownOpt(args[i], "create");
             }
         }
@@ -126,7 +128,7 @@ public final class CliParser {
                     + " It is also the module name, so each dot-separated part must be a Java"
                     + " identifier that is not a keyword; choose another with --package <pkg>.");
         }
-        return new Command.Create(name, gid, p, Set.copyOf(extensions), parentVersion);
+        return new Command.Create(name, gid, p, Set.copyOf(extensions), parentVersion, main);
     }
 
     /** Java keywords and literals, which no package segment may be (JLS §3.9, §3.10). */
@@ -362,6 +364,8 @@ public final class CliParser {
                 opt("--extension, -x <id>",       "Extension to enable, repeatable");
                 opt("--parent-version <version>", "Vidocq runtime parent version   (default: the CLI's runtime version)");
                 opt("",                           "a SNAPSHOT adds the Central snapshot repository to the pom");
+                opt("--main",                     "Also write an @VidocqMain trampoline (default: none, the runtime");
+                opt("",                           "boots the app) — for IDE Run, a VidocqApp, vidocq:jlink/jpackage");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(
