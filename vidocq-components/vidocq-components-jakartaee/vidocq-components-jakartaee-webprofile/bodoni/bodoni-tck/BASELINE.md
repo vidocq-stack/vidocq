@@ -295,5 +295,7 @@ tests as the full run, so no result depends on the database state left by earlie
 `./run-official-tck-tags-3.0.sh smoke` runs six whole classes at 100 % in this run, one per
 library plus the URI check: `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`),
 `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the
-H2 database) and `spec.xml.xmlcore.bindings` (`x`). Rerun on 2026-10-24 after this baseline:
-91/91, `BUILD SUCCESS`.
+H2 database) and `spec.xml.xmlcore.bindings` (`x`). Rerun at commit `1fa0aab`
+(2026-10-23 23:57:29 to 23:57:51 UTC, after the loopback binding fix `f7d4068` and the download
+retries `eee4814`), with `./run-official-tck-tags-3.0.sh smoke`: reactor build green, runner
+tests 39/39, official classes **91/91**, `BUILD SUCCESS`.
