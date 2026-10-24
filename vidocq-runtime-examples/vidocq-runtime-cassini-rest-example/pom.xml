@@ -73,6 +73,17 @@
             <artifactId>vidocq-runtime-external-rest-lib</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- @VidocqTest starts this application for TodoResourceTest (Vidocq/vidocq#350). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

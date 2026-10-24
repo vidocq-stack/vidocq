@@ -28,6 +28,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
 
+| `io.vidocq.runtime:vidocq-runtime-junit:{project-version}` [.tag-new]#NEW#
+| `@VidocqTest`, test scope: the application started in its own JVM for a test class, and HTTP requests to it. See xref:testing.adoc[Testing an application].
+
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
 | Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console [.tag-new]#NEW# is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 

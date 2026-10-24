@@ -1,0 +1,115 @@
+= Testing an application
+:description: @VidocqTest starts the application in its own JVM for a test class and sends it HTTP requests.
+
+[.lead]
+`@VidocqTest` [.tag-new]#NEW# starts the application before the first test of a class and stops it after the
+last one. A test then sends it HTTP requests, as a client would, through the `VidocqApplication` it receives as a
+parameter. `vidocq create` writes such a test for a REST application (Vidocq/vidocq#350).
+
+== Setting it up
+
+Two test dependencies, versioned by `vidocq-runtime-bom` and the JUnit BOM that
+xref:migration.adoc#application-parent[`vidocq-runtime-parent`] imports:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-junit</artifactId>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>org.junit.jupiter</groupId>
+    <artifactId>junit-jupiter</artifactId>
+    <scope>test</scope>
+</dependency>
+----
+
+Nothing goes into `module-info.java`: the tests are patched into the application module, which reads the test
+dependencies on the class path.
+
+== A first test
+
+[source,java]
+----
+import io.vidocq.runtime.junit.VidocqApplication;
+import io.vidocq.runtime.junit.VidocqResponse;
+import io.vidocq.runtime.junit.VidocqTest;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+@VidocqTest
+class HelloResourceTest {
+
+    @Test
+    void saysHello(VidocqApplication application) {
+        VidocqResponse response = application.get("/hello");
+
+        assertEquals(200, response.status(), application.log());
+        assertEquals("Hello from Vidocq!", response.body());
+    }
+}
+----
+
+`mvn test`, `vidocq test` and the IDE run it alike.
+
+== What it does
+
+* **Once per test class**, the application starts in a JVM of its own, as `vidocq:run` starts it: the runtime's
+  own main boots the application module from the module path of the tests (`jdk.module.path`). Under Surefire
+  that path holds `target/classes` and the main dependencies; JUnit and the other test dependencies stay on the
+  class path, so the application never sees them. A `@Nested` class shares the application of the class that
+  carries `@VidocqTest`.
+* **Its HTTP listener** is the `default` Chappe listener, on a free port of `127.0.0.1`
+  (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`).
+* **The test starts** once that port listens. If the process exits first, or after 60 seconds, the class fails with
+  the application's output.
+* **After the last test** the application is stopped as Ctrl+C would stop it, then forcibly after ten seconds.
+
+== The application in a test
+
+A test method declares any of these parameters:
+
+[cols="1,3"]
+|===
+| Parameter | What it is
+
+| `VidocqApplication application`
+| `get(path)`, `post(path, contentType, body)` and `request(method, path, contentType, body)` send a request and
+  return a `VidocqResponse` (`status()`, `body()` read as UTF-8, `header(name)`, `headers()`); `url()` and
+  `url(path)` give the URL; `log()` gives what the application wrote so far.
+
+| `@VidocqUrl URI base` or `@VidocqUrl String base`
+| `http://127.0.0.1:<port>`.
+|===
+
+NOTE: A test patched into the application module reads what that module reads, and an application module does not
+read `java.net.http`: an `HttpClient` in a test fails with `IllegalAccessError`. `VidocqApplication` sends the
+requests from its own jar, which reads it.
+
+== Settings
+
+[cols="1,3"]
+|===
+| `@VidocqTest` attribute | Effect
+
+| `properties`
+| System properties of the application, `key=value` each, such as
+  `@VidocqTest(properties = "vidocq.greeting=hi")`; they win over `vidocq.properties`.
+
+| `module`
+| The application module. By default the module of the test class, which Surefire and the IDEs patch into the
+  application module, else `-Dvidocq.mainModule`.
+
+| `startupTimeoutSeconds`
+| How long the application may take to listen; 60 by default.
+|===
+
+== Limits
+
+* The application needs an HTTP listener (`vidocq-runtime-chappe-webserver-extension`, which every web extension
+  brings): the start waits for its port.
+* The tests run on the module path: an application without `module-info.java`, or a Surefire configured with
+  `useModulePath=false`, has no `jdk.module.path` to start from, and `@VidocqTest` says so.
+* Each test class starts its own application.
