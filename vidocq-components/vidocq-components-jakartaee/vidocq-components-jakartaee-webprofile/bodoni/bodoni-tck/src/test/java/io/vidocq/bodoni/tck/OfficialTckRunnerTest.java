@@ -127,7 +127,8 @@ class OfficialTckRunnerTest {
 
         assertEquals(0, run.exitCode(), run.output());
         assertEquals(3, run.invocations().size(), run.output());
-        assertEquals(List.of("-ntp", "clean", "install"), run.invocations().getFirst());
+        assertEquals(List.of("-ntp", "clean", "install", "-pl", "bodoni-core,bodoni-peano", "-am"),
+                run.invocations().getFirst());
     }
 
     @Test
