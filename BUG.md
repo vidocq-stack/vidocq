@@ -940,3 +940,148 @@ where this whole bug class is invisible.
 - **Cause**: the parser stored the extensions with `Set.copyOf`, whose iteration order depends on a per-JVM salt.
 - **Investigations**:
   - 2026-10-24: fixed: the spec keeps the extensions in a `LinkedHashSet`, in the order given.
+
+## BUG-20261024-02 — `extension add` warns that the Vauban indexer is dropped in a pom that has no Vidocq parent
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#328, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`PomEditor.dropsInheritedProcessorPaths`, `ExtensionEditor`)
+- **Symptom**: on a pom with no Vidocq parent whose `<annotationProcessorPaths>` lists
+  `vidocq-runtime-core-codegen` itself (no `combine.children="append"`, there is nothing to append to),
+  `vidocq extension add dirac-metrics` prints "annotationProcessorPaths replaces the parent's and so drops the Vauban
+  indexer". The build is right: the indexer runs, `checkpom` passes, `vidocq dev` discovers every extension. The
+  warning tells the user to change a correct pom; it is the setup of the reporter of #47.
+- **Minimal reproduction**: `vidocq create --name demo-app -x cassini-rest`; remove `<parent>`, give the project a
+  `<version>`, version the plugins, list `io.vidocq.runtime:vidocq-runtime-core-codegen` in a plain
+  `<annotationProcessorPaths>`; `vidocq extension add dirac-metrics` warns, `mvn compile` and `vidocq dev` work.
+- **Cause**: the check looks only at the `combine.children` attribute. It does not ask whether the pom inherits a
+  Vidocq parent, nor whether the block already lists `vidocq-runtime-core-codegen`. Added by the fix of
+  BUG-20261023-02.
+- **Investigations**:
+  - 2026-10-24: reproduced with the CLI built from `main` (9bb14956).
+
+## BUG-20261024-03 — The extension catalog describes `mansart-data` as Jakarta Persistence
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#329, umbrella #339)
+- **Affected module**: vidocq-runtime-mansart-data-extension (`META-INF/vidocq/extension.properties`)
+- **Symptom**: `vidocq extension list --available` prints `mansart-data — Jakarta Persistence (JPA)`. The extension
+  wires Jakarta Data 1.0 repositories, as its pom says. The generated catalog repeats the error in the CLI,
+  `vidocq:list-extensions` and `vidocq help`.
+- **Minimal reproduction**: `vidocq extension list --available | grep mansart-data`.
+- **Cause**: `description = Jakarta Persistence (JPA)` in the descriptor.
+
+## BUG-20261024-04 — `extension add mansart-persistence` writes a coordinate that does not exist
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#330, umbrella #339)
+- **Affected module**: vidocq-runtime-mansart-persistence-extension, vidocq-runtime-tooling (`KnownExtensions`)
+- **Symptom**: `vidocq extension add mansart-persistence` reports "not a known extension — resolved by convention"
+  and writes `io.vidocq.runtime:vidocq-runtime-mansart-persistence-extension`; the next build fails ("was not found
+  in …maven-snapshots"). The extension is published under `io.vidocq.runtime.extensions.jakartaee.web`; its
+  `-codegen` bundle and its `module-info` needs are not wired either, and it is absent from
+  `vidocq extension list --available`.
+- **Minimal reproduction**: `vidocq create --name demo-app && cd demo-app && vidocq extension add mansart-persistence
+  && vidocq test`.
+- **Cause**: the module has no `META-INF/vidocq/extension.properties`, so the catalog generated from the descriptors
+  does not know it. Every other published extension has one (`devconsole` is added by `vidocq:dev`,
+  `langchain4j-cdi-mcp` is left out of the release). Nothing in the reactor checks it.
+
+## BUG-20261024-05 — The runtime parent does not manage every published extension
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#331, umbrella #339)
+- **Affected module**: root `pom.xml` (`vidocq-runtime-parent` `<dependencyManagement>`)
+- **Symptom**: `vidocq-runtime-grimm-openapi-extension`, `vidocq-runtime-grimm-openapi-ui-extension`,
+  `vidocq-runtime-mansart-persistence-extension` and its `-codegen` are not managed. An application under the parent
+  that declares one without `<version>`, as it can for every other extension, fails with "dependencies.dependency.version
+  is missing". `vidocq extension add` hides it by always writing a version.
+- **Minimal reproduction**: in a created project, declare
+  `io.vidocq.runtime.extensions.microprofile:vidocq-runtime-grimm-openapi-extension` without a version;
+  `mvn validate`.
+- **Cause**: entries forgotten when the modules were added; no reactor test compares the published extension modules
+  with the managed ones.
+
+## BUG-20261024-06 — `vidocq create`: the application takes the runtime's version
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#332, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
+- **Symptom**: the created pom has no `<version>`, so the application inherits `vidocq-runtime-parent`'s:
+  `target/demo-app-0.4.0-SNAPSHOT.jar`, and the startup banner says `io.example.demo.app 0.4.0-SNAPSHOT`. The
+  application's version moves with each Vidocq upgrade.
+- **Minimal reproduction**: `vidocq create --name demo-app && cd demo-app && vidocq build && ls target/*.jar`.
+- **Cause**: the pom template writes no `<version>`.
+
+## BUG-20261024-07 — `vidocq create`: the pom carries workarounds for bugs fixed since 0.2.x
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#333, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
+- **Symptom**: every created pom sets `<jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>` "because vidocq:package 0.2.0 fails
+  on an absent jvmArgs (BUG-20260710-01)" and `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` for
+  BUG-20260710-02. Both are FIXED (#40, #198).
+- **Minimal reproduction**: `vidocq create --name demo-app && grep -n BUG-2026 demo-app/pom.xml`.
+- **Cause**: the workarounds were never taken out of the template once the bugs were fixed.
+
+## BUG-20261024-08 — `vidocq create` writes no Maven wrapper, so `vidocq doctor` warns on the project it just made
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#334, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
+- **Symptom**: `vidocq create --name demo-app && cd demo-app && vidocq doctor` gives `⚠ Maven wrapper — no mvnw on
+  this path`. Without a wrapper, `vidocq dev` / `build` run the `mvn` of the `PATH` (3.9.9 here, not the pinned
+  3.9.16), and each Maven run on JDK 25 starts with eight `WARNING:` lines (Jansi `System::load`, Guava
+  `sun.misc.Unsafe`).
+- **Minimal reproduction**: the commands above.
+- **Cause**: the scaffolder writes the pom, sources and `vidocq.properties` only.
+
+## BUG-20261024-09 — `vidocq create --name demo-app` names the class `DemoAppApp`
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#335, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder.appClassName`)
+- **Symptom**: `vidocq create --name demo-app --main` writes `DemoAppApp.java`, and `vidocq idea` then writes
+  `DemoAppApp (dev).run.xml`. Any name ending in `app` gets `…AppApp`.
+- **Minimal reproduction**: `ProjectScaffolder.appClassName("demo-app")` returns `DemoAppApp`.
+- **Cause**: the method always appends `App`; its Javadoc (`"my-cool-app" → "MyCoolApp"`) says otherwise.
+
+## BUG-20261024-10 — The build of a created application tells the user to add a `provides` it does not need
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#336, umbrella #339)
+- **Affected module**: Vauban `vauban-processor` (`VaubanProcessor`), as used by vidocq-runtime-core-codegen
+- **Symptom**: every compile prints `[Vauban] Generated io.example.demo.app._VaubanComponents … On the module path,
+  add to module-info: provides io.vidocq.vauban.api.VaubanComponentProvider with io.example.demo.app._VaubanComponents;`.
+  The created `module-info.java` has no such `provides`, and the application works without it.
+- **Minimal reproduction**: `vidocq create --name demo-app -x cassini-rest && cd demo-app && vidocq build`.
+- **Cause hypothesis**: the note addresses an application that uses Vauban alone. Under Vidocq the provider is
+  reached another way (`vidocq:generate` service entries / the application layer); to confirm.
+- **Investigations**:
+  - 2026-10-24: without the `provides`, `/hello` and `/health` answer 200 under `vidocq start`, `vidocq dev` and from
+    the `vidocq build jlink` image.
+
+## BUG-20261024-11 — The build of a created application prints three javac warnings
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#337, umbrella #339)
+- **Affected module**: Vauban `vauban-processor`, vidocq-runtime-parent (compiler configuration)
+- **Symptom**: the first build of `vidocq create --name demo-app -x cassini-rest` prints `File for type
+  'io.example.demo.app.HelloResource_Factory' created in the last round will not be subject to annotation processing`,
+  and the same for `HelloResource_ClientProxy` and `_VaubanComponents`. The generated code is right.
+- **Minimal reproduction**: the command above, then `vidocq build`.
+- **Cause**: javac's `proc.file.create.last.round` warning; Vauban's processor writes sources in the last round on
+  purpose (see Vauban's BUG.md on the classes emitted as bytecode). Whether `-Xlint:-processing` covers this key on
+  JDK 25 is to confirm.
+
+## BUG-20261024-12 — `CLI-ROADMAP.md` describes the CLI before #314
+
+- **Date**: 2026-10-24
+- **Status**: OPEN (#338, umbrella #339)
+- **Affected module**: vidocq-runtime-cli (`CLI-ROADMAP.md`)
+- **Symptom**: the file says `vidocq start` delegates to `VidocqBootstrap`, `vidocq dev` boots the runtime in-process
+  without class reloading, and `info` / `extension list` / `doctor` scan the CLI's class path. Since 2cf4cb00 and
+  #314, `dev` and `start` run `vidocq:dev` / `vidocq:run` in the project, and the extension reports resolve the
+  project's dependencies with Maven. The old description is the confusion of #47.
+- **Minimal reproduction**: read M1, M2 and M6 of `vidocq-runtime-cli/CLI-ROADMAP.md`.
+- **Cause**: the file was not updated with 2cf4cb00 and #314.
