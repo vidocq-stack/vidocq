@@ -200,7 +200,7 @@ class TagLibraryValidatorsTest {
             FMT;  fmt; jakarta.tags.fmt;  parseDate;    value="x";               §9.10
             SQL;  sql; jakarta.tags.sql;  update;       sql="x";                 §10.4
             XML;  x;   jakarta.tags.xml;  if;           select="$a";             §12.2
-            XML;  x;   jakarta.tags.xml;  parse;        varDom="d" doc="${x}";   §11.2
+            XML;  x;   jakarta.tags.xml;  transform;    doc="${d}" xslt="${s}";  §13.2
             """)
     void scopeWithoutVarIsReported(String library, String prefix, String uri, String element, String attributes,
             String section) {
@@ -209,6 +209,13 @@ class TagLibraryValidatorsTest {
                 "1", qName, "scope", section);
         assertNull(validate(library, prefix, uri,
                 "<" + qName + " " + attributes + " var=\"v\" scope=\"page\" jsp:id=\"1\"/>"));
+    }
+
+    @Test
+    void parseScopeWithoutVarIsReported() {
+        assertReported(validate("XML", "x", XML, "<x:parse varDom=\"d\" scope=\"page\" jsp:id=\"1\"/>"),
+                "1", "x:parse", "scope requires var", "§11.2");
+        assertNull(validate("XML", "x", XML, "<x:parse var=\"v\" scope=\"page\" jsp:id=\"1\"/>"));
     }
 
     @Test
@@ -233,11 +240,184 @@ class TagLibraryValidatorsTest {
                 + "</jsp:attribute><jsp:body jsp:id=\"3\">x</jsp:body></c:if>"));
         assertNull(validate("XML", "x", XML, "<x:parse scopeDom=\"page\" jsp:id=\"1\">"
                 + "<jsp:attribute name=\"varDom\" jsp:id=\"2\">d</jsp:attribute></x:parse>"));
-        // A value given by jsp:attribute is never checked as a literal.
-        assertNull(core("<c:set var=\"v\" value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"scope\" jsp:id=\"2\">invalid"
-                + "</jsp:attribute></c:set>"));
-        assertNull(core("<c:set value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"var\" jsp:id=\"2\"></jsp:attribute>"
-                + "</c:set>"));
+    }
+
+    @Test
+    void staticAttributeThroughJspAttributeIsCheckedAsALiteral() {
+        assertReported(core("<c:set var=\"v\" value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"scope\" jsp:id=\"2\">"
+                + "<jsp:text jsp:id=\"3\"> invalid </jsp:text></jsp:attribute></c:set>"), "1", "c:set",
+                "invalid scope \"invalid\"", "§2.7");
+        assertReported(core("<c:set value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"var\" jsp:id=\"2\"></jsp:attribute>"
+                + "</c:set>"), "1", "c:set", "var must not be empty", "§2.7");
+        assertReported(core("<c:set value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"var\" trim=\"false\" jsp:id=\"2\">"
+                + "</jsp:attribute></c:set>"), "1", "c:set", "var must not be empty", "§2.7");
+        // Content that is not template text alone is a request-time value: left to the run time.
+        assertNull(core("<c:set var=\"v\" value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"scope\" jsp:id=\"2\">"
+                + "<jsp:expression jsp:id=\"3\">s</jsp:expression></jsp:attribute></c:set>"));
+        assertNull(core("<c:set var=\"v\" value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"scope\" jsp:id=\"2\">"
+                + "<jsp:text jsp:id=\"3\">request</jsp:text></jsp:attribute></c:set>"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "/WEB-INF/tlds/c.tld", "urn:jsptld:/WEB-INF/c.tld" })
+    void aliasUriIsValidatedAsTheLibrary(String alias) {
+        CoreTagLibraryValidator validator = new CoreTagLibraryValidator();
+        assertNull(validator.validate("c", alias, view("<c:choose jsp:id=\"1\"><jsp:text jsp:id=\"2\">\n </jsp:text>"
+                + "<c:when test=\"${x}\" jsp:id=\"3\">a</c:when><c:otherwise jsp:id=\"4\">b</c:otherwise></c:choose>",
+                "c", alias)));
+        assertReported(validator.validate("c", alias, view("<c:choose jsp:id=\"1\"><c:otherwise jsp:id=\"2\"/>"
+                + "</c:choose>", "c", alias)), "1", "c:choose", "§5.4");
+        assertReported(validator.validate("c", alias, view("<c:when test=\"t\" jsp:id=\"1\"/>", "c", alias)), "1",
+                "c:when", "§5.5");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "/WEB-INF/tlds/sql.tld", "urn:jsptld:/WEB-INF/sql.tld" })
+    void transactionUnderAnAliasUriIsMatched(String alias) {
+        SqlTagLibraryValidator validator = new SqlTagLibraryValidator();
+        assertNull(validator.validate("sql", alias, view("<sql:transaction dataSource=\"d\" jsp:id=\"1\">"
+                + "<sql:query var=\"r\" sql=\"x\" jsp:id=\"2\"/></sql:transaction>", "sql", alias)));
+        assertReported(validator.validate("sql", alias, view("<sql:transaction jsp:id=\"1\">"
+                + "<sql:update sql=\"x\" dataSource=\"d\" jsp:id=\"2\"/></sql:transaction>", "sql", alias)), "2",
+                "sql:update", "§10.5");
+    }
+
+    @Test
+    void elIgnoredMakesExpressionsLiterals() {
+        assertReported(core("<jsp:directive.page isELIgnored=\"true\" jsp:id=\"1\"/>"
+                + "<c:set var=\"v\" value=\"1\" scope=\"${s}\" jsp:id=\"2\"/>"), "2", "c:set", "§2.7");
+        // A page directive applies to the whole page, wherever it appears.
+        assertReported(core("<c:set var=\"v\" value=\"1\" scope=\"${s}\" jsp:id=\"1\"/>"
+                + "<jsp:directive.page isELIgnored=\"TRUE\" jsp:id=\"2\"/>"), "1", "c:set", "§2.7");
+        assertReported(core("<jsp:directive.page deferredSyntaxAllowedAsLiteral=\"true\" jsp:id=\"1\"/>"
+                + "<c:set var=\"v\" value=\"1\" scope=\"#{s}\" jsp:id=\"2\"/>"), "2", "c:set", "§2.7");
+        assertNull(core("<jsp:directive.page deferredSyntaxAllowedAsLiteral=\"true\" jsp:id=\"1\"/>"
+                + "<c:set var=\"v\" value=\"1\" scope=\"${s}\" jsp:id=\"2\"/>"));
+        assertNull(core("<jsp:directive.page isELIgnored=\"true\" jsp:id=\"1\"/>"
+                + "<c:set var=\"v\" value=\"1\" scope=\"%= s %\" jsp:id=\"2\"/>"));
+    }
+
+    /**
+     * §2.7 leaves to the run time a constraint that operates on a dynamic attribute (the "Dynamic"
+     * column of the attribute tables): {@code begin}, {@code step} (§6.2, §6.3, §12.6), {@code maxRows}
+     * (§10.3) and {@code currencyCode} (§9.7) are dynamic, so even a literal value is checked by the
+     * handler. The TCK page {@code sql.query#negativeQueryMaxRowsAttributeTest2} catches the
+     * {@code JspException} of {@code maxRows="-5"} at run time.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            CORE | c   | jakarta.tags.core | <c:forEach items="${l}" begin="-1" step="0" jsp:id="1"/>
+            CORE | c   | jakarta.tags.core | <c:forTokens items="a" delims="," begin="-2" step="-1" jsp:id="1"/>
+            XML  | x   | jakarta.tags.xml  | <x:forEach select="$a" begin="-1" step="0" jsp:id="1"/>
+            SQL  | sql | jakarta.tags.sql  | <sql:query var="r" sql="s" maxRows="-5" jsp:id="1"/>
+            FMT  | fmt | jakarta.tags.fmt  | <fmt:formatNumber value="1" type="currency" currencyCode="XXXX" jsp:id="1"/>
+            """)
+    void constraintsOnDynamicAttributesAreLeftToTheRunTime(String library, String prefix, String uri, String body) {
+        assertNull(validate(library, prefix, uri, body));
+    }
+
+    @Test
+    void fmtParamOutsideMessageIsReported() {
+        assertReported(validate("FMT", "fmt", FMT, "<fmt:param value=\"x\" jsp:id=\"1\"/>"), "1", "fmt:param",
+                "fmt:message", "§8.9");
+        assertReported(validate("FMT", "fmt", FMT, "<fmt:bundle basename=\"b\" jsp:id=\"1\"><fmt:param value=\"x\""
+                + " jsp:id=\"2\"/></fmt:bundle>"), "2", "fmt:param", "§8.9");
+        TestPageData nested = view("<fmt:message key=\"k\" jsp:id=\"1\"><c:if test=\"t\" jsp:id=\"2\">"
+                + "<fmt:param value=\"x\" jsp:id=\"3\"/></c:if></fmt:message>", "fmt", FMT, "c", CORE);
+        assertNull(new FmtTagLibraryValidator().validate("fmt", FMT, nested));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            <sql:param value="x" jsp:id="1"/>                                         | sql:param     | §10.7
+            <sql:dateParam value="${d}" jsp:id="1"/>                                  | sql:dateParam | §10.8
+            <sql:transaction jsp:id="0"><sql:param value="x" jsp:id="1"/></sql:transaction> | sql:param | §10.7
+            """)
+    void sqlParamOutsideAnExecutionActionIsReported(String body, String qName, String section) {
+        assertReported(validate("SQL", "sql", SQL, body), "1", qName, "SQLExecutionTag", section);
+    }
+
+    @Test
+    void sqlParamInsideAnExecutionActionOrACustomActionIsAccepted() {
+        assertNull(validate("SQL", "sql", SQL, "<sql:update sql=\"x\" jsp:id=\"1\"><sql:param value=\"x\" jsp:id=\"2\"/>"
+                + "<sql:dateParam value=\"${d}\" jsp:id=\"3\"/></sql:update>"));
+        // A custom action may implement SQLExecutionTag: the validator cannot tell, the handler checks at run time.
+        TestPageData custom = view("<my:exec jsp:id=\"1\"><sql:param value=\"x\" jsp:id=\"2\"/></my:exec>", "sql", SQL,
+                "my", "urn:example:custom");
+        assertNull(new SqlTagLibraryValidator().validate("sql", SQL, custom));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "<jsp:directive.tag body-content=\"empty\" jsp:id=\"9\"/>",
+            "<jsp:directive.attribute name=\"a\" jsp:id=\"9\"/>", "<jsp:doBody jsp:id=\"9\"/>" })
+    void paramNestingIsNotCheckedInATagFile(String tagFileMarker) {
+        // A tag file's actions can be nested, at run time, in an action of the page that invokes it.
+        assertNull(validate("FMT", "fmt", FMT, tagFileMarker + "<fmt:param value=\"x\" jsp:id=\"1\"/>"));
+        assertNull(validate("SQL", "sql", SQL, tagFileMarker + "<sql:param value=\"x\" jsp:id=\"1\"/>"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            <c:set value="1" jsp:id="1"/>                                         | var or target
+            <c:set target="${t}" value="1" jsp:id="1"/>                           | target requires property
+            <c:set property="p" value="1" jsp:id="1"/>                            | property requires target
+            <c:set var="v" target="${t}" property="p" value="1" jsp:id="1"/>      | var excludes target and property
+            <c:set target="${t}" property="p" value="1" scope="page" jsp:id="1"/> | scope requires var
+            """)
+    void setSyntaxErrorsAreReported(String body, String rule) {
+        assertReported(core(body), "1", "c:set", rule, "§4.3");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "<c:set var=\"v\" value=\"1\" jsp:id=\"1\"/>",
+            "<c:set var=\"v\" jsp:id=\"1\"><jsp:text jsp:id=\"2\">body</jsp:text></c:set>",
+            "<c:set target=\"${t}\" property=\"p\" value=\"1\" jsp:id=\"1\"/>",
+            "<c:set value=\"1\" jsp:id=\"1\"><jsp:attribute name=\"target\" jsp:id=\"2\">"
+                    + "<jsp:expression jsp:id=\"3\">t</jsp:expression></jsp:attribute>"
+                    + "<jsp:attribute name=\"property\" jsp:id=\"4\">p</jsp:attribute></c:set>" })
+    void validSetSyntaxIsAccepted(String body) {
+        assertNull(core(body));
+    }
+
+    @Test
+    void forEachWithoutItemsNeedsBeginAndEnd() {
+        assertReported(core("<c:forEach var=\"i\" jsp:id=\"1\"/>"), "1", "c:forEach", "items, or begin and end",
+                "§6.2");
+        assertReported(core("<c:forEach var=\"i\" begin=\"1\" jsp:id=\"1\"/>"), "1", "c:forEach", "§6.2");
+        assertNull(core("<c:forEach var=\"i\" begin=\"1\" end=\"2\" jsp:id=\"1\"/>"));
+    }
+
+    @Test
+    void importWithVarReaderExcludesVarAndScope() {
+        assertReported(core("<c:import url=\"u\" varReader=\"r\" var=\"v\" jsp:id=\"1\"/>"), "1", "c:import",
+                "varReader excludes var and scope", "§7.4");
+        assertReported(core("<c:import url=\"u\" varReader=\"r\" scope=\"page\" jsp:id=\"1\"/>"), "1", "c:import",
+                "§7.4");
+        assertNull(core("<c:import url=\"u\" varReader=\"r\" jsp:id=\"1\"><c:out value=\"x\" jsp:id=\"2\"/></c:import>"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            <sql:setDataSource var="v" jsp:id="1"/>                                | dataSource or url
+            <sql:setDataSource dataSource="d" url="jdbc:x" jsp:id="1"/>            | dataSource excludes url, driver, user and password
+            <sql:setDataSource dataSource="d" user="u" jsp:id="1"/>                | dataSource excludes
+            """)
+    void setDataSourceSyntaxErrorsAreReported(String body, String rule) {
+        assertReported(validate("SQL", "sql", SQL, body), "1", "sql:setDataSource", rule, "§10.6");
+        assertNull(validate("SQL", "sql", SQL, "<sql:setDataSource url=\"jdbc:x\" driver=\"D\" user=\"u\" password=\"p\""
+                + " jsp:id=\"1\"/>"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            <x:parse var="v" varDom="d" jsp:id="1"/>                                       | x:parse     | var and varDom are exclusive         | §11.2
+            <x:parse var="v" doc="${a}" xml="${b}" jsp:id="1"/>                            | x:parse     | doc and xml are exclusive            | §11.2
+            <x:transform doc="${a}" xml="${b}" xslt="${s}" jsp:id="1"/>                    | x:transform | doc and xml are exclusive            | §13.2
+            <x:transform doc="${a}" xslt="${s}" docSystemId="a" xmlSystemId="b" jsp:id="1"/> | x:transform | docSystemId and xmlSystemId are exclusive | §13.2
+            <x:transform doc="${a}" xslt="${s}" var="v" result="${r}" jsp:id="1"/>         | x:transform | var and result are exclusive         | §13.2
+            """)
+    void xmlSyntaxErrorsAreReported(String body, String qName, String rule, String section) {
+        assertReported(validate("XML", "x", XML, body), "1", qName, rule, section);
     }
 
     @ParameterizedTest

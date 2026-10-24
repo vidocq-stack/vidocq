@@ -185,6 +185,12 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `parse` 13/15 → 15/15, `fmtdate` 13/14 → 14/14, `fmtnum` 18/19 → 19/19; each of the 9 pages now fails with
   "TagLibraryValidator validation failed for jakarta.tags.…". `parsedate#negativePDScopeNoVarTest` and
   `parsenum#negativePNScopeNoVarTest` now fail through the validator. The run-time checks stay as defence in depth.
+  Fix round (2026-10-24): an alias URI (TLD path, `web.xml` alias, `urn:jsptld:`) is validated as the library
+  (the first version reported valid `choose` blocks under an alias); the remaining structural and syntax items of §2.7
+  are checked (`fmt:param`, `sql:param` nesting; `c:set`, `c:forEach`, `c:import`, `sql:setDataSource`, `x:parse`,
+  `x:transform` attribute combinations); static attributes given by text-only `jsp:attribute` and EL text under
+  `isELIgnored` are literals. Constraints on dynamic attributes (`begin`, `step`, `maxRows`, `currencyCode`) stay
+  run-time errors (§2.7; TCK `sql.query#negativeQueryMaxRowsAttributeTest2`). Full TCK run: 539/541, no regression.
 
 ## BOD-007 · 2026-10-24 · `LocalizationContext` properties are unreadable in Ibarra pages with Peano reflection denied
 

@@ -70,19 +70,32 @@ The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.
 
 Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; every external entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.
 
+Each validator checks the elements of the URI it is called for, whatever that URI is: a `jakarta.tags.*` or legacy URI, a TLD path, a `web.xml` alias or a `urn:jsptld:` namespace.
+
 [cols="1,3,1",options="header"]
 |===
 | Library | Reported | Spec
 
 | `c`, `x` | A `choose` whose body holds anything but white space, `when` and `otherwise` (template text, a scriptlet, another action), no `when`, a `when` after the `otherwise`, or a second `otherwise`. A `jsp:body` child is transparent; a `jsp:attribute` child is ignored | §5.4, §12.3
 | `c`, `x` | A `when` or `otherwise` whose parent (seen through a `jsp:body`) is not a `choose` | §5.5, §5.6, §12.4, §12.5
-| `c`, `fmt`, `sql`, `x` | `scope` without `var` on `c:if`, `fmt:message`, `fmt:formatNumber`, `fmt:parseNumber`, `fmt:formatDate`, `fmt:parseDate`, `sql:update` and `x:if` | §5.3, §8.8, §9.7-§9.10, §10.4, §12.2
-| `x` | `x:parse` with neither `var` nor `varDom`, or with `scopeDom` without `varDom` | §11.2
+| `c`, `fmt`, `sql`, `x` | `scope` without `var` on `c:if`, `c:set`, `fmt:message`, `fmt:formatNumber`, `fmt:parseNumber`, `fmt:formatDate`, `fmt:parseDate`, `sql:update`, `x:if`, `x:parse` and `x:transform` | §4.3, §5.3, §8.8, §9.7-§9.10, §10.4, §11.2, §12.2, §13.2
+| `c` | `c:set` with neither `var` nor `target`, with `var` and `target` or `property`, or with `target` and `property` apart | §4.3
+| `c` | `c:forEach` with neither `items` nor `begin` and `end` | §6.2
+| `c` | `c:import` with `varReader` and `var` or `scope` | §7.4
+| `fmt` | `fmt:param` not nested in a `fmt:message` | §8.9
 | `sql` | A `dataSource` attribute on `sql:query` or `sql:update` nested in a `sql:transaction` | §10.3-§10.5
+| `sql` | `sql:setDataSource` with neither `dataSource` nor `url`, or with `dataSource` and any of `url`, `driver`, `user`, `password` | §10.6
+| `sql` | `sql:param` or `sql:dateParam` not nested in `sql:query` or `sql:update` | §10.7, §10.8
+| `x` | `x:parse` with neither `var` nor `varDom`, with both, with `doc` and `xml`, or with `scopeDom` without `varDom` | §11.2
+| `x` | `x:transform` with `doc` and `xml`, `docSystemId` and `xmlSystemId`, or `var` and `result` | §13.2
 | all four | A literal `scope` or `scopeDom` other than `page`, `request`, `session` and `application`; an empty `var`, `varDom`, `varStatus` or `varReader` | §2.7
 |===
 
-An attribute counts as present when it is an XML attribute or a `jsp:attribute` of that name. A value given by `jsp:attribute`, or one that holds a request-time or EL expression, is checked at run time only. The `choose`, `when`, `otherwise` and `transaction` actions are matched across every URI of their library, so a `c_rt:when` inside a `c:choose` is accepted, as the handlers accept it. The handlers keep their own run-time checks, which a container that runs no validator still applies.
+An attribute counts as present when it is an XML attribute or a `jsp:attribute` of that name. §2.7 reports at run time a constraint that "operate[s] on a dynamic attribute value": an attribute whose "Dynamic" column is true in the spec tables. So `begin` < 0 and `step` < 1 (§6.2, §6.3, §12.6), `maxRows` < -1 (§10.3) and an invalid `currencyCode` (§9.7) are reported by the handler, as a `JspException`, even for a literal value; the official TCK catches that exception for `maxRows="-5"`. Values are checked on the static attributes `var`, `varDom`, `varStatus`, `varReader`, `scope` and `scopeDom`, when they are literal. A literal is an attribute value that holds no request-time expression (`<%= %>`) and no EL expression. When the page sets `isELIgnored`, `${...}` and `#{...}` are literal text and are checked. With `deferredSyntaxAllowedAsLiteral`, `#{...}` is. A static attribute may also be given by a `jsp:attribute` whose body is template text only: that text, trimmed unless `trim="false"`, is checked like an attribute value. Any other `jsp:attribute` value is checked at run time.
+
+The `choose`, `when`, `otherwise`, `transaction`, `message`, `query` and `update` actions are matched in the validated URI and across every standard URI of their library, so a `c_rt:when` inside a `c:choose` is accepted, as the handlers accept it. The nesting of `fmt:param`, `sql:param` and `sql:dateParam` is not checked in a tag file (one that holds a `tag`, `attribute` or `variable` directive, a `jsp:doBody` or a `jsp:invoke`), nor under an action of a tag library other than Bodoni's, whose handler may implement the expected type: at run time the action may sit inside the expected one. The handlers keep their own run-time checks, which a container that runs no validator still applies.
+
+Some syntax errors are left to the run time. A body-less form that misses its value (`<c:if test="..."/>` without `var`, `<fmt:message/>` without `key`, `<sql:query var="r"/>` without `sql`) is the body form with an empty body, since `<a/>` is `<a></a>`. An invalid value of an attribute with a fixed set of values (`type`, `dateStyle`, `isolation`) is a dynamic attribute, which §2.7 reports at run time.
 
 NOTE: Ibarra runs tag library validators when the page is initialized, before it writes any output, not when it compiles the page (IBARRA-087): a page that breaks a constraint fails on its first request with HTTP 500. Jasper and Open Liberty run them at translation time.
 
