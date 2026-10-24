@@ -66,6 +66,10 @@ class ExtensionEditorTest {
               </build>
             """;
 
+    /** The Vauban indexer, as an application without a Vidocq parent lists it, before its first path. */
+    private static final String INDEXER_THEN_PATH = "<path><groupId>io.vidocq.runtime</groupId>"
+            + "<artifactId>vidocq-runtime-core-codegen</artifactId><version>0.4.0</version></path>\n<path>";
+
     @TempDir
     Path project;
 
@@ -134,14 +138,41 @@ class ExtensionEditorTest {
         assertTrue(reporter.lines.contains("warning: cassini-rest not found in pom.xml — skipped."));
     }
 
+    /** BUG-20261024-04: an unknown id used to become a coordinate that does not exist. */
     @Test
-    void anIdOutsideTheCatalogIsResolvedByConvention() throws IOException {
+    void anIdOutsideTheCatalogFailsWritesNothingAndNamesTheClosestIds() throws IOException {
+        writePom("");
+        String before = pom();
+
+        ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest", "mansart-persistence"), true);
+
+        assertFalse(outcome.succeeded());
+        assertEquals(before, pom());
+        assertTrue(reporter.lines.contains("error: Invalid extension id 'mansart-persistence': not in the Vidocq"
+                + " catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions? An extension outside"
+                + " the catalog is added as groupId:artifactId."), reporter.lines.toString());
+    }
+
+    @Test
+    void anExplicitCoordinateOutsideTheCatalogIsAddedAsGiven() throws IOException {
         writePom("");
 
-        edit(List.of("acme-thing"), true);
+        edit(List.of("com.acme:acme-thing"), true);
 
-        assertTrue(pom().contains("<artifactId>vidocq-runtime-acme-thing-extension</artifactId>"), pom());
-        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("note: ↳ not a known extension")),
+        assertTrue(pom().contains("<groupId>com.acme</groupId>"), pom());
+        assertTrue(pom().contains("<artifactId>acme-thing</artifactId>"), pom());
+        assertTrue(reporter.lines.contains("note: ↳ not in the Vidocq catalog — added as given; verify the coordinate."),
+                reporter.lines.toString());
+    }
+
+    /** BUG-20261024-02: a block that lists the Vauban indexer itself drops nothing, so nothing to warn about. */
+    @Test
+    void replacingPathsThatListTheIndexerDoNotWarn() throws IOException {
+        writePom(REPLACING_PATHS.replaceFirst("<path>", INDEXER_THEN_PATH));
+
+        edit(List.of("knock-health"), true);
+
+        assertFalse(reporter.lines.stream().anyMatch(l -> l.contains("drops the Vauban indexer")),
                 reporter.lines.toString());
     }
 

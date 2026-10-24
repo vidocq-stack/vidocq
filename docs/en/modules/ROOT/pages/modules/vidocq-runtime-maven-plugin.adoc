@@ -106,8 +106,8 @@ mvn vidocq:add-extension -Dextensions=cassini-rest,knock-health
 mvn vidocq:remove-extension -Dextensions=knock-health
 ----
 
-* `-Dextensions` takes catalog ids, comma-separated, or `groupId:artifactId` coordinates; any other name is
-  resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`, with a note in the log.
+* `-Dextensions` takes catalog ids, comma-separated, or `groupId:artifactId` coordinates. Any other name fails the
+  goal, which names the closest catalog ids and writes nothing [.tag-new]#NEW#.
 * `add-extension` writes the dependency, the codegen bundle into the compiler plugin of the project's own build,
   and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It pins the version the
   pom's `vidocq-runtime-parent` gives, else the plugin's own. See

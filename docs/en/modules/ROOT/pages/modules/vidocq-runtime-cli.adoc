@@ -417,8 +417,17 @@ block it fills, and warns when it adds an extension without a codegen bundle to 
 the parent's; xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:checkpom`] fails such a build.
 
 An id may be a known short name (e.g. `cassini-rest`; the catalog now has `grimm-openapi`, `grimm-openapi-ui`,
-`migration`, `flyway-migration` and `liquibase-migration` too [.tag-new]#NEW#), an explicit `groupId:artifactId`, or
-any name (resolved by convention as `io.vidocq.runtime:vidocq-runtime-<id>-extension`).
+`migration`, `flyway-migration` and `liquibase-migration` too [.tag-new]#NEW#) or an explicit `groupId:artifactId`,
+for an extension outside the catalog. Any other name is refused, with the closest catalog ids, and nothing is
+written [.tag-new]#NEW#:
+
+----
+$ vidocq extension add mansart-persistence
+✘ Invalid extension id 'mansart-persistence': not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions? An extension outside the catalog is added as groupId:artifactId.
+----
+
+A block that lists `vidocq-runtime-core-codegen` itself, as in a pom without the Vidocq parent, keeps the indexer:
+`add` does not warn about it.
 
 In `module-info.java`, `add` declares `requires` on the extension's module, which re-exports most
 extension APIs (MicroProfile Health through `knock-health`, Fault Tolerance through

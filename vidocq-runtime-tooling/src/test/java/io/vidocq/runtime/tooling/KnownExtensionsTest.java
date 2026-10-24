@@ -35,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KnownExtensionsTest {
 
+    private static final Path EXTENSIONS = Path.of("..", "vidocq-runtime-extensions");
+
     @Test
     void catalogIsNonEmptyAndWellFormed() {
         assertFalse(KnownExtensions.catalog().isEmpty());
@@ -139,12 +141,41 @@ class KnownExtensionsTest {
         assertEquals("my-ext", c.artifactId());
     }
 
+    /**
+     * BUG-20261024-04: no Vidocq extension lives under the {@code io.vidocq.runtime} groupId, so the former naming
+     * convention for an unknown id always wrote a coordinate that does not exist.
+     */
     @Test
-    void resolvesUnknownIdByConvention() {
-        ExtensionCoordinate c = KnownExtensions.resolve("rest");
-        assertEquals("io.vidocq.runtime", c.groupId());
-        assertEquals("vidocq-runtime-rest-extension", c.artifactId());
-        assertFalse(KnownExtensions.isKnown("rest"));
+    void rejectsAnUnknownShortIdAndNamesTheClosestOnes() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> KnownExtensions.resolve("mansart-persistence"));
+
+        assertEquals("not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions?"
+                + " An extension outside the catalog is added as groupId:artifactId.", e.getMessage());
+        assertFalse(KnownExtensions.isKnown("mansart-persistence"));
+    }
+
+    @Test
+    void anUnknownShortIdWithNothingCloseOnlySaysHowToAddAnyExtension() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> KnownExtensions.resolve("zzz"));
+
+        assertEquals("not in the Vidocq catalog. An extension outside the catalog is added as groupId:artifactId.",
+                e.getMessage());
+    }
+
+    @Test
+    void aTypoInAShortIdNamesTheIdItWasMeantToBe() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> KnownExtensions.resolve("knock-helth"));
+
+        assertTrue(e.getMessage().contains("Did you mean: knock-health?"), e.getMessage());
+    }
+
+    /** BUG-20261024-03: mansart-data is Jakarta Data, not Jakarta Persistence. */
+    @Test
+    void mansartDataIsDescribedAsJakartaData() {
+        assertEquals("Jakarta Data 1.0 repositories", KnownExtensions.byId("mansart-data").orElseThrow().description());
     }
 
     @Test
@@ -187,6 +218,77 @@ class KnownExtensionsTest {
         Set<String> missing = new TreeSet<>(published);
         missing.removeAll(catalog);
         assertTrue(missing.isEmpty(), "published extensions without a " + KnownExtensions.DESCRIPTOR + ": " + missing);
+    }
+
+    /** BUG-20261024-04: a module directory its group's pom does not list is neither built nor published. */
+    @Test
+    void everyExtensionModuleDirectoryIsInTheReactor() throws IOException {
+        Set<String> orphans = new TreeSet<>();
+        try (var groups = Files.list(EXTENSIONS)) {
+            for (var group : groups.filter(g -> Files.isRegularFile(g.resolve("pom.xml"))).toList()) {
+                String modules = Files.readString(group.resolve("pom.xml"));
+                try (var children = Files.list(group)) {
+                    children.filter(m -> Files.isRegularFile(m.resolve("pom.xml")))
+                            .map(m -> m.getFileName().toString())
+                            .filter(name -> !modules.contains("<module>" + name + "</module>"))
+                            .forEach(orphans::add);
+                }
+            }
+        }
+        assertTrue(orphans.isEmpty(), "module directories outside the reactor: " + orphans);
+    }
+
+    /**
+     * BUG-20261024-05: an application declares a published extension, its codegen bundle or its {@code -dev}
+     * module without a version, so the runtime parent manages each of them.
+     */
+    @Test
+    void theRuntimeParentManagesEveryPublishedExtensionModule() throws IOException {
+        String parent = Files.readString(Path.of("..", "pom.xml"));
+        String managed = parent.substring(parent.indexOf("<dependencyManagement>"),
+                parent.indexOf("</dependencyManagement>"));
+        Set<String> unmanaged = new TreeSet<>();
+        for (String module : publishedModules()) {
+            if (module.matches(".*-extension(-codegen|-dev)?")
+                    && !managed.contains("<artifactId>" + module + "</artifactId>")) {
+                unmanaged.add(module);
+            }
+        }
+        assertTrue(unmanaged.isEmpty(), "published modules the runtime parent does not manage: " + unmanaged);
+    }
+
+    /** BUG-20261024-04: an extension whose codegen bundle its descriptor omits is added without it. */
+    @Test
+    void everyExtensionDeclaresItsCodegenSibling() throws IOException {
+        Set<String> modules = publishedModules();
+        for (RegistryEntry e : KnownExtensions.catalog()) {
+            String sibling = e.coordinate().artifactId() + "-codegen";
+            if (modules.contains(sibling)) {
+                assertEquals(sibling, KnownExtensions.codegenBundle(e.id()).map(ExtensionCoordinate::artifactId)
+                        .orElse(null), e.id() + " does not declare its codegen bundle");
+            }
+        }
+    }
+
+    /** The reactor modules under {@link #EXTENSIONS} a release deploys. */
+    private static Set<String> publishedModules() throws IOException {
+        Set<String> published = new TreeSet<>();
+        try (var groups = Files.list(EXTENSIONS)) {
+            for (var group : groups.filter(g -> Files.isRegularFile(g.resolve("pom.xml"))).toList()) {
+                String modules = Files.readString(group.resolve("pom.xml"));
+                try (var children = Files.list(group)) {
+                    for (var module : children.toList()) {
+                        String name = module.getFileName().toString();
+                        Path pom = module.resolve("pom.xml");
+                        if (modules.contains("<module>" + name + "</module>") && Files.isRegularFile(pom)
+                                && !Files.readString(pom).contains("<maven.deploy.skip>true")) {
+                            published.add(name);
+                        }
+                    }
+                }
+            }
+        }
+        return published;
     }
 
     @Test

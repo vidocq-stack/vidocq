@@ -944,7 +944,7 @@ where this whole bug class is invisible.
 ## BUG-20261024-02 — `extension add` warns that the Vauban indexer is dropped in a pom that has no Vidocq parent
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#328, umbrella #339)
+- **Status**: FIXED on `fix/extension-catalog` (#328, umbrella #339)
 - **Affected module**: vidocq-runtime-tooling (`PomEditor.dropsInheritedProcessorPaths`, `ExtensionEditor`)
 - **Symptom**: on a pom with no Vidocq parent whose `<annotationProcessorPaths>` lists
   `vidocq-runtime-core-codegen` itself (no `combine.children="append"`, there is nothing to append to),
@@ -959,41 +959,53 @@ where this whole bug class is invisible.
   BUG-20261023-02.
 - **Investigations**:
   - 2026-10-24: reproduced with the CLI built from `main` (9bb14956).
+- **Fix**: a block that lists `vidocq-runtime-core-codegen` drops nothing, appending or not. Tests
+  `aBlockThatListsTheIndexerItselfDropsNothing`, `replacingPathsThatListTheIndexerDoNotWarn`.
 
 ## BUG-20261024-03 — The extension catalog describes `mansart-data` as Jakarta Persistence
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#329, umbrella #339)
+- **Status**: FIXED on `fix/extension-catalog` (#329, umbrella #339)
 - **Affected module**: vidocq-runtime-mansart-data-extension (`META-INF/vidocq/extension.properties`)
 - **Symptom**: `vidocq extension list --available` prints `mansart-data — Jakarta Persistence (JPA)`. The extension
   wires Jakarta Data 1.0 repositories, as its pom says. The generated catalog repeats the error in the CLI,
   `vidocq:list-extensions` and `vidocq help`.
 - **Minimal reproduction**: `vidocq extension list --available | grep mansart-data`.
 - **Cause**: `description = Jakarta Persistence (JPA)` in the descriptor.
+- **Fix**: `Jakarta Data 1.0 repositories`; the other descriptions checked against their poms, and
+  `humboldt-telemetry` now says traces, metrics and logs, not tracing alone. Test `mansartDataIsDescribedAsJakartaData`.
 
 ## BUG-20261024-04 — `extension add mansart-persistence` writes a coordinate that does not exist
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#330, umbrella #339)
-- **Affected module**: vidocq-runtime-mansart-persistence-extension, vidocq-runtime-tooling (`KnownExtensions`)
+- **Status**: FIXED on `fix/extension-catalog` (#330, umbrella #339)
+- **Affected module**: vidocq-runtime-tooling (`KnownExtensions`, `ProjectSpec`); the orphan
+  `vidocq-runtime-mansart-persistence-extension` directories
 - **Symptom**: `vidocq extension add mansart-persistence` reports "not a known extension — resolved by convention"
   and writes `io.vidocq.runtime:vidocq-runtime-mansart-persistence-extension`; the next build fails ("was not found
-  in …maven-snapshots"). The extension is published under `io.vidocq.runtime.extensions.jakartaee.web`; its
-  `-codegen` bundle and its `module-info` needs are not wired either, and it is absent from
-  `vidocq extension list --available`.
+  in …maven-snapshots").
 - **Minimal reproduction**: `vidocq create --name demo-app && cd demo-app && vidocq extension add mansart-persistence
   && vidocq test`.
-- **Cause**: the module has no `META-INF/vidocq/extension.properties`, so the catalog generated from the descriptors
-  does not know it. Every other published extension has one (`devconsole` is added by `vidocq:dev`,
-  `langchain4j-cdi-mcp` is left out of the release). Nothing in the reactor checks it.
+- **Cause**: two causes. First, every id outside the catalog was resolved by convention to
+  `io.vidocq.runtime:vidocq-runtime-<id>-extension`, while no Vidocq extension has that groupId: the convention could
+  only write a coordinate that does not exist. Second, the first hypothesis, a published extension without a
+  descriptor, was wrong: `vidocq-runtime-mansart-persistence-extension` and its `-codegen` are directories no pom
+  lists as a module, so they are never built nor published. They are left from Mansart Persistence, now Noether:
+  their `module-info.java` was renamed `.bak`, and they depend on `mansart-persistence-*`, which Mansart no longer
+  has. The jars in a local repository dated from an older build.
+- **Fix**: an id outside the catalog is refused, by `vidocq extension add`, `vidocq create -x` and their goals, with
+  the closest catalog ids (a shared word, or two edits at most); an extension outside the catalog is added as
+  `groupId:artifactId`. The orphan directories are removed. Reactor tests: every module directory of an extension
+  group is a module of its pom (`everyExtensionModuleDirectoryIsInTheReactor`), and an extension with a
+  `<artifactId>-codegen` module declares it as its codegen bundle (`everyExtensionDeclaresItsCodegenSibling`).
 
 ## BUG-20261024-05 — The runtime parent does not manage every published extension
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#331, umbrella #339)
+- **Status**: FIXED on `fix/extension-catalog` (#331, umbrella #339)
 - **Affected module**: root `pom.xml` (`vidocq-runtime-parent` `<dependencyManagement>`)
-- **Symptom**: `vidocq-runtime-grimm-openapi-extension`, `vidocq-runtime-grimm-openapi-ui-extension`,
-  `vidocq-runtime-mansart-persistence-extension` and its `-codegen` are not managed. An application under the parent
+- **Symptom**: `vidocq-runtime-grimm-openapi-extension` and `vidocq-runtime-grimm-openapi-ui-extension` are not
+  managed (`mansart-persistence`, first listed here, is not published at all: see BUG-20261024-04). An application under the parent
   that declares one without `<version>`, as it can for every other extension, fails with "dependencies.dependency.version
   is missing". `vidocq extension add` hides it by always writing a version.
 - **Minimal reproduction**: in a created project, declare
@@ -1001,6 +1013,8 @@ where this whole bug class is invisible.
   `mvn validate`.
 - **Cause**: entries forgotten when the modules were added; no reactor test compares the published extension modules
   with the managed ones.
+- **Fix**: both entries added. Test `theRuntimeParentManagesEveryPublishedExtensionModule`: every published
+  `*-extension`, `*-extension-codegen` and `*-extension-dev` module of the reactor is managed.
 
 ## BUG-20261024-06 — `vidocq create`: the application takes the runtime's version
 
