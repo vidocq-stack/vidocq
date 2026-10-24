@@ -96,6 +96,7 @@
     <modules>
         <module>bodoni-core</module>
         <module>bodoni-peano</module>
+        <module>bodoni-it-other-containers</module>
     </modules>
 
     <dependencyManagement>

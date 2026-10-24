@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Bodoni on Open Liberty 26.0.0.10 (Web Profile 11 distribution). The WAR bundles bodoni-core and the
+    tests check that the JSTL that runs is Bodoni's, not the server's.
+    - pages-4.0 is the only feature (it brings servlet-6.1 and expressionLanguage-6.0). Liberty ships its
+      own JSTL (Apache taglibs) with it, and documents no way to turn it off; nothing needs turning off.
+      The spike of 2026-10-24 (PLAN.md open question 5) showed that the TLDs and tag handlers found in
+      the application's WEB-INF/lib win over the server's for the same URIs, including the legacy
+      http://java.sun.com/jsp/jstl/* ones, and that Bodoni's validators run at translation time.
+    - No <classloader> element: the default parentFirst delegation is kept. Bodoni also wins under
+      parentLast, so users need no class loader setting; the JSTL API is what parentFirst takes from the
+      server, which is why the WAR excludes the JSTL API jar.
+-->
+<server description="bodoni-it-openliberty">
+    <featureManager>
+        <feature>pages-4.0</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="-1"/>
+
+    <webApplication location="bodoni-it-openliberty.war" contextRoot="/bodoni"/>
+</server>
