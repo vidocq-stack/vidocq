@@ -50,7 +50,7 @@ Bodoni follows the transverse Vidocq philosophy (see the workspace
 | `bodoni-it-ibarra` | Integration test: pages rendered on Ibarra + Foy + Peano, `sql:` pages against an in-memory H2 database (`it-ibarra` profile, not published) | B1 |
 | `bodoni-ibarra` | Optional build-time inliner for Ibarra (`TagInliner` SPI) | planned (B6, on standby: [BENCH.md](BENCH.md)) |
 | `bodoni-tck` | Official Tags TCK runner on Ibarra's Arquillian adapter (in-reactor under `-Ptck` only, not published) | B5: 541/541 after the TCK fixes (first baseline 452/541) |
-| `bodoni-it-openliberty` | Portability proof on Open Liberty | planned (B7) |
+| `bodoni-it-openliberty` | Portability proof on Open Liberty | delivered (B7) |
 
 ## Build
 

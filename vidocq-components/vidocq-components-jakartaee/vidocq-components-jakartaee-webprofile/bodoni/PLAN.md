@@ -1,6 +1,7 @@
 # Bodoni — Design plan
 
-> Status: **B5 delivered (2026-10-24)** -- the official Tags TCK runner (`bodoni-tck`,
+> Status: **B7 delivered (2026-10-24)** -- `bodoni-it-openliberty` shows that the unchanged
+> `bodoni-core` jar in a WAR is the JSTL Open Liberty 26.0.0.10 runs (nine tests). **B5 delivered (2026-10-24)** -- the official Tags TCK runner (`bodoni-tck`,
 > `run-official-tck-tags-3.0.sh`) and its first full run: **452/541 (83.5 %)**, every failure
 > triaged in `bodoni-tck/BASELINE.md`. **After the TCK fixes (2026-10-24): 541/541** on Ibarra
 > + Foy + Peano (`bodoni-tck/BASELINE.md`), a compatibility measurement, not a certification.
@@ -131,7 +132,8 @@ dependencies the Reference page tells users to declare, deploys it on Open Liber
 checks each library. The Reference page carries the usual `WARNING` block "Deploying on
 an application server". Open Liberty's `pages-4.0` feature itself exposes the
 `jakarta.servlet.jsp.jstl.*` packages (Open Liberty feature docs, checked 2026-10-22), so
-there is no "server JSTL feature" to switch off: see open question 5.
+there is no "server JSTL feature" to switch off: see open question 5. Outcome (2026-10-24):
+the unchanged `bodoni-core` jar in the WAR is the JSTL Open Liberty runs, nine tests over HTTP.
 
 The **Vidocq runtime extension** (in the `vidocq` repository, later) assembles Bodoni +
 Ibarra + Peano and, optionally, puts `bodoni-ibarra` on the precompilation path.
@@ -144,7 +146,7 @@ Ibarra + Peano and, optionally, puts `bodoni-ibarra` on the precompilation path.
 | `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table, B1; `Result` table, B4; `LocalizationContext` table, BOD-007) |
 | `bodoni-ibarra` (planned) | `io.vidocq.bodoni.ibarra` | build only | `io.vidocq.bodoni.core`, Ibarra's compiler-side SPI module | nothing — `provides` the `TagInliner` SPI |
 | `bodoni-tck` (B5) | — (class path: Arquillian, ShrinkWrap and the TCK clients are not Java modules; the deployments stay modular) | test, `-Ptck`, not published | `ibarra-arquillian` (brings Ibarra, Foy, Peano, Chappe), H2, `jakarta.tck:tags-tck:11.0.3` (`tck-official`), all test scope | — |
-| `bodoni-it-openliberty` (planned) | — (WAR) | test | `bodoni-core` | — |
+| `bodoni-it-openliberty` | — (WAR) | test | `bodoni-core` | — |
 
 Facts on the API module (verified 2026-10-22, `jar --describe-module` on 3.0.0 and
 3.0.2): name `jakarta.servlet.jsp.jstl`, exports the four API packages, and
@@ -361,7 +363,7 @@ As built in B5 (decisions and rulings in "Decisions recorded in B5"; implementat
 | B4 | **Done (2026-10-23).** `sql:` (§10): 6 handlers in `tags.sql` (`query`, `update`, `transaction`, `param`, `dateParam`, `setDataSource`), `sql.tld` and `sql-1_2.tld`, data-source resolution (object / JNDI / JDBC parameter string) with driver discovery through the context class loader and credentials kept out of messages, a disconnected `Result` (`internal.QueryResult`), the `Result` accessor table in `bodoni-peano` | unit tests against H2 in memory (test scope); JNDI path tested with a test-only `InitialContextFactory`; pages render on Ibarra in an IT against H2 (BOD-005 found and fixed); open question 8 settled |
 | B5 | **Done (2026-10-24).** `bodoni-tck` (in-reactor under `-Ptck` only, not published) on the published `ibarra-arquillian` adapter, `jakarta.tck:tags-tck:11.0.3` under `-Ptck,tck-official`, the official Derby DDL loaded into H2 served over TCP, `run-official-tck-tags-3.0.sh` (`smoke` / `all` / `-Dtest=`, `--no-prepare`, `--no-install`), the `official-tags-tck-smoke` CI check; first full run with the standard handlers: **452/541 (83.5 %)**, 33/50 classes at 100 %, 0 failures, 89 errors, 0 skipped, every failure triaged (BOD-006 to BOD-009 opened). Follow-up done (2026-10-24, branch `fix/tck-baseline`): the `_rt` TLDs, BOD-006 to BOD-011 fixed, Peano COMP-010 merged, **541/541** | runner + first full run + `bodoni-tck/BASELINE.md` (maintainer, 2026-10-23); 100 % reached by the TCK fixes, each test-first (see "Decisions recorded in the TCK fixes"); open question 1 settled |
 | B6 | **On standby (maintainer, 2026-10-24):** the B6 spike (BENCH-20261024-01) measured no time gain from inlining (176 vs 177 µs for 1,000 items), only less allocation (about 72 B per item); the time is in EL resolution (Vidocq/peano#63). Planned scope: Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
-| B7 | `bodoni-it-other-containers/bodoni-it-openliberty` + Reference "Deploying on an application server" block | WAR with the documented dependencies passes on Open Liberty |
+| B7 | **Done (2026-10-24).** `bodoni-it-other-containers/bodoni-it-openliberty` (in the default reactor, not published): a WAR with exactly the documented dependencies, deployed by the Liberty Maven plugin on Open Liberty 26.0.0.10 (`openliberty-webProfile11`, `pages-4.0`), nine tests over HTTP (`c:` including the legacy URI, `fmt:` with an application bundle, `fn:`, `x:`, `sql:` with the application's H2 driver by `driver` and by URL alone, and the `c:choose` constraint reported by Bodoni); Reference "Deploying on an application server" block; open question 5 settled | WAR with the documented dependencies passes on Open Liberty |
 
 The Vidocq runtime extension (vidocq repository) follows B5.
 
@@ -417,10 +419,13 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    thread context class loader. BOD-002: fixed in Vidocq/foy (Foy BUG-20261022-06, [Vidocq/foy#76](https://codefloe.com/Vidocq/foy/pulls/76)). Foy builds
    that predate it leave the request thread's context class loader unset, so `fmt:` cannot find
    application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
-5. **Open Liberty precedence** — `pages-4.0` exposes the JSTL API and presumably its own
-   implementation for the `jakarta.tags.*` URIs; does a WAR-bundled Bodoni win (Pages
-   allows a container to provide alternate implementations for well-known URIs)? What does
-   the WARNING block tell users to exclude? To be settled by `bodoni-it-openliberty`.
+5. ~~**Open Liberty precedence**~~ -- decided by `bodoni-it-openliberty` (2026-10-24): a
+   WAR-bundled Bodoni wins, for the `jakarta.tags.*` and the legacy URIs, under `parentFirst`
+   and `parentLast`; `pages-4.0` has no switch for its bundled JSTL and none is needed; the
+   WARNING block tells users to exclude the JSTL API jar. `pages-4.0` exposes the JSTL API
+   and presumably its own implementation for the `jakarta.tags.*` URIs; does a WAR-bundled
+   Bodoni win (Pages allows a container to provide alternate implementations for
+   well-known URIs)? What does the WARNING block tell users to exclude?
 6. ~~**XML hardening**~~ -- decided in B3 (2026-10-23): same origin; see "Decisions recorded
    in B3". Secure-processing / external-entity defaults for `x:parse` and `x:transform` vs
    spec §11.1.7 and TCK expectations.

@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B5 delivered — official Tags TCK 541/541 on Ibarra + Foy + Peano (not a certification); `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented; B6 (inlining) on standby after a measurement (BENCH.md), B7 next.** Read [PLAN.md](PLAN.md) before any
+**Status: B5 delivered — official Tags TCK 541/541 on Ibarra + Foy + Peano (not a certification); `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented; B6 (inlining) on standby after a measurement (BENCH.md); B7 delivered — the unchanged `bodoni-core` jar in a WAR is the JSTL Open Liberty 26.0.0.10 runs (nine tests).** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -68,6 +68,7 @@ sdk env
 ./mvnw -ntp clean install                          # default reactor (no TCK)
 ./mvnw test
 ./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify   # Ibarra IT (see note below)
+./mvnw -ntp -pl bodoni-it-other-containers/bodoni-it-openliberty -am verify   # Open Liberty IT
 ./mvnw -ntp -Ptck -pl bodoni-tck test              # TCK runner's own tests
 ./run-official-tck-tags-3.0.sh smoke|all|-Dtest=…  # official Tags TCK (--help: --no-prepare, --no-install)
 ```
@@ -100,7 +101,7 @@ bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profi
 bodoni-tck    ← official Tags TCK runner (jakarta.tck:tags-tck:11.0.3) on ibarra-arquillian,
                 in-reactor behind `tck`, not published, class path (no module-info)
 (planned)     bodoni-ibarra  ← optional build-time inliner for Ibarra (TagInliner SPI)
-(planned)     bodoni-it-other-containers/bodoni-it-openliberty ← portability proof
+bodoni-it-other-containers/bodoni-it-openliberty ← portability proof on Open Liberty (WAR, not published)
 ```
 
 ## Architecture Constraints Not to Violate

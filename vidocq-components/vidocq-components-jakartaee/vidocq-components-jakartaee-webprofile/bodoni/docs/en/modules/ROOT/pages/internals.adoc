@@ -15,7 +15,7 @@ Today `bodoni-core` holds the five libraries, `c:`, `fmt:`, `sql:`, `x:` and `fn
 | `bodoni-it-ibarra` | `io.vidocq.bodoni.it.ibarra` | Renders pages on Ibarra + Foy + Peano, the `sql:` pages against an in-memory H2 database; not published, `it-ibarra` profile only | B1
 | `bodoni-ibarra` | `io.vidocq.bodoni.ibarra` | Build-time inliners for Ibarra (`TagInliner` SPI, never at run time) | planned (B6, on standby)
 | `bodoni-tck` | — (class path, no `module-info`) | Official Tags TCK runner on Ibarra's Arquillian adapter; not published, `tck` profile only (see xref:tck.adoc[TCK status]) | B5: first baseline 452/541
-| `bodoni-it-openliberty` | — (WAR) | Portability proof on Open Liberty | planned (B7)
+| `bodoni-it-openliberty` | — (WAR) | Portability proof on Open Liberty | delivered (B7)
 |===
 
 == The JSTL API module
