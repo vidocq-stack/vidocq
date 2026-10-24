@@ -20,14 +20,14 @@
 package io.vidocq.bodoni.it.openliberty;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.stream.Stream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -77,6 +77,20 @@ class OpenLibertyPortabilityIT {
         String source = generatedSource("fn");
         assertTrue(source.contains("io.vidocq.bodoni.core.functions.Functions"), source);
         assertFalse(source.contains("org.apache.taglibs"), source);
+    }
+
+    @Test
+    void xmlTagsAreBodoni() throws Exception {
+        String body = get("/xml.jsp");
+        assertTrue(body.contains("[parent=io.vidocq.bodoni.core.tags.xml.ForEachTag]"), body);
+        assertTrue(body.contains("NAMES=ada,grace"), body);
+    }
+
+    @Test
+    void sqlQueryRunsOnTheApplicationDriver() throws Exception {
+        String body = get("/sql.jsp");
+        assertTrue(body.contains("[parent=io.vidocq.bodoni.core.tags.sql.TransactionTag]"), body);
+        assertTrue(body.contains("ROWS=2"), body);
     }
 
     /** The servlet source Liberty keeps for a page (server.xml: keepGenerated), found under the workarea. */
