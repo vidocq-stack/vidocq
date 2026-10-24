@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Vidocq/vidocq#339 (evolution 6): what `vidocq create` writes builds, tests itself and packages, on this build's
+    vidocq-runtime-parent and BOM, with no warning but the three javac ones documented as expected (#337).
+    The IT writes the project with the scaffolder the CLI runs, to a temp directory outside this repository, and runs
+    a real `mvn verify` there. That build resolves this build's artifacts from target/it-repo, which
+    maven-invoker-plugin:install stages at pre-integration-test, and anything else from the outer local repository
+    through it-settings.xml, so it never reaches the network: the pattern of vidocq-runtime-it-continuous-testing.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-it-create</artifactId>
+    <name>Vidocq Runtime :: IT :: vidocq create, then mvn verify</name>
+
+    <properties>
+        <it.repo>${project.build.directory}/it-repo</it.repo>
+        <it.settings>${project.build.directory}/it-settings.xml</it.settings>
+        <!-- maven-invoker-plugin reads invoker.skip only; -DskipTests skips the staging too. -->
+        <invoker.skip>${skipTests}</invoker.skip>
+        <!-- The extension below is here for the staging, not compiled by this module: its codegen bundle is a
+             dependency to stage, not a processor path. -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <!-- The scaffolder, which the IT runs, as the CLI and vidocq:create do. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-tooling</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- What the created project uses from this build: invoker:install stages them, and every reactor module
+             and parent POM they need, in target/it-repo. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-parent</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-bom</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-maven-plugin</artifactId>
+            <version>${project.version}</version>
+            <type>maven-plugin</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Jars, as the created project's annotationProcessorPaths entries: a pom-typed dependency stages the
+             pom only. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-invoker-plugin</artifactId>
+                <version>3.10.1</version>
+                <configuration>
+                    <localRepositoryPath>${it.repo}</localRepositoryPath>
+                    <!-- The created project's artifacts are test-scope dependencies here. -->
+                    <scope>test</scope>
+                    <!-- What the created project needs beyond the plugins this module runs, as it never reaches
+                         Central: the JUnit Platform provider of Surefire, and git-commit-id-maven-plugin, whose
+                         version ranges need the maven-metadata-local.xml an installation writes (see
+                         vidocq-runtime-it-continuous-testing). -->
+                    <extraArtifacts>
+                        <extraArtifact>org.apache.maven.surefire:surefire-junit-platform:${maven.surefire.plugin.version}:jar</extraArtifact>
+                        <extraArtifact>io.github.git-commit-id:git-commit-id-maven-plugin:${git-commit-id.plugin.version}:maven-plugin</extraArtifact>
+                    </extraArtifacts>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>stage</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>install</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <it.version>${project.version}</it.version>
+                        <it.repo>${it.repo}</it.repo>
+                        <it.logs>${project.build.directory}/it-logs</it.logs>
+                        <it.settings>${it.settings}</it.settings>
+                        <it.settings.template>${project.basedir}/src/it/it-settings.xml</it.settings.template>
+                        <it.outerRepository>${settings.localRepository}</it.outerRepository>
+                    </systemPropertyVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

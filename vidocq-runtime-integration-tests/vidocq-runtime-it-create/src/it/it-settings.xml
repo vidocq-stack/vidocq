@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings>
+    <!-- Every repository of the fixture's builds, Central included, is the outer local repository: the fixture never
+         reaches the network, so a DNS or Central outage of a loaded runner cannot fail it (Vidocq/vidocq#285). What
+         the outer build did not resolve, the invoker staging resolves for it (extraArtifacts). -->
+    <mirrors>
+        <mirror>
+            <id>outer.local</id>
+            <mirrorOf>*</mirrorOf>
+            <url>@localRepositoryUrl@</url>
+        </mirror>
+    </mirrors>
+    <profiles>
+        <profile>
+            <id>it-repo</id>
+            <repositories>
+                <repository>
+                    <id>local.central</id>
+                    <url>@localRepositoryUrl@</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </repository>
+            </repositories>
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>local.central</id>
+                    <url>@localRepositoryUrl@</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>it-repo</activeProfile>
+    </activeProfiles>
+</settings>
