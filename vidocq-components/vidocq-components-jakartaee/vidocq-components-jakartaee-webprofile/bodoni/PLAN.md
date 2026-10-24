@@ -2,7 +2,8 @@
 
 > Status: **B5 delivered (2026-10-24)** -- the official Tags TCK runner (`bodoni-tck`,
 > `run-official-tck-tags-3.0.sh`) and its first full run: **452/541 (83.5 %)**, every failure
-> triaged in `bodoni-tck/BASELINE.md`; the fixes follow in later pull requests until 100 %.
+> triaged in `bodoni-tck/BASELINE.md`. **After the TCK fixes (2026-10-24): 541/541** on Ibarra
+> + Foy + Peano (`bodoni-tck/BASELINE.md`), a compatibility measurement, not a certification.
 > The `fn:` functions, the `c:` core tags, the `fmt:` i18n and formatting tags, the `x:` XML
 > tags and the `sql:` database tags are implemented in `bodoni-core` (B1–B4), with unit tests
 > and an Ibarra integration test (`bodoni-it-ibarra`, `it-ibarra` profile). This document is the design of record for Bodoni, the
@@ -334,7 +335,11 @@ As built in B5 (decisions and rulings in "Decisions recorded in B5"; implementat
   `spec.xml.xmlcore.bindings`. The `official-tags-tck-smoke` check
   (`.forgejo/workflows/tck-tags.yml`) runs it on pull requests, pushes to `main` and on
   demand. The full run is not in CI.
-- **Gate**: 100 % PASS is the merge gate once green; challenges, if filed, go to a `TCK.md`.
+- **Result**: first baseline 452/541 (83.5 %, B5); after the TCK fixes (branch
+  `fix/tck-baseline`, 2026-10-24) **541/541**, 50/50 classes at 100 %, with Peano `main`
+  `df3b997` (COMP-010) and Ibarra `main` `d67bca4`. Not a certification (open question 1).
+- **Gate**: 100 % PASS is the merge gate, green since the TCK fixes; challenges, if filed, go to
+  a `TCK.md` (none is filed).
 
 ## Milestones (TDD — test first, every milestone)
 
@@ -345,7 +350,7 @@ As built in B5 (decisions and rulings in "Decisions recorded in B5"; implementat
 | B2 | **Done (2026-10-22).** `fmt:` i18n and formatting (§8–§9): 12 handlers, `fmt.tld` and `fmt-1_2.tld`, locale negotiation, bundles, time zones, number/date formatting and parsing | unit tests; pages render on Ibarra in an IT (BOD-002: fixed in Vidocq/foy, Foy BUG-20261022-06; Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix); open question 4 settled |
 | B3 | **Done (2026-10-23).** `x:` (§11–§13): 10 handlers in `tags.xml` (`parse`, `out`, `set`, `if`, `choose`/`when`/`otherwise`, `forEach`, `transform`, `param`), `x.tld` and `x-1_2.tld`, JDK parser/XSLT/XPath, XPath variable bindings over the page scopes, same-origin resolution of external references, `RangeLoopTagSupport` shared with `c:forEach` and `c:forTokens` | unit tests; pages render on Ibarra in an IT (external references included); open question 6 settled; `requires transitive java.xml` settles the Bodoni side of open question 3 |
 | B4 | **Done (2026-10-23).** `sql:` (§10): 6 handlers in `tags.sql` (`query`, `update`, `transaction`, `param`, `dateParam`, `setDataSource`), `sql.tld` and `sql-1_2.tld`, data-source resolution (object / JNDI / JDBC parameter string) with driver discovery through the context class loader and credentials kept out of messages, a disconnected `Result` (`internal.QueryResult`), the `Result` accessor table in `bodoni-peano` | unit tests against H2 in memory (test scope); JNDI path tested with a test-only `InitialContextFactory`; pages render on Ibarra in an IT against H2 (BOD-005 found and fixed); open question 8 settled |
-| B5 | **Done (2026-10-24).** `bodoni-tck` (in-reactor under `-Ptck` only, not published) on the published `ibarra-arquillian` adapter, `jakarta.tck:tags-tck:11.0.3` under `-Ptck,tck-official`, the official Derby DDL loaded into H2 served over TCP, `run-official-tck-tags-3.0.sh` (`smoke` / `all` / `-Dtest=`, `--no-prepare`, `--no-install`), the `official-tags-tck-smoke` CI check; first full run with the standard handlers: **452/541 (83.5 %)**, 33/50 classes at 100 %, 0 failures, 89 errors, 0 skipped, every failure triaged (BOD-006 to BOD-009 opened) | runner + first full run + `bodoni-tck/BASELINE.md` (maintainer, 2026-10-23); 100 % reached by later PRs, each test-first; open question 1 settled |
+| B5 | **Done (2026-10-24).** `bodoni-tck` (in-reactor under `-Ptck` only, not published) on the published `ibarra-arquillian` adapter, `jakarta.tck:tags-tck:11.0.3` under `-Ptck,tck-official`, the official Derby DDL loaded into H2 served over TCP, `run-official-tck-tags-3.0.sh` (`smoke` / `all` / `-Dtest=`, `--no-prepare`, `--no-install`), the `official-tags-tck-smoke` CI check; first full run with the standard handlers: **452/541 (83.5 %)**, 33/50 classes at 100 %, 0 failures, 89 errors, 0 skipped, every failure triaged (BOD-006 to BOD-009 opened). Follow-up done (2026-10-24, branch `fix/tck-baseline`): the `_rt` TLDs, BOD-006 to BOD-011 fixed, Peano COMP-010 merged, **541/541** | runner + first full run + `bodoni-tck/BASELINE.md` (maintainer, 2026-10-23); 100 % reached by the TCK fixes, each test-first (see "Decisions recorded in the TCK fixes"); open question 1 settled |
 | B6 | Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
 | B7 | `bodoni-it-other-containers/bodoni-it-openliberty` + Reference "Deploying on an application server" block | WAR with the documented dependencies passes on Open Liberty |
 
@@ -774,11 +779,16 @@ requests, each test-first, until 100 %.
 tests, 452 passed, 0 failures, 89 errors, 0 skipped, **83.5 %**, 33/50 classes at 100 %, no
 deployment error. Causes: `_rt` TLDs pending 40 (decision 4); Peano COMP-010 32 (a constant
 expression lacked the `(ELContext, Class)` constructor that Ibarra's deferred-value attributes
-call; fixed in Vidocq/peano#61 (merged 2026-10-24), Ibarra regression test IBARRA-156 on branch
-`fix/deferred-constant-ctor`); Bodoni BOD-006 9 (translation-time
+call; fixed in Vidocq/peano#61 (merged 2026-10-24), Ibarra regression test IBARRA-156 merged
+as Vidocq/ibarra#64); Bodoni BOD-006 9 (translation-time
 constraints), BOD-007 3 (`LocalizationContext` under `deny`), BOD-008 2 (`fmt:message bundle` and
 the response locale), BOD-009 1 (`c:forTokens` deferred `items`); TCK input on JDK 20+ CLDR
-locale data, two `parsedate` pages, 2.
+locale data, two `parsedate` pages, 2 (a wrong diagnosis, corrected by the TCK fixes: Bodoni's
+trailing-text rule, BOD-010).
+
+**After the TCK fixes** (2026-10-24, commit `174a887`, same machine, JVM, zone and locale):
+50 classes, 541 tests, **541 passed**, 0 failures, 0 errors, 0 skipped, 50/50 classes at 100 %,
+on Peano `main` `df3b997` and Ibarra `main` `d67bca4` installed locally (`BASELINE.md`).
 
 **B3 and B4 interpretations against the TCK.** Each ruling stays a Bodoni ruling until the
 maintainer decides otherwise.
@@ -786,29 +796,42 @@ maintainer decides otherwise.
 | Interpretation | Settling TCK test | Baseline outcome |
 |---|---|---|
 | Empty `x:forEach` `select` throws (§12.6) (B3) | None: `positiveForEachSelectEmptyTest.jsp` is packaged in the `xforeach` WAR, but the 11.0.3 class has no method that requests it | Not exercised; `spec.xml.xconditional.xforeach` passes 9/9. Bodoni follows the spec text; the page's reading (no iteration) would be a change of interpretation, not a fix |
-| Translation-time constraints checked at run time, no TLV (B1, B3, B4) | The `negative…` tests of `c:choose`, `x:choose`, `x:if`, `x:parse`, `fmt:formatDate`, `fmt:formatNumber` | Settled against Bodoni: 9 tests expect a translation error and get `200` (BOD-006). Other negative tests pass through a run-time `JspTagException` |
+| Translation-time constraints checked at run time, no TLV (B1, B3, B4) | The `negative…` tests of `c:choose`, `x:choose`, `x:if`, `x:parse`, `fmt:formatDate`, `fmt:formatNumber` | Settled against Bodoni: 9 tests expect a translation error and get `200` (BOD-006). Other negative tests pass through a run-time `JspTagException`. Reversed by Ruling 4 of the TCK fixes: tag library validators, 22 negative pages now rejected at page `init()` |
 | `startRow < 0` is an error (B4) | None: the one `startRow` page uses `1` | Not exercised |
 | A blank `maxRows` setting means no limit (B4) | None: the configuration pages set `invalid`, `-5`, `5` and an `Integer` | Not exercised |
 | `limitedByMaxRows` is false for exactly `maxRows` rows (B4) | None: `positiveResultIsLimitedByMaxRowsTest` uses `-1` and `5` against 10 rows | Not exercised |
 
-**Next steps** (each a later pull request, test first, `BASELINE.md` updated with the new
-result):
+**Next steps of the baseline** (each test first, `BASELINE.md` updated with the new result).
+All done in the TCK fixes (branch `fix/tck-baseline`, 2026-10-24; decisions in "Decisions
+recorded in the TCK fixes"):
 
-1. The four JSTL 1.0 `_rt` TLDs (decision 4): 40 tests, which may then meet the other causes.
-2. BOD-006 to BOD-009 (`BUG.md`): 15 tests.
-3. Peano COMP-010: a Peano snapshot with the fixed in Vidocq/peano#61 (merged 2026-10-24) (32 tests);
-   nothing to change in Bodoni.
-4. `parseDate`: the two pre-CLDR `parsedate` pages, a TCK issue for the maintainer to file
-   ("`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM', which the
-   JDK 20+ `en_US` default style no longer accepts (no Java20Plus variant)"); a challenge in a
-   `TCK.md` if it is filed.
-5. Open points for the maintainer: whether the JSTL 1.0 EL URIs ship (open question 2), the
-   `x:forEach` empty-`select` ruling, and whether `official-tags-tck-smoke` becomes a required
-   check.
+1. ~~The four JSTL 1.0 `_rt` TLDs (decision 4): 40 tests~~ — done (Rulings 1–2).
+2. ~~BOD-006 to BOD-009 (`BUG.md`): 15 tests~~ — done (Ruling 4, Ruling 6, BOD-007, BOD-009).
+3. ~~Peano COMP-010~~ — merged in Vidocq/peano#61 (`df3b997`): 32 tests, plus
+   `compat.onedotzero#positiveDateParamQueryTimestampTest` once `_rt` ships; nothing changed in
+   Bodoni.
+4. ~~`parseDate`: the two pre-CLDR `parsedate` pages, a TCK issue~~ — the diagnosis was wrong:
+   a Bodoni defect (BOD-010), fixed with BOD-011 (Ruling 5); the TCK issue is withdrawn, no
+   `TCK.md`.
+5. Open points for the maintainer: ~~whether the JSTL 1.0 EL URIs ship (open question 2)~~ — not
+   shipped (Ruling 3); still open: the `x:forEach` empty-`select` ruling (not exercised by the
+   suite), whether `official-tags-tck-smoke` becomes a required check, and whether the smoke set
+   gains a class that covers the fixes (`BASELINE.md`, "Smoke set").
+
+**Next steps after the TCK fixes**: the Vidocq runtime extension (vidocq repository, after B5);
+B6 (`TagInliner` SPI and `bodoni-ibarra`, with the full TCK run again with inlining on); B7
+(Open Liberty, where the validators run at real translation time). Each keeps the full run at
+100 %.
 
 ## Decisions recorded in the TCK fixes (2026-10-24)
 
 Branch `fix/tck-baseline`; plan `docs/superpowers/plans/2026-10-24-tck-baseline-fixes.md`. Each fix is test-first.
+Result: the official Tags TCK passes **541/541** at `174a887` on Peano `main` `df3b997`
+(COMP-010) and Ibarra `main` `d67bca4` (`bodoni-tck/BASELINE.md`); the Ibarra IT stays 39/39
+with the validators on its pages. A compatibility measurement, not a certification. Commits:
+BOD-009 `d4bc5ef`, `33e01df`; Rulings 1–3 `f8cdcf6`; Ruling 4 (BOD-006) `3c6c49f`, `a298d15`,
+`174a887`; BOD-007 `26540cc`, `758d4bf`; Ruling 6 (BOD-008) `868dcbd`; Ruling 5 (BOD-010,
+BOD-011) `e77985f`.
 
 | Bug | Decision |
 |---|---|

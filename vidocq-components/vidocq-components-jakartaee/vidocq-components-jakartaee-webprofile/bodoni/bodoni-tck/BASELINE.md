@@ -1,7 +1,11 @@
 # Jakarta Tags official TCK baseline (jakarta.tck:tags-tck:11.0.3)
 
-Date: 2026-10-24 (01:10:57 to 01:12:25 CEST, 2026-10-23 23:10:57 to 23:12:25 UTC, reactor
-build included). Bodoni `0.4.0-SNAPSHOT` at commit `1637d78` (branch `feat/b5-tck`), Temurin
+Two full runs are recorded: the first baseline of B5 (452/541) and the run after the TCK fixes
+of branch `fix/tck-baseline` (541/541). The sections below keep the first run's text as
+recorded; the second run adds a column to the tables and dated corrections.
+
+**First run (B5 baseline).** Date: 2026-10-24 (01:10:57 to 01:12:25 CEST, 2026-10-23 23:10:57
+to 23:12:25 UTC, reactor build included). Bodoni `0.4.0-SNAPSHOT` at commit `1637d78` (branch `feat/b5-tck`), Temurin
 25+36 (`openjdk version "25" 2025-09-16 LTS`), Maven 3.9.16, macOS `Darwin arm64` (Apple M5
 Max). Machine zone `Europe/Paris` (`TZ` unset, so the Surefire JVM and the forked hosts used
 the system zone); JVM locale `fr_FR` (`user.language=fr`, `user.country=FR`), `LANG=en_US.UTF-8`.
@@ -16,6 +20,28 @@ local jar matched by checksum with the downloaded build):
 | `chappe-core` | `0.4.0-20261023.163359-37` (central-snapshots, `lastUpdated` 20261023163359) |
 | H2 | 2.3.232 (test scope, database served over TCP to the hosts) |
 
+**After the TCK fixes.** Date: 2026-10-24 (02:55:40 to 02:57:10 CEST, 00:55:40 to 00:57:10
+UTC, reactor build included). Bodoni `0.4.0-SNAPSHOT` at commit `174a887` (branch
+`fix/tck-baseline`, rebased on `main` `a6e1315`), same JVM (`java.runtime.version` 25+36-LTS),
+Maven, machine, zone (`Europe/Paris`, `TZ` unset) and locale (`fr_FR`, `LANG=en_US.UTF-8`) as
+the first run. Command `./run-official-tck-tags-3.0.sh all --no-prepare` (the DDL was already
+extracted; Bodoni installed by the script). Peano and Ibarra were installed from their `main`
+just before the run (`./mvnw -ntp -q install -DskipTests`), because the jars in `~/.m2` predated
+the merge commits; the published central-snapshots builds of both predate the merges too.
+Resolved snapshots (same `dependency:list` and checksum method):
+
+| Artifact | Build |
+|---|---|
+| `ibarra-arquillian`, `ibarra-api`, `ibarra-core`, `ibarra-compiler`, `ibarra-foy` | local install of Ibarra `main` at `d67bca4` (IBARRA-156, [Vidocq/ibarra#64](https://codefloe.com/Vidocq/ibarra/pulls/64)), 2026-10-24 02:54 CEST; `maven-metadata-local.xml` `lastUpdated` 20261024005447 |
+| `peano-api`, `peano-core`, `peano-compiler` | local install of Peano `main` at `df3b997` (COMP-010, [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61)), 2026-10-24 02:54 CEST; `lastUpdated` 20261024005444 (central-snapshots still at 20261022203832, before the fix) |
+| `foy-core` | `0.4.0-20261023.171509-58` (central-snapshots, checksum match), as in the first run |
+| `chappe-core` | `0.4.0-20261023.163359-37` (central-snapshots, checksum match), as in the first run |
+| H2 | 2.3.232 |
+
+The script's reactor build ran the unit tests (`bodoni-core` 1066 + 3, `bodoni-peano` 55) and
+the runner's own tests (39/39). Log and reports: `bodoni-tck/target/full-run.log` and
+`bodoni-tck/target/surefire-reports/` (not committed; a later run replaces the reports).
+
 This measures Bodoni on Ibarra + Foy + Peano with the Tags tests of the Jakarta EE 11 Platform
 TCK; it is not a certification: the formal `jakarta-tags-tck-3.0.0.zip` (JavaTest) was not run.
 The zip is read for one file only, the Derby DDL of the `sql` tests (pinned SHA-256, see the
@@ -28,96 +54,110 @@ sdk env
 
 ## Recorded results
 
-| Measure | Result |
-|---|---:|
-| Official classes selected | 50 |
-| Declared `@Test` methods in the official binary | 541 |
-| Official Surefire entries reported | 541 |
-| Passed | 452 |
-| Assertion failures (Surefire `failure`) | 0 |
-| Method errors (Surefire `error`) | 89 |
-| Class-level (deployment) errors | 0 |
-| Skipped | 0 |
-| Classes at 100 % | 33/50 |
-| Pass rate | **452/541 (83.5 %)** |
+| Measure | First run (2026-10-24, `1637d78`) | After TCK fixes (2026-10-24, `174a887`) |
+|---|---:|---:|
+| Official classes selected | 50 | 50 |
+| Declared `@Test` methods in the official binary | 541 | 541 |
+| Official Surefire entries reported | 541 | 541 |
+| Passed | 452 | 541 |
+| Assertion failures (Surefire `failure`) | 0 | 0 |
+| Method errors (Surefire `error`) | 89 | 0 |
+| Class-level (deployment) errors | 0 | 0 |
+| Skipped | 0 | 0 |
+| Classes at 100 % | 33/50 | 50/50 |
+| Pass rate | **452/541 (83.5 %)** | **541/541 (100 %)** |
 
-Surefire reports `Tests run: 541, Failures: 0, Errors: 89, Skipped: 0`. Every class deploys,
-so the 541 entries match the 541 declared methods. The TCK client reports every failed check
-as an `error` (`java.lang.Exception: [BaseUrlClient] … failed!`), never as a `failure`.
+First run: Surefire reports `Tests run: 541, Failures: 0, Errors: 89, Skipped: 0`. Every class
+deploys, so the 541 entries match the 541 declared methods. The TCK client reports every failed
+check as an `error` (`java.lang.Exception: [BaseUrlClient] … failed!`), never as a `failure`.
+After the fixes: `Tests run: 541, Failures: 0, Errors: 0, Skipped: 0`, `BUILD SUCCESS`.
 
-By library: `c` (`spec.core`) 111/115, `fn` + extensions (`spec.etu`) 77/81, `fmt` 114/123,
-`sql` 86/117, `x` (`spec.xml`) 62/67, JSTL 1.0 compatibility (`compat.onedotzero`) 2/38.
+By library, first run: `c` (`spec.core`) 111/115, `fn` + extensions (`spec.etu`) 77/81, `fmt`
+114/123, `sql` 86/117, `x` (`spec.xml`) 62/67, JSTL 1.0 compatibility (`compat.onedotzero`) 2/38.
+After the fixes: `c` 115/115, `spec.etu` 81/81, `fmt` 123/123, `sql` 117/117, `x` 67/67,
+`compat.onedotzero` 38/38.
 
-By root cause (89 errors):
+This is still a compatibility measurement on Bodoni + Ibarra + Foy + Peano, not a certification:
+the formal `jakarta-tags-tck-3.0.0.zip` was not run.
 
-| Root cause | Owner | Tests |
-|---|---|---:|
-| JSTL 1.0 `_rt` URIs not shipped | known decision (2026-10-23) | 40 |
-| Constant `${…}` on a deferred-value attribute: the Peano expression lacks the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 |
-| Translation-time constraints not enforced (BOD-006) | Bodoni | 9 |
-| `LocalizationContext` unreadable under `deny` (BOD-007) | Bodoni | 3 |
-| `fmt:message bundle` does not set the response locale (BOD-008) | Bodoni | 2 |
-| `c:forTokens` deferred `items` (BOD-009) | Bodoni | 1 |
-| TCK page expects the pre-CLDR `en_US` date-time format | harness (TCK input on JDK 20+) | 2 |
+By root cause (89 errors in the first run):
+
+| Root cause | Owner | Tests | After the TCK fixes |
+|---|---|---:|---|
+| JSTL 1.0 `_rt` URIs not shipped | known decision (2026-10-23) | 40 | fixed: the four `*-1_0-rt.tld` (`f8cdcf6`, Rulings 1–3) |
+| Constant `${…}` on a deferred-value attribute: the Peano expression lacks the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 | fixed upstream: Peano `df3b997` (Vidocq/peano#61); also covers `compat.onedotzero#positiveDateParamQueryTimestampTest` once `_rt` ships (33 in all) |
+| Translation-time constraints not enforced (BOD-006) | Bodoni | 9 | fixed: tag library validators (`3c6c49f`, `a298d15`, `174a887`, Ruling 4) |
+| `LocalizationContext` unreadable under `deny` (BOD-007) | Bodoni | 3 | fixed: `bodoni-peano` accessor table (`26540cc`, `758d4bf`) |
+| `fmt:message bundle` does not set the response locale (BOD-008) | Bodoni | 2 | fixed (`868dcbd`, Ruling 6) |
+| `c:forTokens` deferred `items` (BOD-009) | Bodoni | 1 | fixed (`d4bc5ef`, `33e01df`) |
+| TCK page expects the pre-CLDR `en_US` date-time format | harness (TCK input on JDK 20+) | 2 | **corrected**: a Bodoni defect, BOD-010 (trailing text after a complete date), fixed with BOD-011 (`e77985f`, Ruling 5); see the correction under "Pre-CLDR date-time input" |
+
+How the count moved on the branch (full runs of the task reports): 452 → 525 after the `_rt`
+TLDs, BOD-009 and a Peano snapshot with COMP-010 → 534 after the validators (BOD-006) → 539
+after BOD-007 and BOD-008 → 541 after BOD-010 / BOD-011. The recorded 541/541 is the run of
+`174a887` above, on Peano and Ibarra `main`.
 
 ## Per class
 
 Class names are relative to `com.sun.ts.tests.jstl.`, each `….JSTLClientIT`.
 
-| Class | Tests | Passed | Failures | Errors | Skipped | Status | Triage |
-|---|---:|---:|---:|---:|---:|---|---|
-| `compat.onedotzero` | 38 | 2 | 0 | 36 | 0 | FAIL | known: _rt TLDs pending (36) |
-| `spec.core.conditional.cwo` | 9 | 7 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) |
-| `spec.core.conditional.iftag` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.core.general.catchtag` | 2 | 2 | 0 | 0 | 0 | PASS |  |
-| `spec.core.general.outtag` | 7 | 7 | 0 | 0 | 0 | PASS |  |
-| `spec.core.general.remove` | 1 | 1 | 0 | 0 | 0 | PASS | smoke |
-| `spec.core.general.set` | 8 | 8 | 0 | 0 | 0 | PASS |  |
-| `spec.core.iteration.foreach` | 24 | 23 | 0 | 1 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (1) |
-| `spec.core.iteration.fortokens` | 15 | 14 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-009) (1) |
-| `spec.core.iteration.loopstatus` | 1 | 1 | 0 | 0 | 0 | PASS |  |
-| `spec.core.urlresource.importtag` | 23 | 23 | 0 | 0 | 0 | PASS |  |
-| `spec.core.urlresource.param` | 7 | 7 | 0 | 0 | 0 | PASS |  |
-| `spec.core.urlresource.redirect` | 4 | 4 | 0 | 0 | 0 | PASS |  |
-| `spec.core.urlresource.url` | 8 | 8 | 0 | 0 | 0 | PASS |  |
-| `spec.etu.config` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.etu.functions` | 64 | 64 | 0 | 0 | 0 | PASS | smoke |
-| `spec.etu.tlv.permitted` | 2 | 2 | 0 | 0 | 0 | PASS |  |
-| `spec.etu.tlv.scrfree` | 8 | 4 | 0 | 4 | 0 | FAIL | known: _rt TLDs pending (4) |
-| `spec.etu.uri` | 1 | 1 | 0 | 0 | 0 | PASS | smoke |
-| `spec.fmt.format.fmtdate` | 14 | 13 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) |
-| `spec.fmt.format.fmtnum` | 19 | 18 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) |
-| `spec.fmt.format.localecontext` | 4 | 4 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.format.parsedate` | 18 | 16 | 0 | 2 | 0 | FAIL | harness: TCK input vs JDK 20+ locale data (2) |
-| `spec.fmt.format.parsenum` | 14 | 14 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.format.settimezone` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.format.timezone` | 2 | 2 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.i18n.bundle` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.i18n.message` | 17 | 17 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.i18n.param` | 2 | 2 | 0 | 0 | 0 | PASS | smoke |
-| `spec.fmt.i18n.requestencoding` | 4 | 4 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.i18n.resourcelookup` | 2 | 2 | 0 | 0 | 0 | PASS |  |
-| `spec.fmt.i18n.responseencoding` | 2 | 0 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-008) (2) |
-| `spec.fmt.i18n.setbundle` | 7 | 4 | 0 | 3 | 0 | FAIL | Bodoni defect (BOD-007) (3) |
-| `spec.fmt.i18n.setlocale` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.sql.param` | 21 | 1 | 0 | 20 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (20) |
-| `spec.sql.query` | 26 | 26 | 0 | 0 | 0 | PASS |  |
-| `spec.sql.result` | 8 | 4 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) |
-| `spec.sql.setdatasource` | 22 | 22 | 0 | 0 | 0 | PASS | smoke |
-| `spec.sql.transaction` | 19 | 15 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) |
-| `spec.sql.update` | 21 | 18 | 0 | 3 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (3) |
-| `spec.xml.xconditional.xcwo` | 8 | 6 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) |
-| `spec.xml.xconditional.xforeach` | 9 | 9 | 0 | 0 | 0 | PASS |  |
-| `spec.xml.xconditional.xif` | 7 | 6 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) |
-| `spec.xml.xmlcore.bindings` | 1 | 1 | 0 | 0 | 0 | PASS | smoke |
-| `spec.xml.xmlcore.parse` | 15 | 13 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) |
-| `spec.xml.xmlcore.types` | 2 | 2 | 0 | 0 | 0 | PASS |  |
-| `spec.xml.xmlcore.xout` | 4 | 4 | 0 | 0 | 0 | PASS |  |
-| `spec.xml.xmlcore.xset` | 6 | 6 | 0 | 0 | 0 | PASS |  |
-| `spec.xml.xtransform.param` | 3 | 3 | 0 | 0 | 0 | PASS |  |
-| `spec.xml.xtransform.transform` | 12 | 12 | 0 | 0 | 0 | PASS |  |
+The columns Passed to Triage are the first run's. "After fixes" is the run of `174a887`: the
+status, then what recovered the class's failing tests; no class has a residual cause.
 
-No class reported `ERROR (deployment)`.
+| Class | Tests | Passed | Failures | Errors | Skipped | Status | Triage | After fixes |
+|---|---:|---:|---:|---:|---:|---|---|---|
+| `compat.onedotzero` | 38 | 2 | 0 | 36 | 0 | FAIL | known: _rt TLDs pending (36) | PASS 38/38: `_rt` TLDs (35), plus COMP-010 for `positiveDateParamQueryTimestampTest` |
+| `spec.core.conditional.cwo` | 9 | 7 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) | PASS 9/9: BOD-006 |
+| `spec.core.conditional.iftag` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.general.catchtag` | 2 | 2 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.general.outtag` | 7 | 7 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.general.remove` | 1 | 1 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.core.general.set` | 8 | 8 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.iteration.foreach` | 24 | 23 | 0 | 1 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (1) | PASS 24/24: COMP-010 |
+| `spec.core.iteration.fortokens` | 15 | 14 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-009) (1) | PASS 15/15: BOD-009 |
+| `spec.core.iteration.loopstatus` | 1 | 1 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.urlresource.importtag` | 23 | 23 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.urlresource.param` | 7 | 7 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.urlresource.redirect` | 4 | 4 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.core.urlresource.url` | 8 | 8 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.etu.config` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.etu.functions` | 64 | 64 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.etu.tlv.permitted` | 2 | 2 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.etu.tlv.scrfree` | 8 | 4 | 0 | 4 | 0 | FAIL | known: _rt TLDs pending (4) | PASS 8/8: `_rt` TLDs |
+| `spec.etu.uri` | 1 | 1 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.fmt.format.fmtdate` | 14 | 13 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) | PASS 14/14: BOD-006 |
+| `spec.fmt.format.fmtnum` | 19 | 18 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) | PASS 19/19: BOD-006 |
+| `spec.fmt.format.localecontext` | 4 | 4 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.format.parsedate` | 18 | 16 | 0 | 2 | 0 | FAIL | harness: TCK input vs JDK 20+ locale data (2) | PASS 18/18: BOD-010 (the triage was wrong, see the correction below) |
+| `spec.fmt.format.parsenum` | 14 | 14 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.format.settimezone` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.format.timezone` | 2 | 2 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.i18n.bundle` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.i18n.message` | 17 | 17 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.i18n.param` | 2 | 2 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.fmt.i18n.requestencoding` | 4 | 4 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.i18n.resourcelookup` | 2 | 2 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.fmt.i18n.responseencoding` | 2 | 0 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-008) (2) | PASS 2/2: BOD-008 |
+| `spec.fmt.i18n.setbundle` | 7 | 4 | 0 | 3 | 0 | FAIL | Bodoni defect (BOD-007) (3) | PASS 7/7: BOD-007 |
+| `spec.fmt.i18n.setlocale` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.sql.param` | 21 | 1 | 0 | 20 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (20) | PASS 21/21: COMP-010 |
+| `spec.sql.query` | 26 | 26 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.sql.result` | 8 | 4 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) | PASS 8/8: COMP-010 |
+| `spec.sql.setdatasource` | 22 | 22 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.sql.transaction` | 19 | 15 | 0 | 4 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (4) | PASS 19/19: COMP-010 |
+| `spec.sql.update` | 21 | 18 | 0 | 3 | 0 | FAIL | Peano defect (COMP-010): constant deferred attribute (3) | PASS 21/21: COMP-010 |
+| `spec.xml.xconditional.xcwo` | 8 | 6 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) | PASS 8/8: BOD-006 |
+| `spec.xml.xconditional.xforeach` | 9 | 9 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.xml.xconditional.xif` | 7 | 6 | 0 | 1 | 0 | FAIL | Bodoni defect (BOD-006) (1) | PASS 7/7: BOD-006 |
+| `spec.xml.xmlcore.bindings` | 1 | 1 | 0 | 0 | 0 | PASS | smoke | PASS |
+| `spec.xml.xmlcore.parse` | 15 | 13 | 0 | 2 | 0 | FAIL | Bodoni defect (BOD-006) (2) | PASS 15/15: BOD-006 |
+| `spec.xml.xmlcore.types` | 2 | 2 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.xml.xmlcore.xout` | 4 | 4 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.xml.xmlcore.xset` | 6 | 6 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.xml.xtransform.param` | 3 | 3 | 0 | 0 | 0 | PASS |  | PASS |
+| `spec.xml.xtransform.transform` | 12 | 12 | 0 | 0 | 0 | PASS |  | PASS |
+
+No class reported `ERROR (deployment)`, in either run.
 
 ## Triage
 
@@ -168,6 +208,11 @@ one category.
   `(ELContext, Class)` constructor; Ibarra regression test IBARRA-156 on branch
   `fix/deferred-constant-ctor`. The 32 tests stay counted as failing here: the run predates the
   fix.
+- After the TCK fixes (2026-10-24): Peano `main` `df3b997` carries the fix, and the Ibarra
+  regression test merged as [Vidocq/ibarra#64](https://codefloe.com/Vidocq/ibarra/pulls/64)
+  (`d67bca4`). On those builds the 32 tests pass, and so does
+  `compat.onedotzero#positiveDateParamQueryTimestampTest`, the 33rd page with the same
+  constructor signature, reached once the `_rt` TLDs ship. No Bodoni change was needed.
 
 ### Translation-time constraints not enforced — Bodoni defect (BOD-006)
 
@@ -231,6 +276,16 @@ one category.
 - Not a Bodoni defect; nothing to change in the runner either. Proposed TCK issue title:
   "Tags TCK: `positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM',
   which the JDK 20+ `en_US` default style no longer accepts (no Java20Plus variant)".
+- **Correction (2026-10-24, TCK fixes).** The diagnosis above is wrong; the text is kept as the
+  first run recorded it. Both pages call `fmt:parseDate` without `type`, so the type is `date`
+  (§9.10), not `both`, and the date-time pattern is never used. On JDK 25 the `en_US` date
+  style parses `Nov 21, 2000` and stops at index 12, the error index seen above; Bodoni then
+  refused the text left over (`position.getIndex() != text.length()`). The JDK's own
+  `DateFormat.parse(String)` accepts the value (non-lenient, `Tue Nov 21 2000`). The cause is
+  Bodoni's trailing-text rule, [BUG.md BOD-010](../BUG.md), fixed in `e77985f` (PLAN.md
+  Ruling 5) together with BOD-011, the U+202F / U+00A0 retry for style-based formats. The
+  proposed TCK issue is withdrawn (see "Upstream items"). `spec.fmt.format.parsedate` passes
+  18/18 after the fix.
 
 ### Passing tests worth a note
 
@@ -256,6 +311,28 @@ the one the page describes:
   the page itself causes (`x:if test=…` without `select`, `x:set` without `var`, an
   `isolationLevel` attribute that `sql:transaction` does not declare).
 
+After the TCK fixes (2026-10-24):
+
+- Bodoni's tag library validators (BOD-006, Ruling 4) now reject 22 negative pages at page
+  `init()` on Ibarra, as §2.7 asks ("TagLibraryValidator validation failed for jakarta.tags.…"
+  in the deployments' `server.log`): besides the 9 tests of BOD-006, `parsedate` /
+  `parsenum` scope without `var` (`negativePDScopeNoVarTest`, `negativePNScopeNoVarTest`), the
+  `c:` and `x:` `when` / `otherwise` outside `choose` (`negativeCWOWhenNoParentTest`,
+  `negativeCWOOtherwiseNoParentTest`), `x:parse` with an invalid `scope`, and seven `sql:`
+  pages (`negativeQueryNoVarAttributeTest`, `negativeQueryVarAttributeTest`,
+  `negativeQueryScopeAttributeTest`, `negativeUpdateScopeAttributeTest`,
+  `negativeSetDataSourceScopeAttributeTest`, `negativeTxQueryDataSourceAttributeTest`,
+  `negativeTxUpdateDataSourceAttributeTest`). The run-time checks stay as defence in depth.
+- Constraints on dynamic attributes stay run-time errors (§2.7, "unless they operate on a
+  dynamic attribute value"): `spec.sql.query#negativeQueryMaxRowsAttributeTest2` catches the
+  `JspException` of `maxRows="-5"` at run time and fails if a validator reports it.
+- The two `spec.sql.update` pages on the JSTL 1.0 EL URIs still pass through the unmapped URI:
+  those URIs are not shipped (Ruling 3), and the constraints the pages target are tested on
+  `jakarta.tags.sql` by `TagLibraryValidatorsTest`.
+- `spec.etu.tlv.scrfree#negativeScriptFreeTlvNoRTExprTest` now reaches its page on the shipped
+  `core_rt` URI and fails through the TCK's own validator
+  (`TagLibraryValidator validation failed for http://java.sun.com/jstltck/nortexpr`).
+
 ## Open interpretations
 
 - **Empty `x:forEach` `select`** (B3): not exercised by the suite. `positiveForEachSelectEmptyTest.jsp`
@@ -276,12 +353,17 @@ the one the page describes:
 B5 files no issue; the COMP-010 fix went through Vidocq/peano#61.
 
 - Peano: COMP-010, constant expressions lacked the `(ELContext, Class)` constructor (32 tests),
-  fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (merged 2026-10-24); Ibarra
-  regression test IBARRA-156 on branch `fix/deferred-constant-ctor`.
+  fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (merged 2026-10-24,
+  `df3b997`); Ibarra regression test IBARRA-156 merged as
+  [Vidocq/ibarra#64](https://codefloe.com/Vidocq/ibarra/pulls/64) (`d67bca4`).
 - Ibarra: none of its own in this run (the Peano item shows up in Ibarra-generated pages).
 - Foy: none.
-- Jakarta Tags TCK: "`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM',
-  which the JDK 20+ `en_US` default style no longer accepts (no Java20Plus variant)" (2 tests).
+- Jakarta Tags TCK: ~~"`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM',
+  which the JDK 20+ `en_US` default style no longer accepts (no Java20Plus variant)" (2 tests)~~.
+  Withdrawn on 2026-10-24: the cause was Bodoni's trailing-text rule (BOD-010), not the TCK
+  input. No TCK challenge is filed, so there is no `TCK.md`.
+
+After the TCK fixes, no upstream item is open: the run of `174a887` has no failing test.
 
 ## Reruns
 
@@ -289,6 +371,12 @@ Each of the 17 failing classes was rerun alone (`./run-official-tck-tags-3.0.sh
 -Dtest=<class> --no-prepare --no-install`, fresh database). Every rerun reports the same failing
 tests as the full run, so no result depends on the database state left by earlier classes.
 `spec.fmt.format.parsedate` was also rerun with `TZ=UTC`: same two errors.
+
+During the TCK fixes each task reran the classes it fixed, then a full run (`--no-prepare`):
+525/541, 534/541, 539/541 and 541/541 (see "Recorded results"). Those runs used the Peano install then in `~/.m2`,
+which already had the COMP-010 fix (the last one, 2026-10-24 01:28 CEST, predates the merge
+commit of Vidocq/peano#61); the recorded run of `174a887` uses Peano and
+Ibarra `main` and needed no rerun.
 
 ## Smoke set
 
@@ -299,3 +387,16 @@ H2 database) and `spec.xml.xmlcore.bindings` (`x`). Rerun at commit `1fa0aab`
 (2026-10-23 23:57:29 to 23:57:51 UTC, after the loopback binding fix `f7d4068` and the download
 retries `eee4814`), with `./run-official-tck-tags-3.0.sh smoke`: reactor build green, runner
 tests 39/39, official classes **91/91**, `BUILD SUCCESS`.
+
+After the TCK fixes, at `174a887` (2026-10-24 01:01:45 to 01:02:03 UTC, right after the full
+run), with `./run-official-tck-tags-3.0.sh smoke --no-install --no-prepare`: runner tests 39/39,
+official classes **91/91**, `BUILD SUCCESS`.
+
+The smoke list stays as it is. Every class is now at 100 %, so any class would qualify; the six
+keep one class per library and a short CI check. The fixes are guarded by their unit tests
+(`LegacyRtTldTest`, `TagLibraryValidatorsTest`, `LocalizationContextAccessorTableTest`,
+`MessageTagTest`, `ParseDateTagTest`, `ForTokensTagTest`), by the Ibarra IT (39/39, which now
+runs the validators on its pages), and by the full run, which 100 % PASS makes the merge gate.
+Adding `spec.core.conditional.cwo` (9 tests, the validators) or `compat.onedotzero` (38 tests,
+the `_rt` TLDs and COMP-010) to the smoke set is the maintainer's call: they would put the
+fixes under the CI check at the cost of a longer run.

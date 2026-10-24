@@ -191,6 +191,13 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `x:transform` attribute combinations); static attributes given by text-only `jsp:attribute` and EL text under
   `isELIgnored` are literals. Constraints on dynamic attributes (`begin`, `step`, `maxRows`, `currencyCode`) stay
   run-time errors (§2.7; TCK `sql.query#negativeQueryMaxRowsAttributeTest2`). Full TCK run: 539/541, no regression.
+  Fix round 2 (2026-10-24): a `fmt:param` / `sql:param` / `sql:dateParam` with no enclosing action is left
+  to the run-time check (§8.9, §10.7, §10.8), since it may be the top level of a tag file without
+  directives whose XML view cannot be told from a page's; one nested under a non-matching Bodoni action is
+  still reported.
+  Commits `3c6c49f`, `a298d15`, `174a887`. Final full run at `174a887`: **541/541**
+  (`bodoni-tck/BASELINE.md`); the validators reject 22 negative pages at page `init()`, and the Ibarra IT
+  stays 39/39 with them on its pages.
 
 ## BOD-007 · 2026-10-24 · `LocalizationContext` properties are unreadable in Ibarra pages with Peano reflection denied
 
@@ -212,7 +219,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Status: fixed (2026-10-24, branch `fix/tck-baseline`): `bodoni-peano` provides a third
   read-only table, keyed on the class `LocalizationContext` (subclasses reach it through
   Peano's supertype lookup): `resourceBundle`, `locale`, with `getResourceBundle()` and
-  `getLocale()` callable. TCK `spec.fmt.i18n.setbundle`: 4/7 before, 7/7 after.
+  `getLocale()` callable. TCK `spec.fmt.i18n.setbundle`: 4/7 before, 7/7 after. Commits `26540cc`,
+  `758d4bf` (docs); confirmed by the final full run at `174a887` (541/541).
 
 ## BOD-008 · 2026-10-24 · `fmt:message` with a `bundle` attribute does not set the response locale
 
@@ -231,7 +239,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: `MessageTag.resolve()` takes the `bundle` attribute's context as is; only the enclosing
   `fmt:bundle` and the default-context path (`FmtSupport.defaultContext`) call
   `I18n.setResponseLocale`.
-- Status: fixed 2026-10-24 — `MessageTag.resolve()` calls `I18n.setResponseLocale` with the locale of the `bundle` attribute's context (PLAN.md Ruling 6); `MessageTagTest` (3 new tests) and the two TCK tests.
+- Status: fixed 2026-10-24 — `MessageTag.resolve()` calls `I18n.setResponseLocale` with the locale of the `bundle` attribute's context (PLAN.md Ruling 6); `MessageTagTest` (3 new tests) and the two TCK tests. Commit `868dcbd`; TCK
+  `spec.fmt.i18n.responseencoding` 0/2 before, 2/2 after, confirmed by the final full run at `174a887` (541/541).
 
 ## BOD-009 · 2026-10-24 · `c:forTokens` does not accept a deferred `items`
 
@@ -248,7 +257,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `java.lang.String` without `<deferred-value>` (`c:forEach` `items` and `c:set` `value` have it),
   and `ForTokensTag.setItems(String)` takes no `ValueExpression`, so Ibarra rejects the `#{…}`
   value at translation time.
-- Status: fixed (2026-10-24, branch `fix/tck-baseline`): `items` is `deferred-value` `java.lang.String` in `c.tld` and `c-1_2.tld`; `ForTokensTag.setItems(Object)`. A non-String value is coerced as EL coerces to `String`, a null one gives no iteration. TCK `spec.core.iteration.fortokens`: 14/15 before, 15/15 after.
+- Status: fixed (2026-10-24, branch `fix/tck-baseline`): `items` is `deferred-value` `java.lang.String` in `c.tld` and `c-1_2.tld`; `ForTokensTag.setItems(Object)`. A non-String value is coerced as EL coerces to `String`, a null one gives no iteration. TCK `spec.core.iteration.fortokens`: 14/15 before, 15/15 after. Commits `d4bc5ef`, `33e01df` (deferred `items` without `delims` is one token, no NPE); confirmed by the final full run at `174a887` (541/541).
 
 ## BOD-010 · 2026-10-24 · `fmt:parseDate` refuses text after a complete date
 
@@ -272,6 +281,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   whatever text is left, as `DateFormat.parse(String)` does; field values stay strict
   (`setLenient(false)`). The B2 test `trailingTextIsAJspExceptionNamingTheValue` is reversed into
   `textAfterACompleteDateIsIgnored`. TCK `spec.fmt.format.parsedate`: 16/18 before, 18/18 after.
+  Commit `e77985f`; confirmed by the final full run at `174a887` (541/541). The TCK issue the
+  baseline proposed is withdrawn (`bodoni-tck/BASELINE.md`, "Upstream items").
 
 ## BOD-011 · 2026-10-24 · `fmt:parseDate` refuses an ASCII space where the JDK 20+ CLDR style has U+202F
 
@@ -294,4 +305,4 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   (`explicitPatternStaysStrict`). A value the retry cannot parse either throws a `JspException`
   naming the value, whose cause is the `ParseException` of the first attempt
   (`failedRetryKeepsTheFirstParseExceptionAsCause`; TCK `negativePDUnableToParseValueTest` checks
-  the root cause).
+  the root cause). Commit `e77985f`, with BOD-010.

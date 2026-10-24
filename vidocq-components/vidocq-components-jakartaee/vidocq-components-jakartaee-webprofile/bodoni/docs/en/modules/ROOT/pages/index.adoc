@@ -9,7 +9,7 @@ Bodoni is the Jakarta Standard Tag Library 3.0 (JSTL) implementation of the Vido
 
 [IMPORTANT]
 ====
-Milestone **B4** is delivered: the five libraries, `c:` (core), `fn:` (functions), `fmt:` (I18N and formatting), `x:` (XML processing) and `sql:` (relational database access), are implemented. Milestone **B5** is delivered: the official Tags TCK runner and its first baseline, 452 of 541 tests passing (83.5 %), a measurement, not a certification: see xref:tck.adoc[TCK status]. Under Peano with `peano.reflection=deny`, add the optional `bodoni-peano` adapter: xref:reference.adoc#bod-001[BOD-001].
+Milestone **B4** is delivered: the five libraries, `c:` (core), `fn:` (functions), `fmt:` (I18N and formatting), `x:` (XML processing) and `sql:` (relational database access), are implemented. Milestone **B5** is delivered: the official Tags TCK runner; after the TCK fixes the official Tags tests pass 541 of 541 on Ibarra + Foy + Peano (first baseline 452 of 541), a measurement, not a certification: see xref:tck.adoc[TCK status]. Under Peano with `peano.reflection=deny`, add the optional `bodoni-peano` adapter: xref:reference.adoc#bod-001[BOD-001].
 This documentation describes the `{project-version}` development line; every page states what exists today.
 The design of record is link:{repo-bodoni}/src/branch/main/PLAN.md[PLAN.md].
 ====
@@ -30,7 +30,7 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 | Java modules | `io.vidocq.bodoni.core` — see xref:internals.adoc[Internals]
 | Runtime dependencies | None beyond the JSTL API (`compile`); Pages, Servlet and EL APIs are `provided` by the container
 | Status | B5 — `c:`, `fn:`, `fmt:`, `x:` and `sql:` implemented, official TCK runner delivered; not released or certified
-| Official TCK | First baseline 452/541 (83.5 %), fixes follow; not a certification — see xref:tck.adoc[TCK status]
+| Official TCK | 541/541 on Ibarra + Foy + Peano (first baseline 452/541); not a certification — see xref:tck.adoc[TCK status]
 |===
 
 == Three identifying traits

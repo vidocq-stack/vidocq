@@ -1,8 +1,8 @@
 = TCK status
-:description: Official Jakarta Tags tests (jakarta.tck:tags-tck:11.0.3) on Bodoni + Ibarra + Foy + Peano — first baseline 452/541 (83.5 %), a compatibility measurement, not a certification.
+:description: Official Jakarta Tags tests (jakarta.tck:tags-tck:11.0.3) on Bodoni + Ibarra + Foy + Peano — 541/541 after the TCK fixes (first baseline 452/541), a compatibility measurement, not a certification.
 
 [.lead]
-The first full run of the official Jakarta Tags tests passes **452 of 541 tests (83.5 %)**, with 33 of the 50 classes at 100 %: 0 assertion failures, 89 errors, 0 skipped, every class deployed. The 89 errors are triaged: the JSTL 1.0 `_rt` TLDs not shipped yet (40), a Peano defect (32), Bodoni defects (15) and two TCK pages that cannot pass on JDK 20 and later (2). The fixes follow in later pull requests until 100 %. This is a compatibility measurement, not a certification.
+The official Jakarta Tags tests pass **541 of 541 (100 %)** on Bodoni + Ibarra + Foy + Peano, every one of the 50 classes at 100 %: 0 assertion failures, 0 errors, 0 skipped. The first full run (B5) passed 452 of 541 (83.5 %); its 89 errors were triaged and fixed: the JSTL 1.0 `_rt` TLDs (40), a Peano defect (32) and Bodoni defects (17). This is a compatibility measurement on this stack, **not a certification**: the formal `jakarta-tags-tck-3.0.0.zip` is not run, and no certification process was followed.
 
 == What a result means
 
@@ -58,47 +58,51 @@ The host processes inherit the machine's time zone and locale. To check whether 
 
 The test tooling dependencies are listed in xref:reference.adoc#test-tooling[Reference].
 
-== Baseline
+== Results
 
-First full run on 2026-10-24 (Temurin 25, macOS arm64, zone `Europe/Paris`), with `./run-official-tck-tags-3.0.sh all`:
+Both runs on 2026-10-24 (Temurin 25, macOS arm64, zone `Europe/Paris`), with `./run-official-tck-tags-3.0.sh all`. The second run, after the TCK fixes, used Peano and Ibarra built from their `main` branches (Peano with the COMP-010 fix of https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]).
 
-[cols="2,1",options="header"]
+[cols="2,1,1",options="header"]
 |===
-| Measure | Result
+| Measure | First run (B5) | After the TCK fixes
 
-| Official classes selected | 50
-| Declared `@Test` methods | 541
-| Passed | 452
-| Assertion failures | 0
-| Errors | 89
-| Skipped | 0
-| Classes at 100 % | 33/50
-| Pass rate | **452/541 (83.5 %)**
-|===
-
-The TCK client reports every failed check as an error, never as a failure. By library: `c` 111/115, `fn` and the extension tests 77/81, `fmt` 114/123, `sql` 86/117, `x` 62/67, JSTL 1.0 compatibility 2/38.
-
-[cols="3,1,1",options="header"]
-|===
-| Cause | Owner | Tests
-
-| JSTL 1.0 `_rt` URIs not shipped yet (they ship in a later Bodoni pull request, decided 2026-10-23) | known decision | 40
-| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010, fixed in https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61] (merged 2026-10-24); Ibarra regression test IBARRA-156 on branch `fix/deferred-constant-ctor`) | Peano | 32
-| Translation-time constraints not enforced (BOD-006) | Bodoni | 9
-| `LocalizationContext` unreadable under `peano.reflection=deny` (BOD-007) | Bodoni | 3
-| `fmt:message` with `bundle` does not set the response locale (BOD-008) | Bodoni | 2
-| `c:forTokens` does not accept a deferred `items` (BOD-009) | Bodoni | 1
-| Two `parsedate` pages expect the pre-CLDR `en_US` date-time format, which JDK 20 and later no longer parse | TCK input | 2
+| Official classes selected | 50 | 50
+| Declared `@Test` methods | 541 | 541
+| Passed | 452 | 541
+| Assertion failures | 0 | 0
+| Errors | 89 | 0
+| Skipped | 0 | 0
+| Classes at 100 % | 33/50 | 50/50
+| Pass rate | **452/541 (83.5 %)** | **541/541 (100 %)**
 |===
 
-The Bodoni defects are tracked in link:{repo-bodoni}/src/branch/main/BUG.md[BUG.md]. Each of the 17 failing classes was rerun alone and reported the same failing tests. Per-class results, evidence, the passing tests worth a note and the upstream items: link:{repo-bodoni}/src/branch/main/bodoni-tck/BASELINE.md[`bodoni-tck/BASELINE.md`].
+The TCK client reports every failed check as an error, never as a failure. By library, first run: `c` 111/115, `fn` and the extension tests 77/81, `fmt` 114/123, `sql` 86/117, `x` 62/67, JSTL 1.0 compatibility 2/38; after the fixes, every library is at 100 %.
+
+What 541/541 means: on this stack (Bodoni's standard handlers, every page precompiled by Ibarra, run on Foy and Peano with `peano.reflection=deny`), every test of the Tags suite of the Jakarta EE 11 Platform TCK passes. It is not a certification and does not say how Bodoni behaves on another container; the Open Liberty portability proof is milestone B7.
+
+The causes of the first run's 89 errors, all fixed:
+
+[cols="3,1,1,2",options="header"]
+|===
+| Cause | Owner | Tests | Fix
+
+| JSTL 1.0 `_rt` URIs not shipped | known decision | 40 | The four JSTL 1.0 request-time TLDs (`c_rt`, `fmt_rt`, `sql_rt`, `x_rt`) on the 3.0 handlers
+| A constant `${…}` on a deferred-value attribute: Peano's compiled constant expression lacked the `(ELContext, Class)` constructor (COMP-010) | Peano | 32 | https://codefloe.com/Vidocq/peano/pulls/61[Vidocq/peano#61]; Ibarra regression test IBARRA-156, https://codefloe.com/Vidocq/ibarra/pulls/64[Vidocq/ibarra#64]
+| Translation-time constraints not enforced (BOD-006) | Bodoni | 9 | Tag library validators for `c`, `fmt`, `sql` and `x`, run by Ibarra at page `init()`
+| `LocalizationContext` unreadable under `peano.reflection=deny` (BOD-007) | Bodoni | 3 | A `LocalizationContext` accessor table in `bodoni-peano`
+| `fmt:message` with `bundle` does not set the response locale (BOD-008) | Bodoni | 2 | The `bundle` attribute sets the response locale (§8.4)
+| `c:forTokens` does not accept a deferred `items` (BOD-009) | Bodoni | 1 | `items` accepts a deferred value (§6.3)
+| `fmt:parseDate` refused the text after a complete date (BOD-010; first triaged as TCK input on JDK 20 and later, a wrong diagnosis) | Bodoni | 2 | Text after a complete date is ignored, as `DateFormat.parse(String)` does; with BOD-011, an ASCII space matches the U+202F of a JDK 20+ style
+|===
+
+The Bodoni defects are tracked in link:{repo-bodoni}/src/branch/main/BUG.md[BUG.md]. Per-class results of both runs, evidence, the resolved snapshots, the passing tests worth a note and the upstream items: link:{repo-bodoni}/src/branch/main/bodoni-tck/BASELINE.md[`bodoni-tck/BASELINE.md`].
 
 The four interpretations Bodoni recorded in B3 and B4 are not settled by this suite: the 11.0.3 `x:forEach` class has no test that requests its empty-`select` page, and `startRow < 0`, a blank `maxRows` setting and `limitedByMaxRows` at exactly `maxRows` rows are not exercised.
 
 [#smoke]
 == Smoke and CI
 
-`./run-official-tck-tags-3.0.sh smoke` runs six classes at 100 % in the baseline, 91 tests: `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
+`./run-official-tck-tags-3.0.sh smoke` runs six classes, 91 tests (100 % in both runs): `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
 
 == Plan
 
@@ -106,7 +110,7 @@ The four interpretations Bodoni recorded in B3 and B4 are not settled by this su
 |===
 | Item | Configuration
 
-| Fixes | The `_rt` TLDs, BOD-006 to BOD-009 and a Peano snapshot with COMP-010 fixed, each in a later pull request, test first.
-| Inlining | Run first with the standard handlers (B5), then again with `bodoni-ibarra` inlining enabled (B6).
-| Merge gate | 100 % PASS once green; challenges, if any, in a `TCK.md`.
+| Fixes | Done (2026-10-24): the `_rt` TLDs, BOD-006 to BOD-011, each test first, and Peano with COMP-010 fixed; 541/541.
+| Inlining | Run first with the standard handlers (B5 and the fixes), then again with `bodoni-ibarra` inlining enabled (B6).
+| Merge gate | 100 % PASS of the full run, green since the fixes; challenges, if any, in a `TCK.md` (none is filed).
 |===

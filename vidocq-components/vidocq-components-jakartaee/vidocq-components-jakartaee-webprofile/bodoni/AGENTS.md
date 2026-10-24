@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B5 delivered — official TCK runner, first baseline 452/541; `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented, TCK fixes next.** Read [PLAN.md](PLAN.md) before any
+**Status: B5 delivered — official Tags TCK 541/541 on Ibarra + Foy + Peano (not a certification); `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented, B6 next.** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -156,13 +156,13 @@ Cite the spec section in commit messages / PR descriptions (e.g. "Tags 3.0 §6.2
 ## TCK — Technology Compatibility Kit
 
 B5 delivered the runner (`bodoni-tck`, `run-official-tck-tags-3.0.sh`) and the first full
-run: **452/541 (83.5 %)**, recorded with the triage of every failing test in
-[bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md). The suite is `jakarta.tck:tags-tck:11.0.3`
+run: **452/541 (83.5 %)**; the TCK fixes (the `_rt` TLDs, BOD-006 to BOD-011, Peano COMP-010)
+bring it to **541/541**, both runs recorded in [bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md). The suite is `jakarta.tck:tags-tck:11.0.3`
 (Tags tests of the Jakarta EE 11 Platform TCK); the formal `jakarta-tags-tck-3.0.0.zip` is the
 reference only and is not run. A result is a compatibility measurement on Bodoni + Ibarra +
 Foy + Peano: **never claim certification** from it, nor from a partial or local run. The
 `official-tags-tck-smoke` CI check runs the smoke set. Update `BASELINE.md` when a fix
-changes the result. Once green, 100 % PASS is a merge gate; any challenge goes in a
+changes the result. 100 % PASS of the full run is a merge gate; any challenge goes in a
 `TCK.md` with spec citation — created only if one is actually filed.
 
 ## AI Principles — Collaboration on This Repository
