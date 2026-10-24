@@ -51,17 +51,31 @@ class ProjectScaffolderVersionTest {
                         + "dependencyManagement re-evaluates them to the app's own version");
     }
 
+    /** BUG-20261024-06: the application took the runtime's version, and moved with every upgrade. */
     @Test
-    void scaffoldedAppInheritsTheParentVersion(@TempDir Path dir) throws IOException {
-        // The released parent's dependencyManagement pins every runtime artifact to
-        // ${project.version}. An app declaring its own version would re-evaluate that
-        // to itself and break transitive resolution (e.g. vidocq-runtime-spi), so the
-        // scaffolded pom must NOT declare a version of its own.
+    void theApplicationHasAVersionOfItsOwn(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(create(null), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
-        assertFalse(pom.contains("<artifactId>demo</artifactId>\n    <version>"),
-                "the app must inherit the parent version, pom was:\n" + pom);
+        assertTrue(pom.contains("<artifactId>demo</artifactId>\n    <version>1.0.0-SNAPSHOT</version>"), pom);
+    }
+
+    /**
+     * Before 0.4.0, the parent's dependencyManagement named the runtime version {@code ${project.version}}, which
+     * Maven interpolates in the child (BUG-20261006-02): an application of its own version would ask for every
+     * runtime artifact at that version. Under such a parent the application keeps inheriting the parent's version.
+     */
+    @Test
+    void underAParentBefore040TheApplicationInheritsItsVersion(@TempDir Path dir) throws IOException {
+        RecordingReporter reporter = new RecordingReporter();
+
+        ProjectScaffolder.scaffold(create("0.3.0"), dir, RUNTIME, reporter);
+
+        String pom = Files.readString(dir.resolve("demo/pom.xml"));
+        assertFalse(pom.contains("1.0.0-SNAPSHOT"), pom);
+        assertTrue(reporter.lines.contains("note: Parent version 0.3.0 predates 0.4.0: the project inherits its"
+                + " version, as the parent's dependencyManagement resolves at the project's version."),
+                reporter.lines.toString());
     }
 
     @Test
@@ -75,8 +89,8 @@ class ProjectScaffolderVersionTest {
 
     @Test
     void scaffoldedDependenciesCarryExplicitRuntimeVersion(@TempDir Path dir) throws IOException {
-        // The released parent's dependencyManagement uses ${project.version}, which
-        // re-evaluates to the app's own version — dependencies must pin explicitly.
+        // A parent before 0.4.0 named the runtime version ${project.version} in its
+        // dependencyManagement, which re-evaluates to the app's version: dependencies pin it.
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
                         Set.of("cassini-rest"), "2.2.2", false), dir, RUNTIME, SILENT);

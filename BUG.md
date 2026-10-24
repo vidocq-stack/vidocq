@@ -1019,29 +1019,38 @@ where this whole bug class is invisible.
 ## BUG-20261024-06 — `vidocq create`: the application takes the runtime's version
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#332, umbrella #339)
+- **Status**: FIXED on `fix/create-scaffold` (#332, umbrella #339)
 - **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
 - **Symptom**: the created pom has no `<version>`, so the application inherits `vidocq-runtime-parent`'s:
   `target/demo-app-0.4.0-SNAPSHOT.jar`, and the startup banner says `io.example.demo.app 0.4.0-SNAPSHOT`. The
   application's version moves with each Vidocq upgrade.
 - **Minimal reproduction**: `vidocq create --name demo-app && cd demo-app && vidocq build && ls target/*.jar`.
-- **Cause**: the pom template writes no `<version>`.
+- **Cause**: the pom template writes no `<version>`. It was deliberate: the parents up to 0.3.0 named the runtime
+  version `${project.version}` in their `dependencyManagement`, which resolves at the child's version
+  (BUG-20261006-02); the parent names it literally since 0.4.0.
+- **Fix**: `<version>1.0.0-SNAPSHOT</version>` under a parent from 0.4.0; under an older `--parent-version`, the
+  project keeps inheriting the parent's version, and `create` says why. Tests `theApplicationHasAVersionOfItsOwn`,
+  `underAParentBefore040TheApplicationInheritsItsVersion`; checked end to end: `target/demo-app-1.0.0-SNAPSHOT.jar`,
+  banner `demo-app 1.0.0-SNAPSHOT`.
 
 ## BUG-20261024-07 — `vidocq create`: the pom carries workarounds for bugs fixed since 0.2.x
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#333, umbrella #339)
+- **Status**: FIXED on `fix/create-scaffold` (#333, umbrella #339)
 - **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
 - **Symptom**: every created pom sets `<jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>` "because vidocq:package 0.2.0 fails
   on an absent jvmArgs (BUG-20260710-01)" and `<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>` for
   BUG-20260710-02. Both are FIXED (#40, #198).
 - **Minimal reproduction**: `vidocq create --name demo-app && grep -n BUG-2026 demo-app/pom.xml`.
 - **Cause**: the workarounds were never taken out of the template once the bugs were fixed.
+- **Fix**: both removed; `vidocq:package` reads `vidocq.mainClass` and adds the module itself. Checked end to end,
+  with and without `--main`: the zip launcher of `vidocq build` and the image of `vidocq build jlink` answer
+  `GET /hello` with 200.
 
 ## BUG-20261024-08 — `vidocq create` writes no Maven wrapper, so `vidocq doctor` warns on the project it just made
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#334, umbrella #339)
+- **Status**: FIXED on `fix/create-scaffold` (#334, umbrella #339)
 - **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder`)
 - **Symptom**: `vidocq create --name demo-app && cd demo-app && vidocq doctor` gives `⚠ Maven wrapper — no mvnw on
   this path`. Without a wrapper, `vidocq dev` / `build` run the `mvn` of the `PATH` (3.9.9 here, not the pinned
@@ -1049,16 +1058,23 @@ where this whole bug class is invisible.
   `sun.misc.Unsafe`).
 - **Minimal reproduction**: the commands above.
 - **Cause**: the scaffolder writes the pom, sources and `vidocq.properties` only.
+- **Fix**: `create` writes the wrapper of this repository (`mvnw` executable, `mvnw.cmd`,
+  `.mvn/wrapper/maven-wrapper.properties`), which the tooling jar carries from the repository root, so a Maven
+  upgrade of the ecosystem reaches new projects; `vidocq doctor` on a created project reports no warning. The
+  `.mvn/jvm.config` first considered is not needed: Maven 3.9.16 on JDK 25 prints no `WARNING:` line (checked
+  2026-10-24; the eight lines came from 3.9.9). Test `theScaffoldWritesTheEcosystemsMavenWrapper`.
 
 ## BUG-20261024-09 — `vidocq create --name demo-app` names the class `DemoAppApp`
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#335, umbrella #339)
+- **Status**: FIXED on `fix/create-scaffold` (#335, umbrella #339)
 - **Affected module**: vidocq-runtime-tooling (`ProjectScaffolder.appClassName`)
 - **Symptom**: `vidocq create --name demo-app --main` writes `DemoAppApp.java`, and `vidocq idea` then writes
   `DemoAppApp (dev).run.xml`. Any name ending in `app` gets `…AppApp`.
 - **Minimal reproduction**: `ProjectScaffolder.appClassName("demo-app")` returns `DemoAppApp`.
 - **Cause**: the method always appends `App`; its Javadoc (`"my-cool-app" → "MyCoolApp"`) says otherwise.
+- **Fix**: `App` is appended only when the name does not already end with it. Tests `theClassNameEndsInAppOnce`,
+  `mainOptionNamesTheClassOfADemoAppDemoApp`.
 
 ## BUG-20261024-10 — The build of a created application tells the user to add a `provides` it does not need
 

@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,10 +76,53 @@ class ProjectScaffolderAppTest {
 
         String pom = Files.readString(project.resolve("pom.xml"));
         assertTrue(pom.contains("<vidocq.mainClass>com.acme.demo.DemoApp</vidocq.mainClass>"), pom);
-        assertTrue(pom.contains("<mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>"),
-                "vidocq:package 0.2.0 emits --module <mainClass> verbatim; it needs module/class");
+        // BUG-20261024-07: vidocq:package reads vidocq.mainClass and adds the module itself (BUG-20260710-02, #198).
+        assertFalse(pom.contains("<mainClass>"), pom);
+        assertFalse(pom.contains("BUG-2026"), pom);
         String moduleInfo = Files.readString(project.resolve("src/main/java/module-info.java"));
         assertTrue(moduleInfo.contains("requires io.vidocq.runtime.core;"), moduleInfo);
+    }
+
+    /** BUG-20261024-09: a name that ends in "app" gave DemoAppApp. */
+    @Test
+    void theClassNameEndsInAppOnce() {
+        assertEquals("DemoApp", ProjectScaffolder.appClassName("demo-app"));
+        assertEquals("MyCoolApp", ProjectScaffolder.appClassName("my-cool-app"));
+        assertEquals("MyApiApp", ProjectScaffolder.appClassName("my_api"));
+        assertEquals("ShopApp", ProjectScaffolder.appClassName("shop"));
+        assertEquals("App", ProjectScaffolder.appClassName("app"));
+        assertEquals("WebappApp", ProjectScaffolder.appClassName("webapp"));
+    }
+
+    @Test
+    void mainOptionNamesTheClassOfADemoAppDemoApp(@TempDir Path dir) throws IOException {
+        ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app", Set.of(), null, true),
+                dir, RUNTIME, SILENT);
+
+        assertTrue(Files.isRegularFile(dir.resolve("demo-app/src/main/java/com/acme/demo/app/DemoApp.java")));
+        assertTrue(Files.readString(dir.resolve("demo-app/pom.xml"))
+                .contains("<vidocq.mainClass>com.acme.demo.app.DemoApp</vidocq.mainClass>"));
+    }
+
+    /**
+     * BUG-20261024-08: without a wrapper, {@code vidocq doctor} warned on the project {@code create} had just made,
+     * and Maven was whatever the PATH held. The scaffold writes the wrapper of this repository, so the Maven version
+     * moves with the ecosystem's.
+     */
+    @Test
+    void theScaffoldWritesTheEcosystemsMavenWrapper(@TempDir Path dir) throws IOException {
+        Path project = scaffold(dir, Set.of(), false);
+
+        Path repository = Path.of("..");
+        for (String file : new String[] {"mvnw", "mvnw.cmd", ".mvn/wrapper/maven-wrapper.properties"}) {
+            assertEquals(Files.readString(repository.resolve(file)), Files.readString(project.resolve(file)), file);
+        }
+        if (project.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            assertTrue(Files.isExecutable(project.resolve("mvnw")), "mvnw must be executable");
+        }
+        DoctorContext context = DoctorFacts.gather(project, null, () -> DoctorFacts.Extensions.found(0));
+        assertEquals(Diagnostic.Status.OK, Diagnostics.run(context).stream()
+                .filter(d -> d.name().equals("Maven wrapper")).findFirst().orElseThrow().status());
     }
 
     @Test
