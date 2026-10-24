@@ -94,7 +94,7 @@ TCK file (EFTL). The `sql` tests run against H2 served over TCP on `127.0.0.1`.
 ```
 bodoni-core   ← JSTL 3.0 implementation: tag handlers, functions and TLDs of
                 c:, fmt:, fn:, x:, sql:  (all five since B4)
-bodoni-peano  ← optional engine adapter: LoopTagStatus and Result accessor tables for Peano
+bodoni-peano  ← optional engine adapter: LoopTagStatus, Result and LocalizationContext accessor tables for Peano
                 `peano.reflection=deny` (BOD-001); the only module allowed to depend on Peano
 bodoni-it-ibarra ← integration test on Ibarra + Foy + Peano, `it-ibarra` profile only
 bodoni-tck    ← official Tags TCK runner (jakarta.tck:tags-tck:11.0.3) on ibarra-arquillian,

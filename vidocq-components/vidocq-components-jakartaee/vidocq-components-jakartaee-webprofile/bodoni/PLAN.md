@@ -140,7 +140,7 @@ Ibarra + Peano and, optionally, puts `bodoni-ibarra` on the precompilation path.
 | Module (artefact) | Java module | Kind | Requires | Exports |
 |---|---|---|---|---|
 | `bodoni-core` | `io.vidocq.bodoni.core` | runtime | `transitive jakarta.servlet.jsp.jstl` (brings `jakarta.servlet.jsp`, `jakarta.servlet`, `jakarta.el`, `java.sql`, `java.desktop` → `java.xml`); `transitive java.xml` (B3); `transitive java.sql` (B4: pages hand `javax.sql.DataSource` objects to the actions and read `java.sql` values from `Result` rows); `java.naming` (B4, not transitive: only `internal.DataSources` uses it); `java.net.http` (`c:import`, B1); `uses java.sql.Driver` (B4: the JDBC driver of a JDBC parameter string is found through the `ServiceLoader` of the context class loader) | the tag-handler packages `tags.core`, `tags.fmt`, `tags.xml`, `tags.sql` and the `functions` package (unqualified: generated pages and other containers instantiate handlers); `…core.internal.*` not exported |
-| `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table, B1; `Result` table, B4) |
+| `bodoni-peano` | `io.vidocq.bodoni.peano` | runtime, optional engine adapter | `jakarta.servlet.jsp.jstl`, `io.vidocq.peano.api` | nothing — `provides` Peano's `AccessorProvider` SPI (`LoopTagStatus` table, B1; `Result` table, B4; `LocalizationContext` table, BOD-007) |
 | `bodoni-ibarra` (planned) | `io.vidocq.bodoni.ibarra` | build only | `io.vidocq.bodoni.core`, Ibarra's compiler-side SPI module | nothing — `provides` the `TagInliner` SPI |
 | `bodoni-tck` (B5) | — (class path: Arquillian, ShrinkWrap and the TCK clients are not Java modules; the deployments stay modular) | test, `-Ptck`, not published | `ibarra-arquillian` (brings Ibarra, Foy, Peano, Chappe), H2, `jakarta.tck:tags-tck:11.0.3` (`tck-official`), all test scope | — |
 | `bodoni-it-openliberty` (planned) | — (WAR) | test | `bodoni-core` | — |
@@ -826,5 +826,5 @@ property) of the `varStatus` variable of `c:forEach` / `c:forTokens`, nor `${e.k
 Peano (`Vidocq/peano`, branch `feat/accessor-supertype-lookup`) looks tables up through
 superclasses and interfaces and ships the `Map.Entry` table; `bodoni-peano`, an optional engine
 adapter (engine-adapter exception of the brick/extension rule; `bodoni-core` stays free of
-Peano), ships the `LoopTagStatus` table (and, since B4, the `Result` table of `sql:query`). The Bodoni Vidocq runtime extension will declare
+Peano), ships the `LoopTagStatus` table (and, since B4, the `Result` table of `sql:query`; since the TCK fixes, the `LocalizationContext` table, BOD-007). The Bodoni Vidocq runtime extension will declare
 `bodoni-peano`. Tracked in `BUG.md` (BOD-001).

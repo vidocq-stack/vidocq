@@ -31,7 +31,7 @@ import io.vidocq.peano.spi.MethodDescriptor;
 import io.vidocq.peano.spi.MethodSelection;
 
 /**
- * Base of the accessor tables of an interface whose properties are all read-only and each
+ * Base of the accessor tables of a type whose properties are all read-only and each
  * backed by one no-argument getter. Property {@code i} is read by method {@code i}; a subclass
  * supplies the two parallel lists and the switch that calls the getter.
  */
@@ -44,7 +44,7 @@ abstract class ReadOnlyAccessorTable extends AccessorTable {
     private final MethodDescriptor[] methods;
 
     /**
-     * @param target the interface this table serves
+     * @param target the type this table serves
      * @param properties the property names, in the order of {@code methods}
      * @param methods the no-argument getters, one per property
      */

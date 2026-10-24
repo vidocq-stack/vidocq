@@ -46,7 +46,7 @@ Bodoni follows the transverse Vidocq philosophy (see the workspace
 | Module | Role | State |
 |---|---|---|
 | `bodoni-core` | Tag handlers, functions and TLDs of `c:`, `fmt:`, `fn:`, `x:`, `sql:` | B4: all five implemented |
-| `bodoni-peano` | Optional engine adapter: the `LoopTagStatus` and `Result` accessor tables Peano needs under `peano.reflection=deny` | B1 (`Result`: B4) |
+| `bodoni-peano` | Optional engine adapter: the `LoopTagStatus`, `Result` and `LocalizationContext` accessor tables Peano needs under `peano.reflection=deny` | B1 (`Result`: B4; `LocalizationContext`: BOD-007) |
 | `bodoni-it-ibarra` | Integration test: pages rendered on Ibarra + Foy + Peano, `sql:` pages against an in-memory H2 database (`it-ibarra` profile, not published) | B1 |
 | `bodoni-ibarra` | Optional build-time inliner for Ibarra (`TagInliner` SPI) | planned (B6) |
 | `bodoni-tck` | Official Tags TCK runner on Ibarra's Arquillian adapter (in-reactor under `-Ptck` only, not published) | B5: first baseline 452/541 |
