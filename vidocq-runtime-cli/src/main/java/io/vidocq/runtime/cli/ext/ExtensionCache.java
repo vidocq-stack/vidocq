@@ -53,6 +53,9 @@ import java.util.regex.Pattern;
 public final class ExtensionCache {
 
     private static final String SNAPSHOT = "-SNAPSHOT";
+    private static final String RUNTIME_GROUP = "io.vidocq.runtime";
+    private static final String APPLICATION_PARENT = "vidocq-runtime-parent";
+    private static final String RUNTIME_BOM = "vidocq-runtime-bom";
 
     /** A SNAPSHOT fetched from a remote repository resolves to {@code 1.0-20261001.204500-53}. */
     private static final Pattern TIMESTAMPED = Pattern.compile("-\\d{8}\\.\\d{6}-\\d+$");
@@ -96,7 +99,9 @@ public final class ExtensionCache {
 
     /**
      * The local-repository files a resolution depends on that may change under the same
-     * version: each SNAPSHOT artifact's JAR and POM, and a SNAPSHOT parent's POM.
+     * version: each SNAPSHOT artifact's JAR and POM, a SNAPSHOT parent's POM, and the
+     * {@code vidocq-runtime-bom} a SNAPSHOT {@code vidocq-runtime-parent} imports, which
+     * versions every Vidocq artifact (Vidocq/vidocq#339).
      */
     public static List<Path> snapshotFiles(List<ResolvedArtifact> resolved,
                                            Optional<PomDependencies.Parent> parent) {
@@ -107,14 +112,21 @@ public final class ExtensionCache {
                 files.add(pomBeside(artifact));
             }
         }
-        parent.filter(p -> isSnapshot(p.version()))
-                .flatMap(p -> localRepository(resolved).map(repo -> repo
-                        .resolve(p.groupId().replace('.', '/'))
-                        .resolve(p.artifactId())
-                        .resolve(p.version())
-                        .resolve(p.artifactId() + "-" + p.version() + ".pom")))
-                .ifPresent(files::add);
+        Optional<PomDependencies.Parent> snapshotParent = parent.filter(p -> isSnapshot(p.version()));
+        Optional<Path> repository = snapshotParent.isPresent() ? localRepository(resolved) : Optional.empty();
+        if (snapshotParent.isPresent() && repository.isPresent()) {
+            PomDependencies.Parent p = snapshotParent.get();
+            files.add(pomIn(repository.get(), p.groupId(), p.artifactId(), p.version()));
+            if (p.groupId().equals(RUNTIME_GROUP) && p.artifactId().equals(APPLICATION_PARENT)) {
+                files.add(pomIn(repository.get(), RUNTIME_GROUP, RUNTIME_BOM, p.version()));
+            }
+        }
         return files;
+    }
+
+    private static Path pomIn(Path repository, String groupId, String artifactId, String version) {
+        return repository.resolve(groupId.replace('.', '/')).resolve(artifactId).resolve(version)
+                .resolve(artifactId + "-" + version + ".pom");
     }
 
     /** Fingerprint of {@code file}, or {@code null} when it does not exist. */

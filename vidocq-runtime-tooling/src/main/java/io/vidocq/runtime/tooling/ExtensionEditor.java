@@ -52,9 +52,10 @@ public final class ExtensionEditor {
 
     /**
      * Adds ({@code add}) or removes {@code ids} on the project in {@code projectDir}. The dependency and the codegen
-     * path carry the runtime version the pom's parent gives, else {@code defaultRuntimeVersion}: the parent manages
-     * Vidocq artifacts at {@code ${project.version}}, which is the application's own version as soon as it declares
-     * one.
+     * path carry no version when {@code vidocq-runtime-bom} versions them (a parent from 0.4.0, or an import of the
+     * BOM). Otherwise they carry the runtime version the pom's parent gives, else {@code defaultRuntimeVersion}: a
+     * parent before 0.4.0 manages Vidocq artifacts at {@code ${project.version}}, which is the application's own
+     * version as soon as it declares one.
      */
     public static Outcome edit(Path projectDir, List<String> ids, boolean add, String defaultRuntimeVersion,
                                Reporter reporter) {
@@ -67,7 +68,9 @@ public final class ExtensionEditor {
         String runtimeVersion;
         try {
             pom = Files.readString(pomPath);
-            runtimeVersion = PomDependencies.runtimeVersion(pom).orElse(defaultRuntimeVersion);
+            runtimeVersion = PomDependencies.versionsManaged(pom)
+                    ? null
+                    : PomDependencies.runtimeVersion(pom).orElse(defaultRuntimeVersion);
         } catch (IOException e) {
             reporter.error("Could not read pom.xml: " + e.getMessage());
             return Outcome.FAILED;

@@ -25,8 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,20 +90,41 @@ class ProjectScaffolderVersionTest {
     }
 
     @Test
-    void scaffoldedDependenciesCarryExplicitRuntimeVersion(@TempDir Path dir) throws IOException {
+    void underAParentBefore040DependenciesPinTheRuntimeVersion(@TempDir Path dir) throws IOException {
         // A parent before 0.4.0 named the runtime version ${project.version} in its
         // dependencyManagement, which re-evaluates to the app's version: dependencies pin it.
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "2.2.2", false), dir, RUNTIME, SILENT);
+                        Set.of("cassini-rest"), "0.3.0", false), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-core</artifactId>\n"
-                        + "            <version>2.2.2</version>"),
+                        + "            <version>0.3.0</version>"),
                 "core dependency must pin the runtime version explicitly, pom was:\n" + pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>\n"
-                        + "            <version>2.2.2</version>"),
+                        + "            <version>0.3.0</version>"),
                 "extension dependencies must pin the runtime version explicitly, pom was:\n" + pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>\n"
+                        + "                        <version>0.3.0</version>"),
+                "codegen paths must pin the runtime version explicitly, pom was:\n" + pom);
+    }
+
+    /**
+     * Vidocq/vidocq#339: from 0.4.0 the application parent imports vidocq-runtime-bom, which versions every Vidocq
+     * artifact; the pom names two versions, its parent's and its own, and an upgrade changes one line.
+     */
+    @Test
+    void underTheApplicationParentTheBomVersionsEveryVidocqArtifact(@TempDir Path dir) throws IOException {
+        ProjectScaffolder.scaffold(
+                new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                        Set.of("cassini-rest"), "0.4.0", false), dir, RUNTIME, SILENT);
+
+        String pom = Files.readString(dir.resolve("demo/pom.xml"));
+        assertEquals(List.of("0.4.0", "1.0.0-SNAPSHOT"), pom.lines()
+                .filter(l -> l.strip().startsWith("<version>"))
+                .map(l -> l.strip().replaceAll("</?version>", ""))
+                .toList(), pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"), pom);
     }
 
     @Test

@@ -86,7 +86,7 @@ class ExtensionEditorTest {
         String pom = pom();
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"), pom);
-        assertTrue(pom.contains("<version>9.9.9</version>"), pom);
+        assertEquals(1, pom.split("<version>").length - 1, "the parent's version only, the BOM gives the rest:\n" + pom);
         assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs;"));
         assertTrue(reporter.lines.contains(
                 "success: Added cassini-rest (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"),
@@ -198,6 +198,45 @@ class ExtensionEditorTest {
         assertFalse(pom().contains("combine.children"), pom());
         assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning:") && l.contains("drops the Vauban indexer")),
                 reporter.lines.toString());
+    }
+
+    /** Before 0.4.0 the parent managed the runtime at {@code ${project.version}} (BUG-20261006-02). */
+    @Test
+    void underAParentBefore040TheParentVersionIsPinned() throws IOException {
+        writePom("");
+        Files.writeString(project.resolve("pom.xml"), pom().replace("9.9.9", "0.3.0"));
+
+        edit(List.of("cassini-rest"), true);
+
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>\n"
+                + "            <version>0.3.0</version>"), pom());
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>\n"
+                + "                            <version>0.3.0</version>"), pom());
+    }
+
+    /** Vidocq/vidocq#339: an application that keeps a parent of its own and imports the BOM gets no version. */
+    @Test
+    void aPomThatImportsTheBomGetsNoVersion() throws IOException {
+        Files.writeString(project.resolve("pom.xml"), """
+                <project>
+                  <artifactId>demo</artifactId>
+                  <dependencyManagement>
+                    <dependencies>
+                      <dependency>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-bom</artifactId>
+                        <version>0.4.0</version>
+                        <type>pom</type>
+                        <scope>import</scope>
+                      </dependency>
+                    </dependencies>
+                  </dependencyManagement>
+                </project>
+                """);
+
+        edit(List.of("knock-health"), true);
+
+        assertEquals(1, pom().split("<version>").length - 1, pom());
     }
 
     @Test

@@ -73,8 +73,9 @@ public final class ProjectScaffolder {
     private ProjectScaffolder() {}
 
     /**
-     * Writes the project {@code create} describes into {@code baseDir/<name>}. Its parent, dependencies and codegen
-     * paths carry {@code create.parentVersion()}, else {@code runtimeVersion}, the tool's own runtime version.
+     * Writes the project {@code create} describes into {@code baseDir/<name>}. Its parent carries
+     * {@code create.parentVersion()}, else {@code runtimeVersion}, the tool's own runtime version; from 0.4.0 the
+     * parent's BOM versions the dependencies and codegen paths, which an older parent leaves to them.
      */
     public static void scaffold(ProjectSpec create, Path baseDir, String runtimeVersion, Reporter reporter)
             throws IOException {
@@ -133,6 +134,8 @@ public final class ProjectScaffolder {
             reporter.note("Parent version " + parentVersion + " predates 0.4.0: the project inherits its version,"
                     + " as the parent's dependencyManagement resolves at the project's version.");
         }
+        // From 0.4.0 the parent imports vidocq-runtime-bom, which versions every Vidocq artifact (#339).
+        String vidocqVersion = ownVersion ? null : parentVersion;
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -159,8 +162,7 @@ public final class ProjectScaffolder {
                         <dependency>
                             <groupId>io.vidocq.runtime</groupId>
                             <artifactId>vidocq-runtime-core</artifactId>
-                            <version>%s</version>
-                        </dependency>
+                %s        </dependency>
                 %s
                     </dependencies>
 
@@ -183,9 +185,9 @@ public final class ProjectScaffolder {
                 """.formatted(parentVersion, c.groupId(), c.name(),
                 ownVersion ? versionLine("    ", APPLICATION_VERSION) : "", c.name(),
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
-                snapshot ? snapshotRepositories() : "", parentVersion,
-                extensionDeps(c.extensions(), parentVersion),
-                aptCodegenPlugin(c.extensions(), parentVersion));
+                snapshot ? snapshotRepositories() : "", versionLine("            ", vidocqVersion),
+                extensionDeps(c.extensions(), vidocqVersion),
+                aptCodegenPlugin(c.extensions(), vidocqVersion));
     }
 
     /**
@@ -265,9 +267,9 @@ public final class ProjectScaffolder {
         """.formatted(paths.toString());
     }
 
-    // Dependency versions are pinned explicitly: a parent before 0.4.0 names the runtime
+    // Under a parent before 0.4.0 dependency versions are pinned explicitly: it names the runtime
     // version ${project.version} in its dependencyManagement, which re-evaluates to the
-    // generated app's version and would not resolve (BUG-20261006-02).
+    // generated app's version and would not resolve (BUG-20261006-02). A null version writes none.
     private static String extensionDeps(Set<String> ids, String version) {
         if (ids.isEmpty()) return "";
         var sb = new StringBuilder();
@@ -413,9 +415,9 @@ public final class ProjectScaffolder {
         Files.writeString(path, content);
     }
 
-    /** A {@code <version>} line at {@code indent}. */
+    /** A {@code <version>} line at {@code indent}, none for a {@code null} version. */
     private static String versionLine(String indent, String version) {
-        return indent + "<version>" + version + "</version>\n";
+        return version == null ? "" : indent + "<version>" + version + "</version>\n";
     }
 
     /**

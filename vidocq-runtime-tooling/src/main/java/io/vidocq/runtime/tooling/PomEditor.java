@@ -159,7 +159,7 @@ public final class PomEditor {
      * {@code annotationProcessorPaths} — {@code vidocq:checkpom} fails the build
      * when the matching extension is on the dependencies without it. Idempotent.
      * The path pins {@code version}, the runtime version: {@code ${project.version}}
-     * would be the application's own.
+     * would be the application's own. None when {@code null}: the BOM versions it.
      *
      * <p>Only the project build is edited, never a profile or {@code pluginManagement}
      * (BUG-20261023-03), and the compiler plugin it already declares is filled rather
@@ -376,7 +376,7 @@ public final class PomEditor {
         return indent + "<path>\n"
                 + indent + "    <groupId>" + codegen.groupId() + "</groupId>\n"
                 + indent + "    <artifactId>" + codegen.artifactId() + "</artifactId>\n"
-                + indent + "    <version>" + version + "</version>\n"
+                + (version == null ? "" : indent + "    <version>" + version + "</version>\n")
                 + indent + "</path>\n";
     }
 

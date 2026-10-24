@@ -107,14 +107,29 @@ class ExtensionCacheTest {
     void fingerprintsASnapshotParentPomFoundInTheLocalRepository() throws IOException {
         Path repo = dir.resolve("repository");
         Path jar = artifact(repo, "io.vidocq.runtime", "vidocq-runtime-core", "0.4.0");
+        var parent = new PomDependencies.Parent("com.acme", "parent", "2.0-SNAPSHOT");
+
+        List<Path> files = ExtensionCache.snapshotFiles(List.of(
+                new ResolvedArtifact("io.vidocq.runtime", "vidocq-runtime-core", "0.4.0", jar)),
+                Optional.of(parent));
+
+        assertEquals(List.of(repo.resolve("com/acme/parent/2.0-SNAPSHOT/parent-2.0-SNAPSHOT.pom")), files);
+    }
+
+    /** Vidocq/vidocq#339: from 0.4.0 the application parent takes every Vidocq version from the BOM it imports. */
+    @Test
+    void fingerprintsTheBomASnapshotApplicationParentImports() throws IOException {
+        Path repo = dir.resolve("repository");
+        Path jar = artifact(repo, "io.vidocq.runtime", "vidocq-runtime-core", "0.4.0");
         var parent = new PomDependencies.Parent("io.vidocq.runtime", "vidocq-runtime-parent", "0.4.0-SNAPSHOT");
 
         List<Path> files = ExtensionCache.snapshotFiles(List.of(
                 new ResolvedArtifact("io.vidocq.runtime", "vidocq-runtime-core", "0.4.0", jar)),
                 Optional.of(parent));
 
-        assertEquals(List.of(repo.resolve(
-                "io/vidocq/runtime/vidocq-runtime-parent/0.4.0-SNAPSHOT/vidocq-runtime-parent-0.4.0-SNAPSHOT.pom")),
+        assertEquals(List.of(
+                repo.resolve("io/vidocq/runtime/vidocq-runtime-parent/0.4.0-SNAPSHOT/vidocq-runtime-parent-0.4.0-SNAPSHOT.pom"),
+                repo.resolve("io/vidocq/runtime/vidocq-runtime-bom/0.4.0-SNAPSHOT/vidocq-runtime-bom-0.4.0-SNAPSHOT.pom")),
                 files);
     }
 

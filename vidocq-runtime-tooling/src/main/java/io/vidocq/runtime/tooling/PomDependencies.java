@@ -175,6 +175,21 @@ public final class PomDependencies {
                 .map(Parent::version);
     }
 
+    /**
+     * Whether the project gets the version of every Vidocq artifact from {@code vidocq-runtime-bom}: through a
+     * {@code vidocq-runtime-parent} from 0.4.0, which imports it, or by importing it itself (Vidocq/vidocq#339). An
+     * edit then writes no version, and an upgrade changes one line.
+     */
+    public static boolean versionsManaged(String pomXml) {
+        if (runtimeVersion(pomXml).filter(ProjectScaffolder::parentPinsItsVersion).isPresent()) {
+            return true;
+        }
+        int start = pomXml.indexOf("<dependencyManagement>");
+        int end = pomXml.indexOf("</dependencyManagement>");
+        return start >= 0 && end > start
+                && pomXml.substring(start, end).contains("<artifactId>vidocq-runtime-bom</artifactId>");
+    }
+
     /** True when {@code id} appears in the project's dependency list. */
     public static boolean contains(String pomXml, ExtensionCoordinate coordinate) {
         return parse(pomXml).contains(coordinate);
