@@ -153,7 +153,7 @@ if [[ ! -f "$ddl" ]]; then
     echo "The official Derby DDL is missing; run without --no-prepare." >&2
     exit 2
 fi
-if "$install"; then ./mvnw -ntp clean install; fi
+if "$install"; then ./mvnw -ntp clean install -pl bodoni-core,bodoni-peano -am; fi
 
 # Clear old reports so a partial selection cannot be mistaken for a full run. No module clean:
 # target/tags-tck-distribution must survive.

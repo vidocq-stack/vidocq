@@ -37,7 +37,7 @@ sdk env
 | `all` | `-Dtest=com.sun.ts.tests.jstl.**.*IT`: every official class.
 | `-Dtest=…` | A Surefire selection of official classes or methods.
 | `--no-prepare` | Reuses the DDL already extracted; refused (exit 2) when it is absent, so that the `sql` and compatibility classes cannot fail in their setup unnoticed.
-| `--no-install` | Skips `./mvnw clean install` of Bodoni; refused (exit 2) when the installed `bodoni-core` or `bodoni-peano` snapshot is missing or older than its sources, its `pom.xml` or the root `pom.xml`.
+| `--no-install` | Skips the `./mvnw clean install` of `bodoni-core` and `bodoni-peano` (the only modules the runner needs, so the Open Liberty IT is not run); refused (exit 2) when the installed `bodoni-core` or `bodoni-peano` snapshot is missing or older than its sources, its `pom.xml` or the root `pom.xml`.
 | Other arguments starting with `-` | Passed to the last Maven call (write an option value attached to it: `-T4`, `-Dkey=value`).
 |===
 
