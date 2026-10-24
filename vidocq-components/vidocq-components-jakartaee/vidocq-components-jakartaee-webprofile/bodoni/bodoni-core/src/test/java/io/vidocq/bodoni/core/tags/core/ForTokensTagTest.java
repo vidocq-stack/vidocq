@@ -93,7 +93,34 @@ class ForTokensTagTest {
     }
 
     @Test
-    void nonStringItemsAreCoercedToString() throws Exception {
+    void deferredItemsWithoutDelimsAreOneMonolithicToken() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        ForTokensTag t = new ForTokensTag();
+        t.setItems(new TestValueExpression("a,b c"));
+        t.setVar("x");
+        List<Object> seen = new ArrayList<>();
+        TagHarness.run(t, pc, p -> seen.add(pc.getELContext().getVariableMapper().resolveVariable("x")));
+        assertEquals(1, seen.size());
+        assertEquals("a,b c", ((jakarta.el.ValueExpression) seen.get(0)).getValue(pc.getELContext()));
+    }
+
+    @Test
+    void repeatedGetValueOnAMappedTokenReturnsTheSameToken() throws Exception {
+        TestPageContext pc = TestPageContext.create();
+        ForTokensTag t = new ForTokensTag();
+        t.setItems(new TestValueExpression("a,b"));
+        t.setDelims(",");
+        t.setVar("x");
+        List<Object> seen = new ArrayList<>();
+        TagHarness.run(t, pc, p -> seen.add(pc.getELContext().getVariableMapper().resolveVariable("x")));
+        jakarta.el.ValueExpression second = (jakarta.el.ValueExpression) seen.get(1);
+        assertEquals("b", second.getValue(pc.getELContext()));
+        assertEquals("b", second.getValue(pc.getELContext()));
+        assertEquals("a", ((jakarta.el.ValueExpression) seen.get(0)).getValue(pc.getELContext()));
+    }
+
+    @Test
+    void nonStringItemsAreCoercedToString()throws Exception {
         assertEquals("42,", runWith(42));
         assertEquals("MONDAY,", runWith(new TestValueExpression(java.time.DayOfWeek.MONDAY)));
         assertEquals("42,", runWith(new TestValueExpression(42)));

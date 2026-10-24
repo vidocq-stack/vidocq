@@ -53,7 +53,7 @@ public class ForTokensTag extends RangeLoopTagSupport {
 
     @Override
     protected String getDelims() {
-        return delims;
+        return delims == null ? "" : delims;
     }
 
     @Override
@@ -72,7 +72,7 @@ public class ForTokensTag extends RangeLoopTagSupport {
         if (value == null) {
             iterator = Collections.emptyIterator();
         } else {
-            iterator = ForEachTag.tokens(asString(value), delims == null ? "" : delims);
+            iterator = ForEachTag.tokens(asString(value), getDelims());
         }
     }
 
