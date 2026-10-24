@@ -66,6 +66,26 @@ Each library is served under the `jakarta.tags.*` URI and its JSTL 1.2 URI, and 
 
 The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.tld`, `fmt-1_0-rt.tld`, `sql.tld`, `sql-1_2.tld`, `sql-1_0-rt.tld`, `x.tld`, `x-1_2.tld`, `x-1_0-rt.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
 
+=== Constraints
+
+Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; every external entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.
+
+[cols="1,3,1",options="header"]
+|===
+| Library | Reported | Spec
+
+| `c`, `x` | A `choose` whose body holds anything but white space, `when` and `otherwise` (template text, a scriptlet, another action), no `when`, a `when` after the `otherwise`, or a second `otherwise`. A `jsp:body` child is transparent; a `jsp:attribute` child is ignored | §5.4, §12.3
+| `c`, `x` | A `when` or `otherwise` whose parent (seen through a `jsp:body`) is not a `choose` | §5.5, §5.6, §12.4, §12.5
+| `c`, `fmt`, `sql`, `x` | `scope` without `var` on `c:if`, `fmt:message`, `fmt:formatNumber`, `fmt:parseNumber`, `fmt:formatDate`, `fmt:parseDate`, `sql:update` and `x:if` | §5.3, §8.8, §9.7-§9.10, §10.4, §12.2
+| `x` | `x:parse` with neither `var` nor `varDom`, or with `scopeDom` without `varDom` | §11.2
+| `sql` | A `dataSource` attribute on `sql:query` or `sql:update` nested in a `sql:transaction` | §10.3-§10.5
+| all four | A literal `scope` or `scopeDom` other than `page`, `request`, `session` and `application`; an empty `var`, `varDom`, `varStatus` or `varReader` | §2.7
+|===
+
+An attribute counts as present when it is an XML attribute or a `jsp:attribute` of that name. A value given by `jsp:attribute`, or one that holds a request-time or EL expression, is checked at run time only. The `choose`, `when`, `otherwise` and `transaction` actions are matched across every URI of their library, so a `c_rt:when` inside a `c:choose` is accepted, as the handlers accept it. The handlers keep their own run-time checks, which a container that runs no validator still applies.
+
+NOTE: Ibarra runs tag library validators when the page is initialized, before it writes any output, not when it compiles the page (IBARRA-087): a page that breaks a constraint fails on its first request with HTTP 500. Jasper and Open Liberty run them at translation time.
+
 === Core tags (`c:`)
 
 The attributes of each tag are those of {spec-tags-3-0}[the specification] (chapters 4 to 7).
@@ -185,7 +205,6 @@ The six handlers of `io.vidocq.bodoni.core.tags.sql`, with the attributes of `sq
 * **Dates, times and timestamps.** A `java.sql.Date`, `Time` or `Timestamp` parameter, from `sql:dateParam` or `sql:param`, is bound with `setDate`, `setTime` or `setTimestamp` and a default-zone `Calendar`, which JDBC defines as equivalent to the plain setters. Some drivers (H2) convert the plain form with `java.time` zone rules, which differ from the legacy `java.util` rules before 1891 in zones such as `Europe/Paris`, so a date of 1788 reached the database as the day before (BOD-005 in `BUG.md`, fixed). Any other value is bound with `setObject`.
 * **Parameter actions** must be nested in an action that implements `SQLExecutionTag`, such as `sql:query` and `sql:update`; otherwise they fail with a `JspTagException`.
 * **`sql:setDataSource` (10.6).** Builds a data source from `dataSource` (an object, a JNDI path or a JDBC parameter string, see <<sql-data-sources>>) or, without it, from `url`, `driver`, `user` and `password`, with no JNDI lookup; an empty `driver` means none. With neither `dataSource` nor `url`, or with `dataSource` set to `null`, it fails with a `JspException`. The source is resolved at once (JNDI lookup, or driver class loaded) but no connection is opened. The resolved `javax.sql.DataSource` is exported to `var` in `scope` or, without `var`, set as the `jakarta.servlet.jsp.jstl.sql.dataSource` setting in `scope` (page by default). The password stays inside the data source and appears in no message.
-* **Not checked at translation time.** Bodoni has no tag library validator for `sql:` (B1 precedent): `scope` without `var`, an empty `var`, a `sql:query` without `var` and a `dataSource` attribute inside `sql:transaction` are reported at run time, as a `JspTagException`. A container that checks the required attributes of the TLD reports the missing `var` of `sql:query` at translation time.
 * **Errors (10.3 to 10.6, "Null & Error Handling").** Data-source and database failures end the action with a `JspException`, cause kept when there is one:
 ** `<action>: dataSource is null` for a `dataSource` attribute set to `null`; `<action>: no data source: neither the dataSource attribute nor jakarta.servlet.jsp.jstl.sql.dataSource is set` (`sql:setDataSource`: `no data source: set dataSource or url`);
 ** `<action>: <resolution message>` when the data source cannot be resolved: an object of another type, an empty string, a JNDI name bound to something else, a driver class that cannot be loaded (see <<sql-data-sources>>);
@@ -300,7 +319,6 @@ The handlers of `io.vidocq.bodoni.core.tags.xml`, with the attributes of `x.tld`
 * **Context node.** Inside an `x:forEach`, the context node of a `select` is the current node; elsewhere it is an empty document (11.1.6), so only variables and constants can be selected.
 * **`x:transform`.** The result goes to the `result` attribute when it is set (a `javax.xml.transform.Result`), else to `var`, else to the page. A `Source` supplied by the page is passed as is. An `x:param` with a `null` value sets no parameter. A `Reader` supplied by the page is never closed by Bodoni.
 * **JDK engines.** Parsing, XPath and XSLT are the ones of `java.xml`: namespace-aware parsing, XInclude off, DTD validation off (a DOCTYPE with an internal subset is accepted), XSLT 1.0. There are no Xalan extension functions.
-* **Not checked.** Bodoni has no tag library validator for `x:`: misplaced actions, such as an `x:choose` without an `x:when`, are not reported at translation time.
 
 [NOTE]
 ====

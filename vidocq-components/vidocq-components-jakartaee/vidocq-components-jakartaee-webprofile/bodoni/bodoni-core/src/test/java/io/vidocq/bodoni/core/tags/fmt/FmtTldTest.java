@@ -39,6 +39,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import io.vidocq.bodoni.core.testing.TldReader;
 import jakarta.servlet.jsp.jstl.fmt.LocalizationContext;
+import jakarta.servlet.jsp.tagext.TagLibraryValidator;
 
 /** Checks the fmt tag library descriptors against the attribute tables of Tags 3.0 §8.5-§8.10 and §9.5-§9.10. */
 class FmtTldTest {
@@ -173,6 +174,17 @@ class FmtTldTest {
                 assertTrue(found, tag.tagClass() + " has public " + setter + "(" + a.type() + ")");
             }
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "META-INF/fmt.tld", "META-INF/fmt-1_2.tld", "META-INF/fmt-1_0-rt.tld" })
+    void declaresTheLibraryValidator(String resource) throws ClassNotFoundException {
+        String name = TldReader.read(resource).validatorClass();
+        assertEquals(FmtTagLibraryValidator.class.getName(), name, resource + " validator-class");
+        Class<?> type = Class.forName(name);
+        assertTrue(Modifier.isPublic(type.getModifiers()), name + " is public");
+        assertEquals(TagLibraryValidator.class, type.getSuperclass(), name + " extends the API class directly");
+        assertTrue(Modifier.isPublic(constructorModifiers(type)), name + " no-arg constructor");
     }
 
     private static int constructorModifiers(Class<?> type) {

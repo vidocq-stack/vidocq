@@ -8,6 +8,9 @@
   <tlib-version>3.0</tlib-version>
   <short-name>c</short-name>
   <uri>http://java.sun.com/jsp/jstl/core</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator</validator-class>
+  </validator>
 
   <tag>
     <description>Evaluates an expression and outputs the result to the current JspWriter.</description>

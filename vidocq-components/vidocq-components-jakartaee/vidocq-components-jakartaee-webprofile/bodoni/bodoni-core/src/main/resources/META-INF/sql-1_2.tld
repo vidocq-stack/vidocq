@@ -8,6 +8,9 @@
   <tlib-version>3.0</tlib-version>
   <short-name>sql</short-name>
   <uri>http://java.sun.com/jsp/jstl/sql</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.sql.SqlTagLibraryValidator</validator-class>
+  </validator>
 
   <tag>
     <description>Groups nested query and update actions into one database transaction.</description>

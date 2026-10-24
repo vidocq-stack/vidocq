@@ -8,6 +8,9 @@
   <tlib-version>3.0</tlib-version>
   <short-name>fmt_rt</short-name>
   <uri>http://java.sun.com/jstl/fmt_rt</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.fmt.FmtTagLibraryValidator</validator-class>
+  </validator>
 
   <tag>
     <description>Sets the request character encoding.</description>

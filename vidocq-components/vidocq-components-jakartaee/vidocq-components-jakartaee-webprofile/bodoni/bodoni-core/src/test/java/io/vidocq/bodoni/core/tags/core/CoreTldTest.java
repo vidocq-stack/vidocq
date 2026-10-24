@@ -32,6 +32,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.jsp.tagext.TagLibraryValidator;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -179,6 +181,17 @@ class CoreTldTest {
     /** A dynamic and deferred attribute takes {@code Object}, so the handler can receive the expression. */
     private static String setterType(TldReader.Attribute a) {
         return a.deferred() && a.rtexprvalue() ? "java.lang.Object" : a.type();
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "META-INF/c.tld", "META-INF/c-1_2.tld", "META-INF/c-1_0-rt.tld" })
+    void declaresTheLibraryValidator(String resource) throws ClassNotFoundException {
+        String name = TldReader.read(resource).validatorClass();
+        assertEquals(CoreTagLibraryValidator.class.getName(), name, resource + " validator-class");
+        Class<?> type = Class.forName(name);
+        assertTrue(Modifier.isPublic(type.getModifiers()), name + " is public");
+        assertEquals(TagLibraryValidator.class, type.getSuperclass(), name + " extends the API class directly");
+        assertTrue(Modifier.isPublic(constructorModifiers(type)), name + " no-arg constructor");
     }
 
     private static int constructorModifiers(Class<?> type) {

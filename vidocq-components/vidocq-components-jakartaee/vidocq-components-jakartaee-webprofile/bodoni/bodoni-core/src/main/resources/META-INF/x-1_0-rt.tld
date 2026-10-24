@@ -8,6 +8,9 @@
   <tlib-version>3.0</tlib-version>
   <short-name>x_rt</short-name>
   <uri>http://java.sun.com/jstl/xml_rt</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.xml.XmlTagLibraryValidator</validator-class>
+  </validator>
 
   <tag>
     <description>Parses an XML document and saves the resulting object in a scoped variable.</description>

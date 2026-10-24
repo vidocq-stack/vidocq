@@ -22,6 +22,7 @@ package io.vidocq.bodoni.core.tags;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.List;
 
@@ -51,6 +52,14 @@ class LegacyRtTldTest {
         assertEquals(uri, rt.uri());
         assertEquals(shortName, rt.shortName());
         assertEquals("3.0", rt.tlibVersion());
+    }
+
+    @ParameterizedTest
+    @CsvSource(textBlock = ROWS)
+    void declaresTheSameValidator(String current, String legacy, String uri, String shortName) {
+        String validator = TldReader.read(current).validatorClass();
+        assertNotNull(validator, current + " validator");
+        assertEquals(validator, TldReader.read(legacy).validatorClass(), legacy + " validator");
     }
 
     @ParameterizedTest

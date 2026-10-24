@@ -21,7 +21,6 @@
 package io.vidocq.bodoni.core.tags.xml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 
 import javax.xml.transform.Result;
+
+import jakarta.servlet.jsp.tagext.TagLibraryValidator;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -170,9 +171,14 @@ class XmlTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld" })
-    void declaresNoValidator(String resource) throws IOException {
-        assertFalse(read(resource).contains("<validator>"));
+    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld", "META-INF/x-1_0-rt.tld" })
+    void declaresTheLibraryValidator(String resource) throws ClassNotFoundException {
+        String name = TldReader.read(resource).validatorClass();
+        assertEquals(XmlTagLibraryValidator.class.getName(), name, resource + " validator-class");
+        Class<?> type = Class.forName(name);
+        assertTrue(Modifier.isPublic(type.getModifiers()), name + " is public");
+        assertEquals(TagLibraryValidator.class, type.getSuperclass(), name + " extends the API class directly");
+        assertTrue(Modifier.isPublic(constructorModifiers(type)), name + " no-arg constructor");
     }
 
     private static int constructorModifiers(Class<?> type) {

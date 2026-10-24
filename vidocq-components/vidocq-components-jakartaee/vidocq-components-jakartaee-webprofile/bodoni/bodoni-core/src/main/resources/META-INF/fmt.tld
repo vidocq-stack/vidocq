@@ -8,6 +8,9 @@
   <tlib-version>3.0</tlib-version>
   <short-name>fmt</short-name>
   <uri>jakarta.tags.fmt</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.fmt.FmtTagLibraryValidator</validator-class>
+  </validator>
 
   <tag>
     <description>Sets the request character encoding.</description>

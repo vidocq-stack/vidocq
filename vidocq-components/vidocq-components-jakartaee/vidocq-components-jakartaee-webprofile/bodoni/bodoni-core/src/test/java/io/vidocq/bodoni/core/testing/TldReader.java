@@ -95,6 +95,12 @@ public final class TldReader {
         return childText(root, "tlib-version");
     }
 
+    /** Returns the {@code <validator-class>} of the library's {@code <validator>}, or {@code null}. */
+    public String validatorClass() {
+        List<Element> validators = children(root, "validator");
+        return validators.isEmpty() ? null : childText(validators.get(0), "validator-class");
+    }
+
     /** Returns the declared functions, in document order. */
     public List<Function> functions() {
         List<Function> result = new ArrayList<>();

@@ -173,7 +173,18 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   "no formatting locale". Ibarra runs TLD validators at page `init()` (IBARRA-087), so a
   `TagLibraryValidator`, or a run-time check in each handler, would turn the 9 tests into
   HTTP 500.
-- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first.
+- Status: fixed (2026-10-24, branch `fix/tck-baseline`), by tag library validators rather than run-time checks
+  (PLAN.md, "Decisions recorded in the TCK fixes", Ruling 4): a run-time check cannot report a `c:when` after
+  `c:otherwise` before the `otherwise` body is written, cannot see template text in a `choose`, and misses
+  branches that do not run. Every `c`, `fmt`, `sql` and `x` TLD (3.0, `-1_2`, `-1_0-rt`) names a public validator
+  of its handler package (`CoreTagLibraryValidator`, `FmtTagLibraryValidator`, `SqlTagLibraryValidator`,
+  `XmlTagLibraryValidator`) over the shared `internal.PageConstraints`, a SAX walk of the XML view: `choose`
+  structure, `when` / `otherwise` parent, `scope` without `var`, `x:parse` `var`/`varDom`/`scopeDom`, `dataSource`
+  under `sql:transaction`, a literal invalid `scope` and an empty `var` (§2.7). Ibarra runs them at page `init()`
+  (IBARRA-087). Unit tests: `TagLibraryValidatorsTest`. TCK: `cwo` 7/9 → 9/9, `xcwo` 6/8 → 8/8, `xif` 6/7 → 7/7,
+  `parse` 13/15 → 15/15, `fmtdate` 13/14 → 14/14, `fmtnum` 18/19 → 19/19; each of the 9 pages now fails with
+  "TagLibraryValidator validation failed for jakarta.tags.…". `parsedate#negativePDScopeNoVarTest` and
+  `parsenum#negativePNScopeNoVarTest` now fail through the validator. The run-time checks stay as defence in depth.
 
 ## BOD-007 · 2026-10-24 · `LocalizationContext` properties are unreadable in Ibarra pages with Peano reflection denied
 
