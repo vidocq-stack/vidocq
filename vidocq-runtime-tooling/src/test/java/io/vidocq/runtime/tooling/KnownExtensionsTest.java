@@ -218,6 +218,17 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void anMcpApplicationRequiresTheMcpServerNeverTheExtension() {
+        // The runtime finds the extension as a service; the application compiles against the
+        // server's annotations and types, and JSON-B reflects on its tool arguments and results.
+        assertEquals(new ExtensionCoordinate("io.vidocq.runtime.extensions.essentials",
+                        "vidocq-runtime-langchain4j-cdi-mcp-extension"),
+                KnownExtensions.resolve("langchain4j-cdi-mcp"));
+        assertEquals(List.of("requires dev.langchain4j.cdi.mcp.server", "opens com.acme.time"),
+                KnownExtensions.moduleDirectives("langchain4j-cdi-mcp", "com.acme.time"));
+    }
+
+    @Test
     void moduleNamesMatchTheReactorModuleInfos() throws IOException {
         Path extensions = Path.of("..", "vidocq-runtime-extensions");
         for (RegistryEntry e : KnownExtensions.catalog()) {

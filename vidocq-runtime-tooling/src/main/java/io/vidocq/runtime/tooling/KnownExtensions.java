@@ -164,6 +164,8 @@ public final class KnownExtensions {
      * needs to use {@code id}: its module, which re-exports most extension APIs transitively,
      * plus what the extension's descriptor says it leaves to the application — Cassini does not
      * re-export Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
+     * A descriptor with {@code module-info.requires-module = false} leaves the module out: the runtime
+     * finds the MCP extension as a service, and the application reads the MCP server it names instead.
      * {@code opens} is added only for an existing {@code applicationPackage}, when the descriptor
      * asks for it (JAX-RS, JSON-B and Jakarta Persistence reflect on it). Empty for an id outside the catalog.
      */
@@ -175,7 +177,9 @@ public final class KnownExtensions {
         String key = byId(id).orElseThrow().id();
         List<String> directives = new ArrayList<>();
         csv(property(key, "module-info.requires.static")).forEach(m -> directives.add("requires static " + m));
-        directives.add("requires " + module.get());
+        if (!"false".equals(property(key, "module-info.requires-module"))) {
+            directives.add("requires " + module.get());
+        }
         csv(property(key, "module-info.requires")).forEach(m -> directives.add("requires " + m));
         if (Boolean.parseBoolean(property(key, "module-info.opens-application-package"))
                 && applicationPackage != null && !applicationPackage.isBlank()) {
