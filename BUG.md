@@ -41,6 +41,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   (`maven-compiler-plugin:pom:3.13.0 ... Can't connect to SOCKS proxy`). Fix: the mirror, the `lib`, `sql` and
   aggregator POMs pinned to `@maven.*.plugin.version@`, and `maven-install-plugin` and `git-commit-id-maven-plugin`
   staged. After: 30 runs out of 30 green with the network cut; module `clean install -Pit` green.
+- **Same exposure, same fix: `vidocq-runtime-it-continuous-testing`** (`ContinuousTestingTestGoalIT`,
+  `ContinuousTestingDevGoalIT`, `DevToolsPackagingIT`). Same settings; its single-module fixture has the runtime's
+  parent, so it only needed the bcutil range of `git-commit-id-maven-plugin` from Central, and, once the mirror closed
+  Central, surefire's JUnit Platform provider (`surefire-junit-platform`), which this module, with no unit tests,
+  never resolves. Before: with the fixture's network cut, 3 failures out of 3 tests (`bcutil-jdk18on/maven-metadata.xml
+  ... Can't connect to SOCKS proxy`). Fix: the mirror, and `surefire-junit-platform` and `git-commit-id-maven-plugin`
+  staged. After: 30 runs out of 30 green with the network cut; module `clean install -Pit` green. From an empty local
+  repository, an outer `verify` of both modules with `-am` and no unit tests passes their 9 tests.
 
 ## BUG-20261022-01 — an enriched jar has no folder entries, so Vaadin's development mode copies no frontend files
 
