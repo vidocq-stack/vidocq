@@ -362,8 +362,9 @@ public final class PageConstraints {
             return uri.equals(frame.namespace) || library.family.contains(frame.namespace);
         }
 
+        /** Whether {@code frame} (never {@code null}) is the given action of the library. */
         private boolean inFamily(Frame frame, String localName) {
-            return frame != null && localName.equals(frame.localName) && ofLibrary(frame);
+            return localName.equals(frame.localName) && ofLibrary(frame);
         }
 
         private boolean isSubjectChoose(Frame frame) {
@@ -391,7 +392,8 @@ public final class PageConstraints {
         /** Rules on the place of an element: {@code when} and {@code otherwise}, children of {@code choose}. */
         private void checkParent(Frame frame) {
             Frame container = container(frame.parent);
-            if (library.choice != null && uri.equals(frame.namespace) && !inFamily(container, CHOOSE)) {
+            if (library.choice != null && uri.equals(frame.namespace)
+                    && (container == null || !inFamily(container, CHOOSE))) {
                 if (WHEN.equals(frame.localName)) {
                     report(frame, frame.qName, "must have a choose action as immediate parent", library.choice.when());
                 } else if (OTHERWISE.equals(frame.localName)) {
@@ -467,35 +469,40 @@ public final class PageConstraints {
         private void checkCore(Frame frame) {
             switch (frame.localName) {
                 case "set" -> checkSet(frame);
-                case FOR_EACH -> {
-                    // As the handler: begin defaults to 0, so syntax 2 needs end only.
-                    if (!frame.present(ITEMS) && !frame.present(END)) {
-                        report(frame, frame.qName, "needs either items or end", "6.2");
-                    }
-                }
-                case "import" -> {
-                    if (frame.present(VAR_READER) && (frame.present(VAR) || frame.present(SCOPE))) {
-                        report(frame, frame.qName, "varReader excludes var and scope", "7.4");
-                    }
-                }
+                case FOR_EACH -> checkForEach(frame);
+                case "import" -> checkImport(frame);
                 default -> {
                     // No other syntax rule in the core library.
                 }
             }
         }
 
+        /** §6.2, as the handler: {@code begin} defaults to 0, so syntax 2 needs {@code end} only. */
+        private void checkForEach(Frame frame) {
+            if (!frame.present(ITEMS) && !frame.present(END)) {
+                report(frame, frame.qName, "needs either items or end", "6.2");
+            }
+        }
+
+        /** §7.4: syntax 2 ({@code varReader}) has neither {@code var} nor {@code scope}. */
+        private void checkImport(Frame frame) {
+            if (frame.present(VAR_READER) && (frame.present(VAR) || frame.present(SCOPE))) {
+                report(frame, frame.qName, "varReader excludes var and scope", "7.4");
+            }
+        }
+
         /** §4.3: {@code var} (syntaxes 1, 2, 5) or {@code target} with {@code property} (syntaxes 3, 4). */
         private void checkSet(Frame frame) {
-            boolean var = frame.present(VAR);
-            boolean target = frame.present(TARGET);
-            boolean property = frame.present(PROPERTY);
-            if (!var && !target && !property) {
+            boolean hasVar = frame.present(VAR);
+            boolean hasTarget = frame.present(TARGET);
+            boolean hasProperty = frame.present(PROPERTY);
+            if (!hasVar && !hasTarget && !hasProperty) {
                 report(frame, frame.qName, "needs var or target", SET_SECTION);
-            } else if (var && (target || property)) {
+            } else if (hasVar && (hasTarget || hasProperty)) {
                 report(frame, frame.qName, "var excludes target and property", SET_SECTION);
-            } else if (target && !property) {
+            } else if (hasTarget && !hasProperty) {
                 report(frame, frame.qName, "target requires property", SET_SECTION);
-            } else if (property && !target) {
+            } else if (hasProperty && !hasTarget) {
                 report(frame, frame.qName, "property requires target", SET_SECTION);
             }
         }
@@ -511,15 +518,18 @@ public final class PageConstraints {
                 case QUERY -> checkTransaction(frame, QUERY_SECTION);
                 case UPDATE -> checkTransaction(frame, UPDATE_SECTION);
                 case "setDataSource" -> checkSetDataSource(frame);
-                case PARAM, "dateParam" -> {
-                    if (!nestedIn(frame, QUERY, UPDATE)) {
-                        report(frame, frame.qName, "must be nested inside an action whose handler is a SQLExecutionTag",
-                                PARAM.equals(frame.localName) ? "10.7" : "10.8");
-                    }
-                }
+                case PARAM, "dateParam" -> checkSqlParam(frame);
                 default -> {
                     // No other syntax rule in the SQL library.
                 }
+            }
+        }
+
+        /** §10.7, §10.8: nested in an action whose handler is a {@code SQLExecutionTag}. */
+        private void checkSqlParam(Frame frame) {
+            if (!nestedIn(frame, QUERY, UPDATE)) {
+                report(frame, frame.qName, "must be nested inside an action whose handler is a SQLExecutionTag",
+                        PARAM.equals(frame.localName) ? "10.7" : "10.8");
             }
         }
 

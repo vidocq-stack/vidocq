@@ -131,10 +131,14 @@ class TagLibraryValidatorsTest {
 
     @Test
     void whiteSpaceAndJspBodyInsideChooseAreAccepted() {
-        assertNull(core("<c:choose jsp:id=\"1\">\n  <jsp:text jsp:id=\"2\">\n\t </jsp:text>"
-                + "<jsp:body jsp:id=\"3\"><jsp:text jsp:id=\"4\"> </jsp:text>"
-                + "<c:when test=\"a\" jsp:id=\"5\"><jsp:text jsp:id=\"6\">A</jsp:text></c:when>"
-                + "<c:when test=\"b\" jsp:id=\"7\"/>\n<c:otherwise jsp:id=\"8\">C</c:otherwise></jsp:body>\n</c:choose>"));
+        assertNull(core("""
+                <c:choose jsp:id="1">
+                  <jsp:text jsp:id="2">
+                \t </jsp:text><jsp:body jsp:id="3"><jsp:text jsp:id="4"> </jsp:text>\
+                <c:when test="a" jsp:id="5"><jsp:text jsp:id="6">A</jsp:text></c:when>\
+                <c:when test="b" jsp:id="7"/>
+                <c:otherwise jsp:id="8">C</c:otherwise></jsp:body>
+                </c:choose>"""));
     }
 
     @Test

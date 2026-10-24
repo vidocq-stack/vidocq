@@ -37,7 +37,7 @@ public class ForTokensTag extends RangeLoopTagSupport {
 
     private static final long serialVersionUID = 1L;
 
-    private Object items;
+    private transient Object items;
     private String delims;
     private transient Iterator<?> iterator;
 
