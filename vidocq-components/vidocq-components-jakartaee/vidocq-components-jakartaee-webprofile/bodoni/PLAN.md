@@ -773,7 +773,7 @@ requests, each test-first, until 100 %.
 | `--no-prepare` | Refuses (exit 2) when the extracted DDL is absent |
 | Reports | `target/surefire-reports` and `target/pages-deployments` deleted before Maven runs; no module `clean` (the distribution must survive) |
 | Selections | `all` → `-Dtest=com.sun.ts.tests.jstl.**.*IT`; `smoke` → six whole classes at 100 % in the baseline, eight since the TCK fixes (see "TCK plan") |
-| CI | `.forgejo/workflows/tck-tags.yml`, `official-tags-tck-smoke`, on pull requests and pushes to `main` plus `workflow_dispatch`. Whether it becomes a required check is the maintainer's call |
+| CI | `.forgejo/workflows/tck-tags.yml`, `official-tags-tck-smoke`, on pull requests and pushes to `main` plus `workflow_dispatch`. A required check of `main` (maintainer, 2026-10-24) |
 | Upstream causes | Triaged in `BASELINE.md` with a proposed issue title; only Bodoni defects get `BUG.md` entries; B5 opens nothing in other repositories |
 
 **Baseline** (2026-10-24, Temurin 25, macOS arm64, `Europe/Paris`, `fr_FR`): 50 classes, 541
@@ -816,7 +816,8 @@ recorded in the TCK fixes"):
    `TCK.md`.
 5. Open points for the maintainer: ~~whether the JSTL 1.0 EL URIs ship (open question 2)~~ — not
    shipped (Ruling 3); still open: the `x:forEach` empty-`select` ruling (not exercised by the
-   suite) and whether `official-tags-tck-smoke` becomes a required check. The smoke set gained
+   suite); ~~whether `official-tags-tck-smoke` becomes a required check~~ — it does (maintainer,
+   2026-10-24). The smoke set gained
    `compat.onedotzero` and `spec.core.conditional.cwo` to cover the fixes (decision (2026-10-24);
    `BASELINE.md`, "Smoke set").
 

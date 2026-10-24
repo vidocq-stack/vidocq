@@ -102,7 +102,7 @@ The four interpretations Bodoni recorded in B3 and B4 are not settled by this su
 [#smoke]
 == Smoke and CI
 
-`./run-official-tck-tags-3.0.sh smoke` runs eight classes, 138 tests (138/138 after the TCK fixes): `compat.onedotzero` (the JSTL 1.0 request-time URIs, with the `sql` database), `spec.core.conditional.cwo` (the `c:choose` rules of the tag library validators), `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
+`./run-official-tck-tags-3.0.sh smoke` runs eight classes, 138 tests (138/138 after the TCK fixes): `compat.onedotzero` (the JSTL 1.0 request-time URIs, with the `sql` database), `spec.core.conditional.cwo` (the `c:choose` rules of the tag library validators), `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`, and is a required check of `main`: a pull request that breaks the smoke set cannot be merged. The smoke set is a regression subset; the full `all` run is not in CI.
 
 == Plan
 
