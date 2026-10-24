@@ -25,7 +25,9 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
@@ -39,6 +41,9 @@ import org.junit.jupiter.api.Test;
  * executed in a virtual thread.</p>
  */
 class PolicyComposerAsynchronousTest {
+
+    /** Upper bound on how long the blocked invocation waits for the test to release it. */
+    private static final long RELEASE_WAIT_SECONDS = 10;
 
     @Test
     void asyncExecutesInVirtualThread() throws Exception {
@@ -65,27 +70,30 @@ class PolicyComposerAsynchronousTest {
 
     @Test
     void asyncReturnsCompletionStageImmediately() throws Exception {
-        // Arrange
+        // Arrange — the invocation cannot finish before the test releases it, so a caller that
+        // waited for it would only get a stage back once the release wait has run out.
         Method method = AsyncTestBean.class.getDeclaredMethod("asyncMethod");
-        long startTime = System.nanoTime();
+        CountDownLatch release = new CountDownLatch(1);
 
-        PolicyComposer.Invocation slowInvocation = () -> {
-            Thread.sleep(500);  // Slow operation
+        PolicyComposer.Invocation blockedInvocation = () -> {
+            if (!release.await(RELEASE_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Invocation was never released by the test");
+            }
             return "delayed";
         };
 
         // Act
         CompletionStage<Object> result = (CompletionStage<Object>) PolicyComposer.invoke(
-                slowInvocation, new AsyncTestBean(), method, null
+                blockedInvocation, new AsyncTestBean(), method, null
         );
-        long elapsedNanos = System.nanoTime() - startTime;
 
-        // Assert : caller should get result immediately (< 100ms)
-        assertTrue(elapsedNanos < 100_000_000,
+        // Assert : the caller holds the stage while the invocation is still running
+        assertFalse(result.toCompletableFuture().isDone(),
             "Caller should get CompletionStage immediately without waiting for async execution");
 
-        // Result completes eventually
-        assertEquals("delayed", result.toCompletableFuture().get());
+        // Result completes once the invocation is released
+        release.countDown();
+        assertEquals("delayed", result.toCompletableFuture().get(RELEASE_WAIT_SECONDS, TimeUnit.SECONDS));
     }
 
     @Test
