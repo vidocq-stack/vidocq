@@ -393,11 +393,13 @@ class TagLibraryValidatorsTest {
     }
 
     @Test
-    void forEachWithoutItemsNeedsBeginAndEnd() {
-        assertReported(core("<c:forEach var=\"i\" jsp:id=\"1\"/>"), "1", "c:forEach", "items, or begin and end",
+    void forEachWithoutItemsNeedsEnd() {
+        assertReported(core("<c:forEach var=\"i\" jsp:id=\"1\"/>"), "1", "c:forEach", "needs either items or end",
                 "§6.2");
         assertReported(core("<c:forEach var=\"i\" begin=\"1\" jsp:id=\"1\"/>"), "1", "c:forEach", "§6.2");
         assertNull(core("<c:forEach var=\"i\" begin=\"1\" end=\"2\" jsp:id=\"1\"/>"));
+        // As the handler: begin defaults to 0, so end alone is accepted.
+        assertNull(core("<c:forEach var=\"i\" end=\"3\" jsp:id=\"1\"/>"));
     }
 
     @Test
@@ -494,19 +496,39 @@ class TagLibraryValidatorsTest {
     }
 
     @Test
-    void externalEntityIsRefusedNotFetched(@TempDir Path directory) throws IOException {
-        // A DTD that is valid and harmless: had it been read, the page would be valid.
-        Path dtd = directory.resolve("page.dtd");
-        Files.writeString(dtd, "<!ENTITY e \"fetched\">", StandardCharsets.UTF_8);
+    void externalDtdIsIgnored(@TempDir Path directory) throws IOException {
+        // A DTD that would break the parse if it were read: ignoring it gives a valid page.
+        Path dtd = directory.resolve("broken.dtd");
+        Files.writeString(dtd, "<!garbage", StandardCharsets.UTF_8);
         String root = "<jsp:root xmlns:jsp=\"http://java.sun.com/JSP/Page\" xmlns:c=\"jakarta.tags.core\" jsp:id=\"0\">";
-        String external = "<!DOCTYPE jsp:root SYSTEM \"" + dtd.toUri() + "\">" + root
-                + "<c:choose jsp:id=\"1\"><c:when test=\"t\" jsp:id=\"2\"/></c:choose></jsp:root>";
-        assertReported(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(external)), null,
-                READ_FAILURE, dtd.toUri().toString());
-        String entity = "<!DOCTYPE jsp:root [<!ENTITY e SYSTEM \"" + dtd.toUri() + "\">]>" + root
+        String body = "<c:choose jsp:id=\"1\"><c:when test=\"t\" jsp:id=\"2\"/></c:choose></jsp:root>";
+        assertNull(new CoreTagLibraryValidator().validate("c", CORE,
+                new TestPageData("<!DOCTYPE jsp:root SYSTEM \"" + dtd.toUri() + "\">" + root + body)));
+        // The XHTML doctype a JSP document may keep: nothing is fetched from the network.
+        assertNull(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(
+                "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" "
+                        + "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">" + root + body)));
+        // The rules still apply under a DOCTYPE.
+        assertReported(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(
+                "<!DOCTYPE jsp:root SYSTEM \"" + dtd.toUri() + "\">" + root + "<c:choose jsp:id=\"1\"/></jsp:root>")),
+                "1", "c:choose", "§5.4");
+    }
+
+    @Test
+    void externalEntityIsRefusedNotFetched(@TempDir Path directory) throws IOException {
+        Path file = directory.resolve("entity.txt");
+        Files.writeString(file, "fetched", StandardCharsets.UTF_8);
+        String root = "<jsp:root xmlns:jsp=\"http://java.sun.com/JSP/Page\" xmlns:c=\"jakarta.tags.core\" jsp:id=\"0\">";
+        String general = "<!DOCTYPE jsp:root [<!ENTITY e SYSTEM \"" + file.toUri() + "\">]>" + root
                 + "<jsp:text jsp:id=\"1\">&e;</jsp:text></jsp:root>";
-        assertReported(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(entity)), null,
-                READ_FAILURE, dtd.toUri().toString());
+        assertReported(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(general)), null,
+                READ_FAILURE, file.toUri().toString());
+        Path parameters = directory.resolve("parameters.dtd");
+        Files.writeString(parameters, "<!ENTITY e \"fetched\">", StandardCharsets.UTF_8);
+        String parameter = "<!DOCTYPE jsp:root [<!ENTITY % p SYSTEM \"" + parameters.toUri() + "\"> %p;]>" + root
+                + "<jsp:text jsp:id=\"1\">t</jsp:text></jsp:root>";
+        assertReported(new CoreTagLibraryValidator().validate("c", CORE, new TestPageData(parameter)), null,
+                READ_FAILURE, parameters.toUri().toString());
     }
 
     @Test

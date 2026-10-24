@@ -62,7 +62,8 @@ import org.xml.sax.helpers.DefaultHandler;
  * ({@code %= … %}) and, unless the page ignores EL, no {@code ${…}} or {@code #{…}} expression
  * ({@code #{…}} is literal too with {@code deferredSyntaxAllowedAsLiteral}).
  *
- * <p>The view is read with SAX ({@code java.xml}) and every external entity is refused. A view that
+ * <p>The view is read with SAX ({@code java.xml}); the external DTD subset is not loaded and every
+ * external general or parameter entity is refused. A view that
  * cannot be read gives one message: the validator fails closed. Each call reads the view twice
  * (page directives, then the rules) with its own handlers; nothing is shared between calls.
  */
@@ -94,7 +95,6 @@ public final class PageConstraints {
     private static final String TARGET = "target";
     private static final String PROPERTY = "property";
     private static final String ITEMS = "items";
-    private static final String BEGIN = "begin";
     private static final String END = "end";
     private static final String DOC = "doc";
     private static final String XML = "xml";
@@ -117,7 +117,13 @@ public final class PageConstraints {
     private static final Set<String> TAG_FILE_MARKERS = Set.of("directive.tag", "directive.attribute",
             "directive.variable", "doBody", "invoke");
 
-    /** Refuses every external entity and the external DTD subset: nothing is fetched. */
+    /**
+     * The JDK parser feature that loads the external DTD subset of a non-validating parse. It is off:
+     * a JSP document may keep a DOCTYPE (an XHTML one, say) that names a DTD nothing needs here.
+     */
+    private static final String LOAD_EXTERNAL_DTD = "http://apache.org/xml/features/nonvalidating/load-external-dtd";
+
+    /** Refuses every external general or parameter entity: nothing is fetched. */
     private static final EntityResolver REFUSE = (publicId, systemId) -> {
         throw new SAXException("external entity refused: " + systemId);
     };
@@ -193,6 +199,7 @@ public final class PageConstraints {
 
     private static void parse(byte[] view, DefaultHandler handler) throws IOException, SAXException {
         XMLReader reader = XmlFactories.xmlReader(REFUSE);
+        reader.setFeature(LOAD_EXTERNAL_DTD, false);
         reader.setContentHandler(handler);
         reader.parse(new InputSource(new ByteArrayInputStream(view)));
     }
@@ -461,8 +468,9 @@ public final class PageConstraints {
             switch (frame.localName) {
                 case "set" -> checkSet(frame);
                 case FOR_EACH -> {
-                    if (!frame.present(ITEMS) && !(frame.present(BEGIN) && frame.present(END))) {
-                        report(frame, frame.qName, "needs items, or begin and end", "6.2");
+                    // As the handler: begin defaults to 0, so syntax 2 needs end only.
+                    if (!frame.present(ITEMS) && !frame.present(END)) {
+                        report(frame, frame.qName, "needs either items or end", "6.2");
                     }
                 }
                 case "import" -> {

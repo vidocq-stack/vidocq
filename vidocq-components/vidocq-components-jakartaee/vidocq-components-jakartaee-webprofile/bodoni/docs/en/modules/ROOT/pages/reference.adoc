@@ -68,7 +68,7 @@ The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.
 
 === Constraints
 
-Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; every external entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.
+Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; the external DTD subset of a DOCTYPE is not loaded (an XHTML DOCTYPE kept in a JSP document is harmless), every external general or parameter entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.
 
 Each validator checks the elements of the URI it is called for, whatever that URI is: a `jakarta.tags.*` or legacy URI, a TLD path, a `web.xml` alias or a `urn:jsptld:` namespace.
 
@@ -80,7 +80,7 @@ Each validator checks the elements of the URI it is called for, whatever that UR
 | `c`, `x` | A `when` or `otherwise` whose parent (seen through a `jsp:body`) is not a `choose` | §5.5, §5.6, §12.4, §12.5
 | `c`, `fmt`, `sql`, `x` | `scope` without `var` on `c:if`, `c:set`, `fmt:message`, `fmt:formatNumber`, `fmt:parseNumber`, `fmt:formatDate`, `fmt:parseDate`, `sql:update`, `x:if`, `x:parse` and `x:transform` | §4.3, §5.3, §8.8, §9.7-§9.10, §10.4, §11.2, §12.2, §13.2
 | `c` | `c:set` with neither `var` nor `target`, with `var` and `target` or `property`, or with `target` and `property` apart | §4.3
-| `c` | `c:forEach` with neither `items` nor `begin` and `end` | §6.2
+| `c` | `c:forEach` with neither `items` nor `end` (`begin` defaults to 0, as in the handler) | §6.2
 | `c` | `c:import` with `varReader` and `var` or `scope` | §7.4
 | `fmt` | `fmt:param` not nested in a `fmt:message` | §8.9
 | `sql` | A `dataSource` attribute on `sql:query` or `sql:update` nested in a `sql:transaction` | §10.3-§10.5
