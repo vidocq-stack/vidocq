@@ -801,6 +801,14 @@ result):
    `x:forEach` empty-`select` ruling, and whether `official-tags-tck-smoke` becomes a required
    check.
 
+## Decisions recorded in the TCK fixes (2026-10-24)
+
+Branch `fix/tck-baseline`; plan `docs/superpowers/plans/2026-10-24-tck-baseline-fixes.md`. Each fix is test-first.
+
+| Bug | Decision |
+|---|---|
+| BOD-009 | A TLD attribute that is both `rtexprvalue` and `deferred-value` has a setter of type `java.lang.Object` (the rule Ibarra and the Pages TLD rule apply). `c:forTokens` `items` is `deferred-value` of type `java.lang.String` in `c.tld` and `c-1_2.tld`, and `ForTokensTag.setItems(Object)` evaluates a `ValueExpression` and coerces the value as EL coerces to `String` (`Enum` gives `name()`, other values `toString()`, `null` gives no iteration). `LoopTagSupport` maps `var` through `getDelims()`; for a non-String value the handler hands it a String-coercing wrapper of the expression. Tags 3.0 §6.3. |
+
 ## Cross-repo item: BOD-001 (fixed)
 
 Under Peano with `peano.reflection=deny`, a precompiled page could not read `${s.index}` (or any

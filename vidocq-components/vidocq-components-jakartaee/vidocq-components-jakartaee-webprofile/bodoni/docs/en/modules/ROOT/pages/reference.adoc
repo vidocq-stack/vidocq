@@ -80,7 +80,7 @@ The attributes of each tag are those of {spec-tags-3-0}[the specification] (chap
 | `c:if` | Conditional on a `test` expression (5)
 | `c:choose`, `c:when`, `c:otherwise` | Mutually exclusive conditional (5)
 | `c:forEach` | Iterates over a collection, array, map, iterator, enumeration, comma-separated string, or an integer range; exposes `varStatus` (6)
-| `c:forTokens` | Iterates over the tokens of a string split on delimiters (6)
+| `c:forTokens` | Iterates over the tokens of a string split on delimiters; `items` may be a deferred expression, and a non-String value is coerced to String (6)
 | `c:import` | Includes the content of an absolute or relative URL (7)
 | `c:url` | Builds a URL, rewritten for the context and the session (7)
 | `c:redirect` | Sends an HTTP redirect (7)

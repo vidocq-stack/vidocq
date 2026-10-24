@@ -240,7 +240,9 @@
       <name>items</name>
       <required>true</required>
       <rtexprvalue>true</rtexprvalue>
-      <type>java.lang.String</type>
+      <deferred-value>
+        <type>java.lang.String</type>
+      </deferred-value>
     </attribute>
     <attribute>
       <description>The set of delimiters.</description>

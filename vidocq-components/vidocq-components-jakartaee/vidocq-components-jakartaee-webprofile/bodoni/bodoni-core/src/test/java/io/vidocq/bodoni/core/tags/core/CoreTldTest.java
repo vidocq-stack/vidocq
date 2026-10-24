@@ -95,7 +95,7 @@ class CoreTldTest {
                 "varStatus", optStatic(String.class), "begin", optDyn(int.class), "end", optDyn(int.class),
                 "step", optDyn(int.class))));
         // §6.3
-        SPEC.put("forTokens", new Expected("JSP", attrs("var", optStatic(String.class), "items", reqDyn(String.class),
+        SPEC.put("forTokens", new Expected("JSP", attrs("var", optStatic(String.class), "items", new Attr(true, true, String.class, true),
                 "delims", reqDyn(String.class), "varStatus", optStatic(String.class), "begin", optDyn(int.class),
                 "end", optDyn(int.class), "step", optDyn(int.class))));
         // §7.4
@@ -166,13 +166,18 @@ class CoreTldTest {
                 boolean found = false;
                 for (Method m : type.getMethods()) {
                     if (m.getName().equals(setter) && m.getParameterCount() == 1
-                            && m.getParameterTypes()[0].getName().equals(a.type())) {
+                            && m.getParameterTypes()[0].getName().equals(setterType(a))) {
                         found = true;
                     }
                 }
-                assertTrue(found, tag.tagClass() + " has public " + setter + "(" + a.type() + ")");
+                assertTrue(found, tag.tagClass() + " has public " + setter + "(" + setterType(a) + ")");
             }
         }
+    }
+
+    /** A dynamic and deferred attribute takes {@code Object}, so the handler can receive the expression. */
+    private static String setterType(TldReader.Attribute a) {
+        return a.deferred() && a.rtexprvalue() ? "java.lang.Object" : a.type();
     }
 
     private static int constructorModifiers(Class<?> type) {

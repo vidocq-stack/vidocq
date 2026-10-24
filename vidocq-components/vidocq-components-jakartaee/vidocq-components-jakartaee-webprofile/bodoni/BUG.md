@@ -229,4 +229,4 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `java.lang.String` without `<deferred-value>` (`c:forEach` `items` and `c:set` `value` have it),
   and `ForTokensTag.setItems(String)` takes no `ValueExpression`, so Ibarra rejects the `#{…}`
   value at translation time.
-- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first (TLD and handler).
+- Status: fixed (2026-10-24, branch `fix/tck-baseline`): `items` is `deferred-value` `java.lang.String` in `c.tld` and `c-1_2.tld`; `ForTokensTag.setItems(Object)`. A non-String value is coerced as EL coerces to `String`, a null one gives no iteration. TCK `spec.core.iteration.fortokens`: 14/15 before, 15/15 after.
