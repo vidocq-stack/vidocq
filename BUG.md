@@ -1077,7 +1077,7 @@ where this whole bug class is invisible.
 ## BUG-20261024-12 — `CLI-ROADMAP.md` describes the CLI before #314
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#338, umbrella #339)
+- **Status**: FIXED on `docs/cli-roadmap` (#338, umbrella #339)
 - **Affected module**: vidocq-runtime-cli (`CLI-ROADMAP.md`)
 - **Symptom**: the file says `vidocq start` delegates to `VidocqBootstrap`, `vidocq dev` boots the runtime in-process
   without class reloading, and `info` / `extension list` / `doctor` scan the CLI's class path. Since 2cf4cb00 and
@@ -1085,3 +1085,5 @@ where this whole bug class is invisible.
   project's dependencies with Maven. The old description is the confusion of #47.
 - **Minimal reproduction**: read M1, M2 and M6 of `vidocq-runtime-cli/CLI-ROADMAP.md`.
 - **Cause**: the file was not updated with 2cf4cb00 and #314.
+- **Fix**: the file keeps the principles of the CLI and points to the reference page, the CLI/plugin table and
+  `whats-new` for the commands, and to #339 for what is next: one description to keep up to date.
