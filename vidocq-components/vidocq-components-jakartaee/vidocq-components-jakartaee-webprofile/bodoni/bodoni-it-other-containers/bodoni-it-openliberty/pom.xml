@@ -155,6 +155,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <bodoni.it.base>http://localhost:${liberty.http.port}/bodoni</bodoni.it.base>
+                        <bodoni.it.workarea>${project.build.directory}/liberty/wlp/usr/servers/bodoniIt/workarea</bodoni.it.workarea>
                     </systemPropertyVariables>
                 </configuration>
                 <executions>

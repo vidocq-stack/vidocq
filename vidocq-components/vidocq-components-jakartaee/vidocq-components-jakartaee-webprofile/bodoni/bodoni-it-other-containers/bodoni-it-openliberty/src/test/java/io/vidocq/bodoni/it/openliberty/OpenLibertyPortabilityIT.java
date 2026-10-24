@@ -20,6 +20,10 @@
 package io.vidocq.bodoni.it.openliberty;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Stream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -27,6 +31,7 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -51,6 +56,39 @@ class OpenLibertyPortabilityIT {
     void legacyCoreUriIsBodoni() throws Exception {
         String body = get("/core-legacy.jsp");
         assertTrue(body.contains("[parent=io.vidocq.bodoni.core.tags.core.ForEachTag]"), body);
+    }
+
+    @Test
+    void fmtTagsAreBodoni() throws Exception {
+        String body = get("/fmt.jsp");
+        assertTrue(body.contains("[parent=io.vidocq.bodoni.core.tags.fmt.BundleTag]"), body);
+        assertTrue(body.contains("[parent=io.vidocq.bodoni.core.tags.fmt.TimeZoneTag]"), body);
+    }
+
+    @Test
+    void fmtMessageReadsTheApplicationBundle() throws Exception {
+        String body = get("/fmt.jsp");
+        assertTrue(body.contains("MSG=Hello from the application bundle"), body);
+    }
+
+    @Test
+    void fnFunctionsAreBodoni() throws Exception {
+        assertTrue(get("/fn.jsp").contains("LEN=3"));
+        String source = generatedSource("fn");
+        assertTrue(source.contains("io.vidocq.bodoni.core.functions.Functions"), source);
+        assertFalse(source.contains("org.apache.taglibs"), source);
+    }
+
+    /** The servlet source Liberty keeps for a page (server.xml: keepGenerated), found under the workarea. */
+    private static String generatedSource(String jspName) throws IOException {
+        Path workarea = Path.of(System.getProperty("bodoni.it.workarea"));
+        List<Path> found;
+        try (Stream<Path> files = Files.walk(workarea)) {
+            found = files.filter(f -> f.getFileName().toString().equals("_" + jspName + ".java")).toList();
+        }
+        assertEquals(1, found.size(),
+                "expected exactly one _" + jspName + ".java under " + workarea + ", found " + found);
+        return Files.readString(found.get(0));
     }
 
     private static String get(String path) throws IOException, InterruptedException {
