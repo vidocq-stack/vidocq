@@ -1080,6 +1080,12 @@ where this whole bug class is invisible.
 - **Cause**: javac's `proc.file.create.last.round` warning; Vauban's processor writes sources in the last round on
   purpose (see Vauban's BUG.md on the classes emitted as bytecode). Whether `-Xlint:-processing` covers this key on
   JDK 25 is to confirm.
+- **Investigations**:
+  - 2026-10-24: javac emits the warning for every source or class file created in the last round, outside any lint
+    category: `-Xlint:-processing` and `-Xlint:none` leave the three lines on JDK 25, only `-nowarn` removes them,
+    and it would hide every warning of the application. Vauban generates in the last round on purpose (companion
+    processors and BCEs must have run first), so neither option of the fix holds as written: the fix is a change of
+    Vauban's round strategy, studied in Vidocq/vauban#216.
 
 ## BUG-20261024-12 — `CLI-ROADMAP.md` describes the CLI before #314
 
