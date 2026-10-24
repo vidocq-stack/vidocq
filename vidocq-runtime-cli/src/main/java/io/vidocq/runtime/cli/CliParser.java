@@ -38,6 +38,9 @@ import java.util.Set;
  */
 public final class CliParser {
 
+    private static final String START = "start";
+    private static final String DOCTOR = "doctor";
+    private static final String DEBUG = "--debug";
     private static final String CHECK = "--check";
     private static final String OPTIONS = "Options:";
 
@@ -48,9 +51,9 @@ public final class CliParser {
             case "version", "--version", "-V" -> new Command.Version();
             case "info"                       -> new Command.Info();
             case "help", "--help", "-h"       -> new Command.Help(args.length > 1 ? args[1] : null);
-            case "start"                      -> parseStart(args, 1);
+            case START                      -> parseStart(args, 1);
             case "dev"                        -> parseDev(args, 1);
-            case "doctor"                     -> parseDoctor(args, 1);
+            case DOCTOR                     -> parseDoctor(args, 1);
             case "test"                       -> parseTest(args, 1);
             case "idea"                       -> parseIdea(args, 1);
             case "create"                     -> parseCreate(args, 1);
@@ -77,8 +80,8 @@ public final class CliParser {
             switch (args[i]) {
                 case "--port", "-p"   -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
-                case "--debug"        -> debug  = true;
-                default               -> unknownOpt(args[i], "start");
+                case DEBUG        -> debug  = true;
+                default               -> unknownOpt(args[i], START);
             }
         }
         return new Command.Start(port, portExplicit, config, debug);
@@ -93,7 +96,7 @@ public final class CliParser {
             switch (args[i]) {
                 case "--port", "-p"    -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--profile", "-P" -> profile = value(args, ++i, "--profile");
-                case "--debug"         -> debug   = true;
+                case DEBUG         -> debug   = true;
                 default                -> unknownOpt(args[i], "dev");
             }
         }
@@ -134,7 +137,7 @@ public final class CliParser {
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case "--verbose", "-v" -> verbose = true;
-                default                -> unknownOpt(args[i], "doctor");
+                default                -> unknownOpt(args[i], DOCTOR);
             }
         }
         return new Command.Doctor(verbose);
@@ -336,11 +339,11 @@ public final class CliParser {
         CliOutput.println(CliOutput.bold("Commands:"));
         cmd("version",          "Print the CLI and runtime version.");
         cmd("info",             "Display runtime, JVM, and extension information.");
-        cmd("start",            "Build and run the project's application (mvn vidocq:run).");
+        cmd(START,            "Build and run the project's application (mvn vidocq:run).");
         cmd("dev",              "Run the project in dev mode with live reload (mvn vidocq:dev).");
         cmd("test",             "Run the tests on every change, without the application (mvn vidocq:test).");
         cmd("idea",             "Write the IntelliJ run configurations into .run/ (mvn vidocq:idea).");
-        cmd("doctor",           "Run environment & project health checks.");
+        cmd(DOCTOR,           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
         cmd("clean",            "Remove build output (mvn clean).");
@@ -359,13 +362,13 @@ public final class CliParser {
 
     private static void printTopicHelp(String topic) {
         switch (topic) {
-            case "start" -> {
-                topic("start", "Build and run the application",
+            case START -> {
+                topic(START, "Build and run the application",
                         "Runs 'mvn vidocq:run' in the project (./mvnw when present): compiles it and",
                         "starts it with its dependencies and extensions on the module path.");
                 options("--port, -p <n>",      "HTTP listening port, over the project's own setting",
                         "--config, -c <file>", "Path to an external vidocq.properties file",
-                        "--debug",             "Open a debug agent on port 5005");
+                        DEBUG,             "Open a debug agent on port 5005");
             }
             case "dev" -> {
                 topic("dev", "Development mode",
@@ -374,7 +377,7 @@ public final class CliParser {
                         "and the debug agent (port 5005), and restarts on every source change.");
                 options("--port, -p <n>",       "HTTP listening port, over the project's own setting",
                         "--profile, -P <name>", "Config profile to activate (default: dev)",
-                        "--debug",              "Force the debug agent on (it is on by default in dev)");
+                        DEBUG,              "Force the debug agent on (it is on by default in dev)");
             }
             case "test" -> topic("test", "Continuous testing",
                     "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
@@ -388,8 +391,8 @@ public final class CliParser {
                         "--strict",     "Check, and also fail on files written or edited by hand",
                         "--kind <kind>", "maven (default) or application: an Application run of the main class");
             }
-            case "doctor" -> {
-                topic("doctor", "Environment & project health checks",
+            case DOCTOR -> {
+                topic(DOCTOR, "Environment & project health checks",
                         "Runs a series of checks (Java version, JAVA_HOME, Maven wrapper,",
                         "project layout, extensions) and prints a report. Exits non-zero if",
                         "any check fails.");
