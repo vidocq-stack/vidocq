@@ -300,6 +300,16 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>

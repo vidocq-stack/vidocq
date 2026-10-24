@@ -55,11 +55,10 @@ class ProjectScaffolderExtensionsTest {
     }
 
     @Test
-    void unknownExtensionFallsBackToConvention(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("acme-widgets"));
+    void anExplicitCoordinateIsWrittenAsGiven(@TempDir Path dir) throws IOException {
+        String pom = scaffoldPom(dir, Set.of("com.acme:acme-widgets"));
 
-        assertTrue(pom.contains("<artifactId>vidocq-runtime-acme-widgets-extension</artifactId>"),
-                "unknown ids keep the io.vidocq.runtime:<convention> coordinate, pom was:\n" + pom);
+        assertTrue(pom.contains("<groupId>com.acme</groupId>\n            <artifactId>acme-widgets</artifactId>"), pom);
     }
 
     @Test

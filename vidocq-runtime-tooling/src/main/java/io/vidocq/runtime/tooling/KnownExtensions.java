@@ -23,9 +23,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Built-in, offline catalog of first-party Vidocq extensions, and the resolver
@@ -109,23 +112,59 @@ public final class KnownExtensions {
      * Resolves a user-supplied id to a coordinate:
      * <ol>
      *   <li>a known catalog short id → its (category-specific) coordinate;</li>
-     *   <li>an explicit {@code groupId:artifactId} → parsed verbatim;</li>
-     *   <li>otherwise → the default convention
-     *       {@code io.vidocq.runtime:vidocq-runtime-<id>-extension}.</li>
+     *   <li>an explicit {@code groupId:artifactId} → parsed verbatim.</li>
      * </ol>
+     * Any other id is refused, naming the closest catalog ids: every Vidocq extension is in the catalog, under a
+     * groupId of its category, so a coordinate guessed from the id could only be wrong (BUG-20261024-04).
+     *
+     * @throws IllegalArgumentException for a blank id, or a short id outside the catalog
      */
     public static ExtensionCoordinate resolve(String id) {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("extension id must not be blank");
         }
         String trimmed = id.trim();
-        return byId(trimmed)
-                .map(RegistryEntry::coordinate)
-                .orElseGet(() -> trimmed.contains(":")
-                        ? ExtensionCoordinate.parse(trimmed)
-                        : new ExtensionCoordinate(
-                                "io.vidocq.runtime",
-                                "vidocq-runtime-" + trimmed + "-extension"));
+        if (trimmed.contains(":")) {
+            return ExtensionCoordinate.parse(trimmed);
+        }
+        return byId(trimmed).map(RegistryEntry::coordinate).orElseThrow(() -> unknown(trimmed));
+    }
+
+    private static IllegalArgumentException unknown(String id) {
+        List<String> close = closest(id);
+        return new IllegalArgumentException("not in the Vidocq catalog."
+                + (close.isEmpty() ? "" : " Did you mean: " + String.join(", ", close) + "?")
+                + " An extension outside the catalog is added as groupId:artifactId.");
+    }
+
+    /** The catalog ids sharing a word with {@code id}, or within two edits of it. */
+    private static List<String> closest(String id) {
+        String needle = id.toLowerCase(Locale.ROOT);
+        Set<String> words = Set.of(needle.split("-"));
+        return CATALOG.stream().map(RegistryEntry::id)
+                .filter(candidate -> Arrays.stream(candidate.split("-")).anyMatch(words::contains)
+                        || distance(needle, candidate) <= 2)
+                .toList();
+    }
+
+    /** The Levenshtein distance between {@code a} and {@code b}. */
+    private static int distance(String a, String b) {
+        int[] previous = new int[b.length() + 1];
+        int[] current = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            current[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int substitution = previous[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1);
+                current[j] = Math.min(substitution, Math.min(previous[j], current[j - 1]) + 1);
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[b.length()];
     }
 
     /** The catalog id of the extension at {@code coordinate}, else its artifactId. */

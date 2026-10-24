@@ -143,6 +143,8 @@ public final class PomEditor {
 
     private static final String APT_OPEN = "<annotationProcessorPaths";
     private static final String APT_CLOSE = "</annotationProcessorPaths>";
+    /** The Vauban indexer the runtime parent puts on the processor paths. */
+    private static final String INDEXER = "vidocq-runtime-core-codegen";
     private static final String APPENDING_APT_OPEN = "<annotationProcessorPaths combine.children=\"append\">";
     private static final String COMPILER_ARTIFACT = "<artifactId>maven-compiler-plugin</artifactId>";
     private static final String CONFIGURATION_OPEN = "<configuration>";
@@ -222,14 +224,19 @@ public final class PomEditor {
     /**
      * Whether the project build's {@code annotationProcessorPaths} replaces the parent's
      * instead of appending to it, dropping the Vauban indexer the parent wires. False when
-     * the project declares none.
+     * the project declares none, and when the block lists the indexer itself, as an
+     * application without a Vidocq parent does (BUG-20261024-02).
      */
     public static boolean dropsInheritedProcessorPaths(String pom) {
         List<int[]> skipped = outsideProjectBuild(pom);
         Span plugin = compilerPlugin(pom, skipped);
         int aptOpen = plugin == null ? -1 : indexWithin(pom, APT_OPEN, plugin, skipped);
         int tagEnd = aptOpen < 0 ? -1 : pom.indexOf('>', aptOpen);
-        return tagEnd >= 0 && !appends(pom.substring(aptOpen, tagEnd + 1));
+        if (tagEnd < 0 || appends(pom.substring(aptOpen, tagEnd + 1))) {
+            return false;
+        }
+        int aptClose = pom.indexOf(APT_CLOSE, tagEnd);
+        return aptClose < 0 || !pom.substring(tagEnd, aptClose).contains("<artifactId>" + INDEXER + "</artifactId>");
     }
 
     private static Result addToProcessorPaths(String pom, int aptOpen, ExtensionCoordinate codegen,

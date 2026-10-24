@@ -81,6 +81,10 @@ class PomEditorAptTest {
             </project>
             """;
 
+    /** The Vauban indexer, as an application without a Vidocq parent lists it, before its first path. */
+    private static final String INDEXER_THEN_PATH = "<path><groupId>io.vidocq.runtime</groupId>"
+            + "<artifactId>vidocq-runtime-core-codegen</artifactId><version>0.4.0</version></path>\n<path>";
+
     private static final String POM_MINIMAL = """
             <project>
                 <artifactId>bare</artifactId>
@@ -272,6 +276,19 @@ class PomEditorAptTest {
         assertTrue(PomEditor.dropsInheritedProcessorPaths(pom));
         assertTrue(r.pom().contains("<annotationProcessorPaths combine.children=\"append\">"), r.pom());
         assertFalse(r.pom().contains("combine.self"), r.pom());
+    }
+
+    /**
+     * BUG-20261024-02: an application without a Vidocq parent lists the Vauban indexer in its own block, which
+     * then has nothing to append to and drops nothing.
+     */
+    @Test
+    void aBlockThatListsTheIndexerItselfDropsNothing() {
+        String pom = POM_WITH_APT.replace(" combine.children=\"append\"", "")
+                .replaceFirst("<path>", INDEXER_THEN_PATH);
+
+        assertTrue(pom.contains("vidocq-runtime-core-codegen"), pom);
+        assertFalse(PomEditor.dropsInheritedProcessorPaths(pom), pom);
     }
 
     @Test

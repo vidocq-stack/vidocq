@@ -124,15 +124,28 @@ class CommandRunnerExtensionTest {
         assertTrue(run.out().contains("cassini-rest not found in pom.xml"), run.out());
     }
 
+    /** BUG-20261024-04: an id outside the catalog used to become a coordinate that does not exist. */
     @Test
-    void anExtensionOutsideTheCatalogIsResolvedByConvention() throws IOException {
+    void anIdOutsideTheCatalogFailsAndNamesTheClosestIds() throws IOException {
+        writePom("");
+        String before = pom();
+
+        Run run = run(List.of("mansart-persistence"), true);
+
+        assertEquals(1, run.exit());
+        assertEquals(before, pom());
+        assertTrue(run.out().contains("Did you mean: mansart-data, mansart-pool, mansart-transactions?"), run.out());
+    }
+
+    @Test
+    void anExplicitCoordinateOutsideTheCatalogIsAddedAsGiven() throws IOException {
         writePom("");
 
-        Run run = run(List.of("acme-thing"), true);
+        Run run = run(List.of("com.acme:acme-thing"), true);
 
         assertEquals(0, run.exit());
-        assertTrue(pom().contains("<artifactId>vidocq-runtime-acme-thing-extension</artifactId>"), pom());
-        assertTrue(run.out().contains("not a known extension"), run.out());
+        assertTrue(pom().contains("<artifactId>acme-thing</artifactId>"), pom());
+        assertTrue(run.out().contains("not in the Vidocq catalog"), run.out());
     }
 
     /** BUG-20261023-02: wiring a codegen bundle makes the block append to the parent's. */

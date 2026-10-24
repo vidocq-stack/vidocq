@@ -186,7 +186,7 @@ public final class ExtensionEditor {
         if (result.changed()) {
             reporter.success((add ? "Added " : "Removed ") + id, coordinate.toString());
             if (add && !KnownExtensions.isKnown(id)) {
-                reporter.note("↳ not a known extension — resolved by convention; verify the coordinate.");
+                reporter.note("↳ not in the Vidocq catalog — added as given; verify the coordinate.");
             }
         } else if (add) {
             reporter.note("• " + id + " already present — skipped.");

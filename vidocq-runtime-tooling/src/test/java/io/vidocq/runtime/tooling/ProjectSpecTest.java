@@ -52,6 +52,23 @@ class ProjectSpecTest {
         assertTrue(e.getMessage().endsWith("choose another with -Dpackage=<pkg>."), e.getMessage());
     }
 
+    /** BUG-20261024-04: create wrote the dependency of an unknown id under a coordinate that does not exist. */
+    @Test
+    void anUnknownExtensionIdIsRefused() {
+        var e = assertThrows(IllegalArgumentException.class,
+                () -> ProjectSpec.of("demo", null, null, List.of("knock-helth"), null, false, "--package"));
+
+        assertTrue(e.getMessage().startsWith("unknown extension 'knock-helth': not in the Vidocq catalog."
+                + " Did you mean: knock-health?"), e.getMessage());
+    }
+
+    @Test
+    void anExplicitCoordinateIsAccepted() {
+        ProjectSpec spec = ProjectSpec.of("demo", null, null, List.of("com.acme:acme-thing"), null, false, "--package");
+
+        assertEquals(Set.of("com.acme:acme-thing"), spec.extensions());
+    }
+
     @Test
     void anExplicitPackageMustBeAJavaNameToo() {
         var e = assertThrows(IllegalArgumentException.class,

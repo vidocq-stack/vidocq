@@ -60,7 +60,8 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
      * The spec with its defaults: the groupId {@value #DEFAULT_GROUP_ID}, the package {@code <groupId>.<name>}.
      *
      * @param packageOption how the tool names its package option, for the error message ({@code --package <pkg>})
-     * @throws IllegalArgumentException when the package, given or derived, is not a valid Java package name
+     * @throws IllegalArgumentException when the package, given or derived, is not a valid Java package name, or an
+     *                                  extension is neither a catalog id nor a {@code groupId:artifactId}
      */
     public static ProjectSpec of(String name, String groupId, String pkg, Collection<String> extensions,
                                  String parentVersion, boolean main, String packageOption) {
@@ -74,6 +75,13 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
                     + (pkg != null ? "." : " (derived from the groupId and the name).")
                     + " It is also the module name, so each dot-separated part must be a Java"
                     + " identifier that is not a keyword; choose another with " + packageOption + ".");
+        }
+        for (String id : extensions) {
+            try {
+                KnownExtensions.resolve(id);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("unknown extension '" + id + "': " + e.getMessage(), e);
+            }
         }
         return new ProjectSpec(name, gid, p, new LinkedHashSet<>(extensions), parentVersion, main);
     }

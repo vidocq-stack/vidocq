@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  *   <li>{@code beforeStart(VaubanContainerBuilder)} instantiates the {@link MansartDataSource} and
  *       registers it with Vauban as the singleton {@link DataSource} factory. The pool is opened
  *       here, not in {@code onStart}, so any later extension that depends on a {@link DataSource}
- *       (mansart-data, mansart-persistence, …) sees it ready when the CDI container boots.</li>
+ *       (mansart-data, mansart-transactions, …) sees it ready when the CDI container boots.</li>
  *   <li>{@code onStart(ExtensionContext)} notes what the startup report will flag: a pool whose
  *       {@code minIdle} pre-fill opened nothing, a named pool no {@code @Named} {@link DataSource} bean
  *       serves.</li>
