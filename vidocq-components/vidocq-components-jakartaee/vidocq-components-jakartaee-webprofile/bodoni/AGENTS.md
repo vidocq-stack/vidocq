@@ -10,7 +10,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 > page composes with. Ibarra (Jakarta Pages 4.0) composes and prints the pages; Bodoni
 > supplies the type.
 
-**Status: B5 delivered — official Tags TCK 541/541 on Ibarra + Foy + Peano (not a certification); `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented, B6 next.** Read [PLAN.md](PLAN.md) before any
+**Status: B5 delivered — official Tags TCK 541/541 on Ibarra + Foy + Peano (not a certification); `fn:`, `c:`, `fmt:`, `x:` and `sql:` implemented; B6 (inlining) on standby after a measurement (BENCH.md), B7 next.** Read [PLAN.md](PLAN.md) before any
 change — it is the design of record (spec scope, brick/extension rule, Java Modules
 layout, Ibarra build-time inlining, ecosystem friction points, TCK plan, milestones
 B0–B7, open questions). Structural decisions marked "to validate" there need the
@@ -198,7 +198,7 @@ Jakarta EE / MicroProfile spec implementations.
 `index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
 `performance` → `reference` → `migration`
 
-Bodoni has no `performance` page yet: it is added with the first `BENCH.md` entry.
+The `performance` page carries only figures that have an entry in `BENCH.md`.
 
 ### TCK / Performance rule (not mutually exclusive)
 - Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST

@@ -111,6 +111,6 @@ The four interpretations Bodoni recorded in B3 and B4 are not settled by this su
 | Item | Configuration
 
 | Fixes | Done (2026-10-24): the `_rt` TLDs, BOD-006 to BOD-011, each test first, and Peano with COMP-010 fixed; 541/541.
-| Inlining | Run first with the standard handlers (B5 and the fixes), then again with `bodoni-ibarra` inlining enabled (B6).
+| Inlining | Run first with the standard handlers (B5 and the fixes), then again with `bodoni-ibarra` inlining enabled (B6, on standby).
 | Merge gate | 100 % PASS of the full run, green since the fixes; challenges, if any, in a `TCK.md` (none is filed).
 |===

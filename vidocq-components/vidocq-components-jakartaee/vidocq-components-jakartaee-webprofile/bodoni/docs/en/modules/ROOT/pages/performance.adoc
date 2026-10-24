@@ -1,0 +1,30 @@
+= Performance
+:description: Measured cost of the JSTL core tags on Ibarra, standard handlers against inlined code, and why build-time inlining is on standby.
+
+[.lead]
+On an Ibarra page, the standard JSTL tag handlers cost no measurable time compared with the same page inlined by hand. The time goes to EL evaluation. Every figure on this page comes from an entry in the repository's `BENCH.md`, which lists the machine, the JVM, the command and the raw results.
+
+== Handlers against inlined code (BENCH-20261024-01)
+
+The page is a `c:forEach` over a list of beans, with a `c:if` and a `c:out` in its body. It was measured in two variants:
+
+* the page as Ibarra generates it, with the standard Bodoni handlers;
+* the same page with the three tags inlined by hand, keeping the same compiled EL expressions and the same output.
+
+Both produce byte-identical output. They were measured with JMH 1.37, single-threaded, on an Apple M5 Max with Temurin 25.
+
+[cols="1,2,2,2,2",options="header"]
+|===
+| Items | Handlers, time | Inlined, time | Handlers, allocation | Inlined, allocation
+
+| 10 | 2.77 µs | 2.82 µs | 28.0 KB | 27.4 KB
+| 1,000 | 177 µs | 176 µs | 99.6 KB | 27.4 KB
+|===
+
+What it shows:
+
+* **No time gain.** The difference is inside the noise of the measurement.
+* **Less allocation.** The handlers allocate about 72 bytes per item, and the JIT's escape analysis does not remove them. Whether that matters under concurrent load is not measured yet.
+* **Where the time goes.** Two thirds of the time is EL resolution, tracked in https://codefloe.com/Vidocq/peano/issues/63[Vidocq/peano#63]. The lever for faster pages is the EL implementation, for every page with or without JSTL.
+
+Build-time inlining (`bodoni-ibarra`, milestone B6) is therefore on standby. The standard handlers are the code path on every container. See xref:concepts.adoc[Concepts].

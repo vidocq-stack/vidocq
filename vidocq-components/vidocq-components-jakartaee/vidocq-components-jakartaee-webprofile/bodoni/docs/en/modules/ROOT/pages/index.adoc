@@ -37,7 +37,7 @@ JSTL is the standard catalogue of tags every page composes with. Ibarra (Jakarta
 
 . **Zero third-party dependency** — the JSTL API jar and JDK modules (`java.xml`, `java.sql`, `java.naming`, `java.net.http`). No Apache Taglibs, no Xalan.
 . **Portable** — standard tag handlers that run unchanged on Ibarra, Jasper or Open Liberty. Bodoni depends on APIs only; the Vidocq runtime extension assembles it with Ibarra and Peano.
-. **Codegen where it pays** — an optional `bodoni-ibarra` module lets Ibarra inline `c:if`, `c:choose`, `c:forEach`, `c:set`, `c:out` and friends at build time, tested differentially against the standard handlers.
+. **Codegen where it pays** — an optional `bodoni-ibarra` module lets Ibarra inline `c:if`, `c:choose`, `c:forEach`, `c:set`, `c:out` and friends at build time, tested differentially against the standard handlers (planned, on standby).
 
 == Position in the ecosystem
 

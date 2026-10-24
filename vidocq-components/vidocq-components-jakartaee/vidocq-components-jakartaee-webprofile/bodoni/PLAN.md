@@ -189,6 +189,14 @@ Plan:
   run first with inlining off (B5), then again with `bodoni-ibarra` on (B6); every inliner
   has differential tests against its handler (same page, same model, same output and
   scoped variables).
+- **On standby (maintainer, 2026-10-24).** A throwaway spike compared Ibarra's generated
+  page with the same page inlined by hand, for `c:forEach` / `c:if` / `c:out` over 1,000 items
+  (`BENCH.md`, BENCH-20261024-01). It found no time difference inside the noise: 176 vs 177 µs
+  for 1,000 items. The allocation was 3.6 times lower, because the handlers cost about 72 B per
+  item and escape analysis does not remove them. Two thirds of the time is EL resolution
+  (Vidocq/peano#63), which inlining does not touch. The lever for page speed is therefore Peano.
+  B6 resumes if a measurement under concurrent load, or a tag-heavy page, shows a gain. The
+  module-aware bundle lookup deferred to B6 (open question 4) waits with it.
 - Inlining is skipped (handler path) when a tag uses a feature the inliner does not
   model — e.g. `c:forEach` with a deferred `items` expression (`IteratedValueExpression`
   semantics), `varStatus` consumed by custom tags, or nesting under a custom tag that
@@ -352,7 +360,7 @@ As built in B5 (decisions and rulings in "Decisions recorded in B5"; implementat
 | B3 | **Done (2026-10-23).** `x:` (§11–§13): 10 handlers in `tags.xml` (`parse`, `out`, `set`, `if`, `choose`/`when`/`otherwise`, `forEach`, `transform`, `param`), `x.tld` and `x-1_2.tld`, JDK parser/XSLT/XPath, XPath variable bindings over the page scopes, same-origin resolution of external references, `RangeLoopTagSupport` shared with `c:forEach` and `c:forTokens` | unit tests; pages render on Ibarra in an IT (external references included); open question 6 settled; `requires transitive java.xml` settles the Bodoni side of open question 3 |
 | B4 | **Done (2026-10-23).** `sql:` (§10): 6 handlers in `tags.sql` (`query`, `update`, `transaction`, `param`, `dateParam`, `setDataSource`), `sql.tld` and `sql-1_2.tld`, data-source resolution (object / JNDI / JDBC parameter string) with driver discovery through the context class loader and credentials kept out of messages, a disconnected `Result` (`internal.QueryResult`), the `Result` accessor table in `bodoni-peano` | unit tests against H2 in memory (test scope); JNDI path tested with a test-only `InitialContextFactory`; pages render on Ibarra in an IT against H2 (BOD-005 found and fixed); open question 8 settled |
 | B5 | **Done (2026-10-24).** `bodoni-tck` (in-reactor under `-Ptck` only, not published) on the published `ibarra-arquillian` adapter, `jakarta.tck:tags-tck:11.0.3` under `-Ptck,tck-official`, the official Derby DDL loaded into H2 served over TCP, `run-official-tck-tags-3.0.sh` (`smoke` / `all` / `-Dtest=`, `--no-prepare`, `--no-install`), the `official-tags-tck-smoke` CI check; first full run with the standard handlers: **452/541 (83.5 %)**, 33/50 classes at 100 %, 0 failures, 89 errors, 0 skipped, every failure triaged (BOD-006 to BOD-009 opened). Follow-up done (2026-10-24, branch `fix/tck-baseline`): the `_rt` TLDs, BOD-006 to BOD-011 fixed, Peano COMP-010 merged, **541/541** | runner + first full run + `bodoni-tck/BASELINE.md` (maintainer, 2026-10-23); 100 % reached by the TCK fixes, each test-first (see "Decisions recorded in the TCK fixes"); open question 1 settled |
-| B6 | Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
+| B6 | **On standby (maintainer, 2026-10-24):** the B6 spike (BENCH-20261024-01) measured no time gain from inlining (176 vs 177 µs for 1,000 items), only less allocation (about 72 B per item); the time is in EL resolution (Vidocq/peano#63). Planned scope: Ibarra `TagInliner` SPI (Ibarra PR) + `bodoni-ibarra` inliners for the eight core tags | differential tests vs handlers; TCK green with inlining on; any speed claim in `BENCH.md` |
 | B7 | `bodoni-it-other-containers/bodoni-it-openliberty` + Reference "Deploying on an application server" block | WAR with the documented dependencies passes on Open Liberty |
 
 The Vidocq runtime extension (vidocq repository) follows B5.
@@ -822,7 +830,7 @@ recorded in the TCK fixes"):
    `BASELINE.md`, "Smoke set").
 
 **Next steps after the TCK fixes**: the Vidocq runtime extension (vidocq repository, after B5);
-B6 (`TagInliner` SPI and `bodoni-ibarra`, with the full TCK run again with inlining on); B7
+B6 (`TagInliner` SPI and `bodoni-ibarra`) is on standby since 2026-10-24 (see below); B7
 (Open Liberty, where the validators run at real translation time). Each keeps the full run at
 100 %.
 
