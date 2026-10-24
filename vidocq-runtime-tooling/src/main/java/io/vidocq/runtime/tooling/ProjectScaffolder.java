@@ -181,7 +181,7 @@ public final class ProjectScaffolder {
                     </build>
                 </project>
                 """.formatted(parentVersion, c.groupId(), c.name(),
-                ownVersion ? "    <version>" + APPLICATION_VERSION + "</version>\n" : "", c.name(),
+                ownVersion ? versionLine("    ", APPLICATION_VERSION) : "", c.name(),
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", parentVersion,
                 extensionDeps(c.extensions(), parentVersion),
@@ -200,7 +200,7 @@ public final class ProjectScaffolder {
             int major = Integer.parseInt(parts[0]);
             int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
             return major > 0 || minor >= 4;
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             return true;
         }
     }
@@ -249,7 +249,7 @@ public final class ProjectScaffolder {
                     .append("                    <path>\n")
                     .append("                        <groupId>").append(coordinate.groupId()).append("</groupId>\n")
                     .append("                        <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
-                    .append("                        <version>").append(version).append("</version>\n")
+                    .append(versionLine("                        ", version))
                     .append("                    </path>\n"));
         }
         if (paths.isEmpty()) return "";
@@ -276,7 +276,7 @@ public final class ProjectScaffolder {
             sb.append("        <dependency>\n")
               .append("            <groupId>").append(coordinate.groupId()).append("</groupId>\n")
               .append("            <artifactId>").append(coordinate.artifactId()).append("</artifactId>\n")
-              .append("            <version>").append(version).append("</version>\n")
+              .append(versionLine("            ", version))
               .append("        </dependency>\n");
         }
         return sb.toString();
@@ -413,7 +413,15 @@ public final class ProjectScaffolder {
         Files.writeString(path, content);
     }
 
-    /** Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable where the file system says so. */
+    /** A {@code <version>} line at {@code indent}. */
+    private static String versionLine(String indent, String version) {
+        return indent + "<version>" + version + "</version>\n";
+    }
+
+    /**
+     * Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable by its owner where the file system
+     * has POSIX permissions: what {@code ./mvnw} needs, and what git records as an executable file.
+     */
     private static void writeMavenWrapper(Path root) throws IOException {
         for (String file : WRAPPER_FILES) {
             Path target = root.resolve(file);
@@ -428,8 +436,7 @@ public final class ProjectScaffolder {
         Path mvnw = root.resolve("mvnw");
         if (mvnw.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             Set<PosixFilePermission> permissions = new HashSet<>(Files.getPosixFilePermissions(mvnw));
-            permissions.addAll(Set.of(PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE,
-                    PosixFilePermission.OTHERS_EXECUTE));
+            permissions.add(PosixFilePermission.OWNER_EXECUTE);
             Files.setPosixFilePermissions(mvnw, permissions);
         }
     }
