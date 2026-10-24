@@ -1146,7 +1146,7 @@ where this whole bug class is invisible.
 ## BUG-20261024-11 — The build of a created application prints three javac warnings
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#337, umbrella #339)
+- **Status**: WONTFIX — documented as expected (#337, umbrella #339)
 - **Affected module**: Vauban `vauban-processor`, vidocq-runtime-parent (compiler configuration)
 - **Symptom**: the first build of `vidocq create --name demo-app -x cassini-rest` prints `File for type
   'io.example.demo.app.HelloResource_Factory' created in the last round will not be subject to annotation processing`,
@@ -1161,6 +1161,11 @@ where this whole bug class is invisible.
     and it would hide every warning of the application. Vauban generates in the last round on purpose (companion
     processors and BCEs must have run first), so neither option of the fix holds as written: the fix is a change of
     Vauban's round strategy, studied in Vidocq/vauban#216.
+- **Decision** (2026-10-24): the warnings stay. They have no effect: javac compiles the files created in the last
+  round, and no processor needs to read them afterwards; the application built from them boots and serves
+  `GET /hello`. Changing Vauban's round strategy (vauban#216, options 1 and 2) would trade a warning for a risk on the
+  BCEs or on IDE builds. The getting-started page says the warnings are expected, and why
+  (`getting-started.adoc#last-round-warnings`).
 
 ## BUG-20261024-12 — `CLI-ROADMAP.md` describes the CLI before #314
 
