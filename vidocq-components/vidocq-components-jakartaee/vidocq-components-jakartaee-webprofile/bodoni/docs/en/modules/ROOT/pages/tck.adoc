@@ -23,7 +23,7 @@ Prerequisites: Java 25 and Maven 3.9.16 (`sdk env`), and network access for the 
 [source,bash]
 ----
 sdk env
-./run-official-tck-tags-3.0.sh                 # smoke (the default): six whole classes
+./run-official-tck-tags-3.0.sh                 # smoke (the default): eight whole classes
 ./run-official-tck-tags-3.0.sh all             # every official class
 ./run-official-tck-tags-3.0.sh -Dtest=com.sun.ts.tests.jstl.spec.sql.query.JSTLClientIT
 ./run-official-tck-tags-3.0.sh --help
@@ -33,7 +33,7 @@ sdk env
 |===
 | Argument | Effect
 
-| `smoke` | Six whole classes, one per library plus the URI check (see <<smoke>>). The default.
+| `smoke` | Eight whole classes: one per library, the URI check, the JSTL 1.0 compatibility class and the `c:choose` structure class (see <<smoke>>). The default.
 | `all` | `-Dtest=com.sun.ts.tests.jstl.**.*IT`: every official class.
 | `-Dtest=…` | A Surefire selection of official classes or methods.
 | `--no-prepare` | Reuses the DDL already extracted; refused (exit 2) when it is absent, so that the `sql` and compatibility classes cannot fail in their setup unnoticed.
@@ -102,7 +102,7 @@ The four interpretations Bodoni recorded in B3 and B4 are not settled by this su
 [#smoke]
 == Smoke and CI
 
-`./run-official-tck-tags-3.0.sh smoke` runs six classes, 91 tests (100 % in both runs): `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
+`./run-official-tck-tags-3.0.sh smoke` runs eight classes, 138 tests (138/138 after the TCK fixes): `compat.onedotzero` (the JSTL 1.0 request-time URIs, with the `sql` database), `spec.core.conditional.cwo` (the `c:choose` rules of the tag library validators), `spec.core.general.remove` (`c`), `spec.etu.functions` (`fn`), `spec.etu.uri`, `spec.fmt.i18n.param` (`fmt`), `spec.sql.setdatasource` (`sql`, through the H2 database) and `spec.xml.xmlcore.bindings` (`x`). The `official-tags-tck-smoke` check (`.forgejo/workflows/tck-tags.yml`) runs it on every pull request and push to `main`. The smoke set is a regression subset; the full `all` run is not in CI.
 
 == Plan
 

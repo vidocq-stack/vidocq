@@ -329,10 +329,11 @@ As built in B5 (decisions and rulings in "Decisions recorded in B5"; implementat
   `--no-install`, which refuses a missing or stale `bodoni-core` / `bodoni-peano` snapshot;
   `--no-prepare` refuses a missing DDL. It deletes `target/surefire-reports` and
   `target/pages-deployments` of the module, runs the runner's tests, then the selection.
-- **Smoke and CI**: `smoke` runs six whole classes at 100 % in the baseline (91 tests), one per
-  library plus the URI check: `spec.core.general.remove`, `spec.etu.functions`,
+- **Smoke and CI**: `smoke` runs eight whole classes (138 tests): one per library plus the URI
+  check, at 100 % in the baseline (`spec.core.general.remove`, `spec.etu.functions`,
   `spec.etu.uri`, `spec.fmt.i18n.param`, `spec.sql.setdatasource`,
-  `spec.xml.xmlcore.bindings`. The `official-tags-tck-smoke` check
+  `spec.xml.xmlcore.bindings`, 91 tests), and since the TCK fixes `compat.onedotzero` (the `_rt`
+  TLDs, the `sql` database, COMP-010) and `spec.core.conditional.cwo` (the BOD-006 validators). The `official-tags-tck-smoke` check
   (`.forgejo/workflows/tck-tags.yml`) runs it on pull requests, pushes to `main` and on
   demand. The full run is not in CI.
 - **Result**: first baseline 452/541 (83.5 %, B5); after the TCK fixes (branch
@@ -771,7 +772,7 @@ requests, each test-first, until 100 %.
 | `--no-install` | Refuses (exit 2) a missing `bodoni-core` / `bodoni-peano` snapshot, or one older than its `src/main`, its `pom.xml` or the root `pom.xml` |
 | `--no-prepare` | Refuses (exit 2) when the extracted DDL is absent |
 | Reports | `target/surefire-reports` and `target/pages-deployments` deleted before Maven runs; no module `clean` (the distribution must survive) |
-| Selections | `all` → `-Dtest=com.sun.ts.tests.jstl.**.*IT`; `smoke` → six whole classes at 100 % in the baseline (see "TCK plan") |
+| Selections | `all` → `-Dtest=com.sun.ts.tests.jstl.**.*IT`; `smoke` → six whole classes at 100 % in the baseline, eight since the TCK fixes (see "TCK plan") |
 | CI | `.forgejo/workflows/tck-tags.yml`, `official-tags-tck-smoke`, on pull requests and pushes to `main` plus `workflow_dispatch`. Whether it becomes a required check is the maintainer's call |
 | Upstream causes | Triaged in `BASELINE.md` with a proposed issue title; only Bodoni defects get `BUG.md` entries; B5 opens nothing in other repositories |
 
@@ -815,8 +816,9 @@ recorded in the TCK fixes"):
    `TCK.md`.
 5. Open points for the maintainer: ~~whether the JSTL 1.0 EL URIs ship (open question 2)~~ — not
    shipped (Ruling 3); still open: the `x:forEach` empty-`select` ruling (not exercised by the
-   suite), whether `official-tags-tck-smoke` becomes a required check, and whether the smoke set
-   gains a class that covers the fixes (`BASELINE.md`, "Smoke set").
+   suite) and whether `official-tags-tck-smoke` becomes a required check. The smoke set gained
+   `compat.onedotzero` and `spec.core.conditional.cwo` to cover the fixes (controller ruling,
+   2026-10-24; `BASELINE.md`, "Smoke set").
 
 **Next steps after the TCK fixes**: the Vidocq runtime extension (vidocq repository, after B5);
 B6 (`TagInliner` SPI and `bodoni-ibarra`, with the full TCK run again with inlining on); B7

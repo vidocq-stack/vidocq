@@ -11,7 +11,8 @@ set -euo pipefail
 
 usage='Usage: ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepare] [--no-install] [Maven arguments...]
 
-  smoke              a few whole classes, one per library (default)
+  smoke              a few whole classes: one per library, the JSTL 1.0 compatibility
+                     class and the c:choose structure class (default)
   all                every official class
   -Dtest=...         a Surefire selection of official classes or methods
   --no-prepare       reuse the Derby DDL already extracted into bodoni-tck/target/
@@ -28,7 +29,7 @@ zip_sha256='996c9abc6561134cea986107da0648c2a33277d2f765475994ff9b16da70cb5a'
 distribution_dir='bodoni-tck/target/tags-tck-distribution'
 ddl_entry='tags-tck/sql/derby/derby.ddl.jstl.sql'
 ddl="$distribution_dir/$ddl_entry"
-smoke_selection='-Dtest=com.sun.ts.tests.jstl.spec.core.general.remove.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.functions.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.uri.JSTLClientIT,com.sun.ts.tests.jstl.spec.fmt.i18n.param.JSTLClientIT,com.sun.ts.tests.jstl.spec.sql.setdatasource.JSTLClientIT,com.sun.ts.tests.jstl.spec.xml.xmlcore.bindings.JSTLClientIT'
+smoke_selection='-Dtest=com.sun.ts.tests.jstl.compat.onedotzero.JSTLClientIT,com.sun.ts.tests.jstl.spec.core.conditional.cwo.JSTLClientIT,com.sun.ts.tests.jstl.spec.core.general.remove.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.functions.JSTLClientIT,com.sun.ts.tests.jstl.spec.etu.uri.JSTLClientIT,com.sun.ts.tests.jstl.spec.fmt.i18n.param.JSTLClientIT,com.sun.ts.tests.jstl.spec.sql.setdatasource.JSTLClientIT,com.sun.ts.tests.jstl.spec.xml.xmlcore.bindings.JSTLClientIT'
 
 prepare=true
 install=true

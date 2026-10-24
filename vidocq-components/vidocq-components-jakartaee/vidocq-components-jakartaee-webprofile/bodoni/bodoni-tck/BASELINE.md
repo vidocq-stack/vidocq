@@ -392,11 +392,19 @@ After the TCK fixes, at `174a887` (2026-10-24 01:01:45 to 01:02:03 UTC, right af
 run), with `./run-official-tck-tags-3.0.sh smoke --no-install --no-prepare`: runner tests 39/39,
 official classes **91/91**, `BUILD SUCCESS`.
 
-The smoke list stays as it is. Every class is now at 100 %, so any class would qualify; the six
-keep one class per library and a short CI check. The fixes are guarded by their unit tests
-(`LegacyRtTldTest`, `TagLibraryValidatorsTest`, `LocalizationContextAccessorTableTest`,
-`MessageTagTest`, `ParseDateTagTest`, `ForTokensTagTest`), by the Ibarra IT (39/39, which now
-runs the validators on its pages), and by the full run, which 100 % PASS makes the merge gate.
-Adding `spec.core.conditional.cwo` (9 tests, the validators) or `compat.onedotzero` (38 tests,
-the `_rt` TLDs and COMP-010) to the smoke set is the maintainer's call: they would put the
-fixes under the CI check at the cost of a longer run.
+**Smoke set extended (2026-10-24, controller ruling).** So that the CI check covers the TCK
+fixes, the smoke set gains two classes, now eight:
+
+- `compat.onedotzero` (38 tests): the JSTL 1.0 `_rt` TLDs, the `sql` database path and
+  COMP-010 (`positiveDateParamQueryTimestampTest`);
+- `spec.core.conditional.cwo` (9 tests): the `c:choose` structure rules of the BOD-006 tag
+  library validators.
+
+`OfficialTckRunnerTest` asserts the new selection (it failed on the old script first). Rerun at
+the head of `fix/tck-baseline` (2026-10-24 01:06:53 to 01:07:22 UTC) with
+`./run-official-tck-tags-3.0.sh smoke --no-prepare`: reactor build green, runner tests 39/39,
+official classes **138/138** (38 + 9 + 1 + 64 + 1 + 2 + 22 + 1), `BUILD SUCCESS`. The
+other fixes stay guarded by their unit tests (`LegacyRtTldTest`, `TagLibraryValidatorsTest`,
+`LocalizationContextAccessorTableTest`, `MessageTagTest`, `ParseDateTagTest`,
+`ForTokensTagTest`), by the Ibarra IT (39/39, which now runs the validators on its pages) and
+by the full run, whose 100 % PASS is the merge gate.

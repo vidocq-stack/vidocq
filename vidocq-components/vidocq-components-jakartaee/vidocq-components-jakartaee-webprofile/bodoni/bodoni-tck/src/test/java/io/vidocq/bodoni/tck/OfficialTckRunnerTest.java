@@ -63,6 +63,8 @@ class OfficialTckRunnerTest {
     private static final String PACKAGE = "com.sun.ts.tests.jstl.";
     private static final String CLIENT = ".JSTLClientIT";
     private static final String SMOKE = "-Dtest=" + String.join(",",
+            PACKAGE + "compat.onedotzero" + CLIENT,
+            PACKAGE + "spec.core.conditional.cwo" + CLIENT,
             PACKAGE + "spec.core.general.remove" + CLIENT,
             PACKAGE + "spec.etu.functions" + CLIENT,
             PACKAGE + "spec.etu.uri" + CLIENT,
