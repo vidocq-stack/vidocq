@@ -31,6 +31,7 @@ public final class BodoniAccessorProvider implements AccessorProvider {
 
     @Override
     public Collection<? extends AccessorTable> accessors() {
-        return List.of(new LoopTagStatusAccessorTable(), new ResultAccessorTable());
+        return List.of(new LoopTagStatusAccessorTable(), new ResultAccessorTable(),
+                new LocalizationContextAccessorTable());
     }
 }

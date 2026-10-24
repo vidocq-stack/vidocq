@@ -203,8 +203,10 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   (BOD-001); `jakarta.servlet.jsp.jstl.fmt.LocalizationContext` (Tags 3.0 §8.1.1, properties
   `resourceBundle` and `locale`) has none, so Peano falls back to reflection, which `deny`
   refuses. Not a handler defect (the `allow` mode was not run by the B5 baseline).
-- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first (a
-  `LocalizationContext` table in `bodoni-peano`).
+- Status: fixed (2026-10-24, branch `fix/tck-baseline`): `bodoni-peano` provides a third
+  read-only table, keyed on the class `LocalizationContext` (subclasses reach it through
+  Peano's supertype lookup): `resourceBundle`, `locale`, with `getResourceBundle()` and
+  `getLocale()` callable. TCK `spec.fmt.i18n.setbundle`: 4/7 before, 7/7 after.
 
 ## BOD-008 · 2026-10-24 · `fmt:message` with a `bundle` attribute does not set the response locale
 

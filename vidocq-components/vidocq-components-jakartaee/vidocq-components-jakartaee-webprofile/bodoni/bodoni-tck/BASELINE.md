@@ -190,7 +190,7 @@ one category.
   `#positiveSetBundleLocaleConfigurationTest`, `#positiveSetBundleBasenameNullEmptyTest`.
 - Evidence (HTTP 500, `server.log`): `jakarta.el.ELException: Reflection fallback denied for jakarta.servlet.jsp.jstl.fmt.LocalizationContext; register a generated accessor provider or a custom resolver`,
   from `${rBundle.resourceBundle}` and `${bundle2.resourceBundle == null}`. `bodoni-peano` has
-  accessor tables for `LoopTagStatus` and `Result` only.
+  accessor tables for `LoopTagStatus` and `Result` only (a `LocalizationContext` table was added by BOD-007).
 - See [BUG.md BOD-007](../BUG.md).
 
 ### `fmt:message` with `bundle` does not set the response locale — Bodoni defect (BOD-008)
