@@ -245,6 +245,8 @@ NOTE: From 0.4.0, the codegen bundle is a jar: leave out the `<type>pom</type>` 
 
 NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The `jvmArgs` configuration of `vidocq-runtime-maven-plugin` works around a known 0.2.0 issue (fixed in 0.3.0).
 
+NOTE: From 0.4.0, whose parent names the runtime version literally, `vidocq create` gives the application a version of its own, `1.0.0-SNAPSHOT`, instead of the runtime's; it no longer writes the `jvmArgs` configuration; and it writes the Maven wrapper of the Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), so the project builds with the ecosystem's Maven version and `vidocq doctor` finds it.
+
 `src/main/java/module-info.java`:
 
 [source,java]

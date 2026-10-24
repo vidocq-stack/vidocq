@@ -63,7 +63,7 @@ class VidocqCreateMojoTest {
                     Files.readString(byGoal.resolve("todo").resolve(file)), file.toString());
         }
         assertTrue(Files.readString(byGoal.resolve("todo/pom.xml")).contains("<version>1.2.3</version>"));
-        assertTrue(infos.contains("Project 'todo' created: cd todo && mvn package"), infos.toString());
+        assertTrue(infos.contains("Project 'todo' created: cd todo && ./mvnw vidocq:dev"), infos.toString());
     }
 
     @Test

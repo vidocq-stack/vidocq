@@ -95,7 +95,7 @@ public class VidocqCreateMojo extends AbstractMojo {
         } catch (IOException | IllegalStateException e) {
             throw new MojoFailureException("Failed to create project: " + e.getMessage(), e);
         }
-        getLog().info("Project '" + spec.name() + "' created: cd " + spec.name() + " && mvn package");
+        getLog().info("Project '" + spec.name() + "' created: cd " + spec.name() + " && ./mvnw vidocq:dev");
         if (!spec.main()) {
             getLog().info("  No main class: the runtime boots the app. Add -Dmain for an @VidocqMain trampoline.");
         }

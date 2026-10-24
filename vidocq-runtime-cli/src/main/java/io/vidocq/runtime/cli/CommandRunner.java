@@ -241,7 +241,8 @@ public final class CommandRunner {
         CliOutput.success("Project '" + create.spec().name() + "' created.");
         CliOutput.println();
         CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.spec().name()));
-        CliOutput.println("  Build:     " + CliOutput.cyan("mvn package"));
+        CliOutput.println("  Dev mode:  " + CliOutput.cyan("vidocq dev"));
+        CliOutput.println("  Build:     " + CliOutput.cyan("vidocq build"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
         if (!create.spec().main()) {
             CliOutput.println();

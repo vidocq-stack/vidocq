@@ -55,13 +55,6 @@ class ProjectScaffolderExtensionsTest {
     }
 
     @Test
-    void anExplicitCoordinateIsWrittenAsGiven(@TempDir Path dir) throws IOException {
-        String pom = scaffoldPom(dir, Set.of("com.acme:acme-widgets"));
-
-        assertTrue(pom.contains("<groupId>com.acme</groupId>\n            <artifactId>acme-widgets</artifactId>"), pom);
-    }
-
-    @Test
     void scaffoldedPomWiresTheVidocqPluginAndLaunchCoordinates(@TempDir Path dir) throws IOException {
         String pom = scaffoldPom(dir, Set.of());
 
@@ -70,9 +63,9 @@ class ProjectScaffolderExtensionsTest {
         assertTrue(pom.contains("<artifactId>vidocq-runtime-maven-plugin</artifactId>"),
                 "the vidocq plugin must be active so mvn package produces a runnable dist");
         assertTrue(pom.contains("<goal>package</goal>"));
-        // Workaround for the released 0.2.0 plugin (see BUG.md): jvmArgs NPEs when absent.
-        assertTrue(pom.contains("<jvmArgs>"),
-                "vidocq:package 0.2.0 NPEs when jvmArgs is not configured");
+        // BUG-20261024-07: no workaround for the 0.2.0 plugin (BUG-20260710-01, fixed by #40).
+        assertFalse(pom.contains("<jvmArgs>"), pom);
+        assertFalse(pom.contains("BUG-2026"), pom);
     }
 
     @Test

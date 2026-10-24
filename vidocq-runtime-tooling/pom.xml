@@ -28,6 +28,22 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The Maven wrapper of this repository, which vidocq create writes into a new project
+                 (BUG-20261024-08): the project builds with the ecosystem's Maven version. -->
+            <resource>
+                <directory>${project.basedir}/..</directory>
+                <targetPath>META-INF/vidocq/maven-wrapper</targetPath>
+                <includes>
+                    <include>mvnw</include>
+                    <include>mvnw.cmd</include>
+                    <include>.mvn/wrapper/maven-wrapper.properties</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

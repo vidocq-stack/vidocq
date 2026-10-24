@@ -21,9 +21,12 @@ package io.vidocq.runtime.tooling;
 
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -34,10 +37,11 @@ import java.util.Set;
  * <pre>
  * &lt;name&gt;/
  *   pom.xml
+ *   mvnw, mvnw.cmd, .mvn/wrapper/maven-wrapper.properties
  *   src/main/java/
  *     module-info.java
  *     &lt;package&gt;/
- *       &lt;ClassName&gt;App.java     (--main only)
+ *       &lt;ClassName&gt;.java        (--main only)
  *       HelloResource.java      (cassini-rest only)
  *   src/main/resources/
  *     vidocq.properties
@@ -56,14 +60,15 @@ public final class ProjectScaffolder {
     /** The extension whose scaffold writes a {@code HelloResource}. */
     private static final String REST_EXTENSION = "cassini-rest";
 
-    /** The trampoline launch of {@code vidocq:package}, for a {@code --main} scaffold. */
-    private static final String PACKAGE_MAIN_CLASS = """
-                                        <configuration>
-                                            <!-- vidocq:package 0.2.0 passes mainClass verbatim to the JVM
-                                                 module option, which needs module/class (BUG-20260710-02). -->
-                                            <mainClass>${vidocq.mainModule}/${vidocq.mainClass}</mainClass>
-                                        </configuration>
-                """;
+    /** The version of a new application, which is its own and not the runtime's (BUG-20261024-06). */
+    static final String APPLICATION_VERSION = "1.0.0-SNAPSHOT";
+
+    /** Where the tooling jar holds the Maven wrapper of the Vidocq repository (BUG-20261024-08). */
+    private static final String WRAPPER_RESOURCES = "/META-INF/vidocq/maven-wrapper/";
+
+    /** The wrapper files, relative to the project root. */
+    private static final List<String> WRAPPER_FILES =
+            List.of("mvnw", "mvnw.cmd", ".mvn/wrapper/maven-wrapper.properties");
 
     private ProjectScaffolder() {}
 
@@ -85,6 +90,7 @@ public final class ProjectScaffolder {
         Files.createDirectories(res);
 
         write(root.resolve("pom.xml"),                               buildPom(create, runtimeVersion, reporter));
+        writeMavenWrapper(root);
         write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create, reporter));
         if (create.main()) {
             write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
@@ -122,6 +128,11 @@ public final class ProjectScaffolder {
             reporter.note("Parent version " + parentVersion + " is a SNAPSHOT: the project resolves"
                     + " Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
         }
+        boolean ownVersion = parentPinsItsVersion(parentVersion);
+        if (!ownVersion) {
+            reporter.note("Parent version " + parentVersion + " predates 0.4.0: the project inherits its version,"
+                    + " as the parent's dependencyManagement resolves at the project's version.");
+        }
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -138,7 +149,7 @@ public final class ProjectScaffolder {
 
                     <groupId>%s</groupId>
                     <artifactId>%s</artifactId>
-                    <name>%s</name>
+                %s    <name>%s</name>
 
                     <properties>
                         <vidocq.mainModule>%s</vidocq.mainModule>
@@ -158,27 +169,40 @@ public final class ProjectScaffolder {
                             <plugin>
                                 <groupId>io.vidocq.runtime</groupId>
                                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
-                                <configuration>
-                                    <!-- vidocq:package 0.2.0 fails on an absent jvmArgs (BUG-20260710-01). -->
-                                    <jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>
-                                </configuration>
                                 <executions>
                                     <execution>
                                         <goals>
                                             <goal>package</goal>
                                         </goals>
-                %s                    </execution>
+                                    </execution>
                                 </executions>
                             </plugin>
                 %s        </plugins>
                     </build>
                 </project>
-                """.formatted(parentVersion, c.groupId(), c.name(), c.name(),
+                """.formatted(parentVersion, c.groupId(), c.name(),
+                ownVersion ? "    <version>" + APPLICATION_VERSION + "</version>\n" : "", c.name(),
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", parentVersion,
                 extensionDeps(c.extensions(), parentVersion),
-                c.main() ? PACKAGE_MAIN_CLASS : "",
                 aptCodegenPlugin(c.extensions(), parentVersion));
+    }
+
+    /**
+     * Whether the application can have a version of its own under {@code parentVersion}. Before 0.4.0 the parent's
+     * dependencyManagement named the runtime version {@code ${project.version}}, which Maven interpolates in the
+     * child, so an application of its own version asked for every runtime artifact at that version
+     * (BUG-20261006-02). A version that does not start with {@code <major>.<minor>} is taken as a recent one.
+     */
+    static boolean parentPinsItsVersion(String parentVersion) {
+        String[] parts = parentVersion.split("[.-]");
+        try {
+            int major = Integer.parseInt(parts[0]);
+            int minor = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return major > 0 || minor >= 4;
+        } catch (NumberFormatException e) {
+            return true;
+        }
     }
 
     /** The {@code vidocq.mainClass} of a {@code --main} scaffold: its trampoline. */
@@ -241,9 +265,9 @@ public final class ProjectScaffolder {
         """.formatted(paths.toString());
     }
 
-    // Dependency versions are pinned explicitly: the released parent's
-    // dependencyManagement uses ${project.version}, which re-evaluates to the
-    // generated app's own version and would not resolve.
+    // Dependency versions are pinned explicitly: a parent before 0.4.0 names the runtime
+    // version ${project.version} in its dependencyManagement, which re-evaluates to the
+    // generated app's version and would not resolve (BUG-20261006-02).
     private static String extensionDeps(Set<String> ids, String version) {
         if (ids.isEmpty()) return "";
         var sb = new StringBuilder();
@@ -367,7 +391,8 @@ public final class ProjectScaffolder {
     }
 
     /**
-     * Converts kebab/snake names to PascalCase: "my-cool-app" → "MyCoolApp".
+     * Converts kebab/snake names to PascalCase ending in {@code App} once: "my-cool-app" → "MyCoolApp",
+     * "shop" → "ShopApp" (BUG-20261024-09).
      */
     static String appClassName(String name) {
         String[] parts = name.split("[-_]");
@@ -378,11 +403,34 @@ public final class ProjectScaffolder {
                 if (p.length() > 1) sb.append(p.substring(1));
             }
         }
-        sb.append("App");
+        if (!sb.toString().endsWith("App")) {
+            sb.append("App");
+        }
         return sb.toString();
     }
 
     private static void write(Path path, String content) throws IOException {
         Files.writeString(path, content);
+    }
+
+    /** Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable where the file system says so. */
+    private static void writeMavenWrapper(Path root) throws IOException {
+        for (String file : WRAPPER_FILES) {
+            Path target = root.resolve(file);
+            Files.createDirectories(target.getParent());
+            try (InputStream in = ProjectScaffolder.class.getResourceAsStream(WRAPPER_RESOURCES + file)) {
+                if (in == null) {
+                    throw new IOException(WRAPPER_RESOURCES + file + " is missing from the Vidocq tooling");
+                }
+                Files.copy(in, target);
+            }
+        }
+        Path mvnw = root.resolve("mvnw");
+        if (mvnw.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            Set<PosixFilePermission> permissions = new HashSet<>(Files.getPosixFilePermissions(mvnw));
+            permissions.addAll(Set.of(PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE,
+                    PosixFilePermission.OTHERS_EXECUTE));
+            Files.setPosixFilePermissions(mvnw, permissions);
+        }
     }
 }
