@@ -13,4 +13,17 @@
         <module>app</module>
         <module>jsp</module>
     </modules>
+    <!-- The outer build's version, as in lib/pom.xml: the fixture resolves plugins from the outer local repository
+         only (it-settings.xml). -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>@maven.install.plugin.version@</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>
