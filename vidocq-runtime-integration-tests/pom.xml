@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>0.4.0-SNAPSHOT</version>
     </parent>
 
@@ -27,9 +27,9 @@
         <gpg.skip>true</gpg.skip>
     </properties>
 
-    <!-- The Arquillian BOM is imported here, by the test vehicles that use it, and not by vidocq-runtime-parent:
+    <!-- The Arquillian BOM is imported here, by the test vehicles that use it, and not by the reactor root:
          through ShrinkWrap Resolver's BOM it imports Maven's own dependency management, which every application
-         inheriting vidocq-runtime-parent then received (commons-lang3 3.12.0, commons-io 2.11.0, guava 31.1-jre). -->
+         inheriting it then received (commons-lang3 3.12.0, commons-io 2.11.0, guava 31.1-jre). -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -153,7 +153,7 @@
 
     <build>
         <plugins>
-            <!-- Inherits the checkpom execution from vidocq-runtime-parent/pluginManagement. -->
+            <!-- Inherits the checkpom execution from vidocq-runtime-build/pluginManagement. -->
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>

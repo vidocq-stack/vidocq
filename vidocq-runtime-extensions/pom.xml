@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>0.4.0-SNAPSHOT</version>
     </parent>
 
@@ -26,7 +26,7 @@
 
     <build>
         <plugins>
-            <!-- Inherits the execution from vidocq-runtime-parent/pluginManagement.
+            <!-- Inherits the execution from vidocq-runtime-build/pluginManagement.
                  Re-declaring the <plugin> here (without restating <executions>) is
                  enough to *activate* the bound checkpom execution on every child. -->
             <plugin>

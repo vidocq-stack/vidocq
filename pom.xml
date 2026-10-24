@@ -13,12 +13,12 @@
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
-    <artifactId>vidocq-runtime-parent</artifactId>
+    <artifactId>vidocq-runtime-build</artifactId>
     <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>Vidocq Runtime</name>
-    <description>MicroProfile runtime built on Vauban CDI 4.1</description>
+    <name>Vidocq Runtime Build</name>
+    <description>Build of the Vidocq runtime reactor; an application inherits vidocq-runtime-parent</description>
     <url>https://codefloe.com/Vidocq/vidocq</url>
 
     <scm>
@@ -39,7 +39,11 @@
     </developers>
 
     <modules>
-        <!-- First: every module of this reactor has it on its processor path (pluginManagement
+        <!-- What an application imports and inherits (#339). This pom is the build of this repository
+             only: an application never inherits it. -->
+        <module>vidocq-runtime-bom</module>
+        <module>vidocq-runtime-parent</module>
+        <!-- First of the code: every module of this reactor has it on its processor path (pluginManagement
              below), and Maven does not order a reactor by processor paths. A jar since #237, it
              must be built before the first module compiles. -->
         <module>vidocq-runtime-core-codegen</module>

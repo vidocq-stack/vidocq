@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      The parent of a Vidocq application (Vidocq/vidocq#339). It carries what building an application takes and
+      nothing of this repository: the versions of the BOM, Java 25, the Vauban indexer on the processor path, the
+      Vidocq plugin's checks and distribution, and the build identity the startup banner reads.
+
+      Until 0.4.0 this name was the root of the runtime's own reactor, and an application inherited its CI, SonarQube
+      and TCK settings; that root is vidocq-runtime-build now.
+
+      vidocq-parent is here for the release only: flatten-maven-plugin publishes a pom without a parent, profiles or
+      distributionManagement, so an application inherits what this file declares and nothing else.
+      ApplicationBomAndParentTest checks both.
+    -->
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>Vidocq Runtime Application Parent</name>
+    <description>Parent of a Vidocq application: the runtime's versions and the build of an application</description>
+    <url>https://codefloe.com/Vidocq/vidocq</url>
+
+    <scm>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq</url>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-bom</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- The tests of an application, from its first one (vidocq create). -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>6.0.3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.15.0</version>
+                    <configuration>
+                        <!-- An extension's -codegen bundle goes next to this one, in an
+                             <annotationProcessorPaths combine.children="append"> of the application. -->
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-core-codegen</artifactId>
+                                <!-- Versioned by the BOM: the compiler plugin (3.12+) reads the dependencyManagement. -->
+                            </path>
+                        </annotationProcessorPaths>
+                        <compilerArgs>
+                            <!-- The application layer turns META-INF/services into provides when it defines the
+                                 module, so the processor's advice to declare _VaubanComponents with provides does
+                                 not apply (BUG-20261024-10, VAU-APT-004). -->
+                            <arg>-Avauban.providesHint=false</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.4.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+
+                <!-- An application declares the plugin, groupId and artifactId only, and gets the three. A library
+                     module of a multi-module application leaves it out. -->
+                <plugin>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                    <version>0.4.0-SNAPSHOT</version>
+                    <executions>
+                        <execution>
+                            <id>vidocq-checkpom</id>
+                            <phase>validate</phase>
+                            <goals>
+                                <goal>checkpom</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>vidocq-check-module-info</id>
+                            <phase>process-classes</phase>
+                            <goals>
+                                <goal>check-module-info</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <!-- "default": the id of an execution declared without one, as vidocq create wrote
+                                 until 0.4.0, so that such a pom merges with this one instead of packaging twice. -->
+                            <id>default</id>
+                            <goals>
+                                <goal>package</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- The build identity the startup banner reads (META-INF/vidocq/build-info/<artifactId>.properties),
+                 as vidocq-parent writes it for the runtime's own jars. -->
+            <plugin>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>9.2.0</version>
+                <executions>
+                    <execution>
+                        <id>vidocq-build-info</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <abbrevLength>8</abbrevLength>
+                    <dateFormat>yyyy-MM-dd'T'HH:mm:ssXXX</dateFormat>
+                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <generateGitPropertiesFilename>${project.build.outputDirectory}/META-INF/vidocq/build-info/${project.artifactId}.properties</generateGitPropertiesFilename>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.build.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                </configuration>
+            </plugin>
+
+            <!-- A build tool, not part of what ships (AGENTS.md, zero external dependency): it writes the pom the
+                 release publishes, with no parent, profile or distributionManagement, named in reference.adoc.
+                 Not inherited: an application's own pom stays as its author wrote it. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.7.3</version>
+                <inherited>false</inherited>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>ossrh</flattenMode>
+                    <pomElements>
+                        <parent>remove</parent>
+                        <profiles>remove</profiles>
+                        <distributionManagement>remove</distributionManagement>
+                        <repositories>remove</repositories>
+                        <pluginRepositories>remove</pluginRepositories>
+                        <properties>keep</properties>
+                        <dependencyManagement>keep</dependencyManagement>
+                        <build>keep</build>
+                    </pomElements>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -2,6 +2,8 @@
 *.class
 
 target
+# flatten-maven-plugin output (vidocq-runtime-bom, vidocq-runtime-parent)
+.flattened-pom.xml
 
 # Log file
 *.log

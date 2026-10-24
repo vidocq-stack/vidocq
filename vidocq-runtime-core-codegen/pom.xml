@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>0.4.0-SNAPSHOT</version>
     </parent>
 
@@ -18,8 +18,8 @@
         needs (Vauban indexer — CDI bean discovery). Consumed via
         &lt;annotationProcessorPaths&gt; in maven-compiler-plugin; Maven resolves
         the transitive dependencies declared below into APT paths automatically.
-        Wired by default through the vidocq-runtime-parent pluginManagement so
-        downstream modules inherit it without restating anything.
+        Wired by default through the pluginManagement of vidocq-runtime-parent (applications)
+        and vidocq-runtime-build (this reactor), so modules inherit it without restating anything.
     </description>
 
     <dependencies>

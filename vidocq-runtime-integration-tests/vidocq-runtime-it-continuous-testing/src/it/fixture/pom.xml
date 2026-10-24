@@ -4,10 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- The runtime's own parent: its dependencyManagement and its Vauban indexer APT, as an example has. -->
+    <!-- The root of the runtime's reactor, vidocq-runtime-build: its dependencyManagement and its Vauban indexer APT, as an example has. -->
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>@project.version@</version>
         <relativePath/>
     </parent>

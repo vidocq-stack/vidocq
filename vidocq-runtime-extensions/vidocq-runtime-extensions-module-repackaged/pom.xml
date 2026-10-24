@@ -23,7 +23,7 @@
 
     <build>
         <plugins>
-            <!-- Inherits the execution from vidocq-runtime-parent/pluginManagement.
+            <!-- Inherits the execution from vidocq-runtime-build/pluginManagement.
                  Re-declaring the <plugin> here (without restating <executions>) is
                  enough to *activate* the bound checkpom execution on every child. -->
             <plugin>

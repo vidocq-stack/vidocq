@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>0.4.0-SNAPSHOT</version>
     </parent>
 
@@ -17,7 +17,7 @@
     <description>Aggregated JaCoCo report of the reactor, read by SonarQube (quality profile only)</description>
 
     <properties>
-        <!-- Quality-only module, listed by the quality profile of vidocq-runtime-parent: never
+        <!-- Quality-only module, listed by the quality profile of vidocq-runtime-build: never
              released, installed or deployed. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <maven.install.skip>true</maven.install.skip>

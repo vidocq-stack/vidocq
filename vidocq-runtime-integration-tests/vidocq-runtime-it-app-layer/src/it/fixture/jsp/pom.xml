@@ -6,7 +6,7 @@
     <!-- vidocq#232: an application made of JSP pages only, its module in the application layer. -->
     <parent>
         <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
+        <artifactId>vidocq-runtime-build</artifactId>
         <version>@project.version@</version>
         <relativePath/>
     </parent>
