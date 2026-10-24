@@ -571,21 +571,31 @@ public final class PageConstraints {
         }
 
         /**
-         * Whether an element is nested in one of the given actions of the library. In a tag file, or
-         * under an action of another library (whose handler may be the expected type), the answer is
-         * left to the handler at run time: the method then answers {@code true}.
+         * Whether an element is nested in one of the given actions of the library. In a tag file,
+         * under an action of another library (whose handler may be the expected type), or with no
+         * enclosing action at all (the top level of a tag file without a tag directive looks like a
+         * page), the answer is left to the handler at run time: the method then answers {@code true}.
          */
         private boolean nestedIn(Frame frame, String... localNames) {
             if (directives.tagFile) {
                 return true;
             }
             List<String> names = Arrays.asList(localNames);
+            boolean enclosed = false;
             for (Frame f = frame.parent; f != null; f = f.parent) {
                 if (ofLibrary(f) ? names.contains(f.localName) : foreignAction(f)) {
                     return true;
                 }
+                enclosed |= action(f);
             }
-            return false;
+            // No enclosing action: the view may be the top level of a tag file without a tag
+            // directive, invoked inside the expected action. The parent is unknown here.
+            return !enclosed;
+        }
+
+        /** An action element: neither template XML nor a standard action. */
+        private static boolean action(Frame frame) {
+            return !frame.namespace.isEmpty() && !JSP_NAMESPACE.equals(frame.namespace);
         }
 
         /** An action that is neither a standard action nor one of the Bodoni libraries. */

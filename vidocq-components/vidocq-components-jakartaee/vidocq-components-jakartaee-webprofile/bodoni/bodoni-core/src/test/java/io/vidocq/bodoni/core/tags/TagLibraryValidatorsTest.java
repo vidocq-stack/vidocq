@@ -318,8 +318,6 @@ class TagLibraryValidatorsTest {
 
     @Test
     void fmtParamOutsideMessageIsReported() {
-        assertReported(validate("FMT", "fmt", FMT, "<fmt:param value=\"x\" jsp:id=\"1\"/>"), "1", "fmt:param",
-                "fmt:message", "§8.9");
         assertReported(validate("FMT", "fmt", FMT, "<fmt:bundle basename=\"b\" jsp:id=\"1\"><fmt:param value=\"x\""
                 + " jsp:id=\"2\"/></fmt:bundle>"), "2", "fmt:param", "§8.9");
         TestPageData nested = view("<fmt:message key=\"k\" jsp:id=\"1\"><c:if test=\"t\" jsp:id=\"2\">"
@@ -329,9 +327,8 @@ class TagLibraryValidatorsTest {
 
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
-            <sql:param value="x" jsp:id="1"/>                                         | sql:param     | §10.7
-            <sql:dateParam value="${d}" jsp:id="1"/>                                  | sql:dateParam | §10.8
-            <sql:transaction jsp:id="0"><sql:param value="x" jsp:id="1"/></sql:transaction> | sql:param | §10.7
+            <sql:transaction jsp:id="0"><sql:param value="x" jsp:id="1"/></sql:transaction>         | sql:param     | §10.7
+            <sql:transaction jsp:id="0"><jsp:body jsp:id="2"><sql:dateParam value="${d}" jsp:id="1"/></jsp:body></sql:transaction> | sql:dateParam | §10.8
             """)
     void sqlParamOutsideAnExecutionActionIsReported(String body, String qName, String section) {
         assertReported(validate("SQL", "sql", SQL, body), "1", qName, "SQLExecutionTag", section);
@@ -345,6 +342,22 @@ class TagLibraryValidatorsTest {
         TestPageData custom = view("<my:exec jsp:id=\"1\"><sql:param value=\"x\" jsp:id=\"2\"/></my:exec>", "sql", SQL,
                 "my", "urn:example:custom");
         assertNull(new SqlTagLibraryValidator().validate("sql", SQL, custom));
+    }
+
+    /**
+     * A parameter action with no enclosing action may be the top level of a tag file that has no
+     * tag directive, invoked inside the expected action: the view cannot tell, the handler checks.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            FMT | fmt | jakarta.tags.fmt | <fmt:param value="x" jsp:id="1"/>
+            SQL | sql | jakarta.tags.sql | <sql:param value="x" jsp:id="1"/>
+            SQL | sql | jakarta.tags.sql | <sql:dateParam value="${d}" jsp:id="1"/>
+            FMT | fmt | jakarta.tags.fmt | <jsp:text jsp:id="2">text</jsp:text><fmt:param value="x" jsp:id="1"/>
+            SQL | sql | jakarta.tags.sql | <jsp:directive.page import="x.Y" jsp:id="2"/><sql:param value="x" jsp:id="1"/>
+            """)
+    void topLevelParamActionIsLeftToTheRunTime(String library, String prefix, String uri, String body) {
+        assertNull(validate(library, prefix, uri, body));
     }
 
     @ParameterizedTest
