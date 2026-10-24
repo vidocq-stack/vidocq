@@ -5,6 +5,37 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261024-01 — `ListenerFromADependencyRunsIT` fails when Central cannot be reached: its fixture downloads plugins
+
+- **Date**: 2026-10-24
+- **Status**: FIXED on `fix/flaky-dependency-codegen-offline` (Vidocq/vidocq#285, CI study of the flaky tests)
+- **Symptom**: the 3 methods of `ListenerFromADependencyRunsIT` (`vidocq-runtime-it-dependency-codegen`, `-Pit`)
+  fail with `the fixture build failed: ... Could not transfer artifact
+  org.apache.maven.plugins:maven-resources-plugin:pom:3.4.0 from/to central (https://repo.maven.apache.org/maven2):
+  repo.maven.apache.org: Temporary failure in name resolution`. Seen once in the 9 last failures of vauban's
+  `pr.yml` (≈1.5 days), in vidocq's downstream rebuild (run 46753, 1 585 runner-s lost); the PR did not cause it.
+- **Minimal repro**: build the module once online, then
+  `MAVEN_OPTS="-DsocksProxyHost=127.0.0.1 -DsocksProxyPort=9" mvn -o -Pit -pl
+  vidocq-runtime-integration-tests/vidocq-runtime-it-dependency-codegen clean verify`: the outer build is offline,
+  the fixture's `mvn` has no network. Before the fix: 3 failures out of 3 runs, `maven-compiler-plugin:pom:3.13.0
+  ... Can't connect to SOCKS proxy`.
+- **Cause**: a test that depends on the network, not a product bug. The fixture's settings added the outer local
+  repository as a `file:` repository but kept Central behind it, and the fixture needed artifacts the outer build had
+  never resolved, so each run downloaded them: 89 artifacts of `target/it-repo` came from `central`. The `lib`
+  module has no parent, so it ran the default plugin versions of whichever `mvn` ran the fixture (compiler 3.13.0,
+  surefire 3.2.5, install 3.1.2 with Maven 3.9.16; resources 3.4.0 with the CI's Maven), not the ones the build
+  pins; the aggregator POM did the same for `install`; and the version range of the app's inherited
+  `git-commit-id-maven-plugin` (bcutil `[1.81,1.82)`) needs a `maven-metadata.xml`, which a local repository read as a
+  `file:` repository does not have (it holds `maven-metadata-central.xml`).
+- **Fix**: `src/it/it-settings.xml` mirrors every repository (`*`) to the outer local repository, so the fixture
+  never reaches the network. The fixture's `lib` and aggregator POMs pin the outer build's plugin versions
+  (`@maven.*.plugin.version@`, filtered from `vidocq-parent`). `maven-invoker-plugin:install` stages, as
+  `extraArtifacts`, `maven-install-plugin` (which an outer `verify` never resolves) and `git-commit-id-maven-plugin`,
+  whose installation writes the `maven-metadata-local.xml` the range needs. What the IT checks is unchanged.
+- **Proof**: with the network cut as above, 50 runs out of 50 green (0 failures); `target/it-repo` holds no artifact
+  from `central` any more. From an empty local repository, an outer `verify` (no `install`) with `-am` passes the 3
+  tests, so `maven-install-plugin` comes from the staging. Module `clean install` green.
+
 ## BUG-20261022-01 — an enriched jar has no folder entries, so Vaadin's development mode copies no frontend files
 
 - **Date**: 2026-10-22
