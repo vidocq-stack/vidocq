@@ -80,6 +80,11 @@ abstract class DateTagSupport extends ValueTagSupport {
         timeZone = null;
     }
 
+    /** Whether the {@code pattern} attribute is set, which takes precedence over type and styles. */
+    final boolean hasPattern() {
+        return pattern != null && !pattern.isEmpty();
+    }
+
     /** The date format of the attributes in {@code locale}, set to the time zone of §9.4. */
     final DateFormat dateFormat(Locale locale) throws JspTagException {
         return FmtSupport.dateFormat(action(), type, dateStyle, timeStyle, pattern, locale,

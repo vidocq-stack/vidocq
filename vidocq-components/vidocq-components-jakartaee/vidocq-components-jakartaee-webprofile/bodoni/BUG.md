@@ -249,3 +249,49 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   and `ForTokensTag.setItems(String)` takes no `ValueExpression`, so Ibarra rejects the `#{…}`
   value at translation time.
 - Status: fixed (2026-10-24, branch `fix/tck-baseline`): `items` is `deferred-value` `java.lang.String` in `c.tld` and `c-1_2.tld`; `ForTokensTag.setItems(Object)`. A non-String value is coerced as EL coerces to `String`, a null one gives no iteration. TCK `spec.core.iteration.fortokens`: 14/15 before, 15/15 after.
+
+## BOD-010 · 2026-10-24 · `fmt:parseDate` refuses text after a complete date
+
+- Symptom: `<fmt:parseDate value="Nov 21, 2000 3:45:02 AM" var="d"/>` (default `type`, `date`,
+  `en_US`) throws `JspException: fmt:parseDate: cannot parse 'Nov 21, 2000 3:45:02 AM'`. The
+  date style parses `Nov 21, 2000` and stops at index 12; Bodoni then refused the text left over.
+  The JDK's `DateFormat.parse(String)` accepts it (checked on JDK 25: `getDateInstance(DEFAULT,
+  en_US)`, non-lenient, gives `Tue Nov 21 2000`), and so does Bodoni's own `fmt:parseNumber`
+  (`NumberFormat.parse(String)`). Found by the B5 baseline (official Tags TCK, 2 tests), first
+  filed under "TCK input on JDK 20+ CLDR locale data", a diagnosis this entry corrects: the cause
+  is Bodoni's trailing-text rule, not the CLDR pattern.
+- Minimal repro: official TCK `spec.fmt.format.parsedate.JSTLClientIT#positivePDVarTest` and
+  `#positivePDScopeTest`; unit test `ParseDateTagTest#dateTypeAcceptsADateFollowedByATime`.
+- Cause: `ParseDateTag.convert` failed when `ParsePosition.getIndex() != text.length()`, a B2 rule
+  read from Tags 3.0 §9.10 "Parsing is non-lenient, i.e. the given date string must strictly
+  adhere to the parsing format". That sentence names `DateFormat.setLenient(false)`, which
+  governs field values, not trailing text; the TCK pages (the arbiter) expect the value to parse
+  with the default `type=date`, which leaves `3:45:02 AM` unread on every JDK.
+- Status: fixed 2026-10-24 (branch `fix/tck-baseline`, controller ruling under the maintainer's
+  standing go-ahead, PLAN.md Ruling 5): a parse is a success as soon as the format returns a date,
+  whatever text is left, as `DateFormat.parse(String)` does; field values stay strict
+  (`setLenient(false)`). The B2 test `trailingTextIsAJspExceptionNamingTheValue` is reversed into
+  `textAfterACompleteDateIsIgnored`. TCK `spec.fmt.format.parsedate`: 16/18 before, 18/18 after.
+
+## BOD-011 · 2026-10-24 · `fmt:parseDate` refuses an ASCII space where the JDK 20+ CLDR style has U+202F
+
+- Symptom: `<fmt:parseDate type="time" value="3:45:03 AM"/>` (`en_US`, default style) throws
+  `JspException: fmt:parseDate: cannot parse '3:45:03 AM'`. Since JDK 20 the CLDR time styles of
+  `en_US` (and of many other locales) put U+202F NARROW NO-BREAK SPACE before AM/PM
+  (`h:mm:ss<U+202F>a`), and some locales use U+00A0; users and older pages type an ASCII space,
+  which a non-lenient `SimpleDateFormat` does not match against U+202F.
+- Minimal repro: `ParseDateTagTest#asciiSpaceMatchesTheNarrowNoBreakSpaceOfATimeStyle` (`type`
+  `time`, `3:45:03 AM`) and `#asciiSpaceMatchesInADateAndTimeStyle` (`type` `both`,
+  `Nov 21, 2000, 3:45:02 AM`).
+- Cause: Bodoni parsed with the style-based format exactly as the JDK locale data gives it. A
+  blanket replacement the other way (every ASCII space of the value by U+202F) does not work: the
+  CLDR pattern `MMM d, y, h:mm:ss<U+202F>a` keeps ordinary spaces elsewhere, so the parse then
+  breaks at index 3.
+- Status: fixed 2026-10-24 (branch `fix/tck-baseline`, PLAN.md Ruling 5): when a style-based
+  format fails and its pattern contains U+202F or U+00A0, `fmt:parseDate` retries once,
+  non-lenient, with a `SimpleDateFormat` of that pattern with those characters made ASCII
+  spaces, in the same locale and time zone. An explicit `pattern` attribute is matched as written
+  (`explicitPatternStaysStrict`). A value the retry cannot parse either throws a `JspException`
+  naming the value, whose cause is the `ParseException` of the first attempt
+  (`failedRetryKeepsTheFirstParseExceptionAsCause`; TCK `negativePDUnableToParseValueTest` checks
+  the root cause).

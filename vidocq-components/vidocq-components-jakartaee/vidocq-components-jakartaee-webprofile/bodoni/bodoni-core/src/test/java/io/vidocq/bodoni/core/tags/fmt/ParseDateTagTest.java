@@ -25,10 +25,14 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import java.text.DateFormat;
 import java.text.ParseException;
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
@@ -149,12 +153,86 @@ class ParseDateTagTest {
     }
 
     @Test
-    void trailingTextIsAJspExceptionNamingTheValue() {
+    void textAfterACompleteDateIsIgnored() throws Exception {
+        // BOD-010: DateFormat.parse(String) semantics, as fmt:parseNumber has
         ParseDateTag tag = us("4/13/02x");
         tag.setPattern("M/d/yy");
+        tag.setVar("d");
+        run(tag);
+        assertEquals(INSTANT, parsed());
+    }
+
+    @Test
+    void dateTypeAcceptsADateFollowedByATime() throws Exception {
+        // the TCK case: the default type is date, the time part is left unread
+        assumeCldrNarrowNoBreakSpace();
+        ParseDateTag tag = us("Nov 21, 2000 3:45:02 AM");
+        tag.setVar("d");
+        run(tag);
+        assertEquals(Date.from(Instant.parse("2000-11-21T00:00:00Z")), parsed());
+    }
+
+    @Test
+    void asciiSpaceMatchesTheNarrowNoBreakSpaceOfATimeStyle() throws Exception {
+        // BOD-011: the JDK 20+ CLDR time style has U+202F before AM/PM
+        assumeCldrNarrowNoBreakSpace();
+        ParseDateTag tag = us("3:45:03 AM");
+        tag.setType("time");
+        tag.setVar("d");
+        run(tag);
+        assertEquals(new Date(13_503_000L), parsed());
+    }
+
+    @Test
+    void asciiSpaceMatchesInADateAndTimeStyle() throws Exception {
+        assumeCldrNarrowNoBreakSpace();
+        ParseDateTag tag = us("Nov 21, 2000, 3:45:02 AM");
+        tag.setType("both");
+        tag.setVar("d");
+        run(tag);
+        assertEquals(Date.from(Instant.parse("2000-11-21T03:45:02Z")), parsed());
+    }
+
+    @Test
+    void explicitPatternStaysStrict() {
+        // the retry is for style-based formats only: a pattern is matched as written
+        ParseDateTag tag = us("3:45 AM");
+        tag.setPattern("h:mm\u202Fa");
         JspException e = assertThrows(JspException.class, () -> run(tag));
-        assertTrue(e.getMessage().contains("4/13/02x"));
+        assertTrue(e.getMessage().contains("3:45 AM"));
         assertInstanceOf(ParseException.class, e.getCause());
+    }
+
+    @Test
+    void failedRetryKeepsTheFirstParseExceptionAsCause() {
+        assumeCldrNarrowNoBreakSpace();
+        String value = "25:99 XM";
+        DateFormat first = DateFormat.getTimeInstance(DateFormat.DEFAULT, Locale.US);
+        first.setLenient(false);
+        first.setTimeZone(GMT);
+        ParsePosition position = new ParsePosition(0);
+        assertNull(first.parse(value, position));
+        ParseDateTag tag = us(value);
+        tag.setType("time");
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+        assertTrue(e.getMessage().contains(value));
+        ParseException cause = assertInstanceOf(ParseException.class, e.getCause());
+        assertEquals(position.getErrorIndex(), cause.getErrorOffset());
+    }
+
+    @Test
+    void strictFieldValuesAreStillRejectedAfterTheRetry() {
+        // non-lenient (§9.10) governs field values: hour 13 of a 12-hour style is refused
+        assumeCldrNarrowNoBreakSpace();
+        ParseDateTag tag = us("13:45:03 AM");
+        tag.setType("time");
+        JspException e = assertThrows(JspException.class, () -> run(tag));
+        assertTrue(e.getMessage().contains("13:45:03 AM"));
+    }
+
+    private static void assumeCldrNarrowNoBreakSpace() {
+        assumeTrue(((SimpleDateFormat) DateFormat.getTimeInstance(DateFormat.DEFAULT, Locale.US)).toPattern()
+                .indexOf('\u202F') >= 0, "the JDK time style has no U+202F");
     }
 
     @Test
