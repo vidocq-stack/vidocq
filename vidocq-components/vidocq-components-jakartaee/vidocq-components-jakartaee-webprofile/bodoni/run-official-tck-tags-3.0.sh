@@ -11,8 +11,8 @@ set -euo pipefail
 
 usage='Usage: ./run-official-tck-tags-3.0.sh [smoke|all|-Dtest=...] [--no-prepare] [--no-install] [Maven arguments...]
 
-  smoke              a few whole classes: one per library, the JSTL 1.0 compatibility
-                     class and the c:choose structure class (default)
+  smoke              eight whole classes: one per library, the URI check, the JSTL 1.0
+                     compatibility class and the c:choose structure class (default)
   all                every official class
   -Dtest=...         a Surefire selection of official classes or methods
   --no-prepare       reuse the Derby DDL already extracted into bodoni-tck/target/

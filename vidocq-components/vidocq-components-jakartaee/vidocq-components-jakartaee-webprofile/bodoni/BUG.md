@@ -276,8 +276,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   adhere to the parsing format". That sentence names `DateFormat.setLenient(false)`, which
   governs field values, not trailing text; the TCK pages (the arbiter) expect the value to parse
   with the default `type=date`, which leaves `3:45:02 AM` unread on every JDK.
-- Status: fixed 2026-10-24 (branch `fix/tck-baseline`, controller ruling under the maintainer's
-  standing go-ahead, PLAN.md Ruling 5): a parse is a success as soon as the format returns a date,
+- Status: fixed 2026-10-24 (branch `fix/tck-baseline`, decision (2026-10-24),
+  PLAN.md Ruling 5): a parse is a success as soon as the format returns a date,
   whatever text is left, as `DateFormat.parse(String)` does; field values stay strict
   (`setLenient(false)`). The B2 test `trailingTextIsAJspExceptionNamingTheValue` is reversed into
   `textAfterACompleteDateIsIgnored`. TCK `spec.fmt.format.parsedate`: 16/18 before, 18/18 after.

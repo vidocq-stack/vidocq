@@ -66,6 +66,7 @@ Each library is served under the `jakarta.tags.*` URI and its JSTL 1.2 URI, and 
 
 The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.tld`, `fmt-1_0-rt.tld`, `sql.tld`, `sql-1_2.tld`, `sql-1_0-rt.tld`, `x.tld`, `x-1_2.tld`, `x-1_0-rt.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
 
+[#constraints]
 === Constraints
 
 Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; the external DTD subset of a DOCTYPE is not loaded (an XHTML DOCTYPE kept in a JSP document is harmless), every external general or parameter entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.

@@ -92,7 +92,7 @@ By root cause (89 errors in the first run):
 | `c:forTokens` deferred `items` (BOD-009) | Bodoni | 1 | fixed (`d4bc5ef`, `33e01df`) |
 | TCK page expects the pre-CLDR `en_US` date-time format | harness (TCK input on JDK 20+) | 2 | **corrected**: a Bodoni defect, BOD-010 (trailing text after a complete date), fixed with BOD-011 (`e77985f`, Ruling 5); see the correction under "Pre-CLDR date-time input" |
 
-How the count moved on the branch (full runs of the task reports): 452 → 525 after the `_rt`
+How the count moved on the branch, from one full run after each fix: 452 → 525 after the `_rt`
 TLDs, BOD-009 and a Peano snapshot with COMP-010 → 534 after the validators (BOD-006) → 539
 after BOD-007 and BOD-008 → 541 after BOD-010 / BOD-011. The recorded 541/541 is the run of
 `174a887` above, on Peano and Ibarra `main`.
@@ -392,7 +392,7 @@ After the TCK fixes, at `174a887` (2026-10-24 01:01:45 to 01:02:03 UTC, right af
 run), with `./run-official-tck-tags-3.0.sh smoke --no-install --no-prepare`: runner tests 39/39,
 official classes **91/91**, `BUILD SUCCESS`.
 
-**Smoke set extended (2026-10-24, controller ruling).** So that the CI check covers the TCK
+**Smoke set extended (decision (2026-10-24)).** So that the CI check covers the TCK
 fixes, the smoke set gains two classes, now eight:
 
 - `compat.onedotzero` (38 tests): the JSTL 1.0 `_rt` TLDs, the `sql` database path and
