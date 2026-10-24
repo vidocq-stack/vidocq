@@ -769,7 +769,7 @@ requests, each test-first, until 100 %.
 tests, 452 passed, 0 failures, 89 errors, 0 skipped, **83.5 %**, 33/50 classes at 100 %, no
 deployment error. Causes: `_rt` TLDs pending 40 (decision 4); Peano COMP-010 32 (a constant
 expression lacked the `(ELContext, Class)` constructor that Ibarra's deferred-value attributes
-call; fix proposed in Vidocq/peano#61 (open), Ibarra regression test IBARRA-156 on branch
+call; fixed in Vidocq/peano#61 (merged 2026-10-24), Ibarra regression test IBARRA-156 on branch
 `fix/deferred-constant-ctor`); Bodoni BOD-006 9 (translation-time
 constraints), BOD-007 3 (`LocalizationContext` under `deny`), BOD-008 2 (`fmt:message bundle` and
 the response locale), BOD-009 1 (`c:forTokens` deferred `items`); TCK input on JDK 20+ CLDR
@@ -791,7 +791,7 @@ result):
 
 1. The four JSTL 1.0 `_rt` TLDs (decision 4): 40 tests, which may then meet the other causes.
 2. BOD-006 to BOD-009 (`BUG.md`): 15 tests.
-3. Peano COMP-010: a Peano snapshot with the fix proposed in Vidocq/peano#61 (open) (32 tests);
+3. Peano COMP-010: a Peano snapshot with the fixed in Vidocq/peano#61 (merged 2026-10-24) (32 tests);
    nothing to change in Bodoni.
 4. `parseDate`: the two pre-CLDR `parsedate` pages, a TCK issue for the maintainer to file
    ("`positivePDVarTest` and `positivePDScopeTest` parse 'Nov 21, 2000 3:45:02 AM', which the

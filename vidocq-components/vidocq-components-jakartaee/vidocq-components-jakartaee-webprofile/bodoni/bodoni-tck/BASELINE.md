@@ -164,7 +164,7 @@ one category.
   symptom appears in Ibarra-generated pages, because Ibarra's `PageGenerator.deferredAttribute`
   calls `new …$ExpressionN(ELContext, Class)` for any `${…}` on such an attribute. Not a Bodoni
   defect.
-- Fix proposed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (open): constant expressions get the
+- Fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (merged 2026-10-24): constant expressions get the
   `(ELContext, Class)` constructor; Ibarra regression test IBARRA-156 on branch
   `fix/deferred-constant-ctor`. The 32 tests stay counted as failing here: the run predates the
   fix.
@@ -276,7 +276,7 @@ the one the page describes:
 B5 files no issue; the COMP-010 fix went through Vidocq/peano#61.
 
 - Peano: COMP-010, constant expressions lacked the `(ELContext, Class)` constructor (32 tests),
-  fix proposed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (open); Ibarra
+  fixed in [Vidocq/peano#61](https://codefloe.com/Vidocq/peano/pulls/61) (merged 2026-10-24); Ibarra
   regression test IBARRA-156 on branch `fix/deferred-constant-ctor`.
 - Ibarra: none of its own in this run (the Peano item shows up in Ibarra-generated pages).
 - Foy: none.
