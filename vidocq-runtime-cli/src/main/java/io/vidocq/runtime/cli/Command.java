@@ -68,7 +68,6 @@ public sealed interface Command {
         static Doctor defaults() { return new Doctor(false); }
     }
 
-    /** {@code main}: write an {@code @VidocqMain} trampoline; without it the runtime's own main boots the app. */
     /** {@code vidocq create}: the project {@link io.vidocq.runtime.tooling.ProjectScaffolder} writes. */
     record Create(io.vidocq.runtime.tooling.ProjectSpec spec) implements Command {}
 

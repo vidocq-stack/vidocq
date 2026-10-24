@@ -132,6 +132,7 @@ mvn vidocq:doctor [-Dvidocq.doctor.verbose]                 # the checks of vido
   Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions. A failed check (a JDK
   older than 25) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the hint of the checks
   that passed.
+
 [#create-goal]
 == `vidocq:create` goal [.tag-new]#NEW#
 

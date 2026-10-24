@@ -32,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The defaults and the checks of {@code vidocq create} and {@code vidocq:create} (Vidocq/vidocq#314). */
 class ProjectSpecTest {
 
+    private static final List<String> NONE = List.of();
+
     @Test
     void theGroupIdAndThePackageDefault() {
         ProjectSpec spec = ProjectSpec.of("todo-api", null, null, List.of("cassini-rest"), null, false, "--package");
@@ -43,7 +45,7 @@ class ProjectSpecTest {
     @Test
     void aDerivedPackageThatIsNoJavaNameIsRefusedNamingTheToolsOption() {
         var e = assertThrows(IllegalArgumentException.class,
-                () -> ProjectSpec.of("ft-030", null, null, List.of(), null, false, "-Dpackage=<pkg>"));
+                () -> ProjectSpec.of("ft-030", null, null, NONE, null, false, "-Dpackage=<pkg>"));
 
         assertTrue(e.getMessage().contains("io.example.ft.030"), e.getMessage());
         assertTrue(e.getMessage().contains("derived"), e.getMessage());
@@ -53,14 +55,14 @@ class ProjectSpecTest {
     @Test
     void anExplicitPackageMustBeAJavaNameToo() {
         var e = assertThrows(IllegalArgumentException.class,
-                () -> ProjectSpec.of("demo", "com.acme", "com.acme.class", List.of(), null, false, "--package"));
+                () -> ProjectSpec.of("demo", "com.acme", "com.acme.class", NONE, null, false, "--package"));
 
         assertTrue(e.getMessage().startsWith("'com.acme.class' is not a valid Java package name."), e.getMessage());
     }
 
     @Test
     void aProjectNeedsAName() {
-        assertThrows(IllegalArgumentException.class, () -> ProjectSpec.of(" ", null, null, List.of(), null, false, "-"));
+        assertThrows(IllegalArgumentException.class, () -> ProjectSpec.of(" ", null, null, NONE, null, false, "-"));
     }
 
     @Test

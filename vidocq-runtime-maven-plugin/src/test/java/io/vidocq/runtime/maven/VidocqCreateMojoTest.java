@@ -74,7 +74,7 @@ class VidocqCreateMojoTest {
     }
 
     @Test
-    void withoutNameTheGoalSaysHowToGiveOne() throws Exception {
+    void withoutNameTheGoalSaysHowToGiveOne() {
         MojoFailureException e = assertThrows(MojoFailureException.class,
                 () -> create(dir, " ", null, null, null, false).execute());
 
@@ -82,7 +82,7 @@ class VidocqCreateMojoTest {
     }
 
     @Test
-    void anInvalidPackageNamesTheGoalsOption() throws Exception {
+    void anInvalidPackageNamesTheGoalsOption() {
         MojoFailureException e = assertThrows(MojoFailureException.class,
                 () -> create(dir, "ft-030", null, null, null, false).execute());
 
