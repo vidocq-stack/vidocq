@@ -591,6 +591,11 @@ vidocq update
 
 `VIDOCQ_CENTRAL` and `VIDOCQ_SNAPSHOTS` point it at repository mirrors, as for `install.sh`.
 
+[#cli-and-plugin]
+=== The CLI and the Maven plugin [.tag-new]#NEW#
+
+include::partial$cli-plugin-correspondence.adoc[]
+
 == Configuration & profiles
 
 The CLI operates on the standard Vidocq configuration model. `vidocq.properties` lives in the

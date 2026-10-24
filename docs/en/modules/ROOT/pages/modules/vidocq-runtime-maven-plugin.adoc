@@ -88,6 +88,11 @@ its original, its classes attached with `--patch-module`. Zero configuration. Se
 xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-module applications].
 ====
 
+[#cli-and-plugin]
+== The goals and the Vidocq CLI [.tag-new]#NEW#
+
+include::partial$cli-plugin-correspondence.adoc[]
+
 [#extension-goals]
 == `vidocq:add-extension` and `vidocq:remove-extension` goals [.tag-new]#NEW#
 

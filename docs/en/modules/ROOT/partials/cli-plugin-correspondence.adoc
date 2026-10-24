@@ -1,0 +1,57 @@
+// The table of the CLI commands and of the Maven plugin goals, included by the reference page of each (Vidocq/vidocq#314).
+Every command that edits or checks the project has a goal, and both run the same code from
+`vidocq-runtime-tooling`: the same project, the same edit, the same diagnosis. The commands that build or run the
+application run their goal through Maven (`./mvnw` when the project has one).
+
+[cols="2,2,3"]
+|===
+| CLI | Maven plugin | How they agree
+
+| `vidocq create`
+| `vidocq:create`, without a project
+| The same scaffolder writes the project.
+
+| `vidocq extension add` / `remove`
+| `vidocq:add-extension` / `vidocq:remove-extension` (`-Dextensions=…`)
+| The same editor writes the dependency, the codegen path and the `module-info.java` directives.
+
+| `vidocq extension list`
+| `vidocq:list-extensions` (`-Dvidocq.extensions.available` for the catalog)
+| The same test tells an extension jar; the same catalog names it.
+
+| `vidocq doctor`
+| `vidocq:doctor`
+| The same facts, the same checks.
+
+| `vidocq dev` / `vidocq start`
+| `vidocq:dev` / `vidocq:run`
+| The command runs the goal.
+
+| `vidocq test` / `vidocq idea`
+| `vidocq:test` / `vidocq:idea`
+| The command runs the goal.
+
+| `vidocq build [type]` / `vidocq clean`
+| `package`, `vidocq:jlink`, `vidocq:jpackage`, `vidocq:docker` / `mvn clean`
+| The command runs the build.
+
+| `vidocq config get\|set\|list`
+| none
+| `vidocq.properties` is a file of the sources; `vidocq:doctor` reports the keys it does not recognize.
+
+| `vidocq info`
+| none
+| `vidocq:list-extensions` gives the project's part; versions are the build's.
+
+| `vidocq update`, `completion`, `version`, `help`
+| none
+| They manage the CLI itself.
+
+| none
+| `vidocq:generate`, `vidocq:checkpom`, `vidocq:check-module-info`
+| Bound to the build: no command needed.
+
+| none
+| `vidocq:analyze-deps`, `vidocq:complete-module-info`
+| Build-level reports and fixes, run with Maven.
+|===
