@@ -37,8 +37,13 @@ repo. Common commands: `tea issues`, `tea pulls`, `tea issues create`, `tea pr c
 
 ## Architecture & reactor layout
 
-Root reactor modules (`pom.xml`):
+Root reactor modules (`pom.xml`, artifactId `vidocq-runtime-build`: this repository's build, never an
+application's parent):
 
+- `vidocq-runtime-bom` — the versions of every published runtime artifact; `ApplicationBomAndParentTest` fails when
+  a published module is missing.
+- `vidocq-runtime-parent` — the parent of an application (Vidocq/vidocq#339): imports the BOM, wires the indexer and
+  the plugin, carries no setting of this repository. Both are published flattened (no parent, no profile).
 - `vidocq-runtime-spi` — public extension SPI: `VidocqExtension`, `ExtensionContext`.
 - `vidocq-runtime-core` — lifecycle orchestrator, `ServiceLoader` discovery, bean scan.
 - `vidocq-runtime-core-codegen` — Vauban indexer APT bundle (wired globally via root `pluginManagement`).

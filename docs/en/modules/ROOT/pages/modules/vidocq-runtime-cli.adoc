@@ -276,7 +276,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] write
 | `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.
-| `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits, and of every Vidocq dependency it declares (default: the runtime version of the CLI).
+| `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits (default: the runtime version of the CLI). From 0.4.0 the parent's BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
 | `--main` [.tag-new]#NEW# | Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
 |===
 

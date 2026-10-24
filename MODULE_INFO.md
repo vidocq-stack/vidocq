@@ -14,7 +14,7 @@ The `vidocq-runtime-maven-plugin` catches these at build time.
 ### `vidocq:check-module-info` — verify (default, fail-fast)
 
 Bound at `process-classes` for every module that uses the Vidocq plugin (inherited from
-`vidocq-runtime-parent`'s `pluginManagement`, alongside `checkpom`). It unions the
+the `pluginManagement` of `vidocq-runtime-parent` (applications) and `vidocq-runtime-build` (this reactor), alongside `checkpom`). It unions the
 *module-info requirements* declared by every resolved dependency (see the descriptor format below)
 and checks them against the compiled `module-info.class`. A missing directive fails the build with
 the exact, copy-pasteable fix:

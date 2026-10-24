@@ -109,8 +109,9 @@ mvn vidocq:remove-extension -Dextensions=knock-health
 * `-Dextensions` takes catalog ids, comma-separated, or `groupId:artifactId` coordinates. Any other name fails the
   goal, which names the closest catalog ids and writes nothing [.tag-new]#NEW#.
 * `add-extension` writes the dependency, the codegen bundle into the compiler plugin of the project's own build,
-  and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It pins the version the
-  pom's `vidocq-runtime-parent` gives, else the plugin's own. See
+  and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It writes no version when
+  `vidocq-runtime-bom` gives it (a `vidocq-runtime-parent` from 0.4.0, or a pom that imports the BOM)
+  [.tag-new]#NEW#; otherwise it pins the version the pom's `vidocq-runtime-parent` gives, else the plugin's own. See
   xref:modules/vidocq-runtime-cli.adoc#extension[`vidocq extension`] for each of these edits.
 * `remove-extension` takes back what `add-extension` wrote, the `<dependencies>`, `<build>` and `<plugins>`
   elements it created included.
@@ -160,7 +161,7 @@ mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}:create \
 | `groupId` | The Maven groupId; `io.example` by default.
 | `package` | The root Java package, which is also the module name; `<groupId>.<name>` by default. It must be a valid Java package name.
 | `extensions` | The catalog ids of the extensions to enable, comma-separated, written in this order.
-| `parentVersion` | The `vidocq-runtime-parent` version; the plugin's own by default.
+| `parentVersion` | The `vidocq-runtime-parent` version; the plugin's own by default. From 0.4.0 its BOM versions the Vidocq dependencies, written without a `<version>`.
 | `main` | `true` also writes an `@VidocqMain` trampoline, for an IDE Run or a `VidocqApp`.
 |===
 

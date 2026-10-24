@@ -11,7 +11,13 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM (Model 4.0.0). [[parent-pom-versions]]It manages every Vidocq artifact and the `vidocq-runtime-maven-plugin` at the runtime version written out literally, so an application that declares a `<version>` of its own resolves them at the runtime's version, not its own [.tag-new]#NEW#.
+| Parent POM of an application (Model 4.0.0) [.tag-new]#NEW#. [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `check-module-info` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note].
+
+| `io.vidocq.runtime:vidocq-runtime-bom:{project-version}` [.tag-new]#NEW#
+| The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. `vidocq-runtime-parent` imports it; an application with a parent of its own imports it (`<type>pom</type>`, `<scope>import</scope>`).
+
+| `io.vidocq.runtime:vidocq-runtime-build:{project-version}` [.tag-new]#NEW#
+| The root of the runtime's own reactor, with the settings of this repository (CI, SonarQube, TCK). The parent of the runtime's modules; an application never inherits it.
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
 | Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors [.tag-new]#NEW#)
@@ -46,6 +52,13 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime:vidocq-runtime-integration-tests:{project-version}`
 | Multi-extension integration tests
 |===
+
+[#flattened-poms]
+NOTE: `vidocq-runtime-bom` and `vidocq-runtime-parent` are built with `io.vidocq:vidocq-parent`, for the release,
+and published without it: `org.codehaus.mojo:flatten-maven-plugin` writes the pom the release deploys, with no
+parent, no profile and no `distributionManagement`, so an application inherits or imports what these two files
+declare and nothing of the repository's own build. It is a build tool of this reactor and never reaches an
+application [.tag-new]#NEW#.
 
 == Exported Java modules
 

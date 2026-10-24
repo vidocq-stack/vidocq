@@ -348,7 +348,7 @@ ${ansi.cyan}  T O D O   S E R V I C E${ansi.reset}
 [#build-identity]
 === Build identity [.tag-new]#NEW#
 
-Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe, and the applications created by `vidocq create`, through `vidocq-runtime-parent`) carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase:
+Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe), and every application built with `vidocq-runtime-parent`, which configures the plugin the same way, carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase:
 
 [source,properties]
 ----

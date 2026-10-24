@@ -285,6 +285,53 @@ xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are 
 xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config extension] and
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 
+[#application-parent]
+== `vidocq-runtime-parent` is an application parent, with a BOM [.tag-new]#NEW#
+
+Until 0.4.0, `vidocq-runtime-parent` was the root of the runtime's own reactor, and an application that
+inherited it got the settings of this repository with it: the SonarQube and TCK properties, the versions of
+Testcontainers, Flyway, Liquibase, the bricks and the Jakarta APIs, a SNAPSHOT of langchain4j-cdi. From 0.4.0
+(Vidocq/vidocq#339):
+
+* **`vidocq-runtime-parent` is the parent of an application.** It imports `vidocq-runtime-bom`, sets Java 25,
+  puts the Vauban indexer on the processor path, pins the Maven plugins, and manages
+  `vidocq-runtime-maven-plugin` with `checkpom`, `check-module-info` and `package`. It writes the build identity
+  the startup banner reads, and nothing else.
+* **`vidocq-runtime-bom` versions every Vidocq artifact** an application declares: the runtime, the extensions,
+  their `-codegen` and `-dev` modules, the Dev Services and the test support. An application that keeps a parent
+  of its own imports it:
++
+[source,xml,subs=attributes+]
+----
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-bom</artifactId>
+            <version>{project-version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+----
+* **The runtime's own reactor root is `vidocq-runtime-build`.** It is published, as the parent of the runtime's
+  modules, and an application never inherits it.
+
+What to change in an application:
+
+* **Nothing, to keep building.** The parent's name is the same; bump its version.
+* **Drop the `<version>` of the Vidocq dependencies and codegen paths**, if you like: the BOM gives them, and an
+  upgrade then changes the parent's version only. `vidocq create` and `vidocq extension add` no longer write
+  them under a 0.4.0 parent, nor under a pom that imports the BOM.
+* **Declare the version of anything else you took from the old parent without one** — a Jakarta API, a brick
+  such as `cassini-api`, Testcontainers, H2, Flyway: the new parent manages none of them. Maven names each one
+  (`'dependencies.dependency.version' for … is missing`). The Vidocq extensions bring the bricks they need
+  transitively, so most applications declare none of these.
+* **Declaring `vidocq-runtime-maven-plugin` is enough.** The parent binds `checkpom`, `check-module-info` and
+  `package`; the `<execution>` with `<goal>package</goal>` that `vidocq create` wrote before 0.4.0 merges with the
+  parent's (both are the `default` execution), so it packages once whether you keep it or not.
+
 [#modularize-moved]
 == `vidocq:modularize` is now `vauban:modularize` [.tag-new]#NEW#
 
