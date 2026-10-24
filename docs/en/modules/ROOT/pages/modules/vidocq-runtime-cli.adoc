@@ -95,6 +95,8 @@ This generates a ready-to-build Maven project:
 ----
 hello-world/
 ├── pom.xml                                  # inherits vidocq-runtime-parent, depends on core, sets vidocq.mainModule
+├── mvnw, mvnw.cmd, .mvn/wrapper/            # the Maven wrapper of the Vidocq repositories
+├── .gitignore, README.md
 └── src/main/
     ├── java/
     │   ├── module-info.java                 # module com.example.hello.world { }
@@ -268,11 +270,24 @@ version, the project inherits the parent's version instead, and `create` says so
 xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project
 [.tag-new]#NEW#. The extensions are written in the order given [.tag-new]#NEW#.
 
+From 0.4.0 the project is finished [.tag-new]#NEW# (Vidocq/vidocq#339):
+
+* **A first test.** With `-x cassini-rest`, `src/test/java/<package>/HelloResourceTest.java` starts the application
+  with xref:testing.adoc[`@VidocqTest`] and checks `GET /hello`; the pom declares `vidocq-runtime-junit` and
+  `junit-jupiter` in test scope, versioned by the parent. Without it, the pom declares `junit-jupiter` alone. Under a
+  parent before 0.4.0 no test is written, and `create` says why.
+* **`.gitignore`**: `target/` and the files of IntelliJ IDEA, Eclipse, VS Code and macOS.
+* **`README.md`**: the commands that work on the project, with the CLI and with Maven alone.
+* **Questions on a console.** Without `--name`, on a terminal, `create` asks for the name, then for the group id and
+  the extensions unless the command line gave them, showing the catalog first; Enter takes the default
+  (`io.example`, `cassini-rest`), `none` takes no extension, and a wrong answer is explained and asked again.
+  Without a terminal, `--name` stays required.
+
 [cols="1,2"]
 |===
 | Option | Description
 
-| `--name, -n <name>` | Project / artifact name (**required**).
+| `--name, -n <name>` | Project / artifact name; asked on a terminal when left out, required otherwise.
 | `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.

@@ -92,12 +92,23 @@ public final class ProjectScaffolder {
 
         write(root.resolve("pom.xml"),                               buildPom(create, runtimeVersion, reporter));
         writeMavenWrapper(root);
+        write(root.resolve(".gitignore"),                            GITIGNORE);
+        write(root.resolve("README.md"),                             buildReadme(create));
         write(javaRoot.resolve("module-info.java"),                  buildModuleInfo(create, reporter));
         if (create.main()) {
             write(srcPkg.resolve(appClassName(create.name()) + ".java"), buildApp(create));
         }
         if (create.extensions().contains(REST_EXTENSION)) {
             write(srcPkg.resolve("HelloResource.java"),              buildHelloResource(create));
+            String parentVersion = create.parentVersion() != null ? create.parentVersion() : runtimeVersion;
+            if (parentPinsItsVersion(parentVersion)) {
+                Path testPkg = root.resolve("src/test/java").resolve(packageToPath(create.pkg()));
+                Files.createDirectories(testPkg);
+                write(testPkg.resolve("HelloResourceTest.java"),     buildHelloResourceTest(create));
+            } else {
+                reporter.note("Parent version " + parentVersion + " predates 0.4.0: no first test, as @VidocqTest"
+                        + " (vidocq-runtime-junit) comes with 0.4.0.");
+            }
         }
         write(res.resolve("vidocq.properties"),                      buildProperties());
     }
@@ -186,7 +197,7 @@ public final class ProjectScaffolder {
                 ownVersion ? versionLine("    ", APPLICATION_VERSION) : "", c.name(),
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", versionLine("            ", vidocqVersion),
-                extensionDeps(c.extensions(), vidocqVersion),
+                extensionDeps(c.extensions(), vidocqVersion) + (ownVersion ? testDeps(c) : ""),
                 aptCodegenPlugin(c.extensions(), vidocqVersion));
     }
 
@@ -285,6 +296,28 @@ public final class ProjectScaffolder {
     }
 
     /**
+     * The test dependencies, under a parent from 0.4.0, whose BOMs version them: JUnit, and {@code @VidocqTest} when
+     * the scaffold writes a resource to test. Nothing goes into {@code module-info.java}: Surefire patches the tests
+     * into the application module, which reads the class path.
+     */
+    private static String testDeps(ProjectSpec c) {
+        String vidocqTest = c.extensions().contains(REST_EXTENSION) ? """
+                        <dependency>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-junit</artifactId>
+                            <scope>test</scope>
+                        </dependency>
+                """ : "";
+        return vidocqTest + """
+                        <dependency>
+                            <groupId>org.junit.jupiter</groupId>
+                            <artifactId>junit-jupiter</artifactId>
+                            <scope>test</scope>
+                        </dependency>
+                """;
+    }
+
+    /**
      * The core requirement of the trampoline, then each selected extension's directives in
      * catalog order — the same {@link ModuleInfoEditor} edit {@code vidocq extension add}
      * makes, so a scaffolded extension and an added one end up declared alike. The application
@@ -372,6 +405,92 @@ public final class ProjectScaffolder {
                     }
                 }
                 """.formatted(c.pkg());
+    }
+
+    /** The first test: {@code @VidocqTest} starts the application and the test calls the resource. */
+    private static String buildHelloResourceTest(ProjectSpec c) {
+        return """
+                package %s;
+
+                import io.vidocq.runtime.junit.VidocqApplication;
+                import io.vidocq.runtime.junit.VidocqResponse;
+                import io.vidocq.runtime.junit.VidocqTest;
+                import org.junit.jupiter.api.Test;
+
+                import static org.junit.jupiter.api.Assertions.assertEquals;
+
+                /** {@code @VidocqTest} starts the application for this class and stops it after the last test. */
+                @VidocqTest
+                class HelloResourceTest {
+
+                    @Test
+                    void saysHello(VidocqApplication application) {
+                        VidocqResponse response = application.get("/hello");
+
+                        assertEquals(200, response.status(), application.log());
+                        assertEquals("Hello from Vidocq!", response.body());
+                    }
+                }
+                """.formatted(c.pkg());
+    }
+
+    /** What a build or an IDE writes in the project, kept out of version control. */
+    private static final String GITIGNORE = """
+            # Build output
+            target/
+
+            # IntelliJ IDEA
+            .idea/
+            *.iml
+
+            # Eclipse
+            .classpath
+            .project
+            .settings/
+
+            # VS Code
+            .vscode/
+
+            # macOS
+            .DS_Store
+            """;
+
+    /** The commands that work on the created project, with the CLI and without it. */
+    private static String buildReadme(ProjectSpec c) {
+        boolean rest = c.extensions().contains(REST_EXTENSION);
+        return """
+                # %s
+
+                A Vidocq application, created by `vidocq create`.
+
+                ## With the Vidocq CLI
+
+                | Command | What it does |
+                |---|---|
+                | `vidocq dev` | Runs the application and restarts it on every change, with the dev console |
+                | `vidocq test` | Runs the tests on every change |
+                | `vidocq build` | Builds the distribution under `target/` |
+                | `vidocq build jlink` | Builds a self-contained runtime image |
+                | `vidocq extension add <id>` | Adds an extension (`vidocq extension list --available`) |
+                | `vidocq doctor` | Checks the machine and the project |
+
+                ## With Maven alone
+
+                | Command | What it does |
+                |---|---|
+                | `./mvnw vidocq:dev` | Runs the application and restarts it on every change |
+                | `./mvnw test` | Runs the tests |
+                | `./mvnw package` | Builds the distribution: `target/%s-<version>/bin/%s.sh` starts it |
+                %s
+                Configuration: `src/main/resources/vidocq.properties`. Documentation: https://doc.vidocq.dev/vidocq/
+                """.formatted(c.name(), c.name(), c.name(), rest ? """
+
+                Then:
+
+                ```
+                curl http://localhost:8080/hello
+                ```
+                """ : "");
     }
 
     private static String buildProperties() {

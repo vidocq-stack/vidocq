@@ -144,7 +144,7 @@ public final class CliParser {
         return new Command.Doctor(verbose);
     }
 
-    private static Command.Create parseCreate(String[] args, int from) {
+    private static Command parseCreate(String[] args, int from) {
         String name = null, groupId = null, pkg = null, parentVersion = null;
         boolean main = false;
         Set<String> extensions = new LinkedHashSet<>();
@@ -159,7 +159,9 @@ public final class CliParser {
                 default                  -> unknownOpt(args[i], "create");
             }
         }
-        if (name == null) throw new CliException("'create' requires --name <app-name>.");
+        if (name == null) {
+            return new Command.CreateInteractively(groupId, pkg, extensions, parentVersion, main);
+        }
         try {
             return new Command.Create(ProjectSpec.of(name, groupId, pkg, extensions, parentVersion, main,
                     "--package <pkg>"));
@@ -380,7 +382,7 @@ public final class CliParser {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
-                opt("--name, -n <name>",         "Project / artifact name (required)");
+                opt("--name, -n <name>",         "Project / artifact name (asked on a console when left out)");
                 opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
                 opt("--extension, -x <id>",       "Extension to enable, repeatable");

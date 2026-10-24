@@ -71,6 +71,17 @@ public sealed interface Command {
     /** {@code vidocq create}: the project {@link io.vidocq.runtime.tooling.ProjectScaffolder} writes. */
     record Create(io.vidocq.runtime.tooling.ProjectSpec spec) implements Command {}
 
+    /**
+     * {@code vidocq create} without {@code --name}: on a console, {@link CreatePrompts} asks for the name, and for
+     * the group id and the extensions the command line left out (Vidocq/vidocq#339).
+     */
+    record CreateInteractively(String groupId, String pkg, java.util.Set<String> extensions, String parentVersion,
+                               boolean main) implements Command {
+        public CreateInteractively {
+            extensions = java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(extensions));
+        }
+    }
+
     record Build(
             BuildType type,
             boolean offline,

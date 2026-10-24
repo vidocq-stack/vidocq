@@ -69,6 +69,8 @@ xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
 TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, `--main`, …).
 
+NOTE: From 0.4.0 [.tag-new]#NEW#, `vidocq create` also writes `src/test/java/com/acme/todo/HelloResourceTest.java`, a first test that starts the application with xref:testing.adoc[`@VidocqTest`] and calls `GET /hello` (run it with `vidocq test` or `mvn test`), a `.gitignore` and a `README.md`. Run without `--name` on a terminal, it asks for the name, the group id and the extensions.
+
 == Step 3 — Your first resource
 
 `vidocq create` wrote `src/main/java/com/acme/todo/HelloResource.java`:

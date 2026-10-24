@@ -17,6 +17,9 @@
 * Full runtime boot, validation of phase ordering.
 * REST + CDI + JDBC interaction in end-to-end cases (create, read, transaction, rollback).
 * Shutdown behaviour — virtual thread drain, pool close, HTTP listener release.
+* What `vidocq create` writes [.tag-new]#NEW#: `vidocq-runtime-it-create` (profile `it`, on every CI run) runs
+  `mvn verify` on a created REST application — its first `@VidocqTest` test included — and fails on any warning but
+  the three javac ones documented as expected.
 * Regressions tracked by bugs documented in `vidocq/BUG.md`, `vidocq/CHAPPE-BUGS.md`, `vidocq/VAUBAN-BUGS.md`.
 
 [NOTE]

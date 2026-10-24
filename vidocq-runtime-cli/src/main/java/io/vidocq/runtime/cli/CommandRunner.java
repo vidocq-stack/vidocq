@@ -80,6 +80,7 @@ public final class CommandRunner {
                     MavenInvocation.Options.none(), false,
                     (check == null ? "Writing" : "Checking") + " the IntelliJ run configurations…");
             case Command.Create c              -> runCreate(c);
+            case Command.CreateInteractively c -> runCreateInteractively(c);
             case Command.Build b               -> runBuild(b);
             case Command.Clean cl              -> runClean(cl);
             case Command.Config cfg            -> switch (cfg) {
@@ -259,6 +260,15 @@ public final class CommandRunner {
         return runCreate(create, Path.of(""));
     }
 
+    /** {@code vidocq create} without {@code --name}: the questions on a console, else the missing option. */
+    private static int runCreateInteractively(Command.CreateInteractively create) {
+        CreatePrompts.Prompter console = CreatePrompts.console();
+        if (console == null) {
+            throw new CliException("'create' requires --name <app-name>.");
+        }
+        return runCreate(new Command.Create(CreatePrompts.ask(create, console)));
+    }
+
     /** {@code vidocq create} in {@code baseDir}. */
     static int runCreate(Command.Create create, Path baseDir) {
         CliOutput.info("Scaffolding project '" + CliOutput.bold(create.spec().name()) + "'…");
@@ -272,6 +282,7 @@ public final class CommandRunner {
         CliOutput.println();
         CliOutput.println("  Navigate:  " + CliOutput.cyan("cd " + create.spec().name()));
         CliOutput.println("  Dev mode:  " + CliOutput.cyan("vidocq dev"));
+        CliOutput.println("  Test:      " + CliOutput.cyan("vidocq test"));
         CliOutput.println("  Build:     " + CliOutput.cyan("vidocq build"));
         CliOutput.println("  Run:       " + CliOutput.cyan("vidocq start"));
         if (!create.spec().main()) {
