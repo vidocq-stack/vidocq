@@ -70,8 +70,19 @@
   </modules>
 
   <properties>
+    <!--
+      Versions of the io.vidocq bricks this repository depends on. They are properties, never
+      literals, so that the CI can pin them: the downstream rebuild of Vidocq/ci (build-impacted,
+      pin-upstreams.py) rewrites <NAME.version> under /project/properties to the version of the
+      pull request under test, and the release (release-maven) bumps them with
+      versions:set-property. The name is the brick's repository name.
+    -->
+    <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+    <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+    <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+    <ravel.version>0.4.0-SNAPSHOT</ravel.version>
+
     <version.mp.openapi>4.2-RC5</version.mp.openapi>
-    <version.ravel.mp.config>0.4.0-SNAPSHOT</version.ravel.mp.config>
     <version.jakarta.ws.rs>4.0.0</version.jakarta.ws.rs>
     <version.jakarta.cdi>4.1.0</version.jakarta.cdi>
     <version.jakarta.annotation>3.0.0</version.jakarta.annotation>
@@ -100,7 +111,7 @@
       <dependency>
         <groupId>io.vidocq.ravel</groupId>
         <artifactId>ravel-mp-config-api</artifactId>
-        <version>${version.ravel.mp.config}</version>
+        <version>${ravel.version}</version>
       </dependency>
       <dependency>
         <groupId>jakarta.ws.rs</groupId>
