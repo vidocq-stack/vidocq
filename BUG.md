@@ -35,6 +35,12 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Proof**: with the network cut as above, 50 runs out of 50 green (0 failures); `target/it-repo` holds no artifact
   from `central` any more. From an empty local repository, an outer `verify` (no `install`) with `-am` passes the 3
   tests, so `maven-install-plugin` comes from the staging. Module `clean install` green.
+- **Same exposure, same fix: `vidocq-runtime-it-app-layer`** (`AppLayerRunIT`, `AppLayerPackageIT`, `AppLayerDevIT`,
+  `AppLayerJspIT`). Same settings with Central behind the outer repository, and parentless `lib` and `sql` fixtures
+  plus an aggregator on default plugin versions. Before: with the fixture's network cut, 6 failures out of 6 tests
+  (`maven-compiler-plugin:pom:3.13.0 ... Can't connect to SOCKS proxy`). Fix: the mirror, the `lib`, `sql` and
+  aggregator POMs pinned to `@maven.*.plugin.version@`, and `maven-install-plugin` and `git-commit-id-maven-plugin`
+  staged. After: 30 runs out of 30 green with the network cut; module `clean install -Pit` green.
 
 ## BUG-20261022-01 — an enriched jar has no folder entries, so Vaadin's development mode copies no frontend files
 

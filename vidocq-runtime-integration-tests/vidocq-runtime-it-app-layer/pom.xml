@@ -6,7 +6,9 @@
     The fixture resolves this build's artifacts from target/it-repo, which maven-invoker-plugin:install stages at
     pre-integration-test; anything else comes from the outer local repository through it-settings.xml, which
     Fixture writes from src/it/it-settings.xml with the outer repository's URL (resource filtering cannot
-    read ${settings.localRepository}). Its .mvn/maven.config points the ITs' mvn at them.
+    read ${settings.localRepository}). Its .mvn/maven.config points the ITs' mvn at them. That settings file
+    mirrors every repository to the outer local repository, so the fixture never reaches the network
+    (Vidocq/vidocq#285): its POMs pin the plugins this build runs, and the staging resolves the rest.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -116,6 +118,15 @@
                     <localRepositoryPath>${it.repo}</localRepositoryPath>
                     <!-- The fixture's artifacts are test-scope dependencies here. -->
                     <scope>test</scope>
+                    <!-- What the fixture needs beyond the plugins this module runs, as it never reaches Central
+                         (src/it/it-settings.xml): maven-install-plugin, which this build runs only when it
+                         installs, and git-commit-id-maven-plugin, whose version ranges (bcutil [1.81,1.82)) need
+                         the maven-metadata-local.xml an installation writes: the outer repository only holds
+                         maven-metadata-central.xml, which a file: repository does not read. -->
+                    <extraArtifacts>
+                        <extraArtifact>org.apache.maven.plugins:maven-install-plugin:${maven.install.plugin.version}:maven-plugin</extraArtifact>
+                        <extraArtifact>io.github.git-commit-id:git-commit-id-maven-plugin:${git-commit-id.plugin.version}:maven-plugin</extraArtifact>
+                    </extraArtifacts>
                 </configuration>
                 <executions>
                     <execution>
