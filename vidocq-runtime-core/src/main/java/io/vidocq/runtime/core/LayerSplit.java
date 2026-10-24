@@ -154,6 +154,23 @@ public final class LayerSplit {
         Map<String, Candidate> byName = new LinkedHashMap<>();
         candidates.forEach(c -> byName.put(c.descriptor().name(), c));
         Map<String, String> pinned = new LinkedHashMap<>();
+        Map<String, String> seedReason = seeds(candidates, applicationModules, keepPatterns, forced, pinned);
+        Set<String> kept = closure(byName, seedReason, applicationModules, declaredReads);
+        List<Candidate> parent = new ArrayList<>();
+        List<Candidate> application = new ArrayList<>();
+        for (Candidate c : candidates) {
+            (kept.contains(c.descriptor().name()) ? parent : application).add(c);
+        }
+        return new Result(parent, application, pinned);
+    }
+
+    /**
+     * The modules a rule keeps in the parent layer, with the reason: the pinned ones, also put in {@code pinned},
+     * and the runtime modules that do not ask for the application layer.
+     */
+    private static Map<String, String> seeds(List<Candidate> candidates, Set<String> applicationModules,
+                                             List<String> keepPatterns, Map<String, String> forced,
+                                             Map<String, String> pinned) {
         Map<String, String> seedReason = new LinkedHashMap<>();
         for (Candidate c : candidates) {
             String name = c.descriptor().name();
@@ -168,40 +185,51 @@ public final class LayerSplit {
                 seedReason.put(name, "a runtime module");
             }
         }
+        return seedReason;
+    }
+
+    /** The seeds and every candidate they read, transitively: what the parent layer keeps. */
+    private static Set<String> closure(Map<String, Candidate> byName, Map<String, String> seedReason,
+                                       Set<String> applicationModules, Map<String, Set<String>> declaredReads) {
         Set<String> kept = new LinkedHashSet<>(seedReason.keySet());
-        record Visit(String module, String seed) {}
         var queue = new ArrayDeque<Visit>();
         seedReason.keySet().forEach(n -> queue.add(new Visit(n, n)));
         while (!queue.isEmpty()) {
             Visit visit = queue.poll();
-            ModuleDescriptor d = byName.get(visit.module()).descriptor();
-            Set<String> reads = new LinkedHashSet<>();
-            if (!d.isAutomatic()) {
-                d.requires().forEach(r -> reads.add(r.name()));
-            }
-            reads.addAll(declaredReads.getOrDefault(visit.module(), Set.of()));
-            for (String read : reads) {
+            for (String read : reads(byName.get(visit.module()).descriptor(), declaredReads)) {
                 if (applicationModules.contains(read)) {
-                    String reason = seedReason.get(visit.seed());
-                    if (!visit.module().equals(visit.seed())) {
-                        reason += ", through " + visit.seed();
-                    }
-                    throw new IllegalStateException(visit.module() + " is kept in the parent layer (" + reason
-                            + ") but reads " + read
-                            + ", a module of the application: a parent-layer module cannot read the application"
-                            + " layer. Remove the pin, or move the code it needs out of " + read + ".");
+                    throw readsTheApplication(visit, read, seedReason);
                 }
                 if (byName.containsKey(read) && kept.add(read)) {
                     queue.add(new Visit(read, visit.seed()));
                 }
             }
         }
-        List<Candidate> parent = new ArrayList<>();
-        List<Candidate> application = new ArrayList<>();
-        for (Candidate c : candidates) {
-            (kept.contains(c.descriptor().name()) ? parent : application).add(c);
+        return kept;
+    }
+
+    /** A module reached from {@code seed}, a module the rules keep. */
+    private record Visit(String module, String seed) {}
+
+    /** The {@code requires} of an explicit module, and the reads the build tool declares for it. */
+    private static Set<String> reads(ModuleDescriptor descriptor, Map<String, Set<String>> declaredReads) {
+        Set<String> reads = new LinkedHashSet<>();
+        if (!descriptor.isAutomatic()) {
+            descriptor.requires().forEach(r -> reads.add(r.name()));
         }
-        return new Result(parent, application, pinned);
+        reads.addAll(declaredReads.getOrDefault(descriptor.name(), Set.of()));
+        return reads;
+    }
+
+    private static IllegalStateException readsTheApplication(Visit visit, String read, Map<String, String> seedReason) {
+        String reason = seedReason.get(visit.seed());
+        if (!visit.module().equals(visit.seed())) {
+            reason += ", through " + visit.seed();
+        }
+        return new IllegalStateException(visit.module() + " is kept in the parent layer (" + reason
+                + ") but reads " + read
+                + ", a module of the application: a parent-layer module cannot read the application"
+                + " layer. Remove the pin, or move the code it needs out of " + read + ".");
     }
 
     /**

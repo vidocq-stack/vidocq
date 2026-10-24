@@ -70,8 +70,9 @@ class ModuleLookupInitializerTest {
 
     @Test
     void severalProvidersForOneServiceAreAnError() {
-        IllegalStateException error = assertThrows(IllegalStateException.class,
-                () -> lookup(Map.of()).lookup(Greeting.class));
+        Lookup lookup = lookup(Map.of());
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> lookup.lookup(Greeting.class));
 
         assertTrue(error.getMessage().contains(Greeting.class.getName()), error.getMessage());
     }
