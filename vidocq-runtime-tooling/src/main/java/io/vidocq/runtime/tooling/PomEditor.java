@@ -236,7 +236,7 @@ public final class PomEditor {
             return false;
         }
         int aptClose = pom.indexOf(APT_CLOSE, tagEnd);
-        return aptClose < 0 || !pom.substring(tagEnd, aptClose).contains("<artifactId>" + INDEXER + "</artifactId>");
+        return aptClose < 0 || !pom.substring(tagEnd, aptClose).contains(artifactIdElement(INDEXER));
     }
 
     private static Result addToProcessorPaths(String pom, int aptOpen, ExtensionCoordinate codegen,
@@ -257,7 +257,7 @@ public final class PomEditor {
             throw new IllegalArgumentException("Not a valid pom.xml: unclosed <annotationProcessorPaths>.");
         }
         String paths = pom.substring(tagEnd + 1, aptClose);
-        boolean present = paths.contains("<artifactId>" + codegen.artifactId() + "</artifactId>");
+        boolean present = paths.contains(artifactIdElement(codegen.artifactId()));
         if (present && appends(tag)) {
             return new Result(pom, false);
         }
@@ -270,6 +270,11 @@ public final class PomEditor {
             edited = edited.substring(0, aptOpen) + APPENDING_APT_OPEN + edited.substring(tagEnd + 1);
         }
         return new Result(edited, true);
+    }
+
+    /** The {@code <artifactId>} element naming {@code artifactId}. */
+    private static String artifactIdElement(String artifactId) {
+        return "<artifactId>" + artifactId + "</artifactId>";
     }
 
     /** Whether an {@code <annotationProcessorPaths ...>} start tag keeps the inherited paths. */
@@ -286,7 +291,7 @@ public final class PomEditor {
         Span plugin = compilerPlugin(pom, skipped);
         int aptOpen = plugin == null ? -1 : indexWithin(pom, APT_OPEN, plugin, skipped);
         int aptClose = aptOpen < 0 ? -1 : pom.indexOf(APT_CLOSE, aptOpen);
-        String marker = "<artifactId>" + codegen.artifactId() + "</artifactId>";
+        String marker = artifactIdElement(codegen.artifactId());
         int from = aptOpen;
         while (aptClose >= 0) {
             int open = pom.indexOf("<path>", from);

@@ -55,8 +55,10 @@ class ProjectSpecTest {
     /** BUG-20261024-04: create wrote the dependency of an unknown id under a coordinate that does not exist. */
     @Test
     void anUnknownExtensionIdIsRefused() {
+        List<String> typo = List.of("knock-helth");
+
         var e = assertThrows(IllegalArgumentException.class,
-                () -> ProjectSpec.of("demo", null, null, List.of("knock-helth"), null, false, "--package"));
+                () -> ProjectSpec.of("demo", null, null, typo, null, false, "--package"));
 
         assertTrue(e.getMessage().startsWith("unknown extension 'knock-helth': not in the Vidocq catalog."
                 + " Did you mean: knock-health?"), e.getMessage());
