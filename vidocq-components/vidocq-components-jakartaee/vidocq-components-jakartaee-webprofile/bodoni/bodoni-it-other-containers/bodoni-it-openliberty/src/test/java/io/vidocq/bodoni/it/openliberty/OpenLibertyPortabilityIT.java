@@ -93,6 +93,11 @@ class OpenLibertyPortabilityIT {
         assertTrue(body.contains("ROWS=2"), body);
     }
 
+    @Test
+    void sqlDriverIsFoundFromTheUrlAlone() throws Exception {
+        assertTrue(get("/sql-url-only.jsp").contains("ROWS=2"));
+    }
+
     /** The servlet source Liberty keeps for a page (server.xml: keepGenerated), found under the workarea. */
     private static String generatedSource(String jspName) throws IOException {
         Path workarea = Path.of(System.getProperty("bodoni.it.workarea"));
