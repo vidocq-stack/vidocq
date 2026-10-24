@@ -132,6 +132,7 @@ The twelve handlers of `io.vidocq.bodoni.core.tags.fmt`, with the attributes of 
 
 * Dates are `java.util.Date` values, the type of the spec; `java.time` types are not supported.
 * The `prefix` of an enclosing `fmt:bundle` applies to every nested `fmt:message`, including one with an explicit `bundle` attribute (spec 8.6, "any nested `<fmt:message>` actions").
+* The actions that establish a localization context set the locale of the response (`ServletResponse.setLocale`, and the session charset attribute when a session exists): `fmt:setLocale`, `fmt:bundle`, `fmt:setBundle`, and `fmt:message` when its `bundle` attribute is given or when it falls back to the configured or default context (spec 8.4). A `LocalizationContext` without a locale leaves the response locale unchanged, and the configuration variable `jakarta.servlet.jsp.jstl.fmt.localizationContext` set to a ready `LocalizationContext` is used as is.
 
 [#fmt-config]
 ==== Configuration settings

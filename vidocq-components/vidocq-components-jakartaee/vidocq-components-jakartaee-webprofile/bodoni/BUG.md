@@ -225,7 +225,7 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - Cause: `MessageTag.resolve()` takes the `bundle` attribute's context as is; only the enclosing
   `fmt:bundle` and the default-context path (`FmtSupport.defaultContext`) call
   `I18n.setResponseLocale`.
-- Status: open — found by the B5 baseline; fix in a follow-up PR, test-first.
+- Status: fixed 2026-10-24 — `MessageTag.resolve()` calls `I18n.setResponseLocale` with the locale of the `bundle` attribute's context (PLAN.md Ruling 6); `MessageTagTest` (3 new tests) and the two TCK tests.
 
 ## BOD-009 · 2026-10-24 · `c:forTokens` does not accept a deferred `items`
 

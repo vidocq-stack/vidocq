@@ -108,7 +108,40 @@ class MessageTagTest {
         preferred(Locale.FRENCH);
         Config.set(pc, Config.FMT_LOCALIZATION_CONTEXT, new LocalizationContext(
                 ResourceBundle.getBundle(BASENAME, Locale.ROOT), Locale.ENGLISH), PageContext.PAGE_SCOPE);
+        Locale before = ((TestHttpServletResponse) pc.getResponse()).getLocale();
         assertEquals("Hello", TagHarness.run(message("greeting"), pc, Body.NONE));
+        assertEquals(before, ((TestHttpServletResponse) pc.getResponse()).getLocale());
+    }
+
+    private static LocalizationContext ex2(Locale locale) {
+        return new LocalizationContext(ResourceBundle.getBundle("test-bundles.ex2.Resources", Locale.ENGLISH), locale);
+    }
+
+    @Test
+    void bundleAttributeSetsTheResponseLocale() throws Exception {
+        preferred(Locale.FRENCH);
+        MessageTag tag = message("greeting");
+        tag.setBundle(ex2(Locale.ENGLISH));
+        assertEquals("en", TagHarness.run(tag, pc, Body.NONE));
+        assertEquals(Locale.ENGLISH, ((TestHttpServletResponse) pc.getResponse()).getLocale());
+    }
+
+    @Test
+    void bundleAttributeRecordsTheCharsetInTheSession() throws Exception {
+        ((TestHttpServletResponse) pc.getResponse()).mapLocaleEncoding(Locale.JAPANESE, "Shift_JIS");
+        MessageTag tag = message("greeting");
+        tag.setBundle(ex2(Locale.JAPANESE));
+        TagHarness.run(tag, pc, Body.NONE);
+        assertEquals("Shift_JIS", pc.getSession().getAttribute("jakarta.servlet.jsp.jstl.fmt.request.charset"));
+    }
+
+    @Test
+    void bundleAttributeWithoutLocaleLeavesTheResponseLocale() throws Exception {
+        Locale before = ((TestHttpServletResponse) pc.getResponse()).getLocale();
+        MessageTag tag = message("greeting");
+        tag.setBundle(ex2(null));
+        TagHarness.run(tag, pc, Body.NONE);
+        assertEquals(before, ((TestHttpServletResponse) pc.getResponse()).getLocale());
     }
 
     @Test

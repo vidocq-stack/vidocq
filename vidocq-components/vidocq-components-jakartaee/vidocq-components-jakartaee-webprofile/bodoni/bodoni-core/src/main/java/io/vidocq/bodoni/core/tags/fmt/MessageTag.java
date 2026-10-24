@@ -111,6 +111,9 @@ public class MessageTag extends VarTagSupport {
             return "??????";
         }
         LocalizationContext context = bundle;
+        if (context != null) {
+            I18n.setResponseLocale(pageContext, context.getLocale());
+        }
         if (TagSupport.findAncestorWithClass(this, BundleTag.class) instanceof BundleTag enclosing) {
             if (context == null) {
                 context = enclosing.getLocalizationContext();
