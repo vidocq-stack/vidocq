@@ -1049,7 +1049,7 @@ where this whole bug class is invisible.
 ## BUG-20261024-10 — The build of a created application tells the user to add a `provides` it does not need
 
 - **Date**: 2026-10-24
-- **Status**: OPEN (#336, umbrella #339)
+- **Status**: FIXED on `fix/provides-hint`, with Vauban's companion branch (#336, umbrella #339)
 - **Affected module**: Vauban `vauban-processor` (`VaubanProcessor`), as used by vidocq-runtime-core-codegen
 - **Symptom**: every compile prints `[Vauban] Generated io.example.demo.app._VaubanComponents … On the module path,
   add to module-info: provides io.vidocq.vauban.api.VaubanComponentProvider with io.example.demo.app._VaubanComponents;`.
@@ -1060,6 +1060,13 @@ where this whole bug class is invisible.
 - **Investigations**:
   - 2026-10-24: without the `provides`, `/hello` and `/health` answer 200 under `vidocq start`, `vidocq dev` and from
     the `vidocq build jlink` image.
+- **Fix**: confirmed: the advice is right for Vauban alone, whose `ServiceLoader` reads `provides` only in a named
+  module, and does not apply under Vidocq, whose application layer turns `META-INF/services` into `provides`.
+  Vauban gains `-Avauban.providesHint=false` (VAU-APT-004), a supported option that keeps the note and drops the
+  advice; the runtime parent sets it on the compiler. Checked on a created application: the note reads
+  `[Vauban] Generated io.example.plain.app._VaubanComponents (1 component(s), 0 field(s), 0 method(s)).`, with no
+  "not recognized" warning. The only reactor module that replaces the processor paths is the `peano-accessors`
+  integration test of the plugin.
 
 ## BUG-20261024-11 — The build of a created application prints three javac warnings
 

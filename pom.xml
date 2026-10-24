@@ -796,6 +796,12 @@
                                      path, so its own build would run no processor (#237). -->
                             </path>
                         </annotationProcessorPaths>
+                        <compilerArgs>
+                            <!-- The application layer turns META-INF/services into provides when it defines the
+                                 module, so the processor's advice to declare _VaubanComponents with provides does
+                                 not apply (BUG-20261024-10, VAU-APT-004). -->
+                            <arg>-Avauban.providesHint=false</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
 
