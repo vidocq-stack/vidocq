@@ -38,7 +38,8 @@ import io.vidocq.bodoni.core.testing.TldReader;
 class SetterAccessTest {
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/fmt.tld", "META-INF/x.tld", "META-INF/sql.tld" })
+    @CsvSource({ "META-INF/fmt.tld", "META-INF/x.tld", "META-INF/sql.tld", "META-INF/fmt-1_0-rt.tld", "META-INF/x-1_0-rt.tld",
+            "META-INF/sql-1_0-rt.tld" })
     void everyDeclaredSetterIsInvocableFromAnotherPackage(String resource) throws ReflectiveOperationException {
         for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());

@@ -90,6 +90,11 @@ public final class TldReader {
         return childText(root, "short-name");
     }
 
+    /** Returns the {@code <tlib-version>} of the library. */
+    public String tlibVersion() {
+        return childText(root, "tlib-version");
+    }
+
     /** Returns the declared functions, in document order. */
     public List<Function> functions() {
         List<Function> result = new ArrayList<>();

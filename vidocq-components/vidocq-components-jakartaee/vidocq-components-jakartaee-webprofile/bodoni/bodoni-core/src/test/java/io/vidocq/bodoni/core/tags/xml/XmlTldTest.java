@@ -114,15 +114,16 @@ class XmlTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/x.tld,jakarta.tags.xml", "META-INF/x-1_2.tld,http://java.sun.com/jsp/jstl/xml" })
-    void libraryIdentity(String resource, String uri) {
+    @CsvSource({ "META-INF/x.tld,jakarta.tags.xml,x", "META-INF/x-1_2.tld,http://java.sun.com/jsp/jstl/xml,x",
+            "META-INF/x-1_0-rt.tld,http://java.sun.com/jstl/xml_rt,x_rt" })
+    void libraryIdentity(String resource, String uri, String shortName) {
         TldReader tld = TldReader.read(resource);
         assertEquals(uri, tld.uri());
-        assertEquals("x", tld.shortName());
+        assertEquals(shortName, tld.shortName());
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld" })
+    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld", "META-INF/x-1_0-rt.tld" })
     void declaresExactlyTheTenTags(String resource) {
         List<String> names = TldReader.read(resource).tags().stream().map(TldReader.Tag::name).toList();
         assertEquals(List.copyOf(SPEC.keySet()), names);
@@ -148,7 +149,7 @@ class XmlTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld" })
+    @CsvSource({ "META-INF/x.tld", "META-INF/x-1_2.tld", "META-INF/x-1_0-rt.tld" })
     void handlersExposeEveryDeclaredAttribute(String resource) throws ClassNotFoundException {
         for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());

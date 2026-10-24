@@ -87,13 +87,15 @@ resolution).
 Legacy URIs (decided in B1, 2026-10-22, closing open question 2): the JSTL 1.2 URIs
 (`http://java.sun.com/jsp/jstl/core`, `…/functions`) are shipped, as `c-1_2.tld` and
 `fn-1_2.tld` mapped to the same classes, so that existing pages keep working; the JSTL 1.0
-URIs (`_rt` variants, 1.0 EL TLDs) are not shipped, as no maintained page targets them.
+URIs (`_rt` variants, 1.0 EL TLDs) were not shipped in B1, as no maintained page targets them.
 For reference, the GlassFish/WildFly
 implementation (`org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1-jbossorg-1`, inspected
 2026-10-22) still ships them alongside the `jakarta.tags.*` TLDs; spec Appendix B.1 only
 records the rename (jstl-api#144). The TCK does use the JSTL 1.0 URIs (verified in B5, open
-question 2): the four `_rt` TLDs ship in a later pull request (maintainer decision,
-2026-10-23).
+question 2): the four request-time TLDs ship since the TCK fixes (maintainer decision,
+2026-10-23; "Decisions recorded in the TCK fixes"): `c-1_0-rt.tld`, `fmt-1_0-rt.tld`,
+`sql-1_0-rt.tld` and `x-1_0-rt.tld` serve `http://java.sun.com/jstl/core_rt`, `…/fmt_rt`,
+`…/sql_rt` and `…/xml_rt` on the 3.0 handlers. The 1.0 EL URIs are not shipped.
 
 **Spec text vs EE 11 level.** Spec §1.3 still says "requires a Jakarta Server Pages 3.0
 web container" and "Jakarta Expression Language 4.0"; Web Profile 11 pairs Tags 3.0 with
@@ -368,10 +370,11 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    `http://java.sun.com/jstl/core` and `http://java.sun.com/jstl/sql` in two `sql/update`
    pages (`negativeUpdateVarAttributeTest`, `negativeUpdateScopeVarAttributeTest`). Maintainer
    decision 4 (2026-10-23): the four `_rt` TLDs ship, with the same handlers, in a later Bodoni
-   pull request; the baseline triages their 40 tests as "known: _rt TLDs pending". **Open
-   point:** whether the 1.0 EL URIs ship too. Decision 4 covers the `_rt` TLDs only; the two
-   `sql/update` pages pass today because their URI is not mapped, and would reach the actions
-   once it is.
+   pull request; the baseline triages their 40 tests as "known: _rt TLDs pending". Shipped in
+   the TCK fixes (2026-10-24, rulings 1-2 in "Decisions recorded in the TCK fixes"). The 1.0 EL
+   URIs are not shipped (ruling 3): the two `sql/update` pages are negative tests that check only
+   HTTP 500, so they pass whether the URI is mapped or not, and the constraints they target are
+   tested on `jakarta.tags.sql`.
 3. **`java.desktop` via the API module** — accept that the upstream descriptor
    `requires transitive java.desktop` (apparently for `java.xml`), or report it upstream
    (jstl-api) and ask for `requires transitive java.xml` instead? Effect on jlink images
@@ -570,7 +573,7 @@ the page wrote; JDK exceptions kept in the cause chain, and the output of
 | Topic | Ruling |
 |---|---|
 | `java.xml` | `requires transitive java.xml`: Bodoni uses it directly and exported signatures expose `org.xml.sax.XMLFilter` and `javax.xml.transform.Result`; no reliance on the API module's `java.desktop` chain (open question 3) |
-| URIs | `jakarta.tags.xml` and `http://java.sun.com/jsp/jstl/xml`, same classes (`x.tld`, `x-1_2.tld`); not the 1.0 `xml` / `xml_rt` URIs; no `<validator>` (B1 precedent) |
+| URIs | `jakarta.tags.xml` and `http://java.sun.com/jsp/jstl/xml`, same classes (`x.tld`, `x-1_2.tld`); not the 1.0 `xml` / `xml_rt` URIs (`xml_rt` added by the TCK fixes, `x-1_0-rt.tld`); no `<validator>` (B1 precedent) |
 | Package | `io.vidocq.bodoni.core.tags.xml`, exported |
 | Parsing | Namespace-aware, XInclude off, error handlers that throw on errors and drop warnings (no `System.err` output); factories, builders, transformers and `XPath` objects created per use, none shared, no `Transformer` cache |
 | `select` | XPath, never EL (§2.3, §11.1.5): `rtexprvalue` false |
@@ -808,6 +811,9 @@ Branch `fix/tck-baseline`; plan `docs/superpowers/plans/2026-10-24-tck-baseline-
 | Bug | Decision |
 |---|---|
 | BOD-009 | A TLD attribute that is both `rtexprvalue` and `deferred-value` has a setter of type `java.lang.Object` (the rule Ibarra and the Pages TLD rule apply). `c:forTokens` `items` is `deferred-value` of type `java.lang.String` in `c.tld` and `c-1_2.tld`, and `ForTokensTag.setItems(Object)` evaluates a `ValueExpression` and coerces the value as EL coerces to `String` (`Enum` gives `name()`, other values `toString()`, `null` gives no iteration). `LoopTagSupport` maps `var` through `getDelims()`; for a non-String value the handler hands it a String-coercing wrapper of the expression. Tags 3.0 §6.3. |
+| Ruling 1 | **JSTL 1.0 request-time TLDs**: `META-INF/c-1_0-rt.tld`, `fmt-1_0-rt.tld`, `sql-1_0-rt.tld`, `x-1_0-rt.tld`, URIs `http://java.sun.com/jstl/core_rt`, `…/fmt_rt`, `…/sql_rt`, `…/xml_rt`, short names `c_rt`, `fmt_rt`, `sql_rt`, `x_rt` (the prefixes the TCK pages use). Same schema as the other TLDs (jakartaee `web-jsptaglibrary_3_0.xsd`, `version="3.0"`, `<tlib-version>3.0</tlib-version>`), as the `*-1_2.tld` precedent: the descriptor states what is served, the URI alone marks the legacy contract. Tags, handler classes, body content, attribute names, `required` and `rtexprvalue` are those of the 3.0 TLD. No `<deferred-value>` (JSTL 1.0 predates deferred expressions): an attribute deferred in 3.0 is `<type>java.lang.Object</type>`, the type of its setter. Every `_rt` attribute the suite uses is in the 3.0 set. No `fn_rt` (JSTL 1.0 had no functions). `LegacyRtTldTest` checks the derivation. |
+| Ruling 2 | **`x_rt` `select`** stays XPath and static (`rtexprvalue` false), as in `x.tld` (§2.3, §11.1.5); the suite uses it as literal XPath. |
+| Ruling 3 | **JSTL 1.0 EL URIs** (`http://java.sun.com/jstl/core`, `…/sql`, `…/fmt`, `…/xml`) are not shipped. Only two negative `spec.sql.update` pages import them, and they check only HTTP 500; no compat page uses them, and the Tags 3.0 spec names no 1.0 URI (§1.2, Appendices A and B). Closes the open point of open question 2. |
 
 ## Cross-repo item: BOD-001 (fixed)
 

@@ -120,15 +120,16 @@ class FmtTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/fmt.tld,jakarta.tags.fmt", "META-INF/fmt-1_2.tld,http://java.sun.com/jsp/jstl/fmt" })
-    void libraryIdentity(String resource, String uri) {
+    @CsvSource({ "META-INF/fmt.tld,jakarta.tags.fmt,fmt", "META-INF/fmt-1_2.tld,http://java.sun.com/jsp/jstl/fmt,fmt",
+            "META-INF/fmt-1_0-rt.tld,http://java.sun.com/jstl/fmt_rt,fmt_rt" })
+    void libraryIdentity(String resource, String uri, String shortName) {
         TldReader tld = TldReader.read(resource);
         assertEquals(uri, tld.uri());
-        assertEquals("fmt", tld.shortName());
+        assertEquals(shortName, tld.shortName());
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/fmt.tld", "META-INF/fmt-1_2.tld" })
+    @CsvSource({ "META-INF/fmt.tld", "META-INF/fmt-1_2.tld", "META-INF/fmt-1_0-rt.tld" })
     void declaresExactlyTheTwelveTags(String resource) {
         List<String> names = TldReader.read(resource).tags().stream().map(TldReader.Tag::name).toList();
         assertEquals(List.copyOf(SPEC.keySet()), names);
@@ -154,7 +155,7 @@ class FmtTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/fmt.tld", "META-INF/fmt-1_2.tld" })
+    @CsvSource({ "META-INF/fmt.tld", "META-INF/fmt-1_2.tld", "META-INF/fmt-1_0-rt.tld" })
     void handlersExposeEveryDeclaredAttribute(String resource) throws ClassNotFoundException {
         for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());

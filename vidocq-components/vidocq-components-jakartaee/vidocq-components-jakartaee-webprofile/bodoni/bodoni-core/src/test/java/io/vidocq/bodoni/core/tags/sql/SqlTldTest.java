@@ -98,15 +98,16 @@ class SqlTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/sql.tld,jakarta.tags.sql", "META-INF/sql-1_2.tld,http://java.sun.com/jsp/jstl/sql" })
-    void libraryIdentity(String resource, String uri) {
+    @CsvSource({ "META-INF/sql.tld,jakarta.tags.sql,sql", "META-INF/sql-1_2.tld,http://java.sun.com/jsp/jstl/sql,sql",
+            "META-INF/sql-1_0-rt.tld,http://java.sun.com/jstl/sql_rt,sql_rt" })
+    void libraryIdentity(String resource, String uri, String shortName) {
         TldReader tld = TldReader.read(resource);
         assertEquals(uri, tld.uri());
-        assertEquals("sql", tld.shortName());
+        assertEquals(shortName, tld.shortName());
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/sql.tld", "META-INF/sql-1_2.tld" })
+    @CsvSource({ "META-INF/sql.tld", "META-INF/sql-1_2.tld", "META-INF/sql-1_0-rt.tld" })
     void declaresExactlyTheSixTags(String resource) {
         List<String> names = TldReader.read(resource).tags().stream().map(TldReader.Tag::name).toList();
         assertEquals(List.copyOf(SPEC.keySet()), names);
@@ -133,7 +134,7 @@ class SqlTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/sql.tld", "META-INF/sql-1_2.tld" })
+    @CsvSource({ "META-INF/sql.tld", "META-INF/sql-1_2.tld", "META-INF/sql-1_0-rt.tld" })
     void handlersExposeEveryDeclaredAttribute(String resource) throws ClassNotFoundException {
         for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());

@@ -120,15 +120,16 @@ class CoreTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/c.tld,jakarta.tags.core", "META-INF/c-1_2.tld,http://java.sun.com/jsp/jstl/core" })
-    void libraryIdentity(String resource, String uri) {
+    @CsvSource({ "META-INF/c.tld,jakarta.tags.core,c", "META-INF/c-1_2.tld,http://java.sun.com/jsp/jstl/core,c",
+            "META-INF/c-1_0-rt.tld,http://java.sun.com/jstl/core_rt,c_rt" })
+    void libraryIdentity(String resource, String uri, String shortName) {
         TldReader tld = TldReader.read(resource);
         assertEquals(uri, tld.uri());
-        assertEquals("c", tld.shortName());
+        assertEquals(shortName, tld.shortName());
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/c.tld", "META-INF/c-1_2.tld" })
+    @CsvSource({ "META-INF/c.tld", "META-INF/c-1_2.tld", "META-INF/c-1_0-rt.tld" })
     void declaresExactlyTheFourteenTags(String resource) {
         List<String> names = TldReader.read(resource).tags().stream().map(TldReader.Tag::name).toList();
         assertEquals(List.copyOf(SPEC.keySet()), names);
@@ -155,7 +156,7 @@ class CoreTldTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "META-INF/c.tld", "META-INF/c-1_2.tld" })
+    @CsvSource({ "META-INF/c.tld", "META-INF/c-1_2.tld", "META-INF/c-1_0-rt.tld" })
     void handlersExposeEveryDeclaredAttribute(String resource) throws ClassNotFoundException {
         for (TldReader.Tag tag : TldReader.read(resource).tags()) {
             Class<?> type = Class.forName(tag.tagClass());

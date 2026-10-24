@@ -48,22 +48,23 @@ The official TCK runner `bodoni-tck` (xref:tck.adoc[TCK status]) is built only u
 | `jakarta-tags-tck-3.0.0.zip` | — | Not a Maven dependency: fetched by `run-official-tck-tags-3.0.sh` (or taken from `TAGS_TCK_ZIP`), SHA-256 pinned, read for the Derby DDL only, never committed. EFTL 1.0.
 |===
 
+[#tag-libraries]
 == Tag libraries
 
-Each library is served under two URIs, both mapped to the same classes. The JSTL 1.0 URIs are not shipped.
+Each library is served under the `jakarta.tags.*` URI and its JSTL 1.2 URI, and the core, formatting, SQL and XML libraries under their JSTL 1.0 request-time URI too: every URI of a library is mapped to the same classes. The JSTL 1.0 request-time descriptors use the same handlers, all their attributes are request-time, and they declare no deferred values (JSTL 1.0 predates deferred expressions): an attribute that is deferred in 3.0 (`c:set` `value`, `c:forEach` `items`, `c:forTokens` `items`) is a plain `java.lang.Object` attribute there. The XPath `select` of `x_rt` stays static, as in `x`. The JSTL 1.0 EL URIs (`http://java.sun.com/jstl/core`, `.../fmt`, `.../sql`, `.../xml`) are not shipped. JSTL 1.0 had no functions library, so there is no `fn_rt`.
 
-[cols="1,1,3",options="header"]
+[cols="1,1,3,2",options="header"]
 |===
-| Library | Prefix | URIs
+| Library | Prefix | URIs | JSTL 1.0 request-time
 
-| Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core`
-| I18N and formatting | `fmt` | `jakarta.tags.fmt`, `http://java.sun.com/jsp/jstl/fmt`
-| Relational database access | `sql` | `jakarta.tags.sql`, `http://java.sun.com/jsp/jstl/sql`
-| XML processing | `x` | `jakarta.tags.xml`, `http://java.sun.com/jsp/jstl/xml`
-| Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions`
+| Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core` | `http://java.sun.com/jstl/core_rt` (`c_rt`)
+| I18N and formatting | `fmt` | `jakarta.tags.fmt`, `http://java.sun.com/jsp/jstl/fmt` | `http://java.sun.com/jstl/fmt_rt` (`fmt_rt`)
+| Relational database access | `sql` | `jakarta.tags.sql`, `http://java.sun.com/jsp/jstl/sql` | `http://java.sun.com/jstl/sql_rt` (`sql_rt`)
+| XML processing | `x` | `jakarta.tags.xml`, `http://java.sun.com/jsp/jstl/xml` | `http://java.sun.com/jstl/xml_rt` (`x_rt`)
+| Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions` | none
 |===
 
-The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `fmt.tld`, `fmt-1_2.tld`, `sql.tld`, `sql-1_2.tld`, `x.tld`, `x-1_2.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
+The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.tld`, `fmt-1_0-rt.tld`, `sql.tld`, `sql-1_2.tld`, `sql-1_0-rt.tld`, `x.tld`, `x-1_2.tld`, `x-1_0-rt.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
 
 === Core tags (`c:`)
 
