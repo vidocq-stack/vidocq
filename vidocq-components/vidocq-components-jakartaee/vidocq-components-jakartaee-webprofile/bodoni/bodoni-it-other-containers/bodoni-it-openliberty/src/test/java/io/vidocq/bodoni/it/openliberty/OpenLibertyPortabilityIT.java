@@ -98,6 +98,18 @@ class OpenLibertyPortabilityIT {
         assertTrue(get("/sql-url-only.jsp").contains("ROWS=2"));
     }
 
+    /**
+     * Liberty translates on first request, so a bad page answers 500. The message asserted is Bodoni's
+     * (English); Liberty's wrapper around it is localized. Source read: the HTTP response body.
+     */
+    @Test
+    void chooseConstraintIsReportedByBodoni() throws Exception {
+        HttpResponse<String> response = getRaw("/invalid/choose-order.jsp");
+        assertEquals(500, response.statusCode(), response.body());
+        assertTrue(response.body().contains("after the otherwise action"), response.body());
+        assertFalse(response.body().contains("Illegal \"c:when\""), response.body());
+    }
+
     /** The servlet source Liberty keeps for a page (server.xml: keepGenerated), found under the workarea. */
     private static String generatedSource(String jspName) throws IOException {
         Path workarea = Path.of(System.getProperty("bodoni.it.workarea"));
