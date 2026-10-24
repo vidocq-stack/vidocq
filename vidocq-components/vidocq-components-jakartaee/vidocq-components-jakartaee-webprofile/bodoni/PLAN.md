@@ -1,7 +1,8 @@
 # Bodoni — Design plan
 
 > Status: **B7 delivered (2026-10-24)** -- `bodoni-it-openliberty` shows that the unchanged
-> `bodoni-core` jar in a WAR is the JSTL Open Liberty 26.0.0.10 runs (nine tests). **B5 delivered (2026-10-24)** -- the official Tags TCK runner (`bodoni-tck`,
+> `bodoni-core` jar in a WAR is the JSTL Open Liberty 26.0.0.10 runs (nine tests).
+> **B5 delivered (2026-10-24)** -- the official Tags TCK runner (`bodoni-tck`,
 > `run-official-tck-tags-3.0.sh`) and its first full run: **452/541 (83.5 %)**, every failure
 > triaged in `bodoni-tck/BASELINE.md`. **After the TCK fixes (2026-10-24): 541/541** on Ibarra
 > + Foy + Peano (`bodoni-tck/BASELINE.md`), a compatibility measurement, not a certification.
@@ -420,8 +421,9 @@ The Vidocq runtime extension (vidocq repository) follows B5.
    that predate it leave the request thread's context class loader unset, so `fmt:` cannot find
    application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
 5. ~~**Open Liberty precedence**~~ -- decided by `bodoni-it-openliberty` (2026-10-24): a
-   WAR-bundled Bodoni wins, for the `jakarta.tags.*` and the legacy URIs, under `parentFirst`
-   and `parentLast`; `pages-4.0` has no switch for its bundled JSTL and none is needed; the
+   WAR-bundled Bodoni wins, for the `jakarta.tags.*` URIs and the legacy core URI (the ones
+   tested), under `parentFirst` and `parentLast` (spike); a page on a URI Bodoni does not
+   declare, such as the JSTL 1.0 `http://java.sun.com/jstl/*` URIs, still gets Liberty's tags; `pages-4.0` has no switch for its bundled JSTL and none is needed; the
    WARNING block tells users to exclude the JSTL API jar. `pages-4.0` exposes the JSTL API
    and presumably its own implementation for the `jakarta.tags.*` URIs; does a WAR-bundled
    Bodoni win (Pages allows a container to provide alternate implementations for

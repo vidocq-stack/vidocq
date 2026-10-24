@@ -89,9 +89,9 @@
 
     <!--
         Main reactor modules. bodoni-it-ibarra and bodoni-tck join the reactor only
-        under their profiles (it-ibarra, tck). Planned modules (PLAN.md, milestones
-        B6-B7): bodoni-ibarra (optional build-time inliner) and
-        bodoni-it-other-containers/bodoni-it-openliberty.
+        under their profiles (it-ibarra, tck). bodoni-it-other-containers/bodoni-it-openliberty
+        is in the default reactor (it starts Open Liberty). Planned module (PLAN.md, milestone
+        B6, on standby): bodoni-ibarra (optional build-time inliner).
     -->
     <modules>
         <module>bodoni-core</module>

@@ -24,11 +24,35 @@ Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `
 | `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0` | `provided` | Brought by the Pages container.
 | `jakarta.servlet:jakarta.servlet-api:6.1.0` | `provided` | Brought by the container.
 | `jakarta.el:jakarta.el-api:6.0.1` | `provided` | Brought by the container.
-| `com.h2database:h2:2.3.232` | `test` | In-memory database of the unit tests of `bodoni-core` and of the Ibarra IT; never shipped.
+| `com.h2database:h2:2.3.232` | `test` | In-memory database of the unit tests of `bodoni-core` and of the Ibarra IT; never shipped. The Open Liberty IT WAR also carries it at `runtime` scope, as the test application's own driver.
 | `org.junit.jupiter:junit-jupiter` | `test` | Managed by `vidocq-parent`.
 |===
 
 No build tooling dependency.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Nothing to switch off** -- Open Liberty's `pages-4.0` feature has no switch for its bundled JSTL (Apache taglibs), and none is needed. With `bodoni-core` in `WEB-INF/lib`, Bodoni handles the URIs listed under <<tag-libraries>>. `bodoni-it-openliberty` tests the five `jakarta.tags.*` libraries and the legacy core URI `+http://java.sun.com/jsp/jstl/core+`. A page on a URI Bodoni does not declare, such as the JSTL 1.0 `+http://java.sun.com/jstl/*+` URIs, still gets Liberty's built-in tags.
+* **Exclude the JSTL API jar** from the WAR, with the `<exclusions>` below. `pages-4.0` provides it. Under the default `parentFirst` delegation the WAR's copy is never loaded, and under `parentLast` it is a second copy in the JVM.
+* **Keep the default class loader delegation** -- `parentLast` also works, but there is nothing to gain from it.
+* **What runs where** -- do not add `bodoni-peano`: it is for Peano, and Liberty runs its own EL. Bodoni's tag library validators run when Liberty translates a page, so a page that breaks a constraint of section 2.7 fails on first request with Bodoni's message. The application's JDBC driver and resource bundles are found in the WAR, with no server configuration for the lookup itself (a JNDI data source, for example, still needs a Liberty `<dataSource>` and a JDBC feature). `bodoni-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.bodoni</groupId>
+  <artifactId>bodoni-core</artifactId>
+  <version>${bodoni.version}</version>
+  <exclusions>
+    <exclusion>
+      <groupId>jakarta.servlet.jsp.jstl</groupId>
+      <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+----
 
 [#test-tooling]
 === Test tooling of the TCK runner
@@ -47,30 +71,6 @@ The official TCK runner `bodoni-tck` (xref:tck.adoc[TCK status]) is built only u
 | `jakarta.tck:tags-tck:11.0.3` | `test` | The official tests, under the `tck-official` profile only. Brings `jakarta.tck:common` 11.1.1, `commons-httpclient` 3.1 and `ant` 1.10.15. POM licence EPL-2.0 / GPL-2.0 with Classpath Exception; its `LICENSE.md` is the EFTL 1.1.
 | `jakarta-tags-tck-3.0.0.zip` | — | Not a Maven dependency: fetched by `run-official-tck-tags-3.0.sh` (or taken from `TAGS_TCK_ZIP`), SHA-256 pinned, read for the Derby DDL only, never committed. EFTL 1.0.
 |===
-
-[WARNING]
-.Deploying on an application server
-====
-* **Nothing to switch off** -- Open Liberty's `pages-4.0` feature has no switch for its bundled JSTL (Apache taglibs), and none is needed. With `bodoni-core` in `WEB-INF/lib`, Bodoni handles every JSTL URI, the `jakarta.tags.*` ones and the legacy `+http://java.sun.com/jsp/jstl/*+` ones. Liberty's own JSTL runs only for an application that bundles none.
-* **Exclude the JSTL API jar** from the WAR, with the `<exclusions>` below. `pages-4.0` provides it. Under the default `parentFirst` delegation the WAR's copy is never loaded, and under `parentLast` it is a second copy in the JVM.
-* **Keep the default class loader delegation** -- `parentLast` also works, but there is nothing to gain from it.
-* **What runs where** -- do not add `bodoni-peano`: it is for Peano, and Liberty runs its own EL. Bodoni's tag library validators run when Liberty translates a page, so a page that breaks a constraint of section 2.7 fails on first request with Bodoni's message. The application's JDBC driver and resource bundles are found in the WAR, so nothing else needs configuring. `bodoni-it-openliberty` builds its WAR with exactly these dependencies.
-====
-
-[source,xml]
-----
-<dependency>
-  <groupId>io.vidocq.bodoni</groupId>
-  <artifactId>bodoni-core</artifactId>
-  <version>${bodoni.version}</version>
-  <exclusions>
-    <exclusion>
-      <groupId>jakarta.servlet.jsp.jstl</groupId>
-      <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
-    </exclusion>
-  </exclusions>
-</dependency>
-----
 
 [#tag-libraries]
 == Tag libraries

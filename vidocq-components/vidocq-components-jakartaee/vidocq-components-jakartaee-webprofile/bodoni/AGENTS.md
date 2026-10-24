@@ -65,7 +65,7 @@ of local divergence, the brick-specific sections further down take precedence.
 
 ```bash
 sdk env
-./mvnw -ntp clean install                          # default reactor (no TCK)
+./mvnw -ntp clean install                          # default reactor (no TCK; also starts Open Liberty for bodoni-it-openliberty)
 ./mvnw test
 ./mvnw -ntp -Pit-ibarra -pl bodoni-it-ibarra -am verify   # Ibarra IT (see note below)
 ./mvnw -ntp -pl bodoni-it-other-containers/bodoni-it-openliberty -am verify   # Open Liberty IT

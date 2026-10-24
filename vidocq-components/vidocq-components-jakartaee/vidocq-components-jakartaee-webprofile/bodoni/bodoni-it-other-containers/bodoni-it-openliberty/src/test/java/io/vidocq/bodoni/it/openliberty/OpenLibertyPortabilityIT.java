@@ -73,7 +73,8 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void fnFunctionsAreBodoni() throws Exception {
-        assertTrue(get("/fn.jsp").contains("LEN=3"));
+        String body = get("/fn.jsp");
+        assertTrue(body.contains("LEN=3"), body);
         String source = generatedSource("fn");
         assertTrue(source.contains("io.vidocq.bodoni.core.functions.Functions"), source);
         assertFalse(source.contains("org.apache.taglibs"), source);
@@ -95,7 +96,8 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void sqlDriverIsFoundFromTheUrlAlone() throws Exception {
-        assertTrue(get("/sql-url-only.jsp").contains("ROWS=2"));
+        String body = get("/sql-url-only.jsp");
+        assertTrue(body.contains("ROWS=2"), body);
     }
 
     /**
