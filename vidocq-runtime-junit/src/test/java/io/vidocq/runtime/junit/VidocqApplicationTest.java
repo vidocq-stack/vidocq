@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.file.Files;
@@ -95,27 +96,28 @@ class VidocqApplicationTest {
     void startReturnsOnceThePortListensAndCloseStopsTheProcess() throws Exception {
         int port = VidocqApplication.freePort();
 
-        VidocqApplication application = VidocqApplication.start(program("Listener", LISTENER, port), port,
-                Duration.ofSeconds(60));
-        try {
+        VidocqApplication stopped;
+        try (VidocqApplication application = VidocqApplication.start(program("Listener", LISTENER, port), port,
+                Duration.ofSeconds(60))) {
+            stopped = application;
             assertEquals(URI.create("http://127.0.0.1:" + port), application.url());
             assertEquals(URI.create("http://127.0.0.1:" + port + "/hello"), application.url("/hello"));
             assertEquals(URI.create("http://127.0.0.1:" + port + "/hello"), application.url("hello"));
             new Socket("127.0.0.1", port).close();
             assertTrue(application.log().contains("starting the fake application"), application.log());
-        } finally {
-            application.close();
         }
 
-        assertFalse(application.isAlive());
+        assertFalse(stopped.isAlive());
     }
 
     @Test
     void aProcessThatExitsFailsTheStartWithItsLog() throws IOException {
         int port = VidocqApplication.freePort();
 
-        var e = assertThrows(IllegalStateException.class, () -> VidocqApplication.start(
-                program("Failing", FAILING, port), port, Duration.ofSeconds(60)));
+        List<String> command = program("Failing", FAILING, port);
+
+        var e = assertThrows(IllegalStateException.class,
+                () -> VidocqApplication.start(command, port, Duration.ofSeconds(60)));
 
         assertTrue(e.getMessage().startsWith("The application stopped with exit code 3 before it listened on"
                 + " http://127.0.0.1:" + port + ". Its output:\n"), e.getMessage());
@@ -127,8 +129,10 @@ class VidocqApplicationTest {
         int port = VidocqApplication.freePort();
         int otherPort = VidocqApplication.freePort();
 
-        var e = assertThrows(IllegalStateException.class, () -> VidocqApplication.start(
-                program("Elsewhere", LISTENER, otherPort), port, Duration.ofSeconds(2)));
+        List<String> command = program("Elsewhere", LISTENER, otherPort);
+
+        var e = assertThrows(IllegalStateException.class,
+                () -> VidocqApplication.start(command, port, Duration.ofSeconds(2)));
 
         assertTrue(e.getMessage().startsWith("The application did not listen on http://127.0.0.1:" + port
                 + " within 2 s. Its output:\n"), e.getMessage());
@@ -155,6 +159,19 @@ class VidocqApplicationTest {
 
             assertEquals(404, application.request("DELETE", "/nowhere", null, null).status());
         }
+    }
+
+    /** A request the application cannot answer, as it stopped, names the request. */
+    @Test
+    void aRequestToAStoppedApplicationFailsWithItsUrl() throws Exception {
+        int port = VidocqApplication.freePort();
+        VidocqApplication application = VidocqApplication.start(program("Stopped", HTTP, port), port,
+                Duration.ofSeconds(60));
+        application.close();
+
+        var e = assertThrows(UncheckedIOException.class, () -> application.get("/hello"));
+
+        assertEquals("GET http://127.0.0.1:" + port + "/hello failed", e.getMessage());
     }
 
     private List<String> program(String name, String source, int port) throws IOException {

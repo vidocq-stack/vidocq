@@ -20,6 +20,7 @@
 package io.vidocq.runtime.junit;
 
 import java.io.IOException;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -30,8 +31,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -54,30 +53,35 @@ public final class VidocqApplication implements AutoCloseable {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
+    /** How long a failed start waits for the last lines of the process's output. */
+    private static final Duration DRAIN = Duration.ofSeconds(5);
+
     private final Process process;
-    private final Path log;
     private final URI url;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT).build();
+    /** The process's output and error streams, kept in memory: no temporary file to share or clean. */
+    private final StringBuilder output = new StringBuilder();
+    private final Thread reader;
 
-    private VidocqApplication(Process process, Path log, URI url) {
+    private VidocqApplication(Process process, URI url) {
         this.process = process;
-        this.log = log;
         this.url = url;
+        this.reader = Thread.ofVirtual().name("vidocq-test-output").start(this::readOutput);
     }
 
     /**
-     * Runs {@code command}, its output in a file, and returns once something listens on {@code 127.0.0.1:port}.
+     * Runs {@code command}, its output in memory, and returns once something listens on {@code 127.0.0.1:port}.
      * Fails with the output when the process exits first, or when {@code timeout} runs out, after stopping it.
      */
     static VidocqApplication start(List<String> command, int port, Duration timeout) throws IOException {
-        Path log = Files.createTempFile("vidocq-test-", ".log");
         URI url = URI.create("http://127.0.0.1:" + port);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(log.toFile()).start();
-        VidocqApplication application = new VidocqApplication(process, log, url);
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        VidocqApplication application = new VidocqApplication(process, url);
         long deadline = System.nanoTime() + timeout.toNanos();
         try {
             while (!listens(port)) {
                 if (process.waitFor(POLL.toMillis(), TimeUnit.MILLISECONDS)) {
+                    application.reader.join(DRAIN);
                     throw new IllegalStateException("The application stopped with exit code " + process.exitValue()
                             + " before it listened on " + url + ". Its output:\n" + application.log());
                 }
@@ -161,10 +165,21 @@ public final class VidocqApplication implements AutoCloseable {
 
     /** What the application wrote so far, on its output and error streams. */
     public String log() {
-        try {
-            return Files.exists(log) ? Files.readString(log) : "";
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+        synchronized (output) {
+            return output.toString();
+        }
+    }
+
+    private void readOutput() {
+        char[] buffer = new char[8192];
+        try (Reader in = process.inputReader()) {
+            for (int n = in.read(buffer); n != -1; n = in.read(buffer)) {
+                synchronized (output) {
+                    output.append(buffer, 0, n);
+                }
+            }
+        } catch (IOException _) {
+            // the process ended: its output is closed
         }
     }
 
@@ -173,7 +188,7 @@ public final class VidocqApplication implements AutoCloseable {
         return process.isAlive();
     }
 
-    /** Stops the application, as Ctrl+C would, then forcibly after a grace period, and deletes its output. */
+    /** Stops the application, as Ctrl+C would, then forcibly after a grace period. */
     @Override
     public void close() {
         http.close();
@@ -185,11 +200,6 @@ public final class VidocqApplication implements AutoCloseable {
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
-        }
-        try {
-            Files.deleteIfExists(log);
-        } catch (IOException _) {
-            // a temporary file: the system cleans it up
         }
     }
 }

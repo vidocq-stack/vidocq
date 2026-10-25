@@ -137,9 +137,21 @@ class CreatePromptsTest {
 
     @Test
     void theEndOfTheInputStopsTheCommand() {
-        var e = assertThrows(CliException.class, () -> CreatePrompts.ask(NOTHING_GIVEN, new Scripted((String) null)));
+        Scripted prompter = new Scripted((String) null);
+
+        var e = assertThrows(CliException.class, () -> CreatePrompts.ask(NOTHING_GIVEN, prompter));
 
         assertEquals("'create' stopped: no project name given.", e.getMessage());
+    }
+
+    /** Surefire gives the tests no terminal: a script or a CI job, where nobody would answer. */
+    @Test
+    void withoutAConsoleANameIsRequired() {
+        Command command = CliParser.parse(new String[]{"create"});
+
+        var e = assertThrows(CliException.class, () -> CommandRunner.run(command));
+
+        assertEquals("'create' requires --name <app-name>.", e.getMessage());
     }
 
     @Test

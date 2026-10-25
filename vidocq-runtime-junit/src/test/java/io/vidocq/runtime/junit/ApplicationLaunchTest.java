@@ -47,8 +47,10 @@ class ApplicationLaunchTest {
 
     @Test
     void aPropertyWithoutValueIsRefused() {
+        List<String> properties = List.of("greeting");
+
         var e = assertThrows(IllegalArgumentException.class,
-                () -> ApplicationLaunch.command("java", "/p", "m", 1, List.of("greeting")));
+                () -> ApplicationLaunch.command("java", "/p", "m", 1, properties));
 
         assertEquals("@VidocqTest(properties) takes key=value entries, not 'greeting'", e.getMessage());
     }

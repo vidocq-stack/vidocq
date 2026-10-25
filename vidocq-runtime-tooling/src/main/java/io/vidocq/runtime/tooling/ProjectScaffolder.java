@@ -60,6 +60,9 @@ public final class ProjectScaffolder {
     /** The extension whose scaffold writes a {@code HelloResource}. */
     private static final String REST_EXTENSION = "cassini-rest";
 
+    /** How the notes about the chosen parent start. */
+    private static final String PARENT_VERSION = "Parent version ";
+
     /** The version of a new application, which is its own and not the runtime's (BUG-20261024-06). */
     static final String APPLICATION_VERSION = "1.0.0-SNAPSHOT";
 
@@ -106,7 +109,7 @@ public final class ProjectScaffolder {
                 Files.createDirectories(testPkg);
                 write(testPkg.resolve("HelloResourceTest.java"),     buildHelloResourceTest(create));
             } else {
-                reporter.note("Parent version " + parentVersion + " predates 0.4.0: no first test, as @VidocqTest"
+                reporter.note(PARENT_VERSION + parentVersion + " predates 0.4.0: no first test, as @VidocqTest"
                         + " (vidocq-runtime-junit) comes with 0.4.0.");
             }
         }
@@ -137,12 +140,12 @@ public final class ProjectScaffolder {
         String parentVersion = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
         boolean snapshot = parentVersion.endsWith("-SNAPSHOT");
         if (snapshot) {
-            reporter.note("Parent version " + parentVersion + " is a SNAPSHOT: the project resolves"
+            reporter.note(PARENT_VERSION + parentVersion + " is a SNAPSHOT: the project resolves"
                     + " Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
         }
         boolean ownVersion = parentPinsItsVersion(parentVersion);
         if (!ownVersion) {
-            reporter.note("Parent version " + parentVersion + " predates 0.4.0: the project inherits its version,"
+            reporter.note(PARENT_VERSION + parentVersion + " predates 0.4.0: the project inherits its version,"
                     + " as the parent's dependencyManagement resolves at the project's version.");
         }
         // From 0.4.0 the parent imports vidocq-runtime-bom, which versions every Vidocq artifact (#339).

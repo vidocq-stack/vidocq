@@ -50,11 +50,12 @@ class CreateThenBuildIT {
     /** The javac warnings the created project is allowed: one per class Vauban writes last (#337, documented). */
     private static final String LAST_ROUND = "created in the last round will not be subject to annotation processing";
 
+    /** The IT checks what the scaffolder writes and what the build prints, not what the scaffolder says. */
     private static final Reporter SILENT = new Reporter() {
-        @Override public void success(String message, String detail) {}
-        @Override public void note(String message) {}
-        @Override public void warning(String message) {}
-        @Override public void error(String message) {}
+        @Override public void success(String message, String detail) { /* see SILENT */ }
+        @Override public void note(String message) { /* see SILENT */ }
+        @Override public void warning(String message) { /* see SILENT */ }
+        @Override public void error(String message) { /* see SILENT */ }
     };
 
     @Test

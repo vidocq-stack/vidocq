@@ -22,7 +22,6 @@ package io.vidocq.runtime.junit;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
-import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
 
 import java.io.IOException;
@@ -61,19 +60,14 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
         if (type == VidocqApplication.class) {
             return application;
         }
-        if (type == URI.class) {
-            return application.url();
-        }
-        if (type == String.class) {
-            return application.url().toString();
-        }
-        throw new ParameterResolutionException("@VidocqUrl goes on a URI or a String parameter, not " + type);
+        // supportsParameter took a @VidocqUrl URI or String only.
+        return type == URI.class ? application.url() : application.url().toString();
     }
 
     /** The application of the annotated class, started on the first call, in the store of that class. */
     private static VidocqApplication application(ExtensionContext context) {
         Class<?> annotated = annotated(context.getRequiredTestClass());
-        return context.getStore(NAMESPACE).computeIfAbsent(annotated, VidocqTestExtension::start,
+        return context.getStore(NAMESPACE).computeIfAbsent(annotated, _ -> start(annotated),
                 VidocqApplication.class);
     }
 

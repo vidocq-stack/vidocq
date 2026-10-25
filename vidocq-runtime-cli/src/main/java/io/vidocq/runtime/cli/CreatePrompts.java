@@ -83,7 +83,10 @@ final class CreatePrompts {
                 if (line == null) {
                     return null;
                 }
-                return line.isBlank() ? (defaultValue == null ? "" : defaultValue) : line.strip();
+                if (!line.isBlank()) {
+                    return line.strip();
+                }
+                return defaultValue == null ? "" : defaultValue;
             }
 
             @Override
