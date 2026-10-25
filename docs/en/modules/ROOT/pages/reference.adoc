@@ -321,7 +321,7 @@ The `vidocq` command-line tool (see xref:getting-started.adoc[Getting started] f
 | Inspect and edit CLI configuration.
 
 | `doctor`
-| Diagnose the local setup (JDK, Maven, PATH).
+| Diagnose the local setup (JDK, Maven) and the project (codegen bundles, `module-info.java`, HTTP port); `--fix` repairs the project.
 
 | `info`
 | Show project and runtime information.

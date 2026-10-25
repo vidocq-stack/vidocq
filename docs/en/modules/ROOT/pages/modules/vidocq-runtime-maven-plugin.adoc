@@ -129,15 +129,19 @@ The two goals give the reports of `vidocq extension list` and `vidocq doctor` in
 mvn vidocq:list-extensions                                  # the extensions the project runs with
 mvn vidocq:list-extensions -Dvidocq.extensions.available    # and the catalog
 mvn vidocq:doctor [-Dvidocq.doctor.verbose]                 # the checks of vidocq doctor
+mvn vidocq:doctor -Dvidocq.doctor.fix                       # repair the project first, as vidocq doctor --fix
 ----
 
 * `list-extensions` keeps the runtime dependencies whose module provides `io.vidocq.runtime.spi.VidocqExtension`,
   names them by their catalog id, and marks `(transitive)` those the pom does not declare. The CLI runs Maven to
   find the same list.
-* `doctor` runs the six checks of xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`]: the JDK that runs
-  Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions. A failed check (a JDK
-  older than 25) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the hint of the checks
-  that passed.
+* `doctor` runs the checks of xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`]: the JDK that runs
+  Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions, then
+  [.tag-new]#NEW# xref:modules/vidocq-runtime-cli.adoc#doctor-project[the project's]: its codegen bundles, the Vauban
+  indexer, the `module-info.java` directives, the wrapper's Maven and the HTTP port. A failed check (a JDK older
+  than 25, a missing codegen bundle) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the
+  hint of the checks that passed, and [.tag-new]#NEW# `-Dvidocq.doctor.fix` first makes the repairs of
+  `vidocq doctor --fix` (Vidocq/vidocq#339).
 
 [#create-goal]
 == `vidocq:create` goal [.tag-new]#NEW#
