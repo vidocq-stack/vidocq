@@ -206,7 +206,13 @@
                          reports BUILD SUCCESS without pushing anything to the registry. -->
                     <version>${maven.deploy.plugin.version}</version>
                     <configuration>
-                        <deployAtEnd>false</deployAtEnd>
+                        <!-- One batch at the end of the reactor: nothing reaches the
+                             repository unless every module built and passed its tests (a
+                             failure used to leave the modules built before it published),
+                             and the batch uploads in parallel (vidocq: 10.3 -> 3.75 min).
+                             Checked with 3.1.4 on Maven 3.9.16 in every repository: the same
+                             files as module by module, none on a late failure (Vidocq/vidocq#285). -->
+                        <deployAtEnd>true</deployAtEnd>
                     </configuration>
                 </plugin>
                 <plugin>
