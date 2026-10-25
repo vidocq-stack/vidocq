@@ -44,6 +44,10 @@
              it). The release sets both. It versions vauban-maven-plugin below, and an application that writes
              ${vauban.version}, as the guides did until 0.4.0, still resolves it (BUG-20261025-02). -->
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <!-- Eclipse's Maven integration (m2e) runs the annotation processors only when the pom asks: without them,
+             its build writes an application with no bean index, which starts without its beans (BUG-20261025-06).
+             VS Code's Java extension turns them on by itself. -->
+        <m2e.apt.activation>jdt_apt</m2e.apt.activation>
     </properties>
 
     <dependencyManagement>

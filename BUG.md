@@ -5,6 +5,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-06 — Eclipse builds a Vidocq application without its annotation processors: no bean index
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `feat/vidocq-eclipse` (umbrella #339)
+- **Affected module**: vidocq-runtime-parent
+- **Symptom**: a project `vidocq create -x cassini-rest` writes, imported into Eclipse IDE 2026-09 (m2e 2.8) with
+  Build Automatically on, gets a `target/classes` with no `META-INF/vauban-beans.list`, no generated factory and no
+  Cassini route: the application starts without its beans and answers 404. No `.factorypath` is written.
+- **Minimal reproduction**: import the project into a new Eclipse workspace (File > Import > Existing Maven Projects)
+  and list `target/classes`.
+- **Cause**: m2e configures JDT's annotation processing from the pom only when its "Annotation Processing" preference
+  or the pom's `m2e.apt.activation` property asks; Eclipse's default does not. VS Code's Java extension asks by
+  itself, which is why VS Code's build had the processors.
+- **Fix**: `vidocq-runtime-parent` sets `m2e.apt.activation=jdt_apt`; `ApplicationBomAndParentTest`. Checked in
+  Eclipse 2026-09 driven headless: with the property inherited, its build writes the files of a Maven build (without
+  the weaving of Vauban's javac plugin, which its compiler does not run), and the application answers 200.
 ## BUG-20261025-03 — an application compiled without Vauban's processor starts without its beans, and says nothing
 
 - **Date**: 2026-10-25

@@ -155,6 +155,17 @@ class ApplicationBomAndParentTest {
         assertEquals("${vauban.version}", child(plugin, "version"));
     }
 
+    /**
+     * BUG-20261025-06: Eclipse's Maven integration leaves annotation processing off unless the pom turns it on, and its
+     * build then writes an application without Vauban's index, which starts without its beans.
+     */
+    @Test
+    void theApplicationParentTurnsEclipseAnnotationProcessingOn() throws Exception {
+        Element project = pom(ROOT.resolve("vidocq-runtime-parent")).getDocumentElement();
+
+        assertEquals("jdt_apt", child(elements(project, "properties").getFirst(), "m2e.apt.activation"));
+    }
+
     @Test
     void theApplicationParentCarriesNoSettingOfThisRepository() throws Exception {
         String text = Files.readString(ROOT.resolve("vidocq-runtime-parent").resolve("pom.xml"));
