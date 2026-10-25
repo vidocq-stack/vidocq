@@ -133,9 +133,15 @@ removed:
 | IntelliJ IDEA 2026.2, Maven import | The import runs the plugin: the processor path IntelliJ writes to
 `.idea/compiler.xml` is the one an explicit path gives, entry for entry, so IntelliJ's build runs the same
 processors.
-| Eclipse, VS Code | Not checked. Both import through m2e; if an import misses the processor path, declare the
-paths explicitly as before: the plugin never adds one twice.
+| VS Code, Java extension 1.56 (jdt.ls 1.61, m2e 2.7.8) | The import runs the plugin: the `.factorypath` it writes
+holds the indexer and the extension's bundle, and the IDE's build gives the classes Maven gives. The language server
+must run on Java 25 (`java.jdt.ls.java.home`): JDT runs the annotation processors in its own JVM, and they are Java 25
+class files. On the Java 21 the extension ships, the import succeeds and the IDE says it cannot load the processors.
+| Eclipse 2026-09 (m2e 2.8) | Same m2e and JDT as VS Code's server, on the Java 25 it ships. Not run headless.
 |===
+
+An IDE build needs the Vauban processor of 0.4.0 or later: before it (VAU-APT-005), Eclipse's compiler stopped it in
+its last round, and an application built by Eclipse or VS Code started without its beans.
 
 [#cli-and-plugin]
 == The goals and the Vidocq CLI [.tag-new]#NEW#
