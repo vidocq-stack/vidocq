@@ -123,6 +123,28 @@ A documentation commit on a green pull request, a rebase on a `main` that moved 
 merge bot's re-signing of an unchanged rebase cost no build. The SonarQube analysis follows the same rule.
 
 To force a real build of the same code, re-run the job.
+## Running the plugin's goals in this repository
+
+At the root of this repository, `mvn vidocq:<goal>` fails with `No plugin found for prefix 'vidocq'`. The root build
+can only declare `vidocq-runtime-maven-plugin` in `pluginManagement` (in `<build><plugins>` it would be a reactor
+cycle: the plugin depends on `vidocq-runtime-core`, built here), and Maven resolves a prefix from the build's plugins
+or from the `pluginGroups` of your settings. Install the reactor once (`./mvnw install -DskipTests`), then either name
+the plugin by its group and artifact (the root `pluginManagement` gives the version):
+
+```bash
+./mvnw io.vidocq.runtime:vidocq-runtime-maven-plugin:idea
+```
+
+or add its group to `~/.m2/settings.xml`, once, after which `./mvnw vidocq:idea` works here and everywhere:
+
+```xml
+<pluginGroups>
+  <pluginGroup>io.vidocq.runtime</pluginGroup>
+</pluginGroups>
+```
+
+An application created by `vidocq create` inherits `vidocq-runtime-parent`, which declares the plugin: `mvn vidocq:idea`
+works there as is.
 
 ## Code conventions
 

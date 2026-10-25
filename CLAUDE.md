@@ -113,6 +113,15 @@ edits of `vidocq extension add|remove`: both tools run the same `vidocq-runtime-
 `doctor` give the reports of `vidocq extension list` and `vidocq doctor` the same way; `create` (no project needed) writes the
 project of `vidocq create`.
 
+**In this repository**, the `vidocq:` prefix does not resolve at the root (`No plugin found for prefix 'vidocq'`): the
+root build declares the plugin in `pluginManagement` only, since declaring it in `<build><plugins>` would make a reactor
+cycle (`vidocq-runtime-core` is upstream of the plugin), and Maven resolves a prefix from the build's plugins or the
+`pluginGroups` of the settings. Either name the plugin (its version comes from `pluginManagement`),
+`./mvnw io.vidocq.runtime:vidocq-runtime-maven-plugin:idea`, or add
+`<pluginGroups><pluginGroup>io.vidocq.runtime</pluginGroup></pluginGroups>` to `~/.m2/settings.xml` once (an install
+of the plugin maps the prefix in the local repository). An application under `vidocq-runtime-parent` declares the
+plugin in its build and needs neither.
+
 ## Documentation (Antora) conventions
 
 The project documentation lives in `docs/en` as an Antora component and is
