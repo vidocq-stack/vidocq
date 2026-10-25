@@ -44,6 +44,7 @@ public final class CliParser {
     private static final String DEBUG = "--debug";
     private static final String CHECK = "--check";
     private static final String VSCODE = "vscode";
+    private static final String ECLIPSE = "eclipse";
     private static final String OPTIONS = "Options:";
 
     private CliParser() {}
@@ -59,6 +60,7 @@ public final class CliParser {
             case "test"                       -> parseTest(args, 1);
             case "idea"                       -> parseIdea(args, 1);
             case VSCODE                       -> parseVscode(args, 1);
+            case ECLIPSE                      -> parseEclipse(args, 1);
             case "create"                     -> parseCreate(args, 1);
             case "build"                      -> parseBuild(args, 1);
             case "clean"                      -> parseClean(args, 1);
@@ -123,6 +125,18 @@ public final class CliParser {
             }
         }
         return new Command.Vscode(check);
+    }
+
+    private static Command.Eclipse parseEclipse(String[] args, int from) {
+        boolean check = false;
+        for (String arg : Arrays.asList(args).subList(from, args.length)) {
+            if (CHECK.equals(arg)) {
+                check = true;
+            } else {
+                unknownOpt(arg, ECLIPSE);
+            }
+        }
+        return new Command.Eclipse(check);
     }
 
     private static Command.Idea parseIdea(String[] args, int from) {
@@ -340,6 +354,7 @@ public final class CliParser {
         cmd("test",             "Run the tests on every change, without the application (mvn vidocq:test).");
         cmd("idea",             "Write the IntelliJ run configurations into .run/ (mvn vidocq:idea).");
         cmd(VSCODE,             "Write the VS Code settings, tasks and debug into .vscode/ (mvn vidocq:vscode).");
+        cmd(ECLIPSE,            "Write the Eclipse run and debug configurations into .eclipse/ (mvn vidocq:eclipse).");
         cmd(DOCTOR,           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
@@ -395,6 +410,14 @@ public final class CliParser {
                         "off, tasks.json runs vidocq dev, run and test, launch.json attaches the debugger to",
                         "vidocq dev. A file it did not write is left alone.");
                 options(CHECK, "Only check that .vscode/ is up to date (for CI)");
+            }
+            case ECLIPSE -> {
+                topic(ECLIPSE, "Eclipse run and debug configurations",
+                        "Runs 'mvn vidocq:eclipse' in the project (./mvnw when present): .eclipse/ gets, per",
+                        "application, Maven builds of vidocq dev, run and test and a debug attach to vidocq dev,",
+                        "listed under Run Configurations. A file it did not write is left alone. Turn Project >",
+                        "Build Automatically off while vidocq dev runs.");
+                options(CHECK, "Only check that .eclipse/ is up to date (for CI)");
             }
             case DOCTOR -> {
                 topic(DOCTOR, "Environment & project health checks",

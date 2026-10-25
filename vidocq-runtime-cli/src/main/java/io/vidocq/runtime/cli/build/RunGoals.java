@@ -83,6 +83,11 @@ public final class RunGoals {
         return check ? List.of("vidocq:vscode", "-Dvidocq.vscode.check=true") : List.of("vidocq:vscode");
     }
 
+    /** {@code vidocq:eclipse}; {@code check} only checks the {@code .eclipse/} files. */
+    public static List<String> eclipse(boolean check) {
+        return check ? List.of("vidocq:eclipse", "-Dvidocq.eclipse.check=true") : List.of("vidocq:eclipse");
+    }
+
     /** {@code vidocq:run}, which forks the lifecycle up to {@code process-classes} itself. */
     public static List<String> start(boolean portExplicit, int port, Path configFile, boolean debug) {
         List<String> args = new ArrayList<>(List.of("vidocq:run"));

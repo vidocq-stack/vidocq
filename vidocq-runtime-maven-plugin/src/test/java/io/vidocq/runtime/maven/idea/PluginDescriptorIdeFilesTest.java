@@ -46,6 +46,13 @@ class PluginDescriptorIdeFilesTest {
         assertEquals("${vidocq.vscode.jdk}", configuration.getElementsByTagName("jdk").item(0).getTextContent());
     }
 
+    @Test
+    void eclipse() throws Exception {
+        Element configuration = descriptorMatches("eclipse", VidocqEclipseMojo.class);
+
+        assertEquals("${vidocq.eclipse.check}", configuration.getElementsByTagName("check").item(0).getTextContent());
+    }
+
     /** Every field of the mojo, its base's first, is a parameter of the goal; returns the goal's configuration. */
     private static Element descriptorMatches(String goal, Class<?> type) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();

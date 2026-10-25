@@ -100,7 +100,8 @@ preserved. Canonical example: `vidocq-runtime-examples/vidocq-runtime-mansart-h2
 `idea` (experimental, command line only: IntelliJ run configurations in `.run/`, never `.idea/`;
 a Maven run of `vidocq:run` by default, `-Dvidocq.idea.kind=application` for the main-class kind),
 `vscode` (command line only: `.vscode/` settings with the language server on Java 25 and no automatic build, tasks for
-`vidocq:dev`/`run`/`test`, a debug attach to `vidocq:dev`; leaves a file it did not write alone),
+`vidocq:dev`/`run`/`test`, a debug attach to `vidocq:dev`; leaves a file it did not write alone), `eclipse` (command
+line only: `.eclipse/` launch configurations, Maven builds of `vidocq:dev`/`run`/`test` and a debug attach),
 `add-extension` / `remove-extension` (`-Dextensions=…`: the edits of `vidocq extension add|remove`, through the
 same `vidocq-runtime-tooling` code, #314), `list-extensions` and `doctor` (the reports of `vidocq extension list`
 and `vidocq doctor`), `create` (no project needed: the project of `vidocq create`).

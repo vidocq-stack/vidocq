@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes nineteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -62,6 +62,9 @@
 
 | `vidocq:vscode` [.tag-new]#NEW#
 | Writes the `.vscode/` settings, tasks and debug configuration of the project for VS Code's Java extension, or checks them in CI. See <<vscode,the `vidocq:vscode` goal>>.
+
+| `vidocq:eclipse` [.tag-new]#NEW#
+| Writes the Eclipse run and debug configurations of the project into `.eclipse/`, or checks them in CI. See <<eclipse,the `vidocq:eclipse` goal>>.
 
 | `vidocq:add-extension` [.tag-new]#NEW#
 | Adds extensions to the project, as `vidocq extension add` does: the dependency, the codegen bundle on the compiler's `annotationProcessorPaths` when the extension ships one, and its directives in `src/main/java/module-info.java`. See <<extension-goals>>.
@@ -1338,6 +1341,51 @@ What was checked, in VS Code's language server (Java extension 1.56, jdt.ls 1.61
 `vidocq create -x cassini-rest` writes: with these settings the project imports, a type error is reported in the
 editor, and the server writes nothing into `target/classes`; with the automatic build on, it writes the 15 files of a
 build there.
+
+[#eclipse]
+== `vidocq:eclipse` goal [.tag-new]#NEW#
+
+`vidocq:eclipse` writes the launch configurations a Vidocq project needs in Eclipse IDE 2026-09 or newer
+(Vidocq/vidocq#339). Run it at the reactor root, then import the project (File > Import > Existing Maven Projects):
+
+[source,bash]
+----
+mvn vidocq:eclipse                               # write or update .eclipse/
+mvn vidocq:eclipse -Dvidocq.eclipse.check=true   # CI: fail when a file is missing or out of date
+----
+
+Eclipse lists every `.launch` file of an imported project under Run > Run Configurations. Per application:
+
+[cols="1,3",options="header"]
+|===
+| Configuration | What it runs
+| `<application> (dev)`, `(run)`, `(test)`
+| A Maven build (m2e) of `process-classes vidocq:dev`, `vidocq:run` or `vidocq:test` in the application's Eclipse
+project, on the Java 25 runtime Eclipse ships. m2e's own Maven runs it; the Maven wrapper is not used.
+| `<application> (debug)`
+| A Remote Java Application that attaches the debugger to the agent `vidocq:dev` starts (`vidocq.dev.debugHost` and
+`vidocq.dev.debugPort`, 127.0.0.1:5005 by default, as for `vidocq:idea`).
+|===
+
+The configurations name the Eclipse project after the application's artifactId, m2e's default; with another name
+template in Window > Preferences > Maven, edit the working directory of each one. Each file starts with
+`<!-- Written by vidocq:eclipse … -->`: the goal rewrites such a file, removes one it no longer writes (an
+application renamed or removed), and leaves any other alone. Eclipse rewrites a configuration edited in its dialog
+without that line: it becomes yours.
+
+Two settings the files cannot carry:
+
+* *Annotation processing* — m2e runs the annotation processors only when the pom asks, and Eclipse's build then
+writes an application with no bean index, which starts without its beans. `vidocq-runtime-parent` asks
+(`m2e.apt.activation=jdt_apt`); a project on another parent sets that property itself.
+* *Build automatically* — Eclipse keeps it per workspace, so the goal cannot turn it off as `vidocq:vscode` does in VS
+Code. Turn Project > Build Automatically off while `vidocq dev` runs: both would write `target/classes` on every save,
+and Eclipse's compiler does not run Vauban's javac plugin, which weaves the proxies. The editor keeps its diagnostics.
+
+What was checked, in Eclipse IDE for Java Developers 2026-09 (m2e 2.8, Java 25.0.4 bundled) driven headless on a
+project `vidocq create -x cassini-rest` writes: the four configurations are listed; `(dev)` and `(run)` serve the
+application, `(debug)` attaches to it; with Build Automatically on, Eclipse's build runs the processors and writes the
+files of a Maven build, without the weaving.
 
 == External override (`ExternalFileConfigSource`)
 

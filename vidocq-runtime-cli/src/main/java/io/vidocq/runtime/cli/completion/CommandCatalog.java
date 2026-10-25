@@ -38,6 +38,7 @@ public final class CommandCatalog {
             "doctor",
             "idea",
             "vscode",
+            "eclipse",
             "create",
             "build",
             "clean",

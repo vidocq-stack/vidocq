@@ -1037,5 +1037,30 @@
                 <jdk implementation="java.lang.String">${vidocq.vscode.jdk}</jdk>
             </configuration>
         </mojo>
+        <mojo>
+            <goal>eclipse</goal>
+            <description>Write the Eclipse launch configurations of a Vidocq project into .eclipse/ (Vidocq/vidocq#339): Maven builds (m2e) of vidocq:dev, vidocq:run and vidocq:test of each application on a Java 25 runtime, and a Remote Java Application that attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:eclipse writes is left alone; one that does and is no longer written is removed. vidocq.eclipse.check verifies the files instead. Eclipse keeps Build Automatically per workspace: turn it off while vidocq:dev runs.</description>
+            <requiresDependencyResolution>none</requiresDependencyResolution>
+            <requiresDirectInvocation>true</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>true</aggregator>
+            <implementation>io.vidocq.runtime.maven.idea.VidocqEclipseMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>session</name><type>org.apache.maven.execution.MavenSession</type><required>true</required><editable>false</editable><description>The Maven session (command-line properties, selected projects)</description></parameter>
+                <parameter><name>reactorProjects</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The projects of this build, in reactor order</description></parameter>
+                <parameter><name>mojoExecution</name><type>org.apache.maven.plugin.MojoExecution</type><required>true</required><editable>false</editable><description>This execution, to refuse a binding to a lifecycle phase</description></parameter>
+                <parameter><name>check</name><type>boolean</type><required>false</required><editable>true</editable><description>Write nothing, and fail when one of the files is missing or out of date.</description></parameter>
+            </parameters>
+            <configuration>
+                <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>
+                <reactorProjects implementation="java.util.List" default-value="${reactorProjects}"/>
+                <mojoExecution implementation="org.apache.maven.plugin.MojoExecution" default-value="${mojoExecution}"/>
+                <check implementation="boolean" default-value="false">${vidocq.eclipse.check}</check>
+            </configuration>
+        </mojo>
     </mojos>
 </plugin>

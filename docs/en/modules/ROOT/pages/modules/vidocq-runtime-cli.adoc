@@ -237,6 +237,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq vscode [--check]` [.tag-new]#NEW#
 | Write, or check, the VS Code settings, tasks and debug configuration in `.vscode/`, `mvn vidocq:vscode` (see <<vscode>>).
 
+| `vidocq eclipse [--check]` [.tag-new]#NEW#
+| Write, or check, the Eclipse run and debug configurations in `.eclipse/`, `mvn vidocq:eclipse` (see <<eclipse>>).
+
 | `vidocq build [type] …`
 | Build/package the project, wrapping the Maven plugin goals (see <<build>>).
 
@@ -392,6 +395,22 @@ vidocq vscode --check    # CI: fail when a file is missing or out of date
 
 `--check` maps to `-Dvidocq.vscode.check=true`; see
 xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
+
+[#eclipse]
+=== `vidocq eclipse` [.tag-new]#NEW#
+
+Runs `mvn vidocq:eclipse`: `.eclipse/` gets, per application, Maven builds of `vidocq dev`, `run` and `test` and a
+debug configuration that attaches to `vidocq dev`, listed under Run Configurations once the project is imported. A
+file it did not write is left alone. Turn Project > Build Automatically off while `vidocq dev` runs.
+
+[source,bash]
+----
+vidocq eclipse            # write or update .eclipse/
+vidocq eclipse --check    # CI: fail when a file is missing or out of date
+----
+
+`--check` maps to `-Dvidocq.eclipse.check=true`; see
+xref:modules/vidocq-runtime-maven-plugin.adoc#eclipse[the `vidocq:eclipse` goal].
 
 [#build]
 === `vidocq build` & `vidocq clean`

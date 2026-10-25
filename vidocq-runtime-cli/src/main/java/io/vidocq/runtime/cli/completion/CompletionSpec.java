@@ -82,6 +82,7 @@ public final class CompletionSpec {
             "doctor", List.of("--fix", "--verbose"),
             "idea", List.of(CHECK, "--strict", "--kind"),
             "vscode", List.of(CHECK),
+            "eclipse", List.of(CHECK),
             "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),

@@ -109,7 +109,9 @@ on every change, keys `r`/`f`/`q`), `idea` (experimental, command line only: Int
 suffixed ` (run)`, and a Remote debug one suffixed ` (debug)`; `-Dvidocq.idea.kind=application` writes a single
 Application run of the main class instead, with no console), `vscode` (command line only: `.vscode/` settings
 with the Java extension's language server on Java 25 and its automatic build off, tasks for `vidocq:dev`/`run`/`test`, a
-debug attach to `vidocq:dev`; a file it did not write is left alone). `package`, `jlink`, `jpackage` and `docker` all
+debug attach to `vidocq:dev`; a file it did not write is left alone), `eclipse` (command line only: `.eclipse/` launch
+configurations, Maven builds of `vidocq:dev`/`run`/`test` and a debug attach to `vidocq:dev`; removes one it no longer
+writes, leaves a file it did not write alone). `package`, `jlink`, `jpackage` and `docker` all
 drop a dev-only jar even if declared, with a warning. `add-extension` / `remove-extension` (`-Dextensions=…`) make the
 edits of `vidocq extension add|remove`: both tools run the same `vidocq-runtime-tooling` code (Vidocq/vidocq#314); `list-extensions` and
 `doctor` give the reports of `vidocq extension list` and `vidocq doctor` the same way; `create` (no project needed) writes the

@@ -80,9 +80,11 @@ public final class CommandRunner {
                     "Starting " + CliOutput.bold("continuous testing") + "…");
             case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
-                    (check == null ? "Writing" : "Checking") + " the IntelliJ run configurations…");
+                    progress(check != null, "the IntelliJ run configurations"));
             case Command.Vscode(boolean check) -> runMaven(RunGoals.vscode(check), MavenInvocation.Options.none(),
-                    false, (check ? "Checking" : "Writing") + " the VS Code files in .vscode/…");
+                    false, progress(check, "the VS Code files in .vscode/"));
+            case Command.Eclipse(boolean check) -> runMaven(RunGoals.eclipse(check), MavenInvocation.Options.none(),
+                    false, progress(check, "the Eclipse configurations in .eclipse/"));
             case Command.Create c              -> runCreate(c);
             case Command.CreateInteractively c -> runCreateInteractively(c);
             case Command.Build b               -> runBuild(b);
@@ -756,5 +758,10 @@ public final class CommandRunner {
         CliOutput.success("pom.xml updated.");
         CliOutput.println(CliOutput.dim("  Run 'mvn package' (or './mvnw package' if present) to fetch the new dependencies."));
         return 0;
+    }
+
+    /** What a goal that writes, or with {@code check} checks, IDE files says while Maven runs. */
+    static String progress(boolean check, String files) {
+        return (check ? "Checking " : "Writing ") + files + "…";
     }
 }

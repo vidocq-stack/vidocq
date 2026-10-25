@@ -27,8 +27,8 @@ application run their goal through Maven (`./mvnw` when the project has one).
 | `vidocq:dev` / `vidocq:run`
 | The command runs the goal.
 
-| `vidocq test` / `vidocq idea` / `vidocq vscode`
-| `vidocq:test` / `vidocq:idea` / `vidocq:vscode`
+| `vidocq test` / `vidocq idea` / `vidocq vscode` / `vidocq eclipse`
+| `vidocq:test` / `vidocq:idea` / `vidocq:vscode` / `vidocq:eclipse`
 | The command runs the goal.
 
 | `vidocq build [type]` / `vidocq clean`

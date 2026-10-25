@@ -72,6 +72,13 @@ public sealed interface Command {
     record Vscode(boolean check) implements Command {}
 
     /**
+     * {@code vidocq eclipse}: the {@code .eclipse/} run and debug configurations ({@code mvn vidocq:eclipse}).
+     *
+     * @param check only check the files, write nothing
+     */
+    record Eclipse(boolean check) implements Command {}
+
+    /**
      * {@code vidocq doctor}: the environment and project checks.
      *
      * @param verbose also print the hints of the checks that pass
