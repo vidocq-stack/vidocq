@@ -24,7 +24,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Fix**: `vidocq:dev` runs one `mvn process-classes` first when `target/classes` is missing or holds no file
   (`CompilerOutput.ensureBuilt`, with a warning that says so), which runs everything bound to those phases.
   `vidocq:run` needs `build-frontend` bound to `process-classes` in the application's pom (an execution of its own,
-  `<phase>process-classes</phase>`), now in the Vaadin guide. `CompilerOutputTest` (6 cases). Checked from an empty
+  `<phase>process-classes</phase>`), now in the Vaadin guide. `CompilerOutputTest` (9 cases). Checked from an empty
   `target/` on `VaadinCreate2026` with the 0.4.0-SNAPSHOT of 2026-10-25 plus this fix: `dev` and `run` answer 200 on
   the page, `?v-r=init` and the three `VAADIN/build` bundles; without the binding `run` answers 500 and without the
   fix `dev` answers 404.
