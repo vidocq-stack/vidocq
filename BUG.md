@@ -5,6 +5,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261026-01 — `vidocq:dev` and `vidocq:run` start a Vaadin application from an empty `target/` and answer 404 / 500
+
+- **Date**: 2026-10-26
+- **Status**: FIXED on `fix/dev-builds-an-empty-target` for `vidocq:dev` (code), and for `vidocq:run` in the pom (one
+  binding), see the Vaadin guide (umbrella #339)
+- **Affected module**: vidocq-runtime-maven-plugin
+- **Symptom**: after `mvn clean`, `vidocq:dev` starts with `0 servlet(s)` and answers 404 to every request, and
+  `vidocq:run` answers 500 with _Unable to find index.html_ (Vaadin 25, `VaadinCreate2026`). Both work after one
+  `mvn package`.
+- **Minimal reproduction**: `rm -rf target && mvn vidocq:dev` (or `vidocq:run`) in a Vaadin application whose pom
+  binds `build-frontend` and `vidocq:generate` as the guide says.
+- **Cause**: two different ones. `vidocq:run` runs the lifecycle up to `process-classes`, but Vaadin's `build-frontend`
+  is bound to `prepare-package` by default, so the production bundle is never built. `vidocq:dev` runs no phase at
+  all (`defaultPhase = NONE`), and its start-up check, `CompilerOutput.ensureComplete`, only compares `target/classes`
+  with what the compiler recorded: with nothing built there is no record, so the application starts with no class,
+  whatever the framework. The reload loop already ran `mvn process-classes`, the first start did not.
+- **Fix**: `vidocq:dev` runs one `mvn process-classes` first when `target/classes` is missing or holds no file
+  (`CompilerOutput.ensureBuilt`, with a warning that says so), which runs everything bound to those phases.
+  `vidocq:run` needs `build-frontend` bound to `process-classes` in the application's pom (an execution of its own,
+  `<phase>process-classes</phase>`), now in the Vaadin guide. `CompilerOutputTest` (6 cases). Checked from an empty
+  `target/` on `VaadinCreate2026` with the 0.4.0-SNAPSHOT of 2026-10-25 plus this fix: `dev` and `run` answer 200 on
+  the page, `?v-r=init` and the three `VAADIN/build` bundles; without the binding `run` answers 500 and without the
+  fix `dev` answers 404.
+
 ## BUG-20261025-06 — Eclipse builds a Vidocq application without its annotation processors: no bean index
 
 - **Date**: 2026-10-25

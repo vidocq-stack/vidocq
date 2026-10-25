@@ -167,6 +167,13 @@ xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
         <execution>
           <goals>
             <goal>prepare-frontend</goal>
+          </goals>
+        </execution>
+        <execution>
+          <!-- build-frontend runs in prepare-package by default, after the phases vidocq:run stops at -->
+          <id>build-frontend</id>
+          <phase>process-classes</phase>
+          <goals>
             <goal>build-frontend</goal>
           </goals>
         </execution>
@@ -314,9 +321,16 @@ Vaadin's own development mode, with Node and hot frontend reload, was not tried 
 ./mvnw vidocq:run
 ----
 
-[.tag-new]#NEW# Build the project once first. Neither goal runs Vaadin's `build-frontend` nor processes the Vaadin
-jars, so from an empty `target/`, `vidocq:dev` answers 404 and `vidocq:run` answers 500 with _Unable to find
-index.html_. With the `jvmArgs` properties of the <<setup,pom>>, neither needs a flag for production mode.
+[.tag-new]#NEW# Both goals start from an empty `target/`, after `mvn clean` for instance, with the pom of <<setup,Setup>>:
+
+* `vidocq:run` runs the lifecycle up to `process-classes`, and the pom binds Vaadin's `build-frontend` to that phase.
+  Vaadin binds it to `prepare-package` by default, a later phase that `vidocq:run` never reaches: the production
+  bundle was then never built, and every request answered 500 with _Unable to find index.html_.
+* `vidocq:dev` runs no phase of its own. When `target/classes` is missing or holds no file, it runs one
+  `mvn process-classes` first, as it does on every reload, and says so in a warning. That build runs Vaadin's
+  `build-frontend` and `vidocq:generate`. Before this change it started with no class at all and answered 404.
+
+With the `jvmArgs` properties of the <<setup,pom>>, neither goal needs a flag for production mode.
 
 Both fork a JVM with the runtime on the module path and the application, with its libraries, in the application
 layer. `vidocq:dev` reloads the application layer in place on each change; BENCH.md (2026-10-14) records the reload
@@ -403,10 +417,9 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
 | The Vaadin jars were not processed, so Vaadin's `@WebListener` was never registered and its servlet never deployed.
 | Add the `generate` execution of `vidocq-runtime-maven-plugin`. See <<what-the-build-does>>.
 
-| [.tag-new]#NEW# Right after `mvn clean`, `vidocq:dev` answers 404 and `vidocq:run` answers 500 with _Unable to find
-index.html_.
-| Neither goal builds the frontend nor processes the Vaadin jars.
-| Run `./mvnw package` once first. See <<dev-and-run>>.
+| [.tag-new]#NEW# Right after `mvn clean`, `vidocq:run` answers 500 with _Unable to find index.html_.
+| The pom leaves `build-frontend` in its default phase, `prepare-package`, which `vidocq:run` does not reach.
+| Bind `build-frontend` to `process-classes`, as in <<setup>>.
 
 | [.tag-new]#NEW# On a clean machine, the build stops with _Unresolveable build extension: vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT_ although the jar is on Central's snapshot repository.
 | The pom declares the snapshot repository for dependencies only, and a build extension resolves from the plugin repositories.

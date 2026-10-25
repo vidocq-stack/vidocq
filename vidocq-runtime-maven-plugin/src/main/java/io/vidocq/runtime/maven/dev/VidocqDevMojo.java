@@ -306,6 +306,8 @@ public class VidocqDevMojo extends AbstractMojo {
             throw new MojoExecutionException("vidocq.app.layer=all needs vidocq.dev.layer=true");
         }
         Path projectDir = baseDir.toPath();
+        // Nobody built the project (right after "mvn clean"): build it once, as every reload does.
+        CompilerOutput.ensureBuilt(classesDir.toPath(), new RecompileRunner(projectDir)::run, getLog()::warn);
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
                 getLog()::warn);

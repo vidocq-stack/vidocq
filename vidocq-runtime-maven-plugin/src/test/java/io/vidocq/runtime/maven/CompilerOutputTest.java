@@ -129,6 +129,96 @@ class CompilerOutputTest {
         assertTrue(warning.contains("recompiling"), warning);
     }
 
+    // vidocq:dev starts from a project nobody built: after "mvn clean" there is no class to launch, no compiler state,
+    // and so nothing for ensureComplete to compare. A first "mvn process-classes" builds it, Vaadin's frontend included.
+
+    @Test
+    void aProjectWithoutAClassesDirectoryIsBuiltBeforeTheLaunch() throws Exception {
+        classes = build.resolve("classes");
+        List<String> warnings = new ArrayList<>();
+        AtomicInteger builds = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            builds.incrementAndGet();
+            Files.createDirectories(classes.resolve("a"));
+            Files.writeString(classes.resolve("a/A.class"), "x");
+            return 0;
+        }, warnings::add);
+
+        assertEquals(1, builds.get());
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().contains("nothing in " + classes), warnings.getFirst());
+        assertTrue(warnings.getFirst().contains("building the project first"), warnings.getFirst());
+    }
+
+    @Test
+    void aClassesDirectoryHoldingOnlyEmptyDirectoriesIsBuiltToo() throws Exception {
+        classes = build.resolve("classes");
+        Files.createDirectories(classes.resolve("META-INF/services"));
+        AtomicInteger builds = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            builds.incrementAndGet();
+            return 0;
+        }, warning -> { });
+
+        assertEquals(1, builds.get());
+    }
+
+    @Test
+    void aBuiltProjectIsLaunchedAsItIs() throws Exception {
+        compiled("default-compile", "a/A.class");
+        AtomicInteger builds = new AtomicInteger();
+        List<String> warnings = new ArrayList<>();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            builds.incrementAndGet();
+            return 0;
+        }, warnings::add);
+
+        assertEquals(0, builds.get());
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aResourceOnlyOutputCountsAsBuilt() throws Exception {
+        classes = build.resolve("classes");
+        Files.createDirectories(classes);
+        Files.writeString(classes.resolve("application.properties"), "a=b");
+        AtomicInteger builds = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            builds.incrementAndGet();
+            return 0;
+        }, warning -> { });
+
+        assertEquals(0, builds.get());
+    }
+
+    @Test
+    void aFailedFirstBuildFailsTheLaunchWithItsExitCode() {
+        classes = build.resolve("classes");
+
+        MojoExecutionException failure = assertThrows(MojoExecutionException.class,
+                () -> CompilerOutput.ensureBuilt(classes, () -> 1, warning -> { }));
+
+        assertTrue(failure.getMessage().contains("exit 1"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("mvn process-classes"), failure.getMessage());
+    }
+
+    @Test
+    void aProjectWithNothingToCompileStillLaunchesAfterTheFirstBuild() throws Exception {
+        classes = build.resolve("classes");
+        AtomicInteger builds = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            builds.incrementAndGet();
+            return 0;
+        }, warning -> { });
+
+        assertEquals(1, builds.get());
+    }
+
     @Test
     void aFailedRecompileFailsTheLaunch() throws IOException {
         compiled("default-compile", "a/A.class");

@@ -86,6 +86,47 @@ public final class CompilerOutput {
     }
 
     /**
+     * Builds the project before {@code vidocq:dev} launches when nobody did: {@code target/classes} is missing or
+     * holds no file, as right after {@code mvn clean}. {@link #ensureComplete} cannot see it, as it only compares
+     * with what the compiler recorded, and there is no record yet. One {@code mvn process-classes} then does what
+     * every reload does, the executions bound to its phases included, such as Vaadin's {@code build-frontend} and
+     * {@code vidocq:generate}. A project that has nothing to compile is launched all the same after that build.
+     *
+     * @throws MojoExecutionException when the build fails
+     */
+    public static void ensureBuilt(Path classes, Recompile build, Consumer<String> warn)
+            throws MojoExecutionException {
+        if (hasFiles(classes)) {
+            return;
+        }
+        warn.accept("nothing in " + classes + ": building the project first (mvn process-classes).");
+        int exit;
+        try {
+            exit = build.run();
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot build " + classes + ": " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new MojoExecutionException("Interrupted while building " + classes, e);
+        }
+        if (exit != 0) {
+            throw new MojoExecutionException("The first build of " + classes
+                    + " (mvn process-classes) failed (exit " + exit + ").");
+        }
+    }
+
+    private static boolean hasFiles(Path classes) {
+        if (!Files.isDirectory(classes)) {
+            return false;
+        }
+        try (Stream<Path> walk = Files.walk(classes)) {
+            return walk.anyMatch(Files::isRegularFile);
+        } catch (IOException e) {
+            return true;   // unreadable: do not start a build on a guess, the launch will report it
+        }
+    }
+
+    /**
      * Makes the output complete before a launch: when files the compiler created are missing, warns, deletes the
      * compiler's incremental state, which makes its next run a full compile with the processors, and recompiles once.
      *
