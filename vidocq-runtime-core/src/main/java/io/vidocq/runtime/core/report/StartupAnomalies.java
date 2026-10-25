@@ -48,6 +48,11 @@ public final class StartupAnomalies {
      */
     public static final String GENERATE_SKIPPED = "VIDOCQ-GEN-001";
     /**
+     * The application module has bean classes and none of the files Vauban's annotation processor leaves: it was
+     * compiled without the processor, as by an IDE whose annotation processing did not run, and its beans are lost.
+     */
+    public static final String UNINDEXED_BEANS = "VIDOCQ-GEN-002";
+    /**
      * A startup report contributor could not be loaded, created or identified, or failed while it wrote its
      * section, which is skipped; logged with the stack trace when there is one.
      */

@@ -424,6 +424,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`] [.tag-new]#NEW#
 | The application's bean index is not the one `vidocq:generate` left, as after an IDE build: the boot indexed the bean archives that no build step indexed.
 
+| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-002[`VIDOCQ-GEN-002`] [.tag-new]#NEW#
+| The application module has bean classes and no Vauban index: it was compiled without the annotation processor.
+
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
 

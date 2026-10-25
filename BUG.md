@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-03 — an application compiled without Vauban's processor starts without its beans, and says nothing
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `fix/unindexed-app-anomaly` (umbrella #339)
+- **Affected module**: vidocq-runtime-core
+- **Symptom**: a project `vidocq create -x cassini-rest` writes, compiled by VS Code's Java extension without Vauban's
+  processor (it failed under Eclipse's compiler, Vidocq/vauban VAU-APT-005; or could not load, the extension's server
+  on Java 21), starts with `anomalies none`, registers one REST resource class instead of two, and answers 404 to
+  `GET /hello`.
+- **Minimal reproduction**: the runtime on such a `target/classes` (`-Dvidocq.app.path=…/classes`), or any
+  application module with an `@ApplicationScoped` or `@Path` class and no `META-INF/vauban-beans.list`.
+- **Cause**: nothing indexes a module the processor did not: the fallback of VIDOCQ-GEN-001 scans `beans.xml` archives
+  only, and a created application has none. GEN-001 needs an application module, which an application started by the
+  runtime's own main does not name.
+- **Fix**: `VIDOCQ-GEN-002`: the boot checks the application module, when named, and every exploded module of the
+  application layer; one with bean classes (a CDI scope, `@Singleton`, `@Path`, an interceptor or a decorator) and none
+  of the files the processor leaves is logged, with how to build it. Only read when the three files are missing.
+  `GenerateStampTest`; checked on the IDE output above (anomaly logged) and on Maven's (none).
 ## BUG-20261025-05 — the tree-kill test of `vidocq:dev`'s test runner fails at random: "No such process"
 
 - **Date**: 2026-10-25

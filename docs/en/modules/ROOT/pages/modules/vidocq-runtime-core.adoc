@@ -567,6 +567,23 @@ The application's bean index is not the one `vidocq:generate` left: `META-INF/vi
 
 What the boot cannot do: scan a jar without `beans.xml` that only `<scanDependencies>` names, since the pom is not read at runtime, or honour `<scanExcludes>`. Build with Maven for those.
 
+[#vidocq-gen-002]
+==== VIDOCQ-GEN-002 — bean classes the processor never indexed [.tag-new]#NEW#
+
+The application module has classes that define beans (a CDI scope, `@Singleton`, a Jakarta REST `@Path`, an
+interceptor or a decorator) and none of the files Vauban's annotation processor leaves: `META-INF/vauban-beans.list`,
+the generated `VaubanComponentProvider` service, `META-INF/vauban-bce-processed`. It was compiled without the
+processor, as by an IDE whose annotation processing did not run: VS Code's Java extension on its own Java 21 runtime,
+which cannot load the Java 25 processors, or an IDE with annotation processing off. A module without `beans.xml` is in
+no scan, so those beans are not registered, and the application used to start and answer 404 with no warning. The
+check reads the module's classes only when the three files are missing; a module without beans leaves none and is not
+concerned.
+
+[source,text]
+----
+[VIDOCQ-GEN-002] The application module com.example.todo has bean classes but no Vauban index (META-INF/vauban-beans.list): it was compiled without Vauban's annotation processor, so its beans are not registered. Build it with Maven (mvn process-classes); in an IDE, turn annotation processing on and run its compiler on Java 25 (VS Code: java.jdt.ls.java.home).
+----
+
 [#vidocq-rpt-001]
 ==== VIDOCQ-RPT-001 — contributor failed
 

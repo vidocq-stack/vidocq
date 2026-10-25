@@ -282,6 +282,18 @@ public final class VidocqBootstrap {
         return this;
     }
 
+    /** {@link StartupAnomalies#UNINDEXED_BEANS} for each application module with bean classes and no Vauban index. */
+    private static void reportUnindexedBeans(StartupRecorder recorder) {
+        for (Module unindexed : GenerateStamp.beanModulesWithoutIndex(Vidocq.applicationModule(),
+                VidocqAppLayer.installedLayer())) {
+            recorder.anomaly(StartupAnomalies.UNINDEXED_BEANS, "The application module " + unindexed.getName()
+                    + " has bean classes but no Vauban index (" + GenerateStamp.INDEX + "): it was compiled"
+                    + " without Vauban's annotation processor, so its beans are not registered.", "Build it with"
+                    + " Maven (mvn process-classes); in an IDE, turn annotation processing on and run its compiler"
+                    + " on Java 25 (VS Code: java.jdt.ls.java.home).", StartupRecorder.CORE);
+        }
+    }
+
     /** Weaving, container, extensions and audit, each a phase of {@code recorder}. */
     private void boot(StartupRecorder recorder) {
         // vauban#24 load-time weaving (IDE builds): must run before ANY extension code —
@@ -317,6 +329,12 @@ public final class VidocqBootstrap {
                         + " the IntelliJ configuration that vidocq:idea writes to index them at build time.",
                         StartupRecorder.CORE);
             }
+        }
+
+        // Bean classes in a module the processor never indexed, as an IDE without annotation processing builds it:
+        // without beans.xml no scan reaches them, and the application starts without its beans (VAU-APT-005).
+        if (!embeddedDeployment) {
+            reportUnindexedBeans(recorder);
         }
 
         // Add extra bean classes (e.g. from Arquillian deployment)

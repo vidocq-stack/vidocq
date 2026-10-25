@@ -23,7 +23,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.classfile.Annotation;
 import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModulePackagesAttribute;
+import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.PackageDesc;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.constant.ModuleDesc;
@@ -80,6 +85,43 @@ class GenerateStampTest {
     }
 
     @Test
+    @DisplayName("bean classes and no Vauban index: compiled without Vauban's processor, the beans are lost")
+    void beanClassesWithoutAnIndexWereCompiledWithoutTheProcessor(@TempDir Path dir) throws Exception {
+        assertTrue(GenerateStamp.beansWithoutIndex(module(dir, null, null, "jakarta/enterprise/context/ApplicationScoped")));
+    }
+
+    @Test
+    @DisplayName("a REST resource class and no index: lost as well")
+    void aResourceClassWithoutAnIndexIsLost(@TempDir Path dir) throws Exception {
+        assertTrue(GenerateStamp.beansWithoutIndex(module(dir, null, null, "jakarta/ws/rs/Path")));
+    }
+
+    @Test
+    @DisplayName("bean classes and an index: the processor ran")
+    void beanClassesWithAnIndexAreFine(@TempDir Path dir) throws Exception {
+        assertFalse(GenerateStamp.beansWithoutIndex(module(dir, INDEX, null, "jakarta/enterprise/context/ApplicationScoped")));
+    }
+
+    @Test
+    @DisplayName("no bean class and no index: the processor writes nothing for such a module, nothing is lost")
+    void noBeanClassAndNoIndexIsFine(@TempDir Path dir) throws Exception {
+        assertFalse(GenerateStamp.beansWithoutIndex(module(dir, null, null, "java/lang/Deprecated")));
+        assertFalse(GenerateStamp.beansWithoutIndex(null));
+        assertFalse(GenerateStamp.beansWithoutIndex(getClass().getClassLoader().getUnnamedModule()));
+    }
+
+    @Test
+    @DisplayName("an application launched without a main class of its own: the exploded modules of its layer are checked")
+    void theExplodedModulesOfTheApplicationLayerAreChecked(@TempDir Path dir) throws Exception {
+        Module lost = module(dir, null, null, "jakarta/ws/rs/Path");
+
+        assertEquals(java.util.List.of(lost), GenerateStamp.beanModulesWithoutIndex(null, lost.getLayer()));
+        assertEquals(java.util.List.of(lost), GenerateStamp.beanModulesWithoutIndex(lost, lost.getLayer()),
+                "a module named twice is reported once");
+        assertEquals(java.util.List.of(), GenerateStamp.beanModulesWithoutIndex(null, null));
+    }
+
+    @Test
     @DisplayName("the stamp is a fixed file whose content depends on the index only")
     void theStampDependsOnTheIndexOnly() {
         assertEquals("META-INF/vidocq/generate.stamp", GenerateStamp.PATH);
@@ -91,10 +133,26 @@ class GenerateStampTest {
 
     /** An exploded module {@code acme.app} with the given index and stamp ({@code null}: none), in a layer of its own. */
     private static Module module(Path dir, String index, String stamp) throws Exception {
+        return module(dir, index, stamp, null);
+    }
+
+    /** As {@link #module(Path, String, String)}, with a class {@code acme.app.Greeter} annotated {@code annotation}. */
+    private static Module module(Path dir, String index, String stamp, String annotation) throws Exception {
         Path root = Files.createDirectories(dir.resolve("acme.app"));
+        if (annotation != null) {
+            Files.createDirectories(root.resolve("acme/app"));
+            Files.write(root.resolve("acme/app/Greeter.class"), ClassFile.of().build(ClassDesc.of("acme.app.Greeter"),
+                    cb -> cb.withFlags(ClassFile.ACC_PUBLIC).with(RuntimeVisibleAnnotationsAttribute.of(
+                            Annotation.of(ClassDesc.ofInternalName(annotation))))));
+        }
         Files.write(root.resolve("module-info.class"), ClassFile.of().buildModule(
                 ModuleAttribute.of(ModuleDesc.of("acme.app"), mb -> mb.requires(
-                        ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+                        ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null))),
+                clb -> {
+                    if (annotation != null) {
+                        clb.with(ModulePackagesAttribute.ofNames(PackageDesc.of("acme.app")));
+                    }
+                }));
         write(root.resolve(GenerateStamp.INDEX), index);
         write(root.resolve(GenerateStamp.PATH), stamp);
         var config = ModuleLayer.boot().configuration().resolve(ModuleFinder.of(root), ModuleFinder.of(),
