@@ -6,6 +6,49 @@
 
 ---
 
+## 2026-10-25 — A created application: `vidocq start` and its `vidocq:jlink` image
+
+Startup of the application of the 0.4.0 getting started (Vidocq/vidocq#339): `vidocq create --name todo -g com.example
+-x cassini-rest`, then `vidocq extension add knock-health`, nothing else edited. Quoted in the "Developer Joy in Vidocq
+0.4.0" blog post, to be measured again on 0.4.0-RC1.
+
+### Setup
+
+| Field    | Value |
+|----------|-------|
+| Hardware | Apple M5 Max, 18 cores, 128 GB RAM, macOS 27.0 |
+| JVM      | Temurin 25 (`Temurin-25+36-LTS`); the jlink image embeds the same JDK, stripped |
+| Maven    | 3.9.16 via the `./mvnw` that `vidocq create` writes |
+| Code     | 0.4.0-SNAPSHOT of #352 + #356 + #361 together (local scratch build `2b85e3c0`), CLI from that build's zip |
+| App      | REST (`HelloResource`) + Health, `vidocq.http.port=8080`, default profile (prod) |
+| start    | `vidocq start` (runs `vidocq:run`: forked lifecycle up to `process-classes`, then the application) |
+| jlink    | `vidocq build jlink`, then the image's `bin/java -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq` (what `bin/todo` runs, without its `sh` wrapper) |
+| Run      | one start per run, `GET /hello` checked (200) after `Started in`, then stopped |
+
+### Results
+
+`Started in` is the runtime's own line (bootstrap to ready); `process` is the JVM uptime it prints beside it.
+
+| Run | start `Started in` | start process | jlink `Started in` | jlink process |
+|-----|--------------------|---------------|--------------------|---------------|
+| 1   | 121.2 ms | 212 ms | 120.9 ms | 223 ms |
+| 2   | 111.1 ms | 196 ms | 119.7 ms | 232 ms |
+| 3   | 109.7 ms | 195 ms | 119.2 ms | 231 ms |
+| 4   | 111.6 ms | 197 ms | 119.3 ms | 232 ms |
+| 5   | —        | —      | 118.5 ms | 221 ms |
+| 6   | —        | —      | 118.1 ms | 227 ms |
+| **median of runs 2+** | **111.1 ms** | **196 ms** | **119.2 ms** | **231 ms** |
+
+Size: the jlink image is 40 MB with its JDK; `vidocq build jlink` took 5 s on a warm local repository.
+
+Run 1 of each shape follows a build and is excluded from the median. An earlier run of the same image, right after
+its build, printed 121.7 ms for a process of 1424 ms: the first start of a fresh image pays its cold file cache.
+
+Delta: no previous entry for this shape. The audit figures quoted while drafting the post (130 ms for `vidocq start`,
+133 ms for the image) were not recorded here; this entry replaces them.
+
+---
+
 ## 2026-10-15 — Vaadin 25 on Foy: startup of a `vidocq:package` distribution and of a `vidocq:jlink` image
 
 Startup of the Vaadin 25 spike (one `@Route` view, `vaadin-core` + `vaadin-prod-bundle`, production mode), quoted
