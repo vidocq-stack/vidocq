@@ -5,6 +5,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-04 — VS Code cannot import an application on `vidocq-runtime-parent` 0.4.0
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `fix/participant-java17` (umbrella #339; the IDE side is VAU-APT-005 in Vidocq/vauban)
+- **Affected module**: vidocq-runtime-maven-plugin
+- **Symptom**: VS Code's Java extension (1.56, jdt.ls 1.61, m2e 2.7.8) on its default runtime, Java 21, fails the
+  Maven import of a project `vidocq create` writes: `Initialization failed … TypeNotPresentException: Type
+  CodegenPathsParticipant not present`. No `.classpath`, nothing compiled, no completion. Also, on any runtime, m2e
+  flags `Plugin execution not covered by lifecycle configuration` for `checkpom` and `check-module-info` on the pom.
+- **Minimal reproduction**: jdt.ls headless (the extension's `server/`, its own `jre/21…`) on a project
+  `vidocq create --name todo -x cassini-rest` writes, after #361.
+- **Cause**: #361 loads the plugin as a build extension for its lifecycle participant; the participant was a Java 25
+  class file (the plugin's release) and named `vidocq-runtime-tooling` classes, also Java 25. m2e runs on the IDE's
+  runtime, older than the build's. The lifecycle-mapping warnings: the plugin carried no m2e mapping for the two
+  checks the parent binds.
+- **Fix**: `CodegenPaths` and `CodegenPathsParticipant` are compiled for Java 17 in an execution of their own, and read
+  the extension catalog as a resource (`META-INF/vidocq/extension-catalog.properties`) instead of through
+  `KnownExtensions`; `CodegenPathsParticipantTest` checks both class files (version, no `tooling` class). The plugin
+  carries `META-INF/m2e/lifecycle-mapping-metadata.xml`, which has m2e ignore the two checks
+  (`LifecycleMappingMetadataTest`). Checked in jdt.ls on Java 21: the import succeeds, the processor path holds the
+  indexer and the extension's bundle, no lifecycle warning. Annotation processing itself still needs the language
+  server on Java 25 (`java.jdt.ls.java.home`): JDT runs processors in its own JVM, and they are Java 25 class files.
+  Eclipse 2026-09 ships Java 25.
+
 ## BUG-20261025-02 — a `vidocq:jlink` profile cannot be read: `${vauban.version}` is gone from `vidocq-runtime-parent`
 
 - **Date**: 2026-10-25

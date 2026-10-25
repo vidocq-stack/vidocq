@@ -29,6 +29,10 @@ import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Element;
 
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassModel;
+import java.lang.classfile.constantpool.ClassEntry;
+import java.lang.classfile.constantpool.PoolEntry;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -62,6 +66,31 @@ class CodegenPathsParticipantTest {
         Class<?> implementation = Class.forName(text(component, "implementation"));
         assertEquals(CodegenPathsParticipant.class, implementation);
         assertTrue(AbstractMavenLifecycleParticipant.class.isAssignableFrom(implementation));
+    }
+
+    /**
+     * VS Code's Java extension runs m2e on the Java 21 runtime it ships, and so may Eclipse: a participant compiled for
+     * Java 25 failed the whole Maven import there ({@code TypeNotPresentException: Type CodegenPathsParticipant not
+     * present}). Its classes are Java 17 class files, and name nothing of {@code vidocq-runtime-tooling} (Java 25).
+     */
+    @Test
+    void theParticipantLoadsOnTheJava17RuntimeOfAnIde() throws Exception {
+        List<Path> classes;
+        try (var files = Files.list(Path.of("target/classes/io/vidocq/runtime/maven"))) {
+            classes = files.filter(f -> f.getFileName().toString().startsWith("CodegenPaths")).toList();
+        }
+        assertEquals(2, classes.size(), classes.toString());
+        for (Path file : classes) {
+            ClassModel model = ClassFile.of().parse(Files.readAllBytes(file));
+            assertTrue(model.majorVersion() <= ClassFile.JAVA_17_VERSION,
+                    file.getFileName() + " is a Java " + (model.majorVersion() - 44) + " class file");
+            for (PoolEntry entry : model.constantPool()) {
+                if (entry instanceof ClassEntry type) {
+                    assertFalse(type.asInternalName().startsWith("io/vidocq/runtime/tooling/"),
+                            file.getFileName() + " names " + type.asInternalName());
+                }
+            }
+        }
     }
 
     @Test

@@ -131,6 +131,37 @@
                     </delimiters>
                 </configuration>
             </plugin>
+            <!-- The lifecycle participant (CodegenPaths*) is compiled for Java 17: an IDE may run its Maven import on an
+                 older runtime than the build (VS Code's Java extension runs m2e on Java 21), and a participant it cannot
+                 load fails the whole import. CodegenPathsParticipantTest checks the class files. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <excludes>
+                                <exclude>io/vidocq/runtime/maven/CodegenPaths*.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>participant-java17</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <release>17</release>
+                            <proc>none</proc>
+                            <includes>
+                                <include>io/vidocq/runtime/maven/CodegenPaths*.java</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-plugin-plugin</artifactId>

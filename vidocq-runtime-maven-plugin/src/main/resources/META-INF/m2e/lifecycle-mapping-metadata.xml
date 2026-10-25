@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    How Eclipse's Maven integration (m2e: Eclipse, VS Code's Java extension) treats the goals vidocq-runtime-parent binds
+    before package. checkpom and check-module-info are command-line checks of the build: the IDE ignores them instead of
+    flagging each one on the pom ("Plugin execution not covered by lifecycle configuration"). LifecycleMappingMetadataTest.
+-->
+<lifecycleMappingMetadata>
+    <pluginExecutions>
+        <pluginExecution>
+            <pluginExecutionFilter>
+                <goals>
+                    <goal>checkpom</goal>
+                    <goal>check-module-info</goal>
+                </goals>
+            </pluginExecutionFilter>
+            <action>
+                <ignore/>
+            </action>
+        </pluginExecution>
+    </pluginExecutions>
+</lifecycleMappingMetadata>
