@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-02 — a `vidocq:jlink` profile cannot be read: `${vauban.version}` is gone from `vidocq-runtime-parent`
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `fix/parent-manages-vauban-plugin`
+- **Affected module**: vidocq-runtime-parent
+- **Symptom**: `mvn -Pjlink clean package vidocq:jlink` on `VidocqTools/vaadin-on-vidocq`, or on any pom that copies
+  the `vauban:modularize` snippet of the Vaadin guide, stops before building: `'build.plugins.plugin.version' for
+  io.vidocq.vauban:vauban-maven-plugin must be a valid version but is '${vauban.version}'`.
+- **Minimal reproduction**: an application on the `vidocq-runtime-parent` snapshot of 2026-10-25 14:39 UTC that declares
+  `vauban-maven-plugin` with `<version>${vauban.version}</version>`; `mvn validate`.
+- **Cause**: until #348, `vidocq-runtime-parent` was the reactor's root and defined `vauban.version`, which applications
+  inherited. fbd29643 (#348) made it a parent of its own: the property stayed on the root, `vidocq-runtime-build`, and
+  the parent neither defined it nor managed the plugin.
+- **Fix**: the parent defines `vauban.version`, kept equal to the root's, and manages `vauban-maven-plugin` at it, so an
+  application declares the plugin without a version and an older pom that writes `${vauban.version}` still resolves.
+  `ApplicationBomAndParentTest` fails when the parent's `vauban.version` is not the root's or the plugin is unmanaged.
+- **Proof**: `vaadin-on-vidocq` (`-Pjlink`) and VaadinCreate2026, with the plugin's `<version>` removed, build their
+  image on the fixed parent; each image answers 200 with its frontend bundle.
+
 ## BUG-20261025-01 — every application built on `vidocq-runtime-parent` warns of a plugin managed twice
 
 - **Date**: 2026-10-25

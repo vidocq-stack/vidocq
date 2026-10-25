@@ -137,6 +137,24 @@ class ApplicationBomAndParentTest {
         assertTrue(deploy.getTextContent().contains("true"), "deployAtEnd");
     }
 
+    /**
+     * BUG-20261025-02: an application's {@code vauban:modularize}, which a jlink image of Vaadin needs, took its
+     * version from {@code ${vauban.version}}, which the parent lost when it stopped being the reactor root.
+     */
+    @Test
+    void theApplicationParentManagesTheVaubanPluginAtTheReactorsVauban() throws Exception {
+        Element project = pom(ROOT.resolve("vidocq-runtime-parent")).getDocumentElement();
+        String vauban = child(elements(pom(ROOT).getDocumentElement(), "properties").getFirst(), "vauban.version");
+
+        assertEquals(vauban, child(elements(project, "properties").getFirst(), "vauban.version"),
+                "the parent's vauban.version is not the reactor's");
+        Element plugin = elements(project, "build", "pluginManagement", "plugins", "plugin").stream()
+                .filter(p -> "vauban-maven-plugin".equals(child(p, "artifactId")))
+                .findFirst().orElseThrow(() -> new AssertionError("the parent does not manage the Vauban plugin"));
+        assertEquals("io.vidocq.vauban", child(plugin, "groupId"));
+        assertEquals("${vauban.version}", child(plugin, "version"));
+    }
+
     @Test
     void theApplicationParentCarriesNoSettingOfThisRepository() throws Exception {
         String text = Files.readString(ROOT.resolve("vidocq-runtime-parent").resolve("pom.xml"));

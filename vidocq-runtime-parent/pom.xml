@@ -40,6 +40,10 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
+        <!-- The Vauban the runtime is built on, the same as the reactor root's (ApplicationBomAndParentTest checks
+             it). The release sets both. It versions vauban-maven-plugin below, and an application that writes
+             ${vauban.version}, as the guides did until 0.4.0, still resolves it (BUG-20261025-02). -->
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
     </properties>
 
     <dependencyManagement>
@@ -151,6 +155,14 @@
                             </goals>
                         </execution>
                     </executions>
+                </plugin>
+
+                <!-- vauban:modularize, which a vidocq:jlink image of a library without a module-info needs: an
+                     application declares groupId and artifactId only, and gets the Vauban the runtime runs on. -->
+                <plugin>
+                    <groupId>io.vidocq.vauban</groupId>
+                    <artifactId>vauban-maven-plugin</artifactId>
+                    <version>${vauban.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
