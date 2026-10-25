@@ -5,6 +5,19 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-05 — the tree-kill test of `vidocq:dev`'s test runner fails at random: "No such process"
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `fix/tree-kill-test-race`
+- **Affected module**: vidocq-runtime-maven-plugin (test only)
+- **Symptom**: `TestRunnerTest.aDescendantThatIgnoresTheTermSignalDoesNotDelayTheCancel` errors with
+  `IOException: No such process` at `gone`, failing `pr-validate` of a pull request that does not touch the plugin
+  (vidocq#369, run 1861).
+- **Minimal reproduction**: none on demand; a busy Linux runner where the killed descendant is reaped between the two
+  reads of its `/proc` entry.
+- **Cause**: the test's `gone(pid)` checks that `/proc/<pid>/stat` is readable, then reads it; a process reaped in
+  between makes the read fail instead of counting as gone.
+- **Fix**: a failed read of the entry counts as gone. The runner itself is not affected.
 ## BUG-20261025-04 — VS Code cannot import an application on `vidocq-runtime-parent` 0.4.0
 
 - **Date**: 2026-10-25

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -145,11 +146,6 @@ class TestRunnerTest {
     }
 
     /**
-     * Whether {@code pid} is dead. On Linux a killed process that nobody reaps stays a zombie, which {@link
-     * ProcessHandle#isAlive} still reports alive: in a container without an init process, the orphaned grandchild
-     * is re-parented to a PID 1 that never reaps it. A zombie runs nothing and holds nothing: it counts as gone.
-     */
-    /**
      * {@link #gone} once the process had time to die: a signal is delivered, and acted on, after
      * {@code destroy} returns, so a check made right after the cancel races the kernel on a busy runner.
      */
@@ -164,6 +160,12 @@ class TestRunnerTest {
         return true;
     }
 
+    /**
+     * Whether {@code pid} is dead. On Linux a killed process that nobody reaps stays a zombie, which {@link
+     * ProcessHandle#isAlive} still reports alive: in a container without an init process, the orphaned grandchild
+     * is re-parented to a PID 1 that never reaps it. A zombie runs nothing and holds nothing: it counts as gone. So
+     * does a process reaped between the two checks: reading its {@code /proc} entry then fails with "No such process".
+     */
     private static boolean gone(long pid) throws Exception {
         Optional<ProcessHandle> handle = ProcessHandle.of(pid);
         if (handle.isEmpty() || !handle.get().isAlive()) {
@@ -173,7 +175,12 @@ class TestRunnerTest {
         if (!Files.isReadable(stat)) {
             return false;
         }
-        String line = Files.readString(stat);
+        String line;
+        try {
+            line = Files.readString(stat);
+        } catch (IOException _) {
+            return true;
+        }
         return line.substring(line.lastIndexOf(')') + 2).startsWith("Z");
     }
 
