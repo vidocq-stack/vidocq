@@ -216,11 +216,29 @@ jobs:
           print(f"plugin.xml synced: {n}")
           PY
 
+      # Targeted producer tests (Vidocq/ci targeted-producer-tests): only the modules a changed path
+      # reaches (owner module, its reactor dependents, modules naming it) keep their tests; every module
+      # still compiles and packages, and any doubt (root pom, CI, scripts, an error) runs every test.
+      # main still runs the whole suite before publishing (deploy-maven skip-tests: false + deployAtEnd).
+      - name: Targeted producer tests
+        if: steps.changes.outputs.docs-only != 'true'
+        uses: https://codefloe.com/Vidocq/ci/targeted-producer-tests@main
+        with:
+          mode: targeted
+          changed-files: ${{ runner.temp }}/pr-changed-files.txt   # cross-check only
+
       - name: Build, test & install the producer locally
         if: steps.changes.outputs.docs-only != 'true'
         # install (not deploy): the PR artifact lands in ~/.m2 only — nothing is published.
         # install runs the full lifecycle incl. integration-test/verify.
         run: mvn -B -ntp install
+
+      # Put every pom edited for the targeted tests back, byte for byte, before any later Maven step.
+      - name: Restore the poms edited for targeted tests
+        if: always() && steps.changes.outputs.docs-only != 'true'
+        uses: https://codefloe.com/Vidocq/ci/targeted-producer-tests@main
+        with:
+          mode: restore
 
       - name: Every published jar is a named module
         if: steps.changes.outputs.docs-only != 'true'
@@ -270,6 +288,7 @@ jobs:
           TCK_SELECTED: ${{ steps.tck-select.outputs.modules }}
         run: |
           set -euo pipefail
+          test ! -e "${TARGETED_PRODUCER_EDITS:-/nonexistent}" || { echo "::error::targeted producer test edits still in place"; exit 1; }
           python3 - > .ci-tck.env <<'PY'
           import shlex, xml.etree.ElementTree as ET
           root = ET.parse("pom.xml").getroot()

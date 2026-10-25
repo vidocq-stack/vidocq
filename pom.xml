@@ -94,6 +94,11 @@
             The three slow ones belong in a nightly or main-branch job: their duration is imposed
             from outside and will not say anything new about one pull request.
         -->
+        <!-- Targeted producer tests (Vidocq/ci targeted-producer-tests): a mention of an extension in the
+             tooling catalog keeps the tests of vidocq-runtime-tooling (ExtensionCatalogTest) but does not
+             spread to its dependents: nothing resolves a real extension through the catalog at test time
+             (checked in Vidocq/vidocq#285). A test that starts doing so makes this entry unsafe. -->
+        <ci.targeted.mention-local>vidocq-runtime-tooling/src/main/resources/META-INF/vidocq/extension-catalog.properties</ci.targeted.mention-local>
         <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
         <!-- OpenTelemetry versions, defined once: the Humboldt telemetry extension, its integration test and its TCK runner. -->
         <opentelemetry.version>1.66.0</opentelemetry.version>
