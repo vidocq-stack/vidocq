@@ -35,3 +35,6 @@ jobs:
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+          # Pull requests only: only the modules a change reaches run their tests; the coverage of new code is
+          # unchanged (Vidocq/ci#71, verified on vidocq). main always runs every test.
+          targeted-tests: true
