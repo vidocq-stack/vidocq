@@ -147,11 +147,14 @@
         -->
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-runtime-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <!-- The examples are analysed (people copy them) but not measured for coverage, and they
-             may print to System.out (rule java:S106). -->
+             may print to System.out (rule java:S106). So does the CLI, whose job is to print on the
+             terminal: its output is no log (as chappe-cli in Chappe, QUALITY.md). -->
         <sonar.coverage.exclusions>**/vidocq-runtime-examples/**</sonar.coverage.exclusions>
-        <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria>examples,cli</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
         <sonar.issue.ignore.multicriteria.examples.resourceKey>**/vidocq-runtime-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
+        <sonar.issue.ignore.multicriteria.cli.ruleKey>java:S106</sonar.issue.ignore.multicriteria.cli.ruleKey>
+        <sonar.issue.ignore.multicriteria.cli.resourceKey>**/vidocq-runtime-cli/src/main/java/**</sonar.issue.ignore.multicriteria.cli.resourceKey>
     </properties>
 
     <dependencyManagement>

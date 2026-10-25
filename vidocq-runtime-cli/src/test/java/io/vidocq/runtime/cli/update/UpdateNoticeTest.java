@@ -123,7 +123,7 @@ class UpdateNoticeTest {
         UpdateNotice notice = UpdateNotice.start(() -> {
             try {
                 never.await();
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
             return NEWER;

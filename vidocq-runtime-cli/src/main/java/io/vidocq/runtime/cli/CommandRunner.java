@@ -69,7 +69,7 @@ public final class CommandRunner {
     public static int run(Command command) {
         return switch (command) {
             case Command.Version v             -> runVersion();
-            case Command.Info i                -> runInfo(Path.of("").toAbsolutePath());
+            case Command.Info _                -> runInfo(Path.of("").toAbsolutePath());
             case Command.Help h                -> runHelp(h);
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
@@ -445,7 +445,6 @@ public final class CommandRunner {
         }
     }
 
-    /** {@code <root>/<version>} holding this CLI's {@code modules/} and {@code bin/vidocq}, or {@code null}. */
     /** What {@code vidocq update} would install in place of the CLI installed in {@code installed}. */
     private static UpdatePlan.Decision updatePlan(Path installed, HttpDownloads http) {
         String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
@@ -479,12 +478,18 @@ public final class CommandRunner {
         });
     }
 
+    /** The user's home directory, where the CLI keeps its caches and settings. */
+    private static Path userHome() {
+        return Path.of(System.getProperty("user.home", "."));
+    }
+
     /** When the update notice last checked. */
     static Path updateStamp() {
-        return Path.of(System.getProperty("user.home", ".")).resolve(".vidocq").resolve("cache")
+        return userHome().resolve(".vidocq").resolve("cache")
                 .resolve("update-check");
     }
 
+    /** {@code <root>/<version>} holding this CLI's {@code modules/} and {@code bin/vidocq}, or {@code null}. */
     private static Path installedCliDirectory() {
         try {
             Path jar = Path.of(CommandRunner.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -498,7 +503,7 @@ public final class CommandRunner {
     }
 
     private static void retargetLauncher(Path target) throws IOException {
-        Path bin = Path.of(env("VIDOCQ_BIN", Path.of(System.getProperty("user.home", "."))
+        Path bin = Path.of(env("VIDOCQ_BIN", userHome()
                 .resolve(".local").resolve("bin").toString()));
         Path launcher = bin.resolve("vidocq");
         var retargeted = Files.isRegularFile(launcher)
@@ -514,7 +519,7 @@ public final class CommandRunner {
     }
 
     private static void refreshCompletion(Path target) {
-        Path home = Path.of(System.getProperty("user.home", "."));
+        Path home = userHome();
         for (Shell shell : Shell.values()) {
             if (!Files.isRegularFile(ShellSetup.scriptFile(shell, home))) {
                 continue;
@@ -552,7 +557,7 @@ public final class CommandRunner {
      * commands. Cheap: at most one small file read per shell.
      */
     static void refreshStaleCompletion() {
-        ShellSetup.refreshStale(Path.of(System.getProperty("user.home", ".")), completionStamp(),
+        ShellSetup.refreshStale(userHome(), completionStamp(),
                 shell -> CompletionScripts.script(shell, CommandCatalog.COMMANDS, completionStamp()));
     }
 
@@ -564,7 +569,7 @@ public final class CommandRunner {
             CliOutput.error(e.getMessage());
             return 1;
         }
-        Path home = Path.of(System.getProperty("user.home", "."));
+        Path home = userHome();
         Path rc = ShellSetup.rcFile(shell, home);
         Path script = ShellSetup.scriptFile(shell, home);
         try {
@@ -643,7 +648,7 @@ public final class CommandRunner {
 
     /** Answers from the on-disk cache when it holds, otherwise runs (and announces) Maven. */
     private static ProjectExtensions.Resolution resolveProjectExtensions(Path cwd, boolean refresh) {
-        Path cacheFile = ExtensionCache.fileFor(Path.of(System.getProperty("user.home", "."))
+        Path cacheFile = ExtensionCache.fileFor(userHome()
                 .resolve(".vidocq").resolve("cache").resolve("project-extensions"), cwd);
         if (!refresh) {
             var cached = ProjectExtensions.fromCache(cwd, cacheFile);
