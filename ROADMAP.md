@@ -17,12 +17,12 @@ comes **before** the Web Profile work.
 
 | Version | Content | Estimate |
 |---|---|---|
-| **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano) | end of October 2026 |
+| **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano), Standard Tag Library (Bodoni) | end of October 2026 |
 | **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Antoine's project) if its first release is out in time, else in 1.1.0 | end of November 2026 |
 | **1.0.0-RC1 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | mid-January 2027 |
 | **1.0.0** | The fixes of the release candidate. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of January 2027 |
 | **1.0.x** | The external security audit, executed in February 2027, and its fixes | February–March 2027 |
-| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Standard Tag Library 3.0, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model); Persistence 3.2 if it missed 0.4.0 | April 2027 |
+| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model); Persistence 3.2 if it missed 0.4.0 | April 2027 |
 | **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | October 2027 |
 | **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | January 2028 |
 | **1.4.0** | Jakarta EE Web Profile 11 certification | spring 2028 |
