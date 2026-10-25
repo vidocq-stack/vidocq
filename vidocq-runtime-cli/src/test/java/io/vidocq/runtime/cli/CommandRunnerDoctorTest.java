@@ -80,6 +80,17 @@ class CommandRunnerDoctorTest {
         assertFalse(out.toString().contains("Fix: vidocq doctor --fix"), out.toString());
     }
 
+    @Test
+    void aHealthyProjectHasNothingToFix(@TempDir Path dir) throws IOException {
+        CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                Set.of("cassini-rest"), null, false)), dir);
+        StringBuilder out = new StringBuilder();
+
+        assertEquals(0, doctor(dir.resolve("demo"), true, out));
+
+        assertTrue(out.toString().contains("Nothing to fix."), out.toString());
+    }
+
     private static String captured(Runnable action) {
         PrintStream original = System.out;
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();

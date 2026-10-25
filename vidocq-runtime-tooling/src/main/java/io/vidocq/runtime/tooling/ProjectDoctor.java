@@ -45,7 +45,7 @@ import java.util.regex.Pattern;
 public final class ProjectDoctor {
 
     /** Declared first: {@link #PINNED_MAVEN_VERSION} reads it at class initialization. */
-    private static final Pattern MAVEN_DISTRIBUTION = Pattern.compile("apache-maven-([0-9][^/]*?)-bin\\.zip");
+    private static final Pattern MAVEN_DISTRIBUTION = Pattern.compile("apache-maven-(\\d[^/]*?)-bin\\.zip");
 
     /** The Maven the wrapper of a created project runs, which Vidocq is built and tested with. */
     public static final String PINNED_MAVEN_VERSION = mavenVersion(ProjectScaffolder.wrapperProperties())
@@ -60,6 +60,7 @@ public final class ProjectDoctor {
     private static final String MAVEN_CHECK = "Maven version";
     private static final String PORT_CHECK = "HTTP port";
 
+    private static final String POM_XML = "pom.xml";
     private static final String WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties";
     private static final String MODULE_INFO = "src/main/java/module-info.java";
     private static final ExtensionCoordinate INDEXER =
@@ -87,7 +88,7 @@ public final class ProjectDoctor {
      * when the directory holds no Vidocq project.
      */
     public static Facts read(Path projectDir, IntPredicate portFree) {
-        Path pomFile = projectDir.resolve("pom.xml");
+        Path pomFile = projectDir.resolve(POM_XML);
         try {
             if (!Files.isRegularFile(pomFile)) {
                 return null;
@@ -238,7 +239,7 @@ public final class ProjectDoctor {
         Map<String, ExtensionCoordinate> extensions = catalogExtensions(facts.pom());
         String pom = fixPom(facts.pom(), extensions, defaultRuntimeVersion, reporter);
         if (!pom.equals(facts.pom())) {
-            Files.writeString(projectDir.resolve("pom.xml"), pom);
+            Files.writeString(projectDir.resolve(POM_XML), pom);
             changed = true;
         }
         if (facts.moduleInfo() != null) {
@@ -285,7 +286,7 @@ public final class ProjectDoctor {
     }
 
     private static boolean fixWrapper(Path projectDir, Reporter reporter) throws IOException {
-        if (!Files.isRegularFile(projectDir.resolve("pom.xml"))) {
+        if (!Files.isRegularFile(projectDir.resolve(POM_XML))) {
             return false;
         }
         Path wrapper = wrapperProperties(projectDir);

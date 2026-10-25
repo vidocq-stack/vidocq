@@ -40,6 +40,15 @@ import java.util.Optional;
  */
 public final class PomDependencies {
 
+    private static final String GROUP_ID = "groupId";
+    private static final String ARTIFACT_ID = "artifactId";
+
+    /** A reader {@code try} closes, {@link XMLStreamReader} not being {@link AutoCloseable}. */
+    private interface ClosingReader extends AutoCloseable {
+        @Override
+        void close() throws XMLStreamException;
+    }
+
     private PomDependencies() {}
 
     /**
@@ -75,9 +84,9 @@ public final class PomDependencies {
                             text.append(reader.getText());
                     case XMLStreamConstants.END_ELEMENT -> {
                         String local = reader.getLocalName();
-                        if (isProjectDependencyChild(path, "groupId")) {
+                        if (isProjectDependencyChild(path, GROUP_ID)) {
                             groupId = text.toString().trim();
-                        } else if (isProjectDependencyChild(path, "artifactId")) {
+                        } else if (isProjectDependencyChild(path, ARTIFACT_ID)) {
                             artifactId = text.toString().trim();
                         } else if ("dependency".equals(local) && isProjectDependency(path)
                                 && groupId != null && !groupId.isBlank()
@@ -116,38 +125,36 @@ public final class PomDependencies {
         XMLInputFactory factory = XMLInputFactory.newFactory();
         factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-        XMLStreamReader reader = null;
         try {
-            reader = factory.createXMLStreamReader(new StringReader(pomXml));
-            List<String> path = new ArrayList<>();
-            StringBuilder text = new StringBuilder();
-            while (reader.hasNext()) {
-                switch (reader.next()) {
-                    case XMLStreamConstants.START_ELEMENT -> {
-                        path.add(reader.getLocalName());
-                        text.setLength(0);
-                    }
-                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> text.append(reader.getText());
-                    case XMLStreamConstants.END_ELEMENT -> {
-                        collector.end(path, text.toString().trim());
-                        path.removeLast();
-                        text.setLength(0);
-                    }
-                    default -> { /* ignore */ }
-                }
+            XMLStreamReader reader = factory.createXMLStreamReader(new StringReader(pomXml));
+            try (ClosingReader _ = reader::close) {
+                collectProcessorPaths(reader, collector);
             }
         } catch (XMLStreamException e) {
             throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (XMLStreamException ignored) {
-                    // best effort
-                }
-            }
         }
         return collector.paths;
+    }
+
+    private static void collectProcessorPaths(XMLStreamReader reader, ProcessorPathCollector collector)
+            throws XMLStreamException {
+        List<String> path = new ArrayList<>();
+        StringBuilder text = new StringBuilder();
+        while (reader.hasNext()) {
+            switch (reader.next()) {
+                case XMLStreamConstants.START_ELEMENT -> {
+                    path.add(reader.getLocalName());
+                    text.setLength(0);
+                }
+                case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> text.append(reader.getText());
+                case XMLStreamConstants.END_ELEMENT -> {
+                    collector.end(path, text.toString().trim());
+                    path.removeLast();
+                    text.setLength(0);
+                }
+                default -> { /* ignore */ }
+            }
+        }
     }
 
     /** Collects the {@code <path>} elements of {@code <annotationProcessorPaths>} outside the profiles. */
@@ -163,8 +170,8 @@ public final class PomDependencies {
             }
             if (under(path, 2, "path")) {
                 switch (path.getLast()) {
-                    case "groupId" -> groupId = text;
-                    case "artifactId" -> artifactId = text;
+                    case GROUP_ID -> groupId = text;
+                    case ARTIFACT_ID -> artifactId = text;
                     default -> { /* version, type, exclusions */ }
                 }
             } else if (under(path, 1, "path")) {

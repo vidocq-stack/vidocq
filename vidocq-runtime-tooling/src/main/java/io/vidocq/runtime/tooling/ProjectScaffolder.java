@@ -542,11 +542,6 @@ public final class ProjectScaffolder {
         return version == null ? "" : indent + "<version>" + version + "</version>\n";
     }
 
-    /**
-     * Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable by its owner where the file system
-     * has POSIX permissions: what {@code ./mvnw} needs, and what git records as an executable file. Replaces a
-     * wrapper file already there: {@code vidocq doctor --fix} writes the wrapper a project lacks.
-     */
     /** The {@code maven-wrapper.properties} the tooling writes, which pins the Maven Vidocq is built with. */
     static String wrapperProperties() {
         try (InputStream in = ProjectScaffolder.class.getResourceAsStream(
@@ -560,6 +555,11 @@ public final class ProjectScaffolder {
         }
     }
 
+    /**
+     * Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable by its owner where the file system
+     * has POSIX permissions: what {@code ./mvnw} needs, and what git records as an executable file. Replaces a
+     * wrapper file already there: {@code vidocq doctor --fix} writes the wrapper a project lacks.
+     */
     static void writeMavenWrapper(Path root) throws IOException {
         for (String file : WRAPPER_FILES) {
             Path target = root.resolve(file);

@@ -249,7 +249,11 @@ public final class PomEditor {
             return new Result(pom, false);
         }
         List<int[]> skipped = outsideProjectBuild(pom);
-        int aptOpen = indexWithin(pom, APT_OPEN, compilerPlugin(pom, skipped), skipped);
+        Span plugin = compilerPlugin(pom, skipped);
+        if (plugin == null) {
+            return new Result(pom, false);
+        }
+        int aptOpen = indexWithin(pom, APT_OPEN, plugin, skipped);
         int tagEnd = pom.indexOf('>', aptOpen);
         String replacement = pom.substring(aptOpen, tagEnd + 1).endsWith("/>")
                 ? APPENDING_APT_OPEN + APT_CLOSE

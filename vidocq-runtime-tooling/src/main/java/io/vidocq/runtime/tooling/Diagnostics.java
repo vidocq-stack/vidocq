@@ -35,6 +35,8 @@ public final class Diagnostics {
     /** Minimum Java feature version the Vidocq runtime targets. */
     public static final int MINIMUM_JAVA_VERSION = 25;
 
+    private static final String MAVEN_WRAPPER = "Maven wrapper";
+
     private Diagnostics() {}
 
     /** Runs every check against {@code ctx}, in display order. */
@@ -110,17 +112,17 @@ public final class Diagnostics {
 
     private static Diagnostic checkMavenWrapper(DoctorContext ctx) {
         if (ctx.mavenWrapperPresent()) {
-            return Diagnostic.ok("Maven wrapper", "mvnw found");
+            return Diagnostic.ok(MAVEN_WRAPPER, "mvnw found");
         }
         if (ctx.pomPresent()) {
             // A project to write it into: the one vidocq create writes, pinned to the Maven Vidocq is built with.
             return Diagnostic.warn(
-                    "Maven wrapper",
+                    MAVEN_WRAPPER,
                     "the project has no mvnw",
                     "Without it, builds run on whatever Maven the machine has.").asFixable();
         }
         return Diagnostic.warn(
-                "Maven wrapper",
+                MAVEN_WRAPPER,
                 "no mvnw on this path",
                 "Run from a project that ships ./mvnw, or install Maven, to build and package.");
     }

@@ -226,28 +226,13 @@ public final class CommandRunner {
         CliOutput.println(CliOutput.bold("Vidocq doctor — environment & project checks"));
         CliOutput.println();
         if (doctor.fix()) {
-            try {
-                if (!ProjectDoctor.fix(dir, Version.runtime(), CLI_REPORTER)) {
-                    CliOutput.info("Nothing to fix.");
-                }
-            } catch (IOException e) {
-                CliOutput.error("Could not fix the project: " + e.getMessage());
-            }
-            CliOutput.println();
+            fixProject(dir);
         }
 
         List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(
                 DoctorFacts.gather(dir, System.getenv("JAVA_HOME"), extensions)));
         diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(dir, DoctorFacts::portFree)));
-        for (Diagnostic d : diagnostics) {
-            System.out.printf("  %s %-17s %s%n", symbol(d.status()), d.name(), d.detail());
-            if (d.hint() != null && (doctor.verbose() || d.status() != Diagnostic.Status.OK)) {
-                CliOutput.println("       " + CliOutput.dim("↳ " + d.hint()));
-            }
-            if (d.fixable() && d.status() != Diagnostic.Status.OK) {
-                CliOutput.println("       " + CliOutput.dim("↳ Fix: vidocq doctor --fix"));
-            }
-        }
+        diagnostics.forEach(d -> printDiagnostic(d, doctor.verbose()));
 
         int exit = Diagnostics.exitCode(diagnostics);
         var summary = Diagnostics.summarize(diagnostics);
@@ -264,6 +249,28 @@ public final class CommandRunner {
             CliOutput.println(CliOutput.dim("  Minimum Java: " + Diagnostics.MINIMUM_JAVA_VERSION));
         }
         return exit;
+    }
+
+    /** {@code vidocq doctor --fix}: the repairs, before the report. */
+    private static void fixProject(Path dir) {
+        try {
+            if (!ProjectDoctor.fix(dir, Version.runtime(), CLI_REPORTER)) {
+                CliOutput.info("Nothing to fix.");
+            }
+        } catch (IOException e) {
+            CliOutput.error("Could not fix the project: " + e.getMessage());
+        }
+        CliOutput.println();
+    }
+
+    private static void printDiagnostic(Diagnostic d, boolean verbose) {
+        CliOutput.println(String.format("  %s %-17s %s", symbol(d.status()), d.name(), d.detail()));
+        if (d.hint() != null && (verbose || d.status() != Diagnostic.Status.OK)) {
+            CliOutput.println("       " + CliOutput.dim("↳ " + d.hint()));
+        }
+        if (d.fixable() && d.status() != Diagnostic.Status.OK) {
+            CliOutput.println("       " + CliOutput.dim("↳ Fix: vidocq doctor --fix"));
+        }
     }
 
     private static String symbol(Diagnostic.Status status) {
