@@ -26,14 +26,19 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The check {@code vidocq:dev} and {@code vidocq:run} make before launching: every file the compiler
@@ -204,6 +209,59 @@ class CompilerOutputTest {
 
         assertTrue(failure.getMessage().contains("exit 1"), failure.getMessage());
         assertTrue(failure.getMessage().contains("mvn process-classes"), failure.getMessage());
+    }
+
+    @Test
+    void aFirstBuildThatCannotStartFailsTheLaunch() {
+        classes = build.resolve("classes");
+
+        MojoExecutionException failure = assertThrows(MojoExecutionException.class,
+                () -> CompilerOutput.ensureBuilt(classes, () -> {
+                    throw new IOException("mvn not found");
+                }, warning -> { }));
+
+        assertTrue(failure.getMessage().contains("Cannot build " + classes), failure.getMessage());
+        assertTrue(failure.getMessage().contains("mvn not found"), failure.getMessage());
+    }
+
+    @Test
+    void anInterruptedFirstBuildFailsTheLaunchAndKeepsTheInterruption() {
+        classes = build.resolve("classes");
+        try {
+            MojoExecutionException failure = assertThrows(MojoExecutionException.class,
+                    () -> CompilerOutput.ensureBuilt(classes, () -> {
+                        throw new InterruptedException("stop");
+                    }, warning -> { }));
+
+            assertTrue(failure.getMessage().contains("Interrupted while building " + classes), failure.getMessage());
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();   // do not leak the flag into the next test
+        }
+    }
+
+    @Test
+    void anUnreadableDirectoryIsNotBuiltOnAGuess() throws Exception {
+        classes = build.resolve("classes");
+        Path locked = classes.resolve("locked");
+        Files.createDirectories(locked);
+        Files.writeString(locked.resolve("A.class"), "x");
+        Set<PosixFilePermission> none = Set.of();
+        assumeTrue(Files.getFileAttributeView(locked, PosixFileAttributeView.class) != null);
+        Files.setPosixFilePermissions(locked, none);
+        try {
+            assumeTrue(!Files.isReadable(locked), "the tests run with rights that ignore permissions");
+            AtomicInteger builds = new AtomicInteger();
+
+            CompilerOutput.ensureBuilt(classes, () -> {
+                builds.incrementAndGet();
+                return 0;
+            }, warning -> { });
+
+            assertEquals(0, builds.get());
+        } finally {
+            Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwx------"));
+        }
     }
 
     @Test

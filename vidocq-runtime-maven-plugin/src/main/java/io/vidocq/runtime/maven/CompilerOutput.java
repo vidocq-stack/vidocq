@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven;
 import org.apache.maven.plugin.MojoExecutionException;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -121,7 +122,7 @@ public final class CompilerOutput {
         }
         try (Stream<Path> walk = Files.walk(classes)) {
             return walk.anyMatch(Files::isRegularFile);
-        } catch (IOException e) {
+        } catch (IOException | UncheckedIOException _) {   // Files.walk reports an unreadable directory unchecked
             return true;   // unreadable: do not start a build on a guess, the launch will report it
         }
     }
