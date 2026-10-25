@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,6 +111,45 @@ class PomDependenciesTest {
                 "io.vidocq.runtime", "vidocq-runtime-parent", "0.4.0-SNAPSHOT")),
                 PomDependencies.parent(pom));
         assertTrue(PomDependencies.parent(POM).isEmpty());
+    }
+
+    /** Vidocq/vidocq#339 (evolution 2): who puts the codegen bundles on the processor path. */
+    @Test
+    void theCodegenBundlesAreWiredByTheParentFrom040OrByThePluginAsABuildExtension() {
+        String parent = """
+                <project>
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>%s</version>
+                    </parent>
+                </project>
+                """;
+        String plugin = """
+                <project>
+                    <build>
+                        <plugins>
+                            <plugin>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                                %s
+                            </plugin>
+                            <plugin>
+                                <artifactId>maven-compiler-plugin</artifactId>
+                                <extensions>true</extensions>
+                            </plugin>
+                        </plugins>
+                    </build>
+                </project>
+                """;
+
+        assertTrue(PomDependencies.codegenWiredByPlugin(parent.formatted("0.4.0")));
+        assertTrue(PomDependencies.codegenWiredByPlugin(parent.formatted("1.0.0-SNAPSHOT")));
+        assertFalse(PomDependencies.codegenWiredByPlugin(parent.formatted("0.3.0")));
+        assertTrue(PomDependencies.codegenWiredByPlugin(plugin.formatted("<extensions>true</extensions>")));
+        assertFalse(PomDependencies.codegenWiredByPlugin(plugin.formatted("<extensions>false</extensions>")));
+        assertFalse(PomDependencies.codegenWiredByPlugin(plugin.formatted("")));
+        assertFalse(PomDependencies.codegenWiredByPlugin(POM));
     }
 
     @Test

@@ -70,7 +70,7 @@ class VidocqExtensionEditMojoTest {
         assertEquals(Files.readString(byEditor.resolve("pom.xml")), Files.readString(byGoal.resolve("pom.xml")));
         assertEquals(Files.readString(moduleInfo(byEditor)), Files.readString(moduleInfo(byGoal)));
         String pom = Files.readString(byGoal.resolve("pom.xml"));
-        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"), pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
         assertTrue(infos.contains("Added cassini-rest"
                 + " (io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-cassini-rest-extension)"), infos.toString());
         assertTrue(infos.contains("pom.xml updated."), infos.toString());

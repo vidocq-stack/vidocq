@@ -201,7 +201,7 @@ public final class ProjectScaffolder {
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", versionLine("            ", vidocqVersion),
                 extensionDeps(c.extensions(), vidocqVersion) + (ownVersion ? testDeps(c) : ""),
-                aptCodegenPlugin(c.extensions(), vidocqVersion));
+                ownVersion ? "" : aptCodegenPlugin(c.extensions(), vidocqVersion));
     }
 
     /**
@@ -256,7 +256,8 @@ public final class ProjectScaffolder {
     /**
      * Compiler plugin override wiring the APT codegen bundle of every selected
      * extension that ships one — {@code vidocq:checkpom} fails the build otherwise.
-     * Appends to the parent's Vauban indexer entry.
+     * Appends to the parent's Vauban indexer entry. Only under a parent before 0.4.0:
+     * from 0.4.0 the parent loads the plugin as a build extension, which wires them (#339).
      */
     private static String aptCodegenPlugin(Set<String> ids, String version) {
         var paths = new StringBuilder();

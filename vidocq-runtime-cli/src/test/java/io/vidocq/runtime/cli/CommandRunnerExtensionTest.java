@@ -69,7 +69,7 @@ class CommandRunnerExtensionTest {
     Path project;
 
     @Test
-    void addsTheExtensionItsCodegenPathAndItsModuleDirectives() throws IOException {
+    void addsTheExtensionAndItsModuleDirectives() throws IOException {
         writePom("");
         writeModuleInfo();
 
@@ -78,9 +78,9 @@ class CommandRunnerExtensionTest {
         assertEquals(0, run.exit());
         String pom = pom();
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
-        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"), pom);
-        assertTrue(pom.contains("<version>9.9.9</version>"), pom);
-        assertTrue(run.out().contains("Wired vidocq-runtime-cassini-rest-extension-codegen"), run.out());
+        // The parent's plugin wires the codegen bundle at build time (#339, evolution 2).
+        assertFalse(pom.contains("codegen"), pom);
+        assertFalse(run.out().contains("Wired"), run.out());
         assertTrue(run.out().contains("Added cassini-rest"), run.out());
         assertTrue(run.out().contains("pom.xml updated."), run.out());
         assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs;"));
@@ -110,7 +110,6 @@ class CommandRunnerExtensionTest {
 
         assertEquals(0, run.exit());
         assertEquals(before, pom());
-        assertTrue(run.out().contains("Unwired vidocq-runtime-cassini-rest-extension-codegen"), run.out());
         assertTrue(run.out().contains("Removed cassini-rest"), run.out());
     }
 
@@ -152,6 +151,7 @@ class CommandRunnerExtensionTest {
     @Test
     void wiringACodegenBundleMakesReplacingPathsAppend() throws IOException {
         writePom(REPLACING_PATHS);
+        beforeParent040();
 
         Run run = run(List.of("cassini-rest"), true);
 
@@ -164,6 +164,7 @@ class CommandRunnerExtensionTest {
     @Test
     void addingAnExtensionWithoutCodegenWarnsAboutReplacingPaths() throws IOException {
         writePom(REPLACING_PATHS);
+        beforeParent040();
 
         Run run = run(List.of("knock-health"), true);
 
@@ -210,6 +211,11 @@ class CommandRunnerExtensionTest {
             System.setErr(err);
         }
         return new Run(exit, buffer.toString(StandardCharsets.UTF_8));
+    }
+
+    /** A parent before 0.4.0, under which the edits write the codegen paths themselves. */
+    private void beforeParent040() throws IOException {
+        Files.writeString(project.resolve("pom.xml"), pom().replace("<version>9.9.9</version>", "<version>0.3.0</version>"));
     }
 
     private void writePom(String build) throws IOException {

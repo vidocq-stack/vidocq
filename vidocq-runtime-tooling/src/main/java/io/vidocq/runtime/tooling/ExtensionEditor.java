@@ -78,7 +78,9 @@ public final class ExtensionEditor {
             reporter.error(e.getMessage());
             return Outcome.FAILED;
         }
-        boolean droppedInheritedPaths = PomEditor.dropsInheritedProcessorPaths(pom);
+        // The plugin then wires the codegen bundles at build time, the indexer included (#339).
+        boolean wiredByPlugin = PomDependencies.codegenWiredByPlugin(pom);
+        boolean droppedInheritedPaths = !wiredByPlugin && PomEditor.dropsInheritedProcessorPaths(pom);
         boolean pomChanged = false;
         for (String id : ids) {
             ExtensionCoordinate coordinate;
@@ -88,7 +90,7 @@ public final class ExtensionEditor {
                 reporter.error("Invalid extension id '" + id + "': " + e.getMessage());
                 return Outcome.FAILED;
             }
-            PomEditor.Result result = editPomFor(pom, id, coordinate, runtimeVersion, add, reporter);
+            PomEditor.Result result = editPomFor(pom, id, coordinate, runtimeVersion, add, wiredByPlugin, reporter);
             pom = result.pom();
             pomChanged |= result.changed();
         }
@@ -179,13 +181,19 @@ public final class ExtensionEditor {
         }
     }
 
-    /** Adds or removes one extension's dependency, with its codegen bundle's processor path. */
+    /**
+     * Adds or removes one extension's dependency, with its codegen bundle's processor path unless the plugin wires
+     * it ({@code wiredByPlugin}); a removal takes a path written before that away all the same.
+     */
     private static PomEditor.Result editPomFor(String pom, String id, ExtensionCoordinate coordinate,
-                                               String runtimeVersion, boolean add, Reporter reporter) {
+                                               String runtimeVersion, boolean add, boolean wiredByPlugin,
+                                               Reporter reporter) {
         PomEditor.Result result = add
                 ? PomEditor.add(pom, coordinate, runtimeVersion)
                 : PomEditor.remove(pom, coordinate);
-        PomEditor.Result apt = editProcessorPath(result.pom(), id, runtimeVersion, add, reporter);
+        PomEditor.Result apt = add && wiredByPlugin
+                ? new PomEditor.Result(result.pom(), false)
+                : editProcessorPath(result.pom(), id, runtimeVersion, add, reporter);
         if (result.changed()) {
             reporter.success((add ? "Added " : "Removed ") + id, coordinate.toString());
             if (add && !KnownExtensions.isKnown(id)) {

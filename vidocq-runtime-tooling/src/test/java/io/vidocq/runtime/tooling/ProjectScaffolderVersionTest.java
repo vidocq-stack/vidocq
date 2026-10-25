@@ -124,7 +124,7 @@ class ProjectScaffolderVersionTest {
                 .filter(l -> l.strip().startsWith("<version>"))
                 .map(l -> l.strip().replaceAll("</?version>", ""))
                 .toList(), pom);
-        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"), pom);
+        assertFalse(pom.contains("codegen"), "the parent's plugin wires the codegen bundle (#339):\n" + pom);
     }
 
     @Test

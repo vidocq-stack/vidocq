@@ -29,6 +29,8 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Reads the {@code groupId:artifactId} of every dependency declared directly under
@@ -40,6 +42,8 @@ import java.util.Optional;
  */
 public final class PomDependencies {
 
+    /** A {@code <plugin>} element, whose content is group 1; plugins do not nest. */
+    private static final Pattern PLUGIN_BLOCK = Pattern.compile("<plugin>(.*?)</plugin>", Pattern.DOTALL);
     private static final String GROUP_ID = "groupId";
     private static final String ARTIFACT_ID = "artifactId";
     private static final String DEPENDENCY = "dependency";
@@ -272,23 +276,24 @@ public final class PomDependencies {
     }
 
     /**
-     * Whether {@code vidocq-runtime-maven-plugin} puts the codegen bundles on the compiler's processor path itself:
-     * the Vauban indexer and the {@code -codegen} bundle of each Vidocq extension dependency, as a build extension
-     * (Vidocq/vidocq#339). It is one under a {@code vidocq-runtime-parent} from 0.4.0, which declares it with
-     * {@code <extensions>true</extensions>}, and when the pom declares it so. Explicit paths are then redundant.
+     * Whether {@code vidocq-runtime-maven-plugin}, loaded as a build extension, puts the codegen bundle of each
+     * extension on the compiler's processor path at build time (Vidocq/vidocq#339, evolution 2): under a
+     * {@code vidocq-runtime-parent} from 0.4.0, which declares it so, or when the pom declares it with
+     * {@code <extensions>true</extensions>}. An extension is then its dependency alone.
      */
     public static boolean codegenWiredByPlugin(String pomXml) {
         if (runtimeVersion(pomXml).filter(ProjectScaffolder::parentPinsItsVersion).isPresent()) {
             return true;
         }
-        int plugin = pomXml.indexOf("<artifactId>vidocq-runtime-maven-plugin</artifactId>");
-        if (plugin < 0) {
-            return false;
+        Matcher plugin = PLUGIN_BLOCK.matcher(pomXml);
+        while (plugin.find()) {
+            String block = plugin.group(1);
+            if (block.contains("<artifactId>vidocq-runtime-maven-plugin</artifactId>")
+                    && block.replaceAll("\\s", "").contains("<extensions>true</extensions>")) {
+                return true;
+            }
         }
-        int start = pomXml.lastIndexOf("<plugin>", plugin);
-        int end = pomXml.indexOf("</plugin>", plugin);
-        return start >= 0 && end > plugin
-                && pomXml.substring(start, end).replaceAll("\\s+", "").contains("<extensions>true</extensions>");
+        return false;
     }
 
     /** True when {@code id} appears in the project's dependency list. */

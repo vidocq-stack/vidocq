@@ -103,6 +103,8 @@ class ApplicationBomAndParentTest {
                 .filter(p -> "vidocq-runtime-maven-plugin".equals(child(p, "artifactId")))
                 .findFirst().orElseThrow(() -> new AssertionError("the parent does not manage the Vidocq plugin"));
         assertEquals(version, child(plugin, "version"));
+        // The plugin wires each extension's codegen bundle: an extension is a dependency, nothing more (#339).
+        assertEquals("true", child(plugin, "extensions"), "the Vidocq plugin is not loaded as a build extension");
         for (String goal : List.of("checkpom", "check-module-info", "package")) {
             assertTrue(text.contains("<goal>" + goal + "</goal>"), "the Vidocq plugin does not run " + goal);
         }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The plugin's lifecycle participant, which Maven loads when the plugin is declared with
+    <extensions>true</extensions> (Vidocq/vidocq#339). A Plexus descriptor rather than a Sisu index: Maven 3.9.9
+    reads an index with an ASM that does not know Java 25 class files, and skips the component silently.
+-->
+<component-set>
+    <components>
+        <component>
+            <role>org.apache.maven.AbstractMavenLifecycleParticipant</role>
+            <role-hint>vidocq-codegen-paths</role-hint>
+            <implementation>io.vidocq.runtime.maven.CodegenPathsParticipant</implementation>
+            <instantiation-strategy>singleton</instantiation-strategy>
+        </component>
+    </components>
+</component-set>

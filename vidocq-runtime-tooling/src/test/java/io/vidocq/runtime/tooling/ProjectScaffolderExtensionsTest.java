@@ -69,8 +69,20 @@ class ProjectScaffolderExtensionsTest {
     }
 
     @Test
-    void extensionWithCodegenBundleGetsAnAnnotationProcessorPath(@TempDir Path dir) throws IOException {
+    void fromParent040AnExtensionIsItsDependencyAlone(@TempDir Path dir) throws IOException {
         String pom = scaffoldPom(dir, Set.of("cassini-rest"));
+
+        // The parent loads the plugin as a build extension, which wires the codegen bundle (#339, evolution 2).
+        assertFalse(pom.contains("codegen"), pom);
+        assertFalse(pom.contains("annotationProcessorPaths"), pom);
+    }
+
+    @Test
+    void underAParentBefore040AnExtensionWithCodegenBundleGetsAnAnnotationProcessorPath(@TempDir Path dir)
+            throws IOException {
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", Set.of("cassini-rest"),
+                "0.3.0", false), dir, RUNTIME, SILENT);
+        String pom = Files.readString(dir.resolve("demo/pom.xml"));
 
         assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>"),
                 "checkpom requires the codegen bundle on the APT path, pom was:\n" + pom);

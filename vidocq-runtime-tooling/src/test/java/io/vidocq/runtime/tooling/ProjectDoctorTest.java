@@ -143,8 +143,23 @@ class ProjectDoctorTest {
     void underAParentFrom040TheCodegenBundlesAreThePluginsJob(@TempDir Path dir) throws IOException {
         Path project = create(dir, Set.of("cassini-rest"), false);
         Path pom = project.resolve("pom.xml");
-        removePath(pom, CODEGEN);
-        edit(pom, "<annotationProcessorPaths combine.children=\"append\">", "<annotationProcessorPaths>");
+        // vidocq create writes no codegen path there; add processor paths that replace the parent's.
+        edit(pom, "    </plugins>\n    </build>", """
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <configuration>
+                                <annotationProcessorPaths>
+                                    <path>
+                                        <groupId>org.mapstruct</groupId>
+                                        <artifactId>mapstruct-processor</artifactId>
+                                        <version>1.6.3</version>
+                                    </path>
+                                </annotationProcessorPaths>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </build>""");
         String before = Files.readString(pom);
 
         Map<String, Diagnostic> checks = check(project);
@@ -173,7 +188,8 @@ class ProjectDoctorTest {
 
     @Test
     void aCodegenBundleWithoutItsExtensionWarnsAndIsRemoved(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        // A parent before 0.4.0, where the project lists its codegen paths itself.
+        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
         Path pom = project.resolve("pom.xml");
         removeDependency(pom, "vidocq-runtime-cassini-rest-extension");
 

@@ -119,11 +119,14 @@
                 </plugin>
 
                 <!-- An application declares the plugin, groupId and artifactId only, and gets the three. A library
-                     module of a multi-module application leaves it out. -->
+                     module of a multi-module application leaves it out. As a build extension, the plugin also puts
+                     the codegen bundle of each Vidocq extension the application depends on on the compiler's
+                     processor path, next to the indexer below: an extension is one dependency (#339). -->
                 <plugin>
                     <groupId>io.vidocq.runtime</groupId>
                     <artifactId>vidocq-runtime-maven-plugin</artifactId>
                     <version>0.4.0-SNAPSHOT</version>
+                    <extensions>true</extensions>
                     <executions>
                         <execution>
                             <id>vidocq-checkpom</id>

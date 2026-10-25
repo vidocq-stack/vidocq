@@ -46,6 +46,28 @@ class ExtensionEditorTest {
             %s</project>
             """;
 
+    /**
+     * A project that imports the BOM under a parent of its own and declares the plugin as a plain plugin: nothing
+     * wires the codegen bundles for it, so the edits write their processor paths.
+     */
+    private static final String UNWIRED_POM = """
+            <project>
+              <modelVersion>4.0.0</modelVersion>
+              <artifactId>demo</artifactId>
+              <dependencyManagement>
+                <dependencies>
+                  <dependency>
+                    <groupId>io.vidocq.runtime</groupId>
+                    <artifactId>vidocq-runtime-bom</artifactId>
+                    <version>9.9.9</version>
+                    <type>pom</type>
+                    <scope>import</scope>
+                  </dependency>
+                </dependencies>
+              </dependencyManagement>
+            %s</project>
+            """;
+
     private static final String REPLACING_PATHS = """
               <build>
                 <plugins>
@@ -77,7 +99,7 @@ class ExtensionEditorTest {
 
     @Test
     void addWritesTheDependencyTheCodegenPathAndTheModuleDirectives() throws IOException {
-        writePom("");
+        writeUnwiredPom("");
         writeModuleInfo();
 
         ExtensionEditor.Outcome outcome = edit(List.of("cassini-rest"), true);
@@ -96,9 +118,82 @@ class ExtensionEditorTest {
                 reporter.lines.toString());
     }
 
+    /**
+     * Vidocq/vidocq#339 (evolution 2): from 0.4.0 the parent loads the plugin as a build extension, which puts the
+     * codegen bundle on the processor path at build time: the pom gets the dependency alone.
+     */
+    @Test
+    void underAParentFrom040TheExtensionIsTheDependencyAlone() throws IOException {
+        writePom("");
+        writeModuleInfo();
+
+        edit(List.of("cassini-rest"), true);
+
+        String pom = pom();
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-cassini-rest-extension</artifactId>"), pom);
+        assertFalse(pom.contains("codegen"), pom);
+        assertFalse(pom.contains("annotationProcessorPaths"), pom);
+        assertTrue(Files.readString(moduleInfo()).contains("requires jakarta.ws.rs;"));
+        assertFalse(reporter.lines.stream().anyMatch(l -> l.contains("Wired")), reporter.lines.toString());
+    }
+
+    /** A pom written before 0.4.0 keeps its explicit path; removing the extension still removes it. */
+    @Test
+    void underAParentFrom040RemovingAnExtensionRemovesAPathLeftFromBefore() throws IOException {
+        writePom("""
+                  <dependencies>
+                    <dependency>
+                      <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                      <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+                    </dependency>
+                  </dependencies>
+                  <build>
+                    <plugins>
+                      <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                          <annotationProcessorPaths combine.children="append">
+                            <path>
+                              <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                              <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            </path>
+                          </annotationProcessorPaths>
+                        </configuration>
+                      </plugin>
+                    </plugins>
+                  </build>
+                """);
+
+        edit(List.of("cassini-rest"), false);
+
+        assertFalse(pom().contains("cassini"), pom());
+    }
+
+    /** A plain pom that declares the plugin with extensions=true is wired the same way. */
+    @Test
+    void aPluginDeclaredAsABuildExtensionWiresTheCodegenBundles() throws IOException {
+        writeUnwiredPom("""
+                  <build>
+                    <plugins>
+                      <plugin>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                        <version>9.9.9</version>
+                        <extensions>true</extensions>
+                      </plugin>
+                    </plugins>
+                  </build>
+                """);
+
+        edit(List.of("cassini-rest"), true);
+
+        assertFalse(pom().contains("codegen"), pom());
+    }
+
     @Test
     void removeUndoesAdd() throws IOException {
-        writePom("");
+        writeUnwiredPom("");
         writeModuleInfo();
         String pom = pom();
         String moduleInfo = Files.readString(moduleInfo());
@@ -168,7 +263,7 @@ class ExtensionEditorTest {
     /** BUG-20261024-02: a block that lists the Vauban indexer itself drops nothing, so nothing to warn about. */
     @Test
     void replacingPathsThatListTheIndexerDoNotWarn() throws IOException {
-        writePom(REPLACING_PATHS.replaceFirst("<path>", INDEXER_THEN_PATH));
+        writeUnwiredPom(REPLACING_PATHS.replaceFirst("<path>", INDEXER_THEN_PATH));
 
         edit(List.of("knock-health"), true);
 
@@ -179,7 +274,7 @@ class ExtensionEditorTest {
     /** BUG-20261023-02: wiring a codegen bundle makes a replacing block append to the parent's. */
     @Test
     void wiringACodegenBundleMakesReplacingPathsAppend() throws IOException {
-        writePom(REPLACING_PATHS);
+        writeUnwiredPom(REPLACING_PATHS);
 
         edit(List.of("cassini-rest"), true);
 
@@ -191,7 +286,7 @@ class ExtensionEditorTest {
     /** BUG-20261023-02: an extension without a codegen bundle leaves a replacing block as is, and says so. */
     @Test
     void anExtensionWithoutCodegenWarnsAboutReplacingPaths() throws IOException {
-        writePom(REPLACING_PATHS);
+        writeUnwiredPom(REPLACING_PATHS);
 
         edit(List.of("knock-health"), true);
 
@@ -301,6 +396,10 @@ class ExtensionEditorTest {
 
     private void writePom(String build) throws IOException {
         Files.writeString(project.resolve("pom.xml"), POM.formatted(build));
+    }
+
+    private void writeUnwiredPom(String build) throws IOException {
+        Files.writeString(project.resolve("pom.xml"), UNWIRED_POM.formatted(build));
     }
 
     private void writeModuleInfo() throws IOException {
