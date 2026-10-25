@@ -104,6 +104,85 @@ public final class PomDependencies {
         return result;
     }
 
+    /**
+     * The {@code groupId:artifactId} of every {@code <path>} of an {@code <annotationProcessorPaths>} in the project
+     * build, its {@code pluginManagement} included, in order; a profile's are left out, as a build without the
+     * profile does not run them.
+     *
+     * @throws IllegalArgumentException if the XML cannot be parsed
+     */
+    public static List<ExtensionCoordinate> processorPaths(String pomXml) {
+        ProcessorPathCollector collector = new ProcessorPathCollector();
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        XMLStreamReader reader = null;
+        try {
+            reader = factory.createXMLStreamReader(new StringReader(pomXml));
+            List<String> path = new ArrayList<>();
+            StringBuilder text = new StringBuilder();
+            while (reader.hasNext()) {
+                switch (reader.next()) {
+                    case XMLStreamConstants.START_ELEMENT -> {
+                        path.add(reader.getLocalName());
+                        text.setLength(0);
+                    }
+                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> text.append(reader.getText());
+                    case XMLStreamConstants.END_ELEMENT -> {
+                        collector.end(path, text.toString().trim());
+                        path.removeLast();
+                        text.setLength(0);
+                    }
+                    default -> { /* ignore */ }
+                }
+            }
+        } catch (XMLStreamException e) {
+            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (XMLStreamException ignored) {
+                    // best effort
+                }
+            }
+        }
+        return collector.paths;
+    }
+
+    /** Collects the {@code <path>} elements of {@code <annotationProcessorPaths>} outside the profiles. */
+    private static final class ProcessorPathCollector {
+        final List<ExtensionCoordinate> paths = new ArrayList<>();
+        private String groupId;
+        private String artifactId;
+
+        /** Called at the end of the last element of {@code path}, whose text is {@code text}. */
+        void end(List<String> path, String text) {
+            if (path.contains("profiles")) {
+                return;
+            }
+            if (under(path, 2, "path")) {
+                switch (path.getLast()) {
+                    case "groupId" -> groupId = text;
+                    case "artifactId" -> artifactId = text;
+                    default -> { /* version, type, exclusions */ }
+                }
+            } else if (under(path, 1, "path")) {
+                if (groupId != null && artifactId != null && !groupId.isBlank() && !artifactId.isBlank()) {
+                    paths.add(new ExtensionCoordinate(groupId, artifactId));
+                }
+                groupId = null;
+                artifactId = null;
+            }
+        }
+
+        /** Whether the element {@code up} levels above the last one is a {@code path} of processor paths. */
+        private static boolean under(List<String> path, int up, String element) {
+            int at = path.size() - up;
+            return at >= 1 && element.equals(path.get(at)) && "annotationProcessorPaths".equals(path.get(at - 1));
+        }
+    }
+
     /** The {@code <project>/<parent>} coordinates, when the POM declares a parent. */
     public record Parent(String groupId, String artifactId, String version) {}
 
@@ -188,6 +267,26 @@ public final class PomDependencies {
         int end = pomXml.indexOf("</dependencyManagement>");
         return start >= 0 && end > start
                 && pomXml.substring(start, end).contains("<artifactId>vidocq-runtime-bom</artifactId>");
+    }
+
+    /**
+     * Whether {@code vidocq-runtime-maven-plugin} puts the codegen bundles on the compiler's processor path itself:
+     * the Vauban indexer and the {@code -codegen} bundle of each Vidocq extension dependency, as a build extension
+     * (Vidocq/vidocq#339). It is one under a {@code vidocq-runtime-parent} from 0.4.0, which declares it with
+     * {@code <extensions>true</extensions>}, and when the pom declares it so. Explicit paths are then redundant.
+     */
+    public static boolean codegenWiredByPlugin(String pomXml) {
+        if (runtimeVersion(pomXml).filter(ProjectScaffolder::parentPinsItsVersion).isPresent()) {
+            return true;
+        }
+        int plugin = pomXml.indexOf("<artifactId>vidocq-runtime-maven-plugin</artifactId>");
+        if (plugin < 0) {
+            return false;
+        }
+        int start = pomXml.lastIndexOf("<plugin>", plugin);
+        int end = pomXml.indexOf("</plugin>", plugin);
+        return start >= 0 && end > plugin
+                && pomXml.substring(start, end).replaceAll("\\s+", "").contains("<extensions>true</extensions>");
     }
 
     /** True when {@code id} appears in the project's dependency list. */

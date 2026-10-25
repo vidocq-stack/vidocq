@@ -38,10 +38,10 @@ import io.vidocq.runtime.tooling.ConfigFile;
 import io.vidocq.runtime.tooling.ConfigKeys;
 import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
-import io.vidocq.runtime.tooling.DoctorContext;
 import io.vidocq.runtime.tooling.DoctorFacts;
 import io.vidocq.runtime.tooling.ExtensionEditor;
 import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.ProjectDoctor;
 import io.vidocq.runtime.tooling.PropertiesText;
 import io.vidocq.runtime.tooling.ProjectScaffolder;
 import io.vidocq.runtime.tooling.ProjectSummary;
@@ -53,8 +53,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 /**
  * Dispatches a parsed {@link Command} to its implementation.
  * Uses pattern-matching switch so the compiler enforces exhaustiveness
@@ -212,14 +214,38 @@ public final class CommandRunner {
     }
 
     private static int runDoctor(Command.Doctor doctor) {
+        Path cwd = Path.of("").toAbsolutePath();
+        return runDoctor(doctor, cwd, () -> switch (resolveProjectExtensions(cwd, false)) {
+            case ProjectExtensions.Resolution.Resolved r -> DoctorFacts.Extensions.found(r.extensions().size());
+            case ProjectExtensions.Resolution.Failed f   -> DoctorFacts.Extensions.failed(f.reason());
+        });
+    }
+
+    /** {@code vidocq doctor} on the project in {@code dir}, whose extensions {@code extensions} counts. */
+    static int runDoctor(Command.Doctor doctor, Path dir, Supplier<DoctorFacts.Extensions> extensions) {
         CliOutput.println(CliOutput.bold("Vidocq doctor — environment & project checks"));
         CliOutput.println();
+        if (doctor.fix()) {
+            try {
+                if (!ProjectDoctor.fix(dir, Version.runtime(), CLI_REPORTER)) {
+                    CliOutput.info("Nothing to fix.");
+                }
+            } catch (IOException e) {
+                CliOutput.error("Could not fix the project: " + e.getMessage());
+            }
+            CliOutput.println();
+        }
 
-        var diagnostics = Diagnostics.run(gatherDoctorContext());
+        List<Diagnostic> diagnostics = new ArrayList<>(Diagnostics.run(
+                DoctorFacts.gather(dir, System.getenv("JAVA_HOME"), extensions)));
+        diagnostics.addAll(ProjectDoctor.check(ProjectDoctor.read(dir, DoctorFacts::portFree)));
         for (Diagnostic d : diagnostics) {
-            System.out.printf("  %s %-16s %s%n", symbol(d.status()), d.name(), d.detail());
+            System.out.printf("  %s %-17s %s%n", symbol(d.status()), d.name(), d.detail());
             if (d.hint() != null && (doctor.verbose() || d.status() != Diagnostic.Status.OK)) {
                 CliOutput.println("       " + CliOutput.dim("↳ " + d.hint()));
+            }
+            if (d.fixable() && d.status() != Diagnostic.Status.OK) {
+                CliOutput.println("       " + CliOutput.dim("↳ Fix: vidocq doctor --fix"));
             }
         }
 
@@ -246,14 +272,6 @@ public final class CommandRunner {
             case WARN -> CliOutput.yellow("⚠");
             case FAIL -> CliOutput.red("✘");
         };
-    }
-
-    private static DoctorContext gatherDoctorContext() {
-        Path cwd = Path.of("").toAbsolutePath();
-        return DoctorFacts.gather(cwd, System.getenv("JAVA_HOME"), () -> switch (resolveProjectExtensions(cwd, false)) {
-            case ProjectExtensions.Resolution.Resolved r -> DoctorFacts.Extensions.found(r.extensions().size());
-            case ProjectExtensions.Resolution.Failed f   -> DoctorFacts.Extensions.failed(f.reason());
-        });
     }
 
     private static int runCreate(Command.Create create) {

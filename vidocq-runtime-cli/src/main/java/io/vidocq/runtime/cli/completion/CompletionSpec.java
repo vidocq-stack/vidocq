@@ -77,7 +77,7 @@ public final class CompletionSpec {
     static final Map<String, List<String>> ARGUMENTS = ordered(
             "start", List.of("--port", "--config", "--debug"),
             "dev", List.of("--port", "--profile", "--debug"),
-            "doctor", List.of("--verbose"),
+            "doctor", List.of("--fix", "--verbose"),
             "idea", List.of("--check", "--strict", "--kind"),
             "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),

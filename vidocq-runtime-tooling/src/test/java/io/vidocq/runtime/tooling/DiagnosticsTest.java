@@ -128,12 +128,12 @@ class DiagnosticsTest {
     }
 
     @Test
-    void zeroExtensionsWarns() {
+    void zeroExtensionsIsNotAWarning() {
         DoctorContext ctx = new DoctorContext(
                 Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
                 "/opt/jdk", true, true, true, true, 0);
 
-        assertEquals(Diagnostic.Status.WARN, byName(Diagnostics.run(ctx)).get("Extensions").status());
+        assertEquals(Diagnostic.Status.OK, byName(Diagnostics.run(ctx)).get("Extensions").status());
     }
 
     @Test
@@ -188,14 +188,14 @@ class DiagnosticsTest {
         assertEquals(0, healthy.fail());
         assertEquals(6, healthy.total());
 
-        // Old Java fails + JAVA_HOME unset/mvnw/pom/extensions all warn; config absent → OK.
+        // Old Java fails + JAVA_HOME unset/mvnw/pom warn; config absent and no extension → OK.
         DoctorContext mixed = new DoctorContext(
                 21, "21", Diagnostics.MINIMUM_JAVA_VERSION,
                 null, false, false, false, false, 0);
         Diagnostics.Summary s = Diagnostics.summarize(Diagnostics.run(mixed));
         assertEquals(1, s.fail());
-        assertEquals(4, s.warn());
-        assertEquals(1, s.ok());
+        assertEquals(3, s.warn());
+        assertEquals(2, s.ok());
         assertEquals(6, s.total());
     }
 

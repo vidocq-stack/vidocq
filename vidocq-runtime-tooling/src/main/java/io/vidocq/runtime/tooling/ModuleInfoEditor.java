@@ -91,6 +91,12 @@ public final class ModuleInfoEditor {
         return new Result(out.toString(), changed);
     }
 
+    /** The {@code directives} (written without their {@code ;}) that {@code source} does not declare, in order. */
+    public static List<String> missing(String source, List<String> directives) {
+        List<String> declared = declared(source);
+        return directives.stream().filter(d -> !declared.contains(normalize(d))).toList();
+    }
+
     private static String marker(String id) {
         return "// vidocq:" + id;
     }

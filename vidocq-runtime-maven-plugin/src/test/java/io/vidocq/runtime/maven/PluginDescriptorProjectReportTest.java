@@ -64,12 +64,23 @@ class PluginDescriptorProjectReportTest {
         assertEquals("per-lookup", text(mojo, "instantiationStrategy"));
     }
 
+    /**
+     * Each spec is {@code goal:flag=property,...[:readonly]}: the boolean flags and the properties they read, then
+     * the read-only {@code String} parameters, in the descriptor's order.
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"doctor:verbose:vidocq.doctor.verbose", "list-extensions:available:vidocq.extensions.available"})
+    @ValueSource(strings = {
+            "doctor:verbose=vidocq.doctor.verbose,fix=vidocq.doctor.fix:runtimeVersion",
+            "list-extensions:available=vidocq.extensions.available"})
     void theParametersAreTheFieldsAndReadTheDocumentedProperties(String spec) throws Exception {
         String[] parts = spec.split(":");
         Element mojo = mojo(parts[0]);
         Class<?> implementation = Class.forName(text(mojo, "implementation"));
+        Map<String, String> flags = new LinkedHashMap<>();
+        for (String flag : parts[1].split(",")) {
+            flags.put(flag.split("=")[0], flag.split("=")[1]);
+        }
+        List<String> readOnly = parts.length > 2 ? List.of(parts[2].split(",")) : List.of();
         Map<String, String> parameters = new LinkedHashMap<>();
         for (Element parameter : children(child(mojo, "parameters"))) {
             parameters.put(text(parameter, "name"), text(parameter, "type"));
@@ -79,13 +90,22 @@ class PluginDescriptorProjectReportTest {
             configuration.put(entry.getTagName(), entry);
         }
 
-        assertEquals(List.of("project", parts[1]), new ArrayList<>(parameters.keySet()));
+        List<String> expected = new ArrayList<>(List.of("project"));
+        expected.addAll(flags.keySet());
+        expected.addAll(readOnly);
+        assertEquals(expected, new ArrayList<>(parameters.keySet()));
         assertEquals(parameters.keySet(), configuration.keySet());
         assertEquals(MavenProject.class, implementation.getDeclaredField("project").getType());
-        assertEquals(boolean.class, implementation.getDeclaredField(parts[1]).getType());
         assertEquals("${project}", configuration.get("project").getAttribute("default-value"));
-        assertEquals("${" + parts[2] + "}", configuration.get(parts[1]).getTextContent().strip());
-        assertEquals("false", configuration.get(parts[1]).getAttribute("default-value"));
+        for (var flag : flags.entrySet()) {
+            assertEquals(boolean.class, implementation.getDeclaredField(flag.getKey()).getType());
+            assertEquals("${" + flag.getValue() + "}", configuration.get(flag.getKey()).getTextContent().strip());
+            assertEquals("false", configuration.get(flag.getKey()).getAttribute("default-value"));
+        }
+        for (String name : readOnly) {
+            assertEquals(String.class, implementation.getDeclaredField(name).getType());
+            assertEquals("${plugin.version}", configuration.get(name).getAttribute("default-value"));
+        }
     }
 
     private static Element mojo(String goal) throws Exception {

@@ -239,6 +239,24 @@ public final class PomEditor {
         return aptClose < 0 || !pom.substring(tagEnd, aptClose).contains(artifactIdElement(INDEXER));
     }
 
+    /**
+     * Makes the project build's {@code annotationProcessorPaths} append to the parent's, which hold the Vauban
+     * indexer, when they replace them ({@link #dropsInheritedProcessorPaths}): the fix of BUG-20261023-02, which
+     * keeps the parent's entry rather than copying it. Unchanged otherwise.
+     */
+    public static Result appendToInheritedProcessorPaths(String pom) {
+        if (!dropsInheritedProcessorPaths(pom)) {
+            return new Result(pom, false);
+        }
+        List<int[]> skipped = outsideProjectBuild(pom);
+        int aptOpen = indexWithin(pom, APT_OPEN, compilerPlugin(pom, skipped), skipped);
+        int tagEnd = pom.indexOf('>', aptOpen);
+        String replacement = pom.substring(aptOpen, tagEnd + 1).endsWith("/>")
+                ? APPENDING_APT_OPEN + APT_CLOSE
+                : APPENDING_APT_OPEN;
+        return new Result(pom.substring(0, aptOpen) + replacement + pom.substring(tagEnd + 1), true);
+    }
+
     private static Result addToProcessorPaths(String pom, int aptOpen, ExtensionCoordinate codegen,
                                               String version) {
         int tagEnd = pom.indexOf('>', aptOpen);

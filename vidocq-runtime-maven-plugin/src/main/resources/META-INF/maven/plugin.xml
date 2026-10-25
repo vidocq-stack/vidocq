@@ -893,7 +893,7 @@
         </mojo>
         <mojo>
             <goal>doctor</goal>
-            <description>Check the environment and the project, as vidocq doctor does: the JDK, JAVA_HOME, the Maven wrapper, the pom, vidocq.properties and the extensions of the runtime dependencies. A failed check fails the build. mvn vidocq:doctor [-Dvidocq.doctor.verbose]. No default phase.</description>
+            <description>Check the environment and the project, as vidocq doctor does: the JDK, JAVA_HOME, the Maven wrapper, the pom, vidocq.properties and the extensions of the runtime dependencies, then the project from its sources: codegen bundles, Vauban indexer, module-info.java directives, Maven version, HTTP port. A failed check fails the build. mvn vidocq:doctor [-Dvidocq.doctor.fix] [-Dvidocq.doctor.verbose]. No default phase.</description>
             <requiresDependencyResolution>runtime</requiresDependencyResolution>
             <requiresDirectInvocation>false</requiresDirectInvocation>
             <requiresProject>true</requiresProject>
@@ -906,10 +906,14 @@
             <parameters>
                 <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
                 <parameter><name>verbose</name><type>boolean</type><required>false</required><editable>true</editable><description>Also give the hint of a check that passed</description></parameter>
+                <parameter><name>fix</name><type>boolean</type><required>false</required><editable>true</editable><description>First repair what the project checks report as fixable: the codegen paths, module-info.java, the Maven wrapper</description></parameter>
+                <parameter><name>runtimeVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>The version a codegen path pins when neither the BOM nor the pom's parent gives one: this plugin's own</description></parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
                 <verbose implementation="boolean" default-value="false">${vidocq.doctor.verbose}</verbose>
+                <fix implementation="boolean" default-value="false">${vidocq.doctor.fix}</fix>
+                <runtimeVersion implementation="java.lang.String" default-value="${plugin.version}"/>
             </configuration>
         </mojo>
         <mojo>

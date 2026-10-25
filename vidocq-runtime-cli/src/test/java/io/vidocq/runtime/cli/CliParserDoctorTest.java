@@ -50,6 +50,14 @@ class CliParserDoctorTest {
     }
 
     @Test
+    void fixFlagIsParsed() {
+        Command.Doctor doctor = (Command.Doctor) CliParser.parse(new String[]{"doctor", "--fix", "-v"});
+        assertTrue(doctor.fix());
+        assertTrue(doctor.verbose());
+        assertFalse(((Command.Doctor) CliParser.parse(new String[]{"doctor"})).fix());
+    }
+
+    @Test
     void unknownDoctorOptionIsRejected() {
         CliException ex = assertThrows(CliException.class,
                 () -> CliParser.parse(new String[]{"doctor", "--bogus"}));

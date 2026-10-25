@@ -20,6 +20,8 @@
 package io.vidocq.runtime.tooling;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -89,6 +91,20 @@ public final class DoctorFacts {
             return List.copyOf(PropertiesText.entries(Files.readString(config)).keySet());
         } catch (IOException _) {
             return List.of();
+        }
+    }
+
+    /**
+     * Whether {@code port} can be bound on every interface, as the HTTP listener binds it by default: what
+     * {@link ProjectDoctor#read} asks of {@code vidocq doctor} and {@code vidocq:doctor}.
+     */
+    public static boolean portFree(int port) {
+        try (ServerSocket socket = new ServerSocket()) {
+            socket.setReuseAddress(false);
+            socket.bind(new InetSocketAddress(port));
+            return true;
+        } catch (IOException _) {
+            return false;
         }
     }
 

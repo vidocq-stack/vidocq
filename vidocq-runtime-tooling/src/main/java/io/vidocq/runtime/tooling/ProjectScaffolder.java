@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -543,9 +544,23 @@ public final class ProjectScaffolder {
 
     /**
      * Writes the Maven wrapper the tooling jar carries, {@code mvnw} executable by its owner where the file system
-     * has POSIX permissions: what {@code ./mvnw} needs, and what git records as an executable file.
+     * has POSIX permissions: what {@code ./mvnw} needs, and what git records as an executable file. Replaces a
+     * wrapper file already there: {@code vidocq doctor --fix} writes the wrapper a project lacks.
      */
-    private static void writeMavenWrapper(Path root) throws IOException {
+    /** The {@code maven-wrapper.properties} the tooling writes, which pins the Maven Vidocq is built with. */
+    static String wrapperProperties() {
+        try (InputStream in = ProjectScaffolder.class.getResourceAsStream(
+                WRAPPER_RESOURCES + ".mvn/wrapper/maven-wrapper.properties")) {
+            if (in == null) {
+                throw new IllegalStateException("maven-wrapper.properties is missing from the Vidocq tooling");
+            }
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    static void writeMavenWrapper(Path root) throws IOException {
         for (String file : WRAPPER_FILES) {
             Path target = root.resolve(file);
             Files.createDirectories(target.getParent());
@@ -553,7 +568,7 @@ public final class ProjectScaffolder {
                 if (in == null) {
                     throw new IOException(WRAPPER_RESOURCES + file + " is missing from the Vidocq tooling");
                 }
-                Files.copy(in, target);
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
             }
         }
         Path mvnw = root.resolve("mvnw");

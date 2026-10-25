@@ -112,7 +112,68 @@ class VidocqProjectReportMojoTest {
         assertTrue(lines.stream().anyMatch(l -> l.matches("info: ✔ Extensions +2 extensions in the runtime dependencies")),
                 lines.toString());
         assertTrue(lines.stream().anyMatch(l -> l.startsWith("info: ✔ Vidocq project ")), lines.toString());
-        assertTrue(lines.getLast().matches("info:   6 checks — \\d ok, \\d warning\\(s\\), 0 failed"), lines.getLast());
+        assertTrue(lines.getLast().matches("info:   \\d+ checks — \\d+ ok, \\d+ warning\\(s\\), 0 failed"), lines.getLast());
+    }
+
+    /** {@code -Dvidocq.doctor.fix} repairs the project first, as {@code vidocq doctor --fix} does (#339). */
+    @Test
+    void doctorFixRepairsTheProjectFirst() throws Exception {
+        MavenProject project = project();
+        Files.writeString(dir.resolve("pom.xml"), """
+                <project>
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>0.4.0</version>
+                    </parent>
+                    <artifactId>demo</artifactId>
+                    <dependencies>
+                        <dependency>
+                            <groupId>%s</groupId>
+                            <artifactId>%s</artifactId>
+                        </dependency>
+                    </dependencies>
+                </project>
+                """.formatted(CASSINI_GROUP, CASSINI));
+        Path moduleInfo = Files.createDirectories(dir.resolve("src/main/java")).resolve("module-info.java");
+        Files.writeString(moduleInfo, "module com.acme.demo {\n}\n");
+        VidocqDoctorMojo mojo = mojo(new VidocqDoctorMojo(), project);
+        set(mojo, "fix", true);
+        set(mojo, "runtimeVersion", "0.4.0");
+
+        mojo.execute();
+
+        assertTrue(Files.readString(moduleInfo).contains("requires jakarta.ws.rs; // vidocq:cassini-rest"),
+                Files.readString(moduleInfo));
+        assertTrue(Files.isRegularFile(dir.resolve("mvnw")), "the missing wrapper is written");
+        assertTrue(lines.stream().anyMatch(l -> l.matches("info: ✔ Module directives +module-info.java declares.*")),
+                lines.toString());
+    }
+
+    @Test
+    void aFixableCheckNamesTheGoalThatFixesIt() throws Exception {
+        MavenProject project = project();
+        Files.writeString(dir.resolve("pom.xml"), """
+                <project>
+                    <parent>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-parent</artifactId>
+                        <version>0.4.0</version>
+                    </parent>
+                    <dependencies>
+                        <dependency>
+                            <groupId>%s</groupId>
+                            <artifactId>%s</artifactId>
+                        </dependency>
+                    </dependencies>
+                </project>
+                """.formatted(CASSINI_GROUP, CASSINI));
+        Files.writeString(Files.createDirectories(dir.resolve("src/main/java")).resolve("module-info.java"),
+                "module com.acme.demo {\n}\n");
+
+        assertThrows(MojoFailureException.class, () -> mojo(new VidocqDoctorMojo(), project).execute());
+
+        assertTrue(lines.contains("error:     ↳ Fix: mvn vidocq:doctor -Dvidocq.doctor.fix"), lines.toString());
     }
 
     @Test

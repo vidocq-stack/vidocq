@@ -135,13 +135,15 @@ public final class CliParser {
 
     private static Command.Doctor parseDoctor(String[] args, int from) {
         boolean verbose = false;
+        boolean fix = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case "--verbose", "-v" -> verbose = true;
+                case "--fix"           -> fix = true;
                 default                -> unknownOpt(args[i], DOCTOR);
             }
         }
-        return new Command.Doctor(verbose);
+        return new Command.Doctor(verbose, fix);
     }
 
     private static Command parseCreate(String[] args, int from) {
@@ -373,10 +375,12 @@ public final class CliParser {
             }
             case DOCTOR -> {
                 topic(DOCTOR, "Environment & project health checks",
-                        "Runs a series of checks (Java version, JAVA_HOME, Maven wrapper,",
-                        "project layout, extensions) and prints a report. Exits non-zero if",
-                        "any check fails.");
-                options("--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
+                        "Checks the machine (Java version, JAVA_HOME, Maven wrapper) and the",
+                        "project (codegen bundles, Vauban indexer, module-info.java directives,",
+                        "Maven version, HTTP port) and prints a report. Exits non-zero if any",
+                        "check fails.");
+                options("--fix",         "First repair what it can: codegen paths, module-info.java, the wrapper",
+                        "--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
             }
             case "create" -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");

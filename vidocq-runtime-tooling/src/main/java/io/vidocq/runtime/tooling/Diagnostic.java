@@ -30,8 +30,13 @@ package io.vidocq.runtime.tooling;
  * @param status outcome of the check
  * @param detail human-readable detail of what was found
  * @param hint   remediation advice, or {@code null} when none applies
+ * @param fixable whether {@code vidocq doctor --fix} ({@code vidocq:doctor -Dvidocq.doctor.fix}) repairs it
  */
-public record Diagnostic(String name, Status status, String detail, String hint) {
+public record Diagnostic(String name, Status status, String detail, String hint, boolean fixable) {
+
+    public Diagnostic(String name, Status status, String detail, String hint) {
+        this(name, status, detail, hint, false);
+    }
 
     /** Severity of a {@link Diagnostic}, in increasing order. */
     public enum Status {
@@ -53,5 +58,10 @@ public record Diagnostic(String name, Status status, String detail, String hint)
 
     public static Diagnostic fail(String name, String detail, String hint) {
         return new Diagnostic(name, Status.FAIL, detail, hint);
+    }
+
+    /** This diagnostic, which {@link ProjectDoctor#fix} repairs. */
+    public Diagnostic asFixable() {
+        return new Diagnostic(name, status, detail, hint, true);
     }
 }

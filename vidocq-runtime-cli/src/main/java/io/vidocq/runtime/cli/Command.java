@@ -64,8 +64,14 @@ public sealed interface Command {
      */
     record Idea(String check, String kind) implements Command {}
 
-    record Doctor(boolean verbose) implements Command {
-        static Doctor defaults() { return new Doctor(false); }
+    /**
+     * {@code vidocq doctor}: the environment and project checks.
+     *
+     * @param verbose also print the hints of the checks that pass
+     * @param fix     first repair what the tooling knows how to (Vidocq/vidocq#339)
+     */
+    record Doctor(boolean verbose, boolean fix) implements Command {
+        static Doctor defaults() { return new Doctor(false, false); }
     }
 
     /** {@code vidocq create}: the project {@link io.vidocq.runtime.tooling.ProjectScaffolder} writes. */

@@ -112,6 +112,13 @@ public final class Diagnostics {
         if (ctx.mavenWrapperPresent()) {
             return Diagnostic.ok("Maven wrapper", "mvnw found");
         }
+        if (ctx.pomPresent()) {
+            // A project to write it into: the one vidocq create writes, pinned to the Maven Vidocq is built with.
+            return Diagnostic.warn(
+                    "Maven wrapper",
+                    "the project has no mvnw",
+                    "Without it, builds run on whatever Maven the machine has.").asFixable();
+        }
         return Diagnostic.warn(
                 "Maven wrapper",
                 "no mvnw on this path",
@@ -167,9 +174,12 @@ public final class Diagnostics {
                     "Extensions",
                     count + " extension" + (count == 1 ? "" : "s") + " in the runtime dependencies");
         }
-        return Diagnostic.warn(
+        // Not a warning: an application of CDI beans and a main class needs none, and vidocq create writes one
+        // (Vidocq/vidocq#339). The hint shows with --verbose.
+        return new Diagnostic(
                 "Extensions",
-                "no extension in the runtime dependencies",
+                Diagnostic.Status.OK,
+                "no extension: the application runs on CDI alone",
                 "Add one to enable features (e.g. 'vidocq extension add cassini-rest').");
     }
 }
