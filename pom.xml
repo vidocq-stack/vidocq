@@ -785,6 +785,22 @@
         <pluginManagement>
             <plugins>
                 <!--
+                  One batch at the end of the reactor instead of one upload per module: nothing reaches
+                  central-snapshots unless every module built (a failure used to leave the modules built
+                  before it published), and the resolver uploads the batch in parallel (about 10 s per
+                  module one by one, 63 modules). vidocq-parent pins deployAtEnd to false, so the BOM and
+                  this reactor's parent set it too; all three must agree, or those poms deploy at once.
+                  Checked with maven-deploy-plugin 3.1.4 on Maven 3.9.16: same files as one by one, and
+                  none at all when a late module fails, even with a skipped last module.
+                -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <configuration>
+                        <deployAtEnd>true</deployAtEnd>
+                    </configuration>
+                </plugin>
+                <!--
                   Every Vidocq runtime module that processes user beans needs the
                   Vauban indexer APT. Wire it once here through vidocq-runtime-core-codegen
                   so downstream poms inherit it for free.
