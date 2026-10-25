@@ -64,6 +64,8 @@ jobs:
       test-only: ${{ steps.changes.outputs.test-only }}
       version: ${{ steps.version.outputs.version }}
       suffix: ${{ steps.version.outputs.suffix }}
+      reused: ${{ steps.reuse.outputs.reused }}
+      tree-id: ${{ steps.reuse.outputs.tree-id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -137,6 +139,19 @@ jobs:
           echo "test-only=$test_only" >> "$GITHUB_OUTPUT"
           echo "test-only: $test_only"
 
+      - name: Reuse the validation of an unchanged code tree
+        # Vidocq/ci#57: when a run of this repository already validated the same code (HEAD's tree without the
+        # documentation files), as after a docs-only commit, a rebase on a main that moved by documentation only or
+        # the merge-bot's re-signing of an unchanged rebase, the build, the TCK and the downstream check are not run
+        # again. A re-run, and a companion branch, always build.
+        id: reuse
+        if: steps.changes.outputs.docs-only != 'true'
+        uses: https://codefloe.com/Vidocq/ci/validated-tree@main
+        with:
+          mode: check
+          scope: pr-validate
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
+
       - name: Check documented version numbers stay in sync
         # Runs unconditionally, including on docs-only PRs — that's exactly where
         # this class of drift (docs citing a stale "latest release"/"current
@@ -144,10 +159,10 @@ jobs:
         run: ./check-doc-versions.sh
 
       - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
 
       - name: Compute PR version (release-style, no -SNAPSHOT)
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         id: version
         run: |
           # Parse pom.xml directly with Python — `mvn help:evaluate -q` does not strip all
@@ -173,14 +188,14 @@ jobs:
           echo "PR version: ${BASE}-${SUFFIX}"
 
       - name: Set PR version across the reactor
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         run: |
           mvn -B -ntp versions:set \
             -DnewVersion=${{ steps.version.outputs.version }} \
             -DprocessAllModules=true -DgenerateBackupPoms=false
 
       - name: Sync plugin.xml descriptors with the PR version
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         # versions:set does not touch resources; maven-plugin modules embed a plugin.xml
         # with a hardcoded <version> — without this sync the plugin JAR ships a stale
         # descriptor and every consumer fails with "Plugin's descriptor contains the wrong
@@ -228,7 +243,7 @@ jobs:
           changed-files: ${{ runner.temp }}/pr-changed-files.txt   # cross-check only
 
       - name: Build, test & install the producer locally
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         # install (not deploy): the PR artifact lands in ~/.m2 only — nothing is published.
         # install runs the full lifecycle incl. integration-test/verify.
         run: mvn -B -ntp install
@@ -241,7 +256,7 @@ jobs:
           mode: restore
 
       - name: Every published jar is a named module
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         # No Vidocq jar may reach an application's module path as an automatic module (Vidocq/vidocq#177,
         # Vidocq/grimm#15). Reads the jars the install above just built. See check-named-modules.sh.
         run: ./check-named-modules.sh
@@ -275,14 +290,14 @@ jobs:
       # The nightly TCK job still replays every runner.
       - name: Select the TCK runners to replay
         id: tck-select
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         continue-on-error: true
         uses: https://codefloe.com/Vidocq/ci/select-tck@main
         with:
           changed-files: ${{ runner.temp }}/pr-changed-files.txt
 
       - name: TCK declared by this repository
-        if: steps.changes.outputs.docs-only != 'true'
+        if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
         env:
           TCK_SELECT_MODE: ${{ steps.tck-select.outputs.mode }}
           TCK_SELECTED: ${{ steps.tck-select.outputs.modules }}
@@ -351,7 +366,7 @@ jobs:
   # no consumer is impacted; the aggregator checks that a skip was expected.
   downstream:
     needs: [producer, impacted]
-    if: needs.producer.outputs.docs-only != 'true' && needs.producer.outputs.test-only != 'true' && needs.impacted.outputs.count != '0'
+    if: needs.producer.outputs.docs-only != 'true' && needs.producer.outputs.test-only != 'true' && needs.producer.outputs.reused != 'true' && needs.impacted.outputs.count != '0'
     runs-on: vidocq-runner
     strategy:
       fail-fast: false          # report every broken consumer at once
@@ -385,6 +400,7 @@ jobs:
           DOWNSTREAM: ${{ needs.downstream.result }}
           DOCS_ONLY: ${{ needs.producer.outputs.docs-only }}
           TEST_ONLY: ${{ needs.producer.outputs.test-only }}
+          REUSED: ${{ needs.producer.outputs.reused }}
           COUNT: ${{ needs.impacted.outputs.count }}
         run: |
           set -eu
@@ -397,7 +413,9 @@ jobs:
             success)
               echo "Every impacted consumer (${COUNT}) built against the pull request." ;;
             skipped)
-              if [ "$DOCS_ONLY" = true ] || [ "$TEST_ONLY" = true ]; then
+              if [ "$REUSED" = true ]; then
+                echo "Same code tree as a validated run (Vidocq/ci#57): no build expected."
+              elif [ "$DOCS_ONLY" = true ] || [ "$TEST_ONLY" = true ]; then
                 echo "Docs-only or test-only change set: no downstream build expected."
               elif [ "$COUNT" = 0 ]; then
                 echo "No impacted consumer on the forge: nothing to build."
@@ -406,6 +424,17 @@ jobs:
               fi ;;
             *) fail "downstream: ${DOWNSTREAM}. At least one consumer failed or was cancelled; see the downstream jobs." ;;
           esac
+
+      - name: Record the validated code tree
+        # A later push of the same code reuses this run (Vidocq/ci#57): a ref refs/validated/pr-validate/<id>, pushed with the
+        # bot token. Not for a docs-only change set, which built nothing.
+        if: success() && needs.producer.outputs.docs-only != 'true' && needs.producer.outputs.reused != 'true'
+        uses: https://codefloe.com/Vidocq/ci/validated-tree@main
+        with:
+          mode: record
+          scope: pr-validate
+          tree-id: ${{ needs.producer.outputs.tree-id }}
+          bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
 
       - name: Notify Slack on PR success
         if: success()
