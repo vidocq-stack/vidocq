@@ -428,7 +428,10 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 |===
 
 [#extension-codegen-path]
-The codegen path goes into the compiler plugin of the project's own build [.tag-new]#NEW#: the
+Under a `vidocq-runtime-parent` from 0.4.0, or a pom that declares `vidocq-runtime-maven-plugin` with
+`<extensions>true</extensions>`, `add` writes no codegen path [.tag-new]#NEW#: the plugin puts the bundle on the
+processor path at build time (xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[The plugin wires the
+codegen bundles]). `remove` still takes away a path written before. Otherwise, the codegen path goes into the compiler plugin of the project's own build [.tag-new]#NEW#: the
 `maven-compiler-plugin` the pom already declares, if any, rather than a second one, and never the one of a profile
 or of `pluginManagement`, which the default build does not run. Its `annotationProcessorPaths` must append to the
 parent's, where `vidocq-runtime-core-codegen`, the Vauban indexer, is wired: without

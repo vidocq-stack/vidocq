@@ -88,6 +88,55 @@ its original, its classes attached with `--patch-module`. Zero configuration. Se
 xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-module applications].
 ====
 
+[#codegen-wiring]
+== The plugin wires the codegen bundles [.tag-new]#NEW#
+
+An extension used to take two places in the pom: its dependency, and its `-codegen` bundle in the compiler's
+`annotationProcessorPaths`. From 0.4.0 it takes one. Declared with `<extensions>true</extensions>`, the plugin
+puts the bundles on the processor path itself, once Maven has read the project and before any goal runs
+(Vidocq/vidocq#339):
+
+* the Vauban indexer, `vidocq-runtime-core-codegen`;
+* the bundle of each catalog extension the project depends on outside the `test` scope, at that extension's
+  version.
+
+A path the pom already declares stays as it is and is not added twice, so a pom written for 0.3.0 builds
+unchanged. Only a module that declares the plugin is wired: in a multi-module application, the library modules
+are left alone. `vidocq:checkpom` then finds every bundle in place.
+
+`vidocq-runtime-parent` declares the plugin that way in its `pluginManagement`: under it, declaring the plugin by
+its `groupId` and `artifactId` is enough, and `vidocq create` and `vidocq extension add` write no codegen path. An
+application that keeps a parent of its own declares it with the attribute:
+
+[source,xml,subs=attributes+]
+----
+<plugin>
+    <groupId>io.vidocq.runtime</groupId>
+    <artifactId>vidocq-runtime-maven-plugin</artifactId>
+    <version>{project-version}</version>
+    <extensions>true</extensions>
+</plugin>
+----
+
+Without the attribute, nothing changes: the paths stay in the pom, and `vidocq extension add` keeps writing them.
+
+What was checked before the change, on a project created by `vidocq create -x cassini-rest` with its codegen path
+removed:
+
+[cols="1,3",options="header"]
+|===
+| Tool | Result
+| Maven 3.9.16, the version of the wrapper | Same classes in `target/classes` as with the explicit path,
+`checkpom` aligned.
+| Maven 3.9.16, offline (`-o`) | Same.
+| Maven 3.9.9, 3.9.11, 4.0.0-rc-5 | `checkpom` aligned.
+| IntelliJ IDEA 2026.2, Maven import | The import runs the plugin: the processor path IntelliJ writes to
+`.idea/compiler.xml` is the one an explicit path gives, entry for entry, so IntelliJ's build runs the same
+processors.
+| Eclipse, VS Code | Not checked. Both import through m2e; if an import misses the processor path, declare the
+paths explicitly as before: the plugin never adds one twice.
+|===
+
 [#cli-and-plugin]
 == The goals and the Vidocq CLI [.tag-new]#NEW#
 

@@ -252,6 +252,8 @@ NOTE: Dependency versions are pinned on purpose: the released parent's `dependen
 
 NOTE: From 0.4.0, whose parent names the runtime version literally, `vidocq create` gives the application a version of its own, `1.0.0-SNAPSHOT`, instead of the runtime's; it no longer writes the `jvmArgs` configuration; and it writes the Maven wrapper of the Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), so the project builds with the ecosystem's Maven version and `vidocq doctor` finds it.
 
+NOTE: From 0.4.0, the `maven-compiler-plugin` block goes away [.tag-new]#NEW#: the parent loads `vidocq-runtime-maven-plugin` as a build extension, which puts the codegen bundle of each extension on the processor path, so an extension is its dependency alone. See xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[The plugin wires the codegen bundles].
+
 NOTE: From 0.4.0, `vidocq-runtime-parent` is an application parent that imports `vidocq-runtime-bom` [.tag-new]#NEW#: the Vidocq dependencies and the codegen path lose their `<version>`, and declaring `vidocq-runtime-maven-plugin` alone runs `checkpom`, `check-module-info` and `package`. See xref:migration.adoc#application-parent[the application parent].
 
 `src/main/java/module-info.java`:

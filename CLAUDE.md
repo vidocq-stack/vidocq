@@ -80,12 +80,18 @@ Each extension is named after a **codename** mapping to its spec — keep this m
 
 ### Codegen (APT) wiring — required pattern for apps/examples
 
-The Vauban indexer (`vidocq-runtime-core-codegen`) is inherited from the root
-`pluginManagement`. For **every** `vidocq-runtime-<X>-extension` an app depends on, add the
-matching `vidocq-runtime-<X>-extension-codegen` POM bundle to
-`<annotationProcessorPaths combine.children="append">` — the `append` is mandatory so the
-inherited indexer entry is preserved. Canonical example:
-`vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml`.
+**Applications under `vidocq-runtime-parent` ≥ 0.4.0**: nothing to write. The parent declares
+`vidocq-runtime-maven-plugin` with `<extensions>true</extensions>`, and its lifecycle participant
+(`CodegenPathsParticipant`, declared in `META-INF/plexus/components.xml` — a Sisu index is skipped by Maven 3.9.9 for
+Java 25 classes) adds `vidocq-runtime-core-codegen` and each extension's `-codegen` bundle to the compiler's
+processor path in the model (Vidocq/vidocq#339). `vidocq create` and `vidocq extension add` write no codegen path
+there; `PomDependencies.codegenWiredByPlugin` is the test.
+
+**Examples of this reactor** inherit `vidocq-runtime-build`, which does not load the plugin as an extension: the
+Vauban indexer comes from the root `pluginManagement`, and for **every** `vidocq-runtime-<X>-extension` an example
+depends on, add the matching `vidocq-runtime-<X>-extension-codegen` bundle to
+`<annotationProcessorPaths combine.children="append">` — the `append` is mandatory so the inherited indexer entry is
+preserved. Canonical example: `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml`.
 
 ## Maven plugin goals (`vidocq-runtime-maven-plugin`)
 

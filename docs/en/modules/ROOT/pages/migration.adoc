@@ -321,6 +321,11 @@ Testcontainers, Flyway, Liquibase, the bricks and the Jakarta APIs, a SNAPSHOT o
 What to change in an application:
 
 * **Nothing, to keep building.** The parent's name is the same; bump its version.
+* **Drop the codegen paths**, if you like: the parent loads `vidocq-runtime-maven-plugin` as a build extension,
+  which puts the bundle of each extension and the Vauban indexer on the processor path. A path left in the pom is
+  kept and not added twice. Under a parent of your own, declare the plugin with `<extensions>true</extensions>`
+  for the same result (xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[The plugin wires the codegen
+  bundles]).
 * **Drop the `<version>` of the Vidocq dependencies and codegen paths**, if you like: the BOM gives them, and an
   upgrade then changes the parent's version only. `vidocq create` and `vidocq extension add` no longer write
   them under a 0.4.0 parent, nor under a pom that imports the BOM.
