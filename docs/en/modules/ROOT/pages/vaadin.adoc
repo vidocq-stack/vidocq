@@ -45,18 +45,21 @@ distribution and the image (BENCH.md, 2026-10-15). The JVM itself adds about 150
 == Setup [.tag-new]#NEW#
 
 The project is an ordinary Vidocq application, with `vidocq-runtime-parent` as its parent, the Servlet extension, the
-Vaadin BOM and two build plugins: `vaadin-maven-plugin` builds the frontend, and `vidocq-runtime-maven-plugin`
-generates the application's and the Vaadin jars' glue. The parent manages the versions of the Vidocq artefacts and
-plugin, and `combine.children="append"` keeps the processors it already declares (`vidocq-runtime-core-codegen`)
-next to Foy's.
+Vaadin extension, the Vaadin BOM and two build plugins: `vaadin-maven-plugin` builds the frontend, and
+`vidocq-runtime-maven-plugin` generates the application's and the Vaadin jars' glue. The parent manages the versions
+of the Vidocq artefacts and plugins, and the Vidocq plugin puts Foy's annotation processors on the compiler's path
+by itself: the pom declares no `annotationProcessorPaths` (Vidocq/vidocq#339).
 
-Three parts of this pom are easy to leave out, and each one fails in its own way (see <<troubleshooting>>):
+Four parts of this pom are easy to leave out, and each one fails in its own way (see <<troubleshooting>>):
 
-* Foy's processor and the `generate` execution of `vidocq-runtime-maven-plugin`. Without them, the Vaadin servlet is
-  never deployed and every request answers 404.
+* The `generate` execution of `vidocq-runtime-maven-plugin`. Without it, the Vaadin servlet is never deployed and
+  every request answers 404.
 * The `jvmArgs` properties, which start Vaadin in production mode under every goal. Without them, every request
   answers 500.
 * An SLF4J provider. Vaadin logs through SLF4J, and without a provider it logs nothing at all.
+* [.tag-new]#NEW# `vidocq-runtime-vaadin-extension`, as soon as the application has an `AppShellConfigurator` (a
+  theme, stylesheets, PWA settings). Without it, the first request of a `vidocq:jlink` image never answers. It changes
+  nothing under the other goals. See <<jlink-app-shell>>.
 
 [source,xml]
 ----
@@ -98,6 +101,11 @@ Three parts of this pom are easy to leave out, and each one fails in its own way
     <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
     <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
   </dependency>
+  <!-- Vaadin's Lookup finds the AppShellConfigurator in a jlink image. -->
+  <dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-vaadin-extension</artifactId>
+  </dependency>
   <dependency>
     <groupId>com.vaadin</groupId>
     <artifactId>vaadin-core</artifactId>
@@ -118,19 +126,6 @@ Three parts of this pom are easy to leave out, and each one fails in its own way
 
 <build>
   <plugins>
-    <plugin>
-      <groupId>org.apache.maven.plugins</groupId>
-      <artifactId>maven-compiler-plugin</artifactId>
-      <configuration>
-        <annotationProcessorPaths combine.children="append">
-          <!-- Foy's processors: they also run over the Vaadin jars at vidocq:generate. -->
-          <path>
-            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
-            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-          </path>
-        </annotationProcessorPaths>
-      </configuration>
-    </plugin>
     <plugin>
       <groupId>com.vaadin</groupId>
       <artifactId>vaadin-maven-plugin</artifactId>
@@ -171,6 +166,7 @@ module com.example.app {
     requires io.vidocq.foy.api;
     requires io.vidocq.vauban.api;
     requires jakarta.servlet;
+    requires io.vidocq.runtime.extensions.jakartaee.web.vaadin;
     requires flow.server;
     requires flow.html.components;
     requires vaadin.button.flow;
@@ -280,9 +276,14 @@ Vaadin's own development mode, with Node and hot frontend reload, was not tried 
 
 [source,bash]
 ----
-./mvnw vidocq:dev -Dvidocq.dev.jvmArgs=-Dvaadin.productionMode=true
-./mvnw vidocq:run -Dvidocq.run.jvmArgs=-Dvaadin.productionMode=true
+./mvnw clean package
+./mvnw vidocq:dev
+./mvnw vidocq:run
 ----
+
+[.tag-new]#NEW# Build the project once first. Neither goal runs Vaadin's `build-frontend` nor processes the Vaadin
+jars, so from an empty `target/`, `vidocq:dev` answers 404 and `vidocq:run` answers 500 with _Unable to find
+index.html_. With the `jvmArgs` properties of the <<setup,pom>>, neither needs a flag for production mode.
 
 Both fork a JVM with the runtime on the module path and the application, with its libraries, in the application
 layer. `vidocq:dev` reloads the application layer in place on each change; BENCH.md (2026-10-14) records the reload
@@ -306,14 +307,14 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors 
 == `vidocq:jlink` [.tag-new]#NEW#
 
 `jlink` accepts named modules only, and Vaadin ships none, so every jar of the closure needs a descriptor. Add
-`vauban:modularize` in `all-automatic` mode:
+`vauban:modularize` in `all-automatic` mode. [.tag-new]#NEW# `vidocq-runtime-parent` manages the plugin's version,
+the Vauban the runtime is built on, so the plugin has none here:
 
 [source,xml]
 ----
 <plugin>
   <groupId>io.vidocq.vauban</groupId>
   <artifactId>vauban-maven-plugin</artifactId>
-  <version>${vauban.version}</version>
   <executions>
     <execution>
       <id>modularize</id>
@@ -367,7 +368,17 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
 
 | Every request answers 404, and the startup report shows `0 servlet(s)`. The initializers are registered.
 | The Vaadin jars were not processed, so Vaadin's `@WebListener` was never registered and its servlet never deployed.
-| Add Foy's processor and the `generate` execution of `vidocq-runtime-maven-plugin`. See <<what-the-build-does>>.
+| Add the `generate` execution of `vidocq-runtime-maven-plugin`. See <<what-the-build-does>>.
+
+| [.tag-new]#NEW# Right after `mvn clean`, `vidocq:dev` answers 404 and `vidocq:run` answers 500 with _Unable to find
+index.html_.
+| Neither goal builds the frontend nor processes the Vaadin jars.
+| Run `./mvnw package` once first. See <<dev-and-run>>.
+
+| [.tag-new]#NEW# The pom cannot be read: _'build.plugins.plugin.version' for io.vidocq.vauban:vauban-maven-plugin must
+be a valid version but is '${vauban.version}'_.
+| A `vidocq-runtime-parent` built between Vidocq/vidocq#348 and BUG-20261025-02 lost `vauban.version`.
+| Take a newer parent, or leave the plugin's `<version>` out: the parent manages it.
 
 | Every request answers 500 with _Frontend development bundle is expected to be in the project or on the classpath, but not found_.
 | Vaadin runs in development mode.

@@ -431,13 +431,14 @@ The `vidocq:modularize` goal no longer exists. It is now **`vauban:modularize`**
 `io.vidocq.vauban:vauban-maven-plugin` — Vauban owns the class loader and the module machinery, so
 the goal that writes module descriptors belongs with them. What it does is unchanged; the
 coordinates, the goal prefix, the property names and the output directory move.
+`vidocq-runtime-parent` manages the plugin's version, the Vauban the runtime is built on, so an
+application declares it without one (BUG-20261025-02):
 
 [source,xml]
 ----
 <plugin>
     <groupId>io.vidocq.vauban</groupId>
     <artifactId>vauban-maven-plugin</artifactId>
-    <version>${vauban.version}</version>
     <executions>
         <execution>
             <id>modularize</id>
