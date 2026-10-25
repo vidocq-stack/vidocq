@@ -22,8 +22,11 @@ Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** disc
 - Commits must be **DCO signed-off**: `git commit -s` (see `CONTRIBUTING.md`).
 - **This repository's own TCK runners are in the reactor**, behind the `tck` profile of
   `vidocq-runtime-integration-tests`: `mvn -Ptck -pl vidocq-runtime-integration-tests/vidocq-runtime-tck-<x> test`.
-  They certify the *assembled runtime*. Five of them gate every pull request (`ci.tck.modules` in the
-  root pom, ~45 s); `tck-nightly.yml` runs eight. The per-brick runners of the other repositories
+  They certify the *assembled runtime*. Five of them gate the pull requests (`ci.tck.modules` in the
+  root pom, ~45 s): `select-tck` replays only those a change reaches, and all five on any doubt
+  (root pom, CI, scripts); `tck-nightly.yml` runs eight. The pull request also runs only the
+  tests of the modules a change reaches (`targeted-producer-tests`, every test on any doubt);
+  `main` runs the whole suite before publishing. The per-brick runners of the other repositories
   (Servlet 6.1, the official per-spec suites) are a different matter — several stay outside their
   reactor and are launched by their own `run-official-tck-*.sh`.
 
