@@ -35,13 +35,16 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Vidocq/vidocq#339 (evolution 6): the project {@code vidocq create -x cassini-rest} writes passes {@code mvn verify}
- * on this build: it compiles on {@code vidocq-runtime-parent}, its first test starts the application with
- * {@code @VidocqTest} and calls {@code GET /hello}, and {@code vidocq:package} writes the distribution.
+ * Vidocq/vidocq#339 (evolution 6): the project {@code vidocq create -x cassini-rest} writes passes
+ * {@code mvn verify vidocq:jlink} on this build: it compiles on {@code vidocq-runtime-parent}, whose plugin wires the
+ * codegen bundles, its first test starts the application with {@code @VidocqTest} and calls {@code GET /hello},
+ * {@code vidocq:package} writes the distribution, and {@code vidocq:jlink} the self-contained image
+ * ({@code vidocq build jlink}).
  */
 class CreateThenBuildIT {
 
@@ -59,7 +62,7 @@ class CreateThenBuildIT {
     };
 
     @Test
-    void aCreatedRestApplicationBuildsTestsItselfAndPackagesWithoutAWarning(@TempDir Path dir) throws Exception {
+    void aCreatedRestApplicationBuildsTestsItselfPackagesAndLinksWithoutAWarning(@TempDir Path dir) throws Exception {
         String version = System.getProperty("it.version");
         ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
                 Set.of("cassini-rest"), null, false), dir, version, SILENT);
@@ -67,22 +70,28 @@ class CreateThenBuildIT {
         useThisBuildsArtifacts(project);
 
         Path log = Files.createDirectories(Path.of(System.getProperty("it.logs"))).resolve("create-then-build.log");
-        Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify")
+        Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify", "vidocq:jlink")
                 .directory(project.toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(log.toFile())
                 .start();
         if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
             build.destroyForcibly();
-            fail("mvn verify did not end within " + TIMEOUT + ":\n" + read(log));
+            fail("mvn verify vidocq:jlink did not end within " + TIMEOUT + ":\n" + read(log));
         }
         String output = read(log);
-        assertEquals(0, build.exitValue(), () -> "mvn verify failed:\n" + output);
+        assertEquals(0, build.exitValue(), () -> "mvn verify vidocq:jlink failed:\n" + output);
+        assertFalse(Files.readString(project.resolve("pom.xml")).contains("annotationProcessorPaths"),
+                "the parent's plugin wires the codegen bundles: the created pom lists none");
 
         assertTrue(output.contains("Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed")
                 && output.contains("in com.acme.demo.app.HelloResourceTest"), "the first test did not run:\n" + output);
         assertTrue(Files.isRegularFile(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh")),
                 "vidocq:package wrote no launcher:\n" + output);
+        assertTrue(Files.isRegularFile(project.resolve("target/dist/bin/demo-app")),
+                "vidocq:jlink wrote no image launcher:\n" + output);
+        assertTrue(modules(project.resolve("target/dist/bin/java")).contains("com.acme.demo.app"),
+                "the image does not link the application module:\n" + output);
         List<String> warnings = output.lines()
                 .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND))
                 .toList();
@@ -101,6 +110,14 @@ class CreateThenBuildIT {
         Files.writeString(settings, template.replace("@localRepositoryUrl@", url));
         Files.writeString(project.resolve(".mvn/maven.config"),
                 "-Dmaven.repo.local=" + System.getProperty("it.repo") + "\n--settings\n" + settings + "\n");
+    }
+
+    /** What {@code java --list-modules} of an image prints. */
+    private static String modules(Path java) throws IOException, InterruptedException {
+        Process list = new ProcessBuilder(java.toString(), "--list-modules").redirectErrorStream(true).start();
+        String out = new String(list.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        list.waitFor(1, TimeUnit.MINUTES);
+        return out;
     }
 
     private static String read(Path file) {
