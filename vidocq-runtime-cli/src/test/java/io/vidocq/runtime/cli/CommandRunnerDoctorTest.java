@@ -81,7 +81,7 @@ class CommandRunnerDoctorTest {
     }
 
     @Test
-    void aHealthyProjectHasNothingToFix(@TempDir Path dir) throws IOException {
+    void aHealthyProjectHasNothingToFix(@TempDir Path dir) {
         CommandRunner.runCreate(new Command.Create(new ProjectSpec("demo", "com.acme", "com.acme.demo",
                 Set.of("cassini-rest"), null, false)), dir);
         StringBuilder out = new StringBuilder();

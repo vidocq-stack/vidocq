@@ -42,6 +42,7 @@ public final class PomDependencies {
 
     private static final String GROUP_ID = "groupId";
     private static final String ARTIFACT_ID = "artifactId";
+    private static final String DEPENDENCY = "dependency";
 
     /** A reader {@code try} closes, {@link XMLStreamReader} not being {@link AutoCloseable}. */
     private interface ClosingReader extends AutoCloseable {
@@ -61,56 +62,50 @@ public final class PomDependencies {
         factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
 
-        XMLStreamReader reader = null;
         try {
-            reader = factory.createXMLStreamReader(new StringReader(pomXml));
-            Deque<String> path = new ArrayDeque<>();
-            String groupId = null;
-            String artifactId = null;
-            StringBuilder text = new StringBuilder();
-
-            while (reader.hasNext()) {
-                int event = reader.next();
-                switch (event) {
-                    case XMLStreamConstants.START_ELEMENT -> {
-                        path.addLast(reader.getLocalName());
-                        text.setLength(0);
-                        if (isProjectDependency(path)) {
-                            groupId = null;
-                            artifactId = null;
-                        }
-                    }
-                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA ->
-                            text.append(reader.getText());
-                    case XMLStreamConstants.END_ELEMENT -> {
-                        String local = reader.getLocalName();
-                        if (isProjectDependencyChild(path, GROUP_ID)) {
-                            groupId = text.toString().trim();
-                        } else if (isProjectDependencyChild(path, ARTIFACT_ID)) {
-                            artifactId = text.toString().trim();
-                        } else if ("dependency".equals(local) && isProjectDependency(path)
-                                && groupId != null && !groupId.isBlank()
-                                && artifactId != null && !artifactId.isBlank()) {
-                            result.add(new ExtensionCoordinate(groupId, artifactId));
-                        }
-                        path.removeLast();
-                        text.setLength(0);
-                    }
-                    default -> { /* ignore */ }
-                }
+            XMLStreamReader reader = factory.createXMLStreamReader(new StringReader(pomXml));
+            try (var _ = (ClosingReader) reader::close) {
+                collectDependencies(reader, result);
             }
         } catch (XMLStreamException e) {
             throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (XMLStreamException ignored) {
-                    // best effort
-                }
-            }
         }
         return result;
+    }
+
+    private static void collectDependencies(XMLStreamReader reader, List<ExtensionCoordinate> result)
+            throws XMLStreamException {
+        Deque<String> path = new ArrayDeque<>();
+        String groupId = null;
+        String artifactId = null;
+        StringBuilder text = new StringBuilder();
+        while (reader.hasNext()) {
+            switch (reader.next()) {
+                case XMLStreamConstants.START_ELEMENT -> {
+                    path.addLast(reader.getLocalName());
+                    text.setLength(0);
+                    if (isProjectDependency(path)) {
+                        groupId = null;
+                        artifactId = null;
+                    }
+                }
+                case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> text.append(reader.getText());
+                case XMLStreamConstants.END_ELEMENT -> {
+                    if (isProjectDependencyChild(path, GROUP_ID)) {
+                        groupId = text.toString().trim();
+                    } else if (isProjectDependencyChild(path, ARTIFACT_ID)) {
+                        artifactId = text.toString().trim();
+                    } else if (DEPENDENCY.equals(reader.getLocalName()) && isProjectDependency(path)
+                            && groupId != null && !groupId.isBlank()
+                            && artifactId != null && !artifactId.isBlank()) {
+                        result.add(new ExtensionCoordinate(groupId, artifactId));
+                    }
+                    path.removeLast();
+                    text.setLength(0);
+                }
+                default -> { /* ignore */ }
+            }
+        }
     }
 
     /**
@@ -127,7 +122,7 @@ public final class PomDependencies {
         factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
         try {
             XMLStreamReader reader = factory.createXMLStreamReader(new StringReader(pomXml));
-            try (ClosingReader _ = reader::close) {
+            try (var _ = (ClosingReader) reader::close) {
                 collectProcessorPaths(reader, collector);
             }
         } catch (XMLStreamException e) {
@@ -309,7 +304,7 @@ public final class PomDependencies {
         var it = path.iterator();
         return "project".equals(it.next())
                 && "dependencies".equals(it.next())
-                && "dependency".equals(it.next());
+                && DEPENDENCY.equals(it.next());
     }
 
     // path is project/dependencies/dependency/<child>
@@ -320,7 +315,7 @@ public final class PomDependencies {
         var it = path.iterator();
         return "project".equals(it.next())
                 && "dependencies".equals(it.next())
-                && "dependency".equals(it.next())
+                && DEPENDENCY.equals(it.next())
                 && child.equals(it.next());
     }
 }
