@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,6 +83,18 @@ class ProjectScaffolderFinishedProjectTest {
         assertFalse(pom.contains("junit"), pom);
         assertTrue(reporter.lines.contains("note: Parent version 0.3.0 predates 0.4.0: no first test, as @VidocqTest"
                 + " (vidocq-runtime-junit) comes with 0.4.0."), reporter.lines.toString());
+    }
+
+    /** No blank line before {@code </dependencies>}: {@code vidocq extension add} appends after it. */
+    @Test
+    void theDependenciesEndWithoutABlankLine(@TempDir Path dir) throws IOException {
+        for (Set<String> extensions : List.of(Set.<String>of(), Set.of("cassini-rest"))) {
+            Path project = scaffold(dir.resolve(String.valueOf(extensions.size())), extensions, null,
+                    new RecordingReporter());
+
+            String pom = Files.readString(project.resolve("pom.xml"));
+            assertTrue(pom.contains("        </dependency>\n    </dependencies>"), pom);
+        }
     }
 
     @Test

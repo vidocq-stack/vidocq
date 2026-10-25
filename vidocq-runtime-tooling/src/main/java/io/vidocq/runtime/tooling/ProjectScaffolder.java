@@ -177,8 +177,7 @@ public final class ProjectScaffolder {
                             <groupId>io.vidocq.runtime</groupId>
                             <artifactId>vidocq-runtime-core</artifactId>
                 %s        </dependency>
-                %s
-                    </dependencies>
+                %s    </dependencies>
 
                     <build>
                         <plugins>
