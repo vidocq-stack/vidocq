@@ -113,6 +113,17 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
+## What a push to a pull request rebuilds
+
+`pr-validate` builds the repository, runs its tests and declared TCK runners, and rebuilds the repositories that
+depend on it. It does that again only when the code changed: when an earlier green run validated the same code tree
+(the tree without its documentation files: `*.md`, `*.adoc`, `docs/`, `LICENSE*`, `NOTICE*`, outside any `src/`),
+the run reports green within a minute and says which run it reuses ([Vidocq/ci#57](https://codefloe.com/Vidocq/ci/issues/57)).
+A documentation commit on a green pull request, a rebase on a `main` that moved by documentation only, or the
+merge bot's re-signing of an unchanged rebase cost no build. The SonarQube analysis follows the same rule.
+
+To force a real build of the same code, re-run the job.
+
 ## Code conventions
 
 See `CLAUDE.md` / `README.md` at the root of this repository for the project's
