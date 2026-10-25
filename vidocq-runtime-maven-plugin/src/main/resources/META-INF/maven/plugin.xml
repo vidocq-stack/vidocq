@@ -1010,5 +1010,32 @@
                 <skip implementation="boolean" default-value="false">${vidocq.idea.skip}</skip>
             </configuration>
         </mojo>
+        <mojo>
+            <goal>vscode</goal>
+            <description>Write the .vscode/ files of a Vidocq project for VS Code's Java extension (Vidocq/vidocq#339): settings.json runs the language server on Java 25, which Vauban's annotation processors need, and turns its automatic build off, which would write target/classes while vidocq:dev does; tasks.json runs vidocq:dev, vidocq:run and vidocq:test of each application; launch.json attaches the debugger to vidocq:dev. A file that does not start with the line vidocq:vscode writes is left alone, with what to add to it. vidocq.vscode.check verifies the files instead.</description>
+            <requiresDependencyResolution>none</requiresDependencyResolution>
+            <requiresDirectInvocation>true</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>true</aggregator>
+            <implementation>io.vidocq.runtime.maven.idea.VidocqVscodeMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>session</name><type>org.apache.maven.execution.MavenSession</type><required>true</required><editable>false</editable><description>The Maven session (command-line properties, selected projects)</description></parameter>
+                <parameter><name>reactorProjects</name><type>java.util.List</type><required>true</required><editable>false</editable><description>The projects of this build, in reactor order</description></parameter>
+                <parameter><name>mojoExecution</name><type>org.apache.maven.plugin.MojoExecution</type><required>true</required><editable>false</editable><description>This execution, to refuse a binding to a lifecycle phase</description></parameter>
+                <parameter><name>check</name><type>boolean</type><required>false</required><editable>true</editable><description>Write nothing, and fail when one of the files is missing or out of date.</description></parameter>
+                <parameter><name>jdk</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The JDK the language server runs on (java.jdt.ls.java.home). Default: the JDK running this build, which builds with Java 25.</description></parameter>
+            </parameters>
+            <configuration>
+                <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>
+                <reactorProjects implementation="java.util.List" default-value="${reactorProjects}"/>
+                <mojoExecution implementation="org.apache.maven.plugin.MojoExecution" default-value="${mojoExecution}"/>
+                <check implementation="boolean" default-value="false">${vidocq.vscode.check}</check>
+                <jdk implementation="java.lang.String">${vidocq.vscode.jdk}</jdk>
+            </configuration>
+        </mojo>
     </mojos>
 </plugin>

@@ -73,16 +73,19 @@ public final class CompletionSpec {
             "completion install", Shell.tokens(),
             "completion uninstall", Shell.tokens());
 
+    private static final String CHECK = "--check";
+
     /** Offered anywhere after the context. */
     static final Map<String, List<String>> ARGUMENTS = ordered(
             "start", List.of("--port", "--config", "--debug"),
             "dev", List.of("--port", "--profile", "--debug"),
             "doctor", List.of("--fix", "--verbose"),
-            "idea", List.of("--check", "--strict", "--kind"),
+            "idea", List.of(CHECK, "--strict", "--kind"),
+            "vscode", List.of(CHECK),
             "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
-            "update", List.of("--check"),
+            "update", List.of(CHECK),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
             "extension add", List.of(ADDABLE_EXTENSIONS),
             "extension remove", List.of(POM_EXTENSIONS));

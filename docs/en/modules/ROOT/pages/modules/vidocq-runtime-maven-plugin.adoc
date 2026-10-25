@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes eighteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes nineteen goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -59,6 +59,9 @@
 
 | `vidocq:idea` [.tag-new]#NEW#
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
+
+| `vidocq:vscode` [.tag-new]#NEW#
+| Writes the `.vscode/` settings, tasks and debug configuration of the project for VS Code's Java extension, or checks them in CI. See <<vscode,the `vidocq:vscode` goal>>.
 
 | `vidocq:add-extension` [.tag-new]#NEW#
 | Adds extensions to the project, as `vidocq extension add` does: the dependency, the codegen bundle on the compiler's `annotationProcessorPaths` when the extension ships one, and its directives in `src/main/java/module-info.java`. See <<extension-goals>>.
@@ -1294,6 +1297,47 @@ Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and pr
   shadow the shared one. Delete it from the Run widget.
 * **First open** — IntelliJ loads `.run` files asynchronously; a Run clicked before indexing ends may create a
   temporary configuration.
+
+[#vscode]
+== `vidocq:vscode` goal [.tag-new]#NEW#
+
+`vidocq:vscode` writes the `.vscode/` files a Vidocq project needs in VS Code with the Extension Pack for Java
+(Vidocq/vidocq#339). Run it at the directory VS Code opens, the reactor root:
+
+[source,bash]
+----
+mvn vidocq:vscode                              # write or update .vscode/
+mvn vidocq:vscode -Dvidocq.vscode.check=true   # CI: fail when a file is missing or out of date
+mvn vidocq:vscode -Dvidocq.vscode.jdk=/path/to/jdk-25
+----
+
+[cols="1,3",options="header"]
+|===
+| File | What it holds
+| `settings.json`
+| `java.jdt.ls.java.home`: the extension's language server on the JDK running the build, Java 25. The server runs the
+annotation processors in its own JVM, and Vauban's are Java 25 class files: on the Java 21 the extension ships, the
+project imports and the processors do not load. `java.autobuild.enabled: false`: the extension's automatic build writes `target/classes` on every
+save, as `vidocq dev` does; with it off, the editor keeps its diagnostics and completion, and `vidocq dev` compiles.
+| `tasks.json`
+| `vidocq dev`, `vidocq run` and `vidocq test` (Terminal > Run Task): `process-classes vidocq:dev`, `vidocq:run` and
+`vidocq:test` on the application's pom, through `./mvnw` (`mvnw.cmd` on Windows) when the project has one. With
+several applications, each task is suffixed with the application's name.
+| `launch.json`
+| `Vidocq: attach to <application> (dev)`: attaches the debugger to the agent `vidocq:dev` starts
+(`vidocq.dev.debugHost` and `vidocq.dev.debugPort`, 127.0.0.1:5005 by default, as for `vidocq:idea`).
+|===
+
+Each file starts with `// Written by vidocq:vscode …`; VS Code reads these files as JSON with comments. The goal
+rewrites a file that starts with that line, and leaves any other alone, printing what to add to it: delete the line
+to keep a file of your own. The JDK path is this machine's: keep `settings.json` out of version control, or pass
+`-Dvidocq.vscode.jdk` with the path every machine shares. Applications are found as `vidocq:idea` finds them: a
+module that declares `vidocq-runtime-maven-plugin` and a `vidocq.mainModule`.
+
+What was checked, in VS Code's language server (Java extension 1.56, jdt.ls 1.61) driven headless on a project
+`vidocq create -x cassini-rest` writes: with these settings the project imports, a type error is reported in the
+editor, and the server writes nothing into `target/classes`; with the automatic build on, it writes the 15 files of a
+build there.
 
 == External override (`ExternalFileConfigSource`)
 

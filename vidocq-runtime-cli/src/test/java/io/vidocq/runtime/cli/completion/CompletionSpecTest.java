@@ -104,6 +104,8 @@ class CompletionSpecTest {
         assertTrue(after().containsAll(List.of("test", "idea")));
         assertEquals(List.of("--check", "--strict", "--kind"), after("idea"));
         assertEquals(List.of("maven", "application"), after("idea", "--kind"));
+        assertTrue(after().contains("vscode"));
+        assertEquals(List.of("--check"), after("vscode"));
         assertEquals(List.of(), after("test"));
     }
 

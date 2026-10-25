@@ -234,6 +234,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq idea [--check\|--strict] [--kind <kind>]` [.tag-new]#NEW#
 | Write, or check, the IntelliJ run configurations in `.run/`, `mvn vidocq:idea` (see <<idea>>).
 
+| `vidocq vscode [--check]` [.tag-new]#NEW#
+| Write, or check, the VS Code settings, tasks and debug configuration in `.vscode/`, `mvn vidocq:vscode` (see <<vscode>>).
+
 | `vidocq build [type] …`
 | Build/package the project, wrapping the Maven plugin goals (see <<build>>).
 
@@ -373,6 +376,22 @@ vidocq idea --kind application   # an Application run of the main class instead
 
 The options map to `-Dvidocq.idea.check=true`, `-Dvidocq.idea.check=strict` and `-Dvidocq.idea.kind`; see
 xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
+
+[#vscode]
+=== `vidocq vscode` [.tag-new]#NEW#
+
+Runs `mvn vidocq:vscode`: `.vscode/settings.json` runs the Java extension's language server on Java 25 and turns its
+automatic build off, `tasks.json` runs `vidocq dev`, `run` and `test`, `launch.json` attaches the debugger to
+`vidocq dev`. A file it did not write is left alone.
+
+[source,bash]
+----
+vidocq vscode            # write or update .vscode/
+vidocq vscode --check    # CI: fail when a file is missing or out of date
+----
+
+`--check` maps to `-Dvidocq.vscode.check=true`; see
+xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
 [#build]
 === `vidocq build` & `vidocq clean`

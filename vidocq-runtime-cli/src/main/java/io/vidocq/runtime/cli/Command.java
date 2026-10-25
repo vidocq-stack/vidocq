@@ -65,6 +65,13 @@ public sealed interface Command {
     record Idea(String check, String kind) implements Command {}
 
     /**
+     * {@code vidocq vscode}: the {@code .vscode/} settings, tasks and debug configuration ({@code mvn vidocq:vscode}).
+     *
+     * @param check only check the files, write nothing
+     */
+    record Vscode(boolean check) implements Command {}
+
+    /**
      * {@code vidocq doctor}: the environment and project checks.
      *
      * @param verbose also print the hints of the checks that pass

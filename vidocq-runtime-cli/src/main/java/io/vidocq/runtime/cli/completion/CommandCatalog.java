@@ -37,6 +37,7 @@ public final class CommandCatalog {
             "test",
             "doctor",
             "idea",
+            "vscode",
             "create",
             "build",
             "clean",

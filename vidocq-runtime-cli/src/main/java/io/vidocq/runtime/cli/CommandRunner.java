@@ -81,6 +81,8 @@ public final class CommandRunner {
             case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
                     (check == null ? "Writing" : "Checking") + " the IntelliJ run configurations…");
+            case Command.Vscode(boolean check) -> runMaven(RunGoals.vscode(check), MavenInvocation.Options.none(),
+                    false, (check ? "Checking" : "Writing") + " the VS Code files in .vscode/…");
             case Command.Create c              -> runCreate(c);
             case Command.CreateInteractively c -> runCreateInteractively(c);
             case Command.Build b               -> runBuild(b);

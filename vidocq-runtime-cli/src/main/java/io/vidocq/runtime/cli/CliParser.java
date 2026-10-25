@@ -43,6 +43,7 @@ public final class CliParser {
     private static final String DOCTOR = "doctor";
     private static final String DEBUG = "--debug";
     private static final String CHECK = "--check";
+    private static final String VSCODE = "vscode";
     private static final String OPTIONS = "Options:";
 
     private CliParser() {}
@@ -57,6 +58,7 @@ public final class CliParser {
             case DOCTOR                     -> parseDoctor(args, 1);
             case "test"                       -> parseTest(args, 1);
             case "idea"                       -> parseIdea(args, 1);
+            case VSCODE                       -> parseVscode(args, 1);
             case "create"                     -> parseCreate(args, 1);
             case "build"                      -> parseBuild(args, 1);
             case "clean"                      -> parseClean(args, 1);
@@ -109,6 +111,18 @@ public final class CliParser {
             unknownOpt(args[from], "test");
         }
         return new Command.ContinuousTest();
+    }
+
+    private static Command.Vscode parseVscode(String[] args, int from) {
+        boolean check = false;
+        for (String arg : Arrays.asList(args).subList(from, args.length)) {
+            if (CHECK.equals(arg)) {
+                check = true;
+            } else {
+                unknownOpt(arg, VSCODE);
+            }
+        }
+        return new Command.Vscode(check);
     }
 
     private static Command.Idea parseIdea(String[] args, int from) {
@@ -325,6 +339,7 @@ public final class CliParser {
         cmd("dev",              "Run the project in dev mode with live reload (mvn vidocq:dev).");
         cmd("test",             "Run the tests on every change, without the application (mvn vidocq:test).");
         cmd("idea",             "Write the IntelliJ run configurations into .run/ (mvn vidocq:idea).");
+        cmd(VSCODE,             "Write the VS Code settings, tasks and debug into .vscode/ (mvn vidocq:vscode).");
         cmd(DOCTOR,           "Run environment & project health checks.");
         cmd("create",           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
@@ -372,6 +387,14 @@ public final class CliParser {
                 options(CHECK,          "Only check that .run/ matches the poms (for CI)",
                         "--strict",     "Check, and also fail on files written or edited by hand",
                         "--kind <kind>", "maven (default) or application: an Application run of the main class");
+            }
+            case VSCODE -> {
+                topic(VSCODE, "VS Code settings, tasks and debug",
+                        "Runs 'mvn vidocq:vscode' in the project (./mvnw when present): .vscode/settings.json",
+                        "runs the Java extension's language server on Java 25 and turns its automatic build",
+                        "off, tasks.json runs vidocq dev, run and test, launch.json attaches the debugger to",
+                        "vidocq dev. A file it did not write is left alone.");
+                options(CHECK, "Only check that .vscode/ is up to date (for CI)");
             }
             case DOCTOR -> {
                 topic(DOCTOR, "Environment & project health checks",
