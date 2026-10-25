@@ -106,6 +106,22 @@ class CreatePromptsTest {
                 && l.contains("Jakarta REST")), prompter.shown.toString());
     }
 
+    /** Grouped by family, as {@code vidocq extension list --available} shows it (Vidocq/vidocq#353). */
+    @Test
+    void theCatalogIsShownByFamily() {
+        Scripted prompter = new Scripted("todo", "", "");
+
+        CreatePrompts.ask(NOTHING_GIVEN, prompter);
+
+        List<String> shown = prompter.shown;
+        int jakarta = shown.indexOf("  Jakarta EE");
+        int microprofile = shown.indexOf("  MicroProfile");
+        assertTrue(jakarta >= 0 && microprofile > jakarta, shown.toString());
+        int rest = shown.indexOf(shown.stream().filter(l -> l.contains("cassini-rest")).findFirst().orElseThrow());
+        int health = shown.indexOf(shown.stream().filter(l -> l.contains("knock-health")).findFirst().orElseThrow());
+        assertTrue(jakarta < rest && rest < microprofile && microprofile < health, shown.toString());
+    }
+
     /** What the command line gave is not asked again. */
     @Test
     void optionsGivenOnTheCommandLineAreKept() {

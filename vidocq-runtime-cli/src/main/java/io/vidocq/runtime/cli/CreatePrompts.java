@@ -115,9 +115,15 @@ final class CreatePrompts {
 
     private static void showCatalog(Prompter prompter) {
         prompter.show("Extensions of the Vidocq catalog (\"none\" for no extension):");
-        for (RegistryEntry e : KnownExtensions.catalog()) {
-            prompter.show(String.format("  %-28s %s", e.id(), e.description()));
-        }
+        // By family, as vidocq extension list --available shows them (#353).
+        KnownExtensions.catalogByFamily().forEach((family, entries) -> {
+            if (!entries.isEmpty()) {
+                prompter.show("  " + family.title());
+                for (RegistryEntry e : entries) {
+                    prompter.show(String.format("    %-28s %s", e.id(), e.description()));
+                }
+            }
+        });
     }
 
     private static Set<String> ids(String answer) {
