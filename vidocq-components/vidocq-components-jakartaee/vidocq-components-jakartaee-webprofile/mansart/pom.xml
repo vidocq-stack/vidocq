@@ -78,6 +78,28 @@
             for the code they exercise in the other modules.
         -->
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/mansart-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+
+        <!--
+            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
+            the shared pr-validate workflow, which runs it after the reactor is installed at the
+            pull request's version, and skips the step when this property is absent.
+
+            The Jakarta Data 1.0 TCK, EntityTests and SignatureTests on H2 in memory
+            (`tck-run,tck-sig`, the full mode of run-official-tck-data-1.0.sh), from
+            jakarta.data:jakarta.data-tck 1.0.1, public on Maven Central. mansart-data-tck is a
+            standalone pom outside the reactor, so versions:set does not reach it: mansart.version
+            is set here to the reactor's version, the pull request's, or the run would certify the
+            mansart SNAPSHOT on central-snapshots instead of the change.
+
+            Not gated: the Jakarta Transactions 2.0 TCK. It is not a Maven artifact (a Sun
+            tsharness zip from download.eclipse.org, driven by Ant), and its leaf-by-leaf driving
+            and report parsing (M6c) are not done, so a run cannot fail on a test yet.
+
+            Measured on 2026-10-25 with an isolated local repository holding only the reactor's
+            own install (the TCK and its dependencies downloaded during the run), Java 25, Maven
+            3.9.16: 74 tests (73 EntityTests + 1 SignatureTests), 0 failures, 28 s wall clock.
+        -->
+        <ci.tck.command>mvn -B -ntp -f mansart-jakarta-data/mansart-data-tck/pom.xml -Ptck-run,tck-sig test -DfailIfNoTests=false -Dmansart.version="$(mvn -B -ntp -q -N help:evaluate -Dexpression=project.version -DforceStdout)"</ci.tck.command>
     </properties>
 
     <dependencyManagement>

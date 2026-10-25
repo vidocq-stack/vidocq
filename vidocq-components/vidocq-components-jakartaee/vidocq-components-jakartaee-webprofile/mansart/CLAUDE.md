@@ -15,7 +15,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 ## Prerequisites
 
 - **Java 25** + **Maven 3.9.16** (`.sdkmanrc` coming in this folder).
-- For TCKs: non-public official Jakarta artifacts must be installed in the local M2 (procedure documented in the TCK runner).
+- For TCKs: the Jakarta Data TCK resolves from Maven Central, and every pull request runs it (`ci.tck.command` in the root `pom.xml`). The full Jakarta Transactions suite is an Eclipse zip run with Ant (`mansart-transactions/install-tck.sh`), run by hand, never in CI.
 
 ## Architecture Constraints to Respect
 

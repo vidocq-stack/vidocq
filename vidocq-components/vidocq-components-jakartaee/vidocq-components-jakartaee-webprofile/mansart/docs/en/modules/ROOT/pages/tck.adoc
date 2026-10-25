@@ -116,6 +116,8 @@ cd mansart/mansart-jakarta-data/mansart-data-tck
 ./run-official-tck-data-1.0.sh all
 ----
 
+In CI: every pull request runs `EntityTests` and `SignatureTests` (74 tests, H2 in memory). The root `pom.xml` declares them in `ci.tck.command`, which the shared `pr-validate` workflow runs once the reactor is installed at the pull request's version: `mvn -f mansart-jakarta-data/mansart-data-tck/pom.xml -Ptck-run,tck-sig test`, with `mansart.version` set to that version, since the runner is outside the reactor and would otherwise test the published snapshot. A single failing test fails the check; the run takes under a minute on a fresh runner. `jakarta.data:jakarta.data-tck:1.0.1` is public on Maven Central.
+
 Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled because compiled without the processor in the APT classpath). Resolved by the M7 runtime runner (`MansartRuntimeRepoCreator`). See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md].
 
 == Jakarta Transactions 2.0 — detail
@@ -148,6 +150,8 @@ ant build && ant runclient
 xdg-open ../dist/index.html
 ----
 
+Not run in CI. The official suite is not a Maven artifact: `install-tck.sh` downloads the zip from `download.eclipse.org` and the suite runs under Ant. Until M6c drives it leaf by leaf and parses its report, a run cannot fail on a test, so it would gate nothing. The smoke mode checks the adapter's wiring only, and is run by hand.
+
 == Tests intentionally skipped
 
 [cols="3,5"]
@@ -163,7 +167,7 @@ xdg-open ../dist/index.html
 
 == Tests skipped due to environment
 
-None to date. The Jakarta Data and Jakarta Transactions TCKs run in CI on H2 in-memory, with no external dependency.
+None to date. The Jakarta Data TCK runs on every pull request on H2 in memory, with no external dependency. The Jakarta Transactions TCK is run by hand (see above).
 
 == Reproduce locally
 
@@ -178,4 +182,4 @@ cd mansart/mansart-transactions/mansart-transactions-tck
 ./run-official-tck-transactions-2.0.sh smoke
 ----
 
-Prerequisites: non-public official Jakarta artefacts installed in the local M2 — procedure documented in each runner's README.
+Prerequisites: none for Jakarta Data, whose TCK Maven resolves from Maven Central. The full Jakarta Transactions suite needs the official zip from Eclipse and Apache Ant: `mansart-transactions/install-tck.sh` downloads and unpacks it (see `mansart-transactions/TCK.md`).
