@@ -17,6 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
+// Trial of the targeted producer tests (#285): never merged.
 package io.vidocq.runtime.extensions.microprofile.knock;
 
 import io.vidocq.knock.spi.HealthCheckRegistry;
