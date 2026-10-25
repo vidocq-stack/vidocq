@@ -122,6 +122,8 @@ None to date: the full suite runs and passes at 367/367. Should an exclusion eve
 
 Any structural change to `grimm-core` or `grimm-cdi-vauban` must preserve the 367/367 score before merge. A TCK regression is a CI blocker: the PR does not pass.
 
+Every pull request runs the full suite. The root `pom.xml` declares it in `ci.tck.command`, which the shared `pr-validate` workflow runs once the reactor is installed at the pull request's version: `mvn -f grimm-tck/pom.xml -Ptck-official test`, with `grimm.version` set to that version, since `grimm-tck` is outside the reactor and would otherwise test the published snapshot. A single failing test fails the check. The suite takes under a minute on a fresh runner. A pull request that changes only documentation skips it.
+
 == Further reading
 
 * xref:internals.adoc[Internals] — understand what the TCK validates.

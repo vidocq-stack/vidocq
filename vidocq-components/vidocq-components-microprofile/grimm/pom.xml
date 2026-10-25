@@ -89,6 +89,24 @@
     <version.jakarta.validation>3.1.1</version.jakarta.validation>
 
     <!--
+      The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by the
+      shared pr-validate workflow, which runs it after the reactor is installed at the pull
+      request's version, and skips the step when this property is absent.
+
+      grimm-tck is a standalone pom outside the reactor, so versions:set does not reach it: its
+      grimm.version is set here to the reactor's version, the pull request's, or the run would
+      certify the grimm SNAPSHOT published on central-snapshots instead of the change. The official
+      suite (`tck-official`) is microprofile-openapi-tck 4.2-RC5, public on Maven Central; the
+      runtime it boots (vidocq-runtime-core, the Cassini and Chappe extensions) comes from
+      central-snapshots.
+
+      Measured on 2026-10-25 with an isolated local repository holding only the reactor's own
+      install (the TCK, the runtime and their dependencies downloaded during the run), Java 25,
+      Maven 3.9.16: 367 tests, 0 failures, 54 s wall clock.
+    -->
+    <ci.tck.command>mvn -B -ntp -f grimm-tck/pom.xml -Ptck-official test -Dgrimm.version="$(mvn -B -ntp -q -N help:evaluate -Dexpression=project.version -DforceStdout)"</ci.tck.command>
+
+    <!--
       SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
       grimm-coverage (quality profile), so the tests of grimm-it-weld count for the code they
       exercise in the other modules. grimm-examples stays analysed, out of the coverage

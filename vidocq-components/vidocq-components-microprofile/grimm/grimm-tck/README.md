@@ -6,6 +6,14 @@ Out-of-reactor runner for the official MicroProfile OpenAPI 4.2 TCK.
 
 The runner is a standalone POM (model `4.0.0`, no `<parent>`, not a module of the root POM). This keeps the released runtime decoupled from the official TCK: a normal build never resolves or runs any TCK artifact. Run it with `./mvnw -f grimm-tck/pom.xml -Ptck-official clean test`, or through `run-official-tck-mp-openapi-4.2.sh`.
 
+## In CI
+
+Every pull request runs the full suite: the root POM declares it in `ci.tck.command`, run by the
+shared `pr-validate` workflow after the reactor is installed at the pull request's version. The
+command sets `grimm.version` to that version, because `versions:set` does not reach this
+standalone POM; without it the run would test the grimm snapshot published on
+`central-snapshots`.
+
 ## Local prerequisites
 
 1. Install the reactor artifacts in your local repository.
