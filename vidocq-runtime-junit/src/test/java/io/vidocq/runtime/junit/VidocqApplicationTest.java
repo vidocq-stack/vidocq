@@ -115,9 +115,9 @@ class VidocqApplicationTest {
         int port = VidocqApplication.freePort();
 
         List<String> command = program("Failing", FAILING, port);
+        Duration timeout = Duration.ofSeconds(60);
 
-        var e = assertThrows(IllegalStateException.class,
-                () -> VidocqApplication.start(command, port, Duration.ofSeconds(60)));
+        var e = assertThrows(IllegalStateException.class, () -> VidocqApplication.start(command, port, timeout));
 
         assertTrue(e.getMessage().startsWith("The application stopped with exit code 3 before it listened on"
                 + " http://127.0.0.1:" + port + ". Its output:\n"), e.getMessage());
@@ -130,9 +130,9 @@ class VidocqApplicationTest {
         int otherPort = VidocqApplication.freePort();
 
         List<String> command = program("Elsewhere", LISTENER, otherPort);
+        Duration timeout = Duration.ofSeconds(2);
 
-        var e = assertThrows(IllegalStateException.class,
-                () -> VidocqApplication.start(command, port, Duration.ofSeconds(2)));
+        var e = assertThrows(IllegalStateException.class, () -> VidocqApplication.start(command, port, timeout));
 
         assertTrue(e.getMessage().startsWith("The application did not listen on http://127.0.0.1:" + port
                 + " within 2 s. Its output:\n"), e.getMessage());

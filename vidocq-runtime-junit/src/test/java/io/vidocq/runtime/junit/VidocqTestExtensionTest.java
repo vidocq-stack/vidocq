@@ -33,13 +33,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 import static org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request;
 
@@ -185,7 +185,7 @@ class VidocqTestExtensionTest {
     static class WrongUrlType {
         @Test
         void port(@VidocqUrl int port) {
-            // never runs: no resolver takes an int
+            fail("never runs: no resolver takes an int");
         }
     }
 
@@ -193,7 +193,7 @@ class VidocqTestExtensionTest {
     static class NotAnnotated {
         @Test
         void nothing() {
-            // never runs: the extension fails before
+            fail("never runs: the extension fails before");
         }
     }
 }
