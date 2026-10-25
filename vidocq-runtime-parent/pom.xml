@@ -65,22 +65,6 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!--
-                  One batch at the end of the reactor instead of one upload per module: nothing reaches
-                  central-snapshots unless every module built (a failure used to leave the modules built
-                  before it published), and the resolver uploads the batch in parallel (about 10 s per
-                  module one by one, 63 modules). vidocq-parent pins deployAtEnd to false, so the BOM and
-                  this reactor's parent set it too; all three must agree, or those poms deploy at once.
-                  Checked with maven-deploy-plugin 3.1.4 on Maven 3.9.16: same files as one by one, and
-                  none at all when a late module fails, even with a skipped last module.
-                -->
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-deploy-plugin</artifactId>
-                    <configuration>
-                        <deployAtEnd>true</deployAtEnd>
-                    </configuration>
-                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -169,6 +153,23 @@
         </pluginManagement>
 
         <plugins>
+            <!--
+              One batch at the end of the reactor instead of one upload per module: nothing reaches
+              central-snapshots unless every module built (a failure used to leave the modules built
+              before it published), and the resolver uploads the batch in parallel (about 10 s per
+              module one by one, 63 modules). vidocq-parent pins deployAtEnd to false, so the BOM and
+              this pom set it too; all three must agree, or those poms deploy at once (#285).
+              Here, not in pluginManagement, which already pins the plugin's version, and not inherited:
+              how this repository publishes is no setting of an application (BUG-20261025-01).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <inherited>false</inherited>
+                <configuration>
+                    <deployAtEnd>true</deployAtEnd>
+                </configuration>
+            </plugin>
             <!-- The build identity the startup banner reads (META-INF/vidocq/build-info/<artifactId>.properties),
                  as vidocq-parent writes it for the runtime's own jars. -->
             <plugin>

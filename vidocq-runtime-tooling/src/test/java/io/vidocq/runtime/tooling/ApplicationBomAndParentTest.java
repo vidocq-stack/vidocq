@@ -112,6 +112,29 @@ class ApplicationBomAndParentTest {
                 "the Vauban processor advises a provides the application layer makes (BUG-20261024-10)");
     }
 
+    /**
+     * BUG-20261025-01: a plugin managed twice makes Maven warn on every build of every application ("must be unique
+     * but found duplicate declaration"), and the deploy batching of this repository's releases is no setting of an
+     * application: the parent applies it to its own deploy only.
+     */
+    @Test
+    void theApplicationParentManagesEachPluginOnceAndKeepsItsDeploySettingsToItself() throws Exception {
+        Element project = pom(ROOT.resolve("vidocq-runtime-parent")).getDocumentElement();
+
+        List<String> managed = elements(project, "build", "pluginManagement", "plugins", "plugin").stream()
+                .map(p -> child(p, "artifactId")).toList();
+        assertEquals(List.copyOf(new java.util.LinkedHashSet<>(managed)), managed, "a plugin managed twice");
+        for (Element plugin : elements(project, "build", "pluginManagement", "plugins", "plugin")) {
+            assertFalse(plugin.getTextContent().contains("deployAtEnd"),
+                    "applications inherit deployAtEnd from " + child(plugin, "artifactId"));
+        }
+        Element deploy = elements(project, "build", "plugins", "plugin").stream()
+                .filter(p -> "maven-deploy-plugin".equals(child(p, "artifactId")))
+                .findFirst().orElseThrow(() -> new AssertionError("the parent's own deploy is not batched"));
+        assertEquals("false", child(deploy, "inherited"));
+        assertTrue(deploy.getTextContent().contains("true"), "deployAtEnd");
+    }
+
     @Test
     void theApplicationParentCarriesNoSettingOfThisRepository() throws Exception {
         String text = Files.readString(ROOT.resolve("vidocq-runtime-parent").resolve("pom.xml"));

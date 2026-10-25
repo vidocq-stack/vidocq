@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261025-01 — every application built on `vidocq-runtime-parent` warns of a plugin managed twice
+
+- **Date**: 2026-10-25
+- **Status**: FIXED on `feat/vidocq-test` (#352, umbrella #339)
+- **Affected module**: vidocq-runtime-parent
+- **Symptom**: `mvn verify` on a project `vidocq create` writes prints `'build.pluginManagement.plugins.plugin.(groupId:artifactId)'
+  must be unique but found duplicate declaration of plugin org.apache.maven.plugins:maven-deploy-plugin`, and the
+  application inherits `deployAtEnd=true`, a setting of this repository's releases.
+- **Minimal reproduction**: on 7e7f5d44, `vidocq-runtime-it-create` (`CreateThenBuildIT`), or `mvn validate` on any pom
+  whose parent is `vidocq-runtime-parent` at that commit.
+- **Cause**: 7e7f5d44 (#285) added a `maven-deploy-plugin` entry with `deployAtEnd` to the parent's
+  `pluginManagement`, which already pinned the plugin's version in another entry. Main's build does not build an
+  application on the parent, so nothing failed until the create-then-build IT of #352 did.
+- **Fix**: one `pluginManagement` entry pins the version; `deployAtEnd` moves to the parent's `<build><plugins>`
+  with `<inherited>false</inherited>`, so it batches the parent's own deploy and no application inherits it.
+  `ApplicationBomAndParentTest` fails on a plugin managed twice and on a `deployAtEnd` an application would inherit.
+
 ## BUG-20261024-01 — `ListenerFromADependencyRunsIT` fails when Central cannot be reached: its fixture downloads plugins
 
 - **Date**: 2026-10-24
