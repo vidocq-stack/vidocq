@@ -108,6 +108,8 @@ jobs:
           EOF
           echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
           echo "docs-only: $docs_only"
+          # The TCK runner selection (select-tck) reads the same list.
+          printf '%s' "$files" > "${RUNNER_TEMP:-/tmp}/pr-changed-files.txt"
 
           # Test-only change set: every file is under a src/test/ directory (any module), is CI
           # configuration (.forgejo/), or is a doc file accepted above. None of them is part of the
@@ -250,8 +252,22 @@ jobs:
       #
       # So each repository states what its gate certifies, and nobody can make it vacuous by
       # accident.
+      # Replay only the TCK runners a changed module reaches; any doubt replays all of them, and the
+      # step never fails (continue-on-error: an error leaves the outputs empty, which means all).
+      # The nightly TCK job still replays every runner.
+      - name: Select the TCK runners to replay
+        id: tck-select
+        if: steps.changes.outputs.docs-only != 'true'
+        continue-on-error: true
+        uses: https://codefloe.com/Vidocq/ci/select-tck@main
+        with:
+          changed-files: ${{ runner.temp }}/pr-changed-files.txt
+
       - name: TCK declared by this repository
         if: steps.changes.outputs.docs-only != 'true'
+        env:
+          TCK_SELECT_MODE: ${{ steps.tck-select.outputs.mode }}
+          TCK_SELECTED: ${{ steps.tck-select.outputs.modules }}
         run: |
           set -euo pipefail
           python3 - > .ci-tck.env <<'PY'
@@ -277,6 +293,13 @@ jobs:
           if [ -n "$TCK_COMMAND" ]; then
             echo "TCK via the declared command: $TCK_COMMAND"
             bash -c "$TCK_COMMAND"
+          fi
+
+          if [ -n "$TCK_MODULES" ] && [ "${TCK_SELECT_MODE:-}" = selected ]; then
+            echo "Declared TCK runners: $TCK_MODULES"
+            echo "Replayed for this change (select-tck): ${TCK_SELECTED:-none}"
+            TCK_MODULES="$TCK_SELECTED"
+            [ -n "$TCK_MODULES" ] || echo "No declared TCK runner is reached by this change; the nightly TCK job replays them all."
           fi
 
           if [ -n "$TCK_MODULES" ]; then
