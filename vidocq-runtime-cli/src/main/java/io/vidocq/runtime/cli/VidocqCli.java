@@ -19,6 +19,11 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.update.UpdateNotice;
+
+import java.time.Duration;
+import java.time.Instant;
+
 /**
  * Entry point for the Vidocq command-line interface.
  *
@@ -27,6 +32,9 @@ package io.vidocq.runtime.cli;
  * }</pre>
  */
 public final class VidocqCli {
+
+    /** How long the end of a command waits for an update check still running (#353). */
+    private static final Duration NOTICE_WAIT = Duration.ofSeconds(1);
 
     private VidocqCli() {}
 
@@ -38,7 +46,10 @@ public final class VidocqCli {
         }
         try {
             Command cmd = CliParser.parse(args);
-            System.exit(CommandRunner.run(cmd));
+            UpdateNotice notice = CommandRunner.updateNotice(cmd);
+            int exit = CommandRunner.run(cmd);
+            notice.print(System.err, CommandRunner.updateStamp(), Instant.now(), NOTICE_WAIT);
+            System.exit(exit);
         } catch (CliException e) {
             CliOutput.error(e.getMessage());
             System.exit(1);

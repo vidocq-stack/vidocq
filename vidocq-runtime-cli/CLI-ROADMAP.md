@@ -27,7 +27,10 @@ description to keep up to date, the reference page.
   `doctor`, `config`) and their goals run the same `vidocq-runtime-tooling` code, so the CLI and the plugin cannot
   disagree.
 - **The extensions describe themselves.** The catalog comes from each extension's
-  `META-INF/vidocq/extension.properties`; a reactor test fails when the two drift.
+  `META-INF/vidocq/extension.properties`, its family included, by which `extension list --available` groups it; a
+  reactor test fails when the two drift. The CLI reads no remote registry: one belongs with Vidocq/vidocq#17.
+- **Quiet unless useful.** `info` reads the project's files instead of running Maven; the update notice shows at
+  most once a day, on a terminal, on the error stream.
 - **No external dependency.** A hand-rolled argument parser, Java 25, a named module.
 
 ## What is next

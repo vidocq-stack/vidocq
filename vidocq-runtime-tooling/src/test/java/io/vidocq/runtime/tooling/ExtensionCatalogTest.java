@@ -87,6 +87,21 @@ class ExtensionCatalogTest {
         }
     }
 
+    /** Vidocq/vidocq#353: the CLI lists the catalog by family, so no extension may leave it out. */
+    @Test
+    void everyExtensionNamesItsFamily() throws IOException {
+        Properties catalog = new Properties();
+        catalog.load(new StringReader(render(EXTENSIONS)));
+        for (String key : catalog.stringPropertyNames()) {
+            if (key.endsWith(".artifactId")) {
+                String id = key.substring(0, key.length() - ".artifactId".length());
+                String family = catalog.getProperty(id + ".family");
+                assertNotNull(family, id + " names no family in its " + KnownExtensions.DESCRIPTOR);
+                ExtensionFamily.of(family);
+            }
+        }
+    }
+
     /**
      * The catalog the reactor's extension descriptors describe: per extension id, its Maven coordinates and
      * Java module, read from its pom and {@code module-info.java}, then the descriptor's own keys, sorted.

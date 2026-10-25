@@ -211,7 +211,7 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | Print the CLI and runtime version string. A SNAPSHOT CLI adds its build time, `0.4.0-SNAPSHOT (built 2026-10-06T09:13:13Z)`, as the help header and `vidocq info` do [.tag-new]#NEW#.
 
 | `vidocq info`
-| Display the CLI/Java version and the extensions of the project in the current directory.
+| Display the environment (CLI, Java, OS) and, in a project, its main module, runtime version, number of extensions and active profile, read from its files without running Maven [.tag-new]#NEW#. The detailed list of extensions is `vidocq extension list`'s.
 
 | `vidocq doctor [--verbose]`
 | Run environment & project health checks (see <<doctor>>).
@@ -406,7 +406,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 |===
 | Sub-command | Description
 
-| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` queries the registry; `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list [.tag-new]#NEW#.
+| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web) [.tag-new]#NEW#; `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list [.tag-new]#NEW#.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java` [.tag-new]#NEW#. The dependency and the codegen path carry the parent's version, written out [.tag-new]#NEW#.
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add` [.tag-new]#NEW#.
 |===
@@ -494,9 +494,10 @@ vidocq extension remove knock-health
 
 [NOTE]
 ====
-The public extension registry (`registry.vidocq.dev`) is not yet live, so `list --available`
-currently serves a built-in offline catalog. The CLI reports the data source (live, cached,
-or offline).
+`list --available` lists the catalog built into the CLI, which every extension of the runtime describes itself
+(its `META-INF/vidocq/extension.properties` names its id, description and family), so the catalog matches the
+runtime the CLI belongs to. It reads no remote registry: one, for extensions released apart from the runtime,
+belongs with Vidocq/vidocq#17 [.tag-new]#NEW#.
 ====
 
 [#config]
@@ -524,6 +525,16 @@ recognize (Vidocq/vidocq#314).
 vidocq config get vidocq.http.port
 vidocq config set vidocq.http.port 9090
 vidocq config list
+----
+
+`set` warns at once on a `vidocq.*` key whose namespace no Vidocq module reads, and names the key you most likely
+meant; the key is set all the same [.tag-new]#NEW#:
+
+[source]
+----
+$ vidocq config set vidocq.htpp.port 9090
+✔ Set vidocq.htpp.port = 9090  (src/main/resources/vidocq.properties)
+⚠ No Vidocq module reads 'vidocq.htpp.port'. Did you mean 'vidocq.http.port'?
 ----
 
 [#doctor]
@@ -603,6 +614,24 @@ vidocq update
 ----
 
 `VIDOCQ_CENTRAL` and `VIDOCQ_SNAPSHOTS` point it at repository mirrors, as for `install.sh`.
+
+[#update-notice]
+==== The update notice [.tag-new]#NEW#
+
+Once a day at most, a CLI installed by `install.sh` or `vidocq update` checks, while a command runs, whether
+`vidocq update` would install something, and says so after the command, on the error stream:
+
+[source]
+----
+A newer Vidocq CLI is available: 0.4.1. Run 'vidocq update' to install it (VIDOCQ_NO_UPDATE_CHECK=1 turns this notice off).
+----
+
+* It runs on a terminal only, never in a pipe, a script or a CI job, and never after `version`, `completion`,
+  `config get` or `update`, whose output a script may read.
+* A repository that does not answer within a second of the command's end is not waited for, and is asked again
+  next time; a failure says nothing.
+* The last check is recorded in `~/.vidocq/cache/update-check`.
+* `VIDOCQ_NO_UPDATE_CHECK=1` turns it off.
 
 [#cli-and-plugin]
 === The CLI and the Maven plugin [.tag-new]#NEW#

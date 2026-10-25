@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class ConfigKeysTest {
@@ -92,5 +93,21 @@ class ConfigKeysTest {
     void allKnownKeysYieldNoUnknowns() {
         assertTrue(ConfigKeys.unknownKeys(List.of(
                 "vidocq.http.port", "vidocq.dev.debug", "app.name")).isEmpty());
+    }
+
+    /** Vidocq/vidocq#353: {@code vidocq config set} names the key the user most likely meant. */
+    @Test
+    void anUnknownNamespaceSuggestsTheClosestKnownOne() {
+        assertEquals(Optional.of("vidocq.http.port"), ConfigKeys.suggestion("vidocq.htpp.port"));
+        assertEquals(Optional.of("vidocq.launch.mode"), ConfigKeys.suggestion("vidocq.lanch.mode"));
+        assertEquals(Optional.of("vidocq.profile"), ConfigKeys.suggestion("vidocq.profil"));
+    }
+
+    @Test
+    void aKnownKeyOrAFarOneHasNoSuggestion() {
+        assertEquals(Optional.empty(), ConfigKeys.suggestion("vidocq.http.port"));
+        assertEquals(Optional.empty(), ConfigKeys.suggestion("vidocq.zzzzzzzz"));
+        assertEquals(Optional.empty(), ConfigKeys.suggestion("my.app.setting"));
+        assertEquals(Optional.empty(), ConfigKeys.suggestion("vidocq."));
     }
 }

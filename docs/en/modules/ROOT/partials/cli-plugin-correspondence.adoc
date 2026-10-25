@@ -41,7 +41,7 @@ application run their goal through Maven (`./mvnw` when the project has one).
 
 | `vidocq info`
 | none
-| `vidocq:list-extensions` gives the project's part; versions are the build's.
+| A summary read from the project's files: `vidocq:list-extensions` gives the extensions in detail; versions are the build's.
 
 | `vidocq update`, `completion`, `version`, `help`
 | none

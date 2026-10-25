@@ -66,9 +66,15 @@ public class VidocqListExtensionsMojo extends AbstractMojo {
             return;
         }
         getLog().info("Available extensions:");
-        for (RegistryEntry entry : KnownExtensions.catalog()) {
-            getLog().info(String.format("  • %-22s %s", entry.id(), entry.description()));
-        }
-        getLog().info("  source: built-in catalog — add with " + ADD_HINT);
+        // By family, as vidocq extension list --available (Vidocq/vidocq#353).
+        KnownExtensions.catalogByFamily().forEach((family, entries) -> {
+            if (!entries.isEmpty()) {
+                getLog().info("  " + family.title());
+                for (RegistryEntry entry : entries) {
+                    getLog().info(String.format("    • %-28s %s", entry.id(), entry.description()));
+                }
+            }
+        });
+        getLog().info("  Add one with " + ADD_HINT);
     }
 }

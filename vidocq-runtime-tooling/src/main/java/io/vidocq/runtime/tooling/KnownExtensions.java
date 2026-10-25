@@ -24,19 +24,22 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
 /**
- * Built-in, offline catalog of first-party Vidocq extensions, and the resolver
+ * The catalog of first-party Vidocq extensions built into the CLI and the plugin, and the resolver
  * that turns a user-supplied id into a Maven {@link ExtensionCoordinate}.
  *
- * <p>This catalog is the offline fallback for {@code extension list --available}
- * when the remote registry is unreachable, and the lookup table that lets
- * {@code extension add <short-id>} inject the correct (category-specific) groupId.</p>
+ * <p>This catalog is what {@code extension list --available} lists, by family, and the lookup table that lets
+ * {@code extension add <short-id>} inject the correct (category-specific) groupId. A remote catalog, for
+ * extensions released apart from the runtime, belongs with Vidocq/vidocq#17.</p>
  *
  * <p>The extensions describe themselves: each ships {@value #DESCRIPTOR}, and the
  * {@value #CATALOG_RESOURCE} this class reads is built from those descriptors and
@@ -46,7 +49,7 @@ public final class KnownExtensions {
 
     private KnownExtensions() {}
 
-    /** The descriptor each first-party extension ships: its short id, description, codegen bundle, directives. */
+    /** The descriptor each first-party extension ships: its short id, description, family, codegen bundle, directives. */
     static final String DESCRIPTOR = "META-INF/vidocq/extension.properties";
 
     /** The catalog built from those descriptors (see {@code ExtensionCatalogTest}). */
@@ -95,6 +98,22 @@ public final class KnownExtensions {
     /** The immutable built-in catalog, sorted by id. */
     public static List<RegistryEntry> catalog() {
         return CATALOG;
+    }
+
+    /**
+     * The catalog by family, in the order of {@link ExtensionFamily}, each family sorted by id (Vidocq/vidocq#353).
+     * Every family is a key, even one without an extension.
+     */
+    public static Map<ExtensionFamily, List<RegistryEntry>> catalogByFamily() {
+        Map<ExtensionFamily, List<RegistryEntry>> byFamily = new EnumMap<>(ExtensionFamily.class);
+        for (ExtensionFamily family : ExtensionFamily.values()) {
+            byFamily.put(family, new ArrayList<>());
+        }
+        for (RegistryEntry e : CATALOG) {
+            byFamily.get(ExtensionFamily.of(property(e.id(), "family"))).add(e);
+        }
+        byFamily.replaceAll((family, entries) -> List.copyOf(entries));
+        return Collections.unmodifiableMap(byFamily);
     }
 
     /** Looks up a catalog entry by its short id (case-insensitive). */

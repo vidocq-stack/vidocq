@@ -83,7 +83,10 @@ class VidocqProjectReportMojoTest {
 
         assertTrue(lines.contains("info: Available extensions:"), lines.toString());
         assertEquals(KnownExtensions.catalog().size(),
-                lines.stream().filter(l -> l.startsWith("info:   • ")).count(), lines.toString());
+                lines.stream().filter(l -> l.startsWith("info:     • ")).count(), lines.toString());
+        // By family, as vidocq extension list --available (Vidocq/vidocq#353).
+        assertEquals(List.of("info:   Jakarta EE", "info:   MicroProfile", "info:   Data", "info:   Web"),
+                lines.stream().filter(l -> l.matches("info:   [A-Z][\\w ]+")).toList(), lines.toString());
         assertTrue(lines.getLast().contains("mvn vidocq:add-extension -Dextensions=<id>"), lines.getLast());
     }
 

@@ -20,7 +20,9 @@
 package io.vidocq.runtime.tooling;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -73,6 +75,47 @@ public final class ConfigKeys {
         int dot = rest.indexOf('.');
         String namespace = dot < 0 ? rest : rest.substring(0, dot);
         return KNOWN_NAMESPACES.contains(namespace);
+    }
+
+    /**
+     * The key {@code key} most likely meant, for an unrecognised {@code vidocq.} key: its namespace replaced by the
+     * closest known one, within two edits, a swap of two letters counting as one ({@code vidocq.htpp.port} →
+     * {@code vidocq.http.port}). Empty for a recognised key, or when no namespace is that close (Vidocq/vidocq#353).
+     */
+    public static Optional<String> suggestion(String key) {
+        if (isKnown(key)) {
+            return Optional.empty();
+        }
+        String rest = key.substring(NAMESPACE_PREFIX.length());
+        int dot = rest.indexOf('.');
+        String namespace = dot < 0 ? rest : rest.substring(0, dot);
+        String tail = dot < 0 ? "" : rest.substring(dot);
+        return KNOWN_NAMESPACES.stream()
+                .filter(known -> distance(namespace, known) <= 2)
+                .min(Comparator.<String>comparingInt(known -> distance(namespace, known))
+                        .thenComparing(Comparator.naturalOrder()))
+                .map(known -> NAMESPACE_PREFIX + known + tail);
+    }
+
+    /** The edits from {@code a} to {@code b}: insertions, deletions, substitutions and swaps of two letters. */
+    private static int distance(String a, String b) {
+        int[][] d = new int[a.length() + 1][b.length() + 1];
+        for (int i = 0; i <= a.length(); i++) {
+            d[i][0] = i;
+        }
+        for (int j = 0; j <= b.length(); j++) {
+            d[0][j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                d[i][j] = Math.min(Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1), d[i - 1][j - 1] + cost);
+                if (i > 1 && j > 1 && a.charAt(i - 1) == b.charAt(j - 2) && a.charAt(i - 2) == b.charAt(j - 1)) {
+                    d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+                }
+            }
+        }
+        return d[a.length()][b.length()];
     }
 
     /**

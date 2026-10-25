@@ -27,15 +27,15 @@ import io.vidocq.runtime.cli.completion.CompletionScripts;
 import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.completion.ShellSetup;
 import io.vidocq.runtime.cli.ext.ExtensionCache;
-import io.vidocq.runtime.cli.ext.ExtensionRegistry;
-import io.vidocq.runtime.cli.ext.HttpRegistryFetcher;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
 import io.vidocq.runtime.cli.update.HttpDownloads;
+import io.vidocq.runtime.cli.update.UpdateNotice;
 import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.tooling.ConfigFile;
+import io.vidocq.runtime.tooling.ConfigKeys;
 import io.vidocq.runtime.tooling.Diagnostic;
 import io.vidocq.runtime.tooling.Diagnostics;
 import io.vidocq.runtime.tooling.DoctorContext;
@@ -44,12 +44,15 @@ import io.vidocq.runtime.tooling.ExtensionEditor;
 import io.vidocq.runtime.tooling.KnownExtensions;
 import io.vidocq.runtime.tooling.PropertiesText;
 import io.vidocq.runtime.tooling.ProjectScaffolder;
+import io.vidocq.runtime.tooling.ProjectSummary;
 import io.vidocq.runtime.tooling.RegistryEntry;
 import io.vidocq.runtime.tooling.Reporter;
 
+import java.io.Console;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 /**
@@ -66,7 +69,7 @@ public final class CommandRunner {
     public static int run(Command command) {
         return switch (command) {
             case Command.Version v             -> runVersion();
-            case Command.Info i                -> runInfo();
+            case Command.Info i                -> runInfo(Path.of("").toAbsolutePath());
             case Command.Help h                -> runHelp(h);
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
@@ -81,7 +84,7 @@ public final class CommandRunner {
             case Command.Clean cl              -> runClean(cl);
             case Command.Config cfg            -> switch (cfg) {
                 case Command.Config.Get g       -> runConfigGet(g);
-                case Command.Config.Set s       -> runConfigSet(s);
+                case Command.Config.Set s       -> runConfigSet(s, Path.of("").toAbsolutePath());
                 case Command.Config.Listing l   -> runConfigList(l);
             };
             case Command.Completion comp       -> runCompletion(comp);
@@ -105,19 +108,46 @@ public final class CommandRunner {
         return 0;
     }
 
-    private static int runInfo() {
-        CliOutput.println(CliOutput.bold("Vidocq Runtime — System Information"));
+    /**
+     * The environment, then a summary of the project in {@code cwd} read from its files: no Maven run, the detailed
+     * list of extensions being {@code vidocq extension list}'s (Vidocq/vidocq#353).
+     */
+    static int runInfo(Path cwd) {
+        CliOutput.println(CliOutput.bold("Environment"));
+        infoLine("CLI version:", Version.cliDisplay());
+        infoLine("Runtime for new projects:", Version.runtime());
+        infoLine("Java version:", System.getProperty("java.version"));
+        infoLine("JVM:", System.getProperty("java.vm.name") + " " + System.getProperty("java.vm.version"));
+        infoLine("OS:", System.getProperty("os.name") + " " + System.getProperty("os.arch"));
         CliOutput.println();
-        System.out.printf("  %-24s %s%n", "CLI version:",  Version.cliDisplay());
-        System.out.printf("  %-24s %s%n", "Runtime version:", Version.runtime());
-        System.out.printf("  %-24s %s%n", "Java version:", System.getProperty("java.version"));
-        System.out.printf("  %-24s %s%n", "JVM:",
-                System.getProperty("java.vm.name") + " " + System.getProperty("java.vm.version"));
-        System.out.printf("  %-24s %s%n", "OS:",
-                System.getProperty("os.name") + " " + System.getProperty("os.arch"));
-        CliOutput.println();
-        printProjectExtensions("Project extensions:", false);
+        CliOutput.println(CliOutput.bold("Project"));
+        if (!Files.isRegularFile(cwd.resolve(POM_XML))) {
+            CliOutput.println(CliOutput.dim("  (no pom.xml in this directory)"));
+            return 0;
+        }
+        ProjectSummary summary;
+        try {
+            summary = ProjectSummary.read(cwd, System::getenv);
+        } catch (IOException e) {
+            CliOutput.error("Cannot read the project: " + e.getMessage());
+            return 1;
+        }
+        infoLine("Main module:", orUnknown(summary.mainModule()));
+        infoLine("Runtime version:", orUnknown(summary.runtimeVersion()));
+        infoLine("Extensions:", summary.extensions().size() + " declared"
+                + CliOutput.dim("  (vidocq extension list for the details, transitive ones included)"));
+        infoLine("Profile:", summary.profile() == null
+                ? "none" + CliOutput.dim("  (vidocq dev runs with dev)")
+                : summary.profile() + CliOutput.dim("  (" + summary.profileSource() + ")"));
         return 0;
+    }
+
+    private static void infoLine(String label, String value) {
+        System.out.printf("  %-26s %s%n", label, value);
+    }
+
+    private static String orUnknown(String value) {
+        return value == null ? CliOutput.dim("unknown") : value;
     }
 
     /**
@@ -306,12 +336,10 @@ public final class CommandRunner {
         return 0;
     }
 
-    private static int runConfigSet(Command.Config.Set set) {
-        Path cwd = Path.of("").toAbsolutePath();
-        Path file = locateConfig();
-        if (file == null) {
-            file = ConfigFile.resolveTarget(cwd, Files::isDirectory);
-        }
+    /** {@code vidocq config set} in the project in {@code cwd}; warns on a key no Vidocq module reads (#353). */
+    static int runConfigSet(Command.Config.Set set, Path cwd) {
+        Path file = ConfigFile.locate(cwd, Files::isRegularFile)
+                .orElseGet(() -> ConfigFile.resolveTarget(cwd, Files::isDirectory));
         String text = Files.exists(file) ? readConfig(file) : "";
         if (text == null) {
             return 1;
@@ -326,6 +354,10 @@ public final class CommandRunner {
         }
         CliOutput.success("Set " + CliOutput.bold(set.key()) + " = " + set.value()
                 + CliOutput.dim("  (" + cwd.relativize(file) + ")"));
+        if (!ConfigKeys.isKnown(set.key())) {
+            CliOutput.warning("No Vidocq module reads '" + set.key() + "'."
+                    + ConfigKeys.suggestion(set.key()).map(k -> " Did you mean '" + k + "'?").orElse(""));
+        }
         return 0;
     }
 
@@ -371,14 +403,10 @@ public final class CommandRunner {
                     + " next to its modules) — nothing to update.");
             return 1;
         }
-        String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
-        String snapshots = env("VIDOCQ_SNAPSHOTS",
-                "https://central.sonatype.com/repository/maven-snapshots") + CLI_PATH;
         CliOutput.info("Current: " + Version.cliDisplay()
                 + CliInstaller.installedBuild(installed).map(b -> " — build " + b).orElse(""));
         try (HttpDownloads http = new HttpDownloads()) {
-            var decision = UpdatePlan.plan(Version.cli(), CliInstaller.installedBuild(installed),
-                    Version.buildTimestamp(), http::fetch, central, snapshots);
+            var decision = updatePlan(installed, http);
             switch (decision) {
                 case UpdatePlan.UpToDate u -> {
                     CliOutput.success("Already up to date: " + u.current());
@@ -418,6 +446,45 @@ public final class CommandRunner {
     }
 
     /** {@code <root>/<version>} holding this CLI's {@code modules/} and {@code bin/vidocq}, or {@code null}. */
+    /** What {@code vidocq update} would install in place of the CLI installed in {@code installed}. */
+    private static UpdatePlan.Decision updatePlan(Path installed, HttpDownloads http) {
+        String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
+        String snapshots = env("VIDOCQ_SNAPSHOTS",
+                "https://central.sonatype.com/repository/maven-snapshots") + CLI_PATH;
+        return UpdatePlan.plan(Version.cli(), CliInstaller.installedBuild(installed), Version.buildTimestamp(),
+                http::fetch, central, snapshots);
+    }
+
+    /**
+     * The notice of a newer build to give after {@code command} (#353). None after a command whose output a script
+     * reads, after the update itself, off a terminal, for a CLI that install.sh or 'vidocq update' did not install,
+     * or within a day of the last check.
+     */
+    static UpdateNotice updateNotice(Command command) {
+        if (command instanceof Command.Version || command instanceof Command.Completion
+                || command instanceof Command.CompletionSetup || command instanceof Command.Update
+                || command instanceof Command.Config.Get) {
+            return UpdateNotice.NONE;
+        }
+        Path installed = installedCliDirectory();
+        Console console = System.console();
+        if (installed == null || !UpdateNotice.due(System::getenv, console != null && console.isTerminal(),
+                updateStamp(), Instant.now())) {
+            return UpdateNotice.NONE;
+        }
+        return UpdateNotice.start(() -> {
+            try (HttpDownloads http = new HttpDownloads()) {
+                return updatePlan(installed, http);
+            }
+        });
+    }
+
+    /** When the update notice last checked. */
+    static Path updateStamp() {
+        return Path.of(System.getProperty("user.home", ".")).resolve(".vidocq").resolve("cache")
+                .resolve("update-check");
+    }
+
     private static Path installedCliDirectory() {
         try {
             Path jar = Path.of(CommandRunner.class.getProtectionDomain().getCodeSource().getLocation().toURI());
@@ -557,30 +624,21 @@ public final class CommandRunner {
                 CliOutput.println();
             }
             CliOutput.println(CliOutput.bold("Available extensions:"));
-            var registry = new ExtensionRegistry(
-                    new HttpRegistryFetcher(),
-                    registryCacheFile(),
-                    KnownExtensions.catalog());
-            var result = registry.list();
-            for (RegistryEntry e : result.entries()) {
-                System.out.printf("  %s %-22s %s%n",
-                        CliOutput.cyan("•"),
-                        e.id(),
-                        CliOutput.dim(e.description()));
-            }
+            // The catalog built into this CLI, by family (#353): a remote catalog belongs with #17.
+            KnownExtensions.catalogByFamily().forEach((family, entries) -> {
+                if (!entries.isEmpty()) {
+                    CliOutput.println();
+                    CliOutput.println("  " + CliOutput.bold(family.title()));
+                    for (RegistryEntry e : entries) {
+                        System.out.printf("    %s %-28s %s%n", CliOutput.cyan("•"), e.id(),
+                                CliOutput.dim(e.description()));
+                    }
+                }
+            });
             CliOutput.println();
-            CliOutput.println(CliOutput.dim("  source: " + originLabel(result.origin())
-                    + " — add with 'vidocq extension add <id>'"));
+            CliOutput.println(CliOutput.dim("  Add one with 'vidocq extension add <id>'."));
         }
         return exit;
-    }
-
-    private static String originLabel(ExtensionRegistry.Origin origin) {
-        return switch (origin) {
-            case REMOTE  -> "remote registry";
-            case CACHE   -> "local cache";
-            case CATALOG -> "built-in catalog (offline)";
-        };
     }
 
     /** Answers from the on-disk cache when it holds, otherwise runs (and announces) Maven. */
@@ -595,11 +653,6 @@ public final class CommandRunner {
         }
         CliOutput.println(CliOutput.dim("  resolving the project's runtime dependencies with Maven…"));
         return ProjectExtensions.resolveAndCache(cwd, MavenLauncher.resolveExecutable(cwd), cacheFile);
-    }
-
-    private static Path registryCacheFile() {
-        return Path.of(System.getProperty("user.home", "."))
-                .resolve(".vidocq").resolve("registry-cache.json");
     }
 
     private static int runExtensionAdd(Command.Extension.Add add) {

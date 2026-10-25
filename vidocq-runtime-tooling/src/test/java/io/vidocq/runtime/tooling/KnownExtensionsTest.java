@@ -337,4 +337,25 @@ class KnownExtensionsTest {
                     e.id() + ": module name differs from " + moduleInfo);
         }
     }
+
+    /** Vidocq/vidocq#353: {@code vidocq extension list --available} shows the catalog by family. */
+    @Test
+    void theCatalogIsGroupedByFamilyInTheOrderOfTheFamilies() {
+        var byFamily = KnownExtensions.catalogByFamily();
+
+        assertEquals(List.of(ExtensionFamily.values()), List.copyOf(byFamily.keySet()));
+        assertEquals(KnownExtensions.catalog().size(), byFamily.values().stream().mapToInt(List::size).sum());
+        assertTrue(byFamily.get(ExtensionFamily.MICROPROFILE).stream().anyMatch(e -> e.id().equals("knock-health")));
+        assertTrue(byFamily.get(ExtensionFamily.DATA).stream().anyMatch(e -> e.id().equals("mansart-data")));
+        assertTrue(byFamily.get(ExtensionFamily.WEB).stream().anyMatch(e -> e.id().equals("chappe-webserver")));
+        assertTrue(byFamily.get(ExtensionFamily.JAKARTA_EE).stream().anyMatch(e -> e.id().equals("cassini-rest")));
+    }
+
+    @Test
+    void aFamilyIsReadFromItsDescriptorId() {
+        assertEquals(ExtensionFamily.JAKARTA_EE, ExtensionFamily.of("jakarta-ee"));
+        assertEquals("MicroProfile", ExtensionFamily.MICROPROFILE.title());
+        var e = assertThrows(IllegalArgumentException.class, () -> ExtensionFamily.of("tools"));
+        assertEquals("unknown extension family 'tools': one of jakarta-ee, microprofile, data, web", e.getMessage());
+    }
 }
