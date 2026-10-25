@@ -22,6 +22,7 @@ package io.vidocq.heisenberg.internal;
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import java.lang.reflect.Method;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 
 /**
@@ -94,8 +95,10 @@ public final class BulkheadEngine {
         BulkheadStateRegistry.BulkheadState state = registry.getAsyncState(beanClass, methodName, config.value(), config.waitingTaskQueue());
         Semaphore permits = state.permits();
 
-        // Fast-path: execute immediately when a permit is available.
-        if (permits.tryAcquire()) {
+        // Fast-path: execute immediately when a permit is available and no task waits for one. The timed
+        // tryAcquire honours the fair ordering of the semaphore, the untimed one would take a permit just
+        // released for a queued task (an instant retry would overtake the queue, BUG-010).
+        if (permits.tryAcquire(0, TimeUnit.NANOSECONDS)) {
             recorder.bulkheadRunningDelta(runtimeBeanClass, method, +1);
             long runStart = System.nanoTime();
             try {

@@ -137,12 +137,14 @@ For `Future<T>`, the contract is stricter: `Future.cancel(true)` interrupts the 
 A method annotated `@Asynchronous` must not be called _directly_ from another virtual thread in the same chain — spec §6.4 forbids self-reference to avoid deadlocks. The Heisenberg interceptor detects this and raises `FaultToleranceDefinitionException` at application startup.
 ====
 
+[#bulkhead-semantics]
 == `@Bulkhead` semantics
 
 `@Bulkhead(value=N)` bounds the number of concurrent invocations:
 
 * **Synchronous mode** (no `@Asynchronous`): a `Semaphore` with N permits; a call beyond raises `BulkheadException` immediately.
 * **Asynchronous mode** (with `@Asynchronous`): a `Semaphore` with N permits + a `waitingTaskQueue` queue of pending tasks; beyond that, `BulkheadException`.
+* [.tag-new]#NEW# **Queued tasks run in arrival order** — a freed permit goes to the task that has waited longest; a later call never takes it first. That includes a `@Retry` of an execution that just failed: the retry joins the back of the queue, as spec §7.2 requires.
 
 == Configuration through MicroProfile Config
 

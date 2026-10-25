@@ -169,6 +169,71 @@ class BulkheadEngineTest {
         assertEquals(2, state.permits().availablePermits());
     }
 
+    /**
+     * §7.2 — A permit freed while a task waits in the queue goes to that task: a caller that arrives afterwards,
+     * including the execution that just released it and retries at once, does not take the permit first
+     * (BUG-010, TCK {@code BulkheadAsynchRetryTest.testRetriesJoinBackOfQueue}).
+     */
+    @org.junit.jupiter.api.RepeatedTest(20)
+    void bulkheadAsyncFreedPermitGoesToTheQueuedTaskBeforeALaterCaller() throws Exception {
+        var config = new BulkheadConfig(1, 5);
+        var registry = new TestBulkheadRegistry();
+        var engine = new BulkheadEngine(config, registry);
+        BulkheadStateRegistry.BulkheadState state = registry.getAsyncState("TestClass", "testMethod", 1, 5);
+
+        java.util.List<String> order = new java.util.concurrent.CopyOnWriteArrayList<>();
+        CountDownLatch releaseA = new CountDownLatch(1);
+        CountDownLatch releaseB = new CountDownLatch(1);
+        CountDownLatch aRunning = new CountDownLatch(1);
+        AtomicReference<Throwable> error = new AtomicReference<>();
+
+        // A holds the only permit, then calls again as soon as it releases it, as an instant retry does.
+        Thread a = Thread.ofVirtual().name("bulkhead-a").start(() -> {
+            try {
+                engine.executeAsync(() -> {
+                    aRunning.countDown();
+                    assertTrue(releaseA.await(10, TimeUnit.SECONDS));
+                    return "a1";
+                }, "TestClass", "testMethod");
+                engine.executeAsync(() -> order.add("A-retry"), "TestClass", "testMethod");
+            } catch (Throwable t) {
+                error.set(t);
+            }
+        });
+        assertTrue(aRunning.await(10, TimeUnit.SECONDS));
+
+        // B waits in the queue for that permit.
+        Thread b = Thread.ofVirtual().name("bulkhead-b").start(() -> {
+            try {
+                engine.executeAsync(() -> {
+                    order.add("B");
+                    assertTrue(releaseB.await(10, TimeUnit.SECONDS));
+                    return "b";
+                }, "TestClass", "testMethod");
+            } catch (Throwable t) {
+                error.set(t);
+            }
+        });
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (state.permits().getQueueLength() < 1 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(1, state.permits().getQueueLength(), "B must be waiting for the permit");
+
+        releaseA.countDown();
+        deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (order.isEmpty() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertEquals(java.util.List.of("B"), order, "the queued task must run before A's retry");
+
+        releaseB.countDown();
+        a.join(10_000);
+        b.join(10_000);
+        org.junit.jupiter.api.Assertions.assertNull(error.get());
+        assertEquals(java.util.List.of("B", "A-retry"), order);
+    }
+
     // Minimal test registry
     static class TestBulkheadRegistry implements BulkheadStateRegistry {
         private final java.util.concurrent.ConcurrentHashMap<String, Semaphore> semaphores =

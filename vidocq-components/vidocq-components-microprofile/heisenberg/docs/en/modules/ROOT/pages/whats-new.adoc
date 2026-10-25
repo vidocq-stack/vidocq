@@ -7,6 +7,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Asynchronous methods
 
 * **The request context is active in an `@Asynchronous` method** — on its own virtual thread, the method, its fallback and the other policies run with the CDI request context active, as MicroProfile Fault Tolerance requires; a `@RequestScoped` bean used there failed with `ContextNotActiveException` once Vauban kept one request context per thread (BUG-008, Vidocq/vauban#147). xref:reference.adoc#_asynchronous[`@Asynchronous`].
+* **A retried execution joins the back of the bulkhead queue** — in asynchronous mode, a permit just freed went to whichever caller asked first, not to the task waiting in the queue, so an `@Retry` with no delay overtook the queued tasks and a new call could jump the queue too. The official TCK test `BulkheadAsynchRetryTest.testRetriesJoinBackOfQueue` caught it at random on loaded machines (BUG-010). Queued tasks now run in arrival order. xref:concepts.adoc#bulkhead-semantics[`@Bulkhead` semantics].
 
 == Fallback methods on the module path
 
