@@ -170,7 +170,7 @@ Exception in thread "main" jakarta.enterprise.inject.spi.DeploymentException:
 Use `defaultValue` or `Optional<T>` to make injection optional.
 
 [#extension-in-the-compiler]
-=== When the extension runs in the compiler [.tag-new]#NEW#
+=== When the extension runs in the compiler
 
 Vauban can also run the extension while the application compiles: put `ravel-cdi-vauban` on the
 annotation processor path (on Vidocq, the `vidocq-runtime-ravel-config-extension-codegen` bundle does it).
@@ -286,7 +286,7 @@ public class ApiClient {
 ----
 
 [#other-containers]
-== Other CDI containers [.tag-new]#NEW#
+== Other CDI containers
 
 Ravel does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `ravel-it-other-containers`, prove it on every build (ravel#25), next to the official TCK, which already runs on Weld (xref:tck.adoc[TCK]):
 
