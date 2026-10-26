@@ -36,12 +36,17 @@ RELEASE_VERSION=$(sed -nE 's/^[[:space:]]*release-version:[[:space:]]*([^[:space
 [[ "$RELEASE_VERSION" != *-SNAPSHOT ]] || fail "$ANTORA: release-version ($RELEASE_VERSION) must be a released version, not a SNAPSHOT"
 
 # release-version must be strictly older than the in-dev project-version
-# (compares as tuples of ints, e.g. 0.3.0 < 0.4.0-SNAPSHOT -> (0,3,0) < (0,4,0)).
+# (compares as tuples of ints, e.g. 0.3.0 < 0.4.0-SNAPSHOT -> (0,3,0,1,0) < (0,4,0,1,0)).
+# A release candidate x.y.z-RCn ranks below x.y.z, so 0.4.0-RC1 < 0.4.0-SNAPSHOT.
 python3 - "$RELEASE_VERSION" "$PROJECT_VERSION" <<'PY'
 import re, sys
 def tup(v):
     v = re.sub(r"-SNAPSHOT$", "", v)
-    return tuple(int(p) for p in v.split("."))
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-RC(\d+))?", v)
+    if not m:
+        sys.exit(f"unsupported version format: {v}")
+    base = tuple(int(g) for g in m.groups()[:3])
+    return base + ((0, int(m.group(4))) if m.group(4) else (1, 0))
 release, project = sys.argv[1], sys.argv[2]
 if tup(release) >= tup(project):
     sys.exit(f"release-version ({release}) must be older than project-version ({project})")
@@ -51,7 +56,7 @@ PY
 #    *released* version — it must match release-version (it is plain Markdown,
 #    so it cannot use the Antora {release-version} attribute directly).
 README=README_EN.md
-README_PINNED=$(sed -nE 's#.*<version>([0-9]+\.[0-9]+\.[0-9]+)</version>.*#\1#p' "$README" | head -1)
+README_PINNED=$(sed -nE 's#.*<version>([0-9]+\.[0-9]+\.[0-9]+(-RC[0-9]+)?)</version>.*#\1#p' "$README" | head -1)
 [[ -n "$README_PINNED" ]] || fail "no pinned <version> found in $README's vidocq-runtime-maven-plugin snippet"
 [[ "$README_PINNED" == "$RELEASE_VERSION" ]] || fail "$README pins vidocq-runtime-maven-plugin to $README_PINNED, but the latest released version is $RELEASE_VERSION"
 
