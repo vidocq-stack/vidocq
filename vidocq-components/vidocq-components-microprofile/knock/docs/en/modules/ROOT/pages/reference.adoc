@@ -66,9 +66,9 @@ Internal packages (`io.vidocq.knock.internal`, `io.vidocq.knock.cdi.internal`) a
 | `LIVENESS`, `READINESS`, `STARTUP`, `ALL` — selects the checks to report.
 
 | `HealthCheckRegistry` (interface)
-| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`. [.tag-new]#NEW# List the checks without calling them: `getNamedChecks(ProbeType type)` (registration name to check, concrete probe only), `getCheckNames(ProbeType type)`; store and read the last answers: `recordResult(CheckResult result)`, `getLastResults()`. All four are default methods, so a third-party registry still compiles; its defaults remember nothing. See xref:concepts.adoc#last-results[Last results].
+| Register checks and retrieve them by probe type: `register(ProbeType type, String name, HealthCheck check)`, `unregister(String name)`, `getChecks(ProbeType type)`.List the checks without calling them: `getNamedChecks(ProbeType type)` (registration name to check, concrete probe only), `getCheckNames(ProbeType type)`; store and read the last answers: `recordResult(CheckResult result)`, `getLastResults()`. All four are default methods, so a third-party registry still compiles; its defaults remember nothing. See xref:concepts.adoc#last-results[Last results].
 
-| `CheckResult` (record) [.tag-new]#NEW#
+| `CheckResult` (record)
 | The last answer of one check: `probe` (never `ALL`), `name`, `responseName` (may be `null`), `status`, `observedAt`, `data` (values as strings). Plain values only.
 
 | `Knock` (class)
@@ -124,7 +124,7 @@ sdk env
 * Runs without Vauban, under Weld or Open Liberty — see <<other-containers>>.
 
 [#other-containers]
-== Other CDI containers [.tag-new]#NEW#
+== Other CDI containers
 
 Knock does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `knock-it-other-containers`, prove it on every build (Vidocq/knock#34):
 

@@ -57,7 +57,7 @@ sequenceDiagram
 . `KnockAggregator.aggregate(HealthCheckRegistry, ProbeType)` pulls the checks for the requested probe via `HealthCheckRegistry.getChecks(ProbeType)`.
 . Each `HealthCheck.call()` runs on its own virtual thread; the responses are reduced to a `HealthSnapshot` (spec §3.2 rules).
 . `KnockJsonSerializer.serialize(HealthSnapshot)` renders the snapshot to a JSON `String` through Jakarta JSON-P; `httpStatus(HealthSnapshot)` maps UP/DOWN to 200/503.
-. [.tag-new]#NEW# After the run, `KnockAggregator` records each answer in the registry as a `CheckResult`, under the probe the check is registered for (a `/health` request records each check under its own probe), timestamped by an injectable `Clock`. Recording reuses the answer: no check is called twice. See xref:concepts.adoc#last-results[Last results].
+.After the run, `KnockAggregator` records each answer in the registry as a `CheckResult`, under the probe the check is registered for (a `/health` request records each check under its own probe), timestamped by an injectable `Clock`. Recording reuses the answer: no check is called twice. See xref:concepts.adoc#last-results[Last results].
 . `KnockHealthService.report(ProbeType)` wraps both in a `HealthReport(int httpStatus, String json)` record.
 
 == Core classes
