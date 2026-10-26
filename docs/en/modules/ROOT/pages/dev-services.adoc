@@ -1,4 +1,4 @@
-= Dev services [.tag-new]#NEW#
+= Dev services
 :description: Zero-config external dependencies — a PostgreSQL database, a Keycloak identity provider — for `vidocq:dev`, `vidocq:run` and your tests, visible in the startup report and the dev console.
 
 [.lead]
@@ -7,7 +7,7 @@ A **dev service** provisions a Testcontainers container — PostgreSQL, Keycloak
 TIP: This page covers where dev services run, how the application sees them, and how a test gets one. `DEV_SERVICES.md` at the repository root covers the providers themselves — PostgreSQL, Keycloak, multi-datasource, stable ports — in full.
 
 [#where-they-run]
-== Where they run [.tag-new]#NEW#
+== Where they run
 
 Three hosts can start dev services, all through the same `vidocq-runtime-devservices-host` machinery:
 
@@ -34,7 +34,7 @@ depends on nothing but `vidocq-runtime-devservices-extension`, which reads a sma
 has no Testcontainers, no Maven API and no JSON library of its own.
 
 [#named-modules]
-Every dev services jar is a named module [.tag-new]#NEW#, as every published Vidocq jar is: none of them
+Every dev services jar is a named module, as every published Vidocq jar is: none of them
 reaches a module path as an automatic module. The providers name Testcontainers by the name its jar's
 file gives it (`testcontainers`), which is fine where they run, the plugin's class path, and they need
 Testcontainers' core only: the PostgreSQL provider configures a plain container rather than
@@ -42,7 +42,7 @@ Testcontainers' PostgreSQL module, `testcontainers-postgresql`. `vidocq-runtime-
 class path, where its `META-INF/services` entry finds it; on a module path, its `provides` does.
 
 [#configuration-sources]
-== Configuration sources [.tag-new]#NEW#
+== Configuration sources
 
 A provider's keys are one of two kinds:
 
@@ -69,7 +69,7 @@ vidocq.dev.reuse=true
 PostgreSQL dev service. What the file tells the provider is which database the application uses.
 
 [#postgres-only-for-postgres]
-=== A PostgreSQL container only for a PostgreSQL application [.tag-new]#NEW#
+=== A PostgreSQL container only for a PostgreSQL application
 
 With `vidocq-runtime-devservice-postgres` among the plugin's dependencies, the PostgreSQL dev
 service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for each name of
@@ -120,7 +120,7 @@ all of them are joined with `; `. The log says `DevService 'postgres' not starte
 state file keeps it, and the report shows it (<<the-report-section>>).
 
 [#container-names]
-=== Container names and labels [.tag-new]#NEW#
+=== Container names and labels
 
 A container a dev service starts is named after Vidocq, the application and the service, so
 `docker ps` tells it apart from the rest:
@@ -149,7 +149,7 @@ whatever their prefix. The `testcontainers-ryuk-…` container that removes them
 own name.
 
 [#vidocq-run]
-== vidocq:run (opt-in) [.tag-new]#NEW#
+== vidocq:run (opt-in)
 
 `vidocq:run` starts the application the way the production launcher does, so it starts no
 container unless asked — the same `vidocq.dev.devServices` tuning key turns it on, as a `-D` or in
@@ -166,7 +166,7 @@ and the extension added to the child's module path. Ctrl+C, or the process exiti
 stops the containers exactly once.
 
 [#switching-on-and-off]
-=== Switching dev services on and off [.tag-new]#NEW#
+=== Switching dev services on and off
 
 Every host — `vidocq:dev`, `vidocq:run` and the JUnit listener — reads `vidocq.dev.devServices`
 the same way, first match wins:
@@ -182,7 +182,7 @@ every `vidocq:run` into dev services, and `mvn vidocq:run -Dvidocq.dev.devServic
 turns them off for that one run.
 
 [#in-tests]
-== In tests [.tag-new]#NEW#
+== In tests
 
 A test that only needs a database adds the JUnit host's listener and the provider it wants, both
 `test` scope:
@@ -223,7 +223,7 @@ as a separate jar, it lands on the class path instead, in the unnamed module, wh
 in a consuming project's `pom.xml`.
 
 [#the-report-section]
-== The startup report section and dev console panel [.tag-new]#NEW#
+== The startup report section and dev console panel
 
 Whichever host started them, the application reads one state file,
 `<basedir>/target/vidocq-dev-services.json` — `<basedir>` is always the project's own `pom.xml`
@@ -263,7 +263,7 @@ the same rows. The state file keeps them as `"skipped": [{"id": "postgres", "rea
 written before that key existed reads as none.
 
 [#vidocq-devs-001]
-=== VIDOCQ-DEVS-001 [.tag-new]#NEW#
+=== VIDOCQ-DEVS-001
 
 Raised when the state file exists but could not be read — a corrupt or half-written file, most
 often from a very old, incompatible Vidocq version. The boot goes on; the section reads
@@ -271,7 +271,7 @@ often from a very old, incompatible Vidocq version. The boot goes on; the sectio
 listener, rewrites the file cleanly.
 
 [#one-state-file-per-project]
-=== One state file per project [.tag-new]#NEW#
+=== One state file per project
 
 The state file's path is the project's, not the host's: every host of the same project shares
 it, and `target/vidocq-dev-services.properties` too. Running `mvn test` while `vidocq:dev` runs in
@@ -287,7 +287,7 @@ reach Docker itself, so the panel has no live samples of its own — boot facts 
 xref:dev-console.adoc#panels[The dev console's panels].
 
 [#continuous-testing]
-== Continuous testing [.tag-new]#NEW#
+== Continuous testing
 
 xref:continuous-testing.adoc[Continuous testing] reuses the dev containers: under `vidocq:dev` every test run
 gets the session's connection keys, and `vidocq:test` opens a session of its own, host `vidocq:test`. Each run
@@ -296,7 +296,7 @@ gets `-Dvidocq.dev.devServices=false`, so the tests never start a second set of 
 WARNING: The tests then share the dev database: a test that deletes rows deletes your dev data.
 
 [#no-secrets]
-== No secret leaves the application [.tag-new]#NEW#
+== No secret leaves the application
 
 A key whose last dot-separated segment names a secret — `password`, `passwd`, `pwd`, `secret`,
 `token`, `key`, `credential(s)`, `apikey`, `api-key`, `private-key`, in any case — is written to

@@ -19,24 +19,24 @@
 | Goal | Role
 
 | `vidocq:generate`
-| Generates the CDI bean index (`META-INF/vauban-beans.list`) and the code of the dependency jars it scans — their `_VaubanComponents`, client proxies and intercepted subclasses — into an enriched copy of each jar that every launch uses. See <<generate,the `vidocq:generate` goal>> [.tag-new]#NEW#. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
+| Generates the CDI bean index (`META-INF/vauban-beans.list`) and the code of the dependency jars it scans — their `_VaubanComponents`, client proxies and intercepted subclasses — into an enriched copy of each jar that every launch uses. See <<generate,the `vidocq:generate` goal>>. Extension discovery itself needs no index — it is plain `ServiceLoader` over `provides` directives.
 
 | `vidocq:package`
-| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. `-Dvidocq.package.layer=false` gives the legacy layout, launched through the main class's module: see <<package-layout>> [.tag-new]#NEW#. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
+| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers and `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` artifact. `-Dvidocq.package.layer=false` gives the legacy layout, launched through the main class's module: see <<package-layout>>. Never a dev-only jar, even one the project declares: see <<dev-tools,Dev tools and binaries>>.
 
 | `vidocq:dev`
-| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing]. It also adds the dev tools — the dev console and, per extension, its `-dev` panel module — to the child's module path only: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#.
+| Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change. The child runs a JDWP agent on `127.0.0.1:5005`, see <<debugger,the debug agent>>. With continuous testing, it also runs the tests after every reload; see xref:continuous-testing.adoc[Continuous testing]. It also adds the dev tools — the dev console and, per extension, its `-dev` panel module — to the child's module path only: see <<dev-tools,Dev tools and binaries>>.
 
-| `vidocq:run` [.tag-new]#NEW#
+| `vidocq:run`
 | Runs the application once in a forked JVM, after compiling and indexing it: the goal forks the lifecycle up to `process-classes`, so `mvn vidocq:run` alone is a complete run. See <<run,the `vidocq:run` goal>>.
 
-| `vidocq:test` [.tag-new]#NEW#
+| `vidocq:test`
 | Continuous testing without the application: runs the tests, then again on every change of the main or test sources, with a summary and keys in the terminal. See <<test,the `vidocq:test` goal>>.
 
 | `vidocq:checkpom`
-| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. A missing codegen bundle is reported with the `<path>` to paste into the compiler's `annotationProcessorPaths`, its group and version included [.tag-new]#NEW#; a `-dev` companion module is never asked for one. The bundle is the one the extension's `META-INF/vidocq/extension.properties` names, or none when it names none [.tag-new]#NEW# (xref:modules/vidocq-runtime-cli.adoc#extension-descriptor[the extension descriptor]); for an extension without that descriptor, the `vidocq-runtime-<name>-extension-codegen` its name gives, when that artifact is published. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>> [.tag-new]#NEW#. Warns, never fails, on a codegen `<path>` still declared with `<type>pom</type>`, which IntelliJ's build cannot read [.tag-new]#NEW# (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). Fails when an application that declares an extension has lost `vidocq-runtime-core-codegen`, the Vauban indexer the parent wires, typically to an `annotationProcessorPaths` without `combine.children="append"`; a module with `<proc>none</proc>` is left alone [.tag-new]#NEW#.
+| Verifies every `vidocq-runtime-<name>-extension` declared in the pom is correctly wired (annotation processor paths, codegen bundles). Bound to `validate` via `pluginManagement`. A missing codegen bundle is reported with the `<path>` to paste into the compiler's `annotationProcessorPaths`, its group and version included; a `-dev` companion module is never asked for one. The bundle is the one the extension's `META-INF/vidocq/extension.properties` names, or none when it names none(xref:modules/vidocq-runtime-cli.adoc#extension-descriptor[the extension descriptor]); for an extension without that descriptor, the `vidocq-runtime-<name>-extension-codegen` its name gives, when that artifact is published. Also warns, never fails, on a dev-only jar declared in any scope but `test`: see <<dev-tools,Dev tools and binaries>>. Warns, never fails, on a codegen `<path>` still declared with `<type>pom</type>`, which IntelliJ's build cannot read(xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). Fails when an application that declares an extension has lost `vidocq-runtime-core-codegen`, the Vauban indexer the parent wires, typically to an `annotationProcessorPaths` without `combine.children="append"`; a module with `<proc>none</proc>` is left alone.
 
-| `vidocq:analyze-deps` [.tag-new]#NEW#
+| `vidocq:analyze-deps`
 | Explains which dependencies `vidocq:generate` scans, why, and what it does with each; prints the `<scanDependencies>` block that makes the detection explicit. See <<analyze-deps>>.
 
 | `vauban:modularize` (Vauban plugin)
@@ -57,28 +57,28 @@
 | `vidocq:complete-module-info`
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
 
-| `vidocq:idea` [.tag-new]#NEW#
+| `vidocq:idea`
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
 
-| `vidocq:vscode` [.tag-new]#NEW#
+| `vidocq:vscode`
 | Writes the `.vscode/` settings, tasks and debug configuration of the project for VS Code's Java extension, or checks them in CI. See <<vscode,the `vidocq:vscode` goal>>.
 
-| `vidocq:eclipse` [.tag-new]#NEW#
+| `vidocq:eclipse`
 | Writes the Eclipse run and debug configurations of the project into `.eclipse/`, or checks them in CI. See <<eclipse,the `vidocq:eclipse` goal>>.
 
-| `vidocq:add-extension` [.tag-new]#NEW#
+| `vidocq:add-extension`
 | Adds extensions to the project, as `vidocq extension add` does: the dependency, the codegen bundle on the compiler's `annotationProcessorPaths` when the extension ships one, and its directives in `src/main/java/module-info.java`. See <<extension-goals>>.
 
-| `vidocq:remove-extension` [.tag-new]#NEW#
+| `vidocq:remove-extension`
 | Removes extensions, undoing `add-extension`, as `vidocq extension remove` does. See <<extension-goals>>.
 
-| `vidocq:list-extensions` [.tag-new]#NEW#
+| `vidocq:list-extensions`
 | Lists the extensions the project runs with, as `vidocq extension list` does; `-Dvidocq.extensions.available` adds the catalog. See <<report-goals>>.
 
-| `vidocq:doctor` [.tag-new]#NEW#
+| `vidocq:doctor`
 | Checks the environment and the project, as `vidocq doctor` does; a failed check fails the build. See <<report-goals>>.
 
-| `vidocq:create` [.tag-new]#NEW#
+| `vidocq:create`
 | Scaffolds a new project, as `vidocq create` does; needs no project. See <<create-goal>>.
 |===
 
@@ -87,7 +87,7 @@
 ====
 When `vidocq:generate` scans a dependency, the classes it produces for it belong to *that
 dependency's* packages. The plugin keeps the module path split-package-free end to end: `generate`
-parks those classes in `target/vidocq-patches/<artifactId>/`, then [.tag-new]#NEW# writes an *enriched* copy of the
+parks those classes in `target/vidocq-patches/<artifactId>/`, thenwrites an *enriched* copy of the
 jar that carries them and declares its providers (<<generate>>); `dev`, `run`, `package` and `jlink`
 use that copy in place of the original. Only a jar that cannot be given a module descriptor keeps
 its original, its classes attached with `--patch-module`. Zero configuration. See
@@ -95,7 +95,7 @@ xref:usage.adoc#multi-module-applications-scanned-dependencies[Usage — Multi-m
 ====
 
 [#codegen-wiring]
-== The plugin wires the codegen bundles [.tag-new]#NEW#
+== The plugin wires the codegen bundles
 
 An extension used to take two places in the pom: its dependency, and its `-codegen` bundle in the compiler's
 `annotationProcessorPaths`. From 0.4.0 it takes one. Declared with `<extensions>true</extensions>`, the plugin
@@ -150,12 +150,12 @@ An IDE build needs the Vauban processor of 0.4.0 or later: before it (VAU-APT-00
 its last round, and an application built by Eclipse or VS Code started without its beans.
 
 [#cli-and-plugin]
-== The goals and the Vidocq CLI [.tag-new]#NEW#
+== The goals and the Vidocq CLI
 
 include::partial$cli-plugin-correspondence.adoc[]
 
 [#extension-goals]
-== `vidocq:add-extension` and `vidocq:remove-extension` goals [.tag-new]#NEW#
+== `vidocq:add-extension` and `vidocq:remove-extension` goals
 
 The two goals edit the project the way `vidocq extension add` and `vidocq extension remove` do, for a build
 that has Maven and no Vidocq CLI, in CI or in an IDE. Both tools run the same code, from
@@ -168,11 +168,11 @@ mvn vidocq:remove-extension -Dextensions=knock-health
 ----
 
 * `-Dextensions` takes catalog ids, comma-separated, or `groupId:artifactId` coordinates. Any other name fails the
-  goal, which names the closest catalog ids and writes nothing [.tag-new]#NEW#.
+  goal, which names the closest catalog ids and writes nothing.
 * `add-extension` writes the dependency, the codegen bundle into the compiler plugin of the project's own build,
   and the directives into `src/main/java/module-info.java`, each marked `// vidocq:<id>`. It writes no version when
   `vidocq-runtime-bom` gives it (a `vidocq-runtime-parent` from 0.4.0, or a pom that imports the BOM)
-  [.tag-new]#NEW#; otherwise it pins the version the pom's `vidocq-runtime-parent` gives, else the plugin's own. See
+ ; otherwise it pins the version the pom's `vidocq-runtime-parent` gives, else the plugin's own. See
   xref:modules/vidocq-runtime-cli.adoc#extension[`vidocq extension`] for each of these edits.
 * `remove-extension` takes back what `add-extension` wrote, the `<dependencies>`, `<build>` and `<plugins>`
   elements it created included.
@@ -180,7 +180,7 @@ mvn vidocq:remove-extension -Dextensions=knock-health
   module to change (`mvn -f app/pom.xml vidocq:add-extension …`).
 
 [#report-goals]
-== `vidocq:list-extensions` and `vidocq:doctor` goals [.tag-new]#NEW#
+== `vidocq:list-extensions` and `vidocq:doctor` goals
 
 The two goals give the reports of `vidocq extension list` and `vidocq doctor` in a build, from the same
 `vidocq-runtime-tooling` code (Vidocq/vidocq#314). Neither has a phase; each runs on every module of the build.
@@ -198,14 +198,14 @@ mvn vidocq:doctor -Dvidocq.doctor.fix                       # repair the project
   find the same list.
 * `doctor` runs the checks of xref:modules/vidocq-runtime-cli.adoc#doctor[`vidocq doctor`]: the JDK that runs
   Maven, `JAVA_HOME`, the Maven wrapper, the pom, `vidocq.properties` and the extensions, then
-  [.tag-new]#NEW# xref:modules/vidocq-runtime-cli.adoc#doctor-project[the project's]: its codegen bundles, the Vauban
+ xref:modules/vidocq-runtime-cli.adoc#doctor-project[the project's]: its codegen bundles, the Vauban
   indexer, the `module-info.java` directives, the wrapper's Maven and the HTTP port. A failed check (a JDK older
   than 25, a missing codegen bundle) fails the build; a warning does not. `-Dvidocq.doctor.verbose` also gives the
-  hint of the checks that passed, and [.tag-new]#NEW# `-Dvidocq.doctor.fix` first makes the repairs of
+  hint of the checks that passed, and`-Dvidocq.doctor.fix` first makes the repairs of
   `vidocq doctor --fix` (Vidocq/vidocq#339).
 
 [#create-goal]
-== `vidocq:create` goal [.tag-new]#NEW#
+== `vidocq:create` goal
 
 Scaffolds a new Vidocq project the way `vidocq create` does, for a machine that has Maven and no Vidocq CLI.
 Both run the scaffolder of `vidocq-runtime-tooling`, so they write the same `pom.xml`, `module-info.java`,
@@ -234,11 +234,11 @@ The project is created in the current directory, which must not hold a directory
 xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`] for what each file holds.
 
 [#generate]
-== `vidocq:generate` goal [.tag-new]#NEW#
+== `vidocq:generate` goal
 
 Bound to `process-classes`. Besides the application's own bean index, it generates code for the dependency jars it scans, so that their beans run generated code instead of reflection: per package a `_VaubanComponents` that creates the beans, injects their fields and calls their methods, a client proxy per normal-scoped bean, an intercepted subclass per intercepted one — the same code the Vauban annotation processor writes for a project, made with the Class-File API.
 
-Last, it writes `META-INF/vidocq/generate.stamp` [.tag-new]#NEW#, which records the `META-INF/vauban-beans.list` it leaves: at boot, an application module whose stamp is missing or records another index was built without the goal, and the boot indexes the unprocessed bean archives itself (xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`]).
+Last, it writes `META-INF/vidocq/generate.stamp`, which records the `META-INF/vauban-beans.list` it leaves: at boot, an application module whose stamp is missing or records another index was built without the goal, and the boot indexes the unprocessed bean archives itself (xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`]).
 
 === Which jars it scans
 
@@ -255,7 +255,7 @@ Last, it writes `META-INF/vidocq/generate.stamp` [.tag-new]#NEW#, which records 
 | A CDI bean archive
 | Any jar with a `META-INF/beans.xml` whose `bean-discovery-mode` is not `none`. On by default; `-Dvidocq.generate.autoScan=false` or `<autoScan>false</autoScan>` turns it off.
 
-| A brick [.tag-new]#NEW#
+| A brick
 | A brick whose codegen bundle declares `META-INF/vidocq/dependency-codegen.properties` selects the jars it can process: a jar with one of its `resources`, or with one of its `class-bytes` in a class file. See <<brick-processors>>.
 |===
 
@@ -276,19 +276,19 @@ The copy is a modified third-party jar: its signature files are dropped, and its
 | `scanDependencies` | none | Jars to scan, whatever else selects them; also enriches a signed jar.
 | `scanExcludes` | none | Jars never scanned.
 | `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
-| `cacheDir` (`vidocq.generate.cacheDir`) [.tag-new]#NEW# | `$XDG_CACHE_HOME/vidocq/depgen`, else `~/.cache/vidocq/depgen` | Where the output of the brick processors is cached. See <<depgen-cache>>.
+| `cacheDir` (`vidocq.generate.cacheDir`)| `$XDG_CACHE_HOME/vidocq/depgen`, else `~/.cache/vidocq/depgen` | Where the output of the brick processors is cached. See <<depgen-cache>>.
 |===
 
 The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]). A class that only a build-compatible extension makes a bean — a JAX-RS `@Provider` to which Cassini's extension gives `@Dependent`, say — is covered too: `generate` resolves the runtime-scope dependencies as well as the compile-scope ones, so it runs every extension the application runs.
 
 [#brick-processors]
-=== Brick processors on dependency jars [.tag-new]#NEW#
+=== Brick processors on dependency jars
 
 Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time.
 
 The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, and the classes listed in the service files among its matched `resources`. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
 
-A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`. Such a jar, when it has no module descriptor, stays an automatic module in its enriched copy even when Vauban generates providers for it: the providers are listed in its `META-INF/services` files, and an automatic module may use any service, which a synthesized descriptor cannot guarantee. [[brick-automatic-packaging]][.tag-new]#NEW# `vidocq:package` ships that automatic copy, even when `vauban:modularize` gave the jar a descriptor: it used to rebuild the copy on that descriptor, which can miss a `uses`. The copy's manifest says so with `Vidocq-Automatic: brick-selected`, and its module name is the automatic one, not a name configured for `vauban:modularize`. Only `vidocq:jlink`, which refuses automatic modules, rebuilds it on the `vauban:modularize` descriptor (Vidocq/vidocq#251).
+A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`. Such a jar, when it has no module descriptor, stays an automatic module in its enriched copy even when Vauban generates providers for it: the providers are listed in its `META-INF/services` files, and an automatic module may use any service, which a synthesized descriptor cannot guarantee. [[brick-automatic-packaging]]`vidocq:package` ships that automatic copy, even when `vauban:modularize` gave the jar a descriptor: it used to rebuild the copy on that descriptor, which can miss a `uses`. The copy's manifest says so with `Vidocq-Automatic: brick-selected`, and its module name is the automatic one, not a name configured for `vauban:modularize`. Only `vidocq:jlink`, which refuses automatic modules, rebuilds it on the `vauban:modularize` descriptor (Vidocq/vidocq#251).
 
 *Not candidates.* The `io.vidocq*` jars, which are built with the processors already. For a `class-bytes` hint, a jar that itself defines the hinted classes, as the API jars do (`jakarta.servlet-api` defines `jakarta/servlet/annotation/WebListener`: it mentions it but is not a library that uses it).
 
@@ -325,7 +325,7 @@ The whole javac output is in `target/vidocq-depgen/<artifactId>.log`. A generate
 * A Mansart repository interface compiled without `-parameters` cannot be implemented from a class file, unless its parameters use `@Param`. Mansart's hints are pending (mansart#40, mansart#41): Foy is the first brick to declare them.
 
 [#brick-authors]
-==== For brick authors [.tag-new]#NEW#
+==== For brick authors
 
 A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its codegen bundle, next to its processors. The keys are `brick`, `resources`, `class-bytes`, `markers`, `merge` and `whole-jar`; any other key fails the build. Lists are comma-separated.
 
@@ -372,7 +372,7 @@ whole-jar=META-INF/foy/class-index.list
 Foy's `merge` file is also among its `markers`: a jar that already has it was built with Foy's processor, so it is skipped rather than merged. Its `class-index.list` is a marker too, and `whole-jar`: Foy scans a jar without one for `@HandlesTypes` at run time, which a partial index would prevent.
 
 [#analyze-deps]
-== `vidocq:analyze-deps` goal [.tag-new]#NEW#
+== `vidocq:analyze-deps` goal
 
 `mvn vidocq:analyze-deps` prints, for each bean archive and each named dependency, what it is — its discovery mode, an explicit or automatic module, signed or not — what selects or excludes it, and what `vidocq:generate` does with it: an enriched copy, an open module synthesized first, or nothing and why. It ends with the `<scanDependencies>` block that makes the detected bean archives explicit, to paste in the pom. It reads the same `scanDependencies`, `scanExcludes` and `autoScan` as `vidocq:generate`: configure them at plugin level so both goals see them. A jar that a brick selects reads `selected by a brick (Foy)` as its source, and the bricks that would process it are listed (<<brick-processors>>). It changes nothing.
 
@@ -384,7 +384,7 @@ By default the application jar lands in `app/`, apart from the module-path closu
 module layer the Vauban class loader defines, as it does under `vidocq:dev` and `vidocq:run`.
 
 [#package-legacy-layout]
-=== The legacy layout [.tag-new]#NEW#
+=== The legacy layout
 
 `-Dvidocq.package.layer=false` puts everything in `lib/` and the launchers start the JVM with `--module`,
 which takes a module, then a class:
@@ -398,7 +398,7 @@ other. The launchers used to pass the class name alone to `--module`, and the JV
 `FindException` before `main` (Vidocq/vidocq#198).
 
 [#app-layer-property]
-=== The `vidocq.app.layer` property [.tag-new]#NEW#
+=== The `vidocq.app.layer` property
 
 `vidocq:run`, `vidocq:dev` and `vidocq:package` read the same two properties (Vidocq/vidocq#247).
 
@@ -437,7 +437,7 @@ A jar with classes parked by `vidocq:generate` ships enriched with them, so it m
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
 [#modularize]
-== `modularize` moved to the Vauban plugin [.tag-new]#NEW#
+== `modularize` moved to the Vauban plugin
 
 The `vidocq:modularize` goal no longer exists. It is now **`vauban:modularize`**, in
 `io.vidocq.vauban:vauban-maven-plugin` — Vauban owns the class loader and the module machinery, so
@@ -520,7 +520,7 @@ target/
 ----
 
 [#jlink-without-main-class]
-=== Without an application main class [.tag-new]#NEW#
+=== Without an application main class
 
 `vidocq.mainModule` is the only setting the image needs. `vidocq.mainClass` is optional, as it is for
 `vidocq:dev`, `vidocq:run` and `vidocq:package`:
@@ -544,7 +544,7 @@ A missing `vidocq.mainModule` fails the goal with a message naming the property,
 
 Reuses the `jlink` image. Default type: `app-image` (cross-platform). On macOS, `.app`. On Windows, `.exe` or `.msi`. On Linux, `.deb` or `.rpm`.
 
-[.tag-new]#NEW# Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
+Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
 application starts with `--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the
 two options of <<jlink-without-main-class>> again as `--java-options`: an image built by `vidocq:jlink` already
 holds them, one given through `runtimeImage` may not.
@@ -572,13 +572,13 @@ docker run --rm -p 8080:8080 \
 ----
 
 [#docker-linux-image]
-[.tag-new]#NEW# The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
+The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
 or Windows the image holds a Mach-O or PE `bin/java` that a Linux container cannot start. The goal reads that
 header: when the image is not Linux it logs a warning and still writes the `Dockerfile`, and with
 `-Dvidocq.docker.build=true` it fails before running `docker build`. Build the image on Linux, in CI for instance.
 
 [#run]
-== `vidocq:run` goal [.tag-new]#NEW#
+== `vidocq:run` goal
 
 `vidocq:run` runs the application once, in a JVM it forks the way the production launcher does. Before that it
 forks the lifecycle up to `process-classes`, so a single command compiles the module, completes the bean index
@@ -598,7 +598,7 @@ That forked lifecycle is the reason the goal exists. An IDE that builds with its
 <<idea,`vidocq:idea`>> now writes.
 
 [[compiler-output-check]]
-*An output compiled without the processors* [.tag-new]#NEW#. Before launching, `vidocq:run` and `vidocq:dev` check that `target/classes` still holds every file the Maven compiler recorded as created in `target/maven-status/maven-compiler-plugin/compile/*/createdFiles.lst`, the output of the annotation processors included. An IDE build that compiles the same directory without the processors, as IntelliJ's does with a `-codegen` bundle still declared as a pom (see xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]), leaves only the hand-written classes, and `maven-compiler-plugin` then answers "Nothing to compile": the application would start without its generated beans, web components and services. On such a gap the goal warns with the count and the first missing files, deletes the compiler's incremental state, so that the next compile is a full one with the processors, and recompiles once with `mvn process-classes`; a failed recompile, or files still missing after it, fails the goal and asks for `mvn clean` (Vidocq/vidocq#237).
+*An output compiled without the processors*. Before launching, `vidocq:run` and `vidocq:dev` check that `target/classes` still holds every file the Maven compiler recorded as created in `target/maven-status/maven-compiler-plugin/compile/*/createdFiles.lst`, the output of the annotation processors included. An IDE build that compiles the same directory without the processors, as IntelliJ's does with a `-codegen` bundle still declared as a pom (see xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]), leaves only the hand-written classes, and `maven-compiler-plugin` then answers "Nothing to compile": the application would start without its generated beans, web components and services. On such a gap the goal warns with the count and the first missing files, deletes the compiler's incremental state, so that the next compile is a full one with the processors, and recompiles once with `mvn process-classes`; a failed recompile, or files still missing after it, fails the goal and asks for `mvn clean` (Vidocq/vidocq#237).
 
 The forked JVM is the one `vidocq:dev` forks, without the source watcher, the reload file and
 `-Dvidocq.profile=dev`: the module path of the packaged distribution (every runtime dependency, the enriched
@@ -632,7 +632,7 @@ run always uses.
 | `vidocq.mainClass`
 | _(unset)_
 | The application main class, typically a `@VidocqMain` trampoline. Optional: without it the runtime's own main boots the
-  application [.tag-new]#NEW#; with it, the class is passed as `-Dvidocq.app.main` and run inside the application
+  application; with it, the class is passed as `-Dvidocq.app.main` and run inside the application
   layer. See xref:usage.adoc#entry-point[The application entry point].
 
 | `vidocq.run.jvmArgs`
@@ -656,7 +656,7 @@ run always uses.
 | `5005`
 | The port the debug agent listens on.
 
-| `vidocq.run.debug.host` [.tag-new]#NEW#
+| `vidocq.run.debug.host`
 | `127.0.0.1`
 | The interface the debug agent listens on: this machine only by default. `*` or `0.0.0.0` opens it on every
   interface, with a warning — see <<debugger,the debug agent>>.
@@ -669,13 +669,13 @@ run always uses.
 | `5000`
 | How long the application has to stop after Ctrl+C before it is force-killed.
 
-| `vidocq.app.layer` [.tag-new]#NEW#
+| `vidocq.app.layer`
 | `classes`
 | `classes`: the application layer holds the project's classes, its dependencies stay on the module path. `all`: it
   also holds every dependency outside the runtime's closure, as `WEB-INF/lib` does in a servlet container. Needs the
   layer mode. See <<app-layer-property,the `vidocq.app.layer` property>>.
 
-| `vidocq.app.layer.keep` [.tag-new]#NEW#
+| `vidocq.app.layer.keep`
 | _(empty)_
 | Under `all`, comma-separated patterns kept in the parent layer: a module name or `groupId:artifactId`, `*` alone
   or as a suffix.
@@ -694,13 +694,13 @@ forwards the ones that configure the application: every `-Dvidocq.*` that is not
 -Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
 `vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
 
-[.tag-new]#NEW# `vidocq:dev` forwards the same set, by the same rule. Before, a `-Dvidocq.*` of the command line
+`vidocq:dev` forwards the same set, by the same rule. Before, a `-Dvidocq.*` of the command line
 never reached the JVM it forks: `mvn vidocq:dev -Dvidocq.chappe.listener.default.port=8081` still listened on the
 default port, silently. A `vidocq.dev.systemProperties` entry and the goal's own values (`vidocq.profile=dev`)
 win over the command line, as `vidocq.run.systemProperties` does for `vidocq:run`.
 
 [#run-colours]
-=== Colours in the forked JVM [.tag-new]#NEW#
+=== Colours in the forked JVM
 
 The forked JVM writes to Maven's own console, so it takes Maven's colour policy — `vidocq:run` and `vidocq:dev`
 both pass it as `-Dvidocq.console.color`:
@@ -729,7 +729,7 @@ is passed, because the runtime honours `NO_COLOR` on its own, over any mode. The
 why, on one `-X` debug line.
 
 [#test]
-== `vidocq:test` goal [.tag-new]#NEW#
+== `vidocq:test` goal
 
 `vidocq:test` runs the application's tests on every change, without starting the application: no child JVM,
 no dev console, no debug agent. It opens the dev services session, runs every test, then watches the main and
@@ -774,7 +774,7 @@ its run and its dev services.
 |===
 
 [#dev-continuous-testing]
-=== Continuous testing in `vidocq:dev` [.tag-new]#NEW#
+=== Continuous testing in `vidocq:dev`
 
 `vidocq:dev` gains two parameters:
 
@@ -792,7 +792,7 @@ its run and its dev services.
 |===
 
 [#debugger]
-== The debug agent of `vidocq:dev` and `vidocq:run` [.tag-new]#NEW#
+== The debug agent of `vidocq:dev` and `vidocq:run`
 
 `vidocq:dev` starts its child JVM with a JDWP agent, and `vidocq:run` does when `-Dvidocq.run.debug=true` asks
 for one. A JDWP agent executes what the debugger connected to it asks, so whoever can reach its port can run any
@@ -813,8 +813,8 @@ the same machine attaches to `localhost:5005` as before, and no other machine ca
 | `5005`
 | The port the agent listens on.
 
-| `vidocq.dev.debugHost` [.tag-new]#NEW#
-| `vidocq.run.debug.host` [.tag-new]#NEW#
+| `vidocq.dev.debugHost`
+| `vidocq.run.debug.host`
 | `127.0.0.1`
 | The interface the agent listens on.
 
@@ -850,7 +850,7 @@ you trust: `mvn vidocq:dev -Dvidocq.dev.debugHost='*'` (quote the `*` for the sh
 one, never every interface.
 
 [#dev-tools]
-== Dev tools and binaries [.tag-new]#NEW#
+== Dev tools and binaries
 
 The dev console and every extension's `-dev` panel module (xref:dev-console-panels.adoc#dev-module[A `-dev`
 module, never packaged]) are development tools: only `vidocq:dev` ever adds them, to the child JVM's module
@@ -926,14 +926,14 @@ dependency.
 <<idea,the `vidocq:idea` goal>>.
 
 [#idea]
-== `vidocq:idea` goal [.tag-new]#NEW#
+== `vidocq:idea` goal
 
 *Experimental.* `vidocq:idea` writes IntelliJ IDEA shared run configurations, in `.run/`, per Vidocq application
 of the reactor, from what the poms already declare. By default that is three files per application — a
 **Maven** run of `vidocq:dev` suffixed ` (dev)`, the configuration a developer runs day to day (the console, hot
 reload, continuous testing), one of <<run,`vidocq:run`>> suffixed ` (run)` — that one still compiles the module,
 completes the bean index and starts the application, the three through Maven — and a Remote JVM Debug one
-suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent [.tag-new]#NEW# (Vidocq/vidocq#143); see
+suffixed ` (debug)` that attaches to `vidocq:dev`'s own debug agent(Vidocq/vidocq#143); see
 <<dev-tools,Dev tools and binaries>>.
 
 [source,bash]
@@ -945,7 +945,7 @@ mvn vidocq:idea -Dvidocq.idea.kind=application           # an Application run of
 ----
 
 [IMPORTANT]
-.Why the Maven kind is the default [.tag-new]#NEW#
+.Why the Maven kind is the default
 ====
 The IDE build never runs `vidocq:generate`. IntelliJ's Make compiles the module with its own compiler, and
 `vidocq:generate`, which completes the bean index with the beans of the dependency jars a build-time
@@ -956,7 +956,7 @@ incomplete: the server answers 404 (Vidocq/vidocq#83).
 
 A Maven run configuration has no such hole: `vidocq:run` forks the lifecycle up to `process-classes` itself,
 then forks the JVM exactly as the command line does. `vidocq:dev` starts from `target/classes` as it is, so the
-`(dev)` configuration runs `process-classes vidocq:dev`, as `vidocq dev` does [.tag-new]#NEW# (Vidocq/vidocq#237).
+`(dev)` configuration runs `process-classes vidocq:dev`, as `vidocq dev` does(Vidocq/vidocq#237).
 IntelliJ also disables its own Build step for a Maven configuration. A Build that IntelliJ runs on its own, from
 the Build menu or automatically, still compiles `target/classes` without the processors of a `-codegen` bundle:
 both goals detect it and recompile, see <<compiler-output-check,an output compiled without the processors>>.
@@ -972,14 +972,14 @@ the goal by its coordinates (`mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:
 For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
 `<vidocq.idea.jre>temurin-25</vidocq.idea.jre>` in the top-level pom, the Maven kind writes three files
 (Vidocq/vidocq#143). Without `vidocq.mainClass`, they would be named after the artifactId:
-`mcp-time-server (dev)`, and so on [.tag-new]#NEW#.
+`mcp-time-server (dev)`, and so on.
 
 [cols="2,3"]
 |===
 | File | Runs
 
 | `.run/McpTimeServerApp (dev).run.xml`
-| A Maven run of `process-classes vidocq:dev` [.tag-new]#NEW#, the configuration a developer runs day to day.
+| A Maven run of `process-classes vidocq:dev`, the configuration a developer runs day to day.
   `process-classes` compiles and indexes first, as `vidocq dev` does, since `vidocq:dev` starts from
   `target/classes` as it is (Vidocq/vidocq#237).
 
@@ -1080,10 +1080,10 @@ agent itself, which `vidocq:dev` and `vidocq:idea` both read the same way.
 ==== The `application` kind
 
 `-Dvidocq.idea.kind=application` writes what the goal wrote before: one Application run configuration per
-application that declares a main class [.tag-new]#NEW#, of that main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
+application that declares a main class, of that main class, with two before-launch steps — IntelliJ's Make, then `vidocq:generate` on the
 application's own pom. Unlike the Maven kind's three files, there is only ever this one: the application runs
 in the JVM IntelliJ starts directly, never under `vidocq:dev`, so it never has the dev console or any `-dev`
-module [.tag-new]#NEW# (<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
+module(<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
 separate debugger to — attach IntelliJ's own debugger to this configuration instead.
 
 [source,xml]
@@ -1125,14 +1125,14 @@ A project of the build gets a run configuration when:
 . `vidocq-runtime-maven-plugin` is in its effective `<build><plugins>` (inherited declarations and active
   profiles count, `<pluginManagement>` alone does not): the before-launch step runs `vidocq:generate` on its pom;
 . its pom does not set `vidocq.idea.exclude` to `true`;
-. it declares `vidocq.mainModule` or an application main class [.tag-new]#NEW#. The main class is the
+. it declares `vidocq.mainModule` or an application main class. The main class is the
   plugin-level `<mainClass>` if set, otherwise the `vidocq.mainClass` property. The runtime's own
   `io.vidocq.runtime.core.Vidocq` does not count as one, and a legacy `module/Class` value keeps its class — the
   rule `vidocq:package` applies.
 
 An application needs no main class of its own: the runtime's main boots it, and `vidocq.mainModule` is all
 `vidocq:dev` and `vidocq:run` read. Such an application gets the Maven kind's three files, named after its
-`artifactId` [.tag-new]#NEW#. That default also keeps apart the applications of a reactor with one application
+`artifactId`. That default also keeps apart the applications of a reactor with one application
 per module, where two `App` classes would collide. Only the `application` kind runs a main class: it leaves an
 application without one out, with a warning to declare `vidocq.mainClass` (a `@VidocqMain` trampoline) or to
 keep the Maven kind.
@@ -1141,7 +1141,7 @@ A `<mainClass>` set on an execution (for example the `jlink` one) is not read; w
 class and the module declares no `vidocq.mainModule`, the goal warns. These values
 are read from each module's pom, never from the command line: a `-Dvidocq.mainClass`, `-Dvidocq.mainModule`,
 `-Dvidocq.idea.configurationName`, `-Dvidocq.idea.moduleName`, `-Dvidocq.idea.exclude`, `-Dvidocq.dev.debugHost`
-or `-Dvidocq.dev.debugPort` [.tag-new]#NEW# is ignored with a warning, so that the committed files do not depend
+or `-Dvidocq.dev.debugPort`is ignored with a warning, so that the committed files do not depend
 on how Maven was invoked.
 
 [cols="2,1,3"]
@@ -1149,7 +1149,7 @@ on how Maven was invoked.
 | Module pom property | Default | Meaning
 
 | `vidocq.idea.configurationName`
-| simple name of the main class, or `artifactId` without one [.tag-new]#NEW#
+| simple name of the main class, or `artifactId` without one
 | Run configuration name, and file name.
 
 | `vidocq.idea.moduleName`
@@ -1162,12 +1162,12 @@ on how Maven was invoked.
 | `false`
 | No run configuration for this module, nor for the modules that inherit its properties.
 
-| `vidocq.dev.debugHost` [.tag-new]#NEW#
+| `vidocq.dev.debugHost`
 | `127.0.0.1`
 | The host the `(debug)` file attaches to. Same key `vidocq:dev` reads for its own debug agent
   (<<debugger,the debug agent>>); blank or unset keeps the default.
 
-| `vidocq.dev.debugPort` [.tag-new]#NEW#
+| `vidocq.dev.debugPort`
 | `5005`
 | The port the `(debug)` file attaches to, `1`-`65535`. An invalid value is a configuration error, reported with
   the goal's other errors, and the default is used.
@@ -1185,7 +1185,7 @@ on how Maven was invoked.
   verified. `strict`: also fail on those files when their content differs from what the goal writes. Any other
   value fails the goal.
 
-| `vidocq.idea.kind` [.tag-new]#NEW#
+| `vidocq.idea.kind`
 | `maven`
 | `maven`: a Maven run configuration of `vidocq:run` on the application's pom. `application`: an Application run
   configuration of the main class, with Make and `vidocq:generate` before launch. Any other value fails the goal.
@@ -1302,7 +1302,7 @@ Each of them must be JDK 25 or newer. The goal cannot see IntelliJ's SDKs and pr
   temporary configuration.
 
 [#vscode]
-== `vidocq:vscode` goal [.tag-new]#NEW#
+== `vidocq:vscode` goal
 
 `vidocq:vscode` writes the `.vscode/` files a Vidocq project needs in VS Code with the Extension Pack for Java
 (Vidocq/vidocq#339). Run it at the directory VS Code opens, the reactor root:
@@ -1343,7 +1343,7 @@ editor, and the server writes nothing into `target/classes`; with the automatic 
 build there.
 
 [#eclipse]
-== `vidocq:eclipse` goal [.tag-new]#NEW#
+== `vidocq:eclipse` goal
 
 `vidocq:eclipse` writes the launch configurations a Vidocq project needs in Eclipse IDE 2026-09 or newer
 (Vidocq/vidocq#339). Run it at the reactor root, then import the project (File > Import > Existing Maven Projects):
@@ -1394,7 +1394,7 @@ files of a Maven build, without the weaving.
 == Prerequisites and limitations
 
 * **Strict Java Modules** — every dependency must be a named module; `jlink` rejects every automatic module. Give the non-modular jars a descriptor with <<modularize,`vauban:modularize`>> in `all-automatic` mode.
-* [[jlink-shared-resources]][.tag-new]#NEW# **Resource directories several jars share** — a directory that two jars both hold files in is a split package, which `jlink` refuses. Vaadin's `flow-server` and `flow-react` share `com/vaadin/flow/server/frontend/` (Vidocq/vidocq#256). `vidocq:jlink` stops before `jlink` with one line naming the jars and the directory. `-Dvidocq.jlink.mergeSharedResources=true` moves those files into one module of the image instead: the jar with classes in that package, else the one holding most files there, logged as `merged <dir> into <jar> (N files from <jars>)`. Only the staged copies change; `vidocq:package` and `target/` keep the jars as they are. Two files of one path with different contents, or classes in several jars, stop the build.
+* [[jlink-shared-resources]]**Resource directories several jars share** — a directory that two jars both hold files in is a split package, which `jlink` refuses. Vaadin's `flow-server` and `flow-react` share `com/vaadin/flow/server/frontend/` (Vidocq/vidocq#256). `vidocq:jlink` stops before `jlink` with one line naming the jars and the directory. `-Dvidocq.jlink.mergeSharedResources=true` moves those files into one module of the image instead: the jar with classes in that package, else the one holding most files there, logged as `merged <dir> into <jar> (N files from <jars>)`. Only the staged copies change; `vidocq:package` and `target/` keep the jars as they are. Two files of one path with different contents, or classes in several jars, stop the build.
 * **Records serialised over REST** — Champollion handles them via APT, not reflection. If an external dependency exposes records that are not generated, declare a JSON-B `Converter<T>`.
 * **Custom `java.util.logging` Handler** — declare the module in `logging.properties` so `jlink` embeds it (`handlers=com.example.MyHandler`).
 * **macOS app-image** — the bundle requires a valid `--app-version`; the plugin defaults to the project Maven version.

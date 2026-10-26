@@ -1,4 +1,4 @@
-= Vaadin [.tag-new]#NEW#
+= Vaadin
 :description: Run a Vaadin Flow application on the Vidocq runtime, with Foy as the servlet container: in development, as a packaged distribution, and as a jlink image.
 
 [.lead]
@@ -11,7 +11,7 @@ The example project https://codefloe.com/VidocqTools/vaadin-on-vidocq[VidocqTool
 together: the pom below with production mode set, and a `jlink` profile with the two flags of <<jlink>>.
 
 [#at-a-glance]
-== At a glance [.tag-new]#NEW#
+== At a glance
 
 [cols="1,2,1,2"]
 |===
@@ -42,7 +42,7 @@ The start times are the runtime's `Started in` line on an Apple M5 Max with Temu
 distribution and the image (BENCH.md, 2026-10-15). The JVM itself adds about 150 ms.
 
 [#setup]
-== Setup [.tag-new]#NEW#
+== Setup
 
 The project is an ordinary Vidocq application, with `vidocq-runtime-parent` as its parent, the Servlet extension, the
 Vaadin extension, the Vaadin BOM and two build plugins: `vaadin-maven-plugin` builds the frontend, and
@@ -57,12 +57,12 @@ Four parts of this pom are easy to leave out, and each one fails in its own way 
 * The `jvmArgs` properties, which start Vaadin in production mode under every goal. Without them, every request
   answers 500.
 * An SLF4J provider. Vaadin logs through SLF4J, and without a provider it logs nothing at all.
-* [.tag-new]#NEW# `vidocq-runtime-vaadin-extension`, as soon as the application has an `AppShellConfigurator` (a
+*`vidocq-runtime-vaadin-extension`, as soon as the application has an `AppShellConfigurator` (a
   theme, stylesheets, PWA settings). Without it, the first request of a `vidocq:jlink` image never answers. It changes
   nothing under the other goals. See <<jlink-app-shell>>.
 
 [#snapshot-repositories]
-=== Building against a SNAPSHOT [.tag-new]#NEW#
+=== Building against a SNAPSHOT
 
 Until 0.4.0 is released, the parent and the plugin come from Central's snapshot repository. The pom declares it twice:
 `vidocq-runtime-maven-plugin` is a build extension, and Maven resolves a build extension from the plugin
@@ -216,7 +216,7 @@ module com.example.app {
 }
 ----
 
-[.tag-new]#NEW# There is no main class: the runtime's own main boots the module that `vidocq.mainModule` names,
+There is no main class: the runtime's own main boots the module that `vidocq.mainModule` names,
 under every goal down to the `vidocq:jlink` image. Add a `@VidocqMain` trampoline (and `requires
 io.vidocq.runtime.core; requires io.vidocq.runtime.spi;`) only for a right-click Run in the IDE or logic after
 boot, see xref:usage.adoc#vidocq-main-trampoline[When to add a trampoline]. A view is plain Vaadin:
@@ -243,7 +243,7 @@ vidocq.servlet.context-path=/
 ----
 
 [#app-layer]
-=== Why `vidocq.app.layer=all` [.tag-new]#NEW#
+=== Why `vidocq.app.layer=all`
 
 Vaadin looks the application's resources up, `META-INF/VAADIN/webapp/index.html` first, through the class loader
 that loaded Vaadin. Under the default `vidocq.app.layer=classes`, Vaadin stays in the parent layer and the application
@@ -263,7 +263,7 @@ See xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer
 class loader instead is tracked in Vidocq/vidocq#256.
 
 [#what-the-build-does]
-=== What the build does with the Vaadin jars [.tag-new]#NEW#
+=== What the build does with the Vaadin jars
 
 `vidocq:generate` runs Foy's annotation processors over the jars Foy selects. For Vaadin, these are `flow-server` (its
 `@WebListener` and `ServletContainerInitializer` classes) and `atmosphere-runtime`. The output goes into enriched
@@ -288,7 +288,7 @@ servlet     1 servlet(s), 0 filter(s) at /
 With an SLF4J provider, Vaadin also logs `Automatically deploying Vaadin servlet with name ... to /*`.
 
 [#production-mode]
-=== Production mode [.tag-new]#NEW#
+=== Production mode
 
 `vaadin-prod-bundle` and `build-frontend` give a production build without Node. Start the application with the
 system property `-Dvaadin.productionMode=true`. Vaadin reads it as a system property only. A file such as
@@ -312,7 +312,7 @@ provider, the log shows `Vaadin is running in production mode.` once the propert
 Vaadin's own development mode, with Node and hot frontend reload, was not tried on Vidocq.
 
 [#dev-and-run]
-== `vidocq:dev` and `vidocq:run` [.tag-new]#NEW#
+== `vidocq:dev` and `vidocq:run`
 
 [source,bash]
 ----
@@ -321,7 +321,7 @@ Vaadin's own development mode, with Node and hot frontend reload, was not tried 
 ./mvnw vidocq:run
 ----
 
-[.tag-new]#NEW# Both goals start from an empty `target/`, after `mvn clean` for instance, with the pom of <<setup,Setup>>:
+Both goals start from an empty `target/`, after `mvn clean` for instance, with the pom of <<setup,Setup>>:
 
 * `vidocq:run` runs the lifecycle up to `process-classes`, and the pom binds Vaadin's `build-frontend` to that phase.
   Vaadin binds it to `prepare-package` by default, a later phase that `vidocq:run` never reaches: the production
@@ -337,7 +337,7 @@ layer. `vidocq:dev` reloads the application layer in place on each change; BENCH
 times, Vaadin included.
 
 [#package]
-== `vidocq:package` [.tag-new]#NEW#
+== `vidocq:package`
 
 [source,bash]
 ----
@@ -351,10 +351,10 @@ wrote, marked `Vidocq-Automatic: brick-selected`, so that it may use any service
 xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
 
 [#jlink]
-== `vidocq:jlink` [.tag-new]#NEW#
+== `vidocq:jlink`
 
 `jlink` accepts named modules only, and Vaadin ships none, so every jar of the closure needs a descriptor. Add
-`vauban:modularize` in `all-automatic` mode. [.tag-new]#NEW# `vidocq-runtime-parent` manages the plugin's version,
+`vauban:modularize` in `all-automatic` mode.`vidocq-runtime-parent` manages the plugin's version,
 the Vauban the runtime is built on, so the plugin has none here:
 
 [source,xml]
@@ -404,7 +404,7 @@ message that names the jars.
 The resulting image is about 68 MB with its JDK, and starts in about 330 ms.
 
 [#troubleshooting]
-== Troubleshooting [.tag-new]#NEW#
+== Troubleshooting
 
 Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>). With no provider, the log shows only
 `SLF4J(W): No SLF4J providers were found`, and Vaadin's own errors appear nowhere.
@@ -417,15 +417,15 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
 | The Vaadin jars were not processed, so Vaadin's `@WebListener` was never registered and its servlet never deployed.
 | Add the `generate` execution of `vidocq-runtime-maven-plugin`. See <<what-the-build-does>>.
 
-| [.tag-new]#NEW# Right after `mvn clean`, `vidocq:run` answers 500 with _Unable to find index.html_.
+|Right after `mvn clean`, `vidocq:run` answers 500 with _Unable to find index.html_.
 | The pom leaves `build-frontend` in its default phase, `prepare-package`, which `vidocq:run` does not reach.
 | Bind `build-frontend` to `process-classes`, as in <<setup>>.
 
-| [.tag-new]#NEW# On a clean machine, the build stops with _Unresolveable build extension: vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT_ although the jar is on Central's snapshot repository.
+|On a clean machine, the build stops with _Unresolveable build extension: vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT_ although the jar is on Central's snapshot repository.
 | The pom declares the snapshot repository for dependencies only, and a build extension resolves from the plugin repositories.
 | Add `<pluginRepositories>` for `central-snapshots`. See <<snapshot-repositories>>.
 
-| [.tag-new]#NEW# The pom cannot be read: _'build.plugins.plugin.version' for io.vidocq.vauban:vauban-maven-plugin must
+|The pom cannot be read: _'build.plugins.plugin.version' for io.vidocq.vauban:vauban-maven-plugin must
 be a valid version but is '${vauban.version}'_.
 | A `vidocq-runtime-parent` built between Vidocq/vidocq#348 and BUG-20261025-02 lost `vauban.version`.
 | Take a newer parent, or leave the plugin's `<version>` out: the parent manages it.
@@ -438,7 +438,7 @@ be a valid version but is '${vauban.version}'_.
 | Vaadin is outside the application layer.
 | Set `vidocq.app.layer=all`. See <<app-layer>>.
 
-| [.tag-new]#NEW# In a jlink image only, the first request gets no answer, and the log shows
+|In a jlink image only, the first request gets no answer, and the log shows
 _ServiceConfigurationError: com.example.app.AppShell: module flow.server does not declare `uses`_.
 | The application has an `AppShellConfigurator`. Vaadin looks it up through `ServiceLoader` from `flow.server`, which
 the descriptor of a jlink image cannot let use an application class.
@@ -446,7 +446,7 @@ the descriptor of a jlink image cannot let use an application class.
 |===
 
 [#jlink-app-shell]
-=== An app shell in a jlink image [.tag-new]#NEW#
+=== An app shell in a jlink image
 
 Vaadin creates the app shell with `Instantiator.getOrCreate`, which first asks its `Lookup` for an implementation of
 the class, and the default `Lookup` calls `ServiceLoader.load` from `flow.server`. `ServiceLoader` accepts only the
@@ -482,13 +482,13 @@ Whether it also lifts the Collaboration Engine and LitTemplate limit below was n
 xref:modules/vidocq-runtime-extensions.adoc#vaadin[the extension].
 
 [#limits]
-== Known limits [.tag-new]#NEW#
+== Known limits
 
 * Only production mode was checked, on one view: the bootstrap page and the frontend bundles are served. Server
   round-trips, push, websockets and the routes of a real application were not exercised in this setup.
 * `vidocq.app.layer=classes` does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
-* [.tag-new]#NEW# In a jlink image, an `AppShellConfigurator` needs `vidocq-runtime-vaadin-extension`: see
+*In a jlink image, an `AppShellConfigurator` needs `vidocq-runtime-vaadin-extension`: see
   <<jlink-app-shell>>.
 * What only Vaadin can change (the shared resource directory, stable module names, the `Lookup` cycle, resource lookups
   through the context class loader) is collected in Vidocq/vidocq#256.

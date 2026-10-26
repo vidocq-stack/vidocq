@@ -1,11 +1,11 @@
-= Dev console [.tag-new]#NEW#
+= Dev console
 :description: A read-only page, on a loopback listener of its own, that shows the startup report of the running boot and the live values of the extensions while you develop.
 
 [.lead]
 The dev console is a page that the application serves to your browser while you develop: the startup report of the boot that is running, with its anomalies first, then one tab per extension that has something to show — its boot facts and, for the extensions that give them, live values and charts, such as the connections of each Mansart pool — then the configuration, the beans of the CDI container and the JVM last. It listens on a port of its own, on the loopback address, it only reads, and it is on in a `dev` launch only.
 
 [#getting-it]
-== Getting it [.tag-new]#NEW#
+== Getting it
 
 Nothing to declare. `mvn vidocq:dev` adds the console itself, at the Vidocq version of the application's Chappe extension — with a warning when the plugin is another version (Vidocq/vidocq#148) — the moment the
 application already has `vidocq-runtime-chappe-webserver-extension`: the console serves its page through
@@ -80,7 +80,7 @@ The banner promises the console, and one INFO record gives its address once it l
 Open that URL. The browser is never opened for you.
 
 [#when-it-is-on]
-== When it is on [.tag-new]#NEW#
+== When it is on
 
 `vidocq.devconsole.enabled` is `auto` by default: the console starts when the xref:modules/vidocq-runtime-core.adoc#launch-mode[launch mode] of the boot is `dev` — `mvn vidocq:dev`, a run from an IDE, `-Dvidocq.launch.mode=dev` — and stays off in `test` and `prod`. `true` and `false` force it on or off, whatever the mode.
 
@@ -96,21 +96,21 @@ When the console is off, its section of the startup report says why, and nothing
 `off (vidocq.devconsole.enabled=false)` when it was forced off. Every dev reload starts a new console, with a new listener; a reload whose boot fails takes the console down with it, and the page says so (<<the-page>>).
 
 [#configuration]
-== Configuration [.tag-new]#NEW#
+== Configuration
 
 [cols="2,1,4"]
 |===
 | Key | Default | Description
 
-| `vidocq.devconsole.enabled` [.tag-new]#NEW#
+| `vidocq.devconsole.enabled`
 | `auto`
 | `auto`: on when the launch mode is `dev`, off otherwise. `true` or `false` force it on or off; on outside a dev launch, the console raises <<vidocq-devc-001>>. Case and surrounding blanks are ignored. Another value is reported as <<vidocq-devc-003>> and means `auto`.
 
-| `vidocq.devconsole.port` [.tag-new]#NEW#
+| `vidocq.devconsole.port`
 | `8888`
 | The port the console listens on, from `0` to `65535`. `0` takes a free port, and the dev reloads ask for the same one again, so that an open tab keeps working. Another value is reported as <<vidocq-devc-003>> and means `8888`. A port that is taken falls back to a free one (<<port-taken>>).
 
-| `vidocq.devconsole.host` [.tag-new]#NEW#
+| `vidocq.devconsole.host`
 | `127.0.0.1`
 | The address the console listens on: a host name or an IP address, an IPv6 literal with or without its brackets. Any address that is not a loopback one raises <<vidocq-devc-002>>. A value with anything but ASCII letters, digits and `.-_:%[]`, or longer than 255 characters, is reported as <<vidocq-devc-003>> and means `127.0.0.1`, on the banner too; write a name with a letter outside ASCII in its ASCII form, `hôte.example` as `xn--hte-kna.example`.
 |===
@@ -127,10 +127,10 @@ Without the console on the module path, nothing claims the namespace, and a conf
 The console declares its listener, `dev`, itself: `vidocq.chappe.listeners` must not list it (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
 
 [#where-it-listens]
-== Where it listens [.tag-new]#NEW#
+== Where it listens
 
 [#url-record]
-=== The URL record [.tag-new]#NEW#
+=== The URL record
 
 Once its listener is bound, the console logs one INFO record on the logger `io.vidocq.devconsole`, with the URL last and nothing after its final `/`, so that a terminal or an IDE console makes it a link:
 
@@ -153,7 +153,7 @@ devconsole    Dev console | 0 ms
 ----
 
 [#banner-segment]
-=== The banner segment [.tag-new]#NEW#
+=== The banner segment
 
 The xref:modules/vidocq-runtime-core.adoc#startup-banner[banner], printed before any extension is loaded, already names the console on its context line, after the debugger:
 
@@ -180,7 +180,7 @@ The xref:modules/vidocq-runtime-core.adoc#startup-banner[banner], printed before
 The segment is the *configured* address, a promise made before the bind: the URL record is the one to trust, and it always prints on the first boot. When the 80 columns of the banner cannot hold everything, the segment goes before the debugger's address, which is what attaching a debugger needs (xref:modules/vidocq-runtime-core.adoc#startup-banner[What the banner shows]). The single INFO line of a log output keeps it: `... | prod (vidocq.launch.mode) | devconsole 0.0.0.0:18093`.
 
 [#port-taken]
-=== When the port is taken [.tag-new]#NEW#
+=== When the port is taken
 
 Two applications in dev mode on one machine both want port `8888`. A dev tool must never stop an application from starting, so the second console listens on a free port instead, and says so loudly, three times. Chappe names both ports, then the console logs its URL and a boxed WARNING that holds numbers and the URL only, then the startup report raises <<vidocq-devc-004>>:
 
@@ -207,7 +207,7 @@ The page itself carries a banner with both ports. The box never quotes the confi
 Falling back costs about one second of boot: before the console takes a free port, Chappe retries the bind with a backoff, five attempts with pauses of 100 to 400 ms, as it does for any port (1,387 ms against 358 ms in one measured boot). A dev reload pays that second again for as long as the port stays taken: the console keeps the port it bound across reloads only for port `0` (<<url-record>>), and asks for the configured port on every boot, so that it gets it back once it is free. Until then, each reload falls back to a free port chosen anew, usually another one, so the URL record, the box and <<vidocq-devc-004>> come again with the new port, and an open tab has to be pointed at it.
 
 [#the-page]
-== The page [.tag-new]#NEW#
+== The page
 
 The page is plain HTML, one stylesheet and one JavaScript module, all served by the console: no build step, and nothing loaded from another site, not even a font. It reads one document, `GET /api/snapshot`, about once a second.
 
@@ -218,14 +218,14 @@ The page is plain HTML, one stylesheet and one JavaScript module, all served by 
 * **Themes.** Light and dark follow the system's preference.
 
 [#startup-tab]
-=== Startup [.tag-new]#NEW#
+=== Startup
 
 The xref:modules/vidocq-runtime-core.adoc#startup-report[startup report] of the boot that is running, whatever the level the log printed: the launch mode and the signal it was read from, the anomalies first, with their code, message, hint and the section that raised them, then the sections of the core — `launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` — as tables, and the console's own section. The full report, as the detailed level renders it, closes the tab, with a button that copies it for a bug report. Until the boot has written its report, the tab says `booting…`.
 
 A reload of the dev loop logs the summary report only; the console still has every row, since Vidocq collects them all for it whenever it is on.
 
 [#panels]
-=== Panels [.tag-new]#NEW#
+=== Panels
 
 Every section that a library adds to the startup report is a panel, with the boot facts it wrote: its summary line, its rows and its anomalies. A section that is also a dev console panel adds live values:
 
@@ -246,39 +246,39 @@ The panels shipped today:
 | Panel | Shows
 
 | *Mansart pools*
-| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. In a `dev` launch, a tab per pool [.tag-new]#NEW# lists its tables, describes one, shows its first rows and runs the SQL you type, read-only or in a transaction rolled back unless committed. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section] and xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a SQL editor].
+| One card per pool of `vidocq-runtime-mansart-pool-extension`: its size, timeouts and checks, its URL without credentials in a dev launch, the active and idle connections out of its maximum, the borrowers waiting, borrows, timeouts and leaks, and the mean borrow time. In a `dev` launch, a tab per poollists its tables, describes one, shows its first rows and runs the SQL you type, read-only or in a transaction rolled back unless committed. See xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-panel[the Mansart pool section] and xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a SQL editor].
 
-| *Mansart Data* [.tag-new]#NEW#
+| *Mansart Data*
 | The catalogue of `vidocq-runtime-mansart-data-extension`, one card per entity: its table and columns, then each of its repositories with its methods, their kind, `@Query` text, parameters and return type, and the methods inherited from Jakarta Data. Read once per boot; no connection, no query. See xref:modules/vidocq-runtime-extensions.adoc#mansart-data-catalogue[the Mansart Data catalogue].
 
-| *REST (Cassini)* [.tag-new]#NEW#
+| *REST (Cassini)*
 | The routes of `vidocq-runtime-cassini-rest-extension`, in match order, each mount, the resource classes and the providers by contract, then live, one card per mount: requests per second, responses by status class, requests in flight, the share of time spent in handlers, and the mean and longest time to answer. See xref:modules/vidocq-runtime-extensions.adoc#cassini-rest-live[the `rest` panel].
 
-| *Metrics (Dirac)* [.tag-new]#NEW#
+| *Metrics (Dirac)*
 | The MicroProfile Metrics registries of `vidocq-runtime-dirac-metrics-extension`, one card per registry, application first: how many counters, timers, histograms and gauges each holds, then live every counter's count and every timer's count and mean, under a key derived from the metric's name and tags that the boot facts map back to it. Gauges are counted and named, never called. See xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-panel[the `metrics` panel].
 
-| *Health (Knock)* [.tag-new]#NEW#
+| *Health (Knock)*
 | The health checks of `vidocq-runtime-knock-health-extension`, one card per probe: each check's last answer to a probe request, UP or DOWN and when, `never called` before the first, the checks UP and DOWN over time, and a button to `GET /health`. The console never calls a check. See xref:modules/vidocq-runtime-extensions.adoc#knock-health-live[the `health` panel].
 
-| *Schema migration* [.tag-new]#NEW#
+| *Schema migration*
 | The datasources `vidocq-runtime-migration-extension` migrates, one card each: the version the schema is at, what the last run applied, and in a `dev` launch the migrations applied and pending; with two buttons, *Migrate now*, which applies the migrations added since the boot, and *Clean and migrate*, which drops the schema and migrates it again, refused unless `vidocq.migration[.<name>].cleanDisabled=false`. See xref:modules/vidocq-runtime-extensions.adoc#schema-migration-actions[the `migration` panel].
 
-| *Dev services* [.tag-new]#NEW#
+| *Dev services*
 | What `vidocq:dev`, `vidocq:run` or the test launcher started: image and addresses of each service, the keys it injected, secrets as `configured`. Boot facts only. See xref:dev-services.adoc[Dev services].
 
-| *MCP server* [.tag-new]#NEW#
+| *MCP server*
 | The langchain4j-cdi MCP server of `vidocq-runtime-langchain4j-cdi-mcp-extension`: what it serves and how it is configured, then live — the sessions it holds, the SSE streams and the `subscriptions/listen` streams open, the requests it is waiting an answer of from a client, and whether its methods are invoked through the CDI 4.1 invoker or by reflection. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-live[the `mcp` panel].
 
-| *Configuration* [.tag-new]#NEW#
+| *Configuration*
 | The console's own: the keys the application sets, the source each value comes from, the value in a dev launch only and never a secret, and the keys nothing reads. See <<config-panel>>.
 
-| *CDI (Vauban)* [.tag-new]#NEW#
+| *CDI (Vauban)*
 | The console's own: the beans, interceptors and observers of the Vauban container, the application's first. See <<cdi-panel>>.
 
-| *Logs* [.tag-new]#NEW#
+| *Logs*
 | The console's own, in a `dev` launch only: the last records the application logged, newest first, the warnings and errors per second, the loggers whose level is set, and a button that sets one until the next reload. See <<logs-panel>>.
 
-| *Tests* [.tag-new]#NEW#
+| *Tests*
 | The console's own panel under `vidocq:dev` with continuous testing: the last test run, its failures, and buttons to run every test or the failed ones. See <<tests-panel>>.
 
 | *JVM*
@@ -288,7 +288,7 @@ The panels shipped today:
 An extension adds its panel with the xref:dev-console-panels.adoc[panel SPI].
 
 [#config-panel]
-=== Configuration [.tag-new]#NEW#
+=== Configuration
 
 The console's own panel, `config`, just before the CDI container: which keys the application sets, which source each value comes from, and which keys nothing reads. Everything is read once, when the console starts, from the configuration sources of the boot: the configuration does not change during a boot, and a dev reload boots again.
 
@@ -314,7 +314,7 @@ What is never shown:
 The values are made safe in the application's JVM, before the snapshot is written: a secret never reaches the page, and the panel logs nothing.
 
 [#cdi-panel]
-=== CDI (Vauban) [.tag-new]#NEW#
+=== CDI (Vauban)
 
 The console's own panel, `cdi`, just before the logs of a `dev` launch and the JVM: what Vauban, the runtime's CDI container, holds for this boot, as Quarkus's ArC card shows it. Everything is read once, when the console starts, from the container's metadata: the beans its bean manager lists for `Object` and `@Any`, its interceptors and its observer methods. No bean is created and no context is read, so a lazy bean stays lazy.
 
@@ -341,7 +341,7 @@ A third-party jar's beans read `reflection` until `vidocq:generate` scans the ja
 A table with no row reads `none`. The tables are written as the panel's values rather than its boot facts because a value table has column heads; they are computed once, and every poll hands the page the same rows. The panel keeps class names as strings only, never a class or a bean of the application.
 
 [#logs-panel]
-=== Logs [.tag-new]#NEW#
+=== Logs
 
 The console's own panel, `logs`, between the CDI container and the JVM, in a `dev` launch only: what the application logged in this boot, and a level changed without a restart. When the console starts, it adds a handler of its own to the root logger of `java.util.logging`, and removes it when the boot stops, so that a dev reload never stacks two. The handler keeps the last 500 records in memory, in a bounded ring written without a lock: logging never waits for the console.
 
@@ -358,7 +358,7 @@ What is never shown or kept:
 * **Records that go elsewhere.** When an SLF4J or Log4j bridge replaces the JDK's `System.LoggerFinder`, what Vidocq and the libraries log never reaches `java.util.logging`: `records`, `warnings` and `errors` are absent with the reason, such as `logs go to Log4jSystemLoggerFinder, not java.util.logging`, rather than an empty table that would read as a quiet application. The `levels` table and the button still act on `java.util.logging`.
 
 [#tests-panel]
-=== Tests [.tag-new]#NEW#
+=== Tests
 
 The console's own panel, `tests`, between the logs and the JVM, in a `dev` launch run by `vidocq:dev` with
 xref:continuous-testing.adoc[continuous testing] only: the last test run. The Maven plugin writes it to
@@ -369,14 +369,14 @@ xref:continuous-testing.adoc[continuous testing] only: the last test run. The Ma
 * **Text** `state`: the state and the trigger of the last run, such as `failed (change)` or `running (test-change)`; `results unreadable` when the file could not be read, the previous values staying.
 * **Gauges** `run`, `failures`, `errors` and `skipped`: those of the last complete run, the previous one while a run is in progress. The chart *Tests* plots the failures and the errors.
 * **Table** `failed-tests`, 100 rows at most: the test as `Class#method`, the exception's class, and the first line of its message.
-* **Buttons** *Run all tests* and *Rerun failed tests*: each answers `queued` and the run shows in the panel once it ends; *Rerun failed tests* answers `no failed test to rerun` when the last run had none. A rerun that matches no test runs every test instead [.tag-new]#NEW#. A button never cancels the run in flight: it waits for it.
+* **Buttons** *Run all tests* and *Rerun failed tests*: each answers `queued` and the run shows in the panel once it ends; *Rerun failed tests* answers `no failed test to rerun` when the last run had none. A rerun that matches no test runs every test instead. A button never cancels the run in flight: it waits for it.
 
 What is never shown: a stack trace — it is in the log — or the credentials of a URL in a message. The buttons
 never send a test name: they write the word `run-all` or `rerun-failed` to `target/vidocq-dev-tests.request`,
 and the plugin works out which tests failed.
 
 [#jvm-panel]
-=== JVM [.tag-new]#NEW#
+=== JVM
 
 The console's own panel, always last, read from the JVM's management beans — the same figures that Dirac's base metrics read, with nothing to add to the application.
 
@@ -386,7 +386,7 @@ The console's own panel, always last, read from the JVM's management beans — t
 * **Charts:** memory (heap in use, committed, and the maximum as a ceiling), non-heap, threads, CPU, and per collector the share of time it took and its collections per second.
 
 [#history]
-=== Where the history lives [.tag-new]#NEW#
+=== Where the history lives
 
 The console keeps five minutes of every gauge and counter — 300 points, one a second — and it keeps them *on the server*, in a ring filled by a thread of its own named `vidocq-devconsole-history`. That thread runs for the life of the boot, whether or not a page is open.
 
@@ -399,7 +399,7 @@ It used to be the page that kept them, one point per poll. A browser stops the t
 * **It is forgotten with its boot.** A new `boot` id — a dev reload included — starts every curve again, and `onStop` stops the thread before the panels go.
 
 [#mcp-inspector]
-== MCP inspector [.tag-new]#NEW#
+== MCP inspector
 
 In a `dev` launch of an application that has `vidocq-runtime-langchain4j-cdi-mcp-extension`, the `mcp` tab lists
 the application's tools, prompts, resources and resource templates, and can call each of them. The tab has four
@@ -497,7 +497,7 @@ refusal line above, not a dialog. There is no support for subscriptions, notific
 completion, or for calling an MCP server other than the application's own.
 
 [#json-viewer]
-== JSON viewer [.tag-new]#NEW#
+== JSON viewer
 
 Every JSON the page shows — the body of an `application/json` result and the details under "Exchange" — goes
 through a small viewer instead of plain text. Keys, strings, numbers, and `true`, `false` and `null` each have their
@@ -517,7 +517,7 @@ A body that does not parse as JSON is shown as text. The tree is built with DOM 
 key or a string is never read as HTML.
 
 [#rows-table]
-== A table of rows [.tag-new]#NEW#
+== A table of rows
 
 A result of rows — what *Query* answers in a pool's tab or in the *JDQL* tab of *Mansart Data*, a table's columns,
 its first rows — is drawn as a table. Each column's header holds its name and, dimmed under it, its type; the header
@@ -540,7 +540,7 @@ column, `null`, a `Boolean`, a `Number` or a `String`, anything else written as 
 another shape is shown as any other JSON.
 
 [#json-editor]
-== JSON editor [.tag-new]#NEW#
+== JSON editor
 
 A `json` argument of an action — an MCP tool's arguments in the <<mcp-inspector,MCP inspector>>, the arguments of a
 repository method in the *Mansart Data* tab — is typed in a small code editor written for the page, which loads
@@ -579,7 +579,7 @@ editor stops colouring and checking, and says `past 100 000 characters: no colou
 *Format* still work.
 
 [#json-form]
-=== The generated form [.tag-new]#NEW#
+=== The generated form
 
 When the schema allows it, a `json` argument is a form rather than JSON, with a *JSON* switch to the editor that
 keeps the values both ways. The schema's root is `"type": "object"`, with no `$ref`, `anyOf`, `oneOf`, `allOf` or
@@ -598,7 +598,7 @@ sent: `entity.title is required`. A nested object that is not required and left 
 a value the panel masked is left for you to type again.
 
 [#query-editor]
-== Query editor [.tag-new]#NEW#
+== Query editor
 
 A query argument — the `query` of the *JDQL* tab of *Mansart Data*, in *Query*, *Update / Delete* and *Export CSV*
 (xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]) — is typed in the
@@ -627,7 +627,7 @@ parameters are kept as written. A query with an unterminated string is not forma
 unterminated string`.
 
 [#query-parameters]
-=== Its parameters [.tag-new]#NEW#
+=== Its parameters
 
 The `params` of a query is a JSON editor whose schema follows the query as you type it: one key per named parameter,
 in order of first use, all required, and no other. A parameter compared with an attribute takes its type, its format
@@ -639,7 +639,7 @@ otherwise, such as `price * :factor`, takes any value; a positional one, `?1`, h
 the call. Its text is sent as typed; empty, it holds `{}`.
 
 [#query-sql]
-=== SQL [.tag-new]#NEW#
+=== SQL
 
 The `sql` of a pool's *Query* and *Execute* (xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-sql[Tables and a
 SQL editor]) is typed in the same editor, with what its panel publishes of the pool's tables, and reads SQL as SQL is
@@ -670,7 +670,7 @@ A `:name` in the statement is a parameter, as in JDQL: `params` follows it, and 
 takes the type of `price` in `t`'s table.
 
 [#query-language]
-=== A query language for a panel [.tag-new]#NEW#
+=== A query language for a panel
 
 A panel gives a `json` argument's property this mode in two steps.
 
@@ -715,7 +715,7 @@ JDQL's. `targets` maps each entity's name to its `detail` and `attributes`; an a
 (`string`, `integer`, `number`, `boolean`), optionally a `format` and an `enum`, a `detail`, and a `target` when it
 refers to another entity of the language. Data the editor does not understand makes it know less, never fail.
 
-*SQL's options* [.tag-new]#NEW#. `aliases`, `identifierQuote` and `unquotedCase` make a dialect SQL's (<<query-sql>>),
+*SQL's options*. `aliases`, `identifierQuote` and `unquotedCase` make a dialect SQL's (<<query-sql>>),
 with SQL's own words; JDQL declares none of them:
 
 [source,json]
@@ -736,24 +736,24 @@ there is none. A target of another schema is keyed `schema.name` and says its `"
 part as needed.
 
 [#security]
-== Security [.tag-new]#NEW#
+== Security
 
 The console shows what the application is made of, so it is built to be seen by you only:
 
 * **Loopback by default.** It listens on `127.0.0.1`. Another address raises <<vidocq-devc-002>>, in every mode.
 * **Its own address only.** A request is answered only when its `Host` header names the console: `localhost`, `127.0.0.1`, `[::1]` or the host it listens on, optionally with the port it bound; when that host is not a loopback one, any IP address too. The host it listens on is the configured one only when the console accepted it: a value refused by the ASCII-only rule of <<configuration>> is reported as <<vidocq-devc-003>> and replaced by `127.0.0.1`, for the bind, the banner and this check alike. Anything else gets `403`. This stops DNS rebinding, where a page of another site has its name resolved to `127.0.0.1` to reach local ports: the browser still sends that site's name.
-* **Read-only outside development** [.tag-new]#NEW#. In a `test` or `prod` launch the console answers `GET` and `HEAD` only, anything else gets `405`, `POST /api/action/…` included: no panel's `actions()` is called, and the snapshot carries neither a token nor an action.
-* **Actions in a `dev` launch, for the console's own page only** [.tag-new]#NEW#. A panel may offer actions, such as setting a log level; the console runs one only for a request its own page sent, behind the checks of <<actions>>.
-* **A read-only dev MCP in a `dev` launch** [.tag-new]#NEW#. `POST /mcp` serves the page's facts to a coding agent as MCP tools that change nothing, behind the checks of <<dev-mcp>>: no token, since nothing it answers is not already on the page, but an `Origin`, when there is one, that is the console's own.
-* **Query languages, read-only, in a `dev` launch** [.tag-new]#NEW#. `GET /api/language/<panel>/<id>` serves the vocabulary of a panel's query editor, its entities and attributes, behind the checks of <<query-language>>: `GET` or `HEAD`, no token, an `Origin`, when there is one, that is the console's own; outside `dev`, `404`.
+* **Read-only outside development**. In a `test` or `prod` launch the console answers `GET` and `HEAD` only, anything else gets `405`, `POST /api/action/…` included: no panel's `actions()` is called, and the snapshot carries neither a token nor an action.
+* **Actions in a `dev` launch, for the console's own page only**. A panel may offer actions, such as setting a log level; the console runs one only for a request its own page sent, behind the checks of <<actions>>.
+* **A read-only dev MCP in a `dev` launch**. `POST /mcp` serves the page's facts to a coding agent as MCP tools that change nothing, behind the checks of <<dev-mcp>>: no token, since nothing it answers is not already on the page, but an `Origin`, when there is one, that is the console's own.
+* **Query languages, read-only, in a `dev` launch**. `GET /api/language/<panel>/<id>` serves the vocabulary of a panel's query editor, its entities and attributes, behind the checks of <<query-language>>: `GET` or `HEAD`, no token, an `Origin`, when there is one, that is the console's own; outside `dev`, `404`.
 * **No reading from another site.** No CORS header, so another site's page can send a request but never read the answer. Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`.
 * **No secret.** A section reports a secret only as `configured` or `not configured`: the API has no way to pass its value. A configuration value that may carry one, such as a JDBC URL, is shown in a dev launch only, without its credentials; outside it, the panel says what it is, such as the database kind. The console never shows JVM arguments or system properties, nor the message of an exception thrown by a panel.
 * **Text stays text.** Everything a panel writes reaches the page as text, never as markup, with control characters replaced and cut at 200 characters.
-* **Links are built, never written** [.tag-new]#NEW#. A panel's button or a route's URL becomes a link only when Vidocq built it from a listener the report declared and a path: an absolute `http` or `https` URL, opened in a new tab with `rel="noopener noreferrer"`. A panel has no way to pass a URL of its own. See xref:dev-console-panels.adoc#links[Links].
+* **Links are built, never written**. A panel's button or a route's URL becomes a link only when Vidocq built it from a listener the report declared and a path: an absolute `http` or `https` URL, opened in a new tab with `rel="noopener noreferrer"`. A panel has no way to pass a URL of its own. See xref:dev-console-panels.adoc#links[Links].
 * **A warning outside development.** Forced on in a `test` or `prod` launch, the console raises <<vidocq-devc-001>>, naming where it listens.
 
 [#actions]
-=== Actions [.tag-new]#NEW#
+=== Actions
 
 In a `dev` launch, a panel may offer actions, such as setting a log level (xref:dev-console-panels.adoc#actions[Actions]): buttons next to its links, with a field per argument and, when the panel asks for one, an inline confirmation. That makes the console no longer read-only, and a write is a different threat from a read: a page of any site you visit can send a `POST` to `http://127.0.0.1:8888/`. It cannot read the answer, but it does not need to. So `POST /api/action/<panel>/<action>` runs only when every check passes, in this order, each failure answering without running anything:
 
@@ -766,7 +766,7 @@ In a `dev` launch, a panel may offer actions, such as setting a log level (xref:
 A refusal at step 3 or 4 is logged as <<vidocq-devc-006>>. An action runs on a virtual thread, one at a time per panel (`409` while another runs), and the request waits for it up to 60 seconds: `200 {"result": "..."}`, `500 {"error": "<exception class>"}`, or `202 {"state": "running"}` past the limit, the action going on. The snapshot lists each action with its last outcome of the boot, so the page shows it after a reload too. Every run is logged at INFO, `Vidocq dev console: action <panel>/<action> by <address>: <result>`; a failure at WARNING with the class of the exception, which is all the page shows of it, never its message. The decision and the options set aside are in ADR 0001, `docs/adr/0001-dev-console-actions.md` in the repository; ADR 0001, amendment 1, adds the `json` argument, the structured result and the groups this section and xref:dev-console-panels.adoc#actions[Actions] describe.
 
 [#dev-mcp]
-== Dev MCP [.tag-new]#NEW#
+== Dev MCP
 
 In a `dev` launch, the console is also an MCP server, as Quarkus's Dev MCP is: a coding agent, such as Claude Code, asks the running application what it serves instead of guessing it from the sources. It is served by the console itself, on the console's own listener, never the application's, so it works whether or not the application uses MCP or langchain4j-cdi, and adds no dependency. The console prints its URL after its own:
 
@@ -813,12 +813,12 @@ Each tool answers one JSON object, as `structuredContent` and, for a client that
 * **Outside `dev`, absent.** In a `test` or `prod` launch, `POST /mcp` gets `405` like any other `POST`, and the URL is neither printed nor in the report.
 
 [#anomalies]
-== Anomaly codes [.tag-new]#NEW#
+== Anomaly codes
 
-The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, the sixth from a refused action request, and the seventh, eighth and ninth [.tag-new]#NEW# from matching the live panels the `-dev` modules bring against the report's sections, once per boot — all five on the console's own logger, `io.vidocq.devconsole`.
+The first four are anomalies of the console's section of the startup report: each is one WARNING record on `io.vidocq.startup.anomaly`, logged the moment it is found and recalled by the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). The fifth comes later, from a poll, the sixth from a refused action request, and the seventh, eighth and ninthfrom matching the live panels the `-dev` modules bring against the report's sections, once per boot — all five on the console's own logger, `io.vidocq.devconsole`.
 
 [#vidocq-devc-001]
-=== VIDOCQ-DEVC-001 — on outside development [.tag-new]#NEW#
+=== VIDOCQ-DEVC-001 — on outside development
 
 `vidocq.devconsole.enabled=true` turned the console on in a `test` or `prod` launch. It names where the console listens, the configured host and the bound port:
 
@@ -830,7 +830,7 @@ The first four are anomalies of the console's section of the startup report: eac
 Remove the key, or scope it to a profile: `%dev.vidocq.devconsole.enabled=true`.
 
 [#vidocq-devc-002]
-=== VIDOCQ-DEVC-002 — not a loopback address [.tag-new]#NEW#
+=== VIDOCQ-DEVC-002 — not a loopback address
 
 The console listens on an address that is not a loopback one, in any mode, so whoever reaches the machine can read the page:
 
@@ -842,7 +842,7 @@ The console listens on an address that is not a loopback one, in any mode, so wh
 The address is the one bound, as the JVM writes it: `0.0.0.0` reads as the IPv6 wildcard.
 
 [#vidocq-devc-003]
-=== VIDOCQ-DEVC-003 — invalid value [.tag-new]#NEW#
+=== VIDOCQ-DEVC-003 — invalid value
 
 A `vidocq.devconsole.*` key has a value the console does not accept; the default is used, and the message says which:
 
@@ -856,7 +856,7 @@ A `vidocq.devconsole.*` key has a value the console does not accept; the default
 A host is refused for any character but ASCII letters, digits and `.-_:%[]`, or beyond 255 characters: the console listens on `127.0.0.1` instead, and the banner says so too (<<banner-segment>>). A mistyped key, rather than a wrong value, is the key audit's to report: xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] (<<configuration>>).
 
 [#vidocq-devc-004]
-=== VIDOCQ-DEVC-004 — port taken [.tag-new]#NEW#
+=== VIDOCQ-DEVC-004 — port taken
 
 The configured port was taken: the console listens on a free port instead (<<port-taken>>).
 
@@ -866,7 +866,7 @@ The configured port was taken: the console listens on a free port instead (<<por
 ----
 
 [#vidocq-devc-005]
-=== VIDOCQ-DEVC-005 — a panel failed to sample [.tag-new]#NEW#
+=== VIDOCQ-DEVC-005 — a panel failed to sample
 
 A panel's `sample()` threw a `RuntimeException` or a `LinkageError`, an invalid value key included. That poll misses the panel's live values, its boot facts stay, and the console calls it again on the next poll. The WARNING is logged on `io.vidocq.devconsole` once per panel and boot, with the class of the exception only; its stack trace follows at DEBUG on the same logger:
 
@@ -878,9 +878,9 @@ A panel's `sample()` threw a `RuntimeException` or a `LinkageError`, an invalid 
 It is a bug of the panel: see xref:dev-console-panels.adoc[Writing a dev console panel].
 
 [#vidocq-devc-006]
-=== VIDOCQ-DEVC-006 — an action request from elsewhere [.tag-new]#NEW#
+=== VIDOCQ-DEVC-006 — an action request from elsewhere
 
-In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>), or a <<dev-mcp,dev MCP>> request [.tag-new]#NEW# for its `Origin`: it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
+In a `dev` launch, an action request was refused for its `Origin` or its `X-Vidocq-Console-Token` (<<security>>), or a <<dev-mcp,dev MCP>> requestfor its `Origin`: it did not come from the console's own page. Most likely a page of another site tried to make the console do something, or a stale tab of a previous boot sent its old token. Nothing ran. The WARNING is logged on `io.vidocq.devconsole` with the origin the request named, once per origin, reason and boot, 64 at most:
 
 [source,text]
 ----
@@ -893,7 +893,7 @@ In a `dev` launch, an action request was refused for its `Origin` or its `X-Vido
 The last one, from the console's own origin, is a tab that outlived its boot: reload it.
 
 [#vidocq-devc-007]
-=== VIDOCQ-DEVC-007 — two live panels for one section [.tag-new]#NEW#
+=== VIDOCQ-DEVC-007 — two live panels for one section
 
 Two `-dev` modules' live panels (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged])
 name the same section id. The first one found wins; the second is skipped, never sampled. Logged once per
@@ -908,7 +908,7 @@ Two extensions share an id by mistake, or the application declares two versions 
 the module path. Remove the one that should not be there.
 
 [#vidocq-devc-008]
-=== VIDOCQ-DEVC-008 — a live panel with no section [.tag-new]#NEW#
+=== VIDOCQ-DEVC-008 — a live panel with no section
 
 A `-dev` module's live panel names a section id that the startup report does not have — the runtime
 extension's own contributor failed, was skipped, or does not exist. The panel is never shown; it never invents
@@ -924,7 +924,7 @@ did not run. Check for `VIDOCQ-RPT-001` (xref:modules/vidocq-runtime-core.adoc#s
 the same boot.
 
 [#vidocq-devc-009]
-=== VIDOCQ-DEVC-009 — a panel shipped twice [.tag-new]#NEW#
+=== VIDOCQ-DEVC-009 — a panel shipped twice
 
 A section's own contributor already implements `DevConsolePanel` (the all-in-one form,
 xref:dev-console-panels.adoc[Writing a dev console panel]), and a `-dev` module's live panel also claims that
@@ -939,21 +939,21 @@ The extension should drop one of the two: either its own `DevConsolePanel` imple
 module, not both.
 
 [#loggers]
-== Loggers [.tag-new]#NEW#
+== Loggers
 
 [cols="2,3"]
 |===
 | Logger | Records
 
 | `io.vidocq.devconsole`
-| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch [.tag-new]#NEW#: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. <<vidocq-devc-007>>, <<vidocq-devc-008>> and <<vidocq-devc-009>> [.tag-new]#NEW#, once per boot, the first time the report is read. The <<logs-panel,logs panel>> [.tag-new]#NEW# logs nothing: its handler only reads what reaches the root logger.
+| The URL record (INFO), the boxed WARNING of a taken port, a console that could not start (WARNING), <<vidocq-devc-005>>, and the stack trace of a failed sample (DEBUG). In a `dev` launch: the URL of the <<dev-mcp,dev MCP>> (INFO), every action run (INFO), a failed one (WARNING, its stack trace at DEBUG), and <<vidocq-devc-006>>. <<vidocq-devc-007>>, <<vidocq-devc-008>> and <<vidocq-devc-009>>, once per boot, the first time the report is read. The <<logs-panel,logs panel>>logs nothing: its handler only reads what reaches the root logger.
 
 | `io.vidocq.startup.anomaly`
 | <<vidocq-devc-001>> to <<vidocq-devc-004>>, as every startup anomaly.
 |===
 
-== Next steps [.tag-new]#NEW#
+== Next steps
 
-* xref:dev-console-panels.adoc[Writing a dev console panel] [.tag-new]#NEW# — show the live values of an extension
+* xref:dev-console-panels.adoc[Writing a dev console panel]— show the live values of an extension
 * xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report] — what the *Startup* tab shows
 * xref:modules/vidocq-runtime-maven-plugin.adoc[vidocq-runtime-maven-plugin] — `vidocq:dev`

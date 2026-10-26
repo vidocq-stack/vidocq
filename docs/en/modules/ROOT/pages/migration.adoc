@@ -228,7 +228,7 @@ Payara Micro and Vidocq Runtime share the MicroProfile target. The main differen
 Seven extensions run the TCKs of their MicroProfile 7.2 specifications and the Metrics 5.1 extension runs its own TCK (Metrics is not part of the 7.2 platform); all eight pass on the assembled runtime, through the runners embedded in `vidocq-runtime-integration-tests` (Maven profile `tck`) — 1888 TCK tests green on 2026-10-04. The OpenAPI 4.2 and Telemetry 2.2 runs use release-candidate TCKs, byte-identical to the finals; the 7.2 platform release is still under ballot. See xref:tck.adoc[TCK status].
 
 [#dev-console-dependency]
-== The dev console is no longer a dependency [.tag-new]#NEW#
+== The dev console is no longer a dependency
 
 Before, an application declared `vidocq-runtime-devconsole-extension` itself to get the
 xref:dev-console.adoc[dev console], and that dependency shipped in every binary `vidocq:package`, `jlink`,
@@ -255,7 +255,7 @@ See xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binari
 including the six `-dev` panel modules this repository's own extensions now ship.
 
 [#config-rest-client-codegen]
-== Config and Rest Client need their codegen bundle [.tag-new]#NEW#
+== Config and Rest Client need their codegen bundle
 
 Two extensions now ship a `-codegen` bundle, as the others already did, and `vidocq:checkpom` fails the build
 of an application that declares the extension without it:
@@ -286,7 +286,7 @@ xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config exte
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 
 [#application-parent]
-== `vidocq-runtime-parent` is an application parent, with a BOM [.tag-new]#NEW#
+== `vidocq-runtime-parent` is an application parent, with a BOM
 
 Until 0.4.0, `vidocq-runtime-parent` was the root of the runtime's own reactor, and an application that
 inherited it got the settings of this repository with it: the SonarQube and TCK properties, the versions of
@@ -338,7 +338,7 @@ What to change in an application:
   parent's (both are the `default` execution), so it packages once whether you keep it or not.
 
 [#modularize-moved]
-== `vidocq:modularize` is now `vauban:modularize` [.tag-new]#NEW#
+== `vidocq:modularize` is now `vauban:modularize`
 
 The goal moved to `io.vidocq.vauban:vauban-maven-plugin`. A pom that runs `vidocq:modularize` declares the
 Vauban plugin instead, renames the `vidocq.modularize.*` properties to `vauban.modularize.*`, and drops

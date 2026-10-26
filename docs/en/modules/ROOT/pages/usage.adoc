@@ -10,7 +10,7 @@ configuration via {spec-mp-config}, observability ({spec-mp-health}, {spec-mp-me
 [#entry-point]
 == The application entry point
 
-[.tag-new]#NEW# An application has no main class of its own by default. The runtime's main,
+An application has no main class of its own by default. The runtime's main,
 `io.vidocq.runtime.core.Vidocq`, boots it from the module that `vidocq.mainModule` names, under every goal:
 
 * `vidocq:run` and the `vidocq:package` launchers hand the application to it as a path, `-Dvidocq.app.path`, and
@@ -85,7 +85,7 @@ their packages, with zero `opens`. Override with `-Dvidocq.app.modules=<name,nam
 explicit `-Dvidocq.app.path=<archives>`.
 
 [#app-in-boot-layer]
-[.tag-new]#NEW# When the selection finds no application module to move, the application stays in the boot
+When the selection finds no application module to move, the application stays in the boot
 layer, and there Vidocq cannot give itself access to the `VidocqApp` class it has to instantiate. The boot
 now fails with a message that names the class, its package and the two fixes, instead of a bare
 `IllegalAccessException`: add `exports <package> to io.vidocq.runtime.core;` to the application's
@@ -109,7 +109,7 @@ live on the module path — `LogManager` instantiates handlers through the syste
 loader, which cannot see the layer.
 
 [#app-layer-dependencies]
-=== Dependencies in the application layer [.tag-new]#NEW#
+=== Dependencies in the application layer
 
 By default (`vidocq.app.layer=classes`) the application layer holds the project's classes, and the project's
 dependencies stay on the module path. `-Dvidocq.app.layer=all` moves them into the application layer as well,
@@ -127,7 +127,7 @@ application layer: pin it.
 *Pinning.* `-Dvidocq.app.layer.keep=<patterns>` keeps modules in the parent layer. A pattern is a module name or
 `groupId:artifactId`; `*` alone, or as a suffix (`org.acme.*`), matches several. A brick pins its own modules with
 the `Vidocq-Parent-Layer` attribute of its manifest. A pinned module drags what it requires into the parent layer.
-[.tag-new]#NEW# The other way round, a Vidocq jar whose manifest says `Vidocq-Application-Layer: true` is not kept by
+The other way round, a Vidocq jar whose manifest says `Vidocq-Application-Layer: true` is not kept by
 the name rule: a module that integrates an application framework, such as
 xref:modules/vidocq-runtime-extensions.adoc#vaadin[the Vaadin extension], goes to the application layer with it.
 A pinned module that reads a module of the application fails the build, with both names.
@@ -136,7 +136,7 @@ A pinned module that reads a module of the application fails the build, with bot
 `3 modules, 2 libraries (...)`. The detailed report has one `parent layer` row for each pinned module, with its
 reason. The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
 
-*Enriched libraries.* `vidocq:generate` runs the brick processors (Foy's, for instance) over the dependency jars they select, so a `@WebListener` of a library works without a workaround [.tag-new]#NEW#. The `layer` headline then counts them: `, 1 enriched (Foy 1)`. See xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
+*Enriched libraries.* `vidocq:generate` runs the brick processors (Foy's, for instance) over the dependency jars they select, so a `@WebListener` of a library works without a workaround. The `layer` headline then counts them: `, 1 enriched (Foy 1)`. See xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
 
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
@@ -151,7 +151,7 @@ main class, and carry `-Dvidocq.app.layer=all` and the pinned list. `all` requir
 derived fails the build under `all`, with a message that names the jar: add an `Automatic-Module-Name` to it, or
 use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the plugin properties].
 
-[[app-layer-jdk-modules]]*JDK modules.* [.tag-new]#NEW# Only the boot layer can define a JDK module, so a JDK module that only an
+[[app-layer-jdk-modules]]*JDK modules.*Only the boot layer can define a JDK module, so a JDK module that only an
 application module requires, such as `java.sql` for Vaadin's `flow-data`, must be resolved there. `vidocq:run`,
 `vidocq:dev` and the `vidocq:package` launchers add these modules to `--add-modules`, read from the descriptors of
 the application path. A `java` command written by hand needs the same option; without it the runtime fails with
@@ -282,7 +282,7 @@ The workaround on 0.2.0 is to do by hand what 0.3.0 does natively:
 ====
 
 [#several-applications]
-== Several applications in one reactor [.tag-new]#NEW#
+== Several applications in one reactor
 
 A reactor can hold one application per module, next to the library modules they share. Each application module
 is an ordinary Vidocq application: `vidocq-runtime-maven-plugin` in its `<build><plugins>`, and its own
@@ -358,7 +358,7 @@ Endpoints exposed by `vidocq-runtime-knock-health-extension`: `/health`, `/healt
 The `vidocq-runtime-grimm-openapi-extension` extension serves the OpenAPI document, generated from Jakarta REST + MicroProfile OpenAPI annotations, at `/openapi`; the companion `vidocq-runtime-grimm-openapi-ui-extension` serves Swagger UI at `/openapi/ui`.
 
 [#dev-console]
-== Dev console [.tag-new]#NEW#
+== Dev console
 
 While you develop, run `mvn vidocq:dev`: it adds the console itself when the application has `vidocq-runtime-chappe-webserver-extension`, and never packages it. The application logs `Vidocq dev console: http://127.0.0.1:8888/`, a read-only page with the startup report of the running boot and the live values of the extensions — the connections of each Mansart pool, the heap, the threads, the garbage collectors. It is on in a dev launch only, on the loopback address. See xref:dev-console.adoc[Dev console]; an extension adds its own panel as xref:dev-console-panels.adoc[Writing a dev console panel] describes.
 

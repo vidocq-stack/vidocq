@@ -27,7 +27,7 @@
 * Warn about configured `vidocq.*` keys nobody consumes (`ConfigKeyAudit`, based on the core's own keys and `VidocqExtension.configKeys()`), as <<vidocq-cfg-003>>.
 * Print the startup banner with the exact Vidocq version and build (<<startup-banner>>).
 * Log the startup report, one record that says what has just started, just before `Vidocq - Started in`, and report a boot that fails (<<startup-report>>).
-* Give the extensions a read-only view of that report, `ExtensionContext.startupReport()` [.tag-new]#NEW#, which the xref:dev-console.adoc[dev console] shows while the application runs.
+* Give the extensions a read-only view of that report, `ExtensionContext.startupReport()`, which the xref:dev-console.adoc[dev console] shows while the application runs.
 * Print readable console logs when the application has not configured logging (<<console-logging>>).
 * Manage the shutdown cycle — `onStop()` runs in reverse priority order, virtual threads drain cleanly.
 * Install the Vauban application layer when the launch vehicle requires it (`VidocqAppLayer`, `Vidocq.run`), including the `vidocq:dev` hot-reload loop (`VidocqDevReloadLoop`).
@@ -50,10 +50,10 @@ right-click Run in the IDE or a `VidocqApp` that runs after boot. `Vidocq.run` r
 same way, see xref:usage.adoc#entry-point[The application entry point].
 
 [#app-module-property]
-[.tag-new]#NEW# The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
+The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
 
 [#main-shapes]
-=== Which main methods are accepted [.tag-new]#NEW#
+=== Which main methods are accepted
 
 Vidocq chooses the application's main itself whenever the application is handed over as a path rather than as a module to launch: `mvn vidocq:run`, `vidocq:dev` with `-Dvidocq.dev.hotReload=false`, and the packaged launcher of an application that has no `@VidocqMain` trampoline. All three pass `-Dvidocq.app.main`, and the runtime reaches that main by reflection, inside the application layer. (With a trampoline the script launches `--module app/acme.App` and the JVM launcher makes the choice; `vidocq:dev`'s hot-reload loop, the default, ignores `vidocq.app.main` on purpose and reboots the layer instead.) All of this concerns an application that
 declares `vidocq.mainClass`: without one, no `vidocq.app.main` is passed and the runtime's main boots the
@@ -112,7 +112,7 @@ Boot itself is intentionally sequential on a single thread (easier diagnosis, re
 * request-time work of extensions such as `vidocq-runtime-knock-health-extension`, whose health checks execute on the incoming request's virtual thread.
 
 [#startup-banner]
-== Startup banner [.tag-new]#NEW#
+== Startup banner
 
 Vidocq tells which Vidocq is starting, once per JVM, right after the configuration is loaded and before `Vidocq - Configuration phase`. Two `0.4.0-SNAPSHOT` builds are told apart by their commit, so the version is in the output before anything later can fail.
 
@@ -175,10 +175,10 @@ The *context line* is `Java <version> (<vendor>) | <mode> (<reason>) | debug <ad
 * the Java version and vendor of the running JVM;
 * the <<launch-mode,launch mode>> — `dev`, `test` or `prod` — with, in parentheses, the signal it was read from: `dev (IntelliJ agent)`, `prod (no dev or test signal)`;
 * the <<launch-mode-debugger,debugger>>, when the JVM runs with a JDWP agent;
-* the xref:dev-console.adoc#banner-segment[dev console] [.tag-new]#NEW#, when it is on the module path and on for this launch: `devconsole :8888` for a loopback host, `devconsole <host>:<port>` otherwise, nothing for port `0`. It is the configured address, a promise made before the bind; the console's own `Vidocq dev console: http://…/` record, logged once it listens, is the one to trust;
-* the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module `-Dvidocq.app.module` names [.tag-new]#NEW#, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
+* the xref:dev-console.adoc#banner-segment[dev console], when it is on the module path and on for this launch: `devconsole :8888` for a loopback host, `devconsole <host>:<port>` otherwise, nothing for port `0`. It is the configured address, a promise made before the bind; the console's own `Vidocq dev console: http://…/` record, logged once it listens, is the one to trust;
+* the application: the module of the class that calls `Vidocq.run`, else the module of `-Dvidocq.app.main`, else the module `-Dvidocq.app.module` names, else the module launched with `java -m`. It is named by the `artifactId` of its `pom.properties` when packaged, by its module name otherwise.
 
-Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console [.tag-new]#NEW#, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
+Both lines stay within 80 columns. For the context line, what is given up goes in this order: the JVM vendor, then the segments of a module name are abbreviated (`i.v.t.l.mcptimeserver`), then the name is cut with `...` — always before the application version — then the dev console, and the name comes back whole if it then fits, then the debugger, then the reason of the launch mode, and with it the whole segment when the mode is a `prod` that no signal proves; the whole line is cut last. The vendor goes first because the line is read to know where the process runs and how to attach to it: 19 columns of `(Eclipse Adoptium)` never cost the address of a debugger, nor the mode and the reason it was read from. A long directory path drops its `last Maven build` label before being cut. The single INFO line is never cut: it carries the mode, its reason, the debugger and the dev console whatever their length.
 
 The Vidocq bricks have their own versions. When a brick (Vauban, Chappe, Cassini, ...) has another version than the runtime, was built from a modified tree, or is a snapshot without a commit, one more INFO record lists them:
 
@@ -188,9 +188,9 @@ Vidocq bricks: chappe 0.4.0-SNAPSHOT (2d8ec095+dirty, built 2026-09-16T08:48:26Z
 ----
 
 [#launch-mode]
-=== Launch mode [.tag-new]#NEW#
+=== Launch mode
 
-Vidocq says which of `dev`, `test` and `prod` it is running in, and in parentheses the signal it read it from — the claim and its evidence, never one without the other. It is an observation, not a switch: the container, the configuration and the extensions' lifecycle are the same in every mode. It decides what is printed — the art of the banner, and the default level of the <<startup-report,startup report>> — so that a log or a screenshot says what the launch was. An extension reads it with `ExtensionContext.launchMode()` [.tag-new]#NEW# to offer what only makes sense in development (xref:modules/vidocq-runtime-spi.adoc#launch-mode-api[Reading the launch mode]).
+Vidocq says which of `dev`, `test` and `prod` it is running in, and in parentheses the signal it read it from — the claim and its evidence, never one without the other. It is an observation, not a switch: the container, the configuration and the extensions' lifecycle are the same in every mode. It decides what is printed — the art of the banner, and the default level of the <<startup-report,startup report>> — so that a log or a screenshot says what the launch was. An extension reads it with `ExtensionContext.launchMode()`to offer what only makes sense in development (xref:modules/vidocq-runtime-spi.adoc#launch-mode-api[Reading the launch mode]).
 
 The first signal found wins:
 
@@ -227,14 +227,14 @@ The first signal found wins:
 | `no dev or test signal`
 |===
 
-A profile that is no mode (`staging`) is not a signal: the detection goes on without it. `vidocq.launch.mode=auto` [.tag-new]#NEW#, the default, lets the detection decide too; any other value that names no mode is reported as <<vidocq-cfg-001>> and does the same.
+A profile that is no mode (`staging`) is not a signal: the detection goes on without it. `vidocq.launch.mode=auto`, the default, lets the detection decide too; any other value that names no mode is reported as <<vidocq-cfg-001>> and does the same.
 
 `prod` is the only mode that rests on an absence, and it never shows without saying so: when the context line is too narrow for `prod (no dev or test signal)`, the whole segment goes rather than leave a bare `prod` claiming more than is known.
 
 Reading the archives is bounded: at most four of them, their shape is a string comparison, and only one of them has its parents probed for a build file — a handful of `stat` calls, once per boot: every reload of the dev loop reads its launch again. Nothing in the resolution throws: a probe that fails is a signal that was not found, and the worst case is the `prod` above.
 
 [#launch-mode-debugger]
-==== Debugger [.tag-new]#NEW#
+==== Debugger
 
 When the JVM runs with a JDWP agent (`-agentlib:jdwp=…`, or the older `-Xrunjdwp:…`), the context line also carries what a debugger has to attach to, in every mode and not only in `dev`:
 
@@ -293,15 +293,15 @@ VidocqBootstrap.create()
 |===
 | Key | Default | Description
 
-| `vidocq.banner.mode` [.tag-new]#NEW#
+| `vidocq.banner.mode`
 | `auto`
 | `auto`, `console`, `log` or `off` (above). An unknown value logs a warning and means `auto`.
 
-| `vidocq.banner.location` [.tag-new]#NEW#
+| `vidocq.banner.location`
 | (empty)
 | A custom banner: `classpath:<resource>`, `file:<path>` or `<path>`, which take the path as written, or an encoded `file://` URI (`file:///opt/my%20app/banner.txt`). When unset, a `vidocq-banner.txt` resource of the application is used if there is one. A missing file, or a value that names no file (such as a `file://` URI with a raw space), logs a warning and prints the built-in art.
 
-| `vidocq.launch.mode` [.tag-new]#NEW#
+| `vidocq.launch.mode`
 | `auto`
 | `dev`, `test` or `prod`, forced instead of detected; `auto` detects it (<<launch-mode>>). Another value is reported as <<vidocq-cfg-001>> and means `auto`. It changes what is printed — the banner, the level of the <<startup-report,startup report>> — and what `ExtensionContext.launchMode()` tells the extensions; the runtime itself behaves the same.
 
@@ -330,7 +330,7 @@ A `vidocq-banner.txt` file at the root of the application's resources replaces t
 | `${java.version}` | `Java 25+36-LTS (Eclipse Adoptium)`
 | `${app.name}`, `${app.version}` | the application's name and version
 | `${vidocq.launch}` | `dev (IntelliJ agent)`, `prod (no dev or test signal)` or empty
-| `${vidocq.debug}` [.tag-new]#NEW# | `debug *:5005`, `debug 127.0.0.1:5005 suspend=y`, or empty without a JDWP agent
+| `${vidocq.debug}`| `debug *:5005`, `debug 127.0.0.1:5005 suspend=y`, or empty without a JDWP agent
 | `${ansi.bold}`, `${ansi.faint}`, `${ansi.red}`, `${ansi.green}`, `${ansi.yellow}`, `${ansi.blue}`, `${ansi.magenta}`, `${ansi.cyan}`, `${ansi.reset}` | the escape sequence, or empty when colours are off
 | `${<configuration key>}` | the configured value
 | `${<key>:<default>}` | `<default>` when the key has no value
@@ -346,7 +346,7 @@ ${ansi.cyan}  T O D O   S E R V I C E${ansi.reset}
 ----
 
 [#build-identity]
-=== Build identity [.tag-new]#NEW#
+=== Build identity
 
 Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe), and every application built with `vidocq-runtime-parent`, which configures the plugin the same way, carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase:
 
@@ -376,7 +376,7 @@ git log -1 9beafc47
 ----
 
 [#startup-report]
-== Startup report [.tag-new]#NEW#
+== Startup report
 
 At the end of every boot, just before `Vidocq - Started in`, one INFO record says what has just started: the launch, the application layer, the configuration sources, the extensions, and a section for every library that contributes one. It is written for the moment something does not work — a key that nothing reads, an extension that did not start, a module that is not where it was expected — and for the bug report that has to say what ran. `Vidocq - Started in` stays the last line of a boot.
 
@@ -491,7 +491,7 @@ The contributed sections follow the sections of the core: first those of the ext
 
 A dev launch shows everything once, then one line per section on every reload. An embedded deployment boots hundreds of times in one JVM, so it prints no report unless `vidocq.startup.report` asks for one — the banner is reduced to one line there too.
 
-While the xref:dev-console.adoc[dev console] is on [.tag-new]#NEW#, the contributors are given the `detailed` level whatever the report prints, so that the console has every row even on a reload that logs the summary; what the log prints still follows the level above.
+While the xref:dev-console.adoc[dev console] is on, the contributors are given the `detailed` level whatever the report prints, so that the console has every row even on a reload that logs the summary; what the log prints still follows the level above.
 
 `off` only removes the report. The contributors are still called, and every anomaly is still logged as its own warning. A value that is none of the four is reported as <<vidocq-cfg-001>> and read as `auto`. Like every key, it can be set with `-D`, an environment variable (`VIDOCQ_STARTUP_REPORT`) or `vidocq.properties`.
 
@@ -556,7 +556,7 @@ The beans of the bean index need load-time weaving, as those of an IDE build do,
 Build with Maven or Gradle, which weave at compile time, or launch the application in its application layer, which weaves without an agent: the runtime's own main does under `vidocq:dev`, `vidocq:run`, `vidocq:package` and in a `vidocq:jlink` image, and so does a `@VidocqMain` trampoline from the IDE.
 
 [#vidocq-gen-001]
-==== VIDOCQ-GEN-001 — bean archives indexed at boot [.tag-new]#NEW#
+==== VIDOCQ-GEN-001 — bean archives indexed at boot
 
 The application's bean index is not the one `vidocq:generate` left: `META-INF/vidocq/generate.stamp` is missing from the application module, or it records another `META-INF/vauban-beans.list`. An IDE build does the first, since it never runs the goal, and an IDE's incremental build the second, since the annotation processor rewrites the index without the beans of the dependencies. Those beans, in a dependency compiled without Vauban's processor, are then in no index, and the application used to answer 404 with no warning (Vidocq/vidocq#83). The boot now scans the `beans.xml` archives that no Vauban build step indexed, honouring their discovery mode, and names them; their beans run through reflection. The record is logged only when there was such an archive. An embedded deployment, such as the TCK, is never concerned.
 
@@ -568,7 +568,7 @@ The application's bean index is not the one `vidocq:generate` left: `META-INF/vi
 What the boot cannot do: scan a jar without `beans.xml` that only `<scanDependencies>` names, since the pom is not read at runtime, or honour `<scanExcludes>`. Build with Maven for those.
 
 [#vidocq-gen-002]
-==== VIDOCQ-GEN-002 — bean classes the processor never indexed [.tag-new]#NEW#
+==== VIDOCQ-GEN-002 — bean classes the processor never indexed
 
 The application module has classes that define beans (a CDI scope, `@Singleton`, a Jakarta REST `@Path`, an
 interceptor or a decorator) and none of the files Vauban's annotation processor leaves: `META-INF/vauban-beans.list`,
@@ -597,7 +597,7 @@ A startup report contributor could not be loaded or created, has no id (`null` o
 [#vidocq-rpt-002]
 ==== VIDOCQ-RPT-002 — duplicate section id
 
-Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`), or one of the xref:dev-console.adoc[dev console]'s own panels, `startup`, `config`, `cdi`, `logs`, `tests` and `jvm` [.tag-new]#NEW#. The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
+Two contributors of different classes use the same id: the second one is skipped. So is a contributor whose id names a section of the core (`launch`, `vidocq`, `phases`, `layer`, `configuration`, `extensions` or `anomalies`), or one of the xref:dev-console.adoc[dev console]'s own panels, `startup`, `config`, `cdi`, `logs`, `tests` and `jvm`. The same class found twice is not an anomaly: see xref:modules/vidocq-runtime-spi.adoc#report-twins[Layer twins].
 
 [source,text]
 ----
@@ -640,7 +640,7 @@ The report of a boot that went well never fails it: if the report cannot be prod
 
 The report goes to logs that are shared, pasted into issues and kept. It prints names and counts, never what an application keeps to itself:
 
-* **No configuration value.** The `configuration` section names the sources and their ordinals, never what they hold. The only configured values the core's sections show are the launch mode, when `vidocq.launch.mode` or a `vidocq.profile` named after a mode set it, the report level, and `vidocq.app.path`, whose archives the summary prints as file names. A contributor shows a configured value that may carry a secret, such as a JDBC URL or a user name, in a `dev` launch only, without its credentials [.tag-new]#NEW#; outside it, it says what the value is, such as the database kind (xref:dev-console-panels.adoc#rule-secrets[the rule]).
+* **No configuration value.** The `configuration` section names the sources and their ordinals, never what they hold. The only configured values the core's sections show are the launch mode, when `vidocq.launch.mode` or a `vidocq.profile` named after a mode set it, the report level, and `vidocq.app.path`, whose archives the summary prints as file names. A contributor shows a configured value that may carry a secret, such as a JDBC URL or a user name, in a `dev` launch only, without its credentials; outside it, it says what the value is, such as the database kind (xref:dev-console-panels.adoc#rule-secrets[the rule]).
 * **No system property, environment variable or JVM argument as it is** — a `-D` can carry a password. Only what is derived from them: `IntelliJ agent`, `target/classes with a pom.xml above`.
 * **No secret.** A contributor reports a secret as `configured` or `not configured`; the API has no way to pass its value.
 * **No directory in the summary**, the default of a packaged application: the core's sections print file names only (`vidocq.app.path=.../app`). The detailed report prints a path relative to the working directory, or under `~` for the home directory, or else absolute; a path of more than four names keeps its first two and its last one: `~/.m2/.../langchain4j-cdi-mcp-server-1.4.0-SNAPSHOT.jar`.
@@ -667,17 +667,17 @@ To hide the report, prefer `vidocq.startup.report=off`, which keeps everything e
 |===
 | Key | Default | Description
 
-| `vidocq.startup.report` [.tag-new]#NEW#
+| `vidocq.startup.report`
 | `auto`
 | `auto`, `off`, `summary` or `detailed` (<<startup-report-level>>). Another value is reported as <<vidocq-cfg-001>> and means `auto`.
 
-| `vidocq.launch.mode` [.tag-new]#NEW#
+| `vidocq.launch.mode`
 | `auto`
 | The launch mode that `auto` follows, detected unless forced (<<launch-mode>>).
 |===
 
 [#console-logging]
-== Console logging [.tag-new]#NEW#
+== Console logging
 
 When the application has not configured logging, Vidocq prints one aligned line per record on standard output. The JDK default would print two lines per record on standard error, which an IDE shows in red. Vidocq keeps logging through `System.Logger` and `java.util.logging`: only the console handler of the root logger changes.
 
@@ -735,11 +735,11 @@ An application that calls `LogManager.readConfiguration` after the boot still re
 |===
 | Key | Default | Description
 
-| `vidocq.log.console` [.tag-new]#NEW#
+| `vidocq.log.console`
 | `auto`
 | `auto`: Vidocq's console output, unless the application configured logging (above). `jdk`: the JDK's console handler, untouched.
 
-| `vidocq.console.color` [.tag-new]#NEW#
+| `vidocq.console.color`
 | `auto`
 | Colours of the level: `auto`, `always` or `never`.
 |===

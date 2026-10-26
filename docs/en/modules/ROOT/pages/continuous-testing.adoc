@@ -1,4 +1,4 @@
-= Continuous testing [.tag-new]#NEW#
+= Continuous testing
 :description: Run the application's tests on every change, beside vidocq:dev or on their own with vidocq:test.
 
 [.lead]
@@ -7,7 +7,7 @@ every reload and shows the result in the xref:dev-console.adoc#tests-panel[dev c
 on their own, without the application, with a summary in the terminal.
 
 [#what-it-does]
-== What it does [.tag-new]#NEW#
+== What it does
 
 Every test of the application runs after every change: there is no tracking of the tests a change affects. A run is
 Surefire itself, started as `mvn test-compile surefire:test`, so the tests run exactly as `mvn test` runs them: the
@@ -15,7 +15,7 @@ same module path, the same `argLine`, the same JUnit launcher listeners, the
 xref:dev-services.adoc#in-tests[dev services host] included. Integration tests run by Failsafe are not run.
 
 [#two-goals]
-== `vidocq:dev` or `vidocq:test` [.tag-new]#NEW#
+== `vidocq:dev` or `vidocq:test`
 
 [cols="1,2,2"]
 |===
@@ -50,7 +50,7 @@ mvn vidocq:test                                       # the tests only
 ----
 
 [#when-tests-run]
-== When tests run [.tag-new]#NEW#
+== When tests run
 
 Both goals watch the main directories, `src/main/java` and `src/main/resources`, and the test directories,
 `src/test/java` and `src/test/resources`, with the same 250 ms debounce.
@@ -80,7 +80,7 @@ One run at a time:
   and when several arrive meanwhile, the last one wins.
 
 [#switch]
-== Turning it on and off [.tag-new]#NEW#
+== Turning it on and off
 
 `vidocq.dev.continuousTesting` turns the tests of `vidocq:dev` on or off. It is `true` when the project has a
 `src/test/java` directory and `false` otherwise. The first source that sets it wins:
@@ -94,7 +94,7 @@ The value is `true` or `false`, in any case; anything else stops the goal with a
 `vidocq:test` always runs the tests: the switch does not apply to it.
 
 [#watch-directories]
-== The watched directories [.tag-new]#NEW#
+== The watched directories
 
 [cols="2,2,3"]
 |===
@@ -116,7 +116,7 @@ The value is `true` or `false`, in any case; anything else stops the goal with a
 Only `.java`, `.properties`, `.xml`, `.yml` and `.yaml` files count.
 
 [#results]
-== Results and log [.tag-new]#NEW#
+== Results and log
 
 Each run writes its output to `target/vidocq-dev-tests.log`, overwritten on the next run, and its result to
 `target/vidocq-dev-tests.json`, replaced atomically:
@@ -145,7 +145,7 @@ Each run writes its output to `target/vidocq-dev-tests.log`, overwritten on the 
 | `passed` | Every test passed, or was skipped.
 | `failed` | A test failed or ended in error — or Maven exited with an error although none did, such as a test JVM that crashed; the log says why.
 | `compile-error` | The main or test sources do not compile: the log shows the compiler's errors. The application keeps running.
-| `error` [.tag-new]#NEW# | Maven failed before any test ran, but not in the compiler: for example Surefire's JUnit provider missing from the local repository of an offline run, or a test JVM that crashed before writing any report. The log says why.
+| `error`| Maven failed before any test ran, but not in the compiler: for example Surefire's JUnit provider missing from the local repository of an offline run, or a test JVM that crashed before writing any report. The log says why.
 | `no-tests` | There was no test to run.
 | `cancelled` | A newer change stopped the run; the previous complete result is under `previous`.
 |===
@@ -155,7 +155,7 @@ a key) or `rerun-failed`. A message is the first line of the exception's message
 200 characters at most; the whole stack trace is in the log.
 
 [#terminal]
-== The terminal [.tag-new]#NEW#
+== The terminal
 
 `vidocq:dev` prints one line per run, among the application's own output:
 
@@ -181,7 +181,7 @@ With a console attached, `vidocq:test` reads a key per line — type the key, th
 | Key | Effect
 
 | `r` | Run every test.
-| `f` | Run the tests that failed in the last result; `no failed test to rerun` when there is none. A failure of the class itself (`@BeforeAll`) reruns the whole class, and a rerun that matches no test — a name `-Dtest` cannot express — runs every test instead [.tag-new]#NEW#.
+| `f` | Run the tests that failed in the last result; `no failed test to rerun` when there is none. A failure of the class itself (`@BeforeAll`) reruns the whole class, and a rerun that matches no test — a name `-Dtest` cannot express — runs every test instead.
 | `q` | Quit: the run in flight is cancelled and the dev services stop.
 | Enter | Run every test.
 |===
@@ -190,13 +190,13 @@ Without a console — a CI job, a pipe, an IDE's run window that is no terminal 
 printed, and the goal only watches. Ctrl+C always stops it.
 
 [#dev-console]
-== In the dev console [.tag-new]#NEW#
+== In the dev console
 
 Under `vidocq:dev`, the console's own xref:dev-console.adoc#tests-panel[`tests` panel] shows the last run, its
 failures and a chart of the failures over time, with two buttons: *Run all tests* and *Rerun failed tests*.
 
 [#dev-services]
-== Dev services [.tag-new]#NEW#
+== Dev services
 
 The tests use the same containers as the application: `vidocq:dev` hands every run its session's connection keys,
 and `vidocq:test` opens a session of its own, host `vidocq:test`, once for its whole life. Every run gets
@@ -207,7 +207,7 @@ WARNING: The tests share the database with the running application (`vidocq:dev`
 themselves, or turn continuous testing off for that project.
 
 [#limits]
-== Limits [.tag-new]#NEW#
+== Limits
 
 * Every run starts Maven: a few seconds before the first test, more on a large suite. Turn it off for the dev loop
   with `-Dvidocq.dev.continuousTesting=false` when that is too slow.
@@ -220,7 +220,7 @@ themselves, or turn continuous testing off for that project.
   can see it in the process list, as they can the application's.
 
 [#turning-it-off]
-== Turning it off [.tag-new]#NEW#
+== Turning it off
 
 For one run, `mvn vidocq:dev -Dvidocq.dev.continuousTesting=false`. For the project, in `vidocq.properties`:
 

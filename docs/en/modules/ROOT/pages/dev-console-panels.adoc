@@ -1,11 +1,11 @@
-= Writing a dev console panel [.tag-new]#NEW#
+= Writing a dev console panel
 :description: How an extension shows its section of the startup report live in the dev console: where the panel lives, boot facts and live values, charts, the rules, a worked example, tests and a checklist.
 
 [.lead]
 A panel is a section of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report] that the xref:dev-console.adoc[dev console] also shows live. Your extension already says, once per boot, what it found; as a panel, it also says, about once a second, what it is doing — how many connections are in use, how many requests are waiting — and names the values the page should plot. This page is for the author of an extension. It walks through the Mansart pool panel, the first one shipped, and ends with a checklist.
 
 [#in-short]
-== In short [.tag-new]#NEW#
+== In short
 
 [source,java]
 ----
@@ -59,7 +59,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
 It is a hard requirement, since a class does not load without the interfaces it implements, and a light one: the module holds five small types and brings only `io.vidocq.runtime.spi`. It is an ordinary API jar, not a dev tool: unlike the console, it ships in the binary with an extension that requires it. The console itself stays the application's choice: without it, the panel is a contributor like any other, and its `sample` is never called.
 
 [#dev-module]
-== A `-dev` module, never packaged [.tag-new]#NEW#
+== A `-dev` module, never packaged
 
 The panel above is the *all-in-one* form: `AcmeCacheExtension` is both the extension and the panel, and whatever
 implements `DevConsolePanel` ships in every binary that has the extension, whether or not `vidocq:dev` is ever
@@ -71,7 +71,7 @@ and stays the right shape for an extension of your own that has no packaging con
 the split below is what this repository's own extensions do, and what a `-dev` module of a component with a
 release cycle of its own — an application's, or a third-party extension's — should follow.
 
-=== Three modules, one section [.tag-new]#NEW#
+=== Three modules, one section
 
 [cols="1,2,2"]
 |===
@@ -98,7 +98,7 @@ every mode, production logs included — and drops only the live half, `sample`/
 mansart.pool.dev`. Nothing else ever depends on the `-dev` module, and it is never a dependency of anything
 that gets packaged.
 
-=== `LivePanel` [.tag-new]#NEW#
+=== `LivePanel`
 
 The `-dev` module declares a `io.vidocq.runtime.spi.devconsole.LivePanel` as a service, not a
 `DevConsolePanel`:
@@ -148,7 +148,7 @@ io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev.PoolsLivePanel
 The console loads every `LivePanel` it finds this way (`uses io.vidocq.runtime.spi.devconsole.LivePanel;` in
 its own `module-info`) and matches each to the section of the same id.
 
-=== The descriptor [.tag-new]#NEW#
+=== The descriptor
 
 The runtime extension names its `-dev` companion in one file, so that an application declares nothing and
 `vidocq:dev` finds it on its own:
@@ -164,7 +164,7 @@ One line, the companion's `artifactId` — its `groupId` and version are the run
 holding more than one artifactId, or one that is not a valid Maven identifier, is unreadable: `vidocq:dev` logs
 a warning naming the jar, and that extension gets no companion — it never fails the goal.
 
-=== What the panel reads [.tag-new]#NEW#
+=== What the panel reads
 
 The `-dev` module never reaches the runtime extension's implementation packages — those stay closed. The
 runtime extension exports one small `.live` package to its companion only, `exports <package>.live to
@@ -194,7 +194,7 @@ Either way, the `-dev` module's own class — `PoolsLivePanel`, `HealthLivePanel
 `MetricsLivePanel` — stays package-private: only its `LivePanel` service registration, never a compile-time
 dependency, is what the console needs.
 
-=== The manifest marking [.tag-new]#NEW#
+=== The manifest marking
 
 The `-dev` module's `pom.xml` marks its own jar `Vidocq-Dev-Only: true`, the block every dev-only module in
 this repository carries (xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries]):
@@ -218,7 +218,7 @@ That one entry is what `vidocq:run`, the packaging goals and `vidocq:checkpom` r
 scope, a jar that carries it never ships, and a project that declares it anyway is warned, never failed.
 
 [#where-it-lives]
-== Where the panel lives [.tag-new]#NEW#
+== Where the panel lives
 
 **In the brick's existing runtime extension**, the module under `vidocq-runtime-extensions` that adapts a component — Mansart, Knock, Cassini — to Vidocq, a class-less wrapper included, which then gains its first class (<<wrapper-panel>>). Never in the component, and never in an artifact of its own.
 
@@ -240,7 +240,7 @@ The runtime extension is the indirection between the component and Vidocq: the l
 The console finds a panel the way the report finds a contributor: it keeps the contributors the boot called that are panels, the very instances. There is nothing new to declare, and there are two cases.
 
 [#extension-is-the-panel]
-=== The extension class is the panel [.tag-new]#NEW#
+=== The extension class is the panel
 
 An extension with a `VidocqExtension` class implements `DevConsolePanel` next to it. It is found with no second declaration, and its section comes with those of the extensions, in the order they start:
 
@@ -252,7 +252,7 @@ public final class MansartPoolExtension implements VidocqExtension, DevConsolePa
 This is the case of the Mansart pool extension, and of most extensions. The panel reads the fields the extension already fills in its lifecycle, and clears them in its `onStop`.
 
 [#wrapper-panel]
-=== A wrapper without an extension class [.tag-new]#NEW#
+=== A wrapper without an extension class
 
 Some extensions have no Java class at all. The Knock, Dirac and Heisenberg extensions are *wrappers*: a `pom.xml` and a `module-info` that bring the component in, which then integrates through standard CDI and JAX-RS discovery alone.
 
@@ -351,7 +351,7 @@ What changes for a service:
 A wrapper that only has boot facts to show implements `StartupReportContributor` alone, declared the same way: every section is a panel of the console, with its boot facts. Knock's `KnockHealthPanel` is such a case for now, a class of the wrapper like any other: its checks can be listed by probe, but their status is only known by running them, which a sample must not do (<<rule-memory-only>>), until Knock keeps its last result in memory. Implement `DevConsolePanel` when there is something to sample.
 
 [#two-halves]
-== Two halves: boot facts and live values [.tag-new]#NEW#
+== Two halves: boot facts and live values
 
 [cols="1,1,3"]
 |===
@@ -373,7 +373,7 @@ A wrapper that only has boot facts to show implements `StartupReportContributor`
 The boot facts are drawn from what `contribute` writes: the summary is the headline of the panel, the anomalies come first, and the rows follow as a table. When the sample has groups, a row whose key is a group's name is shown in that group's header, and a row whose key starts with the name and a space goes to that group's card, without the name: the Mansart pool panel writes `@Default` and `@Default size`, and the card of the pool `@Default` shows its URL in its header and `size` in its boot facts. The other rows stay in the panel's own table.
 
 [#links]
-=== Links [.tag-new]#NEW#
+=== Links
 
 A section can offer to open something the application serves, such as a user interface or a document: `section.link("Swagger UI", "default", "/openapi/ui/")`. The log prints a row, the label then the absolute URL; the console shows a button under the panel's title that opens it in a new tab.
 
@@ -384,7 +384,7 @@ A `GET` route with no template variable, such as `GET /openapi`, is a URL a brow
 An extension that serves a page on a listener it does not describe itself advertises it instead, with `ChappeMountPoint.instance().advertise(listener, label, path)` from its `onStart`. The sections that describe that listener offer to open it without knowing the extension: the Swagger UI extension advertises `/openapi/ui/`, and the `rest` panel shows the button.
 
 [#values]
-== Values [.tag-new]#NEW#
+== Values
 
 `PanelSample` takes each value under a key, and every method returns a scope, so that calls chain. A value is one of these kinds:
 
@@ -432,7 +432,7 @@ An extension that serves a page on a listener it does not describe itself advert
 * **No time, no rate.** The console stamps each poll with its own clock and the page computes the rates. A panel never adds a timestamp nor divides by time, so that a missed poll or a debugger paused on a breakpoint does no harm. A counter that goes down reads as a count that started again: its rate has a gap there.
 
 [#charts]
-== Charts [.tag-new]#NEW#
+== Charts
 
 A `Chart` has an id, a title and the series it plots, in drawing order. Each `Series` names a value key and a style:
 
@@ -475,7 +475,7 @@ new Chart("connections", "Connections", List.of(
 A *lifetime mean* — a mean over the whole boot, such as Mansart's mean borrow time — is sampled as a `duration` and shown as a number, never plotted. After an hour, one more minute of slow borrows barely moves a mean of the whole hour: its curve would stay flat while the last minutes get worse, and a flat line reads as "nothing happens". Plot what changes between two polls, a level or the rate of a counter. A mean over the last minutes would need the component to keep a total of the time spent, and a series style that divides its growth by the count's: neither exists yet.
 
 [#actions]
-== Actions [.tag-new]#NEW#
+== Actions
 
 In a `dev` launch, a panel may offer to *do* something, such as setting a log level or migrating a database again. It lists what with `actions()`, one `PanelAction` each, and the page shows a button per action next to the panel's links, with a field per argument:
 
@@ -507,7 +507,7 @@ public List<PanelAction> actions() {
 * **The console guards the request, the panel never parses one.** Who may run an action — the console's own page only, behind an origin check and the token of the boot — is decided in one place: see xref:dev-console.adoc#actions[the checks of an action request].
 
 [#json-argument]
-=== A JSON argument [.tag-new]#NEW#
+=== A JSON argument
 
 `PanelAction.Argument.json(String name, String label, String schema)` takes a JSON document rather than a string:
 `schema` is a JSON Schema, as the text of a JSON object of at most 32 KiB, checked when the argument is built, or
@@ -516,8 +516,8 @@ value reaches `call` as its JSON text, in the same `Map<String, String>`. `accep
 for a `json` argument it means "parses as a JSON object", whatever its length.
 
 The page renders it as a form generated from the schema when the schema allows one, an object of scalars one level
-down included (xref:dev-console.adoc#json-form[the generated form] [.tag-new]#NEW#), and as the
-xref:dev-console.adoc#json-editor[JSON editor] [.tag-new]#NEW# otherwise, which colours, checks and completes the
+down included (xref:dev-console.adoc#json-form[the generated form]), and as the
+xref:dev-console.adoc#json-editor[JSON editor]otherwise, which colours, checks and completes the
 value against the schema, whose keywords that page lists; the console never validates the value against the schema
 itself — the action's target does. The MCP inspector's own tool action is a short example
 (`TestPanels.InspectorPanel`'s `tool.weather`):
@@ -535,13 +535,13 @@ new PanelAction("tool.weather", "Weather", null,
         }, "Tools", "The weather in a city.\nIn Celsius.");
 ----
 
-A string property whose schema also says `"format": "textarea"` [.tag-new]#NEW# is a field of several lines in that
+A string property whose schema also says `"format": "textarea"`is a field of several lines in that
 form rather than a one-line one: four lines of monospace text to start with, taller when dragged, its value sent as
 any other string's.
 
-Such a field whose schema also says `"contentMediaType": "text/x-query"` and `"x-language": "<id>"` [.tag-new]#NEW#
+Such a field whose schema also says `"contentMediaType": "text/x-query"` and `"x-language": "<id>"`
 is the query editor, which colours, completes and checks a query with the vocabulary of the panel's language of that
-id, and one that says `"x-parameters-of": "<query property>"` [.tag-new]#NEW# is the JSON editor of that query's
+id, and one that says `"x-parameters-of": "<query property>"`is the JSON editor of that query's
 parameters, its schema following the query (xref:dev-console.adoc#query-language[A query language for a panel]).
 The Mansart Data panel's *JDQL* tab uses both for its statement and its parameters
 (xref:modules/vidocq-runtime-extensions.adoc#mansart-data-jdql[A JDQL console for Mansart Data]):
@@ -555,7 +555,7 @@ The Mansart Data panel's *JDQL* tab uses both for its statement and its paramete
  "required": ["query"]}
 ----
 
-Such a field whose schema also says `"contentMediaType": "text/csv"` [.tag-new]#NEW# gets a *Choose file* input next
+Such a field whose schema also says `"contentMediaType": "text/csv"`gets a *Choose file* input next
 to it: the file picked is read by the browser and replaces the field's value, nothing being sent until the form is.
 It is read as UTF-8, then again as Windows-1252 when it is not UTF-8 (as a spreadsheet of a decimal-comma locale
 saves CSV), the line under the input saying `read as Windows-1252 (not UTF-8)`. While the field still shows the file
@@ -574,7 +574,7 @@ Data panel's *Import CSV* uses it
 ----
 
 [#action-result]
-=== A structured result [.tag-new]#NEW#
+=== A structured result
 
 The 7-argument constructor, `PanelAction(id, label, confirmation, arguments, call, group, description)`, takes a
 `Function<Map<String, String>, ActionResult> call` in place of `run`: `call` returns an
@@ -584,7 +584,7 @@ The 7-argument constructor, `PanelAction(id, label, confirmation, arguments, cal
   `null` reading as `done`.
 * `body` is optional content shown under the line, at most 256 KiB: `contentType` is `text/plain` or
   `application/json`, the page showing JSON in its xref:dev-console.adoc#json-viewer[JSON viewer], or
-  `ActionResult.CSV`, `text/csv` [.tag-new]#NEW#, which the page shows as text with a *Download* button: the body
+  `ActionResult.CSV`, `text/csv`, which the page shows as text with a *Download* button: the body
   saved by the browser as `<action id>-<yyyyMMdd-HHmmss>.csv` (the id's characters outside `[A-Za-z0-9._-]` replaced
   by `-`), without a request. The Mansart Data panel's *Export CSV* answers so.
 * `error` is `true` when the call went through but its outcome is an error of the action's target, such as a tool
@@ -609,7 +609,7 @@ internal `call`, and each constructor wraps an old `run` anew, so two actions bu
 longer equal.
 
 [#action-groups]
-=== Groups and descriptions [.tag-new]#NEW#
+=== Groups and descriptions
 
 Two more optional fields, both on every constructor:
 
@@ -627,7 +627,7 @@ panel's own buttons. A panel keeps 128 actions at most; an id seen again, or one
 id `actions()` returns twice always was.
 
 [#replay-column]
-=== A replay column [.tag-new]#NEW#
+=== A replay column
 
 A `table` column headed `PanelSample.REPLAY_COLUMN` (`"replay"`) turns each of its cells into a "Replay" button on
 the page: the cell is the id of an action of the same panel, a space, then a JSON object of its arguments by name,
@@ -645,12 +645,12 @@ sub-tab keeping the rows whose cell names one of its own actions. A row whose ce
 one a dev reload orphaned, or a cell emptied for its length — is left out there.
 
 [#rules]
-== The rules [.tag-new]#NEW#
+== The rules
 
 Each has its reason. The console enforces what it can; the rest is up to the panel.
 
 [#rule-memory-only]
-=== `sample()` reads memory only [.tag-new]#NEW#
+=== `sample()` reads memory only
 
 No I/O, no network, no blocking call, no lock the application may hold, no bean created, nothing logged; well under a millisecond.
 
@@ -659,21 +659,21 @@ No I/O, no network, no blocking call, no lock the application may hold, no bean 
 *Why:* the page polls about once a second, per open tab, on the request threads, several at once. A panel that ran a query, called a service or ran the health checks on each poll would make the console a load generator, and its figures would measure the console. A panel that took a lock the application holds could stall the application's own threads. A value that only I/O could give is left out, or written `absent` with the reason; when it matters, the component keeps it in memory and the panel reads that. `contribute` follows the same rule, for the report's sake. The console times every sample and flags one above 5 ms `slow`.
 
 [#rule-volatile-snapshot]
-=== State is published through a `volatile` immutable snapshot [.tag-new]#NEW#
+=== State is published through a `volatile` immutable snapshot
 
 What `sample` reads is one `volatile` field that holds an immutable value — a record, a `List.copyOf` — assigned once complete, and cleared first thing in `onStop`, before what it refers to is closed. `sample` reads the field once, into a local variable, and works from that.
 
 *Why:* the polls arrive on Chappe's virtual threads, while the boot thread fills the extension's fields and, on a dev reload, tears the extension down. A `volatile` field makes what the boot thread wrote visible to the request threads; an immutable value never changes under the reader, so a poll never walks a collection that `onStop` is clearing (a `ConcurrentModificationException`); one read gives one consistent state, where two reads could straddle a reload; and clearing it before closing means a late poll finds nothing rather than a closed pool.
 
 [#rule-no-class-across-reloads]
-=== Nothing of the application outlives a reload [.tag-new]#NEW#
+=== Nothing of the application outlives a reload
 
 No `static` field holds a `Class`, a bean, a proxy or any object of the application.
 
 *Why:* the SPI and the runtime extensions stay in the boot layer across dev reloads, while the application's modules are loaded again in a new layer. A static field of an extension outlives the reload: holding a `Class` of the previous application, or an object whose class is one, keeps that whole layer in memory, and hands the next boot objects of classes it no longer uses. Keep per-boot state in instance fields; a static field may keep a plain value, as the console keeps the port it bound.
 
 [#rule-secrets]
-=== Secrets never leave, configuration only in `dev` [.tag-new]#NEW#
+=== Secrets never leave, configuration only in `dev`
 
 * A secret — a password, a token, a key — is written only as `section.secret(key, configured)`, which prints `configured` or `not configured` and takes no value. `sample` never writes one.
 * Never render a configuration object's `toString()`: Mansart's `PoolConfig` prints its password. Write the fields you mean, one by one.
@@ -684,24 +684,24 @@ No `static` field holds a `Class`, a bean, a proxy or any object of the applicat
 *Why:* the report goes to logs that are shared, pasted into issues and kept, and the page is served to a browser. A value that was never written cannot leak.
 
 [#rule-ids]
-=== Ids are stable and lowercase [.tag-new]#NEW#
+=== Ids are stable and lowercase
 
-`id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `config`, `cdi`, `logs` [.tag-new]#NEW#, `tests` [.tag-new]#NEW#, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
+`id()` is the name of the section and of the panel, such as `mansart-pool`: lowercase, stable across boots and releases, and unique. `startup`, `config`, `cdi`, `logs`, `tests`, `jvm` and `devconsole` are the console's. Chart ids and value keys follow the key rule, and stay the same from one boot to the next.
 
 *Why:* the id is how a reader finds the section in a log, and how the report keeps a section from appearing twice: a second contributor with the same id is skipped as xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`], and so is one that takes `startup`, `config`, `cdi`, `logs`, `tests` or `jvm`. The history is keyed by panel, group and value key: a key that changes between two ticks starts a new curve.
 
 [#rule-failure]
-=== A failure costs one sample [.tag-new]#NEW#
+=== A failure costs one sample
 
 A `RuntimeException` or a `LinkageError` thrown by `sample` drops that poll's live values, never the page: the tab shows the class of the exception, never its message, which may carry a secret, and the boot facts stay. The console logs xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`] once per panel and boot, its stack trace at DEBUG, and calls the panel again on the next poll. `charts()` that throws leaves the panel without charts. A failing `contribute` costs the section, as for any contributor (xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]).
 
 [#worked-example]
-== Worked example: the Mansart pool panel [.tag-new]#NEW#
+== Worked example: the Mansart pool panel
 
 `MansartPoolExtension`, in `vidocq-runtime-mansart-pool-extension`, opens one pool for `vidocq.pool.url` and one per `vidocq.pool.<name>.url`. Its live values are `vidocq-runtime-mansart-pool-extension-dev`'s `PoolsLivePanel`, in the package suffixed `.dev`; the excerpts below are the two modules' code, following the shape of <<dev-module,A `-dev` module, never packaged>>.
 
 [#example-step-1]
-=== Step 1: the extension keeps its section; the `-dev` module makes it live [.tag-new]#NEW#
+=== Step 1: the extension keeps its section; the `-dev` module makes it live
 
 [source,java]
 ----
@@ -726,7 +726,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
 `MansartPoolExtension` no longer implements `DevConsolePanel`: `charts()` and `sample(PanelSample)` moved out, and its module no longer requires `io.vidocq.runtime.spi.devconsole` at all — `contribute`, the boot facts below, is all a `StartupReportContributor` needs. `PoolsLivePanel`, in the `-dev` module, is the `LivePanel` service that makes the `mansart-pool` section live; see <<example-step-4>>.
 
 [#example-step-2]
-=== Step 2: publish what the live panel reads [.tag-new]#NEW#
+=== Step 2: publish what the live panel reads
 
 One record per open pool, built once when the pool opens, that holds no secret — the URL is already redacted. This is unchanged by the split: it still feeds the boot facts of <<example-step-3>>.
 
@@ -813,7 +813,7 @@ exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live
 The unnamed pool is labelled `@Default`, which no pool name can be mistaken for, a pool named `default` included. Named pools follow in name order.
 
 [#example-step-3]
-=== Step 3: the boot facts [.tag-new]#NEW#
+=== Step 3: the boot facts
 
 `contribute` reads the list once, writes the summary at every level, the rows of each pool at `DETAILED` only, then the anomalies found in `onStart`:
 
@@ -881,7 +881,7 @@ mansart-pool  Mansart pools | 1 ms
 In `prod`, the same rows read `@Default  h2 mem`, and there is no `user` row.
 
 [#example-step-4]
-=== Step 4: the `-dev` module's live values, one group per pool [.tag-new]#NEW#
+=== Step 4: the `-dev` module's live values, one group per pool
 
 `PoolsLivePanel`, in `vidocq-runtime-mansart-pool-extension-dev`, is the whole of the live half. It opens no
 pool and closes none — it only reads `MansartPoolsLive.pools()`, the holder <<example-step-2,Step 2>> publishes
@@ -948,7 +948,7 @@ What the snapshot carries for one pool:
 The panel's documentation also says how *not* to read these gauges: `maxSize - active - idle` is not free capacity, since a borrower still opening its connection counts in none of them, and a snapshot is not atomic, since each figure is read on its own.
 
 [#example-step-5]
-=== Step 5: two charts, repeated per pool [.tag-new]#NEW#
+=== Step 5: two charts, repeated per pool
 
 `charts()` moved to `PoolsLivePanel` too — the same two charts, unchanged:
 
@@ -992,7 +992,7 @@ vidocq-runtime-mansart-pool-extension-dev
 ----
 
 [#testing]
-== Testing a panel [.tag-new]#NEW#
+== Testing a panel
 
 A panel needs neither the console nor a running application to be tested, and, once the boot facts and the
 live values are two classes (<<dev-module,A `-dev` module, never packaged>>), they are tested apart, each in
@@ -1041,7 +1041,7 @@ final class RecordedSample implements PanelSample {
 }
 ----
 
-=== The boot facts, on the extension [.tag-new]#NEW#
+=== The boot facts, on the extension
 
 The recording section keeps the summary, the rows in order and the anomalies, a secret as the report prints it, `configured` or `not configured`; a `StartupReportContext` record gives the launch mode and the level. The tests drive the extension as Vidocq would — `configure`, `beforeStart`, `onStart` — and read what it wrote, exactly as before the split:
 
@@ -1064,7 +1064,7 @@ void inDevTheBootFactsShowTheUrlWithoutItsCredentialsAndTheUser() {
 ----
 
 [#testing-the-dev-module]
-=== The live values, on the `-dev` module's `LivePanel` [.tag-new]#NEW#
+=== The live values, on the `-dev` module's `LivePanel`
 
 `PoolsLivePanelTest`, in `vidocq-runtime-mansart-pool-extension-dev`, drives `PoolsLivePanel` directly — never
 the extension's `sample`/`charts`, which no longer exist — but still boots the real extension to open real
@@ -1151,7 +1151,7 @@ console has something to serve it on — open the URL, and read `GET /api/snapsh
 draws, to check what your panel sends.
 
 [#checklist]
-== Checklist [.tag-new]#NEW#
+== Checklist
 
 Before shipping a panel, check that:
 
@@ -1164,11 +1164,11 @@ Before shipping a panel, check that:
 . **No `static` field holds a `Class`, a bean or any object of the application.**
 . **No secret is ever written**: secrets through `secret(key, configured)` only, no `toString()` of a configuration object, URLs without their credentials, configuration values in `dev` only, property keys without their values.
 . **Every key follows `[a-z][a-z0-9.-]{0,39}`, every series names a value the sample writes with the right kind**, a `CEILING` a gauge with a max, a `RATE` a counter, and no lifetime mean is plotted; the rows of a group start with its name.
-. **Its actions, if any, are harmless on a developer's machine** [.tag-new]#NEW#: each takes only declared arguments, a list of values or a narrow pattern, never a path, a class or a URL, returns one short line with no secret, and is tested with the arguments it refuses.
+. **Its actions, if any, are harmless on a developer's machine**: each takes only declared arguments, a list of values or a narrow pattern, never a path, a class or a URL, returns one short line with no secret, and is tested with the arguments it refuses.
 . **It is tested** against a recording section and a recording sample — in `dev` and outside, the secrets searched for, the charts against the sample, empty after `onStop` — and seen once in a real `mvn vidocq:dev` page.
 
-== Next steps [.tag-new]#NEW#
+== Next steps
 
-* xref:dev-console.adoc[The dev console] [.tag-new]#NEW# — what the user sees
-* xref:modules/vidocq-runtime-spi.adoc#dev-console-panels[The panel SPI] [.tag-new]#NEW# — the types, one by one
+* xref:dev-console.adoc[The dev console]— what the user sees
+* xref:modules/vidocq-runtime-spi.adoc#dev-console-panels[The panel SPI]— the types, one by one
 * xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report] — the contract a panel extends

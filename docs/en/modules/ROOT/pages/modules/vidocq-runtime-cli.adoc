@@ -45,7 +45,7 @@ irm https://vidocq.dev/install.ps1 | iex
 $env:VIDOCQ_VERSION = 'snapshot'; irm https://vidocq.dev/install.ps1 | iex
 ----
 
-`VIDOCQ_VERSION=snapshot` [.tag-new]#NEW# takes the newest `-SNAPSHOT` of the CLI from the
+`VIDOCQ_VERSION=snapshot`takes the newest `-SNAPSHOT` of the CLI from the
 Central snapshot repository, where every build of `main` is published. A SNAPSHOT is
 downloaded again on every run, since it changes with every build; a release already
 installed is kept. A CLI installed this way scaffolds projects against its own SNAPSHOT
@@ -83,7 +83,7 @@ extensions in the project's runtime dependencies, and your `vidocq.properties` k
 the project itself (<<doctor>>). Fix any ✘ before continuing, `vidocq doctor --fix` repairs most of them;
 ⚠ warnings are safe to ignore for now.
 
-=== 2. Scaffold the project [.tag-new]#NEW#
+=== 2. Scaffold the project
 
 [source,bash]
 ----
@@ -106,7 +106,7 @@ hello-world/
         └── vidocq.properties                 # vidocq.http.port=8080
 ----
 
-[.tag-new]#NEW# There is no application main class: the runtime's own main boots the application
+There is no application main class: the runtime's own main boots the application
 from `vidocq.mainModule`, under `vidocq dev`, `vidocq start` and the `bin/` launchers of
 `mvn package` alike. With `-x cassini-rest`, the package also gets a `HelloResource`
 (`GET /hello`), and `module-info.java` opens it to JAX-RS and JSON-B. An extension that
@@ -211,10 +211,10 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | Command | Description
 
 | `vidocq version`
-| Print the CLI and runtime version string. A SNAPSHOT CLI adds its build time, `0.4.0-SNAPSHOT (built 2026-10-06T09:13:13Z)`, as the help header and `vidocq info` do [.tag-new]#NEW#.
+| Print the CLI and runtime version string. A SNAPSHOT CLI adds its build time, `0.4.0-SNAPSHOT (built 2026-10-06T09:13:13Z)`, as the help header and `vidocq info` do.
 
 | `vidocq info`
-| Display the environment (CLI, Java, OS) and, in a project, its main module, runtime version, number of extensions and active profile, read from its files without running Maven [.tag-new]#NEW#. The detailed list of extensions is `vidocq extension list`'s.
+| Display the environment (CLI, Java, OS) and, in a project, its main module, runtime version, number of extensions and active profile, read from its files without running Maven. The detailed list of extensions is `vidocq extension list`'s.
 
 | `vidocq doctor [--fix] [--verbose]`
 | Run environment & project health checks, and repair the project with `--fix` (see <<doctor>>).
@@ -228,16 +228,16 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq start [--port] [--config] [--debug]`
 | Build and run the project's application, `mvn vidocq:run` (see <<start>>).
 
-| `vidocq test` [.tag-new]#NEW#
+| `vidocq test`
 | Run the tests on every change, without the application, `mvn vidocq:test` (see <<test>>).
 
-| `vidocq idea [--check\|--strict] [--kind <kind>]` [.tag-new]#NEW#
+| `vidocq idea [--check\|--strict] [--kind <kind>]`
 | Write, or check, the IntelliJ run configurations in `.run/`, `mvn vidocq:idea` (see <<idea>>).
 
-| `vidocq vscode [--check]` [.tag-new]#NEW#
+| `vidocq vscode [--check]`
 | Write, or check, the VS Code settings, tasks and debug configuration in `.vscode/`, `mvn vidocq:vscode` (see <<vscode>>).
 
-| `vidocq eclipse [--check]` [.tag-new]#NEW#
+| `vidocq eclipse [--check]`
 | Write, or check, the Eclipse run and debug configurations in `.eclipse/`, `mvn vidocq:eclipse` (see <<eclipse>>).
 
 | `vidocq build [type] …`
@@ -270,14 +270,14 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 
 Scaffolds a minimal Maven project (`pom.xml`, `module-info.java` and `vidocq.properties`, plus a
 `HelloResource` with `-x cassini-rest` and an `…App` trampoline with `--main`: `DemoApp` for `demo-app`, `ShopApp`
-for `shop` [.tag-new]#NEW#). The project has a version of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the
+for `shop`). The project has a version of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the
 Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), pinned to the ecosystem's Maven version
-[.tag-new]#NEW#. Under a `--parent-version` before 0.4.0, whose `dependencyManagement` resolves at the project's
+. Under a `--parent-version` before 0.4.0, whose `dependencyManagement` resolves at the project's
 version, the project inherits the parent's version instead, and `create` says so. Without the CLI,
 xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project
-[.tag-new]#NEW#. The extensions are written in the order given [.tag-new]#NEW#.
+. The extensions are written in the order given.
 
-From 0.4.0 the project is finished [.tag-new]#NEW# (Vidocq/vidocq#339):
+From 0.4.0 the project is finished(Vidocq/vidocq#339):
 
 * **A first test.** With `-x cassini-rest`, `src/test/java/<package>/HelloResourceTest.java` starts the application
   with xref:testing.adoc[`@VidocqTest`] and checks `GET /hello`; the pom declares `vidocq-runtime-junit` and
@@ -299,7 +299,7 @@ From 0.4.0 the project is finished [.tag-new]#NEW# (Vidocq/vidocq#339):
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.
 | `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits (default: the runtime version of the CLI). From 0.4.0 the parent's BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
-| `--main` [.tag-new]#NEW# | Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
+| `--main`| Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
 |===
 
 [source,bash]
@@ -308,7 +308,7 @@ vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
 ----
 
 [#create-snapshot]
-==== Trying a SNAPSHOT [.tag-new]#NEW#
+==== Trying a SNAPSHOT
 
 Every build of `main` publishes the Vidocq SNAPSHOTs to the Central snapshot repository, `https://central.sonatype.com/repository/maven-snapshots/`. When the parent version is a SNAPSHOT, the generated `pom.xml` declares that repository, for dependencies and for plugins, with releases disabled: the SNAPSHOT artifacts come from there, everything else from Maven Central.
 
@@ -322,7 +322,7 @@ A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-sta
 [#dev]
 === `vidocq dev`
 
-[.tag-new]#NEW# Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when there is one: the
+Runs `mvn process-classes vidocq:dev` in the project, through `./mvnw` when there is one: the
 application starts with its dependencies and extensions on the module path, the dev console and
 a debug agent on port `5005`, and restarts on every source change — exactly as
 `mvn vidocq:dev` does, see xref:modules/vidocq-runtime-maven-plugin.adoc[the Maven plugin] for
@@ -344,7 +344,7 @@ extensions: the runtime came up empty, with nothing listening.
 [#start]
 === `vidocq start`
 
-[.tag-new]#NEW# Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
+Runs `mvn vidocq:run` in the project, through `./mvnw` when there is one: the goal compiles the
 project and starts the application with its dependencies and extensions on the module path.
 
 [cols="1,2"]
@@ -357,14 +357,14 @@ project and starts the application with its dependencies and extensions on the m
 |===
 
 [#test]
-=== `vidocq test` [.tag-new]#NEW#
+=== `vidocq test`
 
 Runs `mvn vidocq:test` in the project, through `./mvnw` when there is one: every test, then again on each change
 of the main or test sources, without starting the application. `r` runs every test, `f` the failed ones, `q`
 quits. See xref:continuous-testing.adoc[Continuous testing].
 
 [#idea]
-=== `vidocq idea` [.tag-new]#NEW#
+=== `vidocq idea`
 
 Runs `mvn vidocq:idea`: one IntelliJ run configuration per application for `vidocq:dev`, `vidocq:run` and a remote
 debug, in `.run/`, never `.idea/`. Experimental, as the goal is.
@@ -381,7 +381,7 @@ The options map to `-Dvidocq.idea.check=true`, `-Dvidocq.idea.check=strict` and 
 xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
 [#vscode]
-=== `vidocq vscode` [.tag-new]#NEW#
+=== `vidocq vscode`
 
 Runs `mvn vidocq:vscode`: `.vscode/settings.json` runs the Java extension's language server on Java 25 and turns its
 automatic build off, `tasks.json` runs `vidocq dev`, `run` and `test`, `launch.json` attaches the debugger to
@@ -397,7 +397,7 @@ vidocq vscode --check    # CI: fail when a file is missing or out of date
 xref:modules/vidocq-runtime-maven-plugin.adoc#vscode[the `vidocq:vscode` goal].
 
 [#eclipse]
-=== `vidocq eclipse` [.tag-new]#NEW#
+=== `vidocq eclipse`
 
 Runs `mvn vidocq:eclipse`: `.eclipse/` gets, per application, Maven builds of `vidocq dev`, `run` and `test` and a
 debug configuration that attaches to `vidocq dev`, listed under Run Configurations once the project is imported. A
@@ -454,22 +454,22 @@ vidocq build -- -Dvidocq.docker.build=true   # extra args after --
 Manages project-level extensions by editing `./pom.xml` in place (text-based, preserving
 formatting; idempotent thanks to a StAX dependency scan). Without the CLI,
 xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-extension` and
-`vidocq:remove-extension`] make the same edits [.tag-new]#NEW#: both run the code of `vidocq-runtime-tooling`.
+`vidocq:remove-extension`] make the same edits: both run the code of `vidocq-runtime-tooling`.
 
 [cols="1,2"]
 |===
 | Sub-command | Description
 
-| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web) [.tag-new]#NEW#; `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list [.tag-new]#NEW#.
-| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java` [.tag-new]#NEW#. The dependency and the codegen path carry the parent's version, written out [.tag-new]#NEW#.
-| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add` [.tag-new]#NEW#.
+| `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web); `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list.
+| `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`. The dependency and the codegen path carry the parent's version, written out.
+| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`.
 |===
 
 [#extension-codegen-path]
 Under a `vidocq-runtime-parent` from 0.4.0, or a pom that declares `vidocq-runtime-maven-plugin` with
-`<extensions>true</extensions>`, `add` writes no codegen path [.tag-new]#NEW#: the plugin puts the bundle on the
+`<extensions>true</extensions>`, `add` writes no codegen path: the plugin puts the bundle on the
 processor path at build time (xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[The plugin wires the
-codegen bundles]). `remove` still takes away a path written before. Otherwise, the codegen path goes into the compiler plugin of the project's own build [.tag-new]#NEW#: the
+codegen bundles]). `remove` still takes away a path written before. Otherwise, the codegen path goes into the compiler plugin of the project's own build: the
 `maven-compiler-plugin` the pom already declares, if any, rather than a second one, and never the one of a profile
 or of `pluginManagement`, which the default build does not run. Its `annotationProcessorPaths` must append to the
 parent's, where `vidocq-runtime-core-codegen`, the Vauban indexer, is wired: without
@@ -478,9 +478,9 @@ block it fills, and warns when it adds an extension without a codegen bundle to 
 the parent's; xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:checkpom`] fails such a build.
 
 An id may be a known short name (e.g. `cassini-rest`; the catalog now has `grimm-openapi`, `grimm-openapi-ui`,
-`migration`, `flyway-migration` and `liquibase-migration` too [.tag-new]#NEW#) or an explicit `groupId:artifactId`,
+`migration`, `flyway-migration` and `liquibase-migration` too) or an explicit `groupId:artifactId`,
 for an extension outside the catalog. Any other name is refused, with the closest catalog ids, and nothing is
-written [.tag-new]#NEW#:
+written:
 
 ----
 $ vidocq extension add mansart-persistence
@@ -500,7 +500,7 @@ hand, except a `requires` of the removed extension's own module, which no longer
 `vidocq create -x` writes the same directives.
 
 [#extension-descriptor]
-==== For extension authors [.tag-new]#NEW#
+==== For extension authors
 
 The catalog comes from the extensions themselves. Each first-party extension ships
 `src/main/resources/META-INF/vidocq/extension.properties`, and the CLI's catalog,
@@ -528,7 +528,7 @@ application. They are not checks: the directives a build must hold, which
 xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:check-module-info`] enforces, go in
 `META-INF/vidocq/module-requirements.properties`.
 
-[.tag-new]#NEW# `list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
+`list --installed`, `vidocq info` and `vidocq doctor` resolve the project's runtime dependencies
 with Maven (`maven-dependency-plugin:list`, compile + runtime scopes, transitively) and keep every
 JAR whose module provides `io.vidocq.runtime.spi.VidocqExtension`. An extension pulled in by
 another one — `chappe-webserver` under `cassini-rest` — is listed and marked `(transitive)`.
@@ -554,7 +554,7 @@ vidocq extension remove knock-health
 `list --available` lists the catalog built into the CLI, which every extension of the runtime describes itself
 (its `META-INF/vidocq/extension.properties` names its id, description and family), so the catalog matches the
 runtime the CLI belongs to. It reads no remote registry: one, for extensions released apart from the runtime,
-belongs with Vidocq/vidocq#17 [.tag-new]#NEW#.
+belongs with Vidocq/vidocq#17.
 ====
 
 [#config]
@@ -585,7 +585,7 @@ vidocq config list
 ----
 
 `set` warns at once on a `vidocq.*` key whose namespace no Vidocq module reads, and names the key you most likely
-meant; the key is set all the same [.tag-new]#NEW#:
+meant; the key is set all the same:
 
 [source]
 ----
@@ -601,7 +601,7 @@ Inspects the local environment and current project and prints a ✔/⚠/✘ repo
 non-zero when a blocking issue is found, so it doubles as a CI pre-flight gate
 (`vidocq doctor && vidocq build`). Without the CLI,
 xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:doctor`] runs the same checks
-[.tag-new]#NEW#.
+.
 
 [cols="1,3"]
 |===
@@ -616,7 +616,7 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:doctor`] 
 |===
 
 [#doctor-project]
-[.tag-new]#NEW# In a Vidocq project, `doctor` also checks the project, from its sources, so before a compile
+In a Vidocq project, `doctor` also checks the project, from its sources, so before a compile
 (Vidocq/vidocq#339). What the build checks with what Maven resolves stays with
 xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:checkpom` and `vidocq:check-module-info`]: these checks
 read what the pom and `module-info.java` declare.
@@ -651,7 +651,7 @@ never fail the command; only ✘ checks set a non-zero exit code.
 [#completion]
 === `vidocq completion`
 
-Prints a self-contained completion script to stdout. It completes [.tag-new]#NEW# commands, sub-commands
+Prints a self-contained completion script to stdout. It completescommands, sub-commands
 (`extension list|add|remove`, `config get|set|list`, …), each command's options, build types,
 and values: the catalog's extension ids after `extension add` and `create -x`, less those the `pom.xml` already declares, the extensions
 the current `pom.xml` declares after `extension remove`, the keys of the project's
@@ -667,7 +667,7 @@ source <(vidocq completion bash)
 vidocq completion zsh > "${fpath[1]}/_vidocq"
 ----
 
-`vidocq completion install` [.tag-new]#NEW# does it for you: it writes the script to
+`vidocq completion install`does it for you: it writes the script to
 `~/.vidocq/completion/vidocq.<shell>` and adds a marked block sourcing it to `~/.zshrc` or
 `~/.bashrc`. The shell comes from `$SHELL` unless named (`vidocq completion install bash`).
 Running it again replaces the block instead of adding another. The script records which CLI
@@ -679,7 +679,7 @@ NOTE: On macOS, Terminal starts bash as a login shell, which reads `~/.bash_prof
 `~/.bashrc`. Source `~/.bashrc` from `~/.bash_profile` if it does not already.
 
 [#update]
-=== `vidocq update` [.tag-new]#NEW#
+=== `vidocq update`
 
 Updates the CLI itself, from the same repositories as `install.sh`:
 
@@ -703,7 +703,7 @@ vidocq update
 `VIDOCQ_CENTRAL` and `VIDOCQ_SNAPSHOTS` point it at repository mirrors, as for `install.sh`.
 
 [#update-notice]
-==== The update notice [.tag-new]#NEW#
+==== The update notice
 
 Once a day at most, a CLI installed by `install.sh` or `vidocq update` checks, while a command runs, whether
 `vidocq update` would install something, and says so after the command, on the error stream:
@@ -721,7 +721,7 @@ A newer Vidocq CLI is available: 0.4.1. Run 'vidocq update' to install it (VIDOC
 * `VIDOCQ_NO_UPDATE_CHECK=1` turns it off.
 
 [#cli-and-plugin]
-=== The CLI and the Maven plugin [.tag-new]#NEW#
+=== The CLI and the Maven plugin
 
 include::partial$cli-plugin-correspondence.adoc[]
 

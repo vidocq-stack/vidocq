@@ -22,13 +22,13 @@
 | `essentials`
 | Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1, H2, H3 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
 
-| `vidocq-runtime-devconsole-extension` [.tag-new]#NEW#
+| `vidocq-runtime-devconsole-extension`
 | `essentials`
-| The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only. Its own panels show the configuration [.tag-new]#NEW# (xref:dev-console.adoc#config-panel[the `config` panel]), the beans of the Vauban container [.tag-new]#NEW# (xref:dev-console.adoc#cdi-panel[the `cdi` panel]), the last log records and the log levels, in a dev launch [.tag-new]#NEW# (xref:dev-console.adoc#logs-panel[the `logs` panel]), the last test run under `vidocq:dev` with continuous testing [.tag-new]#NEW# (xref:dev-console.adoc#tests-panel[the `tests` panel]), and the JVM.
+| The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only. Its own panels show the configuration(xref:dev-console.adoc#config-panel[the `config` panel]), the beans of the Vauban container(xref:dev-console.adoc#cdi-panel[the `cdi` panel]), the last log records and the log levels, in a dev launch(xref:dev-console.adoc#logs-panel[the `logs` panel]), the last test run under `vidocq:dev` with continuous testing(xref:dev-console.adoc#tests-panel[the `tests` panel]), and the JVM.
 
 | `vidocq-runtime-migration-extension`
 | `essentials`
-| Schema-migration facade — runs the configured migration engine before the datasource opens, and says what it did in the startup report [.tag-new]#NEW# (<<schema-migration>>).
+| Schema-migration facade — runs the configured migration engine before the datasource opens, and says what it did in the startup report(<<schema-migration>>).
 
 | `vidocq-runtime-flyway-migration-extension`
 | `essentials`
@@ -38,61 +38,61 @@
 | `essentials`
 | Liquibase-based schema migrations. Liquibase's usage analytics stay off unless you configure them (<<schema-migration-liquibase-analytics>>).
 
-| `vidocq-runtime-langchain4j-cdi-mcp-extension` [.tag-new]#NEW#
+| `vidocq-runtime-langchain4j-cdi-mcp-extension`
 | `essentials`
-| Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<langchain4j-cdi-mcp-live>>). Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
+| Hosts a langchain4j-cdi MCP server: one dependency brings the server, its CDI 4.1 invoker, Jakarta REST and the server's bean list; `vidocq.mcp.*` keys configure it. Its section of the startup report is a live dev console panel(<<langchain4j-cdi-mcp-live>>). Not on Maven Central yet. See <<langchain4j-cdi-mcp>>.
 
-| `vidocq-runtime-peano-el-extension` [.tag-new]#NEW#
+| `vidocq-runtime-peano-el-extension`
 | `jakartaee-core`
 | Activates xref:peano::index.adoc[Peano] for Jakarta Expression Language 6.0 and reports the selected provider module in the `el` startup section. Companion `-codegen` bundle generates application accessor tables. See <<peano-el>>.
 
 | `vidocq-runtime-cassini-rest-extension`
 | `jakartaee-core`
-| Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban. Its `rest` section of the startup report lists every route, and is a live dev console panel [.tag-new]#NEW# (<<cassini-rest-report>>, <<cassini-rest-live>>).
+| Wires xref:cassini::index.adoc[Cassini] for Jakarta REST 4.0. Static routing generated at build (companion `-codegen` artefact), CDI bridged via Vauban. Its `rest` section of the startup report lists every route, and is a live dev console panel(<<cassini-rest-report>>, <<cassini-rest-live>>).
 
-| `vidocq-runtime-foy-servlet-extension` [.tag-new]#NEW#
+| `vidocq-runtime-foy-servlet-extension`
 | `jakartaee-web`
 | Serves the application's Jakarta Servlet 6.1 components through xref:foy::index.adoc[Foy] on the shared Chappe server, with the request and session scopes. Companion `-codegen` artefact. See <<servlet>>.
 
-| `vidocq-runtime-ibarra-pages-extension` [.tag-new]#NEW#
+| `vidocq-runtime-ibarra-pages-extension`
 | `jakartaee-web`
 | Serves the application's JSP pages, compiled at build time by xref:ibarra::index.adoc[Ibarra], through the Servlet extension, with Jakarta EL from Peano. See <<ibarra-pages>>.
 
-| `vidocq-runtime-naming-extension` [.tag-new]#NEW#
+| `vidocq-runtime-naming-extension`
 | `jakartaee-web`
 | Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
 
-| `vidocq-runtime-vaadin-extension` [.tag-new]#NEW#
+| `vidocq-runtime-vaadin-extension`
 | `jakartaee-web`
 | What a Vaadin Flow application needs from Vidocq: a Vaadin lookup that loads services from a module of its own, so an `AppShellConfigurator` works in a jlink image. See <<vaadin>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
-| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel [.tag-new]#NEW# (<<mansart-pool-panel>>).
+| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel(<<mansart-pool-panel>>).
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
-| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel [.tag-new]#NEW# (<<mansart-data-catalogue>>).
+| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel(<<mansart-data-catalogue>>).
 
-| `vidocq-runtime-mansart-transactions-extension` [.tag-new]#NEW#
+| `vidocq-runtime-mansart-transactions-extension`
 | `jakartaee-web`
 | Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>).
 
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
-| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
+| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
 
 | `vidocq-runtime-knock-health-extension`
 | `microprofile`
-| {spec-mp-health} via xref:knock::index.adoc[Knock] — `/health`, `/health/live`, `/health/ready`, `/health/started` endpoints. Its `health` section of the startup report, the checks by probe and the last answer of each, is a live dev console panel [.tag-new]#NEW# (<<knock-health-panel>>).
+| {spec-mp-health} via xref:knock::index.adoc[Knock] — `/health`, `/health/live`, `/health/ready`, `/health/started` endpoints. Its `health` section of the startup report, the checks by probe and the last answer of each, is a live dev console panel(<<knock-health-panel>>).
 
 | `vidocq-runtime-dirac-metrics-extension`
 | `microprofile`
-| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint. Its `metrics` section of the startup report, what the registries hold, is a live dev console panel [.tag-new]#NEW# (<<dirac-metrics-panel>>).
+| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint. Its `metrics` section of the startup report, what the registries hold, is a live dev console panel(<<dirac-metrics-panel>>).
 
 | `vidocq-runtime-grimm-openapi-extension`
 | `microprofile`
-| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI [.tag-new]#NEW#; the `rest` panel of the dev console shows the same buttons. [[grimm-named-module]]The extension requires Grimm's named module, `io.vidocq.grimm.cdi.vauban` [.tag-new]#NEW#: with the automatic module it used to require, a packaged application whose `cassini:generate` sealed its modules lost every Grimm bean, and `/openapi` answered 404 (Vidocq/grimm#15). [[grimm-openapi-apis]]The extension brings the Jakarta REST API [.tag-new]#NEW#, which `grimm-cdi-vauban` leaves to the runtime, so an application with OpenAPI and no Cassini starts.
+| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI; the `rest` panel of the dev console shows the same buttons. [[grimm-named-module]]The extension requires Grimm's named module, `io.vidocq.grimm.cdi.vauban`: with the automatic module it used to require, a packaged application whose `cassini:generate` sealed its modules lost every Grimm bean, and `/openapi` answered 404 (Vidocq/grimm#15). [[grimm-openapi-apis]]The extension brings the Jakarta REST API, which `grimm-cdi-vauban` leaves to the runtime, so an application with OpenAPI and no Cassini starts.
 
 | `vidocq-runtime-cervantes-jwt-extension`
 | `microprofile`
@@ -100,11 +100,11 @@
 
 | `vidocq-runtime-cyrano-rest-client-extension`
 | `microprofile`
-| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. [[cyrano-rest-client-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it. An application with a Rest Client now links with `vidocq:jlink`: `org.reactivestreams`, an automatic module, is no longer required (Vidocq/cyrano#30). `vidocq-runtime-cyrano-rest-client-example` calls one of its own resources through an injected client. [[cyrano-rest-client-apis]]The extension brings the Jakarta REST API and Champollion's JSON-B implementation [.tag-new]#NEW#: Cyrano depends on the APIs only, so an application with the Rest Client and no REST server needs nothing else to read and write JSON bodies.
+| MicroProfile REST Client via xref:cyrano::index.adoc[Cyrano]. [[cyrano-rest-client-codegen]]Companion `-codegen` artefact: it runs Cyrano's extension in the compiler, so the `@RestClient` bean of each `@RegisterRestClient` interface exists when Vauban validates the application, and generates each client's proxy, so the application opens nothing to Cyrano. Without it, `@Inject @RestClient` is unsatisfied; `vidocq:checkpom` asks for it. An application with a Rest Client now links with `vidocq:jlink`: `org.reactivestreams`, an automatic module, is no longer required (Vidocq/cyrano#30). `vidocq-runtime-cyrano-rest-client-example` calls one of its own resources through an injected client. [[cyrano-rest-client-apis]]The extension brings the Jakarta REST API and Champollion's JSON-B implementation: Cyrano depends on the APIs only, so an application with the Rest Client and no REST server needs nothing else to read and write JSON bodies.
 
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
-| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API [.tag-new]#NEW#, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts.
+| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts.
 
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 | `microprofile`
@@ -114,14 +114,14 @@
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
 
 [[codegen-bundles]]
-== Codegen bundles are jars [.tag-new]#NEW#
+== Codegen bundles are jars
 
 A `-codegen` bundle carries no code: it brings an extension's annotation processors to the compiler's `annotationProcessorPaths`. Up to 0.3.0 each bundle was a pom, declared with `<type>pom</type>`. From 0.4.0 each one is a jar holding only an empty `module-info`, and the `<path>` has no `<type>`: IntelliJ's Maven import ignores a processor path of type pom, so IntelliJ's own build used to compile the application without any processor and drop their output (Vidocq/vidocq#237). With jars, IntelliJ resolves each bundle with its dependencies, exactly as Maven does, and its build runs the same processors. The parent's default `vidocq-runtime-core-codegen` path, `vidocq extension add`, the scaffold and `vidocq:checkpom`'s suggestions all use the jar form.
 
 A `<path>` that still says `<type>pom</type>` keeps working with Maven, since every bundle still publishes its pom, and the parent's `dependencyManagement` keeps a version for it. `vidocq:checkpom` warns about it, never fails: remove the `<type>pom</type>` line for IntelliJ.
 
 [[peano-el]]
-== Expression Language (Peano) [.tag-new]#NEW#
+== Expression Language (Peano)
 
 With the Vidocq runtime parent, declare the provider extension and append its processor
 bundle to the inherited compiler configuration:
@@ -163,7 +163,7 @@ is not pulled into the runtime extension. Peano's own official TCK results descr
 the implementation; these wiring tests do not certify the assembled runtime.
 
 [[servlet]]
-== Servlet (Foy) [.tag-new]#NEW#
+== Servlet (Foy)
 
 `vidocq-runtime-foy-servlet-extension` serves the application's servlets, filters, listeners, `web.xml`, web fragments and `ServletContainerInitializer`s through xref:foy::index.adoc[Foy], mounted on the same Chappe server as the other extensions. An application with none of them gets no mount: the extension stays inactive.
 
@@ -204,13 +204,13 @@ The bundle generates the factories of the `@WebServlet`, `@WebFilter` and `@WebL
 | `1800`
 | Session timeout in seconds, used when no descriptor declares a `<session-timeout>`. Zero or less: sessions never expire.
 
-| `vidocq.servlet.response-character-encoding` [.tag-new]#NEW#
+| `vidocq.servlet.response-character-encoding`
 | `UTF-8`
 | Default response encoding of the application, used when neither `web.xml` nor a web fragment declares a `<response-character-encoding>`. See <<servlet-response-encoding>>.
 |===
 
 [#servlet-response-encoding]
-=== Response encoding [.tag-new]#NEW#
+=== Response encoding
 
 The Servlet specification encodes a text response in ISO-8859-1 unless the application names another encoding, so a page with accents, written through `getWriter()`, reaches the browser garbled. Under the runtime, an application that configures nothing answers in **UTF-8**: the extension makes UTF-8 the default response encoding of the `ServletContext`, and `getWriter()` responses carry `charset=UTF-8`.
 
@@ -273,7 +273,7 @@ Foy activates the request context around every request, and the session context 
 
 The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. Two mounts on the same prefix of one listener fail at startup, with the extensions and the keys to change named in the message. Servlet filters and the `HttpSession` do not apply to REST resources; running REST inside Foy instead is tracked by https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215].
 
-The REST extension mounts its resources on the `@ApplicationPath` of the application's `Application` subclass, which needs no CDI scope: `cassini-processor`, in the REST codegen bundle, records the path at compile time [.tag-new]#NEW#. `vidocq.rest.context-path` wins over it.
+The REST extension mounts its resources on the `@ApplicationPath` of the application's `Application` subclass, which needs no CDI scope: `cassini-processor`, in the REST codegen bundle, records the path at compile time. `vidocq.rest.context-path` wins over it.
 
 === Declarative mount
 
@@ -281,12 +281,12 @@ The REST extension mounts its resources on the `@ApplicationPath` of the applica
 
 === The `servlet` section of the startup report
 
-The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener, the context path and the session timeout, then every servlet and filter with what it is mapped to, and the listeners in registration order [.tag-new]#NEW#; or it says that the extension is inactive.
+The `servlet` section gives the number of servlets and filters and the prefixes they are mounted on, the listener, the context path and the session timeout, then every servlet and filter with what it is mapped to, and the listeners in registration order; or it says that the extension is inactive.
 
-[.tag-new]#NEW# Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
+Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
 
 [[ibarra-pages]]
-== Jakarta Pages (Ibarra) [.tag-new]#NEW#
+== Jakarta Pages (Ibarra)
 
 `vidocq-runtime-ibarra-pages-extension` serves the application's JSP pages through the Servlet extension. xref:ibarra::index.adoc[Ibarra] compiles them at build time, inside `vidocq:generate`: no page is translated or compiled while the application runs, and the runtime holds no Java compiler. The extension brings the Servlet extension and the Expression Language extension (<<peano-el>>) with it.
 
@@ -326,7 +326,7 @@ The `pages` section of the startup report counts the compiled pages and lists th
 Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named` bean) need an EL resolver from Vauban (Vidocq/vauban#150); a page reads request, session and application attributes.
 
 [[naming]]
-== JNDI `java:` names [.tag-new]#NEW#
+== JNDI `java:` names
 
 Code written for an application server looks its resources up by name, and the bricks keep doing so: Mansart Data resolves `@Repository(dataStore = "java:comp/env/jdbc/audit")` with `new InitialContext().lookup(…)`, and the Standard Tag Library's `sql:` tags look a data source up under `java:comp/env`. Naming is a service of the platform: `vidocq-runtime-naming-extension` provides it, from the running CDI container, through xref:vauban::jndi.adoc[Vauban Naming].
 
@@ -374,7 +374,7 @@ An application or a library can also declare names in code, with a `JndiBindings
 Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-ref` in `web.xml`, `@DataSourceDefinition`, and the `jms/` names of Tassis, which will come as a `JndiNameProvider` of its extension (vidocq#297).
 
 [[vaadin]]
-== Vaadin [.tag-new]#NEW#
+== Vaadin
 
 A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Vaadin guide]). `vidocq-runtime-vaadin-extension` is the part Vaadin needs from Vidocq itself: today, a Vaadin lookup that lets an `AppShellConfigurator` work in a jlink image (BUG-20261023-06).
 
@@ -425,7 +425,7 @@ The `vidocq-runtime-chappe-webserver-extension` extension illustrates the patter
 | shuts servers down cleanly
 |===
 
-Every listener logs the address it actually bound [.tag-new]#NEW#, not the one it was given: with `port=0`, the line shows the real port.
+Every listener logs the address it actually bound, not the one it was given: with `port=0`, the line shows the real port.
 
 ----
 Chappe listener 'default' started on http://localhost:43127/
@@ -434,7 +434,7 @@ Chappe listener 'default' started on http://localhost:43127/
 A wildcard host reads `localhost` and an IPv6 address is bracketed, `http://[::1]:8080/`.
 
 [#chappe-http-section]
-The startup report gets the same addresses in its `http` section [.tag-new]#NEW#, one per listener of the configuration. The sections that declare routes, such as `rest`, then print them as absolute URLs, and the `mcp` section finds the URL of `/mcp` there:
+The startup report gets the same addresses in its `http` section, one per listener of the configuration. The sections that declare routes, such as `rest`, then print them as absolute URLs, and the `mcp` section finds the URL of `/mcp` there:
 
 ----
 http          HTTP (Chappe) | 0 ms
@@ -447,7 +447,7 @@ rest          REST (Cassini) | 1 ms
 A listener an extension declares for itself is left to that extension's section: the dev console's is in the `devconsole` section. An extension reads the URL a listener really listens on with `ChappeMountPoint.instance().boundUrl(name)`, from its `contribute` onwards.
 
 [#extension-listeners]
-=== A listener of an extension's own [.tag-new]#NEW#
+=== A listener of an extension's own
 
 An extension that serves something apart from the application, as the dev console does, declares its own listener from its `onStart`, between priority 100 and 10000, then mounts on it by name like on any other:
 
@@ -483,7 +483,7 @@ A listener name has one owner. The extensions' listeners start first, then those
 Other extensions follow comparable scheduling logic with their own priorities.
 
 [#cassini-rest-report]
-== The `rest` section of the startup report [.tag-new]#NEW#
+== The `rest` section of the startup report
 
 `vidocq-runtime-cassini-rest-extension` writes the `rest` section: what the Jakarta REST application exposes, as Cassini resolved it. It covers every Cassini stack mounted during the boot — the automatic mount configured by `vidocq.rest.*`, reported as `vidocq.rest`, and each declarative `vidocq.http.mount.<name>.type=restful` mount, reported by its name.
 
@@ -514,7 +514,7 @@ The route table names handler classes, as every routing section of the report do
 The section reads what Cassini computed when each stack was built, through `CassiniStack.routes()` (xref:cassini::usage.adoc#route-table[Reading the route table]): it creates no resource or provider instance, and it keeps names only, never a class of the application, so a dev reload releases the previous application.
 
 [#cassini-rest-live]
-=== The `rest` panel in the dev console [.tag-new]#NEW#
+=== The `rest` panel in the dev console
 
 The dev console shows the section as the `rest` panel, with the boot facts above, and one card per mount below it, sampled about once a second from the counters each Cassini stack keeps (xref:cassini::usage.adoc#request-statistics[Reading live request figures]):
 
@@ -548,12 +548,12 @@ A request is timed from the moment Chappe hands it to Cassini to the moment Cass
 Sampling sums a few counters and creates nothing. The counters are on in every stack Vidocq builds; they cost about 25 ns per request and allocate nothing, as Cassini's `BENCH.md` measures. A stack built without them shows `requests` absent, `counters off`, never a zero.
 
 [#dirac-metrics-panel]
-== Dirac metrics in the startup report and the dev console [.tag-new]#NEW#
+== Dirac metrics in the startup report and the dev console
 
 `vidocq-runtime-dirac-metrics-extension` writes the `metrics` section, titled *Metrics (Dirac)*: what the three MicroProfile Metrics registries of xref:dirac::index.adoc[Dirac] hold. The dev console shows it as the `metrics` panel. Dirac itself needs no Vidocq code; the extension's one class, `DiracMetricsExtension`, only reads what Dirac publishes.
 
 [#dirac-metrics-report]
-=== Boot facts [.tag-new]#NEW#
+=== Boot facts
 
 The summary line counts the metrics of each registry, gauges included: `3 application metrics, 13 base, 0 vendor`. The base registry holds the gauges Dirac reads from the JVM. The detailed report then writes:
 
@@ -564,7 +564,7 @@ The summary line counts the metrics of each registry, gauges included: `3 applic
 A metric name is not a valid key of the console, so the panel derives one, always the same for the same registry: the name, then each tag in the order of the tag names as `.name-value`; lowercased, every character other than a letter, a digit, a dot or a hyphen replaced with a hyphen, and `m-` in front when it does not start with a letter; cut to 40 characters, less 5 for a timer, whose mean needs `.mean`; and when two metrics end up with the same key, the second gets `-2`, the third `-3`. `com.acme.Shop.placeOrder` with the tag `shop=EU` is `com.acme.shop.placeorder.shop-eu`.
 
 [#dirac-metrics-live]
-=== The `metrics` panel in the dev console [.tag-new]#NEW#
+=== The `metrics` panel in the dev console
 
 One card per registry, `application` first, then `base` and `vendor`, sampled about once a second:
 
@@ -606,14 +606,14 @@ What is never shown:
 The section and the panel read the registries of the `MetricRegistryProducerBean` instance the application already has: the bean is resolved once when the extension starts, and each sample asks its context for the existing instance, which never creates one. Before anything asked Dirac for a registry or a metric, the section's summary is `registries not created yet` and the panel shows a single `registries` value, absent, `not created yet`. A container with no Dirac producer, or with a second copy of Dirac loaded by the application layer, which the extension cannot read, shows `no Dirac registry in this container`.
 
 [#knock-health-panel]
-== Knock health checks in the startup report and the dev console [.tag-new]#NEW#
+== Knock health checks in the startup report and the dev console
 
 `vidocq-runtime-knock-health-extension` writes the `health` section, titled *Health (Knock)*: the health checks xref:knock::index.adoc[Knock] registered, by probe, and the last answer of each. The dev console shows it as the `health` panel. Knock itself needs no Vidocq code; the extension's one class, `KnockHealthExtension`, only reads what Knock keeps in memory.
 
 A health check is application code, and may do I/O: neither the section nor the panel ever calls one. Knock remembers the last answer of each check as a probe request ran it, `GET /health`, `/health/live`, `/health/ready` or `/health/started`, and the panel shows that answer. A check that turns DOWN shows DOWN once the next probe request has run it, not before.
 
 [#knock-health-report]
-=== Boot facts [.tag-new]#NEW#
+=== Boot facts
 
 The summary line counts the checks of each probe: `3 checks: 1 liveness, 2 readiness, 0 startup`. Then:
 
@@ -621,7 +621,7 @@ The summary line counts the checks of each probe: `3 checks: 1 liveness, 2 readi
 * in the detailed report, a list per probe that has checks, `liveness`, `readiness` and `startup`: each check by the name the panel shows it under, its simple class name, without the `_ClientProxy` suffix of a scoped bean's proxy: `AppLivenessCheck`.
 
 [#knock-health-live]
-=== The `health` panel in the dev console [.tag-new]#NEW#
+=== The `health` panel in the dev console
 
 One card per probe that has at least one check, `liveness`, then `readiness` and `startup`, sampled about once a second. A check with two probe qualifiers is in both cards: Knock runs it, and records its answer, for each.
 
@@ -664,14 +664,14 @@ What is never shown:
 The section and the panel read Knock's `HealthCheckRegistry` bean, resolved once when the extension starts: each sample asks its context for the existing instance, which never creates one. Knock creates the registry when it registers the first check; a container whose registry was never created has no check, and the section's summary is `no health check (registry not created yet)`, the panel a single `checks` value, absent, `registry not created yet`. A container without Knock shows `no Knock registry in this container`.
 
 [#mansart-pool-panel]
-== Mansart pools in the startup report and the dev console [.tag-new]#NEW#
+== Mansart pools in the startup report and the dev console
 
 `vidocq-runtime-mansart-pool-extension` writes the section `mansart-pool`, *Mansart pools*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report], and the xref:dev-console.adoc[dev console] shows it live, one card per pool. The pools open in `beforeStart`, before the container, so that the extensions after this one find them.
 
 The unnamed pool, the one of `vidocq.pool.url` injected as `@Default`, is labelled `@Default`; named pools, `vidocq.pool.<name>.url`, follow under their name, in name order. A pool named `default` is never mistaken for the unnamed one.
 
 [#mansart-pool-boot-facts]
-=== Boot facts [.tag-new]#NEW#
+=== Boot facts
 
 The summary names the pools and their total size: `2 pools (@Default, audit), 12 connections max`, or `idle: no vidocq.pool[.<name>].url` when no pool is configured. The detailed report, which the console always has, adds for each pool:
 
@@ -729,7 +729,7 @@ mansart-pool  Mansart pools | 1 ms
 A URL loses its user info (`//user:password@`, Oracle's `user/password@`) and every parameter or setting whose key holds `password`, `passwd`, `pwd`, `secret`, `token` or `credential`: `jdbc:postgresql://audit:s3cret@db.example:5432/audit?sslpassword=k3y&ssl=true` shows as `jdbc:postgresql://db.example:5432/audit?ssl=true`. The user info runs to the last `@` before the first `?` or `;`, whatever the password holds, a `/`, a `//`, a `+`, an `=` or an `@`: `jdbc:oracle:thin:scott/Xy7+//Qp4==@db:1521:orcl` shows as `jdbc:oracle:thin:@db:1521:orcl`. A URL that cannot be read shows as `jdbc:<sub-protocol>:…`, and so does one whose password holds a `?` or a `;` — with one known exception: when what follows that `?` or `;` reads as a parameter whose key names a user, a mail or a secret (`pa;pwd=x@host`), the redactor takes it for a parameter and the first part of the password stays visible. Failing closed there would also hide ordinary URLs such as `;password=P@ss`, so it is left as it is and documented. The error of `xa=true` for a URL whose `XADataSource` cannot be guessed quotes the URL the same way.
 
 [#mansart-pool-live]
-=== Live values [.tag-new]#NEW#
+=== Live values
 
 One group per pool, read from the pool's own counters, without a lock and without I/O:
 
@@ -766,7 +766,7 @@ Two readings of the gauges would be wrong:
 * The figures are not read at one instant: each is read on its own, so `active + idle` can dip, or briefly exceed what the pool holds, while a connection moves from one to the other.
 
 [#mansart-pool-sql]
-=== Tables and a SQL editor [.tag-new]#NEW#
+=== Tables and a SQL editor
 
 Under `mvn vidocq:dev`, each pool also has a tab of the *Mansart pools* panel, named after it — `@Default` first, then the named pools in name order — whose list offers five actions. They answer in the dev console's xref:dev-console.adoc#rows-table[table of rows].
 
@@ -792,7 +792,7 @@ UPDATE tasks SET priority = 'HIGH' WHERE id = :id RETURNING id, priority      pa
 *The `sql` language.* What the editor knows of the pool is read once per boot from `DatabaseMetaData` and offered as the language `sql-<pool>` — `sql-default` for `@Default`, a named pool's name in lower case: SQL-92's keywords and the product's (`getSQLKeywords()`), the common functions, the database's identifier quote and how it stores a name written without quotes; each table and view, bare in the current schema and `schema.name` in another, with its columns, their JSON type and `<SQL type> · column`, and a column of a single-column foreign key leading to the table it refers to. Past 1 MiB it is written without the details, then without the types; past it still, the pool has no language, which a WARNING says, and the editor colours the keywords it knows alone. A pool whose tables cannot be read at boot gets no language, no *Describe* and no *Preview*, which a WARNING says without its URL; *Tables*, *Query* and *Execute* still work. A table created later is listed by *Tables* but known to the editor, *Describe* and *Preview* after the next dev reload only.
 
 [#mansart-pool-001]
-=== MANSART-POOL-001 — pre-fill opened nothing [.tag-new]#NEW#
+=== MANSART-POOL-001 — pre-fill opened nothing
 
 A pool whose `minIdle` asks for connections at boot opened none of them. The pool gives up its pre-fill at the first failure, without a word, and opens connections on demand only, so the first requests pay for them, and fail if the cause is still there:
 
@@ -804,7 +804,7 @@ A pool whose `minIdle` asks for connections at boot opened none of them. The poo
 Check the URL, the credentials and the JDBC driver of that pool.
 
 [#mansart-pool-002]
-=== MANSART-POOL-002 — named pool without its bean [.tag-new]#NEW#
+=== MANSART-POOL-002 — named pool without its bean
 
 A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the bean is generated at compile time by `vidocq-runtime-mansart-pool-datasources-codegen`, which the application's annotation processor paths lack. An injection or a repository routed to that pool fails on its first use:
 
@@ -816,7 +816,7 @@ A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the b
 When the container cannot say which beans it has, no pool is flagged: the report never guesses.
 
 [#mansart-data-catalogue]
-== The Mansart Data catalogue in the startup report and the dev console [.tag-new]#NEW#
+== The Mansart Data catalogue in the startup report and the dev console
 
 `vidocq-runtime-mansart-data-extension` writes the section `mansart-data`, *Mansart Data*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]: what Mansart Data knows about the application, read once per boot from the CDI container and by reflection. Under `mvn vidocq:dev`, its companion `vidocq-runtime-mansart-data-extension-dev` shows it in the xref:dev-console.adoc[dev console] as the *Mansart Data* tab, one card per entity with its repositories inside. Nothing here opens a connection or runs a query.
 
@@ -878,7 +878,7 @@ Two entities, or two repositories, with the same simple name are shown under the
 The panel does not show the SQL of a derived method, which Mansart does not keep at run time, nor any statistic, nor Mansart persistence.
 
 [#mansart-data-001]
-=== MANSART-DATA-001 — the model of an entity cannot be read [.tag-new]#NEW#
+=== MANSART-DATA-001 — the model of an entity cannot be read
 
 Mansart could not build the model of a repository's primary entity: its generated metamodel failed, or the entity has no id field, no no-arg constructor, or a package Mansart cannot open. The entity keeps its place in the catalogue, without its columns, and its card says `unavailable:` with the class of the exception. The exception's message is never shown. The boot goes on, but the repositories of that entity will likely fail on their first call:
 
@@ -890,11 +890,11 @@ Mansart could not build the model of a repository's primary entity: its generate
 Check the entity's `jakarta.persistence` annotations, its id and its constructor, and that its package is open to `io.vidocq.mansart.data.core`.
 
 [#mansart-data-run-method]
-== Running a repository method from the dev console [.tag-new]#NEW#
+== Running a repository method from the dev console
 
 Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] also runs the application's repository methods against its database: a query to see what it returns, a write to try it, then roll it back or keep it. The tab keeps the catalogue (<<mansart-data-catalogue>>) under *Monitoring*, then shows one tab per repository, titled with its name, whose list offers its methods by name: every method it declares, plus the `findById`, `findAll`, `save`, `deleteById` and `delete` it inherits from Jakarta Data.
 
-*Arguments.* A method's arguments are one JSON object, one property per parameter, named as the catalogue names it (`@Param`, else the real name when the application is compiled with `-parameters`, else `arg0`, `arg1`…), all required. The page shows a form, an entity as a group of fields in it [.tag-new]#NEW#: one per column, a column that cannot be null starred as required, the generated id and the version marked `(generated)`, each field's tooltip naming its column (xref:dev-console.adoc#json-form[The generated form]). Its *JSON* switch shows the same arguments in the xref:dev-console.adoc#json-editor[JSON editor], which completes an entity's attributes and checks their types.
+*Arguments.* A method's arguments are one JSON object, one property per parameter, named as the catalogue names it (`@Param`, else the real name when the application is compiled with `-parameters`, else `arg0`, `arg1`…), all required. The page shows a form, an entity as a group of fields in it: one per column, a column that cannot be null starred as required, the generated id and the version marked `(generated)`, each field's tooltip naming its column (xref:dev-console.adoc#json-form[The generated form]). Its *JSON* switch shows the same arguments in the xref:dev-console.adoc#json-editor[JSON editor], which completes an entity's attributes and checks their types.
 
 [cols="2,3"]
 |===
@@ -922,7 +922,7 @@ Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev 
 | Its text.
 
 | An entity of a repository
-| An object, one property per column. Its schema [.tag-new]#NEW# says `required` for a column that cannot be null and whose field is not a primitive, `readOnly` for the generated id and the version, and names each column in `description` (`id of Gizmo, column gizmo_id` for a reference); the console does not enforce it: an absent property keeps what the entity's no-arg constructor sets, so that an absent generated `id` is generated. A reference to another entity takes that entity's id. The entity is built through Mansart's own model, as Mansart builds it from a row.
+| An object, one property per column. Its schemasays `required` for a column that cannot be null and whose field is not a primitive, `readOnly` for the generated id and the version, and names each column in `description` (`id of Gizmo, column gizmo_id` for a reference); the console does not enforce it: an absent property keeps what the entity's no-arg constructor sets, so that an absent generated `id` is generated. A reference to another entity takes that entity's id. The entity is built through Mansart's own model, as Mansart builds it from a row.
 |===
 
 A boxed type takes `null`, a primitive does not. A value that does not convert fails the call before anything runs, with the parameter and why: `dueDate: not an ISO date`. A method with any other parameter type, such as `PageRequest`, `Sort`, `Limit` or a `List`, is listed under *Monitoring* in `not-runnable`, with the reason, and is not offered.
@@ -936,14 +936,14 @@ A boxed type takes `null`, a primitive does not. A value that does not convert f
 *Limits.* The console keeps 128 actions per panel: past them, *Monitoring* says `and N more methods`. A call longer than the console's 60 seconds keeps running, and its outcome shows on a later poll. The repository's package must be open to Vidocq — a Vidocq application is an `open module` by convention, or `opens` the package; otherwise its methods are listed as `package <p> not open to Vidocq`.
 
 [#mansart-data-jdql]
-== A JDQL console for Mansart Data [.tag-new]#NEW#
+== A JDQL console for Mansart Data
 
 Under `mvn vidocq:dev`, the *Mansart Data* tab of the xref:dev-console.adoc[dev console] ends with a *JDQL* tab, which runs a JDQL statement you type against the application's database: a query to look at data, an `UPDATE` or a `DELETE` to try a change, then roll it back or keep it. Its list offers two actions.
 
 * *Query* runs a `FROM …`, a projection `SELECT a, b FROM …`, a `SELECT COUNT(this) FROM …` or an aggregate such as `SELECT MAX(price) FROM …`, without asking first. An `UPDATE` or a `DELETE` is refused there: `an UPDATE or DELETE: use Update / Delete`; and when the application has a transaction manager, a query runs in a transaction that is always rolled back, so that nothing it could hold is kept.
 * *Update / Delete* runs an `UPDATE … SET …` or a `DELETE FROM …`, and nothing else (`not an UPDATE or DELETE: use Query`). The page asks first (`Runs this JDQL statement against the database.`), and its *Transaction* list offers `rollback`, the default, then `commit`, as a repository method's write does (<<mansart-data-run-method>>): the statement runs in a transaction of the application's `TransactionManager`, rolled back unless `commit` is asked, and always rolled back when it fails. Without a `TransactionManager`, `commit` only.
 
-The form has two fields of several lines: `query`, the statement, and `params`, its named parameters as a JSON object. The statement is typed in the dev console's query editor [.tag-new]#NEW#, which colours it, completes the entities after `FROM` and their attributes elsewhere, and underlines an unknown entity or attribute before anything runs (xref:dev-console.adoc#query-editor[Query editor]); `params` in a JSON editor whose schema follows the statement [.tag-new]#NEW#: after `WHERE status = :status`, it offers `status` with the values of its enum, and flags it while it is missing (xref:dev-console.adoc#query-parameters[Its parameters]).
+The form has two fields of several lines: `query`, the statement, and `params`, its named parameters as a JSON object. The statement is typed in the dev console's query editor, which colours it, completes the entities after `FROM` and their attributes elsewhere, and underlines an unknown entity or attribute before anything runs (xref:dev-console.adoc#query-editor[Query editor]); `params` in a JSON editor whose schema follows the statement: after `WHERE status = :status`, it offers `status` with the values of its enum, and flags it while it is missing (xref:dev-console.adoc#query-parameters[Its parameters]).
 
 [source,text]
 ----
@@ -956,18 +956,18 @@ DELETE FROM TaskEvent WHERE type = 'REOPENED'
 
 *The entity.* A statement names its entity after `FROM`, `UPDATE` or `DELETE FROM`, by its simple name, or by its full class name when two entities share a simple name, as the catalogue then shows them. A name the catalogue does not know is refused, with the names it knows: `unknown entity Nope; entities: Task, TaskEvent`.
 
-*The `jdql` language* [.tag-new]#NEW#. What the query editor knows comes from the panel, built once per boot from the catalogue and Mansart's models (xref:dev-console.adoc#query-language[A query language for a panel]): the words of Mansart's JDQL, then one entity per entity of the catalogue whose model could be read, under its simple name, with its table, and every attribute of its model but the joined ones, with the JSON type of its Java type and a detail such as `Long · id, generated`, `String · column title` or `→ Project · column project_id`; a reference leads to its entity, so that `project.` completes a project's attributes. An entity whose simple name another shares, which the tab refuses as ambiguous, is left out. *Export CSV*'s statement is typed in the same editor.
+*The `jdql` language*. What the query editor knows comes from the panel, built once per boot from the catalogue and Mansart's models (xref:dev-console.adoc#query-language[A query language for a panel]): the words of Mansart's JDQL, then one entity per entity of the catalogue whose model could be read, under its simple name, with its table, and every attribute of its model but the joined ones, with the JSON type of its Java type and a detail such as `Long · id, generated`, `String · column title` or `→ Project · column project_id`; a reference leads to its entity, so that `project.` completes a project's attributes. An entity whose simple name another shares, which the tab refuses as ambiguous, is left out. *Export CSV*'s statement is typed in the same editor.
 
 *Parameters.* A named parameter `:name` takes the member `name` of `params`; a parameter with no value, or a member no parameter uses, is refused (`:status: no value given`), and so is a positional `?1`. A value compared to an attribute — a parameter, a literal such as `'OPEN'` or `'2026-09-29'`, a value of `SET` — is converted to the attribute's Java type: an enum by the name of a constant, a date or a time as ISO text, a number exactly (`2.5` for an `int` is refused), a `Boolean` from `true` or `false`, a `UUID` from its text. A JSON array feeds an `IN :names`. A value that does not convert fails the statement before it runs: `:status: not a TaskStatus`.
 
-*Results.* The entities as rows of a table [.tag-new]#NEW#, one column per attribute as a repository method returns them (<<mansart-data-run-method>>), each typed from its attribute (`integer`, `string`, `date`…); a projection's columns, a column of entities typed `object` and each written as its JSON; at most 100 rows, the line saying `3 rows in 12 ms` or `first 100 rows in 40 ms` (xref:dev-console.adoc#rows-table[A table of rows], with *JSON* and *Copy as CSV*). A count is its number, `42`; an aggregate its value, `null` when there is no row; a write the rows it changed, `4 rows · rolled back`. *Exchange* holds the entity, the statement, its parameters and the transaction asked. A statement that does not parse, or fails, shows the class of the exception and its message, cut after 500 characters and with a `user:password@` masked.
+*Results.* The entities as rows of a table, one column per attribute as a repository method returns them (<<mansart-data-run-method>>), each typed from its attribute (`integer`, `string`, `date`…); a projection's columns, a column of entities typed `object` and each written as its JSON; at most 100 rows, the line saying `3 rows in 12 ms` or `first 100 rows in 40 ms` (xref:dev-console.adoc#rows-table[A table of rows], with *JSON* and *Copy as CSV*). A count is its number, `42`; an aggregate its value, `null` when there is no row; a write the rows it changed, `4 rows · rolled back`. *Exchange* holds the entity, the statement, its parameters and the transaction asked. A statement that does not parse, or fails, shows the class of the exception and its message, cut after 500 characters and with a `user:password@` masked.
 
 *History.* The *JDQL* tab lists its last 20 statements, *Query* or *Update / Delete*, newest first, each with *Replay*, which fills the form again without sending it.
 
 *Limits.* JDQL has no `INSERT`: insert with a repository's `save`, or an `@Insert` method (<<mansart-data-run-method>>). A statement runs on the default data store, the `RepositoryRuntime` bean of the `@Default` datasource: a repository routed elsewhere with `@Repository(dataStore = …)` is not reached. Paths such as `author.name` go as far as Mansart's JDQL does. The whole result is read before the first 100 rows are shown: narrow a large table with a `WHERE`. The console runs Mansart's own `JdqlExecutor.run(jdql, parameters, model, runtime)`, which a tool of yours may call too.
 
 [#mansart-data-csv]
-== CSV export and import for Mansart Data [.tag-new]#NEW#
+== CSV export and import for Mansart Data
 
 The *JDQL* tab of the *Mansart Data* panel (<<mansart-data-jdql>>) has two more actions, which move rows between the application's database and a CSV file in your browser: *Export CSV* downloads the result of a query, *Import CSV* saves the rows of a file you paste or pick. Nothing is read from, or written to, the project's directory.
 
@@ -993,7 +993,7 @@ The result says `42 rows saved · rolled back` or `· committed`; *Exchange* hol
 *Limits.* A file picked with *Choose file* is at most 60 KiB, and the whole request at most the console's 64 KiB, which a CSV fills a little more than its size once sent as JSON: split a larger file. At most 5000 rows per import, 256 KiB per export: export a large table in slices, `FROM Task WHERE id <= 2000 ORDER BY id`. The default data store only, and no joined attribute, as in the JDQL console.
 
 [#mansart-transactions-jdbc-bridge]
-== Mansart Data writes join the transaction [.tag-new]#NEW#
+== Mansart Data writes join the transaction
 
 `vidocq-runtime-mansart-transactions-extension` now brings `mansart-transactions-jdbc` itself, as a compile dependency and a `requires` of its module descriptor, alongside `mansart-transactions-cdi`. Adding the extension is enough for `@Transactional` to cover Mansart Data writes — no second dependency to remember.
 
@@ -1009,7 +1009,7 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
 ----
 
 [#langchain4j-cdi-mcp]
-== langchain4j-cdi MCP server [.tag-new]#NEW#
+== langchain4j-cdi MCP server
 
 `vidocq-runtime-langchain4j-cdi-mcp-extension` hosts a langchain4j-cdi MCP server on Vidocq: the `@Tool`, `@Prompt`, `@Resource` and `@ResourceTemplate` methods of the application's CDI beans are served over the Model Context Protocol at `/mcp`, in its `2026-07-28` and `2025-03-26` revisions. One dependency brings everything the server needs.
 
@@ -1040,7 +1040,7 @@ module com.example.time {
 Compile the application with `-parameters`, or name every argument with `@ToolArg(name = ...)`, `@PromptArg(name = ...)` or `@ResourceTemplateArg(name = ...)`: an argument without a name is advertised as `arg0` and never bound (<<vidocq-mcp-005>>).
 
 [#langchain4j-cdi-mcp-dependencies]
-=== What the dependency brings [.tag-new]#NEW#
+=== What the dependency brings
 
 [cols="2,3"]
 |===
@@ -1057,11 +1057,11 @@ Compile the application with `-parameters`, or name every argument with `@ToolAr
 |===
 
 [#langchain4j-cdi-mcp-layer]
-=== Where the server lives [.tag-new]#NEW#
+=== Where the server lives
 
 The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`, is kept in the boot layer like every `io.vidocq.runtime.extensions` module, and it reads `dev.langchain4j.cdi.mcp.server` and the invoker. A module kept in the boot layer keeps what it reads, so the MCP server lives in the boot layer in every launch shape: `vidocq:dev`, `vidocq:run`, the generated launcher and a `@VidocqMain` trampoline started from the IDE. The application layer holds the application's modules only, and the report's `layer` section shows it.
 
-The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`) [.tag-new]#NEW#: the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. The JAX-RS providers among them carry `@Provider` alone and are beans only through Cassini's build-compatible extension; `vidocq:generate` runs it too, so they are covered like the rest. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
+The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`): the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. The JAX-RS providers among them carry `@Provider` alone and are beans only through Cassini's build-compatible extension; `vidocq:generate` runs it too, so they are covered like the rest. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
 
 Two hand-made layouts break this:
 
@@ -1069,7 +1069,7 @@ Two hand-made layouts break this:
 * `-Dvidocq.app.modules` naming a `dev.langchain4j.cdi.mcp.*` module. langchain4j-cdi is then loaded a second time, in the application layer. The MCP calls still work, the `mcp` section reads `loaded twice` and <<vidocq-mcp-003>> is reported.
 
 [#langchain4j-cdi-mcp-configuration]
-=== Configuration [.tag-new]#NEW#
+=== Configuration
 
 [cols="2,1,3"]
 |===
@@ -1093,7 +1093,7 @@ Two hand-made layouts break this:
 
 | `vidocq.mcp.requestStateSecret`
 | (random per JVM)
-| The secret the `REPLAY` request state is encrypted and authenticated with (AES-256-GCM, key derived from it) [.tag-new]#NEW#, at least 32 bytes in UTF-8. A client, a proxy or an access log can neither read the answers the request state carries nor alter them; the tool name and arguments travel in clear beside it. Set the same value on every instance that serves the same clients, use a random one (`openssl rand -base64 32`), not a passphrase, and rotate it from time to time. A secret: never printed.
+| The secret the `REPLAY` request state is encrypted and authenticated with (AES-256-GCM, key derived from it), at least 32 bytes in UTF-8. A client, a proxy or an access log can neither read the answers the request state carries nor alter them; the tool name and arguments travel in clear beside it. Set the same value on every instance that serves the same clients, use a random one (`openssl rand -base64 32`), not a passphrase, and rotate it from time to time. A secret: never printed.
 
 | `vidocq.mcp.requestStateTtl`
 | `PT10M`
@@ -1115,7 +1115,7 @@ Two hand-made layouts break this:
 With no key set, the extension adds nothing and the server keeps its defaults, or the application's own `@Named("mcp-server") McpServerConfig` producer. With one key or more, the extension publishes the whole configuration as that bean; when the application produces one as well, the keys win (<<vidocq-mcp-004>>). A value a key does not accept stops the boot with an error that names the key and what it accepts, never the value. A misspelled key under `vidocq.mcp.` is reported as xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`].
 
 [#langchain4j-cdi-mcp-report]
-=== The `mcp` section of the startup report [.tag-new]#NEW#
+=== The `mcp` section of the startup report
 
 The summary line counts what the server serves, and the detailed report describes it. Without an `McpEndpoint` bean the summary reads `not deployed`; with langchain4j-cdi loaded twice, `loaded twice` and nothing else.
 
@@ -1141,7 +1141,7 @@ mcp           MCP server (langchain4j-cdi) | 3 ms
 `server` says where the configuration comes from: `vidocq.mcp.*`, `application bean` or `defaults`. The request-state secret is only ever printed as `configured` or `not configured`; session ids, tool descriptions, schemas and headers are never printed. The section reads what the server holds in memory and creates none of its session beans; at the detailed level it also reads the configuration resolver.
 
 [#langchain4j-cdi-mcp-live]
-=== The `mcp` panel in the dev console [.tag-new]#NEW#
+=== The `mcp` panel in the dev console
 
 The `mcp` section is also a panel of the xref:dev-console.adoc[dev console]: its boot facts stay, and seven values are read again on every poll, about once a second, from the counters the MCP server already keeps in memory — no lock, no I/O, nothing logged, and no bean created.
 
@@ -1233,7 +1233,7 @@ What reaches the page is a key, a kind, a number and a unit: no session id, no t
 The anomalies below are each one WARNING record on `io.vidocq.startup.anomaly`, logged at every level of the report (xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies]). They cover what the extension makes possible or alone can see; langchain4j-cdi's own failures stay in its logs.
 
 [#langchain4j-cdi-mcp-inspector]
-==== The MCP inspector [.tag-new]#NEW#
+==== The MCP inspector
 
 The `mcp` panel is also where the dev console calls the server's own tools, prompts and resources: it publishes
 the URL of `/mcp` the startup report printed, the way its own `mcp` section does, so the panel can find it after
@@ -1242,7 +1242,7 @@ live values already read. See xref:dev-console.adoc#mcp-inspector[MCP inspector]
 is made.
 
 [#vidocq-mcp-001]
-=== VIDOCQ-MCP-001 — the MCP server module cannot serve from the boot layer [.tag-new]#NEW#
+=== VIDOCQ-MCP-001 — the MCP server module cannot serve from the boot layer
 
 The descriptor of `dev.langchain4j.cdi.mcp.server` does not declare `provides org.mcpjava.server.spi.McpServerSPI`, or the module is not open. In the boot layer the JDK ignores `META-INF/services`, so every tool or prompt that builds a `ToolResponse`, a `PromptResponse` or a `TextContent` fails:
 
@@ -1254,7 +1254,7 @@ The descriptor of `dev.langchain4j.cdi.mcp.server` does not declare `provides or
 Use a langchain4j-cdi version that declares both.
 
 [#vidocq-mcp-002]
-=== VIDOCQ-MCP-002 — the server is not deployed [.tag-new]#NEW#
+=== VIDOCQ-MCP-002 — the server is not deployed
 
 The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404. The bean list names the classes of the langchain4j-cdi version the extension was built with: an application that forces another langchain4j-cdi version can lose them. The section reads `not deployed`:
 
@@ -1264,7 +1264,7 @@ The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404
 ----
 
 [#vidocq-mcp-003]
-=== VIDOCQ-MCP-003 — the server is loaded twice [.tag-new]#NEW#
+=== VIDOCQ-MCP-003 — the server is loaded twice
 
 `-Dvidocq.app.modules` put a `dev.langchain4j.cdi.mcp.*` module in the application layer, so langchain4j-cdi is loaded twice: its beans come from the application layer while the extension reads the boot-layer copy. The calls still work; the section reads `loaded twice` and shows nothing else:
 
@@ -1274,7 +1274,7 @@ The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404
 ----
 
 [#vidocq-mcp-004]
-=== VIDOCQ-MCP-004 — keys and an application producer [.tag-new]#NEW#
+=== VIDOCQ-MCP-004 — keys and an application producer
 
 `vidocq.mcp.*` keys are set and the application also produces a `@Named("mcp-server") McpServerConfig`. The keys win:
 
@@ -1286,7 +1286,7 @@ The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404
 Keep one of the two.
 
 [#vidocq-mcp-005]
-=== VIDOCQ-MCP-005 — arguments without a name [.tag-new]#NEW#
+=== VIDOCQ-MCP-005 — arguments without a name
 
 A tool, prompt or resource template argument has no explicit name and its class was compiled without `-parameters`: clients see it as `arg0`, and its value is never bound. One record names every method concerned:
 
@@ -1296,12 +1296,12 @@ A tool, prompt or resource template argument has no explicit name and its class 
 ----
 
 [#schema-migration]
-== Schema migration [.tag-new]#NEW#
+== Schema migration
 
 `vidocq-runtime-migration-extension` migrates each datasource at boot, in `beforeStart`, before the pools open, with the one backend on the path: `vidocq-runtime-flyway-migration-extension` or `vidocq-runtime-liquibase-migration-extension`. It migrates the `@Default` datasource whenever `vidocq.pool.url` is set, and a named datasource only when `vidocq.migration.<name>.locations` is set. A migration that fails stops the boot.
 
 [#schema-migration-backends]
-=== What each backend brings [.tag-new]#NEW#
+=== What each backend brings
 
 A backend brings its engine into the application, with the engine's own dependencies:
 
@@ -1309,7 +1309,7 @@ A backend brings its engine into the application, with the engine's own dependen
 * `vidocq-runtime-liquibase-migration-extension`: Liquibase 4.33.0 and its libraries, Apache 2.0, with commons-lang3 3.20.0 in place of the 3.17.0 Liquibase declares (CVE-2025-48924). The backend stays on Liquibase 4: 4.33.0 is the last release under the Apache 2.0 licence, as Liquibase 5 moved to the Functional Source License (FSL-1.1-ALv2).
 
 [#schema-migration-keys]
-=== Configuration [.tag-new]#NEW#
+=== Configuration
 
 [cols="2,1,3"]
 |===
@@ -1323,7 +1323,7 @@ A backend brings its engine into the application, with the engine's own dependen
 | the one backend
 | `flyway` or `liquibase`, required only when both backends are on the path.
 
-| `vidocq.migration.locations` [.tag-new]#NEW#
+| `vidocq.migration.locations`
 | the backend's
 | The locations of the `@Default` datasource, comma-separated: Flyway locations, `classpath:db/migration` by default, or the Liquibase changelog, `db/changelog/db.changelog-master.xml` by default. Read from every configuration source: set in `vidocq.properties` or as a `-D`, it used to stop the boot with a `StringIndexOutOfBoundsException`, and only the environment variable `VIDOCQ_MIGRATION_LOCATIONS` worked.
 
@@ -1331,23 +1331,23 @@ A backend brings its engine into the application, with the engine's own dependen
 | —
 | Enrols the named datasource of `vidocq.pool.<name>.url`, with its locations.
 
-| `vidocq.migration.failOnMissingLocations` [.tag-new]#NEW#
+| `vidocq.migration.failOnMissingLocations`
 | `false`
 | `true` stops the boot when a Flyway location holds no script (`Unable to resolve location classpath:db/migration.`), instead of migrating nothing. Off by default, so that an application can add the extension before its first script. Liquibase always stops on a missing changelog.
 
-| `vidocq.migration.cleanDisabled` [.tag-new]#NEW#
+| `vidocq.migration.cleanDisabled`
 | `true`
 | `false` lets the dev console's `clean-and-migrate` action drop every object in the schema of the `@Default` datasource (<<schema-migration-actions>>). Any other value keeps it refused. It is Flyway's own `cleanDisabled`, passed on, and the switch Liquibase's `dropAll` lacks. Nothing but that action ever cleans a schema.
 
-| `vidocq.migration.<name>.cleanDisabled` [.tag-new]#NEW#
+| `vidocq.migration.<name>.cleanDisabled`
 | `true`
 | The same for the named datasource `<name>`.
 |===
 
-The extension declares these keys, so a mistyped one, such as `vidocq.migration.location`, is reported as read by nothing [.tag-new]#NEW# (xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]).
+The extension declares these keys, so a mistyped one, such as `vidocq.migration.location`, is reported as read by nothing(xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`]).
 
 [#schema-migration-layer]
-=== Scripts in the application layer [.tag-new]#NEW#
+=== Scripts in the application layer
 
 `vidocq:dev`, `vidocq:run` and the launcher `vidocq:package` writes by default boot the application in a module layer of its own. Its class loader serves a script by name, but lists no directory. The backends used to scan `classpath:db/migration` with a loader, and found nothing there: Flyway logged `No migrations found. Are your locations set up correctly?`, the boot went on with an empty schema, and the first query failed with `Table "…" not found`. Liquibase stopped the boot, the changelog not found.
 
@@ -1359,12 +1359,12 @@ The backends now list `classpath:` locations from the application's own modules,
 A `@VidocqMain` trampoline re-layers the application in `Vidocq.run()`, and the runtime's own main does the same in a jlink image (`vidocq.app.module`), so these launches take this path too. A launch that leaves the application module in the JVM's boot layer keeps the backend's own scanning: `-Dvidocq.dev.layer=false` or `vidocq.package.layer=false` for an application without a trampoline, a class-path launch, and the tests. Flyway locations that mix `classpath:` with `filesystem:` are left to Flyway's scanner, which cannot list the `classpath:` ones in the application layer. The migration logs a warning saying so: keep the locations all `classpath:` or all `filesystem:`.
 
 [#schema-migration-liquibase-analytics]
-=== Liquibase analytics stay off [.tag-new]#NEW#
+=== Liquibase analytics stay off
 
 Since 4.30, Liquibase sends usage data to Liquibase by default for open-source users (`liquibase.analytics.enabled`, with its settings fetched from `config.liquibase.com`). The extension runs every migration, listing and clean with that option off, unless a value is configured where Liquibase reads its configuration: `-Dliquibase.analytics.enabled=true`, `LIQUIBASE_ANALYTICS_ENABLED`, or a defaults file. A configured value, `true` or `false`, is kept as it is.
 
 [#schema-migration-report]
-=== In the startup report [.tag-new]#NEW#
+=== In the startup report
 
 The section `migration`, *Schema migration*, says what each datasource's migration did:
 
@@ -1376,14 +1376,14 @@ The section `migration`, *Schema migration*, says what each datasource's migrati
 | The engine, then each datasource: `flyway: default 2 applied, version 2`, or `default not migrated` when nothing was found. With no datasource, `idle: no vidocq.pool[.<name>].url`; turned off, `disabled: vidocq.migration.enabled=false`.
 
 | `<datasource>`
-| In the detailed report: `0 applied, version 2`. The version is the one the schema is at. On a restart with nothing left to run it is the current one [.tag-new]#NEW#, and the log line says `Migration done: datasource=default applied=0 version=2` where it used to say `version=(none)`.
+| In the detailed report: `0 applied, version 2`. The version is the one the schema is at. On a restart with nothing left to run it is the current one, and the log line says `Migration done: datasource=default applied=0 version=2` where it used to say `version=(none)`.
 
 | `<datasource> locations`
 | In the detailed report: where the datasource was migrated from, the backend's default when no location is configured.
 |===
 
 [#vidocq-mig-001]
-=== VIDOCQ-MIG-001 — no migration found [.tag-new]#NEW#
+=== VIDOCQ-MIG-001 — no migration found
 
 A datasource's migration found no migration at its locations, and its schema history records none: the schema was not migrated at all, and the first query on it will fail. It is a warning in every launch mode:
 
@@ -1395,7 +1395,7 @@ A datasource's migration found no migration at its locations, and its schema his
 Check the key the hint names, and that the scripts are packaged with the application under that path. In a launch that leaves the application module in the boot layer (<<schema-migration-layer>>), also check that `module-info.java` opens their package (`opens db.migration;`). A schema whose history holds a migration, a repeatable one included, is never flagged, so an up-to-date restart is not an anomaly. `vidocq.migration.failOnMissingLocations=true` turns an empty Flyway location into a boot failure instead.
 
 [#schema-migration-actions]
-=== The `migration` panel and its actions [.tag-new]#NEW#
+=== The `migration` panel and its actions
 
 The dev console shows the section as the `migration` panel, with the boot facts above and one card per migrated datasource below:
 

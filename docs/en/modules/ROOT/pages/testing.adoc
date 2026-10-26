@@ -2,7 +2,7 @@
 :description: @VidocqTest starts the application in its own JVM for a test class and sends it HTTP requests.
 
 [.lead]
-`@VidocqTest` [.tag-new]#NEW# starts the application before the first test of a class and stops it after the
+`@VidocqTest`starts the application before the first test of a class and stops it after the
 last one. A test then sends it HTTP requests, as a client would, through the `VidocqApplication` it receives as a
 parameter. `vidocq create` writes such a test for a REST application (Vidocq/vidocq#350).
 

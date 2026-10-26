@@ -11,39 +11,39 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM of an application (Model 4.0.0) [.tag-new]#NEW#. [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `check-module-info` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note].
+| Parent POM of an application (Model 4.0.0). [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `check-module-info` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note].
 
-| `io.vidocq.runtime:vidocq-runtime-bom:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime:vidocq-runtime-bom:{project-version}`
 | The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. `vidocq-runtime-parent` imports it; an application with a parent of its own imports it (`<type>pom</type>`, `<scope>import</scope>`).
 
-| `io.vidocq.runtime:vidocq-runtime-build:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime:vidocq-runtime-build:{project-version}`
 | The root of the runtime's own reactor, with the settings of this repository (CI, SonarQube, TCK). The parent of the runtime's modules; an application never inherits it.
 
 | `io.vidocq.runtime:vidocq-runtime-spi:{project-version}`
-| Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors [.tag-new]#NEW#)
+| Public SPI (`VidocqExtension`, `ExtensionContext`, `VidocqConfig`, the startup report contributors)
 
-| `io.vidocq.runtime:vidocq-runtime-devconsole-spi:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime:vidocq-runtime-devconsole-spi:{project-version}`
 | Dev console panel SPI (`DevConsolePanel`, `PanelSample`, `Chart`, `Series`, `Unit`): what a runtime extension implements to show its section of the startup report live. See xref:dev-console-panels.adoc[Writing a dev console panel].
 
 | `io.vidocq.runtime:vidocq-runtime-core:{project-version}`
 | Runtime engine (boot orchestrator, lifecycle)
 
-| `io.vidocq.runtime:vidocq-runtime-junit:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime:vidocq-runtime-junit:{project-version}`
 | `@VidocqTest`, test scope: the application started in its own JVM for a test class, and HTTP requests to it. See xref:testing.adoc[Testing an application].
 
 | `io.vidocq.runtime.extensions:vidocq-runtime-extensions:{project-version}`
-| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev console [.tag-new]#NEW# is `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
+| Aggregator of the shipped extensions, grouped by domain (essentials, jakartaee-core, jakartaee-web, microprofile, module-repackaged). The dev consoleis `io.vidocq.runtime.extensions.essentials:vidocq-runtime-devconsole-extension` (xref:dev-console.adoc[Dev console]).
 
-| `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime.extensions.essentials:vidocq-runtime-langchain4j-cdi-mcp-extension:{project-version}`
 | langchain4j-cdi MCP server extension. Built in the reactor, not published while langchain4j-cdi is a SNAPSHOT: see xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp[langchain4j-cdi MCP server]
 
-| `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime.extensions.jakartaee.core:vidocq-runtime-peano-el-extension:{project-version}`
 | Jakarta Expression Language 6.0 through Peano; standard provider discovery and the `el` startup report. Companion POM bundle `vidocq-runtime-peano-el-extension-codegen` generates application accessor tables. See xref:modules/vidocq-runtime-extensions.adoc#peano-el[Expression Language (Peano)].
 
-| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}`
 | Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
 
-| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}` [.tag-new]#NEW#
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}`
 | JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
 | `io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}`
@@ -61,7 +61,7 @@ NOTE: `vidocq-runtime-bom` and `vidocq-runtime-parent` are built with `io.vidocq
 and published without it: `org.codehaus.mojo:flatten-maven-plugin` writes the pom the release deploys, with no
 parent, no profile and no `distributionManagement`, so an application inherits or imports what these two files
 declare and nothing of the repository's own build. It is a build tool of this reactor and never reaches an
-application [.tag-new]#NEW#.
+application.
 
 == Exported Java modules
 
@@ -70,9 +70,9 @@ application [.tag-new]#NEW#.
 | Module | Contents
 
 | `io.vidocq.runtime.spi`
-| Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`, `report.*` [.tag-new]#NEW#). Must be declared `requires` in any extension, and in any startup report contributor.
+| Public SPI interfaces (`VidocqExtension`, `ExtensionContext`, `VidocqConfiguration`, `config.*`, `report.*`). Must be declared `requires` in any extension, and in any startup report contributor.
 
-| `io.vidocq.runtime.spi.devconsole` [.tag-new]#NEW#
+| `io.vidocq.runtime.spi.devconsole`
 | The dev console panel SPI, `requires transitive io.vidocq.runtime.spi`. Must be declared `requires` in an extension that implements `DevConsolePanel`. Its name keeps it in the boot layer across dev reloads, with the console.
 
 | `io.vidocq.runtime.core`
@@ -97,7 +97,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.chappe.listeners`
 | `default`
-| CSV list of listeners to start. It cannot list a listener an extension declares itself [.tag-new]#NEW#, such as the dev console's `dev` (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
+| CSV list of listeners to start. It cannot list a listener an extension declares itself, such as the dev console's `dev` (xref:modules/vidocq-runtime-extensions.adoc#extension-listeners[A listener of an extension's own]).
 
 | `vidocq.chappe.listener.<name>.host` +
 `vidocq.chappe.listener.<name>.port`
@@ -107,19 +107,19 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 
 | `vidocq.http.mount.<name>.*`
 | —
-| Declarative mounts (static resources, `restful`, `servlet` [.tag-new]#NEW#, …). Mounts are routed by descending `.priority`, the length of the prefix by default (longest prefix first), and two mounts on the same prefix of one listener fail at startup [.tag-new]#NEW#.
+| Declarative mounts (static resources, `restful`, `servlet`, …). Mounts are routed by descending `.priority`, the length of the prefix by default (longest prefix first), and two mounts on the same prefix of one listener fail at startup.
 
-| `vidocq.servlet.context-path` [.tag-new]#NEW# +
+| `vidocq.servlet.context-path`+
 `vidocq.servlet.listener` +
 `vidocq.servlet.session-timeout` +
-`vidocq.servlet.response-character-encoding` [.tag-new]#NEW#
+`vidocq.servlet.response-character-encoding`
 | `/` +
 `default` +
 `1800` +
 `UTF-8`
 | The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, session timeout in seconds, and the default response encoding when no descriptor declares a `<response-character-encoding>` (`ISO-8859-1` restores the Servlet default). See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
-| `vidocq.servlet.users.<name>.password` [.tag-new]#NEW# +
+| `vidocq.servlet.users.<name>.password`+
 `vidocq.servlet.users.<name>.roles` +
 `vidocq.servlet.confidential-port` +
 `vidocq.servlet.rotate-session-id-on-login`
@@ -134,7 +134,7 @@ none +
 | —
 | JDBC coordinates of the default Mansart datasource. A named datasource uses `vidocq.pool.<name>.url`.
 
-| `vidocq.naming.<name without java:>` [.tag-new]#NEW#
+| `vidocq.naming.<name without java:>`
 | —
 | Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
@@ -148,12 +148,12 @@ none +
 the one backend
 | Schema migration at boot, and the backend when both Flyway and Liquibase are present. See xref:modules/vidocq-runtime-extensions.adoc#schema-migration-keys[Schema migration].
 
-| `vidocq.migration.locations` [.tag-new]#NEW# +
+| `vidocq.migration.locations`+
 `vidocq.migration.<name>.locations`
 | the backend's
 | Script locations of the `@Default` datasource, and of a named one, which this key enrols. Read from every configuration source.
 
-| `vidocq.migration.failOnMissingLocations` [.tag-new]#NEW#
+| `vidocq.migration.failOnMissingLocations`
 | `false`
 | `true`: a Flyway location with no script stops the boot instead of migrating nothing.
 
@@ -169,43 +169,43 @@ the one backend
 | (empty)
 | External override directory (`ExternalFileConfigSource`, ordinal 250).
 
-| `vidocq.log.console` [.tag-new]#NEW#
+| `vidocq.log.console`
 | `auto`
 | `auto`: one aligned line per record on stdout when the application has not configured logging; `jdk`: keep the JDK console handler. See xref:modules/vidocq-runtime-core.adoc#console-logging[Console logging].
 
-| `vidocq.console.color` [.tag-new]#NEW#
+| `vidocq.console.color`
 | `auto`
 | Console colours: `auto`, `always` or `never`. A non-empty `NO_COLOR` environment variable always disables them.
 
-| `vidocq.launch.mode` [.tag-new]#NEW#
+| `vidocq.launch.mode`
 | `auto`
 | Launch mode shown by the startup banner and the startup report, and returned by `ExtensionContext.launchMode()`: `dev`, `test` or `prod`, forced instead of detected; `auto` detects it. Another value is reported as `VIDOCQ-CFG-001` and means `auto`. See xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode].
 
-| `vidocq.startup.report` [.tag-new]#NEW#
+| `vidocq.startup.report`
 | `auto`
 | Level of the startup report: `auto` (`detailed` on the first boot of a dev launch, `summary` otherwise, `off` for an embedded deployment), `off`, `summary` or `detailed`. Another value is reported as `VIDOCQ-CFG-001` and means `auto`. See xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report].
 
-| `vidocq.banner.mode` [.tag-new]#NEW#
+| `vidocq.banner.mode`
 | `auto`
 | Startup banner: `auto` (the art on a terminal or a dev launch, one INFO line elsewhere), `console`, `log` or `off`. See xref:modules/vidocq-runtime-core.adoc#startup-banner[Startup banner].
 
-| `vidocq.banner.location` [.tag-new]#NEW#
+| `vidocq.banner.location`
 | (empty)
 | Custom banner: `classpath:<resource>`, `file:<path>` or `<path>`; a `vidocq-banner.txt` resource is used without configuration.
 
-| `vidocq.devconsole.enabled` [.tag-new]#NEW#
+| `vidocq.devconsole.enabled`
 | `auto`
 | Dev console: `auto` (on in a dev launch, off otherwise), `true` or `false`. Another value is reported as `VIDOCQ-DEVC-003` and means `auto`. Read by `vidocq-runtime-devconsole-extension`. See xref:dev-console.adoc#configuration[Dev console].
 
-| `vidocq.devconsole.port` [.tag-new]#NEW#
+| `vidocq.devconsole.port`
 | `8888`
 | Port of the dev console, `0` for a free one that the dev reloads keep. A taken port falls back to a free one (`VIDOCQ-DEVC-004`).
 
-| `vidocq.devconsole.host` [.tag-new]#NEW#
+| `vidocq.devconsole.host`
 | `127.0.0.1`
 | Address of the dev console. Not a loopback address: `VIDOCQ-DEVC-002`. Anything but ASCII letters, digits and `.-_:%[]`: `VIDOCQ-DEVC-003`, and `127.0.0.1`.
 
-| `vidocq.mcp.serverName` / `vidocq.mcp.serverVersion` [.tag-new]#NEW#
+| `vidocq.mcp.serverName` / `vidocq.mcp.serverVersion`
 | `langchain4j-cdi` / `unknown`
 | Name and version the langchain4j-cdi MCP server advertises. Read by `vidocq-runtime-langchain4j-cdi-mcp-extension`, with seven other `vidocq.mcp.*` keys: `allowedOrigins`, `mrtrMode`, `requestStateSecret`, `requestStateTtl`, `continuationTimeout`, `cacheTtl`, `cacheScope`. See xref:modules/vidocq-runtime-extensions.adoc#langchain4j-cdi-mcp-configuration[its configuration].
 |===
@@ -221,7 +221,7 @@ default. Since 0.3.0 the runtime reports such a key as a startup warning, for ev
 extension claims through `VidocqExtension.configKeys()`. The core claims `vidocq.log.`,
 `vidocq.console.`, `vidocq.banner.`, `vidocq.launch.` and `vidocq.startup.` itself, so a typo such as
 `vidocq.console.colour`, `vidocq.banner.enabled` or `vidocq.startup.reprot` is reported too. The warning
-carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] [.tag-new]#NEW#.
+carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`].
 ====
 
 [NOTE]
@@ -251,7 +251,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Generates the CDI bean index and pre-generates proxies/interceptors (compile-time codegen).
   Also registers Peano APT accessor-provider fragments in the compiled application
   module descriptor; existing access directives are preserved.
-  [.tag-new]#NEW# Compiles the application's JSP pages with Ibarra first, when its module requires
+ Compiles the application's JSP pages with Ibarra first, when its module requires
   `io.vidocq.ibarra.api` (xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)]).
   The plugin depends on `io.vidocq.ibarra:ibarra-compiler` for it: build tooling, never in the application.
 
@@ -261,7 +261,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.
 
-| `vidocq:run` [.tag-new]#NEW#
+| `vidocq:run`
 | One run of the application in a forked JVM, after a lifecycle forked up to `process-classes`: `mvn vidocq:run` compiles, indexes and runs. See xref:modules/vidocq-runtime-maven-plugin.adoc#run[the goal's reference].
 
 | `vidocq:checkpom`
@@ -285,7 +285,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | `vidocq:complete-module-info`
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
 
-| `vidocq:idea` [.tag-new]#NEW#
+| `vidocq:idea`
 | Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details].
 |===
 
@@ -345,7 +345,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Lifecycle interface — `name()`, `priority()` (lower runs first, default 1000), `configure(VidocqConfiguration)`, `beforeStart(VaubanContainerBuilder)`, `onStart(ExtensionContext)`, `onStop()`, `configKeys()`. Registered with `provides … with …` in `module-info.java` (or `META-INF/services`), discovered via `ServiceLoader`.
 
 | `ExtensionContext`
-| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed), `launchMode()` [.tag-new]#NEW#, `startupReport()` [.tag-new]#NEW#.
+| Passed to `onStart` — `container()`, `beanManager()`, `configuration()` (legacy), `config()` (typed), `launchMode()`, `startupReport()`.
 
 | `VidocqConfiguration`
 | String-property configuration passed to `configure` — `property(key)` returns `Optional<String>`, `property(key, default)`, `portFor(extensionName, defaultPort)`.
@@ -359,27 +359,27 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | `@VidocqMain`
 | Annotation for the optional trampoline `main` — a right-click Run in the IDE, or a `VidocqApp` after boot; boots the runtime in the Vauban layer. An application needs none: the runtime's own main boots `vidocq.mainModule`.
 
-| `ApplicationLayer` [.tag-new]#NEW#
+| `ApplicationLayer`
 | The module layer Vidocq boots the application in, when it has one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)`: what a library that scans the application reads, since the layer's class loader lists no directory. See xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files].
 
-| `report.StartupReportContributor` [.tag-new]#NEW#
+| `report.StartupReportContributor`
 | Adds a section to the startup report. Implemented by an extension, or declared as a service with `provides … with …` in `module-info.java` and `META-INF/services`. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].
 
-| `report.StartupReportContext` / `report.StartupReportSection` [.tag-new]#NEW#
+| `report.StartupReportContext` / `report.StartupReportSection`
 | What a contributor reads (level, launch mode, beans, routes) and where it writes (summary line, rows, lists, secrets, listeners, routes, anomalies).
 
-| `report.Verbosity` / `report.LaunchMode` [.tag-new]#NEW#
+| `report.Verbosity` / `report.LaunchMode`
 | `OFF`, `SUMMARY`, `DETAILED`; `DEV`, `TEST`, `PROD`.
 
-| `report.StartupReportView` [.tag-new]#NEW#
+| `report.StartupReportView`
 | The startup report of the running boot, read-only, from `ExtensionContext.startupReport()`: launch mode and reason, anomalies, sections, the detailed text, and the contributors the boot called. See xref:modules/vidocq-runtime-spi.adoc#startup-report-view[Reading the startup report].
 
-| `report.ReportAnomaly` / `report.ReportSection` / `report.ReportLine` [.tag-new]#NEW#
+| `report.ReportAnomaly` / `report.ReportSection` / `report.ReportLine`
 | Its text-only records: an anomaly (code, message, hint, source), a section (id, headline, summary, lines), a line (key, values).
 |===
 
 [#devconsole-spi]
-== Dev console SPI (`vidocq-runtime-devconsole-spi`) [.tag-new]#NEW#
+== Dev console SPI (`vidocq-runtime-devconsole-spi`)
 
 Source: `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/`. How to use it: xref:dev-console-panels.adoc[Writing a dev console panel].
 
@@ -387,21 +387,21 @@ Source: `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devco
 |===
 | Type | Role
 
-| `DevConsolePanel` [.tag-new]#NEW#
+| `DevConsolePanel`
 | A `StartupReportContributor` that the dev console also shows live: `sample(PanelSample)` on every poll, `charts()` once per boot.
 
-| `PanelSample` [.tag-new]#NEW#
+| `PanelSample`
 | Where `sample` writes: `gauge`, `counter`, `duration`, `text`, `absent`, `table`, `group`; `requireKey(key)`, the rule of every key.
 
-| `Unit` [.tag-new]#NEW#
+| `Unit`
 | `COUNT`, `BYTES`, `NANOS`, `RATIO`.
 
-| `Chart` / `Series` / `Series.Style` [.tag-new]#NEW#
+| `Chart` / `Series` / `Series.Style`
 | A chart the page draws from successive samples; a value it plots, in the style `AREA`, `STACKED`, `LINE`, `RATE` or `CEILING`.
 |===
 
 [#startup-anomaly-codes]
-== Startup anomaly codes [.tag-new]#NEW#
+== Startup anomaly codes
 
 Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logged at every level of the startup report, except `VIDOCQ-DEVC-005`, which the dev console logs on `io.vidocq.devconsole` when a panel fails to sample. See xref:modules/vidocq-runtime-core.adoc#startup-anomalies[Anomalies].
 
@@ -421,59 +421,59 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-core.adoc#vauban-009[`VAUBAN-009`]
 | Load-time weaving was needed and could not be prepared.
 
-| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`]
 | The application's bean index is not the one `vidocq:generate` left, as after an IDE build: the boot indexed the bean archives that no build step indexed.
 
-| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-002[`VIDOCQ-GEN-002`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-002[`VIDOCQ-GEN-002`]
 | The application module has bean classes and no Vauban index: it was compiled without the annotation processor.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-002[`VIDOCQ-RPT-002`]
-| Two contributors of different classes use the same id, or one uses the id of a section of the core, or `startup`, `config`, `cdi`, `logs`, `tests` or `jvm` [.tag-new]#NEW#, the dev console's own panels; the second is skipped.
+| Two contributors of different classes use the same id, or one uses the id of a section of the core, or `startup`, `config`, `cdi`, `logs`, `tests` or `jvm`, the dev console's own panels; the second is skipped.
 
-| xref:dev-console.adoc#vidocq-devc-001[`VIDOCQ-DEVC-001`] [.tag-new]#NEW#
+| xref:dev-console.adoc#vidocq-devc-001[`VIDOCQ-DEVC-001`]
 | The dev console is on in a `test` or `prod` launch.
 
-| xref:dev-console.adoc#vidocq-devc-002[`VIDOCQ-DEVC-002`] [.tag-new]#NEW#
+| xref:dev-console.adoc#vidocq-devc-002[`VIDOCQ-DEVC-002`]
 | The dev console listens on an address that is not a loopback one.
 
-| xref:dev-console.adoc#vidocq-devc-003[`VIDOCQ-DEVC-003`] [.tag-new]#NEW#
+| xref:dev-console.adoc#vidocq-devc-003[`VIDOCQ-DEVC-003`]
 | A `vidocq.devconsole.*` key has a value the console does not accept; its default is used.
 
-| xref:dev-console.adoc#vidocq-devc-004[`VIDOCQ-DEVC-004`] [.tag-new]#NEW#
+| xref:dev-console.adoc#vidocq-devc-004[`VIDOCQ-DEVC-004`]
 | The dev console's port was taken; it listens on a free one.
 
-| xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`] [.tag-new]#NEW#
+| xref:dev-console.adoc#vidocq-devc-005[`VIDOCQ-DEVC-005`]
 | A dev console panel failed to sample; that poll misses its live values.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mig-001[`VIDOCQ-MIG-001`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mig-001[`VIDOCQ-MIG-001`]
 | A datasource's migration found no migration, and its schema history records none: the schema was not migrated.
 
-| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-001[`MANSART-POOL-001`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-001[`MANSART-POOL-001`]
 | A Mansart pool opened none of the connections its `minIdle` asks for at boot.
 
-| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[`MANSART-POOL-002`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-pool-002[`MANSART-POOL-002`]
 | A named Mansart pool is open, but no `@Named` `DataSource` bean serves it.
 
 
-| xref:modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`]
 | Mansart could not build the model of a repository's entity; the catalogue shows the entity without its columns.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-001[`VIDOCQ-MCP-001`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-001[`VIDOCQ-MCP-001`]
 | The langchain4j-cdi MCP server module does not provide `McpServerSPI`, or is not open.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-002[`VIDOCQ-MCP-002`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-002[`VIDOCQ-MCP-002`]
 | The langchain4j-cdi MCP extension is present but no `McpEndpoint` bean exists.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-003[`VIDOCQ-MCP-003`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-003[`VIDOCQ-MCP-003`]
 | langchain4j-cdi's MCP server is loaded twice, in the boot layer and in the application layer.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-004[`VIDOCQ-MCP-004`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-004[`VIDOCQ-MCP-004`]
 | `vidocq.mcp.*` keys are set and the application also produces `@Named("mcp-server")`; the keys win.
 
-| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-005[`VIDOCQ-MCP-005`] [.tag-new]#NEW#
+| xref:modules/vidocq-runtime-extensions.adoc#vidocq-mcp-005[`VIDOCQ-MCP-005`]
 | An MCP tool, prompt or resource template argument has no name.
 |===
 

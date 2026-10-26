@@ -29,7 +29,7 @@ Four are lifecycle hooks, all with empty default implementations so an extension
 4. `onStop()` — server shutdown; release resources. Extensions are stopped in **reverse** priority order.
 
 [#failed-boot]
-A boot that fails after the first `beforeStart` stops what it started [.tag-new]#NEW#: every extension whose `beforeStart` was called, the one that failed included, gets its `onStop`, in reverse order, then the container is closed if it was built. So `onStop` must also work when `onStart` never ran, and when it failed halfway: it releases what exists and leaves the rest. A failing `onStop` is logged and the next one still runs; the exception of the boot goes through untouched. A boot that fails in `configure` stops nothing, since no extension has started yet.
+A boot that fails after the first `beforeStart` stops what it started: every extension whose `beforeStart` was called, the one that failed included, gets its `onStop`, in reverse order, then the container is closed if it was built. So `onStop` must also work when `onStart` never ran, and when it failed halfway: it releases what exists and leaves the rest. A failing `onStop` is logged and the next one still runs; the exception of the boot goes through untouched. A boot that fails in `configure` stops nothing, since no extension has started yet.
 
 The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` keys (or `prefix.*` patterns) it consumes, so the runtime's `ConfigKeyAudit` can warn at startup about configured keys that no extension reads.
 
@@ -41,8 +41,8 @@ The seventh method, `configKeys()`, lets an extension declare the `vidocq.*` key
 * `beanManager()` — shortcut to the CDI `BeanManager`;
 * `configuration()` — the legacy `VidocqConfiguration` (string properties);
 * `config()` — the typed `VidocqConfig` API (`Optional`-returning `getValue(key, type)`, aligned with MicroProfile Config concepts);
-* `launchMode()` [.tag-new]#NEW# — how this JVM was launched, `DEV`, `TEST` or `PROD` (xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode]);
-* `startupReport()` [.tag-new]#NEW# — the startup report of this boot, read-only, once it is written (xref:modules/vidocq-runtime-spi.adoc#startup-report-view[Reading the startup report]).
+* `launchMode()`— how this JVM was launched, `DEV`, `TEST` or `PROD` (xref:modules/vidocq-runtime-core.adoc#launch-mode[Launch mode]);
+* `startupReport()`— the startup report of this boot, read-only, once it is written (xref:modules/vidocq-runtime-spi.adoc#startup-report-view[Reading the startup report]).
 
 == Discovery and ordering
 

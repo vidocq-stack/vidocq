@@ -12,7 +12,7 @@
 | Build | `cd vidocq-runtime-examples/<example> && ./mvnw -ntp package`
 |===
 
-[.tag-new]#NEW# No example has a main class. Each pom declares `vidocq.mainModule` only, and the runtime's own
+No example has a main class. Each pom declares `vidocq.mainModule` only, and the runtime's own
 main boots the module under `vidocq:dev`, `vidocq:run`, the `vidocq:package` launchers and the `vidocq:jlink` /
 `vidocq:jpackage` images (see
 xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class]). A main class
@@ -37,11 +37,11 @@ xref:usage.adoc[the `@VidocqMain` trampoline].
 | `vidocq-runtime-knock-health-example`
 | MicroProfile Health via `vidocq-runtime-knock-health-extension` — custom `@Liveness`/`@Readiness` checks exposed on `/api/health` (`/live`, `/ready`, `/started`).
 
-| [[cyrano-rest-client-example]]`vidocq-runtime-cyrano-rest-client-example` [.tag-new]#NEW#
+| [[cyrano-rest-client-example]]`vidocq-runtime-cyrano-rest-client-example`
 | MicroProfile Rest Client via `vidocq-runtime-cyrano-rest-client-extension` and its `-codegen` bundle — `/api/relay` calls the application's own `/api/greeting` through an `@Inject @RestClient` interface. Every build links it with `vidocq:jlink`.
 
-| [[foy-servlet-example]]`vidocq-runtime-foy-servlet-example` [.tag-new]#NEW#
-| Jakarta Servlet 6.1 via `vidocq-runtime-foy-servlet-extension` and its `-codegen` bundle — the Vidocq Bistro: servlets, a filter and a session listener, all CDI beans, a `@SessionScoped` basket, a `@RequestScoped` ticket shared by the filter and the servlet of a request, and a kitchen page protected by `@ServletSecurity` with FORM login; [.tag-new]#NEW# JSP pages compiled by Ibarra, with Peano expressions on `@ELAccessible` records.
+| [[foy-servlet-example]]`vidocq-runtime-foy-servlet-example`
+| Jakarta Servlet 6.1 via `vidocq-runtime-foy-servlet-extension` and its `-codegen` bundle — the Vidocq Bistro: servlets, a filter and a session listener, all CDI beans, a `@SessionScoped` basket, a `@RequestScoped` ticket shared by the filter and the servlet of a request, and a kitchen page protected by `@ServletSecurity` with FORM login;JSP pages compiled by Ibarra, with Peano expressions on `@ELAccessible` records.
 
 | `vidocq-runtime-petstore-example`
 | The largest example — Cassini + Mansart + Champollion + H2 petstore combining REST, persistence and JSON binding.
@@ -81,12 +81,12 @@ curl -X POST http://localhost:8080/api/products \
 curl http://localhost:8080/api/products
 ----
 
-In dev mode, `mvn vidocq:dev`, the example also serves the xref:dev-console.adoc[dev console] [.tag-new]#NEW#: it logs `Vidocq dev console: http://127.0.0.1:8888/`, a page with the startup report, the two pools, `@Default` and `audit`, live, and the JVM. Its `DevConsoleSnapshotTest` boots the example in a dev launch, reads that URL from the log, and checks the snapshot the page polls: both pools, the heap, and no pool password anywhere in it.
+In dev mode, `mvn vidocq:dev`, the example also serves the xref:dev-console.adoc[dev console]: it logs `Vidocq dev console: http://127.0.0.1:8888/`, a page with the startup report, the two pools, `@Default` and `audit`, live, and the JVM. Its `DevConsoleSnapshotTest` boots the example in a dev launch, reads that URL from the log, and checks the snapshot the page polls: both pools, the heap, and no pool password anywhere in it.
 
 The example demonstrates the `@TransactionScoped` scope and the xref:mansart::index.adoc[Mansart] transactional bridge. It also served as the reproduction harness for bug VAU-INJ-001 (normal-scope proxy resolution) — see `vidocq/VAUBAN-BUGS.md`.
 
 [[foy-servlet-example-quick-start]]
-== `vidocq-runtime-foy-servlet-example` — quick start [.tag-new]#NEW#
+== `vidocq-runtime-foy-servlet-example` — quick start
 
 [source,bash]
 ----
@@ -98,7 +98,7 @@ mvn vidocq:dev
 # receipt (a JSP) on http://localhost:8080/receipt, about page on http://localhost:8080/about.jsp
 ----
 
-[.tag-new]#NEW# **JSP pages, with Ibarra and Peano.** `ReceiptServlet` builds a `Receipt` from the basket and forwards to `WEB-INF/views/receipt.jsp`, which a client cannot request; `about.jsp`, under `META-INF/resources`, is requested directly. `vidocq:generate` compiles both into the application module with Ibarra (xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages]). The receipt reads `${line.dish}` on `@ELAccessible` records, whose accessors Peano generates at build time; `BistroPagesTest` runs the pages with `-Dpeano.reflection=deny` to prove no expression falls back to reflection. Ibarra has no JSTL: the example writes its own `<bistro:each>` tag and two functions in `WEB-INF/tlds/bistro.tld`. The module requires `io.vidocq.runtime.extensions.jakartaee.web.ibarra`, `io.vidocq.ibarra.api` and `io.vidocq.peano.api`, and the pom adds the Peano codegen bundle.
+**JSP pages, with Ibarra and Peano.** `ReceiptServlet` builds a `Receipt` from the basket and forwards to `WEB-INF/views/receipt.jsp`, which a client cannot request; `about.jsp`, under `META-INF/resources`, is requested directly. `vidocq:generate` compiles both into the application module with Ibarra (xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages]). The receipt reads `${line.dish}` on `@ELAccessible` records, whose accessors Peano generates at build time; `BistroPagesTest` runs the pages with `-Dpeano.reflection=deny` to prove no expression falls back to reflection. Ibarra has no JSTL: the example writes its own `<bistro:each>` tag and two functions in `WEB-INF/tlds/bistro.tld`. The module requires `io.vidocq.runtime.extensions.jakartaee.web.ibarra`, `io.vidocq.ibarra.api` and `io.vidocq.peano.api`, and the pom adds the Peano codegen bundle.
 
 The other pages are written by servlets. `TicketFilter` and the servlet of one request inject the same `@RequestScoped` `RequestTicket`: its id is both the `X-Request-Id` header and the one in the page footer, and the next request gets a new one. The `@SessionScoped` `Basket` lives in the HTTP session, and `SessionCounter`, a `@WebListener`, counts the open sessions for the kitchen page. `KitchenServlet` carries `@ServletSecurity(@HttpConstraint(rolesAllowed = "chef"))`, and `META-INF/web.xml` holds only a FORM `login-config`: Foy forwards a visitor to `LoginServlet`'s form, which posts to `j_security_check`, and checks the user that `vidocq.servlet.users.chef.*` declares in `vidocq.properties`. The identity lives in the HTTP session, so it ends at *Sign out*, a POST to `LogoutServlet`, or after `vidocq.servlet.session-timeout` without a request; BASIC authentication, Foy's default without a `login-config`, would leave the credentials in the browser until it closes. The `module-info.java` has no exports, no opens and no hand-written `provides`. Under `vidocq:dev`, the dev console plots the active sessions.
 
