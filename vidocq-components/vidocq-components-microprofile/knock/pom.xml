@@ -1,33 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-         >
+<?xml version='1.0' encoding='utf-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <version>0.4.0-RC1</version>
+        <relativePath />
     </parent>
 
     <groupId>io.vidocq.knock</groupId>
     <artifactId>knock-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Knock</name>
     <description>Implémentation MicroProfile Health 4.0 — zéro librairie tierce, virtual threads, Java Modules strict</description>
     <url>https://codefloe.com/Vidocq/knock</url>
 
-    <!--
-        Disjunctive triple license: a recipient may use this software under
-        ANY ONE of the three licences below, at their option. EPL-2.0 is the
-        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
-        is offered as a Secondary License.
-        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
-    -->
+    
     <licenses>
         <license>
             <name>EPL-2.0</name>
@@ -53,65 +44,34 @@
     </scm>
 
     <properties>
-        <!--
-            MicroProfile Health API 4.0.1 - Vidocq fork with module-info
-            for Java Modules/jlink. The upstream version is kept for reference.
-        -->
+        
         <microprofile.health.api.version>${project.version}</microprofile.health.api.version>
         <microprofile.health.upstream.version>4.0.1</microprofile.health.upstream.version>
 
-        <!-- Jakarta JSON-P - implementation provided by champollion -->
+        
         <jakarta.json.version>2.1.3</jakarta.json.version>
 
-        <!-- Jakarta REST - implementation provided by Cassini -->
+        
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
-        <!-- CDI -->
+        
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
-        <!-- Vidocq upstreams (referenced via properties to allow cross-repo PR overrides) -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        
+        <vauban.version>0.4.0-RC1</vauban.version>
+        <champollion.version>0.4.0-RC1</champollion.version>
+        <cassini.version>0.4.0-RC1</cassini.version>
 
-        <!--
-            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
-            the shared pr-validate workflow, which skips the step when this property is absent.
-
-            The certification profile is named explicitly because a plain `-Ptck` would not run it:
-            the root `tck` profile only adds knock-tck to the reactor, and inside knock-tck the
-            `smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset while
-            reporting success — the vacuous gate this campaign exists to remove.
-
-            This became possible only once knock-tck stopped depending on io.vidocq.cassini:
-            cassini-tck, which is published nowhere, and took the harness from the published
-            cassini-testing instead (Vidocq/cassini#36). Measured against a clean local repository,
-            the state of a CI runner, the suite previously failed in one second on an unresolvable
-            artefact — it had never run outside a developer machine.
-        -->
+        
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl knock-tck test</ci.tck.command>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            knock-coverage (quality profile), so the tests of knock-it-weld count for the code
-            they exercise in the other modules.
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/knock-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
-    <!--
-        Main reactor modules. knock-tck joins the reactor only under the `tck`
-        Maven profile (see <profiles> below) — TCK harmonisation, same pattern
-        as the vidocq-runtime-tck-* runners: a regular `mvn install` neither
-        builds nor downloads the TCK harness. The historical reason for keeping
-        TCK runners out of the reactor (ShrinkWrap Maven Resolver 3.3 unable to
-        parse Model 4.1.0 POMs) is obsolete since the Maven 3.9.16 /
-        Model 4.0.0 migration.
-        Activation: ./mvnw -Ptck,tck-official -pl knock-tck test
-        (or through run-official-tck-mp-health-4.0.sh).
-    -->
+    
     <modules>
         <module>knock-mp-health-api</module>
         <module>knock-api</module>
@@ -123,28 +83,28 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- MicroProfile Health API (Vidocq fork with module-info) -->
+            
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-mp-health-api</artifactId>
                 <version>${microprofile.health.api.version}</version>
             </dependency>
 
-            <!-- Jakarta JSON-P (implementation: champollion) -->
+            
             <dependency>
                 <groupId>jakarta.json</groupId>
                 <artifactId>jakarta.json-api</artifactId>
                 <version>${jakarta.json.version}</version>
             </dependency>
 
-            <!-- Jakarta REST (implementation: Cassini) -->
+            
             <dependency>
                 <groupId>jakarta.ws.rs</groupId>
                 <artifactId>jakarta.ws.rs-api</artifactId>
                 <version>${jakarta.ws.rs.version}</version>
             </dependency>
 
-            <!-- CDI -->
+            
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -161,8 +121,7 @@
                 <version>${jakarta.annotation.version}</version>
             </dependency>
 
-            <!-- Runtime implementations (Vidocq) - versions via properties so
-                 the cross-repo PR mechanism can override them. -->
+            
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-jsonp</artifactId>
@@ -189,7 +148,7 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Internal Knock modules -->
+            
             <dependency>
                 <groupId>io.vidocq.knock</groupId>
                 <artifactId>knock-api</artifactId>
@@ -210,21 +169,14 @@
 
 
     <profiles>
-        <!--
-            TCK profile: pulls the knock-tck runner into the reactor.
-            Kept behind a profile so a regular build never downloads nor runs
-            the official MicroProfile Health 4.0 TCK harness.
-        -->
+        
         <profile>
             <id>tck</id>
             <modules>
                 <module>knock-tck</module>
             </modules>
         </profile>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>
