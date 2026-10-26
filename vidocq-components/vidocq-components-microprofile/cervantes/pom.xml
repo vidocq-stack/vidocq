@@ -1,33 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-         >
+<?xml version='1.0' encoding='utf-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <version>0.4.0-RC1</version>
+        <relativePath />
     </parent>
 
     <groupId>io.vidocq.cervantes</groupId>
     <artifactId>cervantes-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Cervantes</name>
     <description>MicroProfile JWT 2.2 implementation — no third-party library, crypto via java.security, JSON via Champollion, config via Ravel, strict Java Modules, virtual threads, CDI via Vauban</description>
     <url>https://codefloe.com/Vidocq/cervantes</url>
 
-    <!--
-        Disjunctive triple license: a recipient may use this software under
-        ANY ONE of the three licences below, at their option. EPL-2.0 is the
-        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
-        is offered as a Secondary License.
-        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
-    -->
+    
     <licenses>
         <license>
             <name>EPL-2.0</name>
@@ -53,71 +44,38 @@
     </scm>
 
     <properties>
-        <!--
-            MicroProfile JWT 2.2 API. The official artifact has NEITHER a module-info NOR an
-            Automatic-Module-Name: it is repackaged as an explicit named module by
-            cervantes-mp-jwt-api (module name: org.eclipse.microprofile.jwt).
-            Compile dependencies of the spec: jakarta.json-api + jakarta.enterprise.cdi-api.
-        -->
+        
         <microprofile.jwt.version>2.2</microprofile.jwt.version>
 
-        <!-- Jakarta EE 11 -->
+        
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
-        <!-- Upstream Vidocq implementations -->
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        
+        <champollion.version>0.4.0-RC1</champollion.version>
+        <ravel.version>0.4.0-RC1</ravel.version>
+        <vauban.version>0.4.0-RC1</vauban.version>
+        <cassini.version>0.4.0-RC1</cassini.version>
 
-        <!-- JMH for cervantes-bench -->
+        
         <jmh.version>1.37</jmh.version>
 
-        <!--
-            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
-            the shared pr-validate workflow, which skips the step when this property is absent.
-
-            The certification profile is named explicitly because a plain `-Ptck` would not run it:
-            the root `tck` profile only adds cervantes-tck to the reactor, and inside cervantes-tck
-            the `smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset
-            while reporting success — the vacuous gate this campaign exists to remove.
-
-            This became possible only once cervantes-tck stopped depending on io.vidocq.cassini:
-            cassini-tck, an artefact that is published nowhere (Vidocq/cassini#36) and which this
-            module never used — it named CassiniTestHarness in one Javadoc comment and nothing else.
-
-            Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
-            official MicroProfile JWT 2.1 TCK ran 206 tests in 13 s, all green, every artefact
-            resolved from Maven Central.
-        -->
+        
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl cervantes-tck test</ci.tck.command>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            cervantes-coverage (quality profile), so the tests of cervantes-it-weld count for the
-            code they exercise in the other modules.
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/cervantes-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
-        <!-- The examples are analysed (people copy them) but kept out of the coverage. -->
+        
         <sonar.coverage.exclusions>**/cervantes-examples/**</sonar.coverage.exclusions>
-        <!-- Writing to the console (java:S106) is what the examples are for. -->
+        
         <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
         <sonar.issue.ignore.multicriteria.examples.resourceKey>**/cervantes-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
     </properties>
 
-    <!--
-        TCK harmonisation: cervantes-tck joins the reactor ONLY under the `tck` Maven
-        profile (see <profiles> below), following the vidocq-runtime-tck-* runner
-        pattern. The historical reason for keeping it out-of-reactor — ShrinkWrap Maven
-        Resolver 3.3 unable to parse Model 4.1.0 POMs — is obsolete since the workspace
-        migrated to Maven 3.9.16 / Model 4.0.0. A regular `mvn install` still skips it;
-        activate it with `./mvnw -Ptck -pl cervantes-tck test` or via
-        run-official-tck-mp-jwt-2.2.sh.
-    -->
+    
     <modules>
         <module>cervantes-mp-jwt-api</module>
         <module>cervantes-api</module>
@@ -130,20 +88,14 @@
     </modules>
 
     <profiles>
-        <!--
-            `tck` profile: pulls the official MP JWT 2.2 TCK runner into the reactor.
-            Not active by default so a plain build never downloads nor runs the TCK.
-        -->
+        
         <profile>
             <id>tck</id>
             <modules>
                 <module>cervantes-tck</module>
             </modules>
         </profile>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>
@@ -154,20 +106,20 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- MP JWT 2.2 spec — repackaged (named module), consumed by the Cervantes modules -->
+            
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <!-- Official API, kept for the TCK runner only -->
+            
             <dependency>
                 <groupId>org.eclipse.microprofile.jwt</groupId>
                 <artifactId>microprofile-jwt-auth-api</artifactId>
                 <version>${microprofile.jwt.version}</version>
             </dependency>
 
-            <!-- Modules internes Cervantes -->
+            
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-api</artifactId>
@@ -189,7 +141,7 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Jakarta CDI / Inject / Annotation (provided in the modules that need them) -->
+            
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -211,7 +163,7 @@
                 <version>${jakarta.ws.rs.version}</version>
             </dependency>
 
-            <!-- JSON-P via Champollion (fournit jakarta.json transitivement) -->
+            
             <dependency>
                 <groupId>io.vidocq.champollion</groupId>
                 <artifactId>champollion-api</artifactId>
@@ -223,7 +175,7 @@
                 <version>${champollion.version}</version>
             </dependency>
 
-            <!-- Config via Ravel (MP Config) -->
+            
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-mp-config-api</artifactId>
@@ -235,7 +187,7 @@
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- CDI via Vauban (test scope in the modules) -->
+            
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-api</artifactId>
@@ -252,20 +204,20 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- JAX-RS via Cassini (security integration, M4) -->
+            
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-api</artifactId>
                 <version>${cassini.version}</version>
             </dependency>
-            <!-- Chappe adapter: provides a JAX-RS RuntimeDelegate (cervantes-jaxrs tests) -->
+            
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-chappe</artifactId>
                 <version>${cassini.version}</version>
             </dependency>
 
-            <!-- JMH -->
+            
             <dependency>
                 <groupId>org.openjdk.jmh</groupId>
                 <artifactId>jmh-core</artifactId>
