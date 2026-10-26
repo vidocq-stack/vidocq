@@ -1,20 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-         >
+<?xml version='1.0' encoding='utf-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <version>0.4.0-RC1</version>
+        <relativePath />
     </parent>
 
     <groupId>io.vidocq.humboldt</groupId>
     <artifactId>humboldt-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Humboldt</name>
@@ -28,13 +25,7 @@
         </developer>
     </developers>
 
-    <!--
-        Disjunctive triple license: a recipient may use this software under
-        ANY ONE of the three licences below, at their option. EPL-2.0 is the
-        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
-        is offered as a Secondary License.
-        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
-    -->
+    
     <licenses>
         <license>
             <name>EPL-2.0</name>
@@ -60,7 +51,7 @@
     </scm>
 
     <properties>
-        <!-- Specs -->
+        
         <microprofile.telemetry.version>2.2-RC3</microprofile.telemetry.version>
         <opentelemetry.version>1.66.0</opentelemetry.version>
         <opentelemetry.semconv.version>1.44.0</opentelemetry.semconv.version>
@@ -69,46 +60,20 @@
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.ws.rs.version>4.0.0</jakarta.ws.rs.version>
 
-        <!-- Vidocq ecosystem -->
+        
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.4.0-RC1</vauban.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
 
-        <!--
-            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
-            the shared pr-validate workflow, which skips the step when this property is absent.
-
-            The certification profile is named explicitly because a plain `-Ptck` would not run it:
-            the root `tck` profile only adds humboldt-tck to the reactor, and inside humboldt-tck the
-            `tck-smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset
-            while reporting success — the vacuous gate this campaign exists to remove.
-
-            Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
-            official MicroProfile Telemetry 2.1 TCK runs 85 tests in 241 s, all green, every artefact
-            resolved from Maven Central. Nothing on our side can shorten that: the TCK's own
-            InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a firm floor
-            paid on every call whatever the implementation does — the faster we are, the longer it
-            waits. Four minutes on a pull request buys the only automated proof of conformance.
-        -->
+        
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl humboldt-tck test</ci.tck.command>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            humboldt-coverage (quality profile), so the tests of humboldt-it-weld count for the
-            code they exercise in the other modules.
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/humboldt-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
-    <!--
-        humboldt-tck joins the reactor only under the `tck` profile (see <profiles>
-        below) — TCK harmonisation, same pattern as the vidocq-runtime-tck-*
-        runners and the dirac pilot: a plain `mvn install` neither downloads nor
-        runs anything TCK-related. The historical out-of-reactor constraint
-        (ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 POMs) disappeared with the
-        Maven 3.9.16 / Model 4.0.0 migration.
-    -->
+    
     <modules>
         <module>humboldt-api</module>
         <module>humboldt-otel-context</module>
@@ -171,7 +136,7 @@
                 <version>${jakarta.ws.rs.version}</version>
             </dependency>
 
-            <!-- Vidocq -->
+            
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-api</artifactId>
@@ -251,25 +216,14 @@
     </dependencyManagement>
 
     <profiles>
-        <!--
-            TCK harmonisation: the official MicroProfile Telemetry TCK runner
-            joins the reactor only when this profile is active.
-
-                ./mvnw -Ptck,tck-smoke -pl humboldt-tck test        # smoke
-                ./mvnw -Ptck,tck-official -pl humboldt-tck test     # full suite
-
-            run-official-tck-telemetry-2.2.sh remains the friendly wrapper.
-        -->
+        
         <profile>
             <id>tck</id>
             <modules>
                 <module>humboldt-tck</module>
             </modules>
         </profile>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>

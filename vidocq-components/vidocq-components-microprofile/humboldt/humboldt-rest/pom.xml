@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.humboldt</groupId>
         <artifactId>humboldt-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC1</version>
     </parent>
 
     <artifactId>humboldt-rest</artifactId>
@@ -56,7 +56,7 @@
         <dependency>
             <groupId>io.vidocq.cyrano</groupId>
             <artifactId>cyrano-mp-rest-client-api</artifactId>
-            <version>0.4.0-SNAPSHOT</version>
+            <version>0.4.0-RC1</version>
             <scope>provided</scope>
         </dependency>
         <!-- jakarta.annotation for @Priority on HumboldtSpanFinalizer.
