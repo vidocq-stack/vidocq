@@ -29,71 +29,85 @@ on:
         description: "io.vidocq:vidocq-parent — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.4.0-RC1"
       cassini_release:
         description: "io.vidocq.cassini:* (all artifacts under io.vidocq.cassini) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       cervantes_release:
         description: "io.vidocq.cervantes:* (all artifacts under io.vidocq.cervantes) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       champollion_release:
         description: "io.vidocq.champollion:* (all artifacts under io.vidocq.champollion) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.4.0-RC1"
       chappe_release:
         description: "io.vidocq.chappe:* (all artifacts under io.vidocq.chappe) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.4.0-RC1"
       cyrano_release:
         description: "io.vidocq.cyrano:* (all artifacts under io.vidocq.cyrano) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       dirac_release:
         description: "io.vidocq.dirac:* (all artifacts under io.vidocq.dirac) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
+      foy_release:
+        description: "io.vidocq.foy:* (all artifacts under io.vidocq.foy) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.3.0"
       grimm_release:
         description: "io.vidocq.grimm:* (all artifacts under io.vidocq.grimm) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       heisenberg_release:
         description: "io.vidocq.heisenberg:* (all artifacts under io.vidocq.heisenberg) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       humboldt_release:
         description: "io.vidocq.humboldt:* (all artifacts under io.vidocq.humboldt) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
+      ibarra_release:
+        description: "io.vidocq.ibarra:* (all artifacts under io.vidocq.ibarra) — stable version (must be released on Central first)"
+        type: string
+        required: true
       knock_release:
         description: "io.vidocq.knock:* (all artifacts under io.vidocq.knock) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       mansart_release:
         description: "io.vidocq.mansart:* (all artifacts under io.vidocq.mansart) — stable version (must be released on Central first)"
         type: string
         required: true
+      peano_release:
+        description: "io.vidocq.peano:* (all artifacts under io.vidocq.peano) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.4.0-RC1"
       ravel_release:
         description: "io.vidocq.ravel:* (all artifacts under io.vidocq.ravel) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
       vauban_release:
         description: "io.vidocq.vauban:* (all artifacts under io.vidocq.vauban) — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.2.0"
+        default:     "0.3.0"
 
 jobs:
   release:
@@ -122,18 +136,26 @@ jobs:
             io.vidocq.chappe=${{ inputs.chappe_release }}
             io.vidocq.cyrano=${{ inputs.cyrano_release }}
             io.vidocq.dirac=${{ inputs.dirac_release }}
+            io.vidocq.foy=${{ inputs.foy_release }}
             io.vidocq.grimm=${{ inputs.grimm_release }}
             io.vidocq.heisenberg=${{ inputs.heisenberg_release }}
             io.vidocq.humboldt=${{ inputs.humboldt_release }}
+            io.vidocq.ibarra=${{ inputs.ibarra_release }}
             io.vidocq.knock=${{ inputs.knock_release }}
             io.vidocq.mansart=${{ inputs.mansart_release }}
+            io.vidocq.peano=${{ inputs.peano_release }}
             io.vidocq.ravel=${{ inputs.ravel_release }}
             io.vidocq.vauban=${{ inputs.vauban_release }}
           excluded-modules: |
+            vidocq-runtime-langchain4j-cdi-mcp-extension
+            vidocq-runtime-langchain4j-cdi-mcp-extension-dev
             vidocq-runtime-integration-tests
             vidocq-runtime-it-cyrano-jpms
+            vidocq-runtime-it-foy-servlet
+            vidocq-runtime-it-ibarra-pages
+            vidocq-runtime-it-naming
+            vidocq-runtime-it-ravel-config
             vidocq-runtime-examples
-            vidocq-runtime-langchain4j-cdi-mcp-extension
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
