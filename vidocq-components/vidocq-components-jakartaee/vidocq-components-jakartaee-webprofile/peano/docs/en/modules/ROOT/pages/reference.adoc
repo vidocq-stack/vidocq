@@ -331,7 +331,7 @@ its own, so applications never share tables.
 An ELClass base (static fields and methods) uses its exact class only: static members are not
 inherited through EL. Functional-interface conversion keeps its exact target-interface lookup.
 
-[.tag-new]#NEW# Peano ships a built-in table for `java.util.Map.Entry`, so `${e.key}` and
+Peano ships a built-in table for `java.util.Map.Entry`, so `${e.key}` and
 `${e.value}` work in deny mode on the JDK's private entry classes (`HashMap$Node`, the entries
 of `Map.of` and of unmodifiable views). It gives the results of the API BeanELResolver, the
 reflective path:
@@ -403,7 +403,7 @@ incremental processing.
 * `-Apeano.accessorTypes=pkg.Type,pkg.Other`: comma-separated owned type names, including models produced by another processor in a later round.
 * Generated provider: `pkg.Type__PeanoAccessors` (nested binary names retain their dollar separators).
 * Registration fragment: `META-INF/peano/accessor-providers/pkg.Type__PeanoAccessors.txt`.
-* [.tag-new]#NEW# Services file: `META-INF/services/io.vidocq.peano.spi.AccessorProvider`, every provider of the module; on an incremental build, the providers already listed stay while their class is in the output.
+*Services file: `META-INF/services/io.vidocq.peano.spi.AccessorProvider`, every provider of the module; on an incremental build, the providers already listed stay while their class is in the output.
 
 Put peano-processor, peano-api and jakarta.el-api on javac's processor module path.
 Only peano-api and peano-core are needed at application runtime.
