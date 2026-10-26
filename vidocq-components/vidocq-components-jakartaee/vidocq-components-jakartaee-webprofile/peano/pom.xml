@@ -1,20 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-         >
+<?xml version='1.0' encoding='utf-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <version>0.4.0-RC1</version>
+        <relativePath />
     </parent>
 
     <groupId>io.vidocq.peano</groupId>
     <artifactId>peano-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Peano</name>
@@ -28,13 +25,7 @@
         </developer>
     </developers>
 
-    <!--
-        Disjunctive triple license: a recipient may use this software under
-        ANY ONE of the three licences below, at their option. EPL-2.0 is the
-        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
-        is offered as a Secondary License.
-        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
-    -->
+    
     <licenses>
         <license>
             <name>EPL-2.0</name>
@@ -60,25 +51,14 @@
     </scm>
 
     <properties>
-        <!-- Jakarta Expression Language 6.0 spec API — already modular upstream
-             (module jakarta.el), no Vidocq fork needed. -->
+        
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            peano-coverage (quality profile), so the tests of one module count for the code they
-            exercise in the others.
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/peano-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
-    <!--
-        Main reactor modules. peano-tck joins the reactor only under the `tck`
-        Maven profile (see <profiles> below) — TCK harmonisation, same pattern
-        as every other Vidocq sub-project: a regular `mvn install` neither
-        builds nor downloads the TCK harness.
-        Activation: ./mvnw -Ptck -pl peano-tck test
-    -->
+    
     <modules>
         <module>peano-api</module>
         <module>peano-core</module>
@@ -88,14 +68,14 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Jakarta Expression Language 6.0 -->
+            
             <dependency>
                 <groupId>jakarta.el</groupId>
                 <artifactId>jakarta.el-api</artifactId>
                 <version>${jakarta.el.version}</version>
             </dependency>
 
-            <!-- Internal Peano modules -->
+            
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
                 <artifactId>peano-api</artifactId>
@@ -120,25 +100,14 @@
                 <module>peano-beans-compat</module>
             </modules>
         </profile>
-        <!--
-            TCK harmonisation: the official Jakarta Expression Language 6.0 TCK
-            runner joins the reactor only when this profile is active.
-
-                ./mvnw -Ptck -pl peano-tck test                  (test support only)
-                ./mvnw -Ptck,tck-official -pl peano-tck test     (pulls the official TCK)
-
-            See PLAN.md, "TCK plan".
-        -->
+        
         <profile>
             <id>tck</id>
             <modules>
                 <module>peano-tck</module>
             </modules>
         </profile>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>
