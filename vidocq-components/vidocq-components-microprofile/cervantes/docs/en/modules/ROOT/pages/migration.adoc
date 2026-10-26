@@ -10,7 +10,7 @@ Cervantes is at `{project-version}`. The MicroProfile JWT 2.2 spec is fully cove
 On the application code side, migration is trivial: Cervantes strictly consumes the standard `org.eclipse.microprofile.jwt.*` and `jakarta.annotation.security.*` annotations. No proprietary import to replace. The gaps lie in transport/JWE configuration and in the dependency footprint.
 
 [#upgrading-from-0-3-0]
-== Upgrading from Cervantes {release-version} [.tag-new]#NEW#
+== Upgrading from Cervantes {release-version}
 
 Cervantes now follows MicroProfile JWT 2.2. Application code does not change, but four things behave differently from `{release-version}`:
 
