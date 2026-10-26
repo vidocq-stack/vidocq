@@ -19,13 +19,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC1</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
     <name>Vidocq Runtime Application Parent</name>
     <description>Parent of a Vidocq application: the runtime's versions and the build of an application</description>
@@ -43,7 +43,7 @@
         <!-- The Vauban the runtime is built on, the same as the reactor root's (ApplicationBomAndParentTest checks
              it). The release sets both. It versions vauban-maven-plugin below, and an application that writes
              ${vauban.version}, as the guides did until 0.4.0, still resolves it (BUG-20261025-02). -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <vauban.version>0.4.0-RC1</vauban.version>
         <!-- Eclipse's Maven integration (m2e) runs the annotation processors only when the pom asks: without them,
              its build writes an application with no bean index, which starts without its beans (BUG-20261025-06).
              VS Code's Java extension turns them on by itself. -->
@@ -55,7 +55,7 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-bom</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -133,7 +133,7 @@
                 <plugin>
                     <groupId>io.vidocq.runtime</groupId>
                     <artifactId>vidocq-runtime-maven-plugin</artifactId>
-                    <version>0.4.0-SNAPSHOT</version>
+                    <version>0.4.0-RC1</version>
                     <extensions>true</extensions>
                     <executions>
                         <execution>

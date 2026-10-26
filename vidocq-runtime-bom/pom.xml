@@ -22,13 +22,13 @@
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC1</version>
         <relativePath/>
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-bom</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
     <name>Vidocq Runtime BOM</name>
     <description>Versions of the Vidocq runtime artifacts an application declares</description>
@@ -46,279 +46,279 @@
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devconsole-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-codegen-commons</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-tooling</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-cli</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- Essentials -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-devconsole-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- Jakarta EE core -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- Jakarta EE web -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-naming-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-vaadin-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- MicroProfile -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- Third-party libraries repackaged as named modules -->
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.module.repackaged</groupId>
                 <artifactId>vidocq-runtime-h2-module-repackaged</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
             <!-- Dev Services and test support -->
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-host</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-postgres</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

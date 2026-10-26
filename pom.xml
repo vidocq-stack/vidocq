@@ -1,20 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
-         >
+<?xml version='1.0' encoding='utf-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
-        <relativePath/>
+        <version>0.4.0-RC1</version>
+        <relativePath />
     </parent>
 
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-build</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Vidocq Runtime Build</name>
@@ -39,13 +36,10 @@
     </developers>
 
     <modules>
-        <!-- What an application imports and inherits (#339). This pom is the build of this repository
-             only: an application never inherits it. -->
+        
         <module>vidocq-runtime-bom</module>
         <module>vidocq-runtime-parent</module>
-        <!-- First of the code: every module of this reactor has it on its processor path (pluginManagement
-             below), and Maven does not order a reactor by processor paths. A jar since #237, it
-             must be built before the first module compiles. -->
+        
         <module>vidocq-runtime-core-codegen</module>
         <module>vidocq-runtime-spi</module>
         <module>vidocq-runtime-devconsole-spi</module>
@@ -62,99 +56,50 @@
     </modules>
 
     <properties>
-        <!--
-            The TCK runners this repository's pull requests are gated on (Vidocq/vauban#85,
-            Vidocq/GestionProjet#9). Read by the shared pr-validate workflow, which runs
-            `mvn -pl <module> -Ptck test` for each. These certify the ASSEMBLED runtime.
-
-            Five of the ten runners: every MicroProfile TCK they need is on Maven Central, so a
-            clean runner can fetch them. About 45 s together, for 1105 conformance tests.
-
-            The five left out, each for a stated reason rather than by omission:
-
-              * vidocq-runtime-tck-annotations — its TCK, jakarta.annotation:jakarta-annotations-tck
-                :3.0.0, is NOT on Maven Central (HTTP 404); it only resolves where someone installed
-                it by hand. It ran in 9 s on a developer machine that already had it, which is
-                exactly how it slipped into the first version of this list and turned the gate red.
-                A runner that needs a non-public artefact cannot gate a pull request until that
-                artefact is cached in the runner image.
-
-              * vidocq-runtime-tck-humboldt-telemetry  (256 s) — the MP Telemetry TCK's own
-                InMemorySpanExporter.assertSpanCount uses Awaitility pollDelay(3, SECONDS), a firm
-                floor paid on every call whatever the implementation does; 99 % of its time is that
-                wait. Nothing here can make it faster.
-              * vidocq-runtime-tck-heisenberg-faulttolerance (183 s) — fault tolerance IS durations:
-                testTimeout, testRetryWithDelay, testBulkheadPressure. Incompressible by nature.
-              * vidocq-runtime-tck-cyrano-restclient   (183 s) — green, simply long.
-              * vidocq-runtime-tck-coreprofile — RED on JDK 25: the TCK's own
-                ee.jakarta.tck.core.common.Utils throws "No access to RETAIN_CLASS_REFERENCE".
-                Deterministic, not environmental. Left out until that is settled upstream — a
-                permanently red gate teaches people to ignore red.
-
-            The three slow ones belong in a nightly or main-branch job: their duration is imposed
-            from outside and will not say anything new about one pull request.
-        -->
-        <!-- Targeted producer tests (Vidocq/ci targeted-producer-tests): a mention of an extension in the
-             tooling catalog keeps the tests of vidocq-runtime-tooling (ExtensionCatalogTest) but does not
-             spread to its dependents: nothing resolves a real extension through the catalog at test time
-             (checked in Vidocq/vidocq#285). A test that starts doing so makes this entry unsafe. -->
+        
+        
         <ci.targeted.mention-local>vidocq-runtime-tooling/src/main/resources/META-INF/vidocq/extension-catalog.properties</ci.targeted.mention-local>
         <ci.tck.modules>vidocq-runtime-integration-tests/vidocq-runtime-tck-ravel-config,vidocq-runtime-integration-tests/vidocq-runtime-tck-grimm-openapi,vidocq-runtime-integration-tests/vidocq-runtime-tck-dirac-metrics,vidocq-runtime-integration-tests/vidocq-runtime-tck-cervantes-jwt,vidocq-runtime-integration-tests/vidocq-runtime-tck-knock-health</ci.tck.modules>
-        <!-- OpenTelemetry versions, defined once: the Humboldt telemetry extension, its integration test and its TCK runner. -->
+        
         <opentelemetry.version>1.66.0</opentelemetry.version>
         <opentelemetry.instrumentation.version>2.31.1</opentelemetry.instrumentation.version>
         <opentelemetry.semconv.version>1.44.0</opentelemetry.semconv.version>
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
-        <peano.version>0.4.0-SNAPSHOT</peano.version>
-        <ibarra.version>0.4.0-SNAPSHOT</ibarra.version>
-        <foy.version>0.4.0-SNAPSHOT</foy.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
-        <mansart.version>0.4.0-SNAPSHOT</mansart.version>
-        <knock.version>0.4.0-SNAPSHOT</knock.version>
-        <dirac.version>0.4.0-SNAPSHOT</dirac.version>
-        <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) — aligned on the 0.4.0-SNAPSHOT global
-             dev version (built locally). heisenberg-cdi-vauban hard-depends only on its own
-             core/api; its Dirac §9 metrics / Humboldt §10 telemetry recorders sit behind optional
-             `requires static` edges, so the FT wrapper stays version-independent of those. -->
-        <heisenberg.version>0.4.0-SNAPSHOT</heisenberg.version>
-        <cyrano.version>0.4.0-SNAPSHOT</cyrano.version>
-        <cervantes.version>0.4.0-SNAPSHOT</cervantes.version>
-        <humboldt.version>0.4.0-SNAPSHOT</humboldt.version>
-        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
-        <grimm.version>0.4.0-SNAPSHOT</grimm.version>
-        <!-- langchain4j-cdi's MCP server, hosted by vidocq-runtime-langchain4j-cdi-mcp-extension (Vidocq/vidocq#94).
-             A SNAPSHOT until langchain4j-cdi releases the MCP 2026-07-28 work: that extension stays out of the
-             release meanwhile (maven.deploy.skip in its pom, excluded-modules in release.yml). -->
+        <vauban.version>0.4.0-RC1</vauban.version>
+        <chappe.version>0.4.0-RC1</chappe.version>
+        <cassini.version>0.4.0-RC1</cassini.version>
+        <peano.version>0.4.0-RC1</peano.version>
+        <ibarra.version>0.4.0-RC1</ibarra.version>
+        <foy.version>0.4.0-RC1</foy.version>
+        <ravel.version>0.4.0-RC1</ravel.version>
+        <mansart.version>0.4.0-RC1</mansart.version>
+        <knock.version>0.4.0-RC1</knock.version>
+        <dirac.version>0.4.0-RC1</dirac.version>
+        
+        <heisenberg.version>0.4.0-RC1</heisenberg.version>
+        <cyrano.version>0.4.0-RC1</cyrano.version>
+        <cervantes.version>0.4.0-RC1</cervantes.version>
+        <humboldt.version>0.4.0-RC1</humboldt.version>
+        <champollion.version>0.4.0-RC1</champollion.version>
+        <grimm.version>0.4.0-RC1</grimm.version>
+        
         <langchain4j-cdi.version>1.4.0-SNAPSHOT</langchain4j-cdi.version>
         <microprofile.config.version>3.1.1</microprofile.config.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <arquillian.version>1.8.0.Final</arquillian.version>
-        <!-- DevServices container providers (build-tooling only — plugin classpath, never runtime) -->
+        
         <testcontainers.version>2.0.5</testcontainers.version>
-        <!-- Schema migration backends (opt-in extension modules) -->
+        
         <flyway.version>13.9.0</flyway.version>
-        <!-- 4.33.0 is the last Apache 2.0 release: Liquibase 5 moved to the Functional Source License (FSL-1.1-ALv2). -->
+        
         <liquibase.version>4.33.0</liquibase.version>
-        <!-- GraalJS, test scope only: the dev console's EditorCoreTest runs the page's editor-core.js as the ES module
-             it is. The community coordinates: org.graalvm.polyglot:js (js-community is its deprecated alias). -->
+        
         <graaljs.version>25.4.4.1.1</graaljs.version>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            vidocq-runtime-coverage (quality profile), so the tests of the vidocq-runtime-it-*
-            modules count for the code they exercise in the other modules. The second path is the
-            per-module default: applications created by `vidocq create` inherit this POM, and
-            they have no vidocq-runtime-coverage module (SonarQube only warns about a missing
-            report and merges the ones it finds).
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vidocq-runtime-coverage/target/site/jacoco-aggregate/jacoco.xml,target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
-        <!-- The examples are analysed (people copy them) but not measured for coverage, and they
-             may print to System.out (rule java:S106). So does the CLI, whose job is to print on the
-             terminal: its output is no log (as chappe-cli in Chappe, QUALITY.md). -->
+        
         <sonar.coverage.exclusions>**/vidocq-runtime-examples/**</sonar.coverage.exclusions>
         <sonar.issue.ignore.multicriteria>examples,cli</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
@@ -165,76 +110,66 @@
 
     <dependencyManagement>
         <dependencies>
-            <!--
-                Internal Vidocq runtime modules — pin their version centrally so child POMs
-                can reference them without restating the version (Maven 4.1 used implicit
-                reactor-resolved versions ; Model 4.0 requires explicit pinning).
-
-                The version is written literally, never ${project.version}: an application inherits
-                this pom as its parent, and Maven interpolates ${project.version} in the child, so an
-                application declaring its own <version> resolved every entry below at that version
-                (BUG-20261006-02). versions:set, which the release runs, rewrites these literals with
-                the reactor version; the pluginManagement entries below follow the same rule.
-            -->
+            
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devconsole-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-codegen-commons</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-tooling</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-chappe-webserver-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-devconsole-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-migration-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-flyway-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.essentials</groupId>
                 <artifactId>vidocq-runtime-liquibase-migration-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>org.liquibase</groupId>
@@ -254,205 +189,204 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-humboldt-telemetry-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-knock-health-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-dirac-metrics-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-ui-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-naming-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-vaadin-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-extension-dev</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-cli</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-arquillian</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-external-rest-lib</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
-            <!-- DevServices (dev-mode container providers — plugin classpath only, never runtime, except
-                 vidocq-runtime-devservices-extension, which runs in the application) -->
+            
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-spi</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-host</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-postgres</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservice-keycloak</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-extension</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-devservices-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-junit</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
 
-            <!-- Jakarta CDI API -->
+            
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
                 <version>${jakarta.cdi.version}</version>
             </dependency>
 
-            <!-- Jakarta Annotations -->
+            
             <dependency>
                 <groupId>jakarta.annotation</groupId>
                 <artifactId>jakarta.annotation-api</artifactId>
@@ -464,7 +398,7 @@
                 <version>${jakarta.servlet.version}</version>
             </dependency>
 
-            <!-- Vauban -->
+            
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-core</artifactId>
@@ -496,7 +430,7 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Chappe HTTP server -->
+            
             <dependency>
                 <groupId>io.vidocq.chappe</groupId>
                 <artifactId>chappe-api</artifactId>
@@ -513,7 +447,7 @@
                 <version>${chappe.version}</version>
             </dependency>
 
-            <!-- Ravel — MicroProfile Config 3.1 implementation -->
+            
             <dependency>
                 <groupId>org.eclipse.microprofile.config</groupId>
                 <artifactId>microprofile-config-api</artifactId>
@@ -535,25 +469,25 @@
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- Peano Expression Language -->
+            
             <dependency>
                 <groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId><version>${peano.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                <artifactId>vidocq-runtime-peano-el-extension</artifactId><version>0.4.0-SNAPSHOT</version>
+                <artifactId>vidocq-runtime-peano-el-extension</artifactId><version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-SNAPSHOT</version>
+                <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-SNAPSHOT</version>
+                <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId><version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
 
-            <!-- Ibarra Jakarta Pages -->
+            
             <dependency>
                 <groupId>io.vidocq.ibarra</groupId><artifactId>ibarra-api</artifactId><version>${ibarra.version}</version>
             </dependency>
@@ -567,7 +501,7 @@
                 <groupId>io.vidocq.ibarra</groupId><artifactId>ibarra-compiler</artifactId><version>${ibarra.version}</version>
             </dependency>
 
-            <!-- Cassini -->
+            
             <dependency>
                 <groupId>io.vidocq.cassini</groupId>
                 <artifactId>cassini-api</artifactId>
@@ -589,7 +523,7 @@
                 <version>${cassini.version}</version>
             </dependency>
 
-            <!-- Foy: Jakarta Servlet 6.1 on Chappe (Servlet extension) -->
+            
             <dependency>
                 <groupId>io.vidocq.foy</groupId>
                 <artifactId>foy-api</artifactId>
@@ -621,7 +555,7 @@
                 <version>${vauban.version}</version>
             </dependency>
 
-            <!-- Cyrano — MicroProfile Rest Client 4.0 implementation -->
+            
             <dependency>
                 <groupId>io.vidocq.cyrano</groupId>
                 <artifactId>cyrano-api</artifactId>
@@ -638,7 +572,7 @@
                 <version>${cyrano.version}</version>
             </dependency>
 
-            <!-- Cervantes — MicroProfile JWT 2.2 implementation -->
+            
             <dependency>
                 <groupId>io.vidocq.cervantes</groupId>
                 <artifactId>cervantes-mp-jwt-api</artifactId>
@@ -665,7 +599,7 @@
                 <version>${cervantes.version}</version>
             </dependency>
 
-            <!-- Humboldt — MicroProfile Telemetry 2.2 (tracing, metrics, logs) -->
+            
             <dependency>
                 <groupId>io.vidocq.humboldt</groupId>
                 <artifactId>humboldt-runtime</artifactId>
@@ -687,7 +621,7 @@
                 <version>${humboldt.version}</version>
             </dependency>
 
-            <!-- Heisenberg — MicroProfile Fault Tolerance 4.1 implementation -->
+            
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-mp-ft-api</artifactId>
@@ -708,69 +642,61 @@
                 <artifactId>heisenberg-cdi-vauban</artifactId>
                 <version>${heisenberg.version}</version>
             </dependency>
-            <!-- Codegen bundles — code-free jars referenced from
-                 <annotationProcessorPaths>. core-codegen is wired by default
-                 through pluginManagement (Vauban indexer is universal). Each
-                 *-extension-codegen is opt-in: declare it whenever you depend
-                 on the matching *-extension runtime. Each bundle is listed
-                 twice: as a jar, the form to declare (IntelliJ's Maven import
-                 ignores a pom-type processor path, Vidocq/vidocq#237), and as
-                 a pom, so that a path still declared with <type>pom</type> and
-                 no version keeps its version. -->
+            
             <dependency>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-core-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
-                <version>0.4.0-SNAPSHOT</version>
+                <version>0.4.0-RC1</version>
                 <type>pom</type>
             </dependency>
 
-            <!-- GraalJS for tests that run the dev console's JavaScript: never on a runtime module path. -->
+            
             <dependency>
                 <groupId>org.graalvm.polyglot</groupId>
                 <artifactId>polyglot</artifactId>
@@ -783,8 +709,7 @@
                 <type>pom</type>
             </dependency>
 
-            <!-- Testcontainers BOM — consumed only by DevService providers (vidocq-runtime-devservice-*),
-                 which run in the Maven plugin JVM. Never reaches the runtime module-path / AOT image. -->
+            
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
@@ -798,15 +723,7 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!--
-                  One batch at the end of the reactor instead of one upload per module: nothing reaches
-                  central-snapshots unless every module built (a failure used to leave the modules built
-                  before it published), and the resolver uploads the batch in parallel (about 10 s per
-                  module one by one, 63 modules). vidocq-parent pins deployAtEnd to false, so the BOM and
-                  this reactor's parent set it too; all three must agree, or those poms deploy at once.
-                  Checked with maven-deploy-plugin 3.1.4 on Maven 3.9.16: same files as one by one, and
-                  none at all when a late module fails, even with a skipped last module.
-                -->
+                
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
@@ -814,17 +731,7 @@
                         <deployAtEnd>true</deployAtEnd>
                     </configuration>
                 </plugin>
-                <!--
-                  Every Vidocq runtime module that processes user beans needs the
-                  Vauban indexer APT. Wire it once here through vidocq-runtime-core-codegen
-                  so downstream poms inherit it for free.
-
-                  Modules that need extension-specific processors (Cassini, Mansart…)
-                  declare their own <annotationProcessorPaths> WITH
-                  combine.children="append" to keep this entry. See
-                  vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml
-                  for the canonical pattern.
-                -->
+                
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -833,35 +740,21 @@
                             <path>
                                 <groupId>io.vidocq.runtime</groupId>
                                 <artifactId>vidocq-runtime-core-codegen</artifactId>
-                                <!-- No version: the compiler plugin (3.12+) takes it from the
-                                     dependencyManagement entry above, which versions:set keeps
-                                     current; it does not rewrite annotationProcessorPaths.
-                                     No <type>pom</type>: IntelliJ's Maven import ignores such a
-                                     path, so its own build would run no processor (#237). -->
+                                
                             </path>
                         </annotationProcessorPaths>
                         <compilerArgs>
-                            <!-- The application layer turns META-INF/services into provides when it defines the
-                                 module, so the processor's advice to declare _VaubanComponents with provides does
-                                 not apply (BUG-20261024-10, VAU-APT-004). -->
+                            
                             <arg>-Avauban.providesHint=false</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>
 
-                <!--
-                  Vidocq Maven plugin: checkpom configured here in pluginManagement
-                  so that intermediate parents (core-extensions, examples,
-                  integration-tests) just have to <plugin>{ref}</plugin> to activate
-                  it without restating the execution. The plugin can't be declared
-                  in <build><plugins> at the root level because vidocq-runtime-core
-                  and vidocq-runtime-spi are upstream of the plugin itself —
-                  applying it there creates a reactor cycle.
-                -->
+                
                 <plugin>
                     <groupId>io.vidocq.runtime</groupId>
                     <artifactId>vidocq-runtime-maven-plugin</artifactId>
-                    <version>0.4.0-SNAPSHOT</version>
+                    <version>0.4.0-RC1</version>
                     <executions>
                         <execution>
                             <id>vidocq-checkpom</id>
@@ -871,9 +764,7 @@
                             </goals>
                         </execution>
                         <execution>
-                            <!-- Fail fast if module-info.java drops a JPMS directive an extension needs
-                                 at runtime (e.g. opens db.migration). Inherited by every module that
-                                 declares the plugin; a module with no extension requirements is a no-op. -->
+                            
                             <id>vidocq-check-module-info</id>
                             <phase>process-classes</phase>
                             <goals>
@@ -886,18 +777,7 @@
         </pluginManagement>
 
         <plugins>
-            <!--
-              Fresh build time in the build identity file. vidocq-parent's
-              git-commit-id-maven-plugin (execution vidocq-build-info, at initialize)
-              writes META-INF/vidocq/build-info/<artifactId>.properties, but leaves an
-              existing file alone when only git.build.time would change: without
-              `mvn clean`, every build of the same commit and dirty state kept the time
-              of the first one, and the startup banner said "built <earlier time>" for
-              classes compiled later. Deleting the file at validate makes each build
-              write its own time. Inherited by this reactor and by the applications
-              created by `vidocq create`. Releases are unaffected: their file has no
-              git.build.time and is rewritten byte for byte.
-            -->
+            
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-clean-plugin</artifactId>
@@ -926,10 +806,7 @@
     </build>
 
     <profiles>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>
