@@ -73,7 +73,7 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
 
 [#bean-archives]
-=== Bean archives [.tag-new]#NEW#
+=== Bean archives
 
 `mansart-data-cdi` and `mansart-transactions-cdi` are explicit bean archives. Each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore treats them as bean archives too. The default `RepositoryRuntime` producer (`MansartRuntimeProducer`) does not depend on discovery mode: the `mansart-data-cdi` extension adds it at `@Discovery`.
 
@@ -82,7 +82,7 @@ All modules are strict Java Modules — minimal `exports`, no unjustified `opens
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
 [#enum-storage]
-[.tag-new]#NEW# An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
+An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
 
 The storage applies wherever Mansart knows which attribute a value belongs to: inserts and updates, row mapping, projections, `WHERE` bindings, bulk updates by attribute, and the table DDL Mansart generates (an integer column for `ORDINAL`). Two paths do not know it yet and still bind a value by its Java type: an aggregate (`SELECT MAX(…)`, …) over an `ORDINAL` enum, and a JDQL `UPDATE … SET` that Mansart runs at run time rather than compiling it (a `SET` with an arithmetic expression, or a statement passed to `JdqlExecutor.run`). Before 0.4, `@Enumerated` was ignored and every enum was stored by its name; see xref:migration.adoc#upgrading-from-0-3-0[Upgrading from 0.3.0] for existing `ORDINAL` columns.
 
@@ -165,7 +165,7 @@ The storage applies wherever Mansart knows which attribute a value belongs to: i
 Discovered via `ServiceLoader` (`provides DialectFactory with H2DialectFactory`).
 
 [#tooling-api]
-== The core API for tools [.tag-new]#NEW#
+== The core API for tools
 
 `io.vidocq.mansart.data.core` (artefact `mansart-data-core`) exposes what a tool needs to describe an application's entities and to run a JDQL statement typed as text, without re-reading annotations or reflecting on generated classes. The Vidocq dev console uses it for its Mansart Data catalogue and its JDQL prompt. An application does not need it: repositories cover that.
 

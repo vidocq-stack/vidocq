@@ -41,7 +41,7 @@ long deleteByName(String name);
 List<Book> find(String title, Author author);
 ----
 
-Each parameter is an equality match on the attribute that `@By` names, or else on the attribute of the parameter's own name (compile with `-parameters`). [.tag-new]#NEW# The annotation processor compiles `@Find` methods: `@OrderBy` gives the order, a trailing `PageRequest` pages the result, and a method without parameters returns every entity. A `Sort`, `Order` or `Limit` parameter is not supported yet: the build warns, naming the method. Range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles too.
+Each parameter is an equality match on the attribute that `@By` names, or else on the attribute of the parameter's own name (compile with `-parameters`).The annotation processor compiles `@Find` methods: `@OrderBy` gives the order, a trailing `PageRequest` pages the result, and a method without parameters returns every entity. A `Sort`, `Order` or `Limit` parameter is not supported yet: the build warns, naming the method. Range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles too.
 
 [source,java]
 ----
@@ -64,7 +64,7 @@ List<Author> search(String pattern, Long minId);
 long rename(String oldName, String newName);
 ----
 
-A statement is one query (`FROM …` or `SELECT … FROM …`), one `UPDATE` or one `DELETE`. [.tag-new]#NEW# `FROM` can be left out: `@Query("WHERE name LIKE :pattern")` targets the repository's entity. `@Param("name")` names a parameter for `:name` whatever the Java parameter is called, so the repository needs no `-parameters`. [.tag-new]#NEW# When Mansart parses the statement at run time — a repository generated at run time, a statement passed to xref:reference.adoc#tooling-api[`JdqlExecutor.run`] — a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause, such as `SELECT this DELETE FROM Product`, is refused with a `MansartDataException`; it used to run as the `DELETE`.
+A statement is one query (`FROM …` or `SELECT … FROM …`), one `UPDATE` or one `DELETE`.`FROM` can be left out: `@Query("WHERE name LIKE :pattern")` targets the repository's entity. `@Param("name")` names a parameter for `:name` whatever the Java parameter is called, so the repository needs no `-parameters`.When Mansart parses the statement at run time — a repository generated at run time, a statement passed to xref:reference.adoc#tooling-api[`JdqlExecutor.run`] — a statement that puts an `UPDATE` or a `DELETE` after a `SELECT` clause, such as `SELECT this DELETE FROM Product`, is refused with a `MansartDataException`; it used to run as the `DELETE`.
 
 === Pagination — offset and keyset
 

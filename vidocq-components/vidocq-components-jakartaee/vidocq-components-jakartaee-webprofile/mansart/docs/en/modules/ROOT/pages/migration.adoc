@@ -9,7 +9,7 @@ NOTE: Persistence and Validation now live in the separate xref:noether::index.ad
 Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[Jakarta Persistence 3.2]), not proprietary extensions. Migrating from Spring Data is trivial — the Jakarta Data spec explicitly took Spring Data conventions on board. Hibernate / EclipseLink takes more effort if the application uses out-of-spec features (custom dialects, listeners, events).
 
 [#upgrading-from-0-3-0]
-== Upgrading from 0.3.0 [.tag-new]#NEW#
+== Upgrading from 0.3.0
 
 === `@Enumerated(EnumType.ORDINAL)` now stores the index
 
