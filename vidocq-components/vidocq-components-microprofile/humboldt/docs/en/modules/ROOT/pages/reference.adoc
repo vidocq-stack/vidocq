@@ -112,7 +112,7 @@ All versions are `{project-version}`.
 | `@WithSpan` annotation (re-exported), `WithSpanInterceptor`, `HumboldtBuildCompatibleExtension`, Tracer/Meter/Logger producers.
 
 | `io.vidocq.humboldt.rest`
-| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`). Reads the MicroProfile Rest Client API through `requires static io.vidocq.cyrano.mp.rest.client.api`, the module Vidocq ships (`io.vidocq.cyrano:cyrano-mp-rest-client-api`), for `HumboldtMpRestClientListener`; it no longer names the automatic module `microprofile.rest.client.api` [.tag-new]#NEW#.
+| `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` (JAX-RS `@Provider`). Reads the MicroProfile Rest Client API through `requires static io.vidocq.cyrano.mp.rest.client.api`, the module Vidocq ships (`io.vidocq.cyrano:cyrano-mp-rest-client-api`), for `HumboldtMpRestClientListener`; it no longer names the automatic module `microprofile.rest.client.api`.
 
 | `io.vidocq.humboldt.runtime`
 | `HumboldtAutoConfigure`, `AutoConfiguredHumboldt`, `EnvConfig`.
@@ -125,7 +125,7 @@ All versions are `{project-version}`.
 |===
 
 [#otel-jars-on-the-module-path]
-Upstream, the OpenTelemetry jars are automatic modules, which export every package. The rebundled modules differ in three ways, so that the OpenTelemetry SDK and OTLP exporter jars can run next to them on the module path [.tag-new]#NEW#:
+Upstream, the OpenTelemetry jars are automatic modules, which export every package. The rebundled modules differ in three ways, so that the OpenTelemetry SDK and OTLP exporter jars can run next to them on the module path:
 
 * Packages that are not API but that the OpenTelemetry jars use across jars are exported, each only to the OpenTelemetry 1.66 stable modules whose classes reference it (found with `jdeps`; the lists are in the two `src/main/moditect/module-info.java` descriptors): `io.opentelemetry.api.internal`, `io.opentelemetry.api.impl` and `io.opentelemetry.api.trace.propagation.internal` from `io.opentelemetry.api`, `io.opentelemetry.context.internal.shaded` from `io.opentelemetry.context`.
 * A qualified export reaches only target modules of the same module layer or of a parent layer. When `humboldt-otel-interop` discovers an OpenTelemetry provider defined in another layer (a child layer of Humboldt's modules, for instance), the two modules add the exports their descriptors name to the modules of that layer, at run time. An OpenTelemetry component that the application builds itself, outside that discovery, does not get them. Limitation: when `humboldt-otel-interop` itself sits in a child layer of `io.opentelemetry.api` / `io.opentelemetry.context`, it cannot call the layer helper (the package is exported to the interop module by name, which reaches only the same layer or a parent layer). The provider is still kept, but its layer's exports are not extended and the exporter can later fail with an `IllegalAccessError`; keep interop in the same layer as the two API modules (as the Vidocq runtime does), or add the `--add-exports` by hand.
@@ -136,12 +136,12 @@ A module-layer test checks the result with `opentelemetry-exporter-otlp` 1.66 an
 `io.vidocq.humboldt.internal.*` packages are never exported. Any direct access fails with a clear Java Modules crash.
 
 [#bean-archives]
-=== Bean archives [.tag-new]#NEW#
+=== Bean archives
 
 `humboldt-cdi` and `humboldt-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@WithSpan` interceptor, the telemetry producers (`Tracer`, `Meter`, `Span`, ...), the server request and response filters and the span finalizer. Without it, `@WithSpan` did nothing there, and no error was reported (BUG-20261009-01).
 
 [#other-containers]
-=== Other CDI containers [.tag-new]#NEW#
+=== Other CDI containers
 
 Humboldt does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `humboldt-it-other-containers`, prove it on every build (humboldt#23):
 
@@ -330,7 +330,7 @@ The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `
 For client-side attributes (HTTP, DB, messaging…), Humboldt does not generate them automatically: set them in application code (either as plain `AttributeKey`s, or with the constants from `opentelemetry-semconv` — an artifact Humboldt itself does not ship). Full reference: https://opentelemetry.io/docs/specs/semconv/[OpenTelemetry Semantic Conventions].
 
 [#exception-attributes]
-== Exception attributes [.tag-new]#NEW#
+== Exception attributes
 
 `Span.recordException(Throwable)` and the log API's `LogRecordBuilder.setException(Throwable)` derive the same attributes, as the OpenTelemetry SDK 1.66 does:
 
@@ -379,7 +379,7 @@ No B3 by default. With the optional `humboldt-otel-interop` bridge on the module
 |===
 
 [#otlp-json-encoding]
-=== OTLP/JSON encoding [.tag-new]#NEW#
+=== OTLP/JSON encoding
 
 The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.66 JSON marshalers do:
 
@@ -393,7 +393,7 @@ The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.
 == Compatibility
 
 * Java 25 LTS minimum (compile and runtime).
-* OpenTelemetry API and context 1.66.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0 [.tag-new]#NEW#.
+* OpenTelemetry API and context 1.66.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0.
 * Maven 3.9.16 or later (Model 4.0.0 everywhere; the TCK runner is in-reactor behind the `tck` profile).
 * Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). Also proven on Weld SE 6.0 and on Open Liberty (CDI 4.0, Jakarta REST 3.1): see <<other-containers>>.
 

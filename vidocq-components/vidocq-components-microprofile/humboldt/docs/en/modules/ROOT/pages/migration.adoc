@@ -121,7 +121,7 @@ Recommendation: align on the standard OTel keys (`OTEL_*`) for portability. Humb
 * **SDK disabled by default** — per MP Telemetry 2.2, `OTEL_SDK_DISABLED` defaults to `true`: coming from the OTel Java SDK (opposite default), remember to export `OTEL_SDK_DISABLED=false` or nothing is emitted. To disable a single signal, use `OTEL_TRACES_EXPORTER=none` / `_METRICS_EXPORTER=none` / `_LOGS_EXPORTER=none`.
 
 [#upgrading-from-0-3-0]
-== Upgrading from Humboldt 0.3.0 [.tag-new]#NEW#
+== Upgrading from Humboldt 0.3.0
 
 Changes an application upgrading from Humboldt 0.3.0 may observe:
 
