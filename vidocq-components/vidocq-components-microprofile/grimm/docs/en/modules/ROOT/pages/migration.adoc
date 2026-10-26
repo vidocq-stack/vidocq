@@ -10,7 +10,7 @@ Grimm is at `{project-version}`. The MicroProfile OpenAPI 4.2 spec is fully cove
 On the application code side, migration is trivial: Grimm strictly consumes the standard `org.eclipse.microprofile.openapi.annotations.*` annotations. No proprietary import to replace. The gaps lie in configuration and packaging.
 
 [#upgrading-from-0-3-0]
-== Upgrading from 0.3.0 [.tag-new]#NEW#
+== Upgrading from 0.3.0
 
 What an application built against Grimm {release-version} may need to change, or will see change, on this development line. The full list is in xref:whats-new.adoc[What's new].
 
@@ -90,7 +90,7 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 * **No `setAccessible(true)`** — if application code relied on non-public classes accessed by a permissive scanner, Grimm will not reach them. Open packages in the application's `module-info.java` or make the types `public`.
 * **Strict YAML** — the hand-written YAML serializer emits strict 1.2. Some lax YAML clients (legacy browsers) may want different indentation. When in doubt, prefer JSON.
 * **`mp.openapi.servers`** — the override _replaces_ the document's `servers` list entirely (spec behaviour). For a merge, go through an `OASFilter`.
-* **`summary` next to a `$ref` is dropped** [.tag-new]#NEW# — a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
+* **`summary` next to a `$ref` is dropped**— a static file that writes `summary` beside a `$ref` on a parameter, request body, response, header, link, security scheme or callback loses the `summary`, because the MicroProfile OpenAPI model has no place for it (see xref:concepts.adoc[Concepts] and BUG-20261004-10 in BUG.md).
 
 == Porting checklist
 
