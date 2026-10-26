@@ -77,7 +77,7 @@ public class CatalogClient {
 The `FallbackHandler` is instantiated by CDI — it can therefore inject its own dependencies (`@Inject CacheManager cache;`).
 
 [#fallback-method-module-path]
-== Fallback methods on the module path [.tag-new]#NEW#
+== Fallback methods on the module path
 
 A `fallbackMethod` is usually `private`, like `catalogFromCache` above. On a strict module path, Heisenberg reaches it **without any `opens`** in your `module-info.java` and without any `--add-reads` on the command line, whatever its access modifier (`private`, package-private, `protected` or `public`):
 

@@ -148,7 +148,7 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
 Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
 
 [#fallback-lookup]
-== How a fallback method is reached [.tag-new]#NEW#
+== How a fallback method is reached
 
 `FallbackResolver` turns a `fallbackMethod` into a `MethodHandle` with `MethodHandles.privateLookupIn(owner, lookup)`. On a strict module path, a private lookup taken from `io.vidocq.heisenberg.core` needs two things the application does not give: a read edge from the core to the application module, and the bean's package opened to the core. The official TCK runs on the class path, where both always hold, so it never saw that a bean with a `fallbackMethod` in a module that opens nothing failed deployment with `Invalid fallbackMethod` (BUG-003, heisenberg#22).
 
@@ -160,7 +160,7 @@ Startup validation is crucial: any malformed annotation (`@Asynchronous void m()
 Either way, no `setAccessible(true)` and no `--add-reads` on the command line. `heisenberg-cdi-vauban-module-it` (`FallbackMethodModulePathTest`) covers private and package-private fallback methods on the module path with an application that opens nothing; the `heisenberg-cdi-vauban` unit tests, which call the interceptor without a container, keep the `opens`-only path covered.
 
 [#observability]
-== Optional observability [.tag-new]#NEW#
+== Optional observability
 
 The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel by two recorders:
 

@@ -55,20 +55,20 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 | Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
 
 | `io.vidocq.heisenberg.cdi.vauban`
-| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`. [.tag-new]#NEW# Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime. [.tag-new]#NEW# Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
+| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
 |===
 
 `io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
 
 [#class-path]
-=== On a class path [.tag-new]#NEW#
+=== On a class path
 
 `heisenberg-cdi-vauban` is an explicit bean archive. It ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`, so the interceptors, the state registries and the metrics recorders are discovered even by a container that does not scan implicit archives, such as Weld SE by default. Without it, `@Retry`, `@Timeout` and the other annotations were silently ignored there (BUG-004).
 
 On a class path, `provides` clauses are ignored. `HeisenbergExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
 
 [#other-containers]
-== Other CDI containers [.tag-new]#NEW#
+== Other CDI containers
 
 Heisenberg does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `heisenberg-it-other-containers`, prove it on every build (heisenberg#25):
 
@@ -229,13 +229,13 @@ Beyond that, `TimeoutException` is raised. For `@Asynchronous`, the underlying v
 
 Note: `value` and `fallbackMethod` are mutually exclusive.
 
-[.tag-new]#NEW# On a strict module path, a `fallbackMethod` of any access modifier is reached with no `opens` when the bean's package has a generated `_VaubanComponents`; otherwise `opens <pkg> to io.vidocq.heisenberg.core` is enough. See xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path].
+On a strict module path, a `fallbackMethod` of any access modifier is reached with no `opens` when the bean's package has a generated `_VaubanComponents`; otherwise `opens <pkg> to io.vidocq.heisenberg.core` is enough. See xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path].
 
 === `@Asynchronous`
 
 No parameter. The method must return `CompletionStage<T>` or `Future<T>`.
 
-[.tag-new]#NEW# The method runs on its own virtual thread with the CDI request context active, as MicroProfile Fault Tolerance requires: a `@RequestScoped` bean used there lives for that call. Heisenberg activates it through the standard `RequestContextController` when it is not already active, and deactivates it after, on any CDI container.
+The method runs on its own virtual thread with the CDI request context active, as MicroProfile Fault Tolerance requires: a `@RequestScoped` bean used there lives for that call. Heisenberg activates it through the standard `RequestContextController` when it is not already active, and deactivates it after, on any CDI container.
 
 == MicroProfile Config keys
 

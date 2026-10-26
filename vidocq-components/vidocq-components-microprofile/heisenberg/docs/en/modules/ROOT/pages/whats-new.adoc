@@ -1,30 +1,7 @@
 = What's new
-:description: Everything that changed in Heisenberg since the {release-version} release — fallback methods reached on a strict module path with no opens, Fault Tolerance that starts without Metrics or Telemetry, and Heisenberg proven on Weld and Open Liberty.
+:description: Everything that changed in this component since the {release-version} release.
 
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-== Asynchronous methods
-
-* **The request context is active in an `@Asynchronous` method** — on its own virtual thread, the method, its fallback and the other policies run with the CDI request context active, as MicroProfile Fault Tolerance requires; a `@RequestScoped` bean used there failed with `ContextNotActiveException` once Vauban kept one request context per thread (BUG-008, Vidocq/vauban#147). xref:reference.adoc#_asynchronous[`@Asynchronous`].
-* **A retried execution joins the back of the bulkhead queue** — in asynchronous mode, a permit just freed went to whichever caller asked first, not to the task waiting in the queue, so an `@Retry` with no delay overtook the queued tasks and a new call could jump the queue too. The official TCK test `BulkheadAsynchRetryTest.testRetriesJoinBackOfQueue` caught it at random on loaded machines (BUG-010). Queued tasks now run in arrival order. xref:concepts.adoc#bulkhead-semantics[`@Bulkhead` semantics].
-
-== Fallback methods on the module path
-
-`@Fallback(fallbackMethod = ...)` on a strict module path, with no `opens` (heisenberg#22):
-
-* **No `opens`, no `--add-reads`** — a bean in a named module that opens nothing used to fail deployment with `FaultToleranceDefinitionException: Invalid fallbackMethod`, whatever the method's access modifier; the official TCK runs on the class path and never saw it. Under Vauban, the fallback method is now resolved through a lookup taken in the bean's own module, supplied by the `_VaubanComponents` generated for its package — by the annotation processor for your application, by the Vauban Maven plugin for a scanned dependency. Nothing to add to your `module-info.java` or to your pom. xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path], xref:reference.adoc#fallback-parameters[`@Fallback` parameters].
-* **Without a Vauban provider, `opens` alone is enough** — when the bean's package has no generated `_VaubanComponents` (for instance an archive compiled by an older processor), `opens <pkg> to io.vidocq.heisenberg.core` is the only thing to declare: Heisenberg adds the read edge to your module itself. If you worked around the bug with `--add-reads io.vidocq.heisenberg.core=<your module>`, you can drop that flag. xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path].
-* **How it works** — `FallbackResolver` stays container-agnostic and asks a hook for a lookup on the bean class; `heisenberg-cdi-vauban` answers it with Vauban's `ModuleLookups`. xref:internals.adoc#fallback-lookup[How a fallback method is reached].
-* **`io.vidocq.heisenberg.cdi.vauban` now declares `requires static io.vidocq.vauban.core`** — `vauban-core` is a `provided` dependency of `heisenberg-cdi-vauban`, brought at runtime by the container; it needs a Vauban `{project-version}` that ships `ModuleLookups`. xref:reference.adoc#java-modules[Java modules].
-
-== Outside Vauban
-
-* **`heisenberg-cdi-vauban` is an explicit bean archive** — the jar now ships `META-INF/beans.xml` (`bean-discovery-mode="annotated"`, heisenberg#25, BUG-004). Under a container that does not scan implicit archives, such as Weld SE by default, `{release-version}` was not discovered: its interceptors never ran and the Fault Tolerance annotations were silently ignored. Nothing changes under Vauban. xref:reference.adoc#class-path[On a class path].
-* **Proven on Weld and Open Liberty** — two new test modules run the Heisenberg jars, unchanged, without Vauban: `heisenberg-it-weld` on Weld SE 6.0 (class path), `heisenberg-it-openliberty` as a WAR on Open Liberty 26.0.0.10 (MicroProfile 7, CDI 4.0) with Liberty's own `mpFaultTolerance` off. Neither is published (heisenberg#25). xref:reference.adoc#other-containers[Other CDI containers].
-* **`vauban-api` is now a runtime dependency** of `heisenberg-cdi-vauban` — it was `provided`, so outside Vauban the state registries and the metrics recorders, which carry a constructor taking `io.vidocq.vauban.api.ProxyLink`, could not be loaded, and the deployment failed (BUG-006). The module descriptor now `requires io.vidocq.vauban.api`. Nothing changes on the Vidocq runtime, which already has it. xref:reference.adoc#other-containers[Other CDI containers].
-* **Metric names and configuration keys use the bean class under every container** — they were keyed by Weld's generated subclass (`Foo$Proxy$_$$_WeldSubclass`), so a `<class>/<method>/<annotation>/<parameter>` override was ignored and metrics carried the wrong `method` tag (BUG-007). xref:reference.adoc#other-containers[Other CDI containers].
-
-== Fault Tolerance without Metrics or Telemetry
-
-* **An application with Fault Tolerance alone starts** — with neither MicroProfile Metrics nor OpenTelemetry present, `{release-version}` stopped the container start with `NoClassDefFoundError: org/eclipse/microprofile/metrics/MetricRegistry` (then `io/opentelemetry/api/common/AttributeKey` once Metrics was added), because both metrics recorder beans named those types in their fields (BUG-005). The recorder beans now refer to no observability type and stay inactive when their API is absent; with both APIs present, the published metrics are unchanged. xref:internals.adoc#observability[Optional observability].
+_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
