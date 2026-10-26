@@ -1,30 +1,24 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>io.vidocq</groupId>
         <artifactId>vidocq-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC1</version>
         <relativePath />
     </parent>
 
     <groupId>io.vidocq.dirac</groupId>
     <artifactId>dirac-parent</artifactId>
-    <version>0.4.0-SNAPSHOT</version>
+    <version>0.4.0-RC1</version>
     <packaging>pom</packaging>
 
     <name>Dirac</name>
     <description>MicroProfile Metrics 5.1.1 implementation — zero third-party libraries, virtual threads, strict Java Modules, CDI via Vauban, REST endpoint via Cassini</description>
     <url>https://codefloe.com/Vidocq/dirac</url>
 
-    <!--
-        Disjunctive triple license: a recipient may use this software under
-        ANY ONE of the three licences below, at their option. EPL-2.0 is the
-        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
-        is offered as a Secondary License.
-        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
-    -->
+    
     <licenses>
         <license>
             <name>EPL-2.0</name>
@@ -50,50 +44,32 @@
     </scm>
 
     <properties>
-        <!-- MicroProfile Metrics 5.1.1 API -->
+        
         <microprofile.metrics.version>5.1.1</microprofile.metrics.version>
 
-        <!-- Jakarta CDI 4.1 (Jakarta EE 11) -->
+        
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <jakarta.annotation.version>3.0.0</jakarta.annotation.version>
 
-        <!-- Jakarta Interceptors 2.2 (Jakarta EE 11) -->
+        
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
 
-        <!-- Jakarta REST 4.0 (for dirac-rest) -->
+        
         <jakarta.rs.version>4.0.0</jakarta.rs.version>
 
-        <!-- Vidocq upstream implementations -->
-        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
-        <ravel.version>0.4.0-SNAPSHOT</ravel.version>
-        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        
+        <vauban.version>0.4.0-RC1</vauban.version>
+        <ravel.version>0.4.0-RC1</ravel.version>
+        <cassini.version>0.4.0-RC1</cassini.version>
 
-        <!-- JMH for dirac-bench -->
+        
         <jmh.version>1.37</jmh.version>
 
-        <!--
-            The TCK this repository's pull requests are gated on (Vidocq/GestionProjet#9). Read by
-            the shared pr-validate workflow, which skips the step when this property is absent.
-
-            The certification profile is named explicitly because a plain `-Ptck` would not run it:
-            the root `tck` profile only adds dirac-tck to the reactor, and inside dirac-tck the
-            `smoke` profile is activeByDefault. `-Ptck` alone would therefore pass on a subset while
-            reporting success — the vacuous gate this campaign exists to remove.
-
-            Measured on a clean local repository (empty ~/.m2, the state of a CI runner): the
-            official MicroProfile Metrics 5.1 TCK runs 127 tests in 10 s, all green, every artefact
-            resolved from Maven Central.
-        -->
+        
         <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl dirac-tck test</ci.tck.command>
 
-        <!--
-            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
-            dirac-coverage (quality profile), so the tests of dirac-it-weld and
-            dirac-cdi-vauban-module-it count for the code they exercise in the other modules.
-            dirac-examples stays analysed, out of the coverage figures, and may print to
-            System.out (rule java:S106).
-        -->
+        
         <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/dirac-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.coverage.exclusions>**/dirac-examples/**</sonar.coverage.exclusions>
         <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
@@ -101,16 +77,7 @@
         <sonar.issue.ignore.multicriteria.examples.resourceKey>**/dirac-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
     </properties>
 
-    <!--
-        dirac-tck joins the reactor only under the `tck` profile (see <profiles>
-        below), mirroring the vidocq-runtime-tck-* pattern: a plain `mvn install`
-        neither downloads nor runs the TCK, and the release reactor never sees it.
-        The historical out-of-reactor constraint (ShrinkWrap Maven Resolver 3.3
-        vs Model 4.1.0 POMs) disappeared with the Maven 3.9.16 / Model 4.0.0
-        migration; the MP Metrics api-tck builds its deployments with
-        addClass/addPackage and does not use the ShrinkWrap Maven resolver, so it
-        runs safely in-reactor (same verification as vidocq-runtime-tck-dirac-metrics).
-    -->
+    
     <modules>
         <module>dirac-mp-metrics-api</module>
         <module>dirac-api</module>
@@ -126,14 +93,14 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- MicroProfile Metrics 5.1.1 API -->
+            
             <dependency>
                 <groupId>org.eclipse.microprofile.metrics</groupId>
                 <artifactId>microprofile-metrics-api</artifactId>
                 <version>${microprofile.metrics.version}</version>
             </dependency>
 
-            <!-- Jakarta CDI -->
+            
             <dependency>
                 <groupId>jakarta.enterprise</groupId>
                 <artifactId>jakarta.enterprise.cdi-api</artifactId>
@@ -150,21 +117,21 @@
                 <version>${jakarta.annotation.version}</version>
             </dependency>
 
-            <!-- Jakarta Interceptors -->
+            
             <dependency>
                 <groupId>jakarta.interceptor</groupId>
                 <artifactId>jakarta.interceptor-api</artifactId>
                 <version>${jakarta.interceptor.version}</version>
             </dependency>
 
-            <!-- Jakarta REST 4.0 (dirac-rest only) -->
+            
             <dependency>
                 <groupId>jakarta.ws.rs</groupId>
                 <artifactId>jakarta.ws.rs-api</artifactId>
                 <version>${jakarta.rs.version}</version>
             </dependency>
 
-            <!-- Vidocq implementations (used in test scope or runtime) -->
+            
             <dependency>
                 <groupId>io.vidocq.vauban</groupId>
                 <artifactId>vauban-api</artifactId>
@@ -186,7 +153,7 @@
                 <version>${ravel.version}</version>
             </dependency>
 
-            <!-- JMH -->
+            
             <dependency>
                 <groupId>org.openjdk.jmh</groupId>
                 <artifactId>jmh-core</artifactId>
@@ -198,7 +165,7 @@
                 <version>${jmh.version}</version>
             </dependency>
 
-            <!-- Internal Dirac modules -->
+            
             <dependency>
                 <groupId>io.vidocq.dirac</groupId>
                 <artifactId>dirac-mp-metrics-api</artifactId>
@@ -224,17 +191,7 @@
 
 
     <profiles>
-        <!--
-            TCK harmonisation (workspace-wide effort, dirac = pilot brick): the
-            official MicroProfile Metrics 5.1.1 TCK runner joins the reactor only
-            when this profile is active, exactly like the in-reactor
-            vidocq-runtime-tck-* runners of the vidocq runtime.
-
-                ./mvnw -Ptck -pl dirac-tck test                     # smoke
-                ./mvnw -Ptck,tck-official -pl dirac-tck test        # full suite
-
-            run-official-tck-mp-metrics-5.1.sh remains the friendly wrapper.
-        -->
+        
         <profile>
             <id>tck</id>
             <modules>
@@ -270,10 +227,7 @@
                 </plugins>
             </build>
         </profile>
-        <!--
-            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
-            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
-        -->
+        
         <profile>
             <id>quality</id>
             <modules>
