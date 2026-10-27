@@ -98,6 +98,19 @@ class TestSummaryPrinterTest {
     }
 
     @Test
+    void aFailureWithoutTypeShowsItsMessageAlone() {
+        assertEquals("  FAILED a.B#c — expected 2",
+                TestSummaryPrinter.failureLine(new Failure("a.B#c", "", "expected 2")));
+        assertEquals("  FAILED a.B#c", TestSummaryPrinter.failureLine(new Failure("a.B#c", "", "")));
+    }
+
+    @Test
+    void aFailureWithTypeAndMessageShowsBoth() {
+        assertEquals("  FAILED a.B#c — AssertionFailedError: expected 2",
+                TestSummaryPrinter.failureLine(new Failure("a.B#c", "org.opentest4j.AssertionFailedError", "expected 2")));
+    }
+
+    @Test
     void aRunThatFailedOutsideTheCompilerSaysSo() {
         TestResults error = TestResults.completed(Trigger.CHANGE, AT, 3210, 1, false,
                 SurefireReports.Reports.NONE, LOG, warning -> {});

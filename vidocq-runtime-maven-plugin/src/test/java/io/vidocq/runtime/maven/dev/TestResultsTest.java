@@ -146,4 +146,15 @@ class TestResultsTest {
 
         assertEquals(List.of("com.acme.SetupTest", "com.acme.OtherTest#x"), failed.rerunList());
     }
+
+    @Test
+    void theRerunListCutsANameAtItsFirstParenthesisOrBracket() {
+        TestResults failed = completed(1, reports(new Counts(3, 3, 0, 0), List.of(
+                new Failure("com.acme.MathTest#adds(int)", "T", "m"),
+                new Failure("com.acme.MathTest#repeats[2]", "T", "m"),
+                new Failure("com.acme.MathTest#mixes[1](x)", "T", "m")), 1, 0));
+
+        assertEquals(List.of("com.acme.MathTest#adds", "com.acme.MathTest#repeats", "com.acme.MathTest#mixes"),
+                failed.rerunList());
+    }
 }
