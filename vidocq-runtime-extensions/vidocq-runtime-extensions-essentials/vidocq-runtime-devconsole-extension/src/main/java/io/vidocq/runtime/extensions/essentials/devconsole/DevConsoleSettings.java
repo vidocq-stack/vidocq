@@ -197,7 +197,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
         try {
             Optional<String> value = config.getValue(key);
             return value.map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
     }

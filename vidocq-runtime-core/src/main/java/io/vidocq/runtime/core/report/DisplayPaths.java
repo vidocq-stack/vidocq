@@ -135,7 +135,7 @@ public record DisplayPaths(Path workingDirectory, Path home) {
         }
         try {
             return Path.of(value);
-        } catch (RuntimeException invalid) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
