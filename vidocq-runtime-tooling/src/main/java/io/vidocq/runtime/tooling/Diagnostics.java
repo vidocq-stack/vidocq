@@ -36,6 +36,10 @@ public final class Diagnostics {
     public static final int MINIMUM_JAVA_VERSION = 25;
 
     private static final String MAVEN_WRAPPER = "Maven wrapper";
+    private static final String JAVA_HOME = "JAVA_HOME";
+    private static final String VIDOCQ_PROJECT = "Vidocq project";
+    private static final String CONFIG = "Config";
+    private static final String EXTENSIONS = "Extensions";
 
     private Diagnostics() {}
 
@@ -97,17 +101,17 @@ public final class Diagnostics {
     private static Diagnostic checkJavaHome(DoctorContext ctx) {
         if (!ctx.javaHomeSet()) {
             return Diagnostic.warn(
-                    "JAVA_HOME",
+                    JAVA_HOME,
                     "not set",
                     "Set JAVA_HOME to your JDK so builds (mvnw, jlink) pick the right toolchain.");
         }
         if (!ctx.javaHomeIsDirectory()) {
             return Diagnostic.warn(
-                    "JAVA_HOME",
+                    JAVA_HOME,
                     ctx.javaHome() + " (not a directory)",
                     "Point JAVA_HOME at an existing JDK installation directory.");
         }
-        return Diagnostic.ok("JAVA_HOME", ctx.javaHome());
+        return Diagnostic.ok(JAVA_HOME, ctx.javaHome());
     }
 
     private static Diagnostic checkMavenWrapper(DoctorContext ctx) {
@@ -130,33 +134,33 @@ public final class Diagnostics {
     private static Diagnostic checkProject(DoctorContext ctx) {
         if (!ctx.pomPresent()) {
             return Diagnostic.warn(
-                    "Vidocq project",
+                    VIDOCQ_PROJECT,
                     "no pom.xml in the current directory",
                     "Run 'vidocq create --name <app>' to scaffold a project, or cd into one.");
         }
         if (!ctx.vidocqProject()) {
             return Diagnostic.warn(
-                    "Vidocq project",
+                    VIDOCQ_PROJECT,
                     "pom.xml present but no Vidocq runtime dependency detected",
                     "Add a 'io.vidocq.runtime' dependency, or check you are in the right module.");
         }
-        return Diagnostic.ok("Vidocq project", "pom.xml references the Vidocq runtime");
+        return Diagnostic.ok(VIDOCQ_PROJECT, "pom.xml references the Vidocq runtime");
     }
 
     private static Diagnostic checkConfig(DoctorContext ctx) {
         if (!ctx.configPresent()) {
-            return Diagnostic.ok("Config", "no vidocq.properties (built-in defaults apply)");
+            return Diagnostic.ok(CONFIG, "no vidocq.properties (built-in defaults apply)");
         }
         List<String> unknown = ConfigKeys.unknownKeys(ctx.configKeys());
         int total = ctx.configKeys().size();
         if (unknown.isEmpty()) {
             return Diagnostic.ok(
-                    "Config",
+                    CONFIG,
                     "vidocq.properties — " + total + " key" + (total == 1 ? "" : "s")
                             + ", all recognized");
         }
         return Diagnostic.warn(
-                "Config",
+                CONFIG,
                 "vidocq.properties — " + unknown.size() + " unrecognized key"
                         + (unknown.size() == 1 ? "" : "s") + ": " + String.join(", ", unknown),
                 "Check for typos; Vidocq keys live under known namespaces "
@@ -166,20 +170,20 @@ public final class Diagnostics {
     private static Diagnostic checkExtensions(DoctorContext ctx) {
         if (ctx.extensionsError() != null) {
             return Diagnostic.warn(
-                    "Extensions",
+                    EXTENSIONS,
                     "could not resolve the project's dependencies — " + ctx.extensionsError(),
                     "Run 'mvn dependency:tree' in the project to see what Maven cannot resolve.");
         }
         int count = ctx.extensionCount();
         if (count > 0) {
             return Diagnostic.ok(
-                    "Extensions",
+                    EXTENSIONS,
                     count + " extension" + (count == 1 ? "" : "s") + " in the runtime dependencies");
         }
         // Not a warning: an application of CDI beans and a main class needs none, and vidocq create writes one
         // (Vidocq/vidocq#339). The hint shows with --verbose.
         return new Diagnostic(
-                "Extensions",
+                EXTENSIONS,
                 Diagnostic.Status.OK,
                 "no extension: the application runs on CDI alone",
                 "Add one to enable features (e.g. 'vidocq extension add cassini-rest').");

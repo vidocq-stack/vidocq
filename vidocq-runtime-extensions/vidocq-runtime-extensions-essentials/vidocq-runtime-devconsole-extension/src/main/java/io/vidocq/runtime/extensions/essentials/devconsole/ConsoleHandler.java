@@ -72,6 +72,10 @@ final class ConsoleHandler implements Handler {
     static final String LANGUAGE_PREFIX = "/api/language/";
 
     private static final String CONTENT_SECURITY_POLICY = "default-src 'self'; frame-ancestors 'none'";
+    private static final String CONTENT_TYPE = "Content-Type";
+    private static final String ALLOW = "Allow";
+    private static final String ORIGIN = "Origin";
+    private static final String FOREIGN_ORIGIN = "This origin is not the dev console's.";
 
     private final HostGuard guard;
     private final IntSupplier boundPort;
@@ -112,7 +116,7 @@ final class ConsoleHandler implements Handler {
         if (!guard.allows(host, boundPort.getAsInt())) {
             response = Response.builder()
                     .status(StatusCode.FORBIDDEN)
-                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .header(CONTENT_TYPE, "text/plain; charset=utf-8")
                     .body("This host is not the dev console's.")
                     .build();
         } else if (actions != null && request.pathInfo() != null
@@ -123,7 +127,7 @@ final class ConsoleHandler implements Handler {
         } else if (request.pathInfo() != null && request.pathInfo().startsWith(LANGUAGE_PREFIX)) {
             response = language(request, host, actions != null);
         } else if (request.method() != HttpMethod.GET && request.method() != HttpMethod.HEAD) {
-            response = Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "GET, HEAD").build();
+            response = Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header(ALLOW, "GET, HEAD").build();
         } else if (SNAPSHOT_PATH.equals(request.pathInfo())) {
             response = snapshot.handle(request);
         } else {
@@ -135,15 +139,15 @@ final class ConsoleHandler implements Handler {
     /** An action request of a dev boot, its {@code Host} already let in: the checks, in the order of ADR 0001. */
     private Response action(Request request, String host, ConsoleActions actions) {
         if (request.method() != HttpMethod.POST) {
-            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "POST").build();
+            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header(ALLOW, "POST").build();
         }
-        if (!json(request.header("Content-Type").orElse(null))) {
+        if (!json(request.header(CONTENT_TYPE).orElse(null))) {
             return ConsoleActions.text(StatusCode.UNSUPPORTED_MEDIA_TYPE, "An action takes application/json.");
         }
-        String origin = request.header("Origin").orElse(null);
+        String origin = request.header(ORIGIN).orElse(null);
         if (!sameOrigin(origin, host)) {
             actions.refused("not the console's own origin", origin);
-            return ConsoleActions.text(StatusCode.FORBIDDEN, "This origin is not the dev console's.");
+            return ConsoleActions.text(StatusCode.FORBIDDEN, FOREIGN_ORIGIN);
         }
         if (!actions.tokenMatches(request.header(ConsoleActions.TOKEN_HEADER).orElse(null))) {
             actions.refused("no valid " + ConsoleActions.TOKEN_HEADER, origin);
@@ -166,17 +170,17 @@ final class ConsoleHandler implements Handler {
      */
     private Response mcp(Request request, String host, ConsoleActions actions) {
         if (request.method() != HttpMethod.POST) {
-            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "POST").build();
+            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header(ALLOW, "POST").build();
         }
-        if (!json(request.header("Content-Type").orElse(null))) {
+        if (!json(request.header(CONTENT_TYPE).orElse(null))) {
             return ConsoleActions.text(StatusCode.UNSUPPORTED_MEDIA_TYPE, "An MCP request is application/json.");
         }
-        String origin = request.header("Origin").orElse(null);
+        String origin = request.header(ORIGIN).orElse(null);
         if (origin != null && !sameOrigin(origin, host)) {
             if (actions != null) {
                 actions.refused("MCP request", "not the console's own origin", origin);
             }
-            return ConsoleActions.text(StatusCode.FORBIDDEN, "This origin is not the dev console's.");
+            return ConsoleActions.text(StatusCode.FORBIDDEN, FOREIGN_ORIGIN);
         }
         if (!acceptsJson(request.headers().all("Accept"))) {
             return ConsoleActions.text(StatusCode.NOT_ACCEPTABLE, "The dev MCP answers application/json only.");
@@ -192,14 +196,14 @@ final class ConsoleHandler implements Handler {
      */
     private Response language(Request request, String host, boolean dev) {
         if (request.method() != HttpMethod.GET && request.method() != HttpMethod.HEAD) {
-            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header("Allow", "GET, HEAD").build();
+            return Response.builder().status(StatusCode.METHOD_NOT_ALLOWED).header(ALLOW, "GET, HEAD").build();
         }
         if (!dev) {
             return ConsoleActions.text(StatusCode.NOT_FOUND, "No such language.");
         }
-        String origin = request.header("Origin").orElse(null);
+        String origin = request.header(ORIGIN).orElse(null);
         if (origin != null && !sameOrigin(origin, host)) {
-            return ConsoleActions.text(StatusCode.FORBIDDEN, "This origin is not the dev console's.");
+            return ConsoleActions.text(StatusCode.FORBIDDEN, FOREIGN_ORIGIN);
         }
         String rest = request.pathInfo().substring(LANGUAGE_PREFIX.length());
         int slash = rest.indexOf('/');
@@ -211,7 +215,7 @@ final class ConsoleHandler implements Handler {
         }
         return Response.builder()
                 .status(StatusCode.OK)
-                .header("Content-Type", "application/json; charset=utf-8")
+                .header(CONTENT_TYPE, "application/json; charset=utf-8")
                 .header("Cache-Control", "no-cache")
                 .body(language.json())
                 .build();

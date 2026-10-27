@@ -62,6 +62,9 @@ final class CdiPanel implements DevConsolePanel {
     static final String ID = "cdi";
 
     private static final String NONE = "none";
+    private static final String BEANS = "beans";
+    private static final String INTERCEPTORS = "interceptors";
+    private static final String OBSERVERS = "observers";
 
     /** What the container held at boot, or {@code null} when there was no container to read. */
     private final CdiInventory inventory;
@@ -111,18 +114,18 @@ final class CdiPanel implements DevConsolePanel {
         summary.append(", ").append(count(held.interceptors(), "interceptor"))
                 .append(", 0 decorators, ").append(count(held.observers(), "observer"));
         section.summary(summary.toString())
-                .row("beans", sides(held.beans(), held.applicationBeans()))
+                .row(BEANS, sides(held.beans(), held.applicationBeans()))
                 .list("scopes", held.scopes().entrySet().stream().map(CdiPanel::scopeCount).toList())
-                .row("interceptors", sides(held.interceptors(), held.applicationInterceptors()))
+                .row(INTERCEPTORS, sides(held.interceptors(), held.applicationInterceptors()))
                 .row("decorators", "none: Vauban implements CDI Lite, which has no decorators")
-                .row("observers", sides(held.observers(), held.applicationObservers()))
+                .row(OBSERVERS, sides(held.observers(), held.applicationObservers()))
                 .row("application", held.applicationRule());
-        codegen(section, "beans", held.beanCodegen());
-        codegen(section, "interceptors", held.interceptorCodegen());
-        codegen(section, "observers", held.observerCodegen());
-        leftOut(section, "beans", held.beans(), held.beanRows());
-        leftOut(section, "interceptors", held.interceptors(), held.interceptorRows());
-        leftOut(section, "observers", held.observers(), held.observerRows());
+        codegen(section, BEANS, held.beanCodegen());
+        codegen(section, INTERCEPTORS, held.interceptorCodegen());
+        codegen(section, OBSERVERS, held.observerCodegen());
+        leftOut(section, BEANS, held.beans(), held.beanRows());
+        leftOut(section, INTERCEPTORS, held.interceptors(), held.interceptorRows());
+        leftOut(section, OBSERVERS, held.observers(), held.observerRows());
         section.row("source", "Vauban's metadata, read once at boot: no bean created");
     }
 
@@ -133,9 +136,9 @@ final class CdiPanel implements DevConsolePanel {
         if (held == null) {
             return;
         }
-        table(sample, "beans", CdiInventory.BEAN_COLUMNS, held.beanRows());
-        table(sample, "interceptors", CdiInventory.INTERCEPTOR_COLUMNS, held.interceptorRows());
-        table(sample, "observers", CdiInventory.OBSERVER_COLUMNS, held.observerRows());
+        table(sample, BEANS, CdiInventory.BEAN_COLUMNS, held.beanRows());
+        table(sample, INTERCEPTORS, CdiInventory.INTERCEPTOR_COLUMNS, held.interceptorRows());
+        table(sample, OBSERVERS, CdiInventory.OBSERVER_COLUMNS, held.observerRows());
     }
 
     private static void table(PanelSample sample, String key, List<String> columns, List<List<String>> rows) {

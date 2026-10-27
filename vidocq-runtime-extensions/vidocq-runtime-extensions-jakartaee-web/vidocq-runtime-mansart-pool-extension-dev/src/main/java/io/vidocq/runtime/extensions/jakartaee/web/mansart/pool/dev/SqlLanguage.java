@@ -39,6 +39,8 @@ import java.util.Set;
  * the table it refers to as its {@code target}. Built from what the boot read: no query.
  */
 final class SqlLanguage {
+    private static final String UPDATE = "UPDATE";
+    private static final String DETAIL = "detail";
 
     /** SQL-92's reserved words, and the few of SQL:2003 a query of today writes, which are no column. */
     static final List<String> KEYWORDS = List.of("ABSOLUTE", "ACTION", "ADD", "ALL", "ALLOCATE", "ALTER", "AND",
@@ -62,7 +64,7 @@ final class SqlLanguage {
             "SCROLL", "SECOND", "SECTION", "SELECT", "SESSION", "SESSION_USER", "SET", "SIZE", "SMALLINT", "SOME",
             "SPACE", "SQL", "SQLCODE", "SQLERROR", "SQLSTATE", "SUBSTRING", "SUM", "SYSTEM_USER", "TABLE",
             "TEMPORARY", "THEN", "TIME", "TIMESTAMP", "TIMEZONE_HOUR", "TIMEZONE_MINUTE", "TO", "TRAILING",
-            "TRANSACTION", "TRANSLATE", "TRANSLATION", "TRIM", "TRUE", "UNION", "UNIQUE", "UNKNOWN", "UPDATE",
+            "TRANSACTION", "TRANSLATE", "TRANSLATION", "TRIM", "TRUE", "UNION", "UNIQUE", "UNKNOWN", UPDATE,
             "UPPER", "USAGE", "USER", "USING", "VALUE", "VALUES", "VARCHAR", "VARYING", "VIEW", "WHEN", "WHENEVER",
             "WHERE", "WITH", "WORK", "WRITE", "YEAR", "ZONE", "LIMIT", "OFFSET", "NULLS", "RECURSIVE", "RETURNING",
             "ILIKE", "OVER", "PARTITION", "LATERAL", "FILTER");
@@ -71,9 +73,9 @@ final class SqlLanguage {
             "TRIM", "COALESCE", "NULLIF", "CAST", "ABS", "ROUND", "SUBSTRING", "CONCAT", "REPLACE", "EXTRACT", "NOW");
     /** The words that start a clause (SQL spec §3). */
     static final List<String> CLAUSES = List.of("SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP BY", "HAVING",
-            "ORDER BY", "LIMIT", "OFFSET", "SET", "VALUES", "UPDATE", "DELETE FROM", "INSERT INTO");
+            "ORDER BY", "LIMIT", "OFFSET", "SET", "VALUES", UPDATE, "DELETE FROM", "INSERT INTO");
     /** The words after which a table is named. */
-    static final List<String> TARGET_AFTER = List.of("FROM", "JOIN", "UPDATE", "INTO");
+    static final List<String> TARGET_AFTER = List.of("FROM", "JOIN", UPDATE, "INTO");
 
     private static final System.Logger LOG = System.getLogger(SqlLanguage.class.getName());
 
@@ -102,7 +104,7 @@ final class SqlLanguage {
             return json;
         }
         int full = json.length();
-        for (List<String> dropped : List.of(List.of("detail"), List.of("type", "format"))) {
+        for (List<String> dropped : List.of(List.of(DETAIL), List.of("type", "format"))) {
             drop(targets, dropped);
             json = write(dialect, targets);
             if (json.length() <= limit) {
@@ -151,14 +153,14 @@ final class SqlLanguage {
             for (Column column : table.columns()) {
                 Map<String, Object> attribute = new LinkedHashMap<>();
                 type(column.jdbcType(), attribute);
-                attribute.put("detail", column.sqlType() + " · column");
+                attribute.put(DETAIL, column.sqlType() + " · column");
                 if (column.target() != null) {
                     attribute.put("target", column.target());
                 }
                 attributes.put(column.name(), attribute);
             }
             Map<String, Object> target = new LinkedHashMap<>();
-            target.put("detail", (table.view() ? "view" : "table")
+            target.put(DETAIL, (table.view() ? "view" : "table")
                     + (table.schema() == null ? "" : " · " + table.schema()));
             String shown = metadata.shown(table);
             if (!shown.equals(table.name())) {

@@ -74,11 +74,12 @@ public final class CompletionSpec {
             "completion uninstall", Shell.tokens());
 
     private static final String CHECK = "--check";
+    private static final String PORT = "--port";
 
     /** Offered anywhere after the context. */
     static final Map<String, List<String>> ARGUMENTS = ordered(
-            "start", List.of("--port", "--config", "--debug"),
-            "dev", List.of("--port", "--profile", "--debug"),
+            "start", List.of(PORT, "--config", "--debug"),
+            "dev", List.of(PORT, "--profile", "--debug"),
             "doctor", List.of("--fix", "--verbose"),
             "idea", List.of(CHECK, "--strict", "--kind"),
             "vscode", List.of(CHECK),
@@ -101,7 +102,7 @@ public final class CompletionSpec {
 
     /** Options followed by a value — nothing is offered for a free-form one. */
     static final Set<String> VALUE_OPTIONS = Set.of(
-            "--port", "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
+            PORT, "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
             "--group-id", "-g", "--package", "--extension", "-x", "--parent-version", "--kind");
 
     private CompletionSpec() {}

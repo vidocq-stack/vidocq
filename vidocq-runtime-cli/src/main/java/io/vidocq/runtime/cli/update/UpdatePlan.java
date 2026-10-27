@@ -45,6 +45,7 @@ public final class UpdatePlan {
 
     private static final String ARTIFACT = "vidocq-runtime-cli";
     private static final String SNAPSHOT = "-SNAPSHOT";
+    private static final String MAVEN_METADATA = "/maven-metadata.xml";
     private static final Pattern RELEASE = Pattern.compile("<release>\\s*([^<\\s]+)\\s*</release>");
     private static final Pattern VERSION = Pattern.compile("<version>\\s*([^<\\s]+)\\s*</version>");
     private static final Pattern CLI_ZIP = Pattern.compile(
@@ -87,7 +88,7 @@ public final class UpdatePlan {
 
     private static Decision planRelease(String current, Function<String, Optional<String>> fetch,
                                         String central) {
-        String url = central + "/maven-metadata.xml";
+        String url = central + MAVEN_METADATA;
         Optional<String> latest = fetch.apply(url).flatMap(xml -> first(RELEASE, xml));
         if (latest.isEmpty()) {
             return new Unavailable("no release found at " + url);
@@ -102,7 +103,7 @@ public final class UpdatePlan {
 
     private static Decision planSnapshot(String current, Optional<String> installedBuild, String builtAt,
                                          Function<String, Optional<String>> fetch, String snapshots) {
-        String url = snapshots + "/maven-metadata.xml";
+        String url = snapshots + MAVEN_METADATA;
         Optional<String> highest = fetch.apply(url).flatMap(xml -> VERSION.matcher(xml).results()
                 .map(m -> m.group(1))
                 .filter(v -> v.endsWith(SNAPSHOT))
@@ -111,7 +112,7 @@ public final class UpdatePlan {
             return new Unavailable("no SNAPSHOT found at " + url);
         }
         String line = compare(highest.get(), current) > 0 ? highest.get() : current;
-        String lineUrl = snapshots + "/" + line + "/maven-metadata.xml";
+        String lineUrl = snapshots + "/" + line + MAVEN_METADATA;
         Optional<Matcher> zip = fetch.apply(lineUrl).map(CLI_ZIP::matcher).filter(Matcher::find);
         if (zip.isEmpty()) {
             return new Unavailable("no " + line + " CLI distribution at " + lineUrl);

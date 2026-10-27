@@ -49,17 +49,19 @@ final class JdqlLanguage {
     static final String ID = "jdql";
     /** The media type of a property that is a query: the page shows it in its query editor. */
     static final String MEDIA_TYPE = "text/x-query";
+    private static final String UPDATE = "UPDATE";
+    private static final String DETAIL = "detail";
     /** The words Mansart's JDQL reads as keywords, and its literals. */
     static final List<String> KEYWORDS = List.of("SELECT", "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT", "IS",
-            "NULL", "BETWEEN", "LIKE", "IN", "ASC", "DESC", "UPDATE", "SET", "DELETE", "COUNT", "THIS", "SUM", "AVG",
+            "NULL", "BETWEEN", "LIKE", "IN", "ASC", "DESC", UPDATE, "SET", "DELETE", "COUNT", "THIS", "SUM", "AVG",
             "MIN", "MAX", "TRUE", "FALSE");
     /** Its scalar functions and aggregates, each followed by {@code (}. */
     static final List<String> FUNCTIONS = List.of("UPPER", "LOWER", "LENGTH", "ABS", "CONCAT", "COUNT", "SUM", "AVG",
             "MIN", "MAX");
     /** The words that start a clause. */
-    static final List<String> CLAUSES = List.of("SELECT", "FROM", "WHERE", "ORDER BY", "SET", "UPDATE", "DELETE FROM");
+    static final List<String> CLAUSES = List.of("SELECT", "FROM", "WHERE", "ORDER BY", "SET", UPDATE, "DELETE FROM");
     /** The words after which the entity is named. */
-    static final List<String> TARGET_AFTER = List.of("FROM", "UPDATE");
+    static final List<String> TARGET_AFTER = List.of("FROM", UPDATE);
 
     private static final System.Logger LOG = System.getLogger(JdqlLanguage.class.getName());
 
@@ -95,13 +97,13 @@ final class JdqlLanguage {
             return json;
         }
         int full = json.length();
-        for (String dropped : List.of("detail", "enum")) {
+        for (String dropped : List.of(DETAIL, "enum")) {
             drop(targets, dropped);
             json = write(targets);
             if (json.length() <= limit) {
                 LOG.log(System.Logger.Level.INFO, "Mansart Data: the JDQL language of " + targets.size()
                         + " entities is " + full + " characters, past the " + limit + " a panel language may hold:"
-                        + " written without " + (dropped.equals("detail") ? "details" : "details or enums"));
+                        + " written without " + (dropped.equals(DETAIL) ? "details" : "details or enums"));
                 return json;
             }
         }
@@ -141,7 +143,7 @@ final class JdqlLanguage {
             EntityModel<?> model = entity.failure() != null || uses.get(name) > 1 ? null
                     : model(entity.className(), classes, models);
             if (model != null) {
-                targets.put(name, Scalars.object("detail", "table " + entity.table(),
+                targets.put(name, Scalars.object(DETAIL, "table " + entity.table(),
                         "attributes", attributes(model, models)));
             }
         }
@@ -184,7 +186,7 @@ final class JdqlLanguage {
         if (attribute instanceof ReferenceAttribute<?, ?> reference) {
             String target = simpleName(reference.javaType().getName());
             typeOf(idType(reference.javaType(), models), out);
-            out.put("detail", "→ " + target + " · column " + attribute.columnName());
+            out.put(DETAIL, "→ " + target + " · column " + attribute.columnName());
             out.put("target", target);
             return out;
         }
@@ -195,7 +197,7 @@ final class JdqlLanguage {
             case VersionAttribute<?, ?> _ -> "version";
             default -> "column " + attribute.columnName();
         };
-        out.put("detail", (type == null ? "?" : type.getSimpleName().isEmpty() ? type.getName()
+        out.put(DETAIL, (type == null ? "?" : type.getSimpleName().isEmpty() ? type.getName()
                 : type.getSimpleName()) + " · " + where);
         return out;
     }

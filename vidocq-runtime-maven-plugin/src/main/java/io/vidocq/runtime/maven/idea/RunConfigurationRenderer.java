@@ -72,6 +72,13 @@ final class RunConfigurationRenderer {
 
     /** Appended to the configuration name of the Remote JVM Debug configuration (Vidocq/vidocq#143). */
     static final String DEBUG_SUFFIX = " (debug)";
+    private static final String COMPONENT_START = "<component name=\"ProjectRunConfigurationManager\">\n";
+    private static final String CONFIGURATION_START = "  <configuration default=\"false\" name=\"";
+    private static final String EMPTY_MAP = "            <map />\n";
+    private static final String OPTION_END = "          </option>\n";
+    private static final String ATTRIBUTE_END = "\" />\n";
+    private static final String CONFIGURATION_END = "  </configuration>\n";
+    private static final String COMPONENT_END = "</component>";
 
     /** What {@code vidocq.idea.kind} asks for. */
     enum Kind {
@@ -148,8 +155,8 @@ final class RunConfigurationRenderer {
      */
     static String mavenBody(IdeaApplication application, String jre, List<String> goals, String name) {
         StringBuilder xml = new StringBuilder(1100);
-        xml.append("<component name=\"ProjectRunConfigurationManager\">\n");
-        xml.append("  <configuration default=\"false\" name=\"").append(escapeAttribute(name))
+        xml.append(COMPONENT_START);
+        xml.append(CONFIGURATION_START).append(escapeAttribute(name))
                 .append("\" type=\"MavenRunConfiguration\" factoryName=\"Maven\">\n");
         xml.append("    <MavenSettings>\n");
         // Left null: a run configuration that carries its own MavenGeneralSettings replaces the user's
@@ -162,12 +169,12 @@ final class RunConfigurationRenderer {
             xml.append("        <MavenRunnerSettings>\n");
             xml.append("          <option name=\"delegateBuildToMaven\" value=\"false\" />\n");
             xml.append("          <option name=\"environmentProperties\">\n");
-            xml.append("            <map />\n");
-            xml.append("          </option>\n");
-            xml.append("          <option name=\"jreName\" value=\"").append(escapeAttribute(jre)).append("\" />\n");
+            xml.append(EMPTY_MAP);
+            xml.append(OPTION_END);
+            xml.append("          <option name=\"jreName\" value=\"").append(escapeAttribute(jre)).append(ATTRIBUTE_END);
             xml.append("          <option name=\"mavenProperties\">\n");
-            xml.append("            <map />\n");
-            xml.append("          </option>\n");
+            xml.append(EMPTY_MAP);
+            xml.append(OPTION_END);
             xml.append("          <option name=\"passParentEnv\" value=\"true\" />\n");
             xml.append("          <option name=\"skipTests\" value=\"false\" />\n");
             xml.append("          <option name=\"vmOptions\" value=\"\" />\n");
@@ -179,32 +186,32 @@ final class RunConfigurationRenderer {
         xml.append("          <option name=\"cmdOptions\" />\n");
         xml.append("          <option name=\"profiles\">\n");
         xml.append("            <set />\n");
-        xml.append("          </option>\n");
+        xml.append(OPTION_END);
         xml.append("          <option name=\"goals\">\n");
         xml.append("            <list>\n");
         for (String goal : goals) {
-            xml.append("              <option value=\"").append(escapeAttribute(goal)).append("\" />\n");
+            xml.append("              <option value=\"").append(escapeAttribute(goal)).append(ATTRIBUTE_END);
         }
         xml.append("            </list>\n");
-        xml.append("          </option>\n");
+        xml.append(OPTION_END);
         xml.append("          <option name=\"multimoduleDir\" />\n");
         // -f <pom>: the goal runs on the application's own pom, whatever the project directory is.
         xml.append("          <option name=\"pomFileName\" value=\"").append(escapeAttribute(application.pomPath()))
-                .append("\" />\n");
+                .append(ATTRIBUTE_END);
         xml.append("          <option name=\"profilesMap\">\n");
-        xml.append("            <map />\n");
-        xml.append("          </option>\n");
+        xml.append(EMPTY_MAP);
+        xml.append(OPTION_END);
         xml.append("          <option name=\"projectsCmdOptionValues\">\n");
         xml.append("            <list />\n");
-        xml.append("          </option>\n");
+        xml.append(OPTION_END);
         xml.append("          <option name=\"resolveToWorkspace\" value=\"false\" />\n");
         xml.append("          <option name=\"workingDirPath\" value=\"$PROJECT_DIR$\" />\n");
         xml.append("        </MavenRunnerParameters>\n");
         xml.append("      </option>\n");
         xml.append("    </MavenSettings>\n");
         xml.append("    <method v=\"2\" />\n");
-        xml.append("  </configuration>\n");
-        xml.append("</component>");
+        xml.append(CONFIGURATION_END);
+        xml.append(COMPONENT_END);
         return xml.toString();
     }
 
@@ -215,49 +222,49 @@ final class RunConfigurationRenderer {
      */
     private static String applicationBody(IdeaApplication application, String jre, boolean generateBeforeLaunch) {
         StringBuilder xml = new StringBuilder(700);
-        xml.append("<component name=\"ProjectRunConfigurationManager\">\n");
-        xml.append("  <configuration default=\"false\" name=\"").append(escapeAttribute(application.configurationName()))
+        xml.append(COMPONENT_START);
+        xml.append(CONFIGURATION_START).append(escapeAttribute(application.configurationName()))
                 .append("\" type=\"Application\" factoryName=\"Application\">\n");
         if (jre != null) {
-            xml.append("    <option name=\"ALTERNATIVE_JRE_PATH\" value=\"").append(escapeAttribute(jre)).append("\" />\n");
+            xml.append("    <option name=\"ALTERNATIVE_JRE_PATH\" value=\"").append(escapeAttribute(jre)).append(ATTRIBUTE_END);
             xml.append("    <option name=\"ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\" />\n");
         }
         // IntelliJ stores and matches the qualified name, with dots for a nested class.
         xml.append("    <option name=\"MAIN_CLASS_NAME\" value=\"")
-                .append(escapeAttribute(application.mainClass().replace('$', '.'))).append("\" />\n");
-        xml.append("    <module name=\"").append(escapeAttribute(application.moduleName())).append("\" />\n");
+                .append(escapeAttribute(application.mainClass().replace('$', '.'))).append(ATTRIBUTE_END);
+        xml.append("    <module name=\"").append(escapeAttribute(application.moduleName())).append(ATTRIBUTE_END);
         xml.append("    <method v=\"2\">\n");
         xml.append("      <option name=\"Make\" enabled=\"true\" />\n");
         if (generateBeforeLaunch) {
             xml.append("      <option name=\"Maven.BeforeRunTask\" enabled=\"true\" file=\"$PROJECT_DIR$/")
                     .append(escapeAttribute(application.pomPath())).append("\" goal=\"")
-                    .append(escapeAttribute(application.generateGoal())).append("\" />\n");
+                    .append(escapeAttribute(application.generateGoal())).append(ATTRIBUTE_END);
         }
         xml.append("    </method>\n");
-        xml.append("  </configuration>\n");
-        xml.append("</component>");
+        xml.append(CONFIGURATION_END);
+        xml.append(COMPONENT_END);
         return xml.toString();
     }
 
     /** A Remote JVM Debug configuration that attaches to the debug agent of vidocq:dev (Vidocq/vidocq#143). */
     static String debugBody(String name, String host, int port) {
         StringBuilder xml = new StringBuilder(500);
-        xml.append("<component name=\"ProjectRunConfigurationManager\">\n");
-        xml.append("  <configuration default=\"false\" name=\"").append(escapeAttribute(name))
+        xml.append(COMPONENT_START);
+        xml.append(CONFIGURATION_START).append(escapeAttribute(name))
                 .append("\" type=\"Remote\">\n");
         xml.append("    <option name=\"USE_SOCKET_TRANSPORT\" value=\"true\" />\n");
         xml.append("    <option name=\"SERVER_MODE\" value=\"false\" />\n");
         xml.append("    <option name=\"SHMEM_ADDRESS\" />\n");
-        xml.append("    <option name=\"HOST\" value=\"").append(escapeAttribute(host)).append("\" />\n");
-        xml.append("    <option name=\"PORT\" value=\"").append(port).append("\" />\n");
+        xml.append("    <option name=\"HOST\" value=\"").append(escapeAttribute(host)).append(ATTRIBUTE_END);
+        xml.append("    <option name=\"PORT\" value=\"").append(port).append(ATTRIBUTE_END);
         xml.append("    <option name=\"AUTO_RESTART\" value=\"false\" />\n");
         xml.append("    <RunnerSettings RunnerId=\"Debug\">\n");
-        xml.append("      <option name=\"DEBUG_PORT\" value=\"").append(port).append("\" />\n");
+        xml.append("      <option name=\"DEBUG_PORT\" value=\"").append(port).append(ATTRIBUTE_END);
         xml.append("      <option name=\"LOCAL\" value=\"false\" />\n");
         xml.append("    </RunnerSettings>\n");
         xml.append("    <method v=\"2\" />\n");
-        xml.append("  </configuration>\n");
-        xml.append("</component>");
+        xml.append(CONFIGURATION_END);
+        xml.append(COMPONENT_END);
         return xml.toString();
     }
 

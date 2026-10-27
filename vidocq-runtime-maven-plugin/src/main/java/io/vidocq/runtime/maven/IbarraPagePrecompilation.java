@@ -53,6 +53,7 @@ final class IbarraPagePrecompilation {
 
     static final String API = "io.vidocq.ibarra.api";
     private static final String RESOURCES = "META-INF/resources";
+    private static final String WEB_INF = "WEB-INF";
 
     private IbarraPagePrecompilation() {}
 
@@ -66,7 +67,7 @@ final class IbarraPagePrecompilation {
     static int apply(Path classes, List<Path> modulePath, Consumer<String> warn) throws IOException {
         Path resources = classes.resolve(RESOURCES);
         var pages = new ArrayList<>(pages(resources, ""));
-        pages.addAll(pages(classes.resolve("WEB-INF"), "/WEB-INF"));
+        pages.addAll(pages(classes.resolve(WEB_INF), "/WEB-INF"));
         if (pages.isEmpty()) return 0;
         Path descriptorFile = classes.resolve("module-info.class");
         if (!Files.isRegularFile(descriptorFile)) {
@@ -121,8 +122,8 @@ final class IbarraPagePrecompilation {
         delete(web);
         Files.createDirectories(web);
         if (Files.isDirectory(resources)) copyTree(resources, web);
-        Path webInf = classes.resolve("WEB-INF");
-        if (Files.isDirectory(webInf)) copyTree(webInf, web.resolve("WEB-INF"));
+        Path webInf = classes.resolve(WEB_INF);
+        if (Files.isDirectory(webInf)) copyTree(webInf, web.resolve(WEB_INF));
         Path metaWebXml = classes.resolve("META-INF/web.xml");
         Path stagedWebXml = web.resolve("WEB-INF/web.xml");
         if (!Files.exists(stagedWebXml) && Files.isRegularFile(metaWebXml)) {

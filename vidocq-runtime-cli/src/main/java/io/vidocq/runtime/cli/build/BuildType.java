@@ -32,16 +32,19 @@ import java.util.List;
 public enum BuildType {
 
     /** {@code mvn package} — standalone distribution ZIP. */
-    PACKAGE("package", "distribution ZIP", List.of("package")),
+    PACKAGE(BuildType.PACKAGE_PHASE, "distribution ZIP", List.of(BuildType.PACKAGE_PHASE)),
 
     /** {@code mvn package vidocq:jlink} — self-contained jlink runtime image. */
-    JLINK("jlink", "jlink runtime image", List.of("package", "vidocq:jlink")),
+    JLINK("jlink", "jlink runtime image", List.of(BuildType.PACKAGE_PHASE, "vidocq:jlink")),
 
     /** {@code mvn package vidocq:jpackage} — native installer / app-image. */
-    JPACKAGE("jpackage", "native installer", List.of("package", "vidocq:jpackage")),
+    JPACKAGE("jpackage", "native installer", List.of(BuildType.PACKAGE_PHASE, "vidocq:jpackage")),
 
     /** {@code mvn package vidocq:docker} — Dockerfile around the jlink image. */
-    DOCKER("docker", "Docker image", List.of("package", "vidocq:docker"));
+    DOCKER("docker", "Docker image", List.of(BuildType.PACKAGE_PHASE, "vidocq:docker"));
+
+    /** The Maven phase every flavour runs (qualified above: the constants come before this field). */
+    private static final String PACKAGE_PHASE = "package";
 
     private final String token;
     private final String label;

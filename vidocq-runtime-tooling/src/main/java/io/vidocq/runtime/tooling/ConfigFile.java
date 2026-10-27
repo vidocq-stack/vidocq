@@ -29,10 +29,11 @@ import java.util.Optional;
  * command runner.
  */
 public final class ConfigFile {
+    private static final String FILE_NAME = "vidocq.properties";
 
     /** Candidate relative locations, in priority order. */
     static final List<String> CANDIDATES = List.of(
-            "vidocq.properties",
+            FILE_NAME,
             "src/main/resources/vidocq.properties");
 
     private ConfigFile() {}
@@ -60,8 +61,8 @@ public final class ConfigFile {
     public static Path resolveTarget(Path projectDir, java.util.function.Predicate<Path> dirExists) {
         Path resources = projectDir.resolve("src/main/resources");
         if (dirExists.test(resources)) {
-            return resources.resolve("vidocq.properties");
+            return resources.resolve(FILE_NAME);
         }
-        return projectDir.resolve("vidocq.properties");
+        return projectDir.resolve(FILE_NAME);
     }
 }

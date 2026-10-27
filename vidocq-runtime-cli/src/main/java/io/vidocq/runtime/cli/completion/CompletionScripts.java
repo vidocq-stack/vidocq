@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
  * No JVM starts on TAB.</p>
  */
 public final class CompletionScripts {
+    private static final String ESAC = "    esac\n";
+    private static final String CASE_INDENT = "        ";
 
     private CompletionScripts() {}
 
@@ -104,10 +106,10 @@ public final class CompletionScripts {
         sh.append("    local cmd=\"$1\" ctx sub prev pos\n");
         sh.append("    case \"$cmd\" in\n");
         aliases(sh, CompletionSpec.COMMAND_ALIASES, "cmd");
-        sh.append("    esac\n");
+        sh.append(ESAC);
         sh.append("    ctx=\"$cmd\"; pos=$#\n");
         sh.append("    case \"$cmd\" in\n");
-        sh.append("        ").append(String.join("|", CompletionSpec.SUBCOMMANDS.keySet())).append(")\n");
+        sh.append(CASE_INDENT).append(String.join("|", CompletionSpec.SUBCOMMANDS.keySet())).append(")\n");
         sh.append("            if [ $# -eq 1 ]; then\n");
         sh.append("                case \"$cmd\" in\n");
         CompletionSpec.SUBCOMMANDS.forEach((cmd, subs) ->
@@ -120,15 +122,15 @@ public final class CompletionScripts {
         aliases(sh.append("    "), CompletionSpec.SUBCOMMAND_ALIASES, "sub");
         sh.append("            esac\n");
         sh.append("            ctx=\"$cmd $sub\"; pos=$(($# - 1)) ;;\n");
-        sh.append("    esac\n");
+        sh.append(ESAC);
         sh.append("    eval \"prev=\\${$#}\"\n");
         sh.append("    case \"$ctx $prev\" in\n");
         cases(sh, CompletionSpec.OPTION_VALUES, "; return");
-        sh.append("    esac\n");
+        sh.append(ESAC);
         sh.append("    case \"$prev\" in\n");
-        sh.append("        ").append(String.join("|", CompletionSpec.VALUE_OPTIONS.stream().sorted().toList()))
+        sh.append(CASE_INDENT).append(String.join("|", CompletionSpec.VALUE_OPTIONS.stream().sorted().toList()))
                 .append(") return ;;\n");
-        sh.append("    esac\n");
+        sh.append(ESAC);
         sh.append("    if [ \"$pos\" -eq 1 ]; then\n");
         sh.append("        case \"$ctx\" in\n");
         CompletionSpec.FIRST_ARGUMENTS.forEach((ctx, words) ->
@@ -137,7 +139,7 @@ public final class CompletionScripts {
         sh.append("    fi\n");
         sh.append("    case \"$ctx\" in\n");
         cases(sh, CompletionSpec.ARGUMENTS, "");
-        sh.append("    esac\n");
+        sh.append(ESAC);
         sh.append("}\n");
         sh.append("_vidocq_addable() {\n");
         sh.append("    local taken id\n");
@@ -163,7 +165,7 @@ public final class CompletionScripts {
 
     private static void aliases(StringBuilder sh, Map<String, String> aliases, String variable) {
         aliases.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e ->
-                sh.append("        ").append(e.getKey()).append(") ").append(variable)
+                sh.append(CASE_INDENT).append(e.getKey()).append(") ").append(variable)
                         .append("=").append(e.getValue()).append(" ;;\n"));
     }
 

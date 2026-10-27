@@ -61,6 +61,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
     private static final int MAX_PORT = 65_535;
     /** The longest host accepted: a DNS name has at most 253 characters, an IPv6 literal far fewer. */
     private static final int MAX_HOST = 255;
+    private static final String FALSE = "false";
 
     DevConsoleSettings {
         invalid = List.copyOf(invalid);
@@ -88,7 +89,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
         }
         String resolved = switch (validEnabled(enabled) && enabled != null ? enabled.toLowerCase(Locale.ROOT) : "") {
             case "true" -> "true";
-            case "false" -> "false";
+            case FALSE -> FALSE;
             default -> "auto";
         };
         return new DevConsoleSettings(resolved, enabled(enabled, mode), mode, host(host), port(port), invalid);
@@ -105,7 +106,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
     static boolean enabled(String value, LaunchMode mode) {
         return switch (value == null ? "" : value.strip().toLowerCase(Locale.ROOT)) {
             case "true" -> true;
-            case "false" -> false;
+            case FALSE -> false;
             default -> mode == LaunchMode.DEV;
         };
     }
@@ -116,7 +117,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
      */
     static boolean validEnabled(String value) {
         return switch (value == null ? "" : value.strip().toLowerCase(Locale.ROOT)) {
-            case "", "auto", "true", "false" -> true;
+            case "", "auto", "true", FALSE -> true;
             default -> false;
         };
     }
@@ -182,7 +183,7 @@ record DevConsoleSettings(String enabled, boolean on, LaunchMode launchMode, Str
      * {@code off (vidocq.devconsole.enabled=false)}.
      */
     String offReason() {
-        return "false".equals(enabled) ? "off (" + ENABLED_KEY + "=false)"
+        return FALSE.equals(enabled) ? "off (" + ENABLED_KEY + "=false)"
                 : "off (auto, launch mode " + launchMode.label() + ")";
     }
 

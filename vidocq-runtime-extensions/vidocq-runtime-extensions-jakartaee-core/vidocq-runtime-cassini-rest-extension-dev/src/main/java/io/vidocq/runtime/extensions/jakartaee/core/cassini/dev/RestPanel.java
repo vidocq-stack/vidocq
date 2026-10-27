@@ -36,39 +36,42 @@ import java.util.List;
  * <p>Reading the counters sums a few adders: no lock, no I/O, no instance created, well under a microsecond.
  */
 final class RestPanel {
+    private static final String REQUESTS = "requests";
+    private static final String IN_FLIGHT = "in-flight";
+    private static final String HANDLER_TIME = "handler-time";
 
     /** What the page plots, repeated for every mount. */
     static final List<Chart> CHARTS = List.of(
-            new Chart("requests", "Requests", List.of(Series.rate("requests"))),
+            new Chart(REQUESTS, "Requests", List.of(Series.rate(REQUESTS))),
             new Chart("responses", "Responses by status",
                     List.of(Series.rate("status.2xx"), Series.rate("status.3xx"), Series.rate("status.4xx"),
                             Series.rate("status.5xx"))),
-            new Chart("in-flight", "In flight", List.of(Series.area("in-flight"))),
-            new Chart("handler-time", "Time in handlers", List.of(Series.rate("handler-time"))));
+            new Chart(IN_FLIGHT, "In flight", List.of(Series.area(IN_FLIGHT))),
+            new Chart(HANDLER_TIME, "Time in handlers", List.of(Series.rate(HANDLER_TIME))));
 
     private RestPanel() {}
 
     static void sample(List<RestMount> mounts, PanelSample out) {
         if (mounts.isEmpty()) {
-            out.absent("requests", "no REST resource mounted");
+            out.absent(REQUESTS, "no REST resource mounted");
             return;
         }
         for (RestMount mount : mounts) {
             PanelSample group = out.group(mount.name());
             CassiniStatistics stats = mount.statistics();
             if (stats == null) {
-                group.absent("requests", "counters off");
+                group.absent(REQUESTS, "counters off");
                 continue;
             }
             long requests = stats.requests();
             long nanos = stats.totalNanos();
-            group.counter("requests", requests, Unit.COUNT)
-                    .gauge("in-flight", stats.inFlight(), Unit.COUNT);
+            group.counter(REQUESTS, requests, Unit.COUNT)
+                    .gauge(IN_FLIGHT, stats.inFlight(), Unit.COUNT);
             for (int statusClass = 1; statusClass <= 5; statusClass++) {
                 group.counter("status." + statusClass + "xx", stats.responses(statusClass), Unit.COUNT);
             }
             // A counter of nanoseconds: the page plots its rate as the share of wall time spent in handlers.
-            group.counter("handler-time", nanos, Unit.NANOS);
+            group.counter(HANDLER_TIME, nanos, Unit.NANOS);
             if (requests == 0) {
                 group.absent("mean", "no request served yet").absent("max", "no request served yet");
             } else {

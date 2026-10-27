@@ -82,12 +82,15 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
 
     /** The rows of a table the console keeps. */
     static final int MAX_ROWS = 100;
+    private static final String CODEGEN = "codegen";
+    private static final String BY_REFLECTION = "by reflection";
+    private static final String SCOPED = "Scoped";
     static final List<String> BEAN_COLUMNS = List.of("class", "kind", "scope", "qualifiers", "alternative", "from",
-            "codegen", "by reflection");
-    static final List<String> INTERCEPTOR_COLUMNS = List.of("interceptor", "bindings", "priority", "from", "codegen",
-            "by reflection");
+            CODEGEN, BY_REFLECTION);
+    static final List<String> INTERCEPTOR_COLUMNS = List.of("interceptor", "bindings", "priority", "from", CODEGEN,
+            BY_REFLECTION);
     static final List<String> OBSERVER_COLUMNS = List.of("event", "qualifiers", "observer", "mode", "from",
-            "codegen", "by reflection");
+            CODEGEN, BY_REFLECTION);
     private static final int BEAN_FROM = BEAN_COLUMNS.indexOf("from");
     private static final int INTERCEPTOR_FROM = INTERCEPTOR_COLUMNS.indexOf("from");
     private static final int OBSERVER_FROM = OBSERVER_COLUMNS.indexOf("from");
@@ -270,8 +273,8 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
             return "dependent";
         }
         String name = scope.getSimpleName();
-        if (name.endsWith("Scoped") && name.length() > "Scoped".length()) {
-            return name.substring(0, name.length() - "Scoped".length()).toLowerCase(Locale.ROOT) + "-scoped";
+        if (name.endsWith(SCOPED) && name.length() > SCOPED.length()) {
+            return name.substring(0, name.length() - SCOPED.length()).toLowerCase(Locale.ROOT) + "-scoped";
         }
         return name.toLowerCase(Locale.ROOT);
     }
