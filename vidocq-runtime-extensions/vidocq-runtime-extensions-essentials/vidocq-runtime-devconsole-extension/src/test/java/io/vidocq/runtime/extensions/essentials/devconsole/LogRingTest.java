@@ -103,6 +103,18 @@ class LogRingTest {
     }
 
     @Test
+    void aMissingOrFilteredOutRecordIsNeitherKeptNorCounted() {
+        LogRing ring = new LogRing();
+        ring.publish(null);
+        ring.setFilter(r -> false);
+        ring.publish(record(Level.SEVERE, "a", "e"));
+
+        assertEquals(List.of(), ring.latest(100));
+        assertEquals(0, ring.seen());
+        assertEquals(0, ring.errors());
+    }
+
+    @Test
     void aLineIsWrittenOnceInStrings() {
         LogRing ring = new LogRing();
         ring.publish(record(Level.WARNING, "io.vidocq.cassini.CassiniExtension", "{0} routes on {1}", 3, "default"));

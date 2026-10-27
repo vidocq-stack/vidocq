@@ -353,6 +353,17 @@ class CdiPanelTest {
     }
 
     @Test
+    void aWildcardAndVoidAreWrittenAsInTheSource() {
+        assertEquals("?", CdiInventory.type(new TypeInfo.WildcardType(null, null)));
+        assertEquals("?", CdiInventory.type(new TypeInfo.WildcardType(type("java.lang.Object"), null)));
+        assertEquals("? extends Number", CdiInventory.type(new TypeInfo.WildcardType(type("java.lang.Number"), null)));
+        assertEquals("? extends List<Order>", CdiInventory.type(new TypeInfo.WildcardType(
+                new TypeInfo.ParameterizedType(DotName.of("java.util.List"), List.of(type("com.acme.Order"))), null)));
+        assertEquals("? super Integer", CdiInventory.type(new TypeInfo.WildcardType(null, type("java.lang.Integer"))));
+        assertEquals("void", CdiInventory.type(new TypeInfo.VoidType()));
+    }
+
+    @Test
     void theApplicationIsItsLayerWhenItHasOne() {
         CdiInventory.ApplicationClasses layer = CdiInventory.ApplicationClasses.of(Optional.of(ModuleLayer.boot()),
                 null);
