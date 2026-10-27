@@ -249,32 +249,14 @@ final class DevMcp {
                 out.put("console", document.get("console"));
                 out.put("startup", startup);
             }
-            case "vidocq_panels" -> {
-                List<Object> panels = new ArrayList<>();
-                for (Object each : list(document.get(PANELS))) {
-                    Map<?, ?> panel = map(each);
-                    Map<String, Object> shown = new LinkedHashMap<>();
-                    for (String key : List.of("id", TITLE, "live", "summary")) {
-                        shown.put(key, panel.get(key));
-                    }
-                    panels.add(shown);
-                }
-                out.put(PANELS, panels);
-            }
+            case "vidocq_panels" -> out.put(PANELS, panelSummaries(document));
             case "vidocq_panel" -> {
                 if (!(named.get("id") instanceof String id)) {
                     throw new Refused(INVALID_PARAMS, "vidocq_panel takes the id of a panel.");
                 }
-                Object found = null;
-                List<Object> ids = new ArrayList<>();
-                for (Object each : list(document.get(PANELS))) {
-                    ids.add(map(each).get("id"));
-                    if (id.equals(map(each).get("id"))) {
-                        found = each;
-                    }
-                }
+                Object found = panel(document, id);
                 if (found == null) {
-                    return toolError("No panel '" + Texts.clean(id) + "'. The panels are " + ids + ".");
+                    return toolError("No panel '" + Texts.clean(id) + "'. The panels are " + panelIds(document) + ".");
                 }
                 out.put("panel", found);
             }
@@ -288,6 +270,40 @@ final class DevMcp {
             default -> throw new Refused(INVALID_PARAMS, "Unknown tool: " + Texts.clean(name));
         }
         return toolResult(out, false);
+    }
+
+    /** The id, title, liveness and summary of every panel of {@code document}. */
+    private static List<Object> panelSummaries(Map<String, Object> document) {
+        List<Object> panels = new ArrayList<>();
+        for (Object each : list(document.get(PANELS))) {
+            Map<?, ?> panel = map(each);
+            Map<String, Object> shown = new LinkedHashMap<>();
+            for (String key : List.of("id", TITLE, "live", "summary")) {
+                shown.put(key, panel.get(key));
+            }
+            panels.add(shown);
+        }
+        return panels;
+    }
+
+    /** The last panel of {@code document} whose id is {@code id}, or {@code null}. */
+    private static Object panel(Map<String, Object> document, String id) {
+        Object found = null;
+        for (Object each : list(document.get(PANELS))) {
+            if (id.equals(map(each).get("id"))) {
+                found = each;
+            }
+        }
+        return found;
+    }
+
+    /** The ids of the panels of {@code document}, in order. */
+    private static List<Object> panelIds(Map<String, Object> document) {
+        List<Object> ids = new ArrayList<>();
+        for (Object each : list(document.get(PANELS))) {
+            ids.add(map(each).get("id"));
+        }
+        return ids;
     }
 
     /**
