@@ -197,9 +197,16 @@ final class JdqlLanguage {
             case VersionAttribute<?, ?> _ -> "version";
             default -> "column " + attribute.columnName();
         };
-        out.put(DETAIL, (type == null ? "?" : type.getSimpleName().isEmpty() ? type.getName()
-                : type.getSimpleName()) + " · " + where);
+        out.put(DETAIL, simpleName(type) + " · " + where);
         return out;
+    }
+
+    /** The simple name of {@code type}, its name when it has none (an anonymous class), {@code ?} when unknown. */
+    private static String simpleName(Class<?> type) {
+        if (type == null) {
+            return "?";
+        }
+        return type.getSimpleName().isEmpty() ? type.getName() : type.getSimpleName();
     }
 
     /** Puts the {@code type}, {@code format} and {@code enum} of {@code type}'s JSON Schema into {@code out}. */

@@ -143,7 +143,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         }
         try {
             List<Chart> charts = panel.charts();
-            return charts == null ? List.of() : charts.stream().filter(chart -> chart != null).toList();
+            return charts == null ? List.of() : charts.stream().filter(Objects::nonNull).toList();
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, "Dev console panel '" + id + "' has no charts: its charts() failed",
                     failed);

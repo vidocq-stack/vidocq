@@ -286,23 +286,28 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
      */
     static String type(TypeInfo type) {
         return switch (type) {
-            case TypeInfo.ClassType classType -> classType.name().simpleName();
-            case TypeInfo.ParameterizedType parameterized -> parameterized.rawType().simpleName()
-                    + parameterized.typeArguments().stream().map(CdiInventory::type)
+            case TypeInfo.ClassType(var name) -> name.simpleName();
+            case TypeInfo.ParameterizedType(var rawType, var typeArguments) -> rawType.simpleName()
+                    + typeArguments.stream().map(CdiInventory::type)
                             .collect(Collectors.joining(", ", "<", ">"));
-            case TypeInfo.ArrayType array -> type(array.componentType()) + "[]".repeat(array.dimensions());
-            case TypeInfo.PrimitiveType primitive -> primitive.kind().name().toLowerCase(Locale.ROOT);
+            case TypeInfo.ArrayType(var componentType, var dimensions) -> type(componentType) + "[]".repeat(dimensions);
+            case TypeInfo.PrimitiveType(var kind) -> kind.name().toLowerCase(Locale.ROOT);
             case TypeInfo.TypeVariable variable -> variable.name();
-            case TypeInfo.WildcardType wildcard -> wildcard.lowerBound() != null
-                    ? "? super " + type(wildcard.lowerBound())
-                    : wildcard.upperBound() == null || isObject(wildcard.upperBound()) ? "?"
-                    : "? extends " + type(wildcard.upperBound());
-            case TypeInfo.VoidType ignored -> "void";
+            case TypeInfo.WildcardType(var upperBound, var lowerBound) -> wildcard(upperBound, lowerBound);
+            case TypeInfo.VoidType _ -> "void";
         };
     }
 
+    /** A wildcard: {@code ? super} its lower bound, else {@code ? extends} its upper bound, or {@code ?} alone. */
+    private static String wildcard(TypeInfo upperBound, TypeInfo lowerBound) {
+        if (lowerBound != null) {
+            return "? super " + type(lowerBound);
+        }
+        return upperBound == null || isObject(upperBound) ? "?" : "? extends " + type(upperBound);
+    }
+
     private static boolean isObject(TypeInfo type) {
-        return type instanceof TypeInfo.ClassType classType && "java.lang.Object".equals(classType.name().value());
+        return type instanceof TypeInfo.ClassType(var name) && "java.lang.Object".equals(name.value());
     }
 
     /** Where a bean comes from, as Vauban made it. */

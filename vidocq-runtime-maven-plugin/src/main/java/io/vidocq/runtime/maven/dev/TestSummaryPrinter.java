@@ -75,8 +75,12 @@ final class TestSummaryPrinter {
     /** {@code  FAILED <test> — <simple type>: <message>}. */
     static String failureLine(TestResults.Failure failure) {
         String type = failure.type().substring(failure.type().lastIndexOf('.') + 1);
-        String what = type.isEmpty() ? failure.message()
-                : failure.message().isEmpty() ? type : type + ": " + failure.message();
+        String what;
+        if (type.isEmpty()) {
+            what = failure.message();
+        } else {
+            what = failure.message().isEmpty() ? type : type + ": " + failure.message();
+        }
         return "  FAILED " + failure.test() + (what.isEmpty() ? "" : " — " + what);
     }
 }

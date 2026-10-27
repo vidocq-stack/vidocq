@@ -91,27 +91,27 @@ final class LogRing extends Handler {
         setLevel(Level.ALL);
     }
 
-    /** Keeps {@code record} as a line of strings, and counts it when it is a WARNING or a SEVERE one. Never throws. */
+    /** Keeps the record as a line of strings, and counts it when it is a WARNING or a SEVERE one. Never throws. */
     @Override
-    public void publish(LogRecord record) {
-        if (record == null || !isLoggable(record)) {
+    public void publish(LogRecord logRecord) {
+        if (logRecord == null || !isLoggable(logRecord)) {
             return;
         }
         try {
-            int level = record.getLevel().intValue();
+            int level = logRecord.getLevel().intValue();
             if (level >= Level.SEVERE.intValue()) {
                 errors.increment();
             } else if (level >= Level.WARNING.intValue()) {
                 warnings.increment();
             }
-            String time = LocalTime.ofInstant(record.getInstant(), zone).format(TIME);
-            String logger = record.getLoggerName() == null ? "" : record.getLoggerName();
+            String time = LocalTime.ofInstant(logRecord.getInstant(), zone).format(TIME);
+            String logger = logRecord.getLoggerName() == null ? "" : logRecord.getLoggerName();
             String thread = Thread.currentThread().getName();
             if (thread.isEmpty()) {
                 thread = "#" + Thread.currentThread().threadId();
             }
             long sequence = next.getAndIncrement();
-            store(new Line(sequence, time, record.getLevel().getName(), logger, thread, message(record)));
+            store(new Line(sequence, time, logRecord.getLevel().getName(), logger, thread, message(logRecord)));
         } catch (RuntimeException | LinkageError unreadable) {
             // a record the ring cannot read is left out: logging never fails because of the console
         }

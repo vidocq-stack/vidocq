@@ -105,7 +105,7 @@ final class FoyDeployments {
         }
     }
 
-    synchronized void record(String name, String listener, FoyChappeBoot.Mounted mounted) {
+    synchronized void register(String name, String listener, FoyChappeBoot.Mounted mounted) {
         live.add(new Live(name, listener, mounted));
         if (boot != null) {
             String contextPath = mounted.servletContext().getContextPath();

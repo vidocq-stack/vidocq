@@ -81,7 +81,10 @@ public final class StartupRecorder {
 
     /** What the boot was doing when it failed: the current step, else the current phase, else {@code boot}. */
     public String failing() {
-        return step != null ? step : phase != null ? phase : "boot";
+        if (step != null) {
+            return step;
+        }
+        return phase != null ? phase : "boot";
     }
 
     /** Keeps how long the next extension's {@code onStart} took, in the order the extensions start. */

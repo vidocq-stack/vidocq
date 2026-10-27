@@ -31,23 +31,23 @@ import java.io.IOException;
 public final class EachTag extends SimpleTagSupport {
 
     private Iterable<?> items;
-    private String var;
+    private String variable;
 
     public void setItems(Iterable<?> items) {
         this.items = items;
     }
 
-    public void setVar(String var) {
-        this.var = var;
+    public void setVar(String variable) {
+        this.variable = variable;
     }
 
     @Override
     public void doTag() throws JspException, IOException {
         if (items == null || getJspBody() == null) return;
         for (Object item : items) {
-            getJspContext().setAttribute(var, item);
+            getJspContext().setAttribute(variable, item);
             getJspBody().invoke(null);
         }
-        getJspContext().removeAttribute(var);
+        getJspContext().removeAttribute(variable);
     }
 }

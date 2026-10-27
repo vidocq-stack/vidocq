@@ -78,7 +78,7 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
                 .orElseThrow(() -> new IllegalStateException(key
                         + ".type=servlet, but the application has no servlet, filter, listener, web.xml "
                         + "nor ServletContainerInitializer"));
-        deployments.record(cfg.name(), cfg.listener(), mounted);
+        deployments.register(cfg.name(), cfg.listener(), mounted);
         return mounted.handler();
     }
 }

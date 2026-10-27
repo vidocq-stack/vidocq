@@ -109,7 +109,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         }
         FoyChappeBoot.Mounted mounted = deployed.get();
         // Recorded before mounting: a refused mount (duplicate prefix) still leaves it to onStop.
-        deployments.record(AUTO_MOUNT, settings.listener(), mounted);
+        deployments.register(AUTO_MOUNT, settings.listener(), mounted);
         target.mount(settings.listener(), mounted.mountPrefix(), mounted.handler());
         LOG.log(System.Logger.Level.INFO, "Foy Servlet extension mounted on listener={0} prefix={1}",
                 settings.listener(), mounted.mountPrefix().isEmpty() ? "/" : mounted.mountPrefix());

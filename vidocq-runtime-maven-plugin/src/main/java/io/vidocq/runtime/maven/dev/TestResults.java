@@ -144,8 +144,11 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
         Counts counts = reports.counts();
         State state;
         if (reports.readable() == 0 || counts.run() == 0) {
-            state = exitCode != 0 ? (compilerFailed ? State.COMPILE_ERROR : State.ERROR)
-                    : reports.unreadable() > 0 ? State.PASSED : State.NO_TESTS;
+            if (exitCode != 0) {
+                state = compilerFailed ? State.COMPILE_ERROR : State.ERROR;
+            } else {
+                state = reports.unreadable() > 0 ? State.PASSED : State.NO_TESTS;
+            }
         } else if (counts.failures() + counts.errors() > 0) {
             state = State.FAILED;
         } else if (exitCode != 0) {
@@ -177,7 +180,10 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
     private static int firstOf(String text, char a, char b) {
         int i = text.indexOf(a);
         int j = text.indexOf(b);
-        return i < 0 ? j : j < 0 ? i : Math.min(i, j);
+        if (i < 0) {
+            return j;
+        }
+        return j < 0 ? i : Math.min(i, j);
     }
 
     private static TestResults flat(TestResults previous) {

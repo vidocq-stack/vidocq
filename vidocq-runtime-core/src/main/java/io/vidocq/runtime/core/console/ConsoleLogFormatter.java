@@ -81,22 +81,23 @@ public final class ConsoleLogFormatter extends Formatter {
     }
 
     @Override
-    public String format(LogRecord record) {
-        Level level = record.getLevel() == null ? Level.INFO : record.getLevel();
+    public String format(LogRecord logRecord) {
+        Level level = logRecord.getLevel() == null ? Level.INFO : logRecord.getLevel();
         String name = levelName(level);
         StringBuilder line = new StringBuilder(192).append('[');
         line.append(colors ? Ansi.wrap(levelColor(level), name) : name);
         line.repeat(' ', LEVEL_WIDTH - name.length());
         line.append("][")
-                .append(TIMESTAMP.format(record.getInstant().atZone(zone == null ? ZoneId.systemDefault() : zone)))
+                .append(TIMESTAMP.format(logRecord.getInstant().atZone(zone == null ? ZoneId.systemDefault() : zone)))
                 .append("][")
                 .append(fitEnd(threadName(Thread.currentThread()), THREAD_WIDTH))
                 .append("][")
-                .append(source(record.getSourceClassName(), record.getSourceMethodName(), record.getLoggerName()))
+                .append(source(logRecord.getSourceClassName(), logRecord.getSourceMethodName(),
+                        logRecord.getLoggerName()))
                 .append("] : ")
-                .append(formatMessage(record))
+                .append(formatMessage(logRecord))
                 .append(System.lineSeparator());
-        Throwable thrown = record.getThrown();
+        Throwable thrown = logRecord.getThrown();
         if (thrown != null) {
             StringWriter trace = new StringWriter();
             try (PrintWriter writer = new PrintWriter(trace)) {

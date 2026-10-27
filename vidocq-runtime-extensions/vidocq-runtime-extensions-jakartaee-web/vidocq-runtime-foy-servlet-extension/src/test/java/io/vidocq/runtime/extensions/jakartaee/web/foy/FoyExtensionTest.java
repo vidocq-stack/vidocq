@@ -153,7 +153,7 @@ class FoyExtensionTest {
         FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(null, loaderWith(root, WEB_XML), "/shop",
                 1800, "UTF-8", config(Map.of())).orElseThrow();
 
-        deployments.record("vidocq.servlet", "admin", mounted);
+        deployments.register("vidocq.servlet", "admin", mounted);
 
         ServletMount mount = ServletMounts.of(boot).getFirst();
         assertEquals("vidocq.servlet", mount.name());

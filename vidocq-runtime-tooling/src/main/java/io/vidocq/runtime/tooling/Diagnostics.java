@@ -71,7 +71,9 @@ public final class Diagnostics {
 
     /** Counts diagnostics by status. */
     public static Summary summarize(List<Diagnostic> diagnostics) {
-        int ok = 0, warn = 0, fail = 0;
+        int ok = 0;
+        int warn = 0;
+        int fail = 0;
         for (Diagnostic d : diagnostics) {
             switch (d.status()) {
                 case OK   -> ok++;
