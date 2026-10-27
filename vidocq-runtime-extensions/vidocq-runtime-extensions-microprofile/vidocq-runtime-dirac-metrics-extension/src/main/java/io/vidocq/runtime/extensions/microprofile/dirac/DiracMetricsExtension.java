@@ -50,9 +50,7 @@ public final class DiracMetricsExtension implements VidocqExtension, StartupRepo
     private volatile DiracLiveBean live = DiracLiveBean.NONE;
 
     /** Created by the {@link java.util.ServiceLoader}. */
-    public DiracMetricsExtension() {
-        // Nothing to set up: the service loader only needs this public no-argument constructor.
-    }
+    public DiracMetricsExtension() {}
 
     @Override
     public String name() {

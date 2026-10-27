@@ -382,7 +382,7 @@ public final class LaunchModeResolver {
     private static String setting(Function<String, Optional<String>> config, String key) {
         try {
             return config.apply(key).map(String::strip).filter(value -> !value.isEmpty()).orElse(null);
-        } catch (RuntimeException _) {
+        } catch (RuntimeException unreadable) {
             return null;
         }
     }

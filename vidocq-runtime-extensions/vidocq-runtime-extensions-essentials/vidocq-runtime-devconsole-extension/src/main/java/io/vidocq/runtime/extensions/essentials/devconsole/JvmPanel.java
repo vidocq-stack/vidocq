@@ -224,7 +224,7 @@ final class JvmPanel implements DevConsolePanel {
     private static double read(DoubleSupplier figure) {
         try {
             return figure.getAsDouble();
-        } catch (RuntimeException _) {
+        } catch (RuntimeException unreadable) {
             return Double.NaN;
         }
     }

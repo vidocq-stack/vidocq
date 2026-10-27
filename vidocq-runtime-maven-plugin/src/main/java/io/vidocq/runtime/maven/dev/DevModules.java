@@ -89,7 +89,7 @@ final class DevModules {
                 return Optional.empty();
             }
             return Optional.of(ids.getFirst());
-        } catch (IOException | SecurityException _) {
+        } catch (IOException | SecurityException unreadable) {
             warn.accept("Dev tools: " + jar.getFileName() + " cannot be read; that extension gets no dev module");
             return Optional.empty();
         }

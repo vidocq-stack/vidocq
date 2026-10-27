@@ -184,7 +184,7 @@ final class Scalars {
         if (type == UUID.class) {
             try {
                 return UUID.fromString(text(json, name));
-            } catch (IllegalArgumentException _) {
+            } catch (IllegalArgumentException malformed) {
                 throw new ArgumentException(name, "not a UUID");
             }
         }
@@ -208,7 +208,7 @@ final class Scalars {
             BigDecimal number;
             try {
                 number = new BigDecimal(text);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException notANumber) {
                 throw new ArgumentException(name, INTEGERS.contains(type) ? "not an integer" : "not a number");
             }
             return fromJson(type, number, name);
@@ -264,7 +264,7 @@ final class Scalars {
         BigInteger value;
         try {
             value = number.toBigIntegerExact();
-        } catch (ArithmeticException _) {
+        } catch (ArithmeticException fraction) {
             throw new ArgumentException(name, "not an integer");
         }
         try {
@@ -281,7 +281,7 @@ final class Scalars {
                 return value.byteValueExact();
             }
             return value;
-        } catch (ArithmeticException _) {
+        } catch (ArithmeticException tooLarge) {
             throw outOfRange(type, name);
         }
     }
@@ -295,7 +295,7 @@ final class Scalars {
             throws ArgumentException {
         try {
             return parse.apply(text(json, name));
-        } catch (DateTimeParseException _) {
+        } catch (DateTimeParseException malformed) {
             throw new ArgumentException(name, "not an ISO " + what);
         }
     }

@@ -228,7 +228,7 @@ public final class HumboldtExtension implements VidocqExtension {
                             name.toUpperCase(Locale.ROOT).replace('.', '_'), v));
                 }
             }
-        } catch (ReflectiveOperationException | RuntimeException _) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             // MP Config absent from the assembled runtime — not an error.
         }
     }

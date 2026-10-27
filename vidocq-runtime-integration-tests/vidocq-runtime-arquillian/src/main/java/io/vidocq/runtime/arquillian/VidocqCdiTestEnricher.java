@@ -94,7 +94,7 @@ public class VidocqCdiTestEnricher implements TestEnricher {
                 values[i] = container.resolveParameter(parameter.getType(),
                         parameter.getParameterizedType(), null, qualifiersOf(parameter),
                         method, null, parameter, i);
-            } catch (RuntimeException _) {
+            } catch (RuntimeException e) {
                 values[i] = null;
             }
         }

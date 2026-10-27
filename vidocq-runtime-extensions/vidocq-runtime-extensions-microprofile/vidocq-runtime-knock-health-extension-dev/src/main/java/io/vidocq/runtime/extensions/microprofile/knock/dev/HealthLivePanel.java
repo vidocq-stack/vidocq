@@ -38,9 +38,7 @@ public final class HealthLivePanel implements LivePanel {
     private volatile KnockLiveBean live = KnockLiveBean.NONE;
 
     /** Created by the service loader. */
-    public HealthLivePanel() {
-        // Nothing to set up: the service loader only needs this public no-argument constructor.
-    }
+    public HealthLivePanel() {}
 
     @Override
     public String id() {

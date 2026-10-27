@@ -149,7 +149,7 @@ final class StartupFacts {
                 return List.of();
             }
             return java.util.Arrays.stream(value.split(",")).map(String::strip).filter(b -> !b.isEmpty()).toList();
-        } catch (IOException | RuntimeException _) {
+        } catch (IOException | RuntimeException unreadable) {
             return List.of();
         }
     }

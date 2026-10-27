@@ -188,7 +188,7 @@ final class RepositoryActions {
         for (Class<?> repository : repositories) {
             try {
                 return Class.forName(className, false, repository.getClassLoader());
-            } catch (ClassNotFoundException | LinkageError _) {
+            } catch (ClassNotFoundException | LinkageError notThere) {
                 // the next repository's loader may know it
             }
         }
@@ -404,7 +404,7 @@ final class RepositoryActions {
     private Object bean(Entry entry) throws Refused {
         try {
             return beans.reference(entry.repository());
-        } catch (RuntimeException | LinkageError _) {
+        } catch (RuntimeException | LinkageError none) {
             throw new Refused("no bean for " + entry.repositoryName());
         }
     }

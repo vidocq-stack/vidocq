@@ -264,7 +264,7 @@ final class Snapshot implements Handler {
         try {
             String asked = request.queryParams().get("since");
             return asked == null ? -1 : Long.parseLong(asked.trim());
-        } catch (RuntimeException _) {
+        } catch (RuntimeException unusable) {
             return -1;
         }
     }
@@ -296,7 +296,7 @@ final class Snapshot implements Handler {
         RecordingSample sample = new RecordingSample();
         try {
             panel.panel().sample(sample);
-        } catch (RuntimeException | LinkageError _) {
+        } catch (RuntimeException | LinkageError failure) {
             return;
         }
         history.record(time, panel.id(), sample);

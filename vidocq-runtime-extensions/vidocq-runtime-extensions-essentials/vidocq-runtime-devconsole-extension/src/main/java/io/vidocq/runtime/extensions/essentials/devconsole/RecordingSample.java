@@ -156,8 +156,8 @@ final class RecordingSample implements PanelSample {
                             sink.measure(group, key, "gauge", unit(gauge.unit()), gauge.value(), gauge.max());
                     case Counter counter ->
                             sink.measure(group, key, "counter", unit(counter.unit()), counter.total(), Double.NaN);
-                    case Absent _ -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
-                    default -> { /* a duration, a text or a table: nothing a chart draws */ }
+                    case Absent ignored -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
+                    default -> { }      // a duration, a text or a table: nothing a chart draws
                 }
             });
         }
@@ -376,7 +376,7 @@ final class RecordingSample implements PanelSample {
                 return arguments.startsWith("{") && arguments.endsWith("}");
             }
             return JsonValues.parse(arguments, PanelAction.Argument.MAX_JSON_DEPTH) instanceof Map;
-        } catch (IllegalArgumentException _) {
+        } catch (IllegalArgumentException notAReplay) {
             return false;
         }
     }

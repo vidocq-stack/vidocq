@@ -121,7 +121,7 @@ public final class DependencyCodegenCache {
     public Optional<DependencyCodegen.Output> get(String key) throws IOException {
         try {
             return read(key, true);
-        } catch (NoSuchFileException _) {
+        } catch (NoSuchFileException vanished) {
             // Another build is replacing or discarding the entry: a miss, not a failure.
             return Optional.empty();
         }

@@ -106,7 +106,7 @@ final class TestRunner implements ContinuousTesting.Launcher {
         try {
             String log = Files.readString(logFile, StandardCharsets.UTF_8);
             return log.contains("COMPILATION ERROR") || log.contains("Compilation failure");
-        } catch (IOException | UncheckedIOException _) {
+        } catch (IOException | UncheckedIOException unreadable) {
             return false;
         }
     }

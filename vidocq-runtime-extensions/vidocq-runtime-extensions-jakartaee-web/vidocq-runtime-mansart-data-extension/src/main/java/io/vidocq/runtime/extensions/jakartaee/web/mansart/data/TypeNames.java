@@ -43,7 +43,7 @@ final class TypeNames {
     private static String raw(Type type) {
         try {
             return type.getTypeName();
-        } catch (RuntimeException | LinkageError _) {
+        } catch (RuntimeException | LinkageError unreadable) {
             return "?";
         }
     }

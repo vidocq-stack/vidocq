@@ -52,9 +52,7 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
     private volatile KnockLiveBean live = KnockLiveBean.NONE;
 
     /** Created by the {@link java.util.ServiceLoader}. */
-    public KnockHealthExtension() {
-        // Nothing to set up: the service loader only needs this public no-argument constructor.
-    }
+    public KnockHealthExtension() {}
 
     @Override
     public String name() {

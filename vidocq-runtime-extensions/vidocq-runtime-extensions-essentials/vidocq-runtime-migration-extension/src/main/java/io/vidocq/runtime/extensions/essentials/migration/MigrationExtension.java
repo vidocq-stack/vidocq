@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.essentials.migration;
 
 import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl;
+import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl.LiveOutcome;
 import io.vidocq.runtime.extensions.essentials.migration.live.MigrationLive;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -321,7 +322,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
             requireRunning();
             try {
                 migrator.clean(t);
-            } catch (UnsupportedOperationException _) {
+            } catch (UnsupportedOperationException unsupported) {
                 return name + ": " + migrator.engine() + " cannot clean a schema, nothing dropped";
             }
             MigrationResult r = run(t, "clean-and-migrate", () -> migrator.migrate(t));
@@ -359,7 +360,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         String absent = null;
         try {
             info = migrator.info(t);
-        } catch (UnsupportedOperationException _) {
+        } catch (UnsupportedOperationException unsupported) {
             absent = migrator.engine() + " cannot list the migrations";
         } catch (RuntimeException failed) {
             // the class only: the message of a JDBC failure may carry the URL, or worse

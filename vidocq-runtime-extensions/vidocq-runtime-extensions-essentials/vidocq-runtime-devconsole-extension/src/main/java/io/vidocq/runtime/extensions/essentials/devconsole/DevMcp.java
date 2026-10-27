@@ -99,7 +99,7 @@ final class DevMcp {
         String body;
         try {
             body = ConsoleActions.body(request, MAX_BODY);
-        } catch (ConsoleActions.TooLarge _) {
+        } catch (ConsoleActions.TooLarge tooLarge) {
             return ConsoleActions.text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + MAX_BODY
                     + " bytes.");
         } catch (IOException | RuntimeException unreadable) {

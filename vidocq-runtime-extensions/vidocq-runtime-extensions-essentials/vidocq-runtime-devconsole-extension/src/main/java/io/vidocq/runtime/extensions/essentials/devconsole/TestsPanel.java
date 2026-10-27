@@ -123,7 +123,7 @@ final class TestsPanel implements DevConsolePanel {
                 refresh();
                 try {
                     Thread.sleep(POLL_MILLIS);
-                } catch (InterruptedException _) {
+                } catch (InterruptedException stopping) {
                     return;
                 }
             }
@@ -159,7 +159,7 @@ final class TestsPanel implements DevConsolePanel {
         try {
             modified = Files.getLastModifiedTime(results).toMillis();
             size = Files.size(results);
-        } catch (IOException _) {
+        } catch (IOException noFileYet) {
             return;
         }
         if (modified == lastModified && size == lastSize) {

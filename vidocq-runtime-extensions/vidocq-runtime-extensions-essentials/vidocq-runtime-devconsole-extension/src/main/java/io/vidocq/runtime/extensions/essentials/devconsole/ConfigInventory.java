@@ -94,7 +94,7 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
             Set<String> names;
             try {
                 names = source.getPropertyNames();
-            } catch (RuntimeException _) {
+            } catch (RuntimeException unreadable) {
                 continue;
             }
             for (String key : names == null ? Set.<String>of() : names) {
@@ -136,7 +136,7 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
                 String value;
                 try {
                     value = source.getValue(key);
-                } catch (RuntimeException _) {
+                } catch (RuntimeException unreadable) {
                     continue;
                 }
                 if (value != null) {

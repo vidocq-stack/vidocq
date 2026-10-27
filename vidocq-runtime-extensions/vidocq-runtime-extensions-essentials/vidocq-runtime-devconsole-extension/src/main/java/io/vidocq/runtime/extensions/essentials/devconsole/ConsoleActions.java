@@ -207,7 +207,7 @@ final class ConsoleActions {
         String body;
         try {
             body = body(request, max);
-        } catch (TooLarge _) {
+        } catch (TooLarge tooLarge) {
             return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + max + " bytes.");
         } catch (IOException | RuntimeException unreadable) {
             return text(StatusCode.BAD_REQUEST, "The body is not UTF-8 text.");
@@ -238,7 +238,7 @@ final class ConsoleActions {
                     ? json(StatusCode.OK, answer(outcome))
                     : json(StatusCode.INTERNAL_SERVER_ERROR, new JsonWriter().beginObject().name("error")
                             .value(outcome.text()).endObject().toString());
-        } catch (TimeoutException | ExecutionException _) {
+        } catch (TimeoutException | ExecutionException stillRunning) {
             return stillRunning();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();

@@ -62,7 +62,7 @@ final class JsonCheck {
             json.value(0);
             json.blanks();
             return json.at == text.length();
-        } catch (IllegalArgumentException _) {
+        } catch (IllegalArgumentException malformed) {
             return false;
         }
     }
