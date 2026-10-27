@@ -128,33 +128,47 @@ final class HealthPanel {
                 }
             }
             if (written < MAX_CHECK_VALUES) {
-                String key = keys.allocate(display);
-                if (result == null) {
-                    group.absent(key, NEVER_CALLED);
-                } else {
-                    group.gauge(key, result.status() == HealthCheckResponse.Status.UP ? 1 : 0, 1, Unit.COUNT)
-                            .text(key + CheckKeys.AT, time(result, zone));
-                }
+                writeCheck(group, keys.allocate(display), result, zone);
                 written++;
             }
             if (rows.size() < MAX_ROWS) {
-                rows.add(result == null
-                        ? List.of(display, "", NEVER_CALLED, "", "")
-                        : List.of(display, String.valueOf(result.responseName()), result.status().name(),
-                                time(result, zone), data(result.data())));
+                rows.add(row(display, result, zone));
             }
         }
-        if (up + down == 0) {
-            group.absent(STATUS, NEVER_CALLED);
-        } else {
-            group.text(STATUS, down > 0 ? "DOWN" : "UP")
-                    .gauge("up", up, names.size(), Unit.COUNT)
-                    .gauge("down", down, names.size(), Unit.COUNT);
-        }
+        writeStatus(group, up, down, names.size());
         if (written < names.size()) {
             group.text("omitted", (names.size() - written) + " checks omitted");
         }
         group.table(CHECKS, COLUMNS, rows);
+    }
+
+    /** One check's value: its status as a 0/1 gauge and the time it was observed, or never called. */
+    private static void writeCheck(PanelSample group, String key, CheckResult result, ZoneId zone) {
+        if (result == null) {
+            group.absent(key, NEVER_CALLED);
+        } else {
+            group.gauge(key, result.status() == HealthCheckResponse.Status.UP ? 1 : 0, 1, Unit.COUNT)
+                    .text(key + CheckKeys.AT, time(result, zone));
+        }
+    }
+
+    /** One row of the checks table. */
+    private static List<String> row(String display, CheckResult result, ZoneId zone) {
+        return result == null
+                ? List.of(display, "", NEVER_CALLED, "", "")
+                : List.of(display, String.valueOf(result.responseName()), result.status().name(),
+                        time(result, zone), data(result.data()));
+    }
+
+    /** The probe's overall status and its up and down counts, or never called when no check ran. */
+    private static void writeStatus(PanelSample group, int up, int down, int checks) {
+        if (up + down == 0) {
+            group.absent(STATUS, NEVER_CALLED);
+        } else {
+            group.text(STATUS, down > 0 ? "DOWN" : "UP")
+                    .gauge("up", up, checks, Unit.COUNT)
+                    .gauge("down", down, checks, Unit.COUNT);
+        }
     }
 
     private static String time(CheckResult result, ZoneId zone) {
