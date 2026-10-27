@@ -42,6 +42,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JdqlLanguageTest {
 
+    @Test
+    void anAttributeTypeIsItsSimpleNameElseItsNameElseAQuestionMark() {
+        Class<?> anonymous = new Object() { }.getClass();
+
+        assertEquals("String", JdqlLanguage.simpleName(String.class));
+        assertEquals(anonymous.getName(), JdqlLanguage.simpleName(anonymous));
+        assertEquals("?", JdqlLanguage.simpleName(null));
+    }
+
     private static MansartDataCatalogue.Entity entity(String name, Class<?> type, String table) {
         return new MansartDataCatalogue.Entity(name, type.getName(), table, List.of(), null);
     }

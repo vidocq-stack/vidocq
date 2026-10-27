@@ -202,7 +202,7 @@ final class JdqlLanguage {
     }
 
     /** The simple name of {@code type}, its name when it has none (an anonymous class), {@code ?} when unknown. */
-    private static String simpleName(Class<?> type) {
+    static String simpleName(Class<?> type) {
         if (type == null) {
             return "?";
         }
