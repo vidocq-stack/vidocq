@@ -240,7 +240,7 @@ public final class VidocqAppLayer {
      * The comma-separated items of {@code text}, the blanks around each comma dropped, and the empty items at the
      * end too, as {@link String#split(String)} drops them.
      */
-    private static List<String> commaSeparated(String text) {
+    static List<String> commaSeparated(String text) {
         java.util.ArrayList<String> items = new java.util.ArrayList<>();
         for (String item : text.split(",", -1)) {
             items.add(item.strip());

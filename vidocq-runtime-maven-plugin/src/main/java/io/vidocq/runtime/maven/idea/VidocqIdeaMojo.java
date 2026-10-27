@@ -283,7 +283,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
      * JRE, keeping everything else about this particular file (its goal, its name, or its debug host and
      * port) unchanged; {@link #pinHint} uses it to tell whether a user-owned file differs only by its JDK.
      */
-    private record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
+    record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
                           State state, UnaryOperator<String> withJre) {
 
         @Override
