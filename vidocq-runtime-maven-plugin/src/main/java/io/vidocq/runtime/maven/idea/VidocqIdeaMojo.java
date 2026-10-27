@@ -288,9 +288,11 @@ public class VidocqIdeaMojo extends AbstractMojo {
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof Target t && application.equals(t.application) && shownPath.equals(t.shownPath)
-                    && file.equals(t.file) && body.equals(t.body) && Arrays.equals(onDisk, t.onDisk)
-                    && state == t.state && withJre.equals(t.withJre);
+            return other instanceof Target(var otherApplication, var otherShownPath, var otherFile, var otherBody,
+                                           var otherOnDisk, var otherState, var otherWithJre)
+                    && application.equals(otherApplication) && shownPath.equals(otherShownPath)
+                    && file.equals(otherFile) && body.equals(otherBody) && Arrays.equals(onDisk, otherOnDisk)
+                    && state == otherState && withJre.equals(otherWithJre);
         }
 
         @Override

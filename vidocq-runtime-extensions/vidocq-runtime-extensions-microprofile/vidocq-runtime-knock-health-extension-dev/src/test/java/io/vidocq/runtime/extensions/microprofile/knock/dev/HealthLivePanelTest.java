@@ -151,7 +151,7 @@ class HealthLivePanelTest {
 
     @Test
     void aContainerWithoutKnockSaysSo() {
-        try (VaubanContainer _ = started()) {
+        try (var _ = started()) {
             RecordingSample out = new RecordingSample();
             panel.sample(out);
 

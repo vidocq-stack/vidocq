@@ -145,16 +145,16 @@ final class HealthPanel {
             }
         }
         if (up + down == 0) {
-            group.absent(STATUS, NEVER_CALLED);
+            group.absent("status", NEVER_CALLED);
         } else {
-            group.text(STATUS, down > 0 ? "DOWN" : "UP")
+            group.text("status", down > 0 ? "DOWN" : "UP")
                     .gauge("up", up, names.size(), Unit.COUNT)
                     .gauge("down", down, names.size(), Unit.COUNT);
         }
         if (written < names.size()) {
             group.text("omitted", (names.size() - written) + " checks omitted");
         }
-        group.table(CHECKS, COLUMNS, rows);
+        group.table("checks", COLUMNS, rows);
     }
 
     private static String time(CheckResult result, ZoneId zone) {

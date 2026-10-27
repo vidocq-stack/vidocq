@@ -96,7 +96,6 @@ public final class EnrichedJars {
     private static final String AUTOMATIC_BRICK_SELECTED = "brick-selected";
     private static final String SERVICES_DIR = "META-INF/services/";
     private static final String META_INF = "META-INF/";
-    private static final String CLASS_SUFFIX = ".class";
 
     /**
      * One scanned dependency: the original jar, its artifact id and {@code groupId:artifactId:version}, and the
@@ -343,7 +342,7 @@ public final class EnrichedJars {
             throws IOException {
         Map<String, byte[]> patch = readTree(patchDir);
         List<byte[]> patchClasses = patch.entrySet().stream()
-                .filter(e -> e.getKey().endsWith(CLASS_SUFFIX)).map(Map.Entry::getValue).toList();
+                .filter(e -> e.getKey().endsWith(".class")).map(Map.Entry::getValue).toList();
         Set<String> requires = VaubanModuleReferences.of(patchClasses);
 
         Map<String, byte[]> entries = new LinkedHashMap<>();
@@ -402,7 +401,7 @@ public final class EnrichedJars {
                     : bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses));
             // A descriptor that lists its packages must list those of the added classes and providers too.
             Set<String> addedPackages = new TreeSet<>();
-            patch.keySet().stream().filter(n -> n.endsWith(CLASS_SUFFIX) && !n.startsWith(META_INF))
+            patch.keySet().stream().filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
                     .forEach(n -> addedPackages.add(n.lastIndexOf('/') < 0 ? ""
                             : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
             providers.forEach(p -> addedPackages.add(packageOf(p)));
@@ -562,7 +561,7 @@ public final class EnrichedJars {
     private static List<String> providersIn(Path patchDir) throws IOException {
         return readTree(patchDir).keySet().stream()
                 .filter(name -> name.equals(PROVIDER_CLASS_FILE) || name.endsWith("/" + PROVIDER_CLASS_FILE))
-                .map(name -> name.substring(0, name.length() - CLASS_SUFFIX.length()).replace('/', '.'))
+                .map(name -> name.substring(0, name.length() - ".class".length()).replace('/', '.'))
                 .sorted().toList();
     }
 

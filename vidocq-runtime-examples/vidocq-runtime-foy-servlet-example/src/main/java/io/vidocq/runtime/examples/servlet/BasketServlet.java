@@ -25,6 +25,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -33,6 +34,8 @@ import java.util.Map;
  */
 @WebServlet("/basket")
 public class BasketServlet extends HttpServlet {
+
+    private static final String BASKET = "/basket";
 
     @Inject
     Menu menu;
@@ -58,7 +61,7 @@ public class BasketServlet extends HttpServlet {
             body.append("<p>The basket is empty. <a href=\"").append(req.getContextPath())
                     .append("/\">See the menu</a>.</p>");
         } else {
-            String action = req.getContextPath() + "/basket";
+            String action = req.getContextPath() + BASKET;
             body.append("<table>");
             for (Map.Entry<Dish, Integer> line : basket.lines().entrySet()) {
                 Dish dish = line.getKey();
@@ -81,18 +84,26 @@ public class BasketServlet extends HttpServlet {
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) {
         String add = req.getParameter("add");
         String remove = req.getParameter("remove");
+        String next;
         if (add != null) {
             menu.find(add).ifPresent(basket::add);
-            Html.redirect(resp, req.getContextPath() + "/");
+            next = "/";
         } else if (remove != null) {
             menu.find(remove).ifPresent(basket::remove);
-            Html.redirect(resp, req.getContextPath() + "/basket");
+            next = BASKET;
         } else if (req.getParameter("order") != null && basket.count() > 0) {
             Kitchen.Order order = kitchen.place(basket);
             basket.clear();
-            Html.redirect(resp, req.getContextPath() + "/basket?placed=" + order.number());
+            next = BASKET + "?placed=" + order.number();
         } else {
-            Html.redirect(resp, req.getContextPath() + "/basket");
+            next = BASKET;
+        }
+        // Always one of this application's own pages: the visitor's input picks which, never where.
+        String location = req.getContextPath() + next;
+        try {
+            resp.sendRedirect(location);
+        } catch (IOException e) {
+            Html.failed(resp, e);
         }
     }
 }

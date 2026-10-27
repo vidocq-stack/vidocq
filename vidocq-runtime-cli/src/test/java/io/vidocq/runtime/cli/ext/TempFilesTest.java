@@ -40,7 +40,6 @@ class TempFilesTest {
             assertTrue(file.getFileName().toString().startsWith("vidocq-test"));
             if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
                 assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
-                assertEquals(1, TempFiles.ownerOnly().length);
             }
         } finally {
             Files.deleteIfExists(file);

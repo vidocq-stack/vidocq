@@ -70,15 +70,6 @@ final class Html {
         }
     }
 
-    /** Redirects the visitor to {@code location}. */
-    static void redirect(HttpServletResponse resp, String location) {
-        try {
-            resp.sendRedirect(location);
-        } catch (IOException e) {
-            failed(resp, e);
-        }
-    }
-
     /**
      * An answer that could not be given: the visitor went away, or the container failed. It is logged, and turned
      * into a 500 while the response is not committed yet.

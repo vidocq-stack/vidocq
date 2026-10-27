@@ -222,10 +222,10 @@ public final class StartupReportRenderer {
             switch (line) {
                 case Cells cells -> table.add(cells);
                 case Row row -> out.addAll(row(row.key(), clean(row.value()), width));
-                case Items(var key, var items) -> {
-                    if (!items.isEmpty()) {
-                        List<String> cleaned = items.stream().map(StartupReportRenderer::clean).toList();
-                        out.addAll(row(key, String.join(", ", capped(cleaned)), width));
+                case Items items -> {
+                    if (!items.items().isEmpty()) {
+                        List<String> cleaned = items.items().stream().map(StartupReportRenderer::clean).toList();
+                        out.addAll(row(items.key(), String.join(", ", capped(cleaned)), width));
                     }
                 }
                 case Text(var text) -> out.addAll(wrap(" ".repeat(INDENT), clean(text)));

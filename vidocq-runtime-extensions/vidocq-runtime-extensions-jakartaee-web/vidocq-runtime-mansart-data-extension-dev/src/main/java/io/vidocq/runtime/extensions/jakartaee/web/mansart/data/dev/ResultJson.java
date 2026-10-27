@@ -44,8 +44,6 @@ final class ResultJson {
     /** The most elements an array holds. */
     static final int MAX_ROWS = 100;
 
-    private static final String NO_ROW = "no row";
-    private static final String ONE_ROW = "1 row";
     /** The summary of an array cut at {@link #MAX_ROWS}. */
     private static final String FIRST_ROWS = "first " + MAX_ROWS + " rows";
 
@@ -72,12 +70,12 @@ final class ResultJson {
             return new Result(null, "done", false);
         }
         if (value == null) {
-            return new Result("null", NO_ROW, false);
+            return new Result("null", "no row", false);
         }
         if (value instanceof Optional<?> optional) {
             return optional.isPresent()
-                    ? new Result(Json.write(node(optional.get(), entities, 0)), ONE_ROW, false)
-                    : new Result("null", NO_ROW, false);
+                    ? new Result(Json.write(node(optional.get(), entities, 0)), "1 row", false)
+                    : new Result("null", "no row", false);
         }
         if (value instanceof Stream<?> stream) {
             try (stream) {
@@ -108,7 +106,7 @@ final class ResultJson {
             return rows(read, entities);
         }
         Object node = node(value, entities, 0);
-        return new Result(Json.write(node), entities.isEntity(value.getClass()) ? ONE_ROW : String.valueOf(node),
+        return new Result(Json.write(node), entities.isEntity(value.getClass()) ? "1 row" : String.valueOf(node),
                 false);
     }
 
@@ -126,9 +124,9 @@ final class ResultJson {
     /** {@code no row}, {@code 1 row} or {@code N rows}. */
     static String count(long n) {
         if (n == 0) {
-            return NO_ROW;
+            return "no row";
         }
-        return n == 1 ? ONE_ROW : n + " rows";
+        return n == 1 ? "1 row" : n + " rows";
     }
 
     /**
@@ -196,7 +194,7 @@ final class ResultJson {
             out.add(values);
         }
         return new Result(ActionResult.rows(null, shown, out, more).body(),
-                more ? FIRST_ROWS : count(out.size()), true);
+                more ? "first " + MAX_ROWS + " rows" : count(out.size()), true);
     }
 
     /** {@code value} as JSON, as an element of a list is written: an entity as an object, a scalar as itself. */

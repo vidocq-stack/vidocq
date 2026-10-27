@@ -50,7 +50,6 @@ public final class CliParser {
     private static final String BUILD = "build";
     private static final String CLEAN = "clean";
     private static final String UPDATE = "update";
-    private static final String PORT = "--port";
     private static final String DRY_RUN = "--dry-run";
 
     private CliParser() {}
@@ -89,7 +88,7 @@ public final class CliParser {
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case PORT, "-p"   -> { port = parseInt(args, ++i, PORT); portExplicit = true; }
+                case "--port", "-p"   -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
                 case DEBUG        -> debug  = true;
                 default               -> unknownOpt(args[i], START);
@@ -105,7 +104,7 @@ public final class CliParser {
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case PORT, "-p"    -> { port = parseInt(args, ++i, PORT); portExplicit = true; }
+                case "--port", "-p"    -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
                 case "--profile", "-P" -> profile = value(args, ++i, "--profile");
                 case DEBUG         -> debug   = true;
                 default                -> unknownOpt(args[i], "dev");

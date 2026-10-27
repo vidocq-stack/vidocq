@@ -77,10 +77,8 @@ final class DevMcp {
     private static final int SNAPSHOT_DEPTH = 64;
     private static final String READ_ONLY = " Read-only: it changes nothing in the application.";
     private static final String JSONRPC = "jsonrpc";
-    private static final String METHOD = "method";
     private static final String PANELS = "panels";
     private static final String TITLE = "title";
-    private static final String STARTUP = "startup";
 
     private final Snapshot snapshot;
     private final String version;
@@ -130,18 +128,18 @@ final class DevMcp {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "A batch is not supported: send one "
                     + "request per POST."));
         }
-        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get(JSONRPC))) {
+        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get("jsonrpc"))) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
         Object id = request.get("id");
         boolean hasId = request.containsKey("id");
-        if (!request.containsKey(METHOD)) {
+        if (!request.containsKey("method")) {
             // a response from the client, which this server never asked for anything: nothing to answer
             return hasId && (request.containsKey("result") || request.containsKey("error"))
                     ? accepted()
                     : answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
-        if (!(request.get(METHOD) instanceof String method)) {
+        if (!(request.get("method") instanceof String method)) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "The method is not a string."));
         }
         if (!hasId) {
@@ -245,23 +243,23 @@ final class DevMcp {
         Map<String, Object> document = document();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("state", document.get("state"));
-        Map<?, ?> startup = document.get(STARTUP) == null ? null : map(document.get(STARTUP));
+        Map<?, ?> startup = document.get("startup") == null ? null : map(document.get("startup"));
         switch (name) {
             case "vidocq_report" -> {
                 out.put("console", document.get("console"));
-                out.put(STARTUP, startup);
+                out.put("startup", startup);
             }
             case "vidocq_panels" -> {
                 List<Object> panels = new ArrayList<>();
-                for (Object each : list(document.get(PANELS))) {
+                for (Object each : list(document.get("panels"))) {
                     Map<?, ?> panel = map(each);
                     Map<String, Object> shown = new LinkedHashMap<>();
-                    for (String key : List.of("id", TITLE, "live", "summary")) {
+                    for (String key : List.of("id", "title", "live", "summary")) {
                         shown.put(key, panel.get(key));
                     }
                     panels.add(shown);
                 }
-                out.put(PANELS, panels);
+                out.put("panels", panels);
             }
             case "vidocq_panel" -> {
                 if (!(named.get("id") instanceof String id)) {
@@ -269,7 +267,7 @@ final class DevMcp {
                 }
                 Object found = null;
                 List<Object> ids = new ArrayList<>();
-                for (Object each : list(document.get(PANELS))) {
+                for (Object each : list(document.get("panels"))) {
                     ids.add(map(each).get("id"));
                     if (id.equals(map(each).get("id"))) {
                         found = each;
@@ -315,7 +313,7 @@ final class DevMcp {
                     continue;
                 }
                 Map<String, Object> route = new LinkedHashMap<>();
-                route.put(METHOD, cells.get(1));
+                route.put("method", cells.get(1));
                 route.put("url", cells.get(2));
                 route.put("handler", cells.get(3));
                 routes.add(route);

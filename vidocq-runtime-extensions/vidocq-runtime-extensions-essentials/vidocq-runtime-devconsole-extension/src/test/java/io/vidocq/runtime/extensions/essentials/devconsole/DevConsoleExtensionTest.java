@@ -392,7 +392,7 @@ class DevConsoleExtensionTest {
         second.stop();
         boots.remove(second);
 
-        try (ServerSocket _ = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (var _ = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))) {
             Boot third = boot(context);
 
             int moved = third.console().boundPort();

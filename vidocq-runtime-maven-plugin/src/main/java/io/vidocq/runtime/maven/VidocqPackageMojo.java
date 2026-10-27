@@ -154,10 +154,10 @@ public class VidocqPackageMojo extends AbstractMojo {
             // -Dvidocq.app.path, so it resolves into a Vauban-defined module layer
             // instead of the JVM module path.
             Path appJar = project.getArtifact().getFile().toPath();
-            Path appTarget = layerMode ? distRoot.resolve("app") : libDir;
-            Files.createDirectories(appTarget);
-            this.appDir = layerMode ? appTarget : null;
-            Files.copy(appJar, appTarget.resolve(appJar.getFileName()),
+            Path appDir = layerMode ? distRoot.resolve("app") : libDir;
+            Files.createDirectories(appDir);
+            this.appDir = layerMode ? appDir : null;
+            Files.copy(appJar, appDir.resolve(appJar.getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
 
             // Copy dependency JARs. A dependency for which vidocq:generate parked
@@ -196,7 +196,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             // vidocq.app.layer=all: the parent layer stays in lib/, the other libraries ship in app/.
             Set<Path> toApp = splitForAppLayer(packaged);
             for (Packaged p : packaged) {
-                Path destDir = toApp.contains(p.src()) ? appTarget : libDir;
+                Path destDir = toApp.contains(p.src()) ? appDir : libDir;
                 if (!p.enriched() && Files.isDirectory(p.patchDir())) {
                     JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
                     getLog().info("Enriched " + p.src().getFileName()

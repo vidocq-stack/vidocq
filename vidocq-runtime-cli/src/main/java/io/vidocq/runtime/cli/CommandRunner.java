@@ -568,7 +568,7 @@ public final class CommandRunner {
                 continue;
             }
             try {
-                Process p = new ProcessBuilder(target.resolve("bin").resolve(LAUNCHER).toString(),
+                Process p = new ProcessBuilder(target.resolve("bin").resolve("vidocq").toString(),
                         "completion", "install", shell.token())
                         .redirectErrorStream(true)
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)

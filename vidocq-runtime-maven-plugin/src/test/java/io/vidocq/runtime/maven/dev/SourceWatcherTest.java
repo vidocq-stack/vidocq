@@ -180,7 +180,7 @@ class SourceWatcherTest {
     @Test
     void noDirectoryAtAllIsNoError() {
         assertDoesNotThrow(() -> {
-            try (SourceWatcher _ = SourceWatcher.on(List.of(), List.of(), Duration.ofMillis(50))) {
+            try (var _ = SourceWatcher.on(List.of(), List.of(), Duration.ofMillis(50))) {
                 // nothing to watch, and no exception
             }
         });

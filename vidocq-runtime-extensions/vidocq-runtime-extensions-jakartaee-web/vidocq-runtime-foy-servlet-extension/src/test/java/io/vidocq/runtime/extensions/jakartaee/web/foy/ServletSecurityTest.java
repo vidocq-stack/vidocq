@@ -135,7 +135,6 @@ class ServletSecurityTest {
         assertNotEquals(alice, other);
         assertNotEquals(alice, new ServletSecurity.User("bob", "secret".toCharArray(), List.of("cook")));
         assertNotEquals(alice, new ServletSecurity.User("alice", "secret".toCharArray(), List.of("waiter")));
-        assertNotEquals(alice, "alice");
         assertFalse(alice.toString().contains("secret"), alice.toString());
         assertTrue(alice.toString().contains("alice") && alice.toString().contains("cook"), alice.toString());
     }

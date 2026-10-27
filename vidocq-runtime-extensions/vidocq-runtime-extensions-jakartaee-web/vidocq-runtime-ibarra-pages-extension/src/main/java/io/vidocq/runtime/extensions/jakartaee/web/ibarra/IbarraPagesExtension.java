@@ -45,7 +45,7 @@ public final class IbarraPagesExtension implements VidocqExtension, StartupRepor
     private static final String PAGES = "pages";
 
     private final Supplier<List<String>> catalog;
-    private final AtomicReference<List<String>> pages = new AtomicReference<>();
+    private final AtomicReference<List<String>> compiledPages = new AtomicReference<>();
 
     /** Created by the runtime's service loader: the pages of the application layer. */
     public IbarraPagesExtension() {
@@ -62,17 +62,17 @@ public final class IbarraPagesExtension implements VidocqExtension, StartupRepor
 
     @Override
     public void onStart(ExtensionContext context) {
-        pages.set(catalog.get());
+        compiledPages.set(catalog.get());
     }
 
     @Override
     public void onStop() {
-        pages.set(null);
+        compiledPages.set(null);
     }
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        List<String> compiled = pages.get();
+        List<String> compiled = compiledPages.get();
         section.summary("Jakarta Pages 4.0");
         if (compiled == null) {
             section.row(PAGES, "not initialized");

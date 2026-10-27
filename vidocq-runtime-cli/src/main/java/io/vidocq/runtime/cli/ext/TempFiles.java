@@ -24,7 +24,9 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
 
 /**
  * Temporary files readable and writable by their owner only. NIO already creates them so on a POSIX file system;
@@ -36,14 +38,16 @@ public final class TempFiles {
     private TempFiles() {
     }
 
+    /** Whether the default file system has POSIX permissions, which owner-only files then spell out. */
+    private static final boolean POSIX = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+
+    private static final FileAttribute<Set<PosixFilePermission>> OWNER_ONLY =
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"));
+
     /** {@link Files#createTempFile(String, String, FileAttribute[])}, owner-only. */
     public static Path createFile(String prefix, String suffix) throws IOException {
-        return Files.createTempFile(prefix, suffix, ownerOnly());
-    }
-
-    static FileAttribute<?>[] ownerOnly() {
-        return FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
-                ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))}
-                : new FileAttribute<?>[0];
+        return POSIX
+                ? Files.createTempFile(prefix, suffix, OWNER_ONLY)
+                : Files.createTempFile(prefix, suffix, new FileAttribute<?>[0]);
     }
 }

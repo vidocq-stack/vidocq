@@ -123,18 +123,8 @@ final class StartupFacts {
             URI location = resolved.reference().location().orElse(null);
             Path file = file(location);
             int index = file == null ? -1 : order.indexOf(file);
-            String kind;
-            if (file != null) {
-                kind = kind(location, file);
-            } else {
-                kind = location == null ? "-" : location.getScheme();
-            }
-            int rank;
-            if (resolved.name().equals(application)) {
-                rank = -1;
-            } else {
-                rank = index < 0 ? Integer.MAX_VALUE : index;
-            }
+            String kind = file != null ? kind(location, file) : location == null ? "-" : location.getScheme();
+            int rank = resolved.name().equals(application) ? -1 : index < 0 ? Integer.MAX_VALUE : index;
             placed.add(new Placed(rank,
                     new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind,
                             file == null ? List.of() : enriched.apply(file))));

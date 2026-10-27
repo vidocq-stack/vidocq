@@ -57,8 +57,8 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof User user && name.equals(user.name) && Arrays.equals(password, user.password)
-                    && roles.equals(user.roles);
+            return other instanceof User(String otherName, char[] otherSecret, List<String> otherRoles)
+                    && name.equals(otherName) && Arrays.equals(password, otherSecret) && roles.equals(otherRoles);
         }
 
         @Override
@@ -66,10 +66,10 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
             return 31 * (31 * name.hashCode() + Arrays.hashCode(password)) + roles.hashCode();
         }
 
-        /** Never shows the password. */
+        /** Leaves the secret out. */
         @Override
         public String toString() {
-            return "User[name=" + name + ", password=***, roles=" + roles + "]";
+            return "User[name=" + name + ", roles=" + roles + "]";
         }
     }
 

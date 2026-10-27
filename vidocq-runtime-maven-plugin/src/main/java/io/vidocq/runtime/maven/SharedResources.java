@@ -125,7 +125,7 @@ final class SharedResources {
                 try (JarFile in = new JarFile(stage.resolve(jar).toFile())) {
                     for (JarEntry entry : Collections.list(in.entries())) {
                         if (s.directory().equals(directoryOf(entry))) {
-                            if (entry.getName().endsWith(CLASS_SUFFIX)) {
+                            if (entry.getName().endsWith(".class")) {
                                 classes = true;
                             } else {
                                 try (InputStream is = in.getInputStream(entry)) {

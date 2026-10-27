@@ -441,18 +441,18 @@ final class CsvActions {
             throw new JdqlActions.Refused(Failures.text(unreadable));
         }
         List<Row> rows = new ArrayList<>(lines.size());
-        for (Csv.Record csvRecord : lines) {
-            int count = csvRecord.fields().size();
+        for (Csv.Record record : lines) {
+            int count = record.fields().size();
             if (count != header.size()) {
-                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + count
+                throw new JdqlActions.Refused("line " + record.line() + ": " + count
                         + (count == 1 ? " field" : " fields") + ", the header has " + header.size());
             }
             try {
-                rows.add(new Row(csvRecord.line(), build.build(csvRecord.fields())));
+                rows.add(new Row(record.line(), build.build(record.fields())));
             } catch (ArgumentException refused) {
-                throw new JdqlActions.Refused("line " + csvRecord.line() + ", " + refused.getMessage());
+                throw new JdqlActions.Refused("line " + record.line() + ", " + refused.getMessage());
             } catch (RuntimeException | LinkageError failed) {
-                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + Failures.text(failed));
+                throw new JdqlActions.Refused("line " + record.line() + ": " + Failures.text(failed));
             }
         }
         return rows;

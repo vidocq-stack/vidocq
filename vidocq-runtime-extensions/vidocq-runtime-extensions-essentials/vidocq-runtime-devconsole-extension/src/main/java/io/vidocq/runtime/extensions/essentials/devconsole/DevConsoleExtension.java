@@ -140,7 +140,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private final AtomicReference<InetSocketAddress> boundAddress = new AtomicReference<>();
     private volatile String url;
     private volatile String notStarted;
-    private final AtomicReference<Thread> ticker = new AtomicReference<>();
+    private final AtomicReference<Thread> tickerThread = new AtomicReference<>();
     private final AtomicReference<LogsPanel> logs = new AtomicReference<>();
     private final AtomicReference<TestsPanel> tests = new AtomicReference<>();
     private final AtomicReference<LivePanels> livePanels = new AtomicReference<>(LivePanels.NONE);
@@ -230,7 +230,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             DevMcp mcp = resolved.launchMode() == LaunchMode.DEV ? new DevMcp(boot, VIDOCQ_VERSION) : null;
             mountPoint.mount(LISTENER, "", new ConsoleHandler(new HostGuard(resolved.host()), this::boundPort, boot,
                     page, mcp));
-            ticker.set(startTicking(boot));
+            tickerThread.set(startTicking(boot));
         } catch (RuntimeException failed) {
             snapshot.set(null);
             notStarted = String.valueOf(failed.getMessage());
@@ -412,8 +412,8 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      */
     @Override
     public void onStop() {
-        Thread ticking = ticker.get();
-        ticker.set(null);
+        Thread ticking = tickerThread.get();
+        tickerThread.set(null);
         if (ticking != null) {
             ticking.interrupt();
             try {

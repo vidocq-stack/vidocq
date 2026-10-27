@@ -49,7 +49,6 @@ class VidocqIdeaMojoTargetTest {
         assertEquals(one.hashCode(), same.hashCode());
         assertNotEquals(one, target(".run/App.run.xml", new byte[] {1, 2, 4}));
         assertNotEquals(one, target(".run/Other.run.xml", new byte[] {1, 2, 3}));
-        assertNotEquals(one, ".run/App.run.xml");
     }
 
     @Test

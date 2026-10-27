@@ -92,7 +92,7 @@ class MetricsLivePanelTest {
 
     @Test
     void aContainerWithoutDiracSaysSo() {
-        try (VaubanContainer _ = started()) {
+        try (var _ = started()) {
             RecordingSample out = new RecordingSample();
             panel.sample(out);
 
