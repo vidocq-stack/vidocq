@@ -44,9 +44,6 @@ final class ResultJson {
     /** The most elements an array holds. */
     static final int MAX_ROWS = 100;
 
-    /** The summary of an array cut at {@link #MAX_ROWS}. */
-    private static final String FIRST_ROWS = "first " + MAX_ROWS + " rows";
-
     /** How deep nested collections are followed; past it an element is its text. */
     private static final int MAX_DEPTH = 8;
 
@@ -118,15 +115,12 @@ final class ResultJson {
         for (Object row : kept) {
             json.add(node(row, entities, 1));
         }
-        return new Result(Json.write(json), more ? FIRST_ROWS : count(kept.size()), true);
+        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(kept.size()), true);
     }
 
     /** {@code no row}, {@code 1 row} or {@code N rows}. */
     static String count(long n) {
-        if (n == 0) {
-            return "no row";
-        }
-        return n == 1 ? "1 row" : n + " rows";
+        return n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
     }
 
     /**
@@ -144,7 +138,7 @@ final class ResultJson {
             }
             json.add(object);
         }
-        return new Result(Json.write(json), more ? FIRST_ROWS : count(json.size()), true);
+        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(json.size()), true);
     }
 
     /**
@@ -165,7 +159,7 @@ final class ResultJson {
         List<Column> columns = types.entrySet().stream().map(type -> new Column(type.getKey(), type.getValue()))
                 .toList();
         return new Result(ActionResult.rows(null, columns, rows, more).body(),
-                more ? FIRST_ROWS : count(rows.size()), true);
+                more ? "first " + MAX_ROWS + " rows" : count(rows.size()), true);
     }
 
     /**

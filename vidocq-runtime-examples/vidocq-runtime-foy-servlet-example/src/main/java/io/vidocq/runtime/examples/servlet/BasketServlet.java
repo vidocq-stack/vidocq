@@ -35,7 +35,7 @@ import java.util.Map;
 @WebServlet("/basket")
 public class BasketServlet extends HttpServlet {
 
-    private static final String BASKET = "/basket";
+    private static final String BASKET_PATH = "/basket";
 
     @Inject
     Menu menu;
@@ -61,7 +61,7 @@ public class BasketServlet extends HttpServlet {
             body.append("<p>The basket is empty. <a href=\"").append(req.getContextPath())
                     .append("/\">See the menu</a>.</p>");
         } else {
-            String action = req.getContextPath() + BASKET;
+            String action = req.getContextPath() + BASKET_PATH;
             body.append("<table>");
             for (Map.Entry<Dish, Integer> line : basket.lines().entrySet()) {
                 Dish dish = line.getKey();
@@ -90,13 +90,13 @@ public class BasketServlet extends HttpServlet {
             next = "/";
         } else if (remove != null) {
             menu.find(remove).ifPresent(basket::remove);
-            next = BASKET;
+            next = BASKET_PATH;
         } else if (req.getParameter("order") != null && basket.count() > 0) {
             Kitchen.Order order = kitchen.place(basket);
             basket.clear();
-            next = BASKET + "?placed=" + order.number();
+            next = BASKET_PATH + "?placed=" + order.number();
         } else {
-            next = BASKET;
+            next = BASKET_PATH;
         }
         // Always one of this application's own pages: the visitor's input picks which, never where.
         String location = req.getContextPath() + next;

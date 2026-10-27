@@ -48,6 +48,6 @@ public final class TempFiles {
     public static Path createFile(String prefix, String suffix) throws IOException {
         return POSIX
                 ? Files.createTempFile(prefix, suffix, OWNER_ONLY)
-                : Files.createTempFile(prefix, suffix, new FileAttribute<?>[0]);
+                : Files.createTempFile(prefix, suffix);
     }
 }

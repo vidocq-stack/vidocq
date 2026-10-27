@@ -54,9 +54,6 @@ final class Scalars {
     /** The most integer digits read: past it a value is out of the range of every type, BigInteger included. */
     private static final int MAX_DIGITS = 1000;
 
-    private static final String STRING = "string";
-    private static final String FORMAT = "format";
-
     private Scalars() {}
 
     /** A JSON object of these names and values, in this order: {@code object("type", "string")}. */
@@ -71,10 +68,10 @@ final class Scalars {
     /** The JSON Schema of {@code type}, or {@code null} when §4 does not support it. */
     static Map<String, Object> schema(Class<?> type) {
         if (type == String.class) {
-            return object("type", STRING);
+            return object("type", "string");
         }
         if (type == char.class || type == Character.class) {
-            return object("type", STRING, "maxLength", 1);
+            return object("type", "string", "maxLength", 1);
         }
         if (INTEGERS.contains(type)) {
             return object("type", "integer");
@@ -90,19 +87,19 @@ final class Scalars {
             for (Object constant : type.getEnumConstants()) {
                 names.add(((Enum<?>) constant).name());
             }
-            return object("type", STRING, "enum", names);
+            return object("type", "string", "enum", names);
         }
         if (type == LocalDate.class) {
-            return object("type", STRING, FORMAT, "date");
+            return object("type", "string", "format", "date");
         }
         if (type == LocalTime.class) {
-            return object("type", STRING, FORMAT, "time");
+            return object("type", "string", "format", "time");
         }
         if (DATE_TIMES.contains(type)) {
-            return object("type", STRING, FORMAT, "date-time");
+            return object("type", "string", "format", "date-time");
         }
         if (type == UUID.class) {
-            return object("type", STRING, FORMAT, "uuid");
+            return object("type", "string", "format", "uuid");
         }
         return null;
     }
@@ -211,18 +208,14 @@ final class Scalars {
             BigDecimal number;
             try {
                 number = new BigDecimal(text);
-            } catch (NumberFormatException _) {
+            } catch (NumberFormatException notANumber) {
                 throw new ArgumentException(name, INTEGERS.contains(type) ? "not an integer" : "not a number");
             }
             return fromJson(type, number, name);
         }
         if (type == boolean.class || type == Boolean.class) {
-            Object flag = switch (text) {
-                case "true" -> Boolean.TRUE;
-                case "false" -> Boolean.FALSE;
-                case null, default -> text;
-            };
-            return fromJson(type, flag, name);
+            return fromJson(type, "true".equals(text) ? Boolean.TRUE : "false".equals(text) ? Boolean.FALSE : text,
+                    name);
         }
         return fromJson(type, text, name);
     }
@@ -271,7 +264,7 @@ final class Scalars {
         BigInteger value;
         try {
             value = number.toBigIntegerExact();
-        } catch (ArithmeticException _) {
+        } catch (ArithmeticException fraction) {
             throw new ArgumentException(name, "not an integer");
         }
         try {
@@ -288,7 +281,7 @@ final class Scalars {
                 return value.byteValueExact();
             }
             return value;
-        } catch (ArithmeticException _) {
+        } catch (ArithmeticException tooLarge) {
             throw outOfRange(type, name);
         }
     }
@@ -302,7 +295,7 @@ final class Scalars {
             throws ArgumentException {
         try {
             return parse.apply(text(json, name));
-        } catch (DateTimeParseException _) {
+        } catch (DateTimeParseException malformed) {
             throw new ArgumentException(name, "not an ISO " + what);
         }
     }
