@@ -42,9 +42,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class JdqlLanguageTest {
 
+    /** An instance of an anonymous class, whose simple name is empty. */
+    private static final Runnable ANONYMOUS = new Runnable() {
+        @Override
+        public void run() {
+            // only its class is used
+        }
+    };
+
     @Test
     void anAttributeTypeIsItsSimpleNameElseItsNameElseAQuestionMark() {
-        Class<?> anonymous = new Object() { }.getClass();
+        Class<?> anonymous = ANONYMOUS.getClass();
 
         assertEquals("String", JdqlLanguage.simpleName(String.class));
         assertEquals(anonymous.getName(), JdqlLanguage.simpleName(anonymous));

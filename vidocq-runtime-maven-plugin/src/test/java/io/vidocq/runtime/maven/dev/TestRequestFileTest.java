@@ -73,7 +73,7 @@ class TestRequestFileTest {
         Files.writeString(file, "run-all");
         BlockingQueue<Trigger> seen = new LinkedBlockingQueue<>();
 
-        try (TestRequestFile _ = TestRequestFile.poll(file, seen::add, warnings::add)) {
+        try (var _ = TestRequestFile.poll(file, seen::add, warnings::add)) {
             assertNull(seen.poll(600, TimeUnit.MILLISECONDS), "a request left by a killed session never runs");
             Files.writeString(file, "run-all");
             assertEquals(Trigger.RUN_ALL, seen.poll(5, TimeUnit.SECONDS));

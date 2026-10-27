@@ -173,7 +173,7 @@ class ConsoleLoggingProcessTest {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         manifest.getMainAttributes().put(new Attributes.Name("Premain-Class"), StandInIdeaAgent.class.getName());
-        try (OutputStream file = Files.newOutputStream(jar); JarOutputStream _ = new JarOutputStream(file, manifest)) {
+        try (OutputStream file = Files.newOutputStream(jar); var _ = new JarOutputStream(file, manifest)) {
             // the manifest is the whole jar: the agent class comes from the class path
         }
         return jar;

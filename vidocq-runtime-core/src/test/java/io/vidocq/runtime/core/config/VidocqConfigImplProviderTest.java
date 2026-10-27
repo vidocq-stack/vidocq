@@ -70,7 +70,7 @@ class VidocqConfigImplProviderTest {
         VidocqConfig cfg = new VidocqConfigImpl(List.of());
         assertFalse(cfg.getValue("vidocq.any").isPresent());
         int count = 0;
-        for (ConfigSource _ : cfg.getConfigSources()) count++;
+        for (var _ : cfg.getConfigSources()) count++;
         assertEquals(0, count);
     }
 
