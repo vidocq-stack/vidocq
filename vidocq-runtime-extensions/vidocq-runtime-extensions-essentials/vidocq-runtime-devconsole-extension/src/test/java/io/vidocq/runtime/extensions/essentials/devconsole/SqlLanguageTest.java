@@ -34,6 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -271,8 +272,11 @@ class SqlLanguageTest {
     @Test
     void whereATargetGoesTheTargetsWrittenAsTheDatabaseNeedsThem() {
         assertEquals("14-14 tasks projects \"Order\" sales.orders", complete("SELECT * FROM |"));
-        assertEquals("tasks: table · public\nprojects: table · public\nOrder: table · public\n"
-                + "sales.orders: view · sales", details("SELECT * FROM |", 4));
+        assertEquals("""
+                tasks: table · public
+                projects: table · public
+                Order: table · public
+                sales.orders: view · sales""", details("SELECT * FROM |", 4));
         assertEquals("27-29 projects", complete("SELECT * FROM tasks t JOIN pr|"));
         assertEquals("23-23 tasks projects \"Order\" sales.orders", complete("SELECT * FROM tasks t, |"),
                 "after a comma of the FROM list");
@@ -294,8 +298,13 @@ class SqlLanguageTest {
     void inAnOnTheAliasesTheTargetsThenEveryColumnWithItsTableThenFunctionsAndKeywords() {
         assertEquals("41-41 t p tasks projects id title price due_date project_id id title lead " + FUNCTIONS + " "
                 + OTHER_KEYWORDS, complete("SELECT * FROM tasks t JOIN projects p ON |"));
-        assertEquals("t: alias of tasks\np: alias of projects\ntasks: table · public\nprojects: table · public\n"
-                + "id: int8 · column · tasks\ntitle: varchar(200) · column · tasks",
+        assertEquals("""
+                t: alias of tasks
+                p: alias of projects
+                tasks: table · public
+                projects: table · public
+                id: int8 · column · tasks
+                title: varchar(200) · column · tasks""",
                 details("SELECT * FROM tasks t JOIN projects p ON |", 6));
         assertEquals("7-7 tasks id title price due_date project_id " + FUNCTIONS + " " + OTHER_KEYWORDS,
                 complete("SELECT | FROM tasks"), "no self in a dialect that has none");
@@ -311,7 +320,8 @@ class SqlLanguageTest {
                 "SELECT * FROM tasks t JOIN projects p ON p.", "FROM .", "FROM tasks t, ", "SELECT /* x",
                 "WITH r AS (SELECT", "SELECT a::", "SELECT * FROM (SELECT * FROM tasks) x WHERE x."}) {
             for (int caret = 0; caret <= typed.length(); caret++) {
-                completion(typed.substring(0, caret) + "|" + typed.substring(caret));
+                String atCaret = typed.substring(0, caret) + "|" + typed.substring(caret);
+                assertDoesNotThrow(() -> completion(atCaret), atCaret);
             }
         }
     }
@@ -464,8 +474,12 @@ class SqlLanguageTest {
         String once = format("select t.title from tasks t inner join projects p on p.id = t.project_id where "
                 + "t.title = 'a' or t.price between 1 and 2");
 
-        assertEquals("SELECT t.title\nFROM tasks t\nINNER JOIN projects p ON p.id = t.project_id\n"
-                + "WHERE t.title = 'a'\n  OR t.price BETWEEN 1 AND 2", once);
+        assertEquals("""
+                SELECT t.title
+                FROM tasks t
+                INNER JOIN projects p ON p.id = t.project_id
+                WHERE t.title = 'a'
+                  OR t.price BETWEEN 1 AND 2""", once);
         assertEquals(once, format(once));
     }
 

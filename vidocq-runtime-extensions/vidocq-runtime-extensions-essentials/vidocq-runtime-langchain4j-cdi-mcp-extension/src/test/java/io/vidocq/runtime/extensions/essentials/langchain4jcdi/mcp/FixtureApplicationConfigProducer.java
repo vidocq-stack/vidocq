@@ -29,7 +29,9 @@ import jakarta.inject.Named;
 public class FixtureApplicationConfigProducer {
 
     /** CDI constructor. */
-    public FixtureApplicationConfigProducer() {}
+    public FixtureApplicationConfigProducer() {
+        // nothing to initialise: the bean only produces
+    }
 
     @Produces
     @Named("mcp-server")

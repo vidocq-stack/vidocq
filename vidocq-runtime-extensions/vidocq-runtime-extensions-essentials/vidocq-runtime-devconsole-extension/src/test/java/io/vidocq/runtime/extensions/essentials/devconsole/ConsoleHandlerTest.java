@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ConsoleHandlerTest {
 
     private final List<String> served = new ArrayList<>();
-    private final Snapshot snapshot = new Snapshot("0123456789abcdef", "0.4.0-TEST", () -> Optional.empty(), List.of(),
+    private final Snapshot snapshot = new Snapshot("0123456789abcdef", "0.4.0-TEST", Optional::empty, List.of(),
             () -> 1L);
     private final Handler page = request -> {
         served.add(request.pathInfo());

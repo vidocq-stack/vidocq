@@ -39,6 +39,7 @@ import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -400,6 +401,6 @@ class ConsoleActionsTest {
         String two = ConsoleActions.newToken();
 
         assertTrue(one.matches("[0-9a-f]{64}"), one);
-        assertFalse(one.equals(two));
+        assertNotEquals(one, two);
     }
 }

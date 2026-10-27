@@ -51,10 +51,12 @@ class ExtensionCoordinateTest {
     void rendersDependencyBlockWithIndent() {
         ExtensionCoordinate c = new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-knock-health-extension");
         String xml = c.dependencyXml("    ");
-        String expected = "    <dependency>\n"
-                + "        <groupId>io.vidocq.runtime</groupId>\n"
-                + "        <artifactId>vidocq-runtime-knock-health-extension</artifactId>\n"
-                + "    </dependency>";
+        String expected = """
+                    <dependency>
+                        <groupId>io.vidocq.runtime</groupId>
+                        <artifactId>vidocq-runtime-knock-health-extension</artifactId>
+                    </dependency>\
+                """;
         assertEquals(expected, xml);
         assertTrue(xml.startsWith("    <dependency>"));
     }

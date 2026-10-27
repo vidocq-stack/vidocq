@@ -31,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
@@ -122,7 +123,7 @@ class CervantesJwtIntegrationTest {
     //  Test 2 — valid token without the role → 403
     // ============================================================
     @Test
-    void validToken_withoutRole_returns403() throws IOException, Exception {
+    void validToken_withoutRole_returns403() throws Exception {
         String token = TestJwt.signRs256(PRIVATE_KEY, ISSUER, "alice", List.of("user"));
         var resp = httpGet("/secured/admin", token);
         assertEquals(403, resp.statusCode,
@@ -159,7 +160,7 @@ class CervantesJwtIntegrationTest {
     //  HTTP helpers
     // ============================================================
     private SimpleResponse httpGet(String path, String bearerOrNull) throws IOException {
-        URL url = new URL(baseUrl, path.startsWith("/") ? path.substring(1) : path);
+        URL url = URI.create(baseUrl.toString()).resolve(path.startsWith("/") ? path.substring(1) : path).toURL();
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         if (bearerOrNull != null) {

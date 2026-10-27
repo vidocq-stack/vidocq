@@ -100,8 +100,9 @@ class McpConfigMappingTest {
             "vidocq.mcp.requestStateSecret,  short-secret-31-bytes-long-xyz!, at least 32 bytes in UTF-8"
     })
     void anInvalidValueFailsNamingTheKeyButNeverTheValue(String key, String value, String expected) {
+        VidocqConfiguration invalid = config(Map.of(key, value));
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> McpConfigMapping.map(config(Map.of(key, value))));
+                () -> McpConfigMapping.map(invalid));
 
         assertTrue(failure.getMessage().contains(key), failure.getMessage());
         assertTrue(failure.getMessage().contains(expected), failure.getMessage());

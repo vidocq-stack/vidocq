@@ -45,6 +45,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -586,7 +587,7 @@ class VidocqGenerateDependencyCodegenTest {
             assertEquals("Alpha", jar.getManifest().getMainAttributes().getValue("Vidocq-Enriched-By"));
             assertEquals("org.lib", java.lang.module.ModuleDescriptor.read(
                     jar.getInputStream(jar.getEntry("module-info.class"))).name());
-            assertTrue(jar.getEntry("com/acme/Foo$$Gen.class") != null);
+            assertNotNull(jar.getEntry("com/acme/Foo$$Gen.class"));
         }
         assertTrue(info.contains("Rebuilt the enriched copy of lib-1.0.jar on the module descriptor"
                 + " vauban:modularize generated"), info::toString);

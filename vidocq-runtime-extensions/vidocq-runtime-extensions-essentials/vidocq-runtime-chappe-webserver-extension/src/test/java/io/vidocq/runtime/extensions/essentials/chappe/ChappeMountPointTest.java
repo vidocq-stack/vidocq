@@ -94,10 +94,10 @@ class ChappeMountPointTest {
                 () -> mp.router("default"));
         assertThrows(IllegalStateException.class,
                 () -> mp.addBeforeStartHook(() -> {}));
-        assertThrows(IllegalStateException.class,
-                () -> mp.declareListener(ChappeListener.http("x", "0.0.0.0", 1234)));
-        assertThrows(IllegalStateException.class,
-                () -> mp.declareListener(ChappeListener.http("y", "127.0.0.1", 0), ListenerOptions.DEFAULTS));
+        ChappeListener x = ChappeListener.http("x", "0.0.0.0", 1234);
+        assertThrows(IllegalStateException.class, () -> mp.declareListener(x));
+        ChappeListener y = ChappeListener.http("y", "127.0.0.1", 0);
+        assertThrows(IllegalStateException.class, () -> mp.declareListener(y, ListenerOptions.DEFAULTS));
     }
 
     @Test
@@ -158,8 +158,9 @@ class ChappeMountPointTest {
     void aNameIsDeclaredByOneExtensionOnly() {
         mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888), ListenerOptions.DEFAULTS);
 
+        ChappeListener again = ChappeListener.http("dev", "127.0.0.1", 8889);
         var ex = assertThrows(IllegalStateException.class,
-                () -> mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8889), ListenerOptions.DEFAULTS));
+                () -> mp.declareListener(again, ListenerOptions.DEFAULTS));
         assertTrue(ex.getMessage().contains("'dev'"), ex.getMessage());
         assertEquals(8888, mp.listeners().iterator().next().port(), "the first declaration is kept");
     }
@@ -168,8 +169,8 @@ class ChappeMountPointTest {
     void configurationCannotListAListenerAnExtensionDeclared() {
         mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 8888), ListenerOptions.DEFAULTS);
 
-        var ex = assertThrows(IllegalStateException.class,
-                () -> mp.declareListener(ChappeListener.http("dev", "0.0.0.0", 9000)));
+        ChappeListener configured = ChappeListener.http("dev", "0.0.0.0", 9000);
+        var ex = assertThrows(IllegalStateException.class, () -> mp.declareListener(configured));
         assertEquals("listener 'dev' is declared by an extension (ChappeMountPointTest); "
                 + "remove it from vidocq.chappe.listeners", ex.getMessage());
     }
@@ -178,8 +179,9 @@ class ChappeMountPointTest {
     void extensionCannotDeclareAListenerTheConfigurationLists() {
         mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 9090));
 
+        ChappeListener admin = ChappeListener.http("admin", "127.0.0.1", 0);
         var ex = assertThrows(IllegalStateException.class,
-                () -> mp.declareListener(ChappeListener.http("admin", "127.0.0.1", 0), ListenerOptions.DEFAULTS));
+                () -> mp.declareListener(admin, ListenerOptions.DEFAULTS));
         assertTrue(ex.getMessage().contains("vidocq.chappe.listeners"), ex.getMessage());
     }
 
@@ -192,9 +194,9 @@ class ChappeMountPointTest {
 
     @Test
     void theDefaultListenerIsTheApplications() {
+        ChappeListener theDefault = ChappeListener.http(ChappeListener.DEFAULT, "127.0.0.1", 0);
         var ex = assertThrows(IllegalArgumentException.class,
-                () -> mp.declareListener(ChappeListener.http(ChappeListener.DEFAULT, "127.0.0.1", 0),
-                        ListenerOptions.DEFAULTS));
+                () -> mp.declareListener(theDefault, ListenerOptions.DEFAULTS));
         assertTrue(ex.getMessage().contains("default"), ex.getMessage());
         assertTrue(mp.listeners().isEmpty());
     }
@@ -211,28 +213,28 @@ class ChappeMountPointTest {
     @Test
     void nullDeclarationArgumentsRejected() {
         assertThrows(NullPointerException.class, () -> mp.declareListener(null, ListenerOptions.DEFAULTS));
-        assertThrows(NullPointerException.class,
-                () -> mp.declareListener(ChappeListener.http("dev", "127.0.0.1", 0), null));
+        ChappeListener dev = ChappeListener.http("dev", "127.0.0.1", 0);
+        assertThrows(NullPointerException.class, () -> mp.declareListener(dev, null));
     }
 
     @Test
     void advertisedPagesAreKeptPerListenerInOrder() {
-        ChappeMountPoint mp = new ChappeMountPoint();
-        mp.advertise(ChappeListener.DEFAULT, "Swagger UI", "/openapi/ui/");
-        mp.advertise(ChappeListener.DEFAULT, "OpenAPI document", "/openapi");
+        ChappeMountPoint pages = new ChappeMountPoint();
+        pages.advertise(ChappeListener.DEFAULT, "Swagger UI", "/openapi/ui/");
+        pages.advertise(ChappeListener.DEFAULT, "OpenAPI document", "/openapi");
 
         assertEquals(List.of(new ChappeMountPoint.Page("Swagger UI", "/openapi/ui/"),
-                new ChappeMountPoint.Page("OpenAPI document", "/openapi")), mp.pages(ChappeListener.DEFAULT));
-        assertEquals(List.of(), mp.pages("admin"));
+                new ChappeMountPoint.Page("OpenAPI document", "/openapi")), pages.pages(ChappeListener.DEFAULT));
+        assertEquals(List.of(), pages.pages("admin"));
     }
 
     @Test
     void anAdvertisedPageIsAPathAndComesBeforeTheStart() {
-        ChappeMountPoint mp = new ChappeMountPoint();
+        ChappeMountPoint pages = new ChappeMountPoint();
 
-        assertThrows(IllegalArgumentException.class, () -> mp.advertise("default", "Evil", "javascript:alert(1)"));
-        mp.freeze();
-        assertThrows(IllegalStateException.class, () -> mp.advertise("default", "Late", "/late"));
+        assertThrows(IllegalArgumentException.class, () -> pages.advertise("default", "Evil", "javascript:alert(1)"));
+        pages.freeze();
+        assertThrows(IllegalStateException.class, () -> pages.advertise("default", "Late", "/late"));
     }
 
     @Test

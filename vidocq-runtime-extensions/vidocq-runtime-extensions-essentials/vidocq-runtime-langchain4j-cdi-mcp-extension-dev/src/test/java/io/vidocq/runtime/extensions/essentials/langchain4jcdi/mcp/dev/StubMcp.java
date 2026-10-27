@@ -129,7 +129,7 @@ final class StubMcp implements AutoCloseable {
         if (answer.delayMillis() > 0) {
             try {
                 Thread.sleep(answer.delayMillis());
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -151,9 +151,9 @@ final class StubMcp implements AutoCloseable {
                 out.flush();
                 Thread.sleep(chunkDelayMillis);
             }
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (IOException clientGaveUp) {
+        } catch (IOException _) {
             // the client cancelled or closed the connection: nothing left to answer.
         }
     }

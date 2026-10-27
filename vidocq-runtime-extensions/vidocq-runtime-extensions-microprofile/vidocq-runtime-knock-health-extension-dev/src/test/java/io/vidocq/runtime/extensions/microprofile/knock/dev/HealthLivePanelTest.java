@@ -103,8 +103,6 @@ class HealthLivePanelTest {
 
     @Test
     void itMakesTheHealthSectionLiveWithItsChart() {
-        HealthLivePanel panel = new HealthLivePanel();
-
         assertEquals("health", panel.id());
         assertEquals(HealthPanel.CHARTS, panel.charts());
     }
@@ -153,7 +151,7 @@ class HealthLivePanelTest {
 
     @Test
     void aContainerWithoutKnockSaysSo() {
-        try (VaubanContainer container = started()) {
+        try (VaubanContainer _ = started()) {
             RecordingSample out = new RecordingSample();
             panel.sample(out);
 

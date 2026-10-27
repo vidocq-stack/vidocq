@@ -42,6 +42,7 @@ import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -137,7 +138,7 @@ class DevMcpTest {
         String text = body(response);
         assertEquals(status, response.status().code(), text);
         Map<?, ?> error = (Map<?, ?>) Json.object(text).get("error");
-        assertTrue(error != null, text);
+        assertNotNull(error, text);
         return error;
     }
 

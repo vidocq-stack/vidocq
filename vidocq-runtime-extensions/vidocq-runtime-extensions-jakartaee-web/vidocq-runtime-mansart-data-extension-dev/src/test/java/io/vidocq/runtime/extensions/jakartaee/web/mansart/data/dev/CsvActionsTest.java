@@ -181,8 +181,11 @@ class CsvActionsTest {
 
         assertFalse(result.error(), result.summary());
         assertEquals(ActionResult.CSV, result.contentType());
-        assertEquals("id,name,stock,level,due,price\r\n1,bolt,3,LOW,2026-10-01,2.50\r\n"
-                + "2,\"nut, \"\"big\"\"\",0,HIGH,,10\r\n", result.body());
+        assertEquals("""
+                id,name,stock,level,due,price\r
+                1,bolt,3,LOW,2026-10-01,2.50\r
+                2,"nut, ""big""\",0,HIGH,,10\r
+                """, result.body());
         assertTrue(result.summary().matches("2 rows · " + utf8(result.body()) + " B in \\d+ ms"), result.summary());
         assertEquals(List.of("FROM Gizmo ORDER BY id"), runner.queries, "the statement, stripped");
         assertEquals(List.of(List.of("begin")), runner.eventsDuringRun, "run in a transaction");

@@ -265,17 +265,21 @@ class EditorCoreTest {
 
     @Test
     void aStringThatDoesNotLookLikeItsFormatIsAWarning() {
-        assertEquals("warning 40-52 not a date, such as 2026-09-30\n"
-                + "warning 77-95 not a date-time, such as 2026-09-30T14:30:00\n"
-                + "warning 104-109 not a uuid, such as 123e4567-e89b-12d3-a456-426614174000",
+        assertEquals("""
+                warning 40-52 not a date, such as 2026-09-30
+                warning 77-95 not a date-time, such as 2026-09-30T14:30:00
+                warning 104-109 not a uuid, such as 123e4567-e89b-12d3-a456-426614174000""",
                 diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"due\": \"30/09/2026\", \"at\": \"14:30\", "
                         + "\"when\": \"2026-09-30 14:30\", \"ref\": \"123\"}", TASK));
     }
 
     @Test
     void theChecksFollowItemsTheirArrayFormAndALocalRefAtDepth() {
-        assertEquals("error 47-48 expected string\nerror 63-64 expected string\n"
-                + "error 82-83 missing required key \"name\"\nwarning 83-89 unknown key \"nick\"",
+        assertEquals("""
+                error 47-48 expected string
+                error 63-64 expected string
+                error 82-83 missing required key "name"
+                warning 83-89 unknown key "nick\"""",
                 diagnose("{\"title\": \"a\", \"status\": \"OPEN\", \"tags\": [\"x\", 2], \"pair\": [1, 2, true], "
                         + "\"owner\": {\"nick\": \"y\"}}", TASK));
     }
@@ -397,9 +401,12 @@ class EditorCoreTest {
 
     @Test
     void theKeysAfterTheCaretAreWrittenToo() {
-        assertEquals("1-1\n\"status\": \"OPEN\"|,", complete("{|\n  \"title\": \"a\", \"due\": \"\", \"at\": \"\", "
-                + "\"when\": \"\", \"ref\": \"\", \"points\": 1, \"done\": true, \"tags\": [], \"pair\": [], "
-                + "\"owner\": {}, \"extra\": 1, \"any\": 1, \"id\": 1\n}", TASK));
+        assertEquals("1-1\n\"status\": \"OPEN\"|,", complete("""
+                {|
+                  "title": "a", "due": "", "at": "", \
+                "when": "", "ref": "", "points": 1, "done": true, "tags": [], "pair": [], \
+                "owner": {}, "extra": 1, "any": 1, "id": 1
+                }""", TASK));
     }
 
     // ------------------------------------------------------------------------------------------------ shortcuts

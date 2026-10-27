@@ -186,7 +186,7 @@ class McpClientTest {
     }
 
     @Test
-    void aResponseBodyOverOneMebibyteIsATransportFailure() throws Exception {
+    void aResponseBodyOverOneMebibyteIsATransportFailure() {
         stub.respond(request -> new StubMcp.Answer(200, "application/json", "a".repeat(1_048_576 + 1), 0));
 
         McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));
@@ -195,7 +195,7 @@ class McpClientTest {
     }
 
     @Test
-    void anEndlessSlowStreamTimesOutWithoutHanging() throws Exception {
+    void anEndlessSlowStreamTimesOutWithoutHanging() {
         client.close();
         client = new McpClient(stub.uri(), Duration.ofSeconds(1));
         stub.respondWithEndlessSlowStream(50);
@@ -209,7 +209,7 @@ class McpClientTest {
     }
 
     @Test
-    void aCallAfterCloseFailsCleanly() throws Exception {
+    void aCallAfterCloseFailsCleanly() {
         client.close();
 
         McpTransportException failure = assertThrows(McpTransportException.class, () -> callTool("current_time"));

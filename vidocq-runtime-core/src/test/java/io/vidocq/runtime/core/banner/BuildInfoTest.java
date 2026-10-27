@@ -50,6 +50,7 @@ import static io.vidocq.runtime.core.banner.BannerTestSupport.utf8;
 import static io.vidocq.runtime.core.banner.BannerTestSupport.writeJar;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -141,7 +142,7 @@ class BuildInfoTest {
         assertNull(info.dirty());
         assertNull(info.builtAt());
         assertNull(info.committedAt());
-        assertTrue(info.fileDatedAt() != null, "the jar date stands in");
+        assertNotNull(info.fileDatedAt(), "the jar date stands in");
         assertTrue(info.describe().startsWith("version unknown (jar dated "), info.describe());
     }
 

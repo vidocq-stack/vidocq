@@ -177,7 +177,7 @@ class VidocqDevMojoTest {
                 stopStarted.countDown();
                 try {
                     Thread.sleep(300); // simulates a slow container stop (Testcontainers/Ryuk)
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
                 stopCompleted.set(true);

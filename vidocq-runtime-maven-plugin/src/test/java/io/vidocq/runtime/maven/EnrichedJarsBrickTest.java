@@ -51,6 +51,7 @@ import static io.vidocq.runtime.maven.EnrichedJarsTest.descriptorOf;
 import static io.vidocq.runtime.maven.EnrichedJarsTest.emptyClass;
 import static io.vidocq.runtime.maven.EnrichedJarsTest.patch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -149,7 +150,7 @@ class EnrichedJarsBrickTest {
         assertEquals(List.of(auto), enriched);
         Path copy = EnrichedJars.resolve(build, auto);
         assertNull(entry(copy, "module-info.class"), "no descriptor is synthesized");
-        assertTrue(entry(copy, "org/dep/Servlet$$FoyComponent.class") != null);
+        assertNotNull(entry(copy, "org/dep/Servlet$$FoyComponent.class"));
         assertEquals("org.dep.Servlet$$FoyComponent\n", entry(copy, WEB_FILE));
         Attributes main = manifestOf(copy);
         assertEquals("Foy", main.getValue("Vidocq-Enriched-By"));

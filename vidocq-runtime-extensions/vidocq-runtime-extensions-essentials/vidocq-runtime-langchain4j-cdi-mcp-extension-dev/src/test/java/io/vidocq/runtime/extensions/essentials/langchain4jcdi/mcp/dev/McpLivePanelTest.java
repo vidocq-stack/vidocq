@@ -99,7 +99,7 @@ class McpLivePanelTest {
 
     @Test
     void beforeAnyRequestSessionsIsAbsentWithItsReason() {
-        try (VaubanContainer container = started()) {
+        try (VaubanContainer _ = started()) {
             RecordingSample sample = new RecordingSample();
 
             panel.sample(sample);
@@ -178,7 +178,7 @@ class McpLivePanelTest {
 
     @Test
     void aSampleTakesUnderFiveMilliseconds() {
-        try (VaubanContainer container = started()) {
+        try (VaubanContainer _ = started()) {
             for (int warmup = 0; warmup < 100; warmup++) {
                 panel.sample(new RecordingSample());
             }
@@ -194,7 +194,7 @@ class McpLivePanelTest {
 
     @Test
     void afterStopTheSampleWritesNothing() {
-        try (VaubanContainer container = started()) {
+        try (VaubanContainer _ = started()) {
             RecordingSample before = new RecordingSample();
             panel.sample(before);
             assertFalse(before.isEmpty(), "the panel wrote nothing while the container was up");

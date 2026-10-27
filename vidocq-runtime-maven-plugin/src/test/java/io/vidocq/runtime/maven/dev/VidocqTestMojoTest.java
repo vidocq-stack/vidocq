@@ -107,7 +107,7 @@ class VidocqTestMojoTest {
                 public void cancel() {
                     try {
                         Thread.sleep(500); // a slow kill
-                    } catch (InterruptedException e) {
+                    } catch (InterruptedException _) {
                         Thread.currentThread().interrupt();
                     }
                     killed.set(true);

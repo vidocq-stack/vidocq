@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.constant.ClassDesc;
@@ -77,7 +78,7 @@ class EnrichedJarsTest {
         return ClassFile.of().build(ClassDesc.of(fqn), clb -> clb.withMethodBody("call",
                 MethodTypeDesc.of(ConstantDescs.CD_void,
                         ClassDesc.of("io.vidocq.vauban.core.interceptor.InterceptorManager")),
-                ClassFile.ACC_PUBLIC, cob -> cob.return_()));
+                ClassFile.ACC_PUBLIC, CodeBuilder::return_));
     }
 
     static Path jar(Path file, Map<String, byte[]> entries, Map<String, String> sectionDigests) throws Exception {
@@ -142,8 +143,8 @@ class EnrichedJarsTest {
         assertEquals(List.of("org.dep._VaubanComponents"), md.provides().stream()
                 .filter(p -> p.service().equals(SPI)).findFirst().orElseThrow().providers());
         try (JarFile copy = new JarFile(out.toFile())) {
-            assertTrue(copy.getEntry("org/dep/_VaubanComponents.class") != null);
-            assertTrue(copy.getEntry("org/dep/Service$$Intercepted.class") != null);
+            assertNotNull(copy.getEntry("org/dep/_VaubanComponents.class"));
+            assertNotNull(copy.getEntry("org/dep/Service$$Intercepted.class"));
             assertNull(copy.getEntry("META-INF/LIB.SF"), "the signature no longer matches: dropped");
             assertEquals("org.dep._VaubanComponents\n", new String(copy.getInputStream(
                     copy.getEntry("META-INF/services/" + SPI)).readAllBytes(), StandardCharsets.UTF_8));
@@ -309,7 +310,7 @@ class EnrichedJarsTest {
                 List.of(lib, other), line -> { }, line -> { });
 
         try (JarFile copy = new JarFile(EnrichedJars.resolve(build, lib).toFile())) {
-            assertTrue(copy.getEntry("org/dep/Service_ClientProxy.class") != null, "the new class is in the copy");
+            assertNotNull(copy.getEntry("org/dep/Service_ClientProxy.class"), "the new class is in the copy");
         }
         assertFalse(EnrichedJars.isEnriched(build, other), "a jar no longer scanned keeps no stale copy");
     }

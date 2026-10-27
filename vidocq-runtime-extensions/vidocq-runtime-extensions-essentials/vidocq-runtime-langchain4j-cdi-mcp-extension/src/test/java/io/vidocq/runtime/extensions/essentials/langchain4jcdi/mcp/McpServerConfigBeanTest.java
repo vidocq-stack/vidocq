@@ -90,7 +90,7 @@ class McpServerConfigBeanTest {
     @Test
     void onStopForgetsThePublishedConfiguration() {
         extension.configure(McpConfigMappingTest.config(Map.of(McpConfigMapping.SERVER_NAME, "time-server")));
-        try (VaubanContainer ignored = McpTestContainers.container(extension)) {
+        try (VaubanContainer _ = McpTestContainers.container(extension)) {
             extension.onStop();
             assertNull(McpServerConfigProducer.CONFIG.get());
         }

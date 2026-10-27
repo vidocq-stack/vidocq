@@ -161,12 +161,10 @@ class DevConsoleExtensionTest {
         assertTrue(tickers().get(0).isDaemon(), "a daemon: the history must never hold a JVM open");
 
         // It fills on its own, with no page asking for anything: that is the whole point of moving it here.
-        Map<String, Object> filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
-        List<?> panels = (List<?>) filled.get("panels");
         boolean ticked = false;
         for (int attempt = 0; attempt < 40 && !ticked; attempt++) {
-            filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
-            panels = (List<?>) filled.get("panels");
+            Map<String, Object> filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
+            List<?> panels = (List<?>) filled.get("panels");
             ticked = panels.stream().anyMatch(panel -> !((List<?>) ((Map<?, ?>) panel).get("history")).isEmpty());
             if (!ticked) {
                 Thread.sleep(100);
@@ -181,7 +179,7 @@ class DevConsoleExtensionTest {
     }
 
     @Test
-    void aDevReloadLeavesExactlyOneTicker() throws Exception {
+    void aDevReloadLeavesExactlyOneTicker() {
         Boot first = boot(context(LaunchMode.DEV));
         assertEquals(1, tickers().size());
 
@@ -195,12 +193,12 @@ class DevConsoleExtensionTest {
 
     /** The rings of the logs panel on the JVM's root logger. */
     private static long rings() {
-        return Arrays.stream(Logger.getLogger("").getHandlers()).filter(handler -> handler instanceof LogRing)
+        return Arrays.stream(Logger.getLogger("").getHandlers()).filter(LogRing.class::isInstance)
                 .count();
     }
 
     @Test
-    void aDevReloadLeavesExactlyOneRingOnTheRootLogger() throws Exception {
+    void aDevReloadLeavesExactlyOneRingOnTheRootLogger() {
         long before = rings();
         Boot first = boot(context(LaunchMode.DEV));
         assertEquals(before + 1, rings());
@@ -394,7 +392,7 @@ class DevConsoleExtensionTest {
         second.stop();
         boots.remove(second);
 
-        try (ServerSocket taken = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))) {
+        try (ServerSocket _ = new ServerSocket(port, 50, InetAddress.getByName("127.0.0.1"))) {
             Boot third = boot(context);
 
             int moved = third.console().boundPort();

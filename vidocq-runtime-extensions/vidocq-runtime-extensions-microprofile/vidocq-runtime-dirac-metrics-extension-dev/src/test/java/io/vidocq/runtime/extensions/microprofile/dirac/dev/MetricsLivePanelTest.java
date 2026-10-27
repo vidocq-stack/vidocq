@@ -48,8 +48,6 @@ class MetricsLivePanelTest {
 
     @Test
     void itMakesTheMetricsSectionLiveWithNoCharts() {
-        MetricsLivePanel panel = new MetricsLivePanel();
-
         assertEquals("metrics", panel.id());
         assertTrue(panel.charts().isEmpty());
     }
@@ -94,7 +92,7 @@ class MetricsLivePanelTest {
 
     @Test
     void aContainerWithoutDiracSaysSo() {
-        try (VaubanContainer container = started()) {
+        try (VaubanContainer _ = started()) {
             RecordingSample out = new RecordingSample();
             panel.sample(out);
 

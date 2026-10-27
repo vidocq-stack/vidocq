@@ -52,7 +52,7 @@ class ReloadAckTest {
             try {
                 Thread.sleep(300);
                 Files.writeString(ReloadAck.readyFile(reload), "42\n");
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // the test fails on its timeout
             }
         });

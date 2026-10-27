@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -81,7 +82,7 @@ class DependencyCodegenTest {
 
     private static String text(DependencyCodegen.Output output, String path) {
         byte[] bytes = output.files().get(path);
-        assertTrue(bytes != null, () -> path + " not generated, got " + output.files().keySet());
+        assertNotNull(bytes, () -> path + " not generated, got " + output.files().keySet());
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
@@ -128,7 +129,7 @@ class DependencyCodegenTest {
     }
 
     @Test
-    void aBrickErrorNamesOnlyThatBrick() throws Exception {
+    void aBrickErrorNamesOnlyThatBrick() {
         var failure = assertThrows(DependencyCodegen.Failure.class,
                 () -> run(acme(), brick("Alpha", "ProcessorA"), brick("Epsilon", "ProcessorE")));
 
@@ -139,7 +140,7 @@ class DependencyCodegenTest {
     }
 
     @Test
-    void aProcessorThatThrowsAMultiLineMessageFailsWithOneLine() throws Exception {
+    void aProcessorThatThrowsAMultiLineMessageFailsWithOneLine() {
         var failure = assertThrows(DependencyCodegen.Failure.class, () -> run(acme(), brick("Tau", "ProcessorT")));
 
         assertEquals(1, failure.lines().size(), () -> failure.lines().toString());

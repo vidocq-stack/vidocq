@@ -35,6 +35,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Which methods write (spec §3): each rule, and reads that look close. */
@@ -158,9 +159,9 @@ class WriteKindsTest {
         TransactionRunner console = new TransactionRunner(new JtaDemarcation(RecordingTransactionManager::new));
         TransactionRunner own = RepositoryActions.runnerFor(
                 OwnTransactions.class.getMethod("deleteByName", String.class), OwnTransactions.class, console);
-        assertTrue(own == TransactionRunner.NONE, "no console transaction around it");
+        assertSame(TransactionRunner.NONE, own, "no console transaction around it");
         assertEquals(java.util.List.of(TransactionRunner.COMMIT), own.modes());
-        assertTrue(RepositoryActions.runnerFor(MixedTransactions.class.getMethod("deleteByLabel", String.class),
-                MixedTransactions.class, console) == console);
+        assertSame(console, RepositoryActions.runnerFor(
+                MixedTransactions.class.getMethod("deleteByLabel", String.class), MixedTransactions.class, console));
     }
 }

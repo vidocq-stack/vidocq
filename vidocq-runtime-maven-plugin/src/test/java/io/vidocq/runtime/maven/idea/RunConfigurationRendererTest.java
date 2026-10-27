@@ -249,21 +249,23 @@ class RunConfigurationRendererTest {
 
         assertEquals(MEASURED_MAVEN_REFERENCE.replace(
                         "      <option name=\"myRunnerSettings\" />\n",
-                        "      <option name=\"myRunnerSettings\">\n"
-                                + "        <MavenRunnerSettings>\n"
-                                + "          <option name=\"delegateBuildToMaven\" value=\"false\" />\n"
-                                + "          <option name=\"environmentProperties\">\n"
-                                + "            <map />\n"
-                                + "          </option>\n"
-                                + "          <option name=\"jreName\" value=\"temurin-25\" />\n"
-                                + "          <option name=\"mavenProperties\">\n"
-                                + "            <map />\n"
-                                + "          </option>\n"
-                                + "          <option name=\"passParentEnv\" value=\"true\" />\n"
-                                + "          <option name=\"skipTests\" value=\"false\" />\n"
-                                + "          <option name=\"vmOptions\" value=\"\" />\n"
-                                + "        </MavenRunnerSettings>\n"
-                                + "      </option>\n"),
+                        """
+                              <option name="myRunnerSettings">
+                                <MavenRunnerSettings>
+                                  <option name="delegateBuildToMaven" value="false" />
+                                  <option name="environmentProperties">
+                                    <map />
+                                  </option>
+                                  <option name="jreName" value="temurin-25" />
+                                  <option name="mavenProperties">
+                                    <map />
+                                  </option>
+                                  <option name="passParentEnv" value="true" />
+                                  <option name="skipTests" value="false" />
+                                  <option name="vmOptions" value="" />
+                                </MavenRunnerSettings>
+                              </option>
+                        """),
                 body);
         assertEquals("temurin-25", RunConfigurationFiles.pinnedJre(body.getBytes(StandardCharsets.UTF_8)));
     }

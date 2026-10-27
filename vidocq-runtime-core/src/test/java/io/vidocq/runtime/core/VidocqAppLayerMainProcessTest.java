@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -93,7 +94,7 @@ class VidocqAppLayerMainProcessTest {
 
         var run = child(application);
 
-        assertTrue(run.exitCode() != 0, "the JVM must fail when no main can be selected");
+        assertNotEquals(0, run.exitCode(), "the JVM must fail when no main can be selected");
         var output = run.stdout() + run.stderr();
         assertTrue(output.contains("acme.app.Main#main(String[]) is private"), output);
         assertTrue(output.contains("Java 25 accepts main(String[]) or main()"), output);

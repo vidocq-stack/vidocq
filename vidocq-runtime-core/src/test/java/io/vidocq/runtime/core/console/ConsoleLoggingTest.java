@@ -52,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -180,9 +179,10 @@ class ConsoleLoggingTest {
     @Test
     void anotherRootHandlerKeepsTheJdkDefault() {
         Handler bridge = new Handler() {
-            @Override public void publish(LogRecord record) {}
-            @Override public void flush() {}
-            @Override public void close() {}
+            // A stand-in for a logging bridge: only its presence on the root logger matters, it handles nothing.
+            @Override public void publish(LogRecord logRecord) { /* drops the record */ }
+            @Override public void flush() { /* nothing buffered */ }
+            @Override public void close() { /* nothing held */ }
         };
         root().addHandler(bridge);
 

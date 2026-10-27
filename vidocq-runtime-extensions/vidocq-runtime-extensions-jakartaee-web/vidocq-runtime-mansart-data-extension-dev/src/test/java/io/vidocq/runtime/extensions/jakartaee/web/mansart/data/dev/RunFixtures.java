@@ -72,7 +72,9 @@ final class RunFixtures {
         private LocalDate due;
         private BigDecimal price;
 
-        public Gizmo() {}
+        public Gizmo() {
+            // the entity constructor Mansart calls; fields are set through method handles
+        }
 
         Long id() {
             return id;
@@ -105,7 +107,9 @@ final class RunFixtures {
         private Gizmo gizmo;
         private String label;
 
-        public Part() {}
+        public Part() {
+            // the entity constructor Mansart calls; fields are set through method handles
+        }
 
         Gizmo gizmo() {
             return gizmo;
@@ -120,7 +124,9 @@ final class RunFixtures {
     public static class Broken {
         private String label;
 
-        public Broken() {}
+        public Broken() {
+            // the entity constructor Mansart would call, had it a model
+        }
     }
 
     /** Its model is {@link #slotModel()}: a {@code Year}, a type the console cannot convert, between an id and a label. */
@@ -129,7 +135,9 @@ final class RunFixtures {
         private Year year;
         private String label;
 
-        public Slot() {}
+        public Slot() {
+            // the entity constructor Mansart calls; fields are set through method handles
+        }
     }
 
     /** Its model is {@link #tallyModel()}: a primitive {@code long} id, which Mansart never generates, and a label. */
@@ -137,7 +145,9 @@ final class RunFixtures {
         private long id;
         private String label;
 
-        public Tally() {}
+        public Tally() {
+            // the entity constructor Mansart calls; fields are set through method handles
+        }
     }
 
     /**
@@ -153,7 +163,9 @@ final class RunFixtures {
         private Level level;
         private Gizmo owner;
 
-        public Task() {}
+        public Task() {
+            // the entity constructor Mansart calls; fields are set through method handles
+        }
     }
 
     static Slot slot(Long id, Year year, String label) {
@@ -282,7 +294,6 @@ final class RunFixtures {
         return new MansartDataCatalogue(List.of(gizmo, part), List.of(gizmos, parts, reports), 2, 3, 15);
     }
 
-    /** The model of {@link Slot}, with real handles: its id, a {@code Year}, a label. */
     /** The model of {@link Tally}, with real handles: its primitive id, a label. */
     static EntityModel<Tally> tallyModel() {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
@@ -299,6 +310,7 @@ final class RunFixtures {
         }
     }
 
+    /** The model of {@link Slot}, with real handles: its id, a {@code Year}, a label. */
     static EntityModel<Slot> slotModel() {
         MethodHandles.Lookup lookup = MethodHandles.lookup();
         try {

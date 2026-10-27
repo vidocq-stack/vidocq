@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.ReportSection;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +35,7 @@ import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,7 +75,7 @@ class LogsPanelTest {
     }
 
     private long rings() {
-        return Arrays.stream(root.getHandlers()).filter(handler -> handler instanceof LogRing).count();
+        return Arrays.stream(root.getHandlers()).filter(LogRing.class::isInstance).count();
     }
 
     @Test
@@ -86,7 +88,7 @@ class LogsPanelTest {
         assertEquals("logs", entry.id());
         assertEquals("Warnings and errors", entry.charts().getFirst().title());
         assertEquals(List.of("warnings", "errors"),
-                entry.charts().getFirst().series().stream().map(series -> series.key()).toList());
+                entry.charts().getFirst().series().stream().map(Series::key).toList());
         assertEquals(List.of("set-level"), entry.actions().stream().map(PanelAction::id).toList());
         assertNull(entry.actions().getFirst().confirmation(), "harmless, and undone on the next reload");
     }
@@ -164,7 +166,7 @@ class LogsPanelTest {
         assertEquals(Map.of("key", "warnings", "kind", "absent", "reason", reason), value(sample, "warnings"),
                 "never a zero that would read as a quiet application");
         assertEquals(reason, contributed(panel).summary());
-        assertTrue(value(sample, "levels") != null, "the levels of java.util.logging are still shown");
+        assertNotNull(value(sample, "levels"), "the levels of java.util.logging are still shown");
     }
 
     @Test
@@ -275,7 +277,8 @@ class LogsPanelTest {
         LogsPanel panel = panel(JDK_FINDER);
         panel.stop();
 
-        assertThrows(IllegalStateException.class, () -> panel.setLevel(Map.of("logger", LOGGER, "level", "FINE")));
+        Map<String, String> fine = Map.of("logger", LOGGER, "level", "FINE");
+        assertThrows(IllegalStateException.class, () -> panel.setLevel(fine));
         assertNull(Logger.getLogger(LOGGER).getLevel());
     }
 

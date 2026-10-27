@@ -223,20 +223,20 @@ class VidocqRunMojoTest {
     }
 
     @Test
-    void skipRunsNothing() throws Exception {
+    void skipRunsNothing() {
         VidocqRunMojo mojo = new VidocqRunMojo();
         mojo.setSkip(true);
 
         // Nothing else is set: a goal that skipped must not read the project, let alone fork a JVM.
-        mojo.execute();
+        assertDoesNotThrow(mojo::execute);
     }
 
     @Test
     @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void aZeroExitCodeIsASuccess(@TempDir Path tmp) throws Exception {
+    void aZeroExitCodeIsASuccess(@TempDir Path tmp) {
         VidocqRunMojo mojo = newMojo();
 
-        mojo.await(javac(tmp, "--version"));
+        assertDoesNotThrow(() -> mojo.await(javac(tmp, "--version")));
     }
 
     @Test
@@ -366,7 +366,7 @@ class VidocqRunMojoTest {
                 stopStarted.countDown();
                 try {
                     Thread.sleep(300); // simulates a slow container stop (Testcontainers/Ryuk)
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
                 stopCompleted.set(true);
@@ -423,6 +423,7 @@ class VidocqRunMojoTest {
 
             @Override
             public void stop() {
+                // no container behind this fake: nothing to stop
             }
         };
         Map<String, String> systemProperties = new LinkedHashMap<>();

@@ -274,7 +274,7 @@ final class Fixture {
                 probe.setReuseAddress(false);
                 probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
                 return port;
-            } catch (IOException inUse) {
+            } catch (IOException _) {
                 // try the next one
             }
         }

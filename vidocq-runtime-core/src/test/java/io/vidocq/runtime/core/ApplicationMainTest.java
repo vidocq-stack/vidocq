@@ -274,13 +274,13 @@ class ApplicationMainTest {
     @Test
     @DisplayName("an instance main needs something to instantiate: a non-private constructor, and a concrete class")
     void instanceMainNeedsAnInstance() {
-        var noConstructor = assertThrows(IllegalStateException.class,
-                () -> ApplicationMain.of(InstanceMainNoAccessibleConstructor.class).invoke(ARGS));
+        ApplicationMain privateConstructor = ApplicationMain.of(InstanceMainNoAccessibleConstructor.class);
+        var noConstructor = assertThrows(IllegalStateException.class, () -> privateConstructor.invoke(ARGS));
         assertTrue(noConstructor.getMessage().contains("constructor")
                 && noConstructor.getMessage().contains("is private"), noConstructor.getMessage());
 
-        var isAbstract = assertThrows(IllegalStateException.class,
-                () -> ApplicationMain.of(AbstractInstanceMain.class).invoke(ARGS));
+        ApplicationMain abstractMain = ApplicationMain.of(AbstractInstanceMain.class);
+        var isAbstract = assertThrows(IllegalStateException.class, () -> abstractMain.invoke(ARGS));
         assertTrue(isAbstract.getMessage().contains("is abstract"), isAbstract.getMessage());
 
         assertEquals(List.of(), CALLS, "a rejected main is never invoked");

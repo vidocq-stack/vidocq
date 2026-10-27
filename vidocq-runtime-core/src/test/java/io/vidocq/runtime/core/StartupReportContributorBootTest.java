@@ -111,9 +111,12 @@ class StartupReportContributorBootTest {
             VidocqBootstrap bootstrap = withContextLoader(loader, () -> bootstrap(glue).configure().start());
             try {
                 String report = records.messages(REPORT_LOGGER, Level.INFO).getFirst();
-                assertTrue(report.endsWith("\n  glue        written by an extension"
-                        + "\n  library     found by the service loader"
-                        + "\n  anomalies   none"), report);
+                assertTrue(report.endsWith("""
+
+                          glue        written by an extension
+                          library     found by the service loader
+                          anomalies   none\
+                        """), report);
                 assertEquals(List.of("layer", "configuration", "extensions", "glue", "library"),
                         bootstrap.startupReport().orElseThrow().sections().stream().map(Section::id).toList());
                 List<LogRecord> all = records.all();

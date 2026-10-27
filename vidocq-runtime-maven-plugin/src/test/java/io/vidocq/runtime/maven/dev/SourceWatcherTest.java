@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -57,7 +58,7 @@ class SourceWatcherTest {
                 threadStarted.countDown();
                 try {
                     changed.set(watcher.awaitChange());
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             });
@@ -86,7 +87,7 @@ class SourceWatcherTest {
             Thread t = new Thread(() -> {
                 try {
                     result.set(watcher.awaitChange() ? 1 : 0);
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             });
@@ -134,7 +135,7 @@ class SourceWatcherTest {
             Thread t = new Thread(() -> {
                 try {
                     change.set(watcher.awaitChanges());
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             });
@@ -161,7 +162,7 @@ class SourceWatcherTest {
             Thread t = new Thread(() -> {
                 try {
                     change.set(watcher.awaitChanges());
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             });
@@ -177,9 +178,11 @@ class SourceWatcherTest {
     }
 
     @Test
-    void noDirectoryAtAllIsNoError() throws Exception {
-        try (SourceWatcher ignored = SourceWatcher.on(List.of(), List.of(), Duration.ofMillis(50))) {
-            // nothing to watch, and no exception
-        }
+    void noDirectoryAtAllIsNoError() {
+        assertDoesNotThrow(() -> {
+            try (SourceWatcher _ = SourceWatcher.on(List.of(), List.of(), Duration.ofMillis(50))) {
+                // nothing to watch, and no exception
+            }
+        });
     }
 }

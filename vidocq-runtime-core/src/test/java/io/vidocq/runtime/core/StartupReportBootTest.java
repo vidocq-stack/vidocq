@@ -166,8 +166,10 @@ class StartupReportBootTest {
             List<String> reports = records.messages(REPORT_LOGGER, Level.INFO);
             assertEquals(2, reports.size(), reports.toString());
             String detailed = reports.get(0);
-            assertTrue(detailed.contains("\n  launch      dev (vidocq.launch.mode) | report detailed"
-                    + " | override -Dvidocq.launch.mode=prod\n"), detailed);
+            assertTrue(detailed.contains("""
+
+                      launch      dev (vidocq.launch.mode) | report detailed | override -Dvidocq.launch.mode=prod
+                    """), detailed);
             assertTrue(detailed.contains("\n  vidocq      "), detailed);
             assertTrue(detailed.contains("\n  phases      configure "), detailed);
             assertTrue(detailed.contains(" | build "), detailed);

@@ -298,7 +298,7 @@ class SnapshotTest {
         List<Throwable> traces = log.thrown(Level.FINE);
         assertTrue(traces.stream().anyMatch(t -> t instanceof IllegalStateException
                 && "password=hunter2".equals(t.getMessage())), "the stack traces at DEBUG: " + traces);
-        assertTrue(traces.stream().anyMatch(t -> t instanceof NoClassDefFoundError), traces.toString());
+        assertTrue(traces.stream().anyMatch(NoClassDefFoundError.class::isInstance), traces.toString());
     }
 
     @Test
@@ -331,7 +331,7 @@ class SnapshotTest {
             public void sample(PanelSample sample) {
                 try {
                     Thread.sleep(8);
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             }

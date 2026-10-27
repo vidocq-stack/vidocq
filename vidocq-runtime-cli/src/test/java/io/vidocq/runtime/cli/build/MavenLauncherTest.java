@@ -27,7 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class MavenLauncherTest {
 
@@ -80,6 +80,6 @@ class MavenLauncherTest {
     void runReturnsOneWhenExecutableMissing(@TempDir Path dir) {
         int code = MavenLauncher.run(
                 java.util.List.of("definitely-not-a-real-binary-xyz"), dir);
-        assertTrue(code != 0);
+        assertNotEquals(0, code);
     }
 }

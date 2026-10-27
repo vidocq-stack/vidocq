@@ -32,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
@@ -86,7 +87,7 @@ class HumboldtIntegrationTest {
 
     @BeforeEach
     void resetSpansBeforeEachTest() throws IOException {
-        httpRequest("DELETE", "/__spans", null);
+        httpRequest("DELETE", "/__spans");
     }
 
     // ============================================================
@@ -183,12 +184,11 @@ class HumboldtIntegrationTest {
     // ============================================================
 
     private SimpleResponse httpGet(String path) throws IOException {
-        return httpRequest("GET", path, null);
+        return httpRequest("GET", path);
     }
 
     private SimpleResponse httpGetWithHeader(String path, String headerName, String headerValue) throws IOException {
-        URL url = new URL(baseUrl, path.startsWith("/") ? path.substring(1) : path);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection) url(path).openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty(headerName, headerValue);
         conn.setConnectTimeout(5000);
@@ -199,9 +199,12 @@ class HumboldtIntegrationTest {
         return new SimpleResponse(statusCode, body);
     }
 
-    private SimpleResponse httpRequest(String method, String path, String headerValueOrNull) throws IOException {
-        URL url = new URL(baseUrl, path.startsWith("/") ? path.substring(1) : path);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+    private URL url(String path) throws IOException {
+        return URI.create(baseUrl.toString()).resolve(path.startsWith("/") ? path.substring(1) : path).toURL();
+    }
+
+    private SimpleResponse httpRequest(String method, String path) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) url(path).openConnection();
         conn.setRequestMethod(method);
         conn.setConnectTimeout(5000);
         conn.setReadTimeout(5000);

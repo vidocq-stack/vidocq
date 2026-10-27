@@ -314,9 +314,14 @@ class QueryLanguageTest {
     void inAnExpressionClauseOfAKnownTargetItsAttributesSelfTheFunctionsThenTheOtherKeywords() {
         assertEquals("7-7 id title status price dueDate project this " + FUNCTIONS + " " + OTHER_KEYWORDS,
                 complete("SELECT | FROM Task"), "the target written after the caret");
-        assertEquals("id: Long · id, generated\ntitle: String · column title\nstatus: Status · column status\n"
-                + "price: BigDecimal · column price\ndueDate: LocalDate · column due_date\n"
-                + "project: → Project · column project_id\nthis: the Task itself",
+        assertEquals("""
+                id: Long · id, generated
+                title: String · column title
+                status: Status · column status
+                price: BigDecimal · column price
+                dueDate: LocalDate · column due_date
+                project: → Project · column project_id
+                this: the Task itself""",
                 String.join("\n", details("SELECT | FROM Task").lines().limit(7).toList()));
         assertEquals("16-18 title", complete("FROM Task WHERE ti|"));
         assertEquals("16-18 UPPER(|) UPDATE", complete("FROM Task WHERE up|"));
@@ -574,8 +579,13 @@ class QueryLanguageTest {
 
     @Test
     void formatWritesKeywordsAndFunctionsInCapitalsSelfAsTheDialectDoesAndTheRestAsWritten() {
-        assertEquals("SELECT COUNT(this)\nFROM Task\nWHERE UPPER(title) = 'It''s'\n  AND price > -1.50\n  AND id IN "
-                + "(:a, :b)\n  AND dueDate = :Due", format("select count ( THIS ) from Task where upper(title)='It''s' "
+        assertEquals("""
+                SELECT COUNT(this)
+                FROM Task
+                WHERE UPPER(title) = 'It''s'
+                  AND price > -1.50
+                  AND id IN (:a, :b)
+                  AND dueDate = :Due""", format("select count ( THIS ) from Task where upper(title)='It''s' "
                 + "and price>-1.50 and id in(:a,:b) and dueDate=:Due"));
     }
 
