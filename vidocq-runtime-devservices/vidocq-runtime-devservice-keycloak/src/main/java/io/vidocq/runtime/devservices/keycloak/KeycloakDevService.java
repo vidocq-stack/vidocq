@@ -63,6 +63,8 @@ public final class KeycloakDevService implements DevService {
     private static final int KC_PORT = 8080;
     /** User name and password of the throwaway container's bootstrap administrator. */
     private static final String BOOTSTRAP_ADMIN = "admin";
+    /** The path, and the endpoint name, of Keycloak's administration console. */
+    private static final String ADMIN_CONSOLE = "admin";
 
     private GenericContainer<?> container;
     private String image;
@@ -179,7 +181,7 @@ public final class KeycloakDevService implements DevService {
         if (container != null) {
             String base = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT);
             endpoints.put("issuer", issuer);
-            endpoints.put("admin", base + "/admin");
+            endpoints.put(ADMIN_CONSOLE, base + "/" + ADMIN_CONSOLE);
         }
         return new DevServiceState(id(), image, endpoints, List.copyOf(injected.keySet()));
     }

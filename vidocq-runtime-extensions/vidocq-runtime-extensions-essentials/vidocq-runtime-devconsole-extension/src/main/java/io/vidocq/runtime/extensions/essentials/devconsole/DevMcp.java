@@ -251,15 +251,15 @@ final class DevMcp {
             }
             case "vidocq_panels" -> {
                 List<Object> panels = new ArrayList<>();
-                for (Object each : list(document.get("panels"))) {
+                for (Object each : list(document.get(PANELS))) {
                     Map<?, ?> panel = map(each);
                     Map<String, Object> shown = new LinkedHashMap<>();
-                    for (String key : List.of("id", "title", "live", "summary")) {
+                    for (String key : List.of("id", TITLE, "live", "summary")) {
                         shown.put(key, panel.get(key));
                     }
                     panels.add(shown);
                 }
-                out.put("panels", panels);
+                out.put(PANELS, panels);
             }
             case "vidocq_panel" -> {
                 if (!(named.get("id") instanceof String id)) {
@@ -267,7 +267,7 @@ final class DevMcp {
                 }
                 Object found = null;
                 List<Object> ids = new ArrayList<>();
-                for (Object each : list(document.get("panels"))) {
+                for (Object each : list(document.get(PANELS))) {
                     ids.add(map(each).get("id"));
                     if (id.equals(map(each).get("id"))) {
                         found = each;
