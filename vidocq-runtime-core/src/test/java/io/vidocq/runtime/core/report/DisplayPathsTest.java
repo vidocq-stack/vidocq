@@ -86,4 +86,12 @@ class DisplayPathsTest {
     private static String local(String unixPath) {
         return unixPath.replace("/", File.separator);
     }
+
+    @Test
+    void aValueThatIsNoPathIsWrittenAsItIs() {
+        String noPath = "bad\u0000name";
+
+        assertEquals(noPath, PATHS.summary(noPath));
+        assertEquals(noPath, PATHS.detailed(noPath));
+    }
 }
