@@ -147,7 +147,7 @@ final class HealthPanel {
         if (up + down == 0) {
             group.absent(STATUS, NEVER_CALLED);
         } else {
-            group.text("status", down > 0 ? "DOWN" : "UP")
+            group.text(STATUS, down > 0 ? "DOWN" : "UP")
                     .gauge("up", up, names.size(), Unit.COUNT)
                     .gauge("down", down, names.size(), Unit.COUNT);
         }
