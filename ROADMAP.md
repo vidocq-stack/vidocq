@@ -9,32 +9,39 @@ SPI, lifecycle, packaging (fat jar / jlink via `vidocq-runtime-maven-plugin`).
 
 ## Release plan
 
-Decided on 2026-10-19. Each version has a milestone on
+Decided on 2026-10-19, revised on 2026-10-27. Each version has a milestone on
 [Vidocq/vidocq](https://codefloe.com/Vidocq/vidocq/milestones), which gathers its issues,
 those of the bricks included; the board of all of them is the
 [ROADMAP 1.0 project](https://codefloe.com/Vidocq/-/projects/890). Production readiness — performance, robustness, security —
 comes **before** the Web Profile work.
 
+The estimates are a projection, not a commitment: they are given by quarter (Q1–Q4) or by
+half-year (S1, S2), and revisited at each release.
+
 | Version | Content | Estimate |
 |---|---|---|
-| **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano), Standard Tag Library (Bodoni) | end of October 2026 |
-| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Antoine's project) if its first release is out in time, else in 1.1.0 | end of November 2026 |
-| **1.0.0-RC1 — production readiness** | Fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | mid-January 2027 |
-| **1.0.0** | The fixes of the release candidate. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of January 2027 |
-| **1.0.x** | The external security audit, executed in February 2027, and its fixes | February–March 2027 |
-| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model); Persistence 3.2 if it missed 0.4.0 | April 2027 |
-| **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | October 2027 |
-| **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | January 2028 |
-| **1.4.0** | Jakarta EE Web Profile 11 certification | spring 2028 |
+| **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano), Standard Tag Library (Bodoni) | Q4 2026 |
+| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Noether, Antoine's project) if its first release is out in time, else in 1.0.0 | Q4 2026 |
+| **1.0.0-RC1 — production readiness** | The fixes found by the comparative benchmarks (exceptions thrown on the hot path, generated code left unused such as the static JSON-B generation); fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks on a dedicated bench with an external load generator, with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | Q1 2027 |
+| **1.0.0 — ready for production** | Core Profile + MicroProfile 7.2 + Persistence 3.2: clean, documented, fast. The fixes of the release candidate and of the external security audit; migration tooling from Spring Boot. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of S1 2027 |
+| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | S2 2027 |
+| **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | S1 2028 |
+| **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | S2 2028 |
+| **1.4.0** | Jakarta EE Web Profile 11 certification | S2 2028 |
 
-**Why 1.0.0 in January.** A 1.0 is a promise of stability, not the end of the feature list. The
-Core Profile is certified and MicroProfile 7.2 delivered; what 1.0.0 adds is the proof that the
-runtime holds in production: robustness, performance and security, measured and published. The
-Web Profile then comes as 1.x releases, which add without breaking; a breaking change would make
-a 2.0. The 0.4.0 dates depend on two outside events: the MicroProfile 7.2 platform ballot and
-the first Persistence release. From 1.1.0 on, the dates follow the CDI Full estimates of the
-Vauban study (below). Gap analysis and per-spec status of the Web Profile:
-[`WEB-PROFILE.md`](WEB-PROFILE.md).
+**Why 1.0.0 at the end of S1 2027.** A 1.0 is a promise of stability, not the end of the feature
+list, and a rushed one would get Vidocq taken for a toy. Its scope is kept narrow so the promise
+holds: the certified Core Profile, MicroProfile 7.2 and Persistence 3.2. Servlet, Pages,
+Expression Language and the Standard Tag Library ship before it, but are not part of that scope.
+What 1.0.0 adds is the proof that the runtime holds in production: robustness, performance and
+security, measured and published, and evidence gathered from two sides — the project's own
+certifications, and users who confirm it runs their workloads. The release candidate can come as
+early as mid-January 2027 if the performance fixes land; the time up to 1.0.0 goes to the
+external audit and to those outside validations. The Web Profile then comes as 1.x releases,
+which add without breaking; a breaking change would make a 2.0. The 0.4.0 dates depend on two
+outside events: the MicroProfile 7.2 platform ballot and the first Persistence release. From
+1.1.0 on, the dates follow the CDI Full estimates of the Vauban study (below). Gap analysis and
+per-spec status of the Web Profile: [`WEB-PROFILE.md`](WEB-PROFILE.md).
 
 ### How the estimates are made
 
@@ -43,8 +50,8 @@ on 2026-07-04, 0.3.0 on 2026-08-30), and 13 merged work items a week over the la
 weeks, 21 over the last four (a floor: many commits cite no issue). Sizes: S about a week,
 M one to two weeks, L about three weeks, XL six to nine weeks; L and XL carry a 50 % margin,
 CDI Full and Faces having the most design risk. The dates are revisited at each release. The 1.0.0
-dates are the tightest of the plan: eight to ten weeks of focused work, holidays included; they
-hold only with days dedicated to the campaign.
+release candidate is the tightest step of the plan: eight to ten weeks of focused work, holidays
+included; it holds only with days dedicated to the campaign.
 
 ### CDI 4.1 Full
 
@@ -82,8 +89,8 @@ door open to CDI 5 later, with the Jakarta EE 12 Web Profile.
 - **Security.** A threat model of the runtime and of each network-facing brick; an internal
   audit against it; an external audit, scoped and time-boxed; every finding fixed or
   documented. Today: signed releases and signed commits, no threat model, no scanning, no SBOM.
-  The external audit is ordered in November 2026 for an execution in February 2027: a vendor
-  books four to eight weeks ahead. Its results and fixes ship in 1.0.x.
+  The external audit is ordered in Q4 2026 for an execution in Q1 2027: a vendor books four to
+  eight weeks ahead. Its results and fixes ship in 1.0.0.
 - **Code quality and static analysis.** One central tool, settled on 2026-10-20 (#269, #284):
   **SonarQube Community Build** — the free, self-hosted edition of SonarQube, from SonarSource
   (Switzerland) — extended with the open-source
@@ -145,7 +152,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
-| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0 if its first release is out in time, else 1.1.0; the TCK runs |
+| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0 if its first release is out in time, else 1.0.0; the TCK runs |
 
 ## Jakarta EE Core Profile 11 certification
 
