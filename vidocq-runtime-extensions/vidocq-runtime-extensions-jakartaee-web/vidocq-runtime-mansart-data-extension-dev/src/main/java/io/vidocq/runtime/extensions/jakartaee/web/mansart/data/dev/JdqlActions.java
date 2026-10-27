@@ -364,7 +364,7 @@ final class JdqlActions {
     Object runtime() throws Refused {
         try {
             return beans.reference(RepositoryRuntime.class);
-        } catch (RuntimeException | LinkageError none) {
+        } catch (RuntimeException | LinkageError _) {
             throw new Refused("no RepositoryRuntime bean");
         }
     }

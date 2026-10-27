@@ -75,7 +75,7 @@ public final class ApplicationClasspath {
     private static boolean jarHolds(Path jar, String resource) {
         try (ZipFile zip = new ZipFile(jar.toFile())) {
             return zip.getEntry(resource) != null;
-        } catch (IOException e) {
+        } catch (IOException _) {
             return false; // not a readable jar: it holds nothing
         }
     }

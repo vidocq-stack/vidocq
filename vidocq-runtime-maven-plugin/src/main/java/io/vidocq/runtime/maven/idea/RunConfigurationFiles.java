@@ -84,7 +84,7 @@ final class RunConfigurationFiles {
                     .onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(onDisk))
                     .toString());
-        } catch (CharacterCodingException e) {
+        } catch (CharacterCodingException _) {
             return State.FOREIGN;
         }
         int newline = content.indexOf('\n');

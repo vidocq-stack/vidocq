@@ -226,7 +226,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
                     try {
                         byBrick.put(brick, BuildInfo.ofClass(Class.forName(anchor, false, loader)));
                         break;
-                    } catch (ClassNotFoundException | LinkageError absent) {
+                    } catch (ClassNotFoundException | LinkageError _) {
                         // this brick is not on the class path
                     }
                 }

@@ -105,7 +105,7 @@ final class ProjectDirectories {
             }
             reader.close();
             return modules;
-        } catch (IOException | XMLStreamException | RuntimeException e) {
+        } catch (IOException | XMLStreamException | RuntimeException _) {
             return List.of();
         }
     }

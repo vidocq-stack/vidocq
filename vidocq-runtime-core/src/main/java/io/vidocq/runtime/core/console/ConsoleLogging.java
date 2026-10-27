@@ -143,7 +143,7 @@ public final class ConsoleLogging {
                     handler.setFormatter(new ConsoleLogFormatter(colors));
                 }
             }
-        } catch (RuntimeException | LinkageError e) {
+        } catch (RuntimeException | LinkageError _) {
             // console output is never a reason to fail the boot
         }
     }

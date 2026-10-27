@@ -241,7 +241,7 @@ public final class StartupBanner {
         }
         try {
             return BannerMode.valueOf(raw.get().strip().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
+        } catch (IllegalArgumentException _) {
             LOG.log(System.Logger.Level.WARNING, "Configuration key ''{0}'' has an unknown value ''{1}''"
                     + " (expected auto, console, log or off); using auto", MODE_KEY, raw.get());
             return BannerMode.AUTO;

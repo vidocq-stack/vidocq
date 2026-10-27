@@ -179,7 +179,7 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
     private static List<ChappeMountPoint.Page> advertisedPages(String listener) {
         try {
             return ChappeMountPoint.instance().pages(listener);
-        } catch (IllegalStateException notInstalled) {
+        } catch (IllegalStateException _) {
             return List.of();
         }
     }

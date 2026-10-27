@@ -331,7 +331,7 @@ final class IdeaApplications {
         int port;
         try {
             port = Integer.parseInt(value.strip());
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             errors.add(PREFIX + coordinates + ": vidocq.dev.debugPort \"" + value + "\" is not a valid port number.");
             return 0;
         }

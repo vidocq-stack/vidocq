@@ -103,7 +103,7 @@ public record JdwpAgent(String host, int port, boolean suspend) {
         String address = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
         try {
             return InetAddress.ofLiteral(address);
-        } catch (IllegalArgumentException notAnAddress) {
+        } catch (IllegalArgumentException _) {
             return null;
         }
     }

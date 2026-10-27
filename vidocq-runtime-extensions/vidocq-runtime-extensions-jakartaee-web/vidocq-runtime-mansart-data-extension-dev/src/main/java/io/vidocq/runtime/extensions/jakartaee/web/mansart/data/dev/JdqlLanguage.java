@@ -153,7 +153,7 @@ final class JdqlLanguage {
                                         Function<Class<?>, EntityModel<?>> models) {
         try {
             return models.apply(classes.apply(className));
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

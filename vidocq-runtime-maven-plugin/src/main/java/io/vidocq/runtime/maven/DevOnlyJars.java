@@ -46,7 +46,7 @@ public final class DevOnlyJars {
             Manifest manifest = file.getManifest();
             return manifest != null
                     && "true".equalsIgnoreCase(manifest.getMainAttributes().getValue(MANIFEST_ENTRY));
-        } catch (IOException | SecurityException unreadable) {
+        } catch (IOException | SecurityException _) {
             return false;
         }
     }

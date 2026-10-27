@@ -81,7 +81,7 @@ public final class ChappeEngineExtension implements VidocqExtension, StartupRepo
         ChappeMountPoint mp;
         try {
             mp = ChappeMountPoint.instance();
-        } catch (IllegalStateException notInstalled) {
+        } catch (IllegalStateException _) {
             section.summary("no listener started");
             return;
         }

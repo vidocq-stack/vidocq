@@ -428,7 +428,7 @@ public final class VidocqAppLayer {
         try {
             var providerClass = Class.forName("io.vidocq.vauban.sjar.SjarKeyProvider");
             return (PluginContext) providerClass.getDeclaredConstructor().newInstance();
-        } catch (Exception e) {
+        } catch (Exception _) {
             return PluginContext.empty();
         }
     }

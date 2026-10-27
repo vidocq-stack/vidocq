@@ -258,7 +258,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 }
                 try {
                     Thread.sleep(Snapshot.POLL_MILLIS);
-                } catch (InterruptedException stopping) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             }

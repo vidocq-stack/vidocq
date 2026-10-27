@@ -289,7 +289,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
         }
         try {
             return OffsetDateTime.parse(v).toInstant().truncatedTo(ChronoUnit.SECONDS);
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException _) {
             return null;
         }
     }

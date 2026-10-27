@@ -172,7 +172,7 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
                         names.add(name);
                     }
                 }
-            } catch (IOException | IllegalArgumentException ignored) {
+            } catch (IOException | IllegalArgumentException _) {
                 // file absent or unreadable at this build phase — annotation still covers it
             }
         }

@@ -55,7 +55,7 @@ final class ReloadAck {
         try {
             return Files.readString(readyFile(reloadFile), StandardCharsets.UTF_8).strip()
                     .equals(Long.toString(stamp));
-        } catch (IOException notYet) {
+        } catch (IOException _) {
             return false;
         }
     }

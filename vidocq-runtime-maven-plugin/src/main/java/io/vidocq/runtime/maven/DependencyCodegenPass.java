@@ -382,7 +382,7 @@ final class DependencyCodegenPass {
     static String display(Path baseDir, Path log) {
         try {
             return baseDir.relativize(log).toString();
-        } catch (IllegalArgumentException differentRoots) {
+        } catch (IllegalArgumentException _) {
             return log.toString();
         }
     }

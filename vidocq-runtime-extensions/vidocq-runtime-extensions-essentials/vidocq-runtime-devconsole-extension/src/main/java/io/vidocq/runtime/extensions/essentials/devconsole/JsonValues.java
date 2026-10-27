@@ -264,7 +264,7 @@ final class JsonValues {
         if (number.indexOf('.') < 0 && number.indexOf('e') < 0 && number.indexOf('E') < 0) {
             try {
                 return Long.parseLong(number);
-            } catch (NumberFormatException tooLarge) {
+            } catch (NumberFormatException _) {
                 // an integer past a long: a double, as JavaScript would read it
             }
         }

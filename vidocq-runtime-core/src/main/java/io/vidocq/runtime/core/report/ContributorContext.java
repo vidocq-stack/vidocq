@@ -104,7 +104,7 @@ final class ContributorContext implements StartupReportContext {
             CreationalContext<?> context = beans.createCreationalContext(bean);
             created.add(context);
             return Optional.ofNullable(type.cast(beans.getReference(bean, type, context)));
-        } catch (RuntimeException | LinkageError unsatisfiedAmbiguousOrFailing) {
+        } catch (RuntimeException | LinkageError _) {
             return Optional.empty();
         }
     }

@@ -80,7 +80,7 @@ final class WarJspPages {
         try {
             Class.forName("io.vidocq.ibarra.compiler.PagePrecompiler", false, WarJspPages.class.getClassLoader());
             return true;
-        } catch (ClassNotFoundException absent) {
+        } catch (ClassNotFoundException _) {
             return false;
         }
     }

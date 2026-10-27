@@ -96,7 +96,7 @@ final class DevConsoleProbe {
         try {
             Class.forName(CONSOLE_CLASS, false, loader);
             return true;
-        } catch (ClassNotFoundException | LinkageError absent) {
+        } catch (ClassNotFoundException | LinkageError _) {
             return false;
         }
     }
@@ -176,7 +176,7 @@ final class DevConsoleProbe {
         String literal = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
         try {
             return InetAddress.ofLiteral(literal).isLoopbackAddress();
-        } catch (IllegalArgumentException notAnAddress) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }
@@ -197,7 +197,7 @@ final class DevConsoleProbe {
     private static String setting(Function<String, Optional<String>> config, String key) {
         try {
             return config.apply(key).map(String::strip).filter(value -> !value.isEmpty()).orElse(null);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
