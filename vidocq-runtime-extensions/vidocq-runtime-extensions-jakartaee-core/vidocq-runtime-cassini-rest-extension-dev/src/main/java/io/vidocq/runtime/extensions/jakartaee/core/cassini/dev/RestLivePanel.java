@@ -30,7 +30,9 @@ import java.util.List;
 public final class RestLivePanel implements LivePanel {
 
     /** Created by the service loader. */
-    public RestLivePanel() {}
+    public RestLivePanel() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override
     public String id() {

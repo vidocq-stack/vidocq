@@ -32,6 +32,7 @@ public final class InstalledApplicationLayer implements ApplicationLayer {
 
     /** Called by {@link java.util.ServiceLoader}. */
     public InstalledApplicationLayer() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
     }
 
     @Override

@@ -79,7 +79,9 @@ public final class CatalogueLivePanel implements LivePanel {
     private volatile RepositoryActions run = RepositoryActions.NONE;
 
     /** Created by the service loader. */
-    public CatalogueLivePanel() {}
+    public CatalogueLivePanel() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override
     public String id() {

@@ -34,7 +34,9 @@ public final class MetricsLivePanel implements LivePanel {
     private volatile DiracLiveBean live = DiracLiveBean.NONE;
 
     /** Created by the service loader. */
-    public MetricsLivePanel() {}
+    public MetricsLivePanel() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override
     public String id() {

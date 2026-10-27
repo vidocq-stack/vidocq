@@ -101,6 +101,7 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
 
     @Override
     public void beforeStart(VaubanContainerBuilder builder) {
+        // Nothing to add to the container: the REST stack is mounted by onStart, once the container runs.
     }
 
     @Override

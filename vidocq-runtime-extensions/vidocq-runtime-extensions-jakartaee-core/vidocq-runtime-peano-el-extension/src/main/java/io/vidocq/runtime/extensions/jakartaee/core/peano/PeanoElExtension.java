@@ -36,7 +36,9 @@ public final class PeanoElExtension implements VidocqExtension, StartupReportCon
     private volatile String providerModule;
 
     /** Created by the runtime's service loader. */
-    public PeanoElExtension() {}
+    public PeanoElExtension() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override public String name() { return "peano-el"; }
     @Override public String id() { return "el"; }

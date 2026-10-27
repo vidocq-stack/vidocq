@@ -157,7 +157,7 @@ final class RecordingSample implements PanelSample {
                     case Counter counter ->
                             sink.measure(group, key, "counter", unit(counter.unit()), counter.total(), Double.NaN);
                     case Absent _ -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
-                    default -> { }      // a duration, a text or a table: nothing a chart draws
+                    default -> { /* a duration, a text or a table: nothing a chart draws */ }
                 }
             });
         }

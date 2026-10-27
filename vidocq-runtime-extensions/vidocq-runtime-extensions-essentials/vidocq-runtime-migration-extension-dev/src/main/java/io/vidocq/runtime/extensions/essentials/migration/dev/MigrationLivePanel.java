@@ -47,7 +47,9 @@ public final class MigrationLivePanel implements LivePanel {
     private static final int MAX_ROWS = 100;
 
     /** Created by the service loader. */
-    public MigrationLivePanel() {}
+    public MigrationLivePanel() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override
     public String id() {

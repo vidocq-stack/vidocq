@@ -57,7 +57,9 @@ public final class PoolsLivePanel implements LivePanel {
     private volatile List<PoolActions> pools;
 
     /** Created by the service loader. */
-    public PoolsLivePanel() {}
+    public PoolsLivePanel() {
+        // Nothing to set up: the service loader only needs this public no-argument constructor.
+    }
 
     @Override
     public String id() {

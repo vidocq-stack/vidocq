@@ -147,7 +147,7 @@ public final class ModuleDescriptorAugmenter {
                     case ClassEntry c -> addInternalName(c.asInternalName(), packages);
                     case NameAndTypeEntry nt -> addDescriptor(nt.type().stringValue(), packages);
                     case MethodTypeEntry mt -> addDescriptor(mt.descriptor().stringValue(), packages);
-                    default -> { }
+                    default -> { /* other entries name types only through the entries matched above */ }
                 }
             }
             for (FieldModel f : model.fields()) {
