@@ -96,14 +96,23 @@ final class SourceWatcher implements AutoCloseable {
         WatchService ws = (all.isEmpty() ? FileSystems.getDefault() : all.get(0).getFileSystem()).newWatchService();
         SourceWatcher watcher = new SourceWatcher(ws, debounce.toMillis(),
                 testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
-        for (Path dir : all) {
-            if (Files.isDirectory(dir)) {
-                watcher.registerRecursive(dir);
-            } else {
-                watcher.missing.add(dir.toAbsolutePath().normalize());
-            }
+        try {
+            watcher.registerAll(all);
+        } catch (IOException | RuntimeException e) {
+            watcher.close(); // a half-registered watcher would leak its WatchService
+            throw e;
         }
         return watcher;
+    }
+
+    private void registerAll(List<Path> dirs) throws IOException {
+        for (Path dir : dirs) {
+            if (Files.isDirectory(dir)) {
+                registerRecursive(dir);
+            } else {
+                missing.add(dir.toAbsolutePath().normalize());
+            }
+        }
     }
 
     private void registerRecursive(Path root) throws IOException {

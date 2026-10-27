@@ -53,7 +53,25 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
     static final String ROTATE_SESSION_ID = "vidocq.servlet.rotate-session-id-on-login";
 
     /** A configured user; {@code password} is wiped once handed to Foy. */
-    record User(String name, char[] password, List<String> roles) {}
+    record User(String name, char[] password, List<String> roles) {
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof User user && name.equals(user.name) && Arrays.equals(password, user.password)
+                    && roles.equals(user.roles);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * (31 * name.hashCode() + Arrays.hashCode(password)) + roles.hashCode();
+        }
+
+        /** Never shows the password. */
+        @Override
+        public String toString() {
+            return "User[name=" + name + ", password=***, roles=" + roles + "]";
+        }
+    }
 
     static ServletSecurity from(VidocqConfig config) {
         Set<String> names = new TreeSet<>();

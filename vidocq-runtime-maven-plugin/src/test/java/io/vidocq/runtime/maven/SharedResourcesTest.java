@@ -181,7 +181,8 @@ class SharedResourcesTest {
                 "com/acme/b/B.class", emptyClass("com.acme.b.B"),
                 "com/acme/res/x.txt", text("from b")));
 
-        IOException e = assertThrows(IOException.class, () -> SharedResources.merge(stage, SharedResources.find(stage)));
+        var found = SharedResources.find(stage);
+        IOException e = assertThrows(IOException.class, () -> SharedResources.merge(stage, found));
 
         assertTrue(e.getMessage().contains("com/acme/res/x.txt"), e.getMessage());
     }

@@ -227,7 +227,7 @@ final class CsvActions {
             case JdqlResult.Value value -> out.add(List.of("value"))
                     && out.add(Collections.singletonList(cell(value.value())));
         };
-        return fits ? new Written(out.text(), out.records() - 1, out.bytes()) : null;
+        return fits ? new Written(out.text(), out.records() - 1L, out.bytes()) : null;
     }
 
     private boolean writeEntities(List<?> entities, Csv.Writer out) {

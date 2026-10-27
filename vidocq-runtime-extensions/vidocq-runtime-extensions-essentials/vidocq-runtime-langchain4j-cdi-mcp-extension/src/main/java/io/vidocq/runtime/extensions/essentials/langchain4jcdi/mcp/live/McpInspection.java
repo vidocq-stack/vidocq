@@ -57,7 +57,8 @@ public record McpInspection(boolean twin, int namedConfigBeans, boolean configFr
         try {
             Bean<?> registry = null;
             for (Bean<?> bean : beans.getBeans(Object.class, Any.Literal.INSTANCE)) {
-                if (bean.getBeanClass().getName().equals(McpToolRegistry.class.getName())) {
+                // By name on purpose: a twin is the same class loaded a second time, which no type check can match.
+                if (bean.getBeanClass().getName().equals(McpToolRegistry.class.getName())) { // NOSONAR java:S1872
                     registry = bean;
                     break;
                 }

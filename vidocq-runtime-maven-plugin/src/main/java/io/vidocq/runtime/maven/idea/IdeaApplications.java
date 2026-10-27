@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.regex.Pattern;
 
 /**
  * Finds the Vidocq applications of a reactor and what their IntelliJ run configurations contain.
@@ -82,11 +81,19 @@ final class IdeaApplications {
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String PREFIX = "Vidocq idea: ";
-    private static final Pattern JAVA_NAME = Pattern.compile(
-            "([\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*\\.)*"
-                    + "[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*");
 
     enum Level { DEBUG, INFO, WARN }
+
+    /** Whether {@code name} is a dotted sequence of Java identifiers, such as a fully qualified class name. */
+    static boolean isJavaName(String name) {
+        for (String part : name.split("\\.", -1)) {
+            if (part.isEmpty() || !Character.isJavaIdentifierStart(part.codePointAt(0))
+                    || !part.codePoints().skip(1).allMatch(Character::isJavaIdentifierPart)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     record Diagnostic(Level level, String message) {
     }
@@ -190,7 +197,7 @@ final class IdeaApplications {
                                                List<Diagnostic> diagnostics, List<String> errors) {
         String coordinates = project.getGroupId() + ":" + project.getArtifactId();
         int errorsBefore = errors.size();
-        if (mainClass != null && !JAVA_NAME.matcher(mainClass).matches()) {
+        if (mainClass != null && !isJavaName(mainClass)) {
             errors.add(PREFIX + coordinates + ": the main class \"" + mainClass + "\" is not a Java class name.");
         }
         String configurationName = pomValue(project, CONFIGURATION_NAME_PROPERTY,

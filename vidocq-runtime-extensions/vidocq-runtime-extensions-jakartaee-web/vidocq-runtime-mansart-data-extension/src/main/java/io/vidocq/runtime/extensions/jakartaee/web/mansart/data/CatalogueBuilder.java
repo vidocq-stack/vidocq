@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.Optional;
 
 /**
  * Builds the {@link MansartDataCatalogue} once per boot, from the repository interfaces the container holds and the
@@ -171,7 +172,9 @@ final class CatalogueBuilder {
     /** The id first, then the version, then the other attributes in model order. */
     private static <E> List<Column> columns(EntityModel<E> model) {
         IdAttribute<E, ?> id = model.id();
-        VersionAttribute<E, ?> version = model.version() == null ? null : model.version().orElse(null);
+        // a model breaking its contract with a null Optional reads as unversioned
+        Optional<VersionAttribute<E, ?>> declared = Objects.requireNonNullElse(model.version(), Optional.empty());
+        VersionAttribute<E, ?> version = declared.orElse(null);
         List<Column> columns = new ArrayList<>();
         columns.add(column(id));
         if (version != null) {

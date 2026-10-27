@@ -42,11 +42,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
@@ -283,6 +285,23 @@ public class VidocqIdeaMojo extends AbstractMojo {
      */
     private record Target(IdeaApplication application, String shownPath, Path file, String body, byte[] onDisk,
                           State state, UnaryOperator<String> withJre) {
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Target t && application.equals(t.application) && shownPath.equals(t.shownPath)
+                    && file.equals(t.file) && body.equals(t.body) && Arrays.equals(onDisk, t.onDisk)
+                    && state == t.state && withJre.equals(t.withJre);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(application, shownPath, file, body, Arrays.hashCode(onDisk), state, withJre);
+        }
+
+        @Override
+        public String toString() {
+            return "Target[" + shownPath + ", " + state + "]";
+        }
     }
 
     private Map<String, Target> targets(List<IdeaApplication> applications, Path runDirectory)

@@ -127,8 +127,10 @@ public final class KeycloakDevService implements DevService {
         Path realmFile = realmImport.map(ctx::resolve).orElse(null);
         String reuseKey = reuse ? image + "\n" + realm + "\n" + realmDigest(realmFile) : null;
         String name = DevContainers.name(ctx, "keycloak", null, reuseKey);
-        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image))
-                .withExposedPorts(KC_PORT)
+        // Configured on the instance itself, not through the fluent chain: the caller owns (and stops) this very
+        // container, which a chained expression would hide behind the builder's return values.
+        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image));
+        container.withExposedPorts(KC_PORT)
                 .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
                 .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
                 .withLabels(DevContainers.labels(ctx, "keycloak"))

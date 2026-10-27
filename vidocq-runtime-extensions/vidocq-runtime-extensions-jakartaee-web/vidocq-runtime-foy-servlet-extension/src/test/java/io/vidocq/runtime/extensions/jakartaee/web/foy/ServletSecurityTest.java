@@ -123,4 +123,20 @@ class ServletSecurityTest {
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }
+
+    @Test
+    void aUserComparesItsPasswordByContentAndNeverPrintsIt() {
+        var alice = new ServletSecurity.User("alice", "secret".toCharArray(), List.of("cook"));
+        var same = new ServletSecurity.User("alice", "secret".toCharArray(), List.of("cook"));
+        var other = new ServletSecurity.User("alice", "other".toCharArray(), List.of("cook"));
+
+        assertEquals(alice, same);
+        assertEquals(alice.hashCode(), same.hashCode());
+        assertNotEquals(alice, other);
+        assertNotEquals(alice, new ServletSecurity.User("bob", "secret".toCharArray(), List.of("cook")));
+        assertNotEquals(alice, new ServletSecurity.User("alice", "secret".toCharArray(), List.of("waiter")));
+        assertNotEquals(alice, "alice");
+        assertFalse(alice.toString().contains("secret"), alice.toString());
+        assertTrue(alice.toString().contains("alice") && alice.toString().contains("cook"), alice.toString());
+    }
 }

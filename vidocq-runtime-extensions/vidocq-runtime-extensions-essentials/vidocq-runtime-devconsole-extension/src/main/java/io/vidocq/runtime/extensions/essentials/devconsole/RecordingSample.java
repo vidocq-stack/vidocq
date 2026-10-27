@@ -365,7 +365,10 @@ final class RecordingSample implements PanelSample {
      * {@value PanelSample#MAX_REPLAY_CELL} characters is not parsed: braces at both ends of its arguments are enough.
      */
     private static boolean isReplay(String raw) {
-        int space = raw == null ? -1 : raw.indexOf(' ');
+        if (raw == null) {
+            return false;
+        }
+        int space = raw.indexOf(' ');
         if (space <= 0) {
             return false;
         }

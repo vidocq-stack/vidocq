@@ -284,6 +284,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                     try {
                         lock.wait();
                     } catch (InterruptedException stopping) {
+                        Thread.currentThread().interrupt();
                         return;
                     }
                 }
@@ -306,6 +307,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                     runOnce(next.trigger(), taken);
                 }
             } catch (InterruptedException stopping) {
+                Thread.currentThread().interrupt();
                 return;
             } catch (RuntimeException failed) {
                 warn.accept("Tests: the run failed: " + failed.getClass().getName());

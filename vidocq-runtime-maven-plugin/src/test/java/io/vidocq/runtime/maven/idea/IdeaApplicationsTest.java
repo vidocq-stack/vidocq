@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -695,5 +696,17 @@ class IdeaApplicationsTest {
         assertTrue(discovery.diagnostics().stream()
                         .anyMatch(d -> d.level() == level && d.message().contains(fragment)),
                 "expected " + level + " containing '" + fragment + "' in " + discovery.diagnostics());
+    }
+
+    @Test
+    void aJavaNameIsADottedSequenceOfIdentifiers() {
+        assertTrue(IdeaApplications.isJavaName("App"));
+        assertTrue(IdeaApplications.isJavaName("com.example.App"));
+        assertTrue(IdeaApplications.isJavaName("café.$Main_1"));
+        assertFalse(IdeaApplications.isJavaName(""));
+        assertFalse(IdeaApplications.isJavaName("com..App"));
+        assertFalse(IdeaApplications.isJavaName("com.example."));
+        assertFalse(IdeaApplications.isJavaName("1com.App"));
+        assertFalse(IdeaApplications.isJavaName("com.Ap-p"));
     }
 }

@@ -223,10 +223,9 @@ public final class HumboldtExtension implements VidocqExtension {
                 }
                 @SuppressWarnings("unchecked")
                 var value = (java.util.Optional<String>) getOptionalValue.invoke(config, name, String.class);
-                if (value != null) {
-                    value.ifPresent(v -> env.put(
-                            name.toUpperCase(Locale.ROOT).replace('.', '_'), v));
-                }
+                // a reflective call into a foreign Config may still answer null: read it as empty
+                java.util.Objects.requireNonNullElse(value, java.util.Optional.<String>empty()).ifPresent(v -> env.put(
+                        name.toUpperCase(Locale.ROOT).replace('.', '_'), v));
             }
         } catch (ReflectiveOperationException | RuntimeException ignored) {
             // MP Config absent from the assembled runtime — not an error.

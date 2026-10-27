@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli.update;
 
+import io.vidocq.runtime.cli.CliOutput;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -66,10 +68,10 @@ public final class CliInstaller {
             if (!Files.isRegularFile(launcher)) {
                 throw new IOException("Not a Vidocq CLI distribution: no bin/vidocq in " + zip.getFileName());
             }
-            launcher.toFile().setExecutable(true, false);
+            makeExecutable(launcher);
             Path cmd = staging.resolve("bin").resolve("vidocq.cmd");
             if (Files.isRegularFile(cmd)) {
-                cmd.toFile().setExecutable(true, false);
+                makeExecutable(cmd);
             }
             if (build.isPresent()) {
                 Files.writeString(staging.resolve(BUILD_MARKER), build.get() + "\n");
@@ -113,6 +115,13 @@ public final class CliInstaller {
             return Optional.empty();
         }
         return Optional.of(launcher.substring(0, m.start(1)) + installed + launcher.substring(m.end(1)));
+    }
+
+    /** Makes {@code file} executable by everyone; says so when the file system refuses, the install going on. */
+    private static void makeExecutable(Path file) {
+        if (!file.toFile().setExecutable(true, false)) {
+            CliOutput.warning("Could not make " + file + " executable: run chmod +x on it.");
+        }
     }
 
     private static void unzip(Path zip, Path into) throws IOException {

@@ -358,7 +358,9 @@ public class VidocqPackageMojo extends AbstractMojo {
 
         Path shFile = binDir.resolve(scriptName + ".sh");
         Files.writeString(shFile, script);
-        shFile.toFile().setExecutable(true);
+        if (!shFile.toFile().setExecutable(true)) {
+            getLog().warn("Could not make " + shFile + " executable: run chmod +x on it.");
+        }
     }
 
     void generateCmdScript(Path binDir) throws IOException, MojoExecutionException {
