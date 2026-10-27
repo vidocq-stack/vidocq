@@ -18,21 +18,29 @@ comes **before** the Web Profile work.
 The estimates are a projection, not a commitment: they are given by quarter (Q1–Q4) or by
 half-year (S1, S2), and revisited at each release.
 
+**Shipped is not certified.** Every component ships in the first release where it works: 0.4.0
+already carries Servlet, Pages, Expression Language and the Standard Tag Library. A component
+is **certified** — declared ready for production, with its certification filed where a
+specification has one — only once it has passed the security audits and the comparative
+performance tests. 1.0.0 certifies the Core Profile, MicroProfile 7.2 and Persistence 3.2; the
+Web Profile is certified later, after the same audits and tests on the web tier.
+
 | Version | Content | Estimate |
 |---|---|---|
 | **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano), Standard Tag Library (Bodoni) | Q4 2026 |
 | **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Noether, Antoine's project) if its first release is out in time, else in 1.0.0 | Q4 2026 |
 | **1.0.0-RC1 — production readiness** | The fixes found by the comparative benchmarks (exceptions thrown on the hot path, generated code left unused such as the static JSON-B generation); fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks on a dedicated bench with an external load generator, with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | Q1 2027 |
-| **1.0.0 — ready for production** | Core Profile + MicroProfile 7.2 + Persistence 3.2: clean, documented, fast. The fixes of the release candidate and of the external security audit; migration tooling from Spring Boot. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of S1 2027 |
+| **1.0.0 — ready for production** | Certified: Core Profile + MicroProfile 7.2 + Persistence 3.2, clean, documented, fast; the other components keep shipping, not certified yet. The fixes of the release candidate and of the external security audit; migration tooling from Spring Boot. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of S1 2027 |
 | **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | S2 2027 |
 | **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | S1 2028 |
 | **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | S2 2028 |
-| **1.4.0** | Jakarta EE Web Profile 11 certification | S2 2028 |
+| **1.4.0** | Jakarta EE Web Profile 11 certification, after the security audit and the comparative performance tests of the web tier | S2 2028 |
 
 **Why 1.0.0 at the end of S1 2027.** A 1.0 is a promise of stability, not the end of the feature
-list, and a rushed one would get Vidocq taken for a toy. Its scope is kept narrow so the promise
-holds: the certified Core Profile, MicroProfile 7.2 and Persistence 3.2. Servlet, Pages,
-Expression Language and the Standard Tag Library ship before it, but are not part of that scope.
+list, and a rushed one would get Vidocq taken for a toy. What it certifies is kept narrow so the
+promise holds: the Core Profile, MicroProfile 7.2 and Persistence 3.2. Servlet, Pages,
+Expression Language and the Standard Tag Library ship before it and alongside it, but are not
+certified by it.
 What 1.0.0 adds is the proof that the runtime holds in production: robustness, performance and
 security, measured and published, and evidence gathered from two sides — the project's own
 certifications, and users who confirm it runs their workloads. The release candidate can come as
