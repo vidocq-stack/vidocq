@@ -160,7 +160,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // The war's JSP pages, compiled by Ibarra when a runner puts its compiler on the class path: the
             // runtime finds Ibarra's engine and the pages in the layer DeploymentApplicationLayer gives it.
             if (WarJspPages.available()) {
-                java.nio.file.Path work = java.nio.file.Files.createTempDirectory("vidocq-tck-jsp-");
+                java.nio.file.Path work = MaterializedDeployment.createOwnerOnlyTempDirectory("vidocq-tck-jsp-");
                 pagesWork.put(archive, work);
                 WarJspPages.compile(materialized.root(), materialized.classLoader(), work)
                         .ifPresent(DeploymentApplicationLayer::set);

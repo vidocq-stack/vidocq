@@ -60,7 +60,9 @@ public final class PostgresDevService implements DevService {
     private static final String DEFAULT_IMAGE    = "postgres:16-alpine";
     private static final String DEFAULT_DB       = "vidocq";
     private static final String DEFAULT_USERNAME = "vidocq";
-    private static final String DEFAULT_PASSWORD = "vidocq";
+    // The credential of a throwaway local container started by the dev service, documented and overridable:
+    // it never protects anything outside the developer's machine.
+    private static final String DEFAULT_PASSWORD = "vidocq"; // NOSONAR java:S2068 - dev-only container credential
     private static final String DEFAULT_NAME     = "default";
 
     /** On the application's class path, the sign that it talks to PostgreSQL when no URL says so (rule 4). */
@@ -140,8 +142,10 @@ public final class PostgresDevService implements DevService {
                 ? String.join("\n", ds.image(), ds.db(), ds.username(), ds.password(), String.valueOf(ds.fixedPort()))
                 : null;
         String name = DevContainers.name(ctx, "postgres", qualifier, reuseKey);
-        GenericContainer<?> c = new GenericContainer<>(DockerImageName.parse(ds.image()))
-                .withEnv("POSTGRES_DB", ds.db())
+        // Configured on the instance itself, not through the fluent chain: the caller owns (and stops) this very
+        // container, which a chained expression would hide behind the builder's return values.
+        GenericContainer<?> c = new GenericContainer<>(DockerImageName.parse(ds.image()));
+        c.withEnv("POSTGRES_DB", ds.db())
                 .withEnv("POSTGRES_USER", ds.username())
                 .withEnv("POSTGRES_PASSWORD", ds.password())
                 .withCommand("postgres", "-c", "fsync=off")

@@ -25,8 +25,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
-
 /** The home page: the menu, each dish with a button that adds it to the basket. */
 @WebServlet("")
 public class MenuServlet extends HttpServlet {
@@ -41,7 +39,7 @@ public class MenuServlet extends HttpServlet {
     RequestTicket ticket;
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         StringBuilder body = new StringBuilder("<h1>Today's menu</h1><table>");
         for (Dish dish : menu.dishes()) {
             body.append("<tr><td>").append(Html.escape(dish.name())).append("</td><td class=\"price\">")

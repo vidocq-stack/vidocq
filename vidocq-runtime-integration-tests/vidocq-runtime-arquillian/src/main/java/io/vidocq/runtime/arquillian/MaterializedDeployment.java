@@ -29,8 +29,11 @@ import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -77,7 +80,7 @@ final class MaterializedDeployment implements AutoCloseable {
      * loader whose parent is this class's own loader.
      */
     static MaterializedDeployment of(Archive<?> archive) throws IOException {
-        Path root = Files.createTempDirectory("vidocq-deployment-");
+        Path root = createOwnerOnlyTempDirectory("vidocq-deployment-");
         List<Path> libraries = new ArrayList<>();
         boolean web = archive.getName().endsWith(".war");
 
@@ -316,5 +319,17 @@ final class MaterializedDeployment implements AutoCloseable {
                 });
             }
         }
+    }
+
+    /**
+     * A temporary directory only its owner can enter. NIO already creates it so on a POSIX file system; the
+     * permissions are spelled out so the shared temporary directory is visibly used safely. Elsewhere the file
+     * system's own defaults apply.
+     */
+    static Path createOwnerOnlyTempDirectory(String prefix) throws IOException {
+        FileAttribute<?>[] ownerOnly = FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+                ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))}
+                : new FileAttribute<?>[0];
+        return Files.createTempDirectory(prefix, ownerOnly);
     }
 }

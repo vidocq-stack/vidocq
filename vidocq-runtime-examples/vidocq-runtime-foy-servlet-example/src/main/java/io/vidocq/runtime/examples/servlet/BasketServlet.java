@@ -25,7 +25,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -48,7 +47,7 @@ public class BasketServlet extends HttpServlet {
     RequestTicket ticket;
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         StringBuilder body = new StringBuilder("<h1>Your basket</h1>");
         String placed = req.getParameter("placed");
         if (placed != null) {
@@ -79,21 +78,21 @@ public class BasketServlet extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) {
         String add = req.getParameter("add");
         String remove = req.getParameter("remove");
         if (add != null) {
             menu.find(add).ifPresent(basket::add);
-            resp.sendRedirect(req.getContextPath() + "/");
+            Html.redirect(resp, req.getContextPath() + "/");
         } else if (remove != null) {
             menu.find(remove).ifPresent(basket::remove);
-            resp.sendRedirect(req.getContextPath() + "/basket");
+            Html.redirect(resp, req.getContextPath() + "/basket");
         } else if (req.getParameter("order") != null && basket.count() > 0) {
             Kitchen.Order order = kitchen.place(basket);
             basket.clear();
-            resp.sendRedirect(req.getContextPath() + "/basket?placed=" + order.number());
+            Html.redirect(resp, req.getContextPath() + "/basket?placed=" + order.number());
         } else {
-            resp.sendRedirect(req.getContextPath() + "/basket");
+            Html.redirect(resp, req.getContextPath() + "/basket");
         }
     }
 }

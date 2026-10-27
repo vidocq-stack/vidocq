@@ -27,7 +27,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -49,7 +48,7 @@ public class KitchenServlet extends HttpServlet {
     RequestTicket ticket;
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         StringBuilder body = new StringBuilder("<h1>Kitchen</h1>")
                 .append("<p>Signed in as <b>").append(Html.escape(req.getRemoteUser())).append("</b>. ")
                 .append(kitchen.openSessions()).append(" open session(s), ")

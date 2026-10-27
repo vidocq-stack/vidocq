@@ -41,13 +41,17 @@ public class ReceiptServlet extends HttpServlet {
     Basket basket;
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         var lines = new ArrayList<ReceiptLine>();
         for (Map.Entry<Dish, Integer> line : basket.lines().entrySet()) {
             Dish dish = line.getKey();
             lines.add(new ReceiptLine(dish.name(), line.getValue(), Html.euros(dish.cents() * line.getValue())));
         }
         req.setAttribute("receipt", new Receipt(lines, Html.euros(basket.totalCents())));
-        req.getRequestDispatcher("/WEB-INF/views/receipt.jsp").forward(req, resp);
+        try {
+            req.getRequestDispatcher("/WEB-INF/views/receipt.jsp").forward(req, resp);
+        } catch (ServletException | IOException e) {
+            Html.failed(resp, e);
+        }
     }
 }

@@ -25,8 +25,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import java.io.IOException;
-
 /**
  * The FORM login page of {@code META-INF/web.xml}. Foy forwards a visitor who asks for the kitchen
  * here, and back here with {@code ?error} after a wrong password; the form posts to
@@ -42,17 +40,17 @@ public class LoginServlet extends HttpServlet {
     RequestTicket ticket;
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
         render(req, resp);
     }
 
     /** The error page answers the POST to {@code j_security_check} that Foy forwards here. */
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) {
         render(req, resp);
     }
 
-    private void render(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+    private void render(HttpServletRequest req, HttpServletResponse resp) {
         StringBuilder body = new StringBuilder("<h1>Sign in</h1>");
         if (req.getParameter("error") != null) {
             body.append("<p class=\"notice\">Wrong user name or password.</p>");

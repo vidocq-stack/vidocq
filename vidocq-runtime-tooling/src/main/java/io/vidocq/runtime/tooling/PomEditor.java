@@ -42,9 +42,9 @@ public final class PomEditor {
     public record Result(String pom, boolean changed) {}
 
     private static final Pattern GROUP_ID =
-            Pattern.compile("<groupId>\\s*([^<\\s][^<]*?)\\s*</groupId>");
+            Pattern.compile("<groupId>([^<]*)</groupId>");
     private static final Pattern ARTIFACT_ID =
-            Pattern.compile("<artifactId>\\s*([^<\\s][^<]*?)\\s*</artifactId>");
+            Pattern.compile("<artifactId>([^<]*)</artifactId>");
     private static final String INDENT = "    ";
     private static final String TWO_INDENTS = INDENT + INDENT;
 

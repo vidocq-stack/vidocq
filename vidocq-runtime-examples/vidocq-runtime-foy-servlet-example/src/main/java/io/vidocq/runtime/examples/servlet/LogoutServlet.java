@@ -26,8 +26,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import java.io.IOException;
-
 /**
  * Signs the user out: forgets the identity, ends the session, basket included, and goes back to
  * the menu. A POST, so that no link, prefetch or image can sign anyone out.
@@ -36,8 +34,13 @@ import java.io.IOException;
 public class LogoutServlet extends HttpServlet {
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        req.logout();
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) {
+        try {
+            req.logout();
+        } catch (ServletException e) {
+            Html.failed(resp, e);
+            return;
+        }
         HttpSession session = req.getSession(false);
         if (session != null) {
             session.invalidate();

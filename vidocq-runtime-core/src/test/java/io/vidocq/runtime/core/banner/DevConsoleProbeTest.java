@@ -109,7 +109,7 @@ class DevConsoleProbeTest {
     void aHostThatCouldBreakTheLineHasNoSegment() {
         assertNull(DevConsoleProbe.segment("evil\n[VIDOCQ-FAKE] forged", 8888));
         assertNull(DevConsoleProbe.segment("a host", 8888));
-        assertNull(DevConsoleProbe.segment("x‮y", 8888), "a bidirectional override");
+        assertNull(DevConsoleProbe.segment("x\u202Ey", 8888), "a bidirectional override");
         assertNull(DevConsoleProbe.segment("hôte", 8888), "a letter outside ASCII, which the console refuses");
         assertNull(DevConsoleProbe.segment("١٢٧.٠.٠.١", 8888), "digits outside ASCII");
     }

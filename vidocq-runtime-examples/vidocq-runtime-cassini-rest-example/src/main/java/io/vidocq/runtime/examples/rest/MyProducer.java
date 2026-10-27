@@ -24,14 +24,16 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.Produces;
 
-import java.util.Random;
+import java.security.SecureRandom;
 
 @ApplicationScoped
 public class MyProducer {
 
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     @Produces
     @Dependent
     public Generator generator() {
-        return () -> "Nb:" + new Random().nextInt(1000);
+        return () -> "Nb:" + RANDOM.nextInt(1000);
     }
 }

@@ -30,8 +30,11 @@ import javax.tools.ToolProvider;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -104,7 +107,7 @@ public final class DependencyCodegen {
         var problem = new Problem(jar, coordinates, logDisplay);
         String allBricks = bricks.stream().map(b -> b.hints().brick()).distinct().collect(Collectors.joining(", "));
         var javacOutput = new StringBuilder();
-        Path tmp = Files.createTempDirectory("vidocq-depgen-");
+        Path tmp = ownerOnlyTempDirectory("vidocq-depgen-");
         Output output;
         try {
             Path src = Files.createDirectories(tmp.resolve("src"));
@@ -256,6 +259,17 @@ public final class DependencyCodegen {
         try (Stream<Path> walk = Files.walk(root)) {
             return walk.filter(Files::isRegularFile).sorted().toList();
         }
+    }
+
+    /**
+     * A temporary directory only its owner can enter. NIO already creates it so on a POSIX file system; the
+     * permissions are spelled out so the shared temporary directory is visibly used safely.
+     */
+    private static Path ownerOnlyTempDirectory(String prefix) throws IOException {
+        FileAttribute<?>[] ownerOnly = FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+                ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))}
+                : new FileAttribute<?>[0];
+        return Files.createTempDirectory(prefix, ownerOnly);
     }
 
     private static void delete(Path root) throws IOException {

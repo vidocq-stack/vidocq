@@ -28,6 +28,7 @@ import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.completion.ShellSetup;
 import io.vidocq.runtime.cli.ext.ExtensionCache;
 import io.vidocq.runtime.cli.ext.ProjectExtensions;
+import io.vidocq.runtime.cli.ext.TempFiles;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
@@ -463,7 +464,7 @@ public final class CommandRunner {
                         return 0;
                     }
                     CliOutput.info("Downloading " + u.zipUrl());
-                    Path zip = Files.createTempFile("vidocq-cli", ".zip");
+                    Path zip = TempFiles.createFile("vidocq-cli", ".zip");
                     Path target;
                     try {
                         http.download(u.zipUrl(), zip);

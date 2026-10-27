@@ -23,11 +23,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /**
@@ -52,6 +52,9 @@ public final class DevContainers {
 
     /** What Docker accepts as a container name. */
     private static final Pattern DOCKER_NAME = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]*");
+
+    /** Draws the suffix of a container that is not reused: from a generator other processes cannot predict. */
+    private static final SecureRandom SUFFIXES = new SecureRandom();
 
     private DevContainers() {
     }
@@ -108,13 +111,26 @@ public final class DevContainers {
 
     /** Lower case, every run of what Docker refuses as one {@code -}, no {@code -} at either end. */
     private static String part(String text) {
-        String part = text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]+", "-").replaceAll("^[-_.]+|-+$", "");
+        String part = trim(text.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]+", "-"));
         return part.isEmpty() ? "x" : part;
+    }
+
+    /** {@code text} without its leading {@code -}, {@code _} and {@code .}, nor its trailing {@code -}. */
+    private static String trim(String text) {
+        int start = 0;
+        int end = text.length();
+        while (start < end && "-_.".indexOf(text.charAt(start)) >= 0) {
+            start++;
+        }
+        while (end > start && text.charAt(end - 1) == '-') {
+            end--;
+        }
+        return text.substring(start, end);
     }
 
     private static String suffix(DevServiceContext ctx, String service, String qualifier, String reuseKey) {
         if (reuseKey == null) {
-            return HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
+            return HexFormat.of().toHexDigits(SUFFIXES.nextInt());
         }
         String identity = absolute(ctx) + "\n" + service + "\n" + (qualifier == null ? "" : qualifier) + "\n" + reuseKey;
         try {

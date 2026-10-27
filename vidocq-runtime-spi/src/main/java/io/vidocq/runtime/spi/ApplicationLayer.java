@@ -85,7 +85,7 @@ public interface ApplicationLayer {
      * @throws UncheckedIOException when a module of the layer cannot be read
      */
     static List<String> list(ModuleLayer layer, String directory) {
-        String root = directory.replaceAll("^/+|/+$", "");
+        String root = stripSlashes(directory);
         String prefix = root.isEmpty() ? "" : root + "/";
         TreeSet<String> names = new TreeSet<>();
         for (ResolvedModule module : layer.configuration().modules()) {
@@ -97,5 +97,18 @@ public interface ApplicationLayer {
             }
         }
         return List.copyOf(names);
+    }
+
+    /** {@code path} without its leading and trailing {@code /}. */
+    private static String stripSlashes(String path) {
+        int start = 0;
+        int end = path.length();
+        while (start < end && path.charAt(start) == '/') {
+            start++;
+        }
+        while (end > start && path.charAt(end - 1) == '/') {
+            end--;
+        }
+        return path.substring(start, end);
     }
 }

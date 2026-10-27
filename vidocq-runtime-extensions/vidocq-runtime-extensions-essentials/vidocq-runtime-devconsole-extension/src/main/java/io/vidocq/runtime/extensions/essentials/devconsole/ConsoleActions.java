@@ -91,6 +91,9 @@ final class ConsoleActions {
 
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
 
+    /** Draws the boot tokens: one generator, seeded once. */
+    private static final SecureRandom TOKENS = new SecureRandom();
+
     private final String token;
     private final byte[] tokenBytes;
     private final LongSupplier clock;
@@ -132,7 +135,7 @@ final class ConsoleActions {
     /** A new token: 32 bytes from {@link SecureRandom}, in lowercase hex. */
     static String newToken() {
         byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
+        TOKENS.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
     }
 

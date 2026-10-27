@@ -28,6 +28,8 @@ import java.util.Locale;
 /** The page layout shared by the servlets, and two formatting helpers. */
 final class Html {
 
+    private static final System.Logger LOG = System.getLogger(Html.class.getName());
+
     private static final String STYLE = """
             body{font-family:system-ui,sans-serif;max-width:44rem;margin:2rem auto;padding:0 1rem;color:#222}
             nav{display:flex;gap:1rem;align-items:baseline;border-bottom:1px solid #ddd;padding-bottom:.5rem}
@@ -45,23 +47,47 @@ final class Html {
     }
 
     static void page(HttpServletRequest req, HttpServletResponse resp, String title, Basket basket,
-                     RequestTicket ticket, String body) throws IOException {
+                     RequestTicket ticket, String body) {
         String root = req.getContextPath();
         resp.setContentType("text/html;charset=UTF-8");
-        resp.getWriter().write("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-                + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                + "<title>" + escape(title) + " · Vidocq Bistro</title><style>" + STYLE + "</style></head><body>"
-                + "<nav><span class=\"brand\">Vidocq Bistro</span>"
-                + "<a href=\"" + root + "/\">Menu</a>"
-                + "<a href=\"" + root + "/basket\">Basket (" + basket.count() + ")</a>"
-                + "<a href=\"" + root + "/kitchen\">Kitchen</a>"
-                + "<a href=\"" + root + "/about.jsp\">About</a>" + account(req) + "</nav>"
-                + body
-                + "<footer>Session " + escape(req.getSession().getId().substring(0, 8))
-                + " · request " + ticket.id() + " · " + ticket.elapsedMicros() + " µs"
-                + " · Jakarta Servlet " + req.getServletContext().getMajorVersion() + "."
-                + req.getServletContext().getMinorVersion() + " by Foy on Chappe</footer>"
-                + "</body></html>");
+        try {
+            resp.getWriter().write("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+                    + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                    + "<title>" + escape(title) + " · Vidocq Bistro</title><style>" + STYLE + "</style></head><body>"
+                    + "<nav><span class=\"brand\">Vidocq Bistro</span>"
+                    + "<a href=\"" + root + "/\">Menu</a>"
+                    + "<a href=\"" + root + "/basket\">Basket (" + basket.count() + ")</a>"
+                    + "<a href=\"" + root + "/kitchen\">Kitchen</a>"
+                    + "<a href=\"" + root + "/about.jsp\">About</a>" + account(req) + "</nav>"
+                    + body
+                    + "<footer>Session " + escape(req.getSession().getId().substring(0, 8))
+                    + " · request " + ticket.id() + " · " + ticket.elapsedMicros() + " µs"
+                    + " · Jakarta Servlet " + req.getServletContext().getMajorVersion() + "."
+                    + req.getServletContext().getMinorVersion() + " by Foy on Chappe</footer>"
+                    + "</body></html>");
+        } catch (IOException e) {
+            failed(resp, e);
+        }
+    }
+
+    /** Redirects the visitor to {@code location}. */
+    static void redirect(HttpServletResponse resp, String location) {
+        try {
+            resp.sendRedirect(location);
+        } catch (IOException e) {
+            failed(resp, e);
+        }
+    }
+
+    /**
+     * An answer that could not be given: the visitor went away, or the container failed. It is logged, and turned
+     * into a 500 while the response is not committed yet.
+     */
+    static void failed(HttpServletResponse resp, Exception e) {
+        LOG.log(System.Logger.Level.WARNING, "Could not answer the request", e);
+        if (!resp.isCommitted()) {
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /** The signed-in user and a logout button, or a link to the login page. */

@@ -213,7 +213,7 @@ class StartupReportRendererTest {
 
     @Test
     void controlCharactersNeverReachTheLog() {
-        String injected = "ok\nINFO: Vidocq - Started in 1 ms\r[31mred  ‮";
+        String injected = "ok\nINFO: Vidocq - Started in 1 ms\r[31mred  \u202E";
 
         String text = StartupReportRenderer.render(report(Verbosity.DETAILED, List.of(
                 new Section("x\nid", "headline", null, List.of(new Row("key\tname", injected),

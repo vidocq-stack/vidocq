@@ -55,7 +55,7 @@ final class ApplicationResourceAccessor extends AbstractResourceAccessor {
 
     @Override
     public List<Resource> search(String path, boolean recursive) {
-        String directory = name(path).replaceAll("/+$", "");
+        String directory = withoutTrailingSlashes(name(path));
         int depth = directory.isEmpty() ? 0 : directory.length() + 1;
         List<Resource> found = new ArrayList<>();
         for (String name : lister.apply(directory)) {
@@ -83,6 +83,14 @@ final class ApplicationResourceAccessor extends AbstractResourceAccessor {
     }
 
     /** {@code path} as a resource name: no {@code classpath:} prefix, no leading slash. */
+    private static String withoutTrailingSlashes(String path) {
+        int end = path.length();
+        while (end > 0 && path.charAt(end - 1) == '/') {
+            end--;
+        }
+        return path.substring(0, end);
+    }
+
     private static String name(String path) {
         return path.replace('\\', '/').replaceFirst("^classpath\\*?:", "").replaceFirst("^/+", "");
     }

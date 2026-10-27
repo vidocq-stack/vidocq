@@ -124,8 +124,8 @@ public final class ProjectExtensions {
         Path output = null;
         Path log = null;
         try {
-            output = Files.createTempFile("vidocq-deps", ".txt");
-            log = Files.createTempFile("vidocq-deps", ".log");
+            output = TempFiles.createFile("vidocq-deps", ".txt");
+            log = TempFiles.createFile("vidocq-deps", ".log");
             Process process = new ProcessBuilder(DependencyList.command(mavenExecutable, output))
                     .directory(projectDir.toFile())
                     .redirectErrorStream(true)
