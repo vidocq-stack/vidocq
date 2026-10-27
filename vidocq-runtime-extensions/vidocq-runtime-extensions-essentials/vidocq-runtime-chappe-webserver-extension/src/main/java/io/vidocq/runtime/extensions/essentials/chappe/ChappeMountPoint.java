@@ -60,6 +60,8 @@ public final class ChappeMountPoint {
     /** Names the class that declares a listener, for the error when the configuration lists it too. */
     private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
 
+    private static final String LISTENER_NAME = "listenerName";
+
     private final Map<String, Router.Builder> routers = new LinkedHashMap<>();
     /** Mounts by listener, applied to the router longest prefix first when the server starts. */
     private final Map<String, List<PendingMount>> mounts = new LinkedHashMap<>();
@@ -187,7 +189,7 @@ public final class ChappeMountPoint {
      * @param path         its path on that listener, starting with {@code /}
      */
     public void advertise(String listenerName, String label, String path) {
-        Objects.requireNonNull(listenerName, "listenerName");
+        Objects.requireNonNull(listenerName, LISTENER_NAME);
         Page page = new Page(label, path);
         ensureOpen();
         pages.computeIfAbsent(listenerName, n -> new ArrayList<>()).add(page);
@@ -276,7 +278,7 @@ public final class ChappeMountPoint {
      */
     void mount(String listenerName, String prefix, Handler handler, boolean stripPrefix, int priority,
                String owner) {
-        Objects.requireNonNull(listenerName, "listenerName");
+        Objects.requireNonNull(listenerName, LISTENER_NAME);
         Objects.requireNonNull(prefix, "prefix");
         Objects.requireNonNull(handler, "handler");
         Objects.requireNonNull(owner, "owner");
@@ -332,7 +334,7 @@ public final class ChappeMountPoint {
      * used by {@code ChappeMountConfigExtension} for declarative {@code type=websocket} mounts.
      */
     public void webSocket(String listenerName, String pattern, WebSocketHandler handler) {
-        Objects.requireNonNull(listenerName, "listenerName");
+        Objects.requireNonNull(listenerName, LISTENER_NAME);
         Objects.requireNonNull(pattern, "pattern");
         Objects.requireNonNull(handler, "handler");
         ensureOpen();
@@ -345,7 +347,7 @@ public final class ChappeMountPoint {
      * <p>Direct access to a listener's {@link Router.Builder} for fine-grained contributions.</p>
      */
     public Router.Builder router(String listenerName) {
-        Objects.requireNonNull(listenerName, "listenerName");
+        Objects.requireNonNull(listenerName, LISTENER_NAME);
         ensureOpen();
         return routers.computeIfAbsent(listenerName, n -> Router.builder());
     }

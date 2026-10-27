@@ -52,7 +52,9 @@ public final class DiracMetricsExtension implements VidocqExtension, StartupRepo
     private final AtomicReference<DiracLiveBean> live = new AtomicReference<>(DiracLiveBean.NONE);
 
     /** Created by the {@link java.util.ServiceLoader}. */
-    public DiracMetricsExtension() {}
+    public DiracMetricsExtension() {
+        // nothing to set up: the work starts in the lifecycle callbacks
+    }
 
     @Override
     public String name() {

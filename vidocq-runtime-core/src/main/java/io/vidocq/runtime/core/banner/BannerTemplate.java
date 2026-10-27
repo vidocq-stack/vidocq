@@ -19,7 +19,7 @@
  */
 package io.vidocq.runtime.core.banner;
 
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * The placeholders of a custom banner: <code>${key}</code> and <code>${key:default}</code>.
@@ -35,7 +35,7 @@ final class BannerTemplate {
     private BannerTemplate() {}
 
     /** Replaces every placeholder with {@code values.apply(key)}, its default, or nothing. */
-    static String resolve(String template, Function<String, String> values) {
+    static String resolve(String template, UnaryOperator<String> values) {
         StringBuilder out = new StringBuilder(template.length());
         int i = 0;
         while (i < template.length()) {

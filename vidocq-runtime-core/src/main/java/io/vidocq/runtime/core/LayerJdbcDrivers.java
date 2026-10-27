@@ -100,7 +100,7 @@ final class LayerJdbcDrivers {
                         if (c != null) {
                             return c;
                         }
-                    } catch (LinkageError e) {
+                    } catch (LinkageError _) {
                         // an optional dependency of this class is absent: try another class of the layer
                     }
                 }

@@ -114,7 +114,7 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         List<MountConfig> mounts = new ArrayList<>();
 
         for (String name : mountNames) {
-            String prefix = config.getValue(PREFIX + name + ".path", String.class, "/");
+            String prefix = config.getValue(PREFIX + name + SUFFIX_PATH, String.class, "/");
             String listener = config.getValue(PREFIX + name + ".listener", String.class, ChappeListener.DEFAULT);
             String normalizedPrefix = normalizePrefix(prefix);
             int priority = config.getValue(PREFIX + name + ".priority", Integer.class,

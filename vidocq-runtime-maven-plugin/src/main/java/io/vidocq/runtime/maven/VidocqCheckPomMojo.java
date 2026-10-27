@@ -142,10 +142,6 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     }
 
     /**
-     * Resolve a dependency to its jar file. Returns {@link Optional#empty()} on any
-     * resolution failure, so the calling code never crashes on unavailable artifacts.
-     */
-    /**
      * Whether {@code project} builds a dev-only jar itself (a {@code -dev} companion, the console): its
      * maven-jar-plugin writes {@code Vidocq-Dev-Only: true} into the manifest. Such a module depends on dev tools by
      * design.
@@ -166,7 +162,11 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                 .anyMatch(e -> e != null && "true".equalsIgnoreCase(e.getValue() == null ? "" : e.getValue().strip()));
     }
 
-    // package-private: a test resolves every dependency to a jar of its own.
+    /**
+     * Resolve a dependency to its jar file. Returns {@link Optional#empty()} on any
+     * resolution failure, so the calling code never crashes on unavailable artifacts.
+     * Package-private: a test resolves every dependency to a jar of its own.
+     */
     Optional<Path> resolvedJar(Dependency d) {
         if (d.getVersion() == null) return Optional.empty();
         try {

@@ -128,7 +128,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             "/META-INF/vidocq/build-info/vidocq-runtime-devconsole-extension.properties";
     /** A URL {@link ChappeListener#httpUrl} writes: a loopback name or an address, a port, nothing after the slash. */
     private static final Pattern PRINTABLE_URL = Pattern.compile(
-            "http://(localhost|[0-9]{1,3}(\\.[0-9]{1,3}){3}|\\[[0-9a-f:.]+(%25[0-9A-Za-z._~-]+)?]):[0-9]{1,5}/");
+            "http://(localhost|\\d{1,3}(\\.\\d{1,3}){3}|\\[[0-9a-f:.]+(%25[0-9A-Za-z._~-]+)?]):\\d{1,5}/");
     private static final System.Logger LOG = System.getLogger(LOGGER_NAME);
     private static final String VIDOCQ_VERSION = version();
 
@@ -261,7 +261,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 }
                 try {
                     Thread.sleep(Snapshot.POLL_MILLIS); // NOSONAR java:S6881 - platform thread kept, see above
-                } catch (InterruptedException stopping) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             }

@@ -40,9 +40,11 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class ServletLivePanel implements LivePanel {
 
+    private static final String SESSIONS = "sessions";
+
     /** What the page plots, repeated for every mount. */
     static final List<Chart> CHARTS = List.of(
-            new Chart("sessions", "Active sessions", List.of(Series.area("sessions"))));
+            new Chart(SESSIONS, "Active sessions", List.of(Series.area(SESSIONS))));
 
     /** The boot's container, the key of its mounts; set by {@link #start}. */
     private final AtomicReference<Object> boot = new AtomicReference<>();
@@ -74,11 +76,11 @@ public final class ServletLivePanel implements LivePanel {
         Object container = boot.get();
         List<ServletMount> mounts = container == null ? List.of() : ServletMounts.of(container);
         if (mounts.isEmpty()) {
-            sample.absent("sessions", "no servlet deployed");
+            sample.absent(SESSIONS, "no servlet deployed");
             return;
         }
         for (ServletMount mount : mounts) {
-            sample.group(mount.name()).gauge("sessions", mount.activeSessions().getAsInt(), Unit.COUNT);
+            sample.group(mount.name()).gauge(SESSIONS, mount.activeSessions().getAsInt(), Unit.COUNT);
         }
     }
 }

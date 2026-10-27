@@ -117,6 +117,8 @@ public class VidocqDevMojo extends AbstractMojo {
     /** The continuous-testing switch, in every source. */
     static final String CONTINUOUS_TESTING_KEY = "vidocq.dev.continuousTesting";
 
+    private static final String RUNTIME_SCOPE = "runtime";
+
     /** How long the tests of a main change wait for the hot reload to answer. */
     static final Duration RELOAD_ACK_TIMEOUT = Duration.ofMinutes(2);
 
@@ -681,21 +683,6 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
-     * The dev console and its SPI (Vidocq/vidocq#143), resolved through Aether under this plugin's own
-     * version, unless the application already has both or lacks Chappe. Never a {@code vidocq-runtime-maven-plugin}
-     * dependency: {@code vidocq-runtime-devconsole-extension} sits inside the {@code vidocq-runtime-extensions}
-     * reactor tree, whose parent pom activates this very plugin (checkpom) as a build tool on every extension —
-     * a compile/runtime edge back onto it from here would make the reactor cyclic.
-     *
-     * <p>A jar that cannot be resolved (offline, or the local repository was never populated with this plugin's
-     * own release) costs the console only: a warning is logged and {@code vidocq:dev} continues without it, the
-     * same graceful degradation {@link DevModules#collect} gives an unresolvable companion. It never fails the
-     * goal.</p>
-     *
-     * @param addedKeys collects the {@code groupId:artifactId} of every jar actually added, so the caller can seed
-     *                  {@link DevModules#collect} with them (spec §5.3 "never twice")
-     */
-    /**
      * The dev tools for the child's module path: nothing without Chappe (a CLI application gets no dev tool, and
      * a companion's live panel has no console to show it), otherwise the console, then each extension's companion.
      * {@code onPath} holds the keys an earlier step already added; the console step adds its own, so a companion
@@ -712,6 +699,21 @@ public class VidocqDevMojo extends AbstractMojo {
         return jars;
     }
 
+    /**
+     * The dev console and its SPI (Vidocq/vidocq#143), resolved through Aether under this plugin's own
+     * version, unless the application already has both or lacks Chappe. Never a {@code vidocq-runtime-maven-plugin}
+     * dependency: {@code vidocq-runtime-devconsole-extension} sits inside the {@code vidocq-runtime-extensions}
+     * reactor tree, whose parent pom activates this very plugin (checkpom) as a build tool on every extension —
+     * a compile/runtime edge back onto it from here would make the reactor cyclic.
+     *
+     * <p>A jar that cannot be resolved (offline, or the local repository was never populated with this plugin's
+     * own release) costs the console only: a warning is logged and {@code vidocq:dev} continues without it, the
+     * same graceful degradation {@link DevModules#collect} gives an unresolvable companion. It never fails the
+     * goal.</p>
+     *
+     * @param addedKeys collects the {@code groupId:artifactId} of every jar actually added, so the caller can seed
+     *                  {@link DevModules#collect} with them (spec §5.3 "never twice")
+     */
     private List<Path> resolveDevConsole(Set<String> addedKeys) {
         Map<String, Artifact> consoleArtifacts = new LinkedHashMap<>();
         // The console follows the application's Vidocq runtime, not this plugin (#148).
@@ -749,7 +751,7 @@ public class VidocqDevMojo extends AbstractMojo {
         try {
             ArtifactResult result = repoSystem.resolveArtifact(repoSession, request);
             Artifact resolved = new org.apache.maven.artifact.DefaultArtifact(groupId, artifactId, version,
-                    "runtime", "jar", "", new DefaultArtifactHandler("jar"));
+                    RUNTIME_SCOPE, "jar", "", new DefaultArtifactHandler("jar"));
             resolved.setFile(result.getArtifact().getFile());
             return resolved;
         } catch (ArtifactResolutionException e) {
@@ -762,9 +764,9 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /** {@code coordinates} and its runtime dependencies, through Maven's own resolution and repositories. */
     private List<DevModules.Resolved> resolveRuntime(String coordinates) throws Exception {
-        Dependency root = new Dependency(new DefaultArtifact(coordinates), "runtime");
+        Dependency root = new Dependency(new DefaultArtifact(coordinates), RUNTIME_SCOPE);
         CollectRequest collect = new CollectRequest(root, remoteRepos);
-        DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.classpathFilter("runtime"));
+        DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.classpathFilter(RUNTIME_SCOPE));
         List<DevModules.Resolved> jars = new ArrayList<>();
         DependencyResult result = repoSystem.resolveDependencies(repoSession, request);
         for (ArtifactResult artifactResult : result.getArtifactResults()) {

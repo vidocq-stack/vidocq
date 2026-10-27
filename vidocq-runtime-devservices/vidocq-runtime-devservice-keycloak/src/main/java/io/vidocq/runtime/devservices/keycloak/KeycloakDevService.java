@@ -61,6 +61,8 @@ public final class KeycloakDevService implements DevService {
 
     private static final String DEFAULT_IMAGE = "quay.io/keycloak/keycloak:26.0";
     private static final int KC_PORT = 8080;
+    /** User name and password of the throwaway container's bootstrap administrator. */
+    private static final String BOOTSTRAP_ADMIN = "admin";
 
     private GenericContainer<?> container;
     private String image;
@@ -131,8 +133,8 @@ public final class KeycloakDevService implements DevService {
         // container, which a chained expression would hide behind the builder's return values.
         GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image));
         container.withExposedPorts(KC_PORT)
-                .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
-                .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
+                .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", BOOTSTRAP_ADMIN)
+                .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", BOOTSTRAP_ADMIN)
                 .withLabels(DevContainers.labels(ctx, "keycloak"))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
 

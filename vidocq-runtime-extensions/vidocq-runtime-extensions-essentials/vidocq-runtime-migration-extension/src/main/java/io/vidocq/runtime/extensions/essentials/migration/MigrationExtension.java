@@ -20,7 +20,6 @@
 package io.vidocq.runtime.extensions.essentials.migration;
 
 import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl;
-import io.vidocq.runtime.extensions.essentials.migration.live.MigrationControl.LiveOutcome;
 import io.vidocq.runtime.extensions.essentials.migration.live.MigrationLive;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -73,6 +72,8 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
 
     private static final String PREFIX = "vidocq.migration.";
     private static final String POOL_PREFIX = "vidocq.pool.";
+    /** The name of the unqualified datasource, configured under {@value #POOL_PREFIX} directly. */
+    private static final String DEFAULT_DATASOURCE = "default";
     private static final String LOCATIONS_SUFFIX = ".locations";
     private static final String DEFAULT_LOCATIONS_KEY = PREFIX + "locations";
     private static final String STRICT_KEY = PREFIX + "failOnMissingLocations";
@@ -323,7 +324,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
             requireRunning();
             try {
                 migrator.clean(t);
-            } catch (UnsupportedOperationException unsupported) {
+            } catch (UnsupportedOperationException _) {
                 return name + ": " + migrator.engine() + " cannot clean a schema, nothing dropped";
             }
             MigrationResult r = run(t, "clean-and-migrate", () -> migrator.migrate(t));
@@ -361,7 +362,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         String absent = null;
         try {
             info = migrator.info(t);
-        } catch (UnsupportedOperationException unsupported) {
+        } catch (UnsupportedOperationException _) {
             absent = migrator.engine() + " cannot list the migrations";
         } catch (RuntimeException failed) {
             // the class only: the message of a JDBC failure may carry the URL, or worse
@@ -419,7 +420,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         List<MigrationTarget> result = new ArrayList<>();
         boolean strict = cfg.property(STRICT_KEY).map(Boolean::parseBoolean).orElse(false);
         if (cfg.property(POOL_PREFIX + "url").isPresent()) {
-            result.add(target(cfg, "default", POOL_PREFIX, DEFAULT_LOCATIONS_KEY, strict));
+            result.add(target(cfg, DEFAULT_DATASOURCE, POOL_PREFIX, DEFAULT_LOCATIONS_KEY, strict));
         }
         for (String name : namedWithLocations(cfg)) {
             String poolPrefix = POOL_PREFIX + name + ".";
@@ -472,7 +473,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
 
     /** The key that lets the schema of a datasource be cleaned: {@code vidocq.migration[.<name>].cleanDisabled}. */
     static String cleanDisabledKey(String name) {
-        return "default".equals(name) ? DEFAULT_CLEAN_DISABLED_KEY : PREFIX + name + "." + CLEAN_DISABLED_SUFFIX;
+        return DEFAULT_DATASOURCE.equals(name) ? DEFAULT_CLEAN_DISABLED_KEY : PREFIX + name + "." + CLEAN_DISABLED_SUFFIX;
     }
 
     private static TreeSet<String> namedWithLocations(VidocqConfiguration cfg) {
@@ -493,7 +494,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
 
     /** The key that sets the locations of {@code t}, as the hint of {@value #NOTHING_FOUND} names it. */
     private static String locationsKey(MigrationTarget t) {
-        return "default".equals(t.dataSourceName()) ? DEFAULT_LOCATIONS_KEY
+        return DEFAULT_DATASOURCE.equals(t.dataSourceName()) ? DEFAULT_LOCATIONS_KEY
                 : PREFIX + t.dataSourceName() + LOCATIONS_SUFFIX;
     }
 

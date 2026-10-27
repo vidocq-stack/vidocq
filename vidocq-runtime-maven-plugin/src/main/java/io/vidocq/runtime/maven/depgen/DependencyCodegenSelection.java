@@ -53,6 +53,7 @@ import java.util.jar.JarFile;
 public final class DependencyCodegenSelection {
 
     private static final String SERVICES = "META-INF/services/";
+    private static final String CLASS_SUFFIX = ".class";
 
     /**
      * The first line hashed into every memo key. Bump it whenever the selection rules or the memo's content change,
@@ -181,10 +182,10 @@ public final class DependencyCodegenSelection {
      * infos included.
      */
     private static String topLevelClass(String entry) {
-        if (!entry.endsWith(".class") || entry.startsWith("META-INF/")) {
+        if (!entry.endsWith(CLASS_SUFFIX) || entry.startsWith("META-INF/")) {
             return null;
         }
-        String binary = entry.substring(0, entry.length() - ".class".length());
+        String binary = entry.substring(0, entry.length() - CLASS_SUFFIX.length());
         int slash = binary.lastIndexOf('/');
         String simple = binary.substring(slash + 1);
         if (simple.equals("module-info") || simple.equals("package-info")) {
@@ -205,8 +206,8 @@ public final class DependencyCodegenSelection {
         for (String line : text.lines().toList()) {
             int hash = line.indexOf('#');
             String name = (hash >= 0 ? line.substring(0, hash) : line).strip();
-            if (!name.isEmpty() && names.contains(name.replace('.', '/') + ".class")) {
-                listed.add(topLevelClass(name.replace('.', '/') + ".class"));
+            if (!name.isEmpty() && names.contains(name.replace('.', '/') + CLASS_SUFFIX)) {
+                listed.add(topLevelClass(name.replace('.', '/') + CLASS_SUFFIX));
             }
         }
         return listed;
@@ -290,7 +291,7 @@ public final class DependencyCodegenSelection {
         var classes = new LinkedHashMap<DependencyCodegenHints, List<String>>();
         for (String line : lines.subList(1, lines.size())) {
             String[] parts = line.split(" ", 3);
-            if (parts.length < 3 || !parts[1].matches("[0-9]{1,6}") || Integer.parseInt(parts[1]) >= bricks.size()) {
+            if (parts.length < 3 || !parts[1].matches("\\d{1,6}") || Integer.parseInt(parts[1]) >= bricks.size()) {
                 return Optional.empty();
             }
             DependencyCodegenHints brick = bricks.get(Integer.parseInt(parts[1]));

@@ -76,8 +76,8 @@ final class LogRing extends Handler {
     /** Formats a message with the parameters and the resource bundle of its record, never the whole record. */
     private final Formatter formatter = new Formatter() {
         @Override
-        public String format(LogRecord record) {
-            return formatMessage(record);
+        public String format(LogRecord entry) {
+            return formatMessage(entry);
         }
     };
     private final AtomicReferenceArray<Line> slots = new AtomicReferenceArray<>(CAPACITY);
@@ -131,15 +131,15 @@ final class LogRing extends Handler {
      * The message of {@code record} as the panel shows it: formatted, followed by the class and the first line of
      * the message of its throwable, without the credentials of a URL, cut at {@value #MAX_MESSAGE} characters.
      */
-    String message(LogRecord record) {
+    String message(LogRecord entry) {
         String text;
         try {
-            text = formatter.formatMessage(record);
+            text = formatter.formatMessage(entry);
         } catch (RuntimeException formatting) {
-            text = record.getMessage();
+            text = entry.getMessage();
         }
         StringBuilder message = new StringBuilder(text == null ? "" : text);
-        Throwable thrown = record.getThrown();
+        Throwable thrown = entry.getThrown();
         if (thrown != null) {
             message.append(message.isEmpty() ? "" : " - ").append(thrown.getClass().getName());
             String first = firstLine(thrown.getMessage());

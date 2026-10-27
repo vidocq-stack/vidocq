@@ -41,6 +41,9 @@ import java.util.function.Supplier;
  */
 public final class IbarraPagesExtension implements VidocqExtension, StartupReportContributor {
 
+    /** The id of this extension, and the row of its report section. */
+    private static final String PAGES = "pages";
+
     private final Supplier<List<String>> catalog;
     private final AtomicReference<List<String>> pages = new AtomicReference<>();
 
@@ -54,7 +57,7 @@ public final class IbarraPagesExtension implements VidocqExtension, StartupRepor
     }
 
     @Override public String name() { return "ibarra-pages"; }
-    @Override public String id() { return "pages"; }
+    @Override public String id() { return PAGES; }
     @Override public String title() { return "Jakarta Pages (Ibarra)"; }
 
     @Override
@@ -72,14 +75,14 @@ public final class IbarraPagesExtension implements VidocqExtension, StartupRepor
         List<String> compiled = pages.get();
         section.summary("Jakarta Pages 4.0");
         if (compiled == null) {
-            section.row("pages", "not initialized");
+            section.row(PAGES, "not initialized");
         } else if (compiled.isEmpty()) {
-            section.row("pages", "none compiled")
+            section.row(PAGES, "none compiled")
                     .anomaly("ibarra-no-pages", "No JSP page was compiled into the application",
                             "put the pages under src/main/resources/META-INF/resources/, require io.vidocq.ibarra.api "
                                     + "in module-info.java, and build with vidocq:generate");
         } else {
-            section.row("pages", compiled.size()).list("paths", compiled);
+            section.row(PAGES, compiled.size()).list("paths", compiled);
         }
     }
 

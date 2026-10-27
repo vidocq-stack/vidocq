@@ -47,8 +47,11 @@ final class UriTemplates {
         StringBuilder out = new StringBuilder();
         while (variable.find()) {
             JsonValue value = values.get(variable.group(1));
-            String text = value == null || value.getValueType() == JsonValue.ValueType.NULL ? ""
-                    : value instanceof JsonString string ? string.getString() : value.toString();
+            String text = switch (value) {
+                case null -> "";
+                case JsonString string -> string.getString();
+                default -> value.getValueType() == JsonValue.ValueType.NULL ? "" : value.toString();
+            };
             variable.appendReplacement(out, Matcher.quoteReplacement(encode(text)));
         }
         variable.appendTail(out);

@@ -36,8 +36,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 /**
  * The console's own {@code config} panel, shown after the contributed panels and before the {@linkplain CdiPanel CDI
@@ -73,8 +73,10 @@ final class ConfigPanel implements DevConsolePanel {
     /** The panel's id, reserved by the core for the console. */
     static final String ID = "config";
 
+    private static final String SOURCE = "source";
+
     /** The columns of the {@code keys} table. */
-    static final List<String> COLUMNS = List.of("key", "source", "ordinal", "value", "status");
+    static final List<String> COLUMNS = List.of("key", SOURCE, "ordinal", "value", "status");
 
     /** The code of the key audit's anomaly: a configured key that nothing reads. */
     static final String UNREAD_KEY = "VIDOCQ-CFG-003";
@@ -137,7 +139,7 @@ final class ConfigPanel implements DevConsolePanel {
         }
         section.summary(count(held.keys(), "key") + ": " + held.application() + " of the application, "
                         + held.vidocq() + " vidocq.*, " + held.mp() + " mp.*; "
-                        + count(held.sources().size(), "source"))
+                        + count(held.sources().size(), SOURCE))
                 .list("sources", held.sources())
                 .row("values", held.valuesShown() ? "shown, a secret as configured and a URL without its credentials"
                         : ConfigValues.NOT_SHOWN)
@@ -147,7 +149,7 @@ final class ConfigPanel implements DevConsolePanel {
             section.row("keys left out", (held.keys() - held.rows().size()) + ", past the "
                     + ConfigInventory.MAX_ROWS + " rows the table shows");
         }
-        section.row("source", "the configuration sources, read once at boot: each key's raw value in the first"
+        section.row(SOURCE, "the configuration sources, read once at boot: each key's raw value in the first"
                 + " source that has one");
     }
 
@@ -185,7 +187,7 @@ final class ConfigPanel implements DevConsolePanel {
         return rows;
     }
 
-    private static List<List<String>> withStatus(List<List<String>> rows, Function<String, String> status) {
+    private static List<List<String>> withStatus(List<List<String>> rows, UnaryOperator<String> status) {
         List<List<String>> out = new ArrayList<>(rows.size());
         for (List<String> row : rows) {
             List<String> cells = new ArrayList<>(row);

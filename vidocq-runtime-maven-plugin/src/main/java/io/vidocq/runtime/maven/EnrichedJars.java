@@ -84,7 +84,7 @@ public final class EnrichedJars {
     static final String ENRICHED_INPUTS = "Vidocq-Enriched-Inputs";
     private static final String PROVIDER_CLASS_FILE = "_VaubanComponents.class";
     private static final Pattern VERSIONED_DESCRIPTOR =
-            Pattern.compile("META-INF/versions/[1-9][0-9]*/module-info\\.class");
+            Pattern.compile("META-INF/versions/[1-9]\\d*/module-info\\.class");
 
     /** Names the bricks that enriched a copy, sorted, after the {@code vidocq:generate} dependency codegen pass. */
     static final String ENRICHED_BY = "Vidocq-Enriched-By";
@@ -95,6 +95,8 @@ public final class EnrichedJars {
     static final String AUTOMATIC = "Vidocq-Automatic";
     private static final String AUTOMATIC_BRICK_SELECTED = "brick-selected";
     private static final String SERVICES_DIR = "META-INF/services/";
+    private static final String META_INF = "META-INF/";
+    private static final String CLASS_SUFFIX = ".class";
 
     /**
      * One scanned dependency: the original jar, its artifact id and {@code groupId:artifactId:version}, and the
@@ -341,7 +343,7 @@ public final class EnrichedJars {
             throws IOException {
         Map<String, byte[]> patch = readTree(patchDir);
         List<byte[]> patchClasses = patch.entrySet().stream()
-                .filter(e -> e.getKey().endsWith(".class")).map(Map.Entry::getValue).toList();
+                .filter(e -> e.getKey().endsWith(CLASS_SUFFIX)).map(Map.Entry::getValue).toList();
         Set<String> requires = VaubanModuleReferences.of(patchClasses);
 
         Map<String, byte[]> entries = new LinkedHashMap<>();
@@ -400,7 +402,7 @@ public final class EnrichedJars {
                     : bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses));
             // A descriptor that lists its packages must list those of the added classes and providers too.
             Set<String> addedPackages = new TreeSet<>();
-            patch.keySet().stream().filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
+            patch.keySet().stream().filter(n -> n.endsWith(CLASS_SUFFIX) && !n.startsWith(META_INF))
                     .forEach(n -> addedPackages.add(n.lastIndexOf('/') < 0 ? ""
                             : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
             providers.forEach(p -> addedPackages.add(packageOf(p)));
@@ -473,7 +475,7 @@ public final class EnrichedJars {
 
     /** {@code META-INF/*.SF}, {@code *.RSA}, {@code *.DSA}, {@code *.EC}, {@code SIG-*}: a signature. */
     public static boolean isSignature(String name) {
-        if (!name.startsWith("META-INF/") || name.indexOf('/', "META-INF/".length()) >= 0) {
+        if (!name.startsWith(META_INF) || name.indexOf('/', META_INF.length()) >= 0) {
             return false;
         }
         String upper = name.toUpperCase(Locale.ROOT);
@@ -560,7 +562,7 @@ public final class EnrichedJars {
     private static List<String> providersIn(Path patchDir) throws IOException {
         return readTree(patchDir).keySet().stream()
                 .filter(name -> name.equals(PROVIDER_CLASS_FILE) || name.endsWith("/" + PROVIDER_CLASS_FILE))
-                .map(name -> name.substring(0, name.length() - ".class".length()).replace('/', '.'))
+                .map(name -> name.substring(0, name.length() - CLASS_SUFFIX.length()).replace('/', '.'))
                 .sorted().toList();
     }
 

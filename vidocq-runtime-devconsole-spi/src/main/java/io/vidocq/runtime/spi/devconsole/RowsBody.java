@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
 final class RowsBody {
 
     /** A number as JSON writes it: anything else a {@link Number} prints, such as {@code NaN}, is written as text. */
-    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?");
+    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?");
     /** The end of a body whose rows are not all there, the longer of the two ends. */
     private static final String MORE = "],\"more\":true}";
     /** The end of a body that holds every row. */

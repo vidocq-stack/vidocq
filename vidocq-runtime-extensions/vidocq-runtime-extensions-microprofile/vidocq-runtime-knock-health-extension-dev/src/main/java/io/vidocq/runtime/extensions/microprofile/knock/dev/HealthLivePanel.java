@@ -39,7 +39,9 @@ public final class HealthLivePanel implements LivePanel {
     private final AtomicReference<KnockLiveBean> live = new AtomicReference<>(KnockLiveBean.NONE);
 
     /** Created by the service loader. */
-    public HealthLivePanel() {}
+    public HealthLivePanel() {
+        // nothing to set up: the panel binds to the running application when it starts
+    }
 
     @Override
     public String id() {

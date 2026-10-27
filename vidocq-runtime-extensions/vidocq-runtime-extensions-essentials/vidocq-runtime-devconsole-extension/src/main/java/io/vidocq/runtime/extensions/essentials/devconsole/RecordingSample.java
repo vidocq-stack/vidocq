@@ -50,6 +50,8 @@ final class RecordingSample implements PanelSample {
     static final int MAX_ROWS = 100;
     static final int MAX_COLUMNS = 8;
 
+    private static final String VALUE = "value";
+
     private final Scope values = new Scope(true);
     private final Map<String, Group> groups = new LinkedHashMap<>();
     private boolean truncated;
@@ -152,11 +154,11 @@ final class RecordingSample implements PanelSample {
         void forEachMeasure(String group, PanelHistory.MeasureSink sink) {
             byKey.forEach((key, value) -> {
                 switch (value) {
-                    case Gauge gauge ->
-                            sink.measure(group, key, "gauge", unit(gauge.unit()), gauge.value(), gauge.max());
-                    case Counter counter ->
-                            sink.measure(group, key, "counter", unit(counter.unit()), counter.total(), Double.NaN);
-                    case Absent ignored -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
+                    case Gauge(var measured, var max, var unit) ->
+                            sink.measure(group, key, "gauge", unit(unit), measured, max);
+                    case Counter(var total, var unit) ->
+                            sink.measure(group, key, "counter", unit(unit), total, Double.NaN);
+                    case Absent _ -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
                     default -> { }      // a duration, a text or a table: nothing a chart draws
                 }
             });
@@ -316,21 +318,21 @@ final class RecordingSample implements PanelSample {
     private static void write(JsonWriter out, String key, Value value) {
         out.beginObject().name("key").value(key);
         switch (value) {
-            case Gauge gauge -> {
-                out.name("kind").value("gauge").name("value").value(gauge.value());
-                if (!Double.isNaN(gauge.max())) {
-                    out.name("max").value(gauge.max());
+            case Gauge(var measured, var max, var unit) -> {
+                out.name("kind").value("gauge").name(VALUE).value(measured);
+                if (!Double.isNaN(max)) {
+                    out.name("max").value(max);
                 }
-                out.name("unit").value(unit(gauge.unit()));
+                out.name("unit").value(unit(unit));
             }
-            case Counter counter -> out.name("kind").value("counter").name("value").value(counter.total())
-                    .name("unit").value(unit(counter.unit()));
-            case Elapsed elapsed -> out.name("kind").value("duration").name("nanos").value(elapsed.nanos());
-            case Text text -> out.name("kind").value("text").name("value").value(text.value());
-            case Absent absent -> {
+            case Counter(var total, var unit) -> out.name("kind").value("counter").name(VALUE).value(total)
+                    .name("unit").value(unit(unit));
+            case Elapsed(var nanos) -> out.name("kind").value("duration").name("nanos").value(nanos);
+            case Text(var text) -> out.name("kind").value("text").name(VALUE).value(text);
+            case Absent(var reason) -> {
                 out.name("kind").value("absent");
-                if (absent.reason() != null) {
-                    out.name("reason").value(absent.reason());
+                if (reason != null) {
+                    out.name("reason").value(reason);
                 }
             }
             case Table table -> {
@@ -379,7 +381,7 @@ final class RecordingSample implements PanelSample {
                 return arguments.startsWith("{") && arguments.endsWith("}");
             }
             return JsonValues.parse(arguments, PanelAction.Argument.MAX_JSON_DEPTH) instanceof Map;
-        } catch (IllegalArgumentException notAReplay) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }

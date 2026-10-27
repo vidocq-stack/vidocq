@@ -78,6 +78,8 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
             System.getLogger(MansartDataIntegrationExtension.class.getName());
 
     private static final String P_CHECK_ON_START = "vidocq.data.checkOnStart";
+    private static final String METHOD = "method";
+    private static final String METHODS = "methods";
 
     /** An entity whose model Mansart could not build. */
     static final String ANOMALY = "MANSART-DATA-001";
@@ -118,7 +120,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         if (context.config().getValue(P_CHECK_ON_START, Boolean.class, Boolean.TRUE)) {
             checkDataSourceReachable(bm);
         }
-        start(() -> beanClasses(bm), type -> EntityModels.of(type));
+        start(() -> beanClasses(bm), EntityModels::of);
     }
 
     /**
@@ -184,7 +186,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         }
         section.summary(count(read.entityCount(), "entity", "entities") + ", "
                 + count(read.repositoryCount(), "repository", "repositories") + ", "
-                + count(read.methodCount(), "method", "methods"));
+                + count(read.methodCount(), METHOD, METHODS));
         if (context.verbosity() == Verbosity.DETAILED) {
             for (MansartDataCatalogue.Entity entity : read.entities()) {
                 section.row(entity.name(), entity.failure() == null
@@ -197,12 +199,12 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
             for (MansartDataCatalogue.Repository repository : read.repositories()) {
                 if (repository.entityClassName() != null) {
                     section.row(repository.name(), repository.entityName() + ", "
-                            + count(repository.methodCount(), "method", "methods"));
+                            + count(repository.methodCount(), METHOD, METHODS));
                 }
             }
             for (MansartDataCatalogue.Repository repository : read.otherRepositories()) {
                 section.row(repository.name(),
-                        "no primary entity, " + count(repository.methodCount(), "method", "methods"));
+                        "no primary entity, " + count(repository.methodCount(), METHOD, METHODS));
             }
             if (read.moreRepositories() > 0) {
                 section.row("more repositories", "and " + read.moreRepositories() + " more");

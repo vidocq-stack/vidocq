@@ -340,9 +340,9 @@ public class VidocqRunMojo extends AbstractMojo {
      */
     // package-private for the unit test of the close-exactly-once wiring.
     synchronized void closeDevServices() {
-        DevServicesSession session = devServicesSession.getAndSet(null);
-        if (session != null) {
-            session.close();
+        DevServicesSession running = devServicesSession.getAndSet(null);
+        if (running != null) {
+            running.close();
         }
     }
 

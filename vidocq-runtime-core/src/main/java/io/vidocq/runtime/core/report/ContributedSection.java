@@ -187,17 +187,17 @@ final class ContributedSection implements StartupReportSection {
         }
         for (Entry entry : entries) {
             switch (entry) {
-                case Written written -> lines.add(written.line());
+                case Written(var line) -> lines.add(line);
                 case Route route -> {
                     String url = route.url(listeners);
                     // A GET with no template variable is a URL a browser can open as it is.
                     boolean openable = "GET".equals(route.method()) && absolute(url) && url.indexOf('{') < 0;
                     lines.add(new Cells(List.of(route.method(), url, route.shortHandler()), openable ? url : null));
                 }
-                case Link link -> {
-                    String base = listeners.get(link.listener());
-                    String url = base == null ? link.path() : join(base, link.path());
-                    lines.add(new Row(link.label(), url, absolute(url) ? url : null));
+                case Link(var label, var listener, var path) -> {
+                    String base = listeners.get(listener);
+                    String url = base == null ? path : join(base, path);
+                    lines.add(new Row(label, url, absolute(url) ? url : null));
                 }
             }
         }

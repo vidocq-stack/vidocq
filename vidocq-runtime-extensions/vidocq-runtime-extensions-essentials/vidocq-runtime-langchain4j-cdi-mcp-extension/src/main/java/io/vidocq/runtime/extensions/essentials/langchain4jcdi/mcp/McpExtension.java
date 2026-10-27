@@ -70,7 +70,9 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
     private final AtomicReference<McpInspection> inspection = new AtomicReference<>(McpInspection.NOTHING);
 
     /** Created by the {@link java.util.ServiceLoader}. */
-    public McpExtension() {}
+    public McpExtension() {
+        // nothing to set up: the work starts in the lifecycle callbacks
+    }
 
     @Override
     public String name() {

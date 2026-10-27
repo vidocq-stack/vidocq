@@ -47,9 +47,10 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class PoolsLivePanel implements LivePanel {
 
+    private static final String ACTIVE = "active";
     private static final List<Chart> CHARTS = List.of(
-            new Chart("connections", "Connections", List.of(Series.area("active"), Series.stacked("idle"),
-                    Series.line("waiting"), Series.ceiling("active"))),
+            new Chart("connections", "Connections", List.of(Series.area(ACTIVE), Series.stacked("idle"),
+                    Series.line("waiting"), Series.ceiling(ACTIVE))),
             new Chart("throughput", "Throughput", List.of(Series.rate("borrows"), Series.rate("timeouts"))));
 
     private static final System.Logger LOG = System.getLogger(PoolsLivePanel.class.getName());
@@ -58,7 +59,9 @@ public final class PoolsLivePanel implements LivePanel {
     private final AtomicReference<List<PoolActions>> pools = new AtomicReference<>();
 
     /** Created by the service loader. */
-    public PoolsLivePanel() {}
+    public PoolsLivePanel() {
+        // nothing to set up: the panel binds to the running application when it starts
+    }
 
     @Override
     public String id() {
@@ -130,7 +133,7 @@ public final class PoolsLivePanel implements LivePanel {
             PoolConfig c = v.pool().config();
             PoolMetrics m = v.pool().snapshot();
             PanelSample pool = sample.group(v.label())
-                    .gauge("active", m.active(), c.maxSize(), Unit.COUNT)
+                    .gauge(ACTIVE, m.active(), c.maxSize(), Unit.COUNT)
                     .gauge("idle", m.idle(), c.maxSize(), Unit.COUNT)
                     .gauge("waiting", m.waiting(), Unit.COUNT)
                     .counter("borrows", m.totalBorrows(), Unit.COUNT)

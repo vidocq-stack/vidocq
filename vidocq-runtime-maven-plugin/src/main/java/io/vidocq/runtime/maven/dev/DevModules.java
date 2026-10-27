@@ -50,7 +50,9 @@ import java.util.zip.ZipEntry;
 final class DevModules {
 
     static final String DESCRIPTOR = "META-INF/vidocq/dev-module";
-    static final Pattern ARTIFACT_ID = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]*");
+    static final Pattern ARTIFACT_ID = Pattern.compile("\\w[\\w.-]*");
+    /** The prefix of every line this class logs. */
+    private static final String DEV_TOOLS = "Dev tools: ";
 
     /** One resolved jar: {@code groupId:artifactId} and its file. */
     record Resolved(String key, Path file) {}
@@ -84,13 +86,13 @@ final class DevModules {
                 }
             }
             if (ids.size() != 1 || !ARTIFACT_ID.matcher(ids.getFirst()).matches()) {
-                warn.accept("Dev tools: " + DESCRIPTOR + " of " + jar.getFileName()
+                warn.accept(DEV_TOOLS + DESCRIPTOR + " of " + jar.getFileName()
                         + " must hold one artifactId; that extension gets no dev module");
                 return Optional.empty();
             }
             return Optional.of(ids.getFirst());
-        } catch (IOException | SecurityException unreadable) {
-            warn.accept("Dev tools: " + jar.getFileName() + " cannot be read; that extension gets no dev module");
+        } catch (IOException | SecurityException _) {
+            warn.accept(DEV_TOOLS + jar.getFileName() + " cannot be read; that extension gets no dev module");
             return Optional.empty();
         }
     }
@@ -134,7 +136,7 @@ final class DevModules {
             try {
                 resolved = resolver.resolve(coordinates);
             } catch (Exception unresolvable) {
-                warn.accept("Dev tools: " + coordinates + " not found (" + unresolvable.getClass().getSimpleName()
+                warn.accept(DEV_TOOLS + coordinates + " not found (" + unresolvable.getClass().getSimpleName()
                         + "); the " + artifact.getArtifactId() + " panel shows its boot facts only. Run the build"
                         + " once online, or mvn -U");
                 continue;
@@ -152,7 +154,7 @@ final class DevModules {
                 toAdd.add(jar);
             }
             if (foreign != null) {
-                warn.accept("Dev tools: " + coordinates + " needs " + foreign
+                warn.accept(DEV_TOOLS + coordinates + " needs " + foreign
                         + ", which the application does not have; its panel shows its boot facts only");
                 continue;
             }
@@ -163,7 +165,7 @@ final class DevModules {
             names.add(companion.get());
         }
         if (!names.isEmpty()) {
-            info.accept("Dev tools: " + String.join(", ", names));
+            info.accept(DEV_TOOLS + String.join(", ", names));
         }
         return added;
     }

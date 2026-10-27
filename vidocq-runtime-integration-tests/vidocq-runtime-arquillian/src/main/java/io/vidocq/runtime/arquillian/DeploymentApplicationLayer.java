@@ -34,7 +34,9 @@ public final class DeploymentApplicationLayer implements ApplicationLayer {
     private static final AtomicReference<ModuleLayer> CURRENT = new AtomicReference<>();
 
     /** Created by the service loader. */
-    public DeploymentApplicationLayer() {}
+    public DeploymentApplicationLayer() {
+        // nothing to set up: the layer is handed over later, per deployment
+    }
 
     static void set(ModuleLayer layer) {
         CURRENT.set(layer);

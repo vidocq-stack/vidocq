@@ -68,6 +68,7 @@ final class DependencyCodegenPass {
      */
     static final String WRITTEN_DIR = "written";
     private static final String WRITTEN_SUFFIX = ".list";
+    private static final String LOG_PREFIX = "vidocq:generate: ";
 
     /**
      * What the pass did.
@@ -177,12 +178,12 @@ final class DependencyCodegenPass {
         }
         Path patchRoot = JpmsPatches.root(buildDir);
         try (var lists = Files.list(records)) {
-            for (Path record : lists.filter(p -> p.getFileName().toString().endsWith(WRITTEN_SUFFIX)).toList()) {
-                String name = record.getFileName().toString();
+            for (Path list : lists.filter(p -> p.getFileName().toString().endsWith(WRITTEN_SUFFIX)).toList()) {
+                String name = list.getFileName().toString();
                 Path patchDir = JpmsPatches.patchDirFor(buildDir,
                         name.substring(0, name.length() - WRITTEN_SUFFIX.length())).normalize();
                 if (patchDir.startsWith(patchRoot) && !patchDir.equals(patchRoot)) {
-                    for (String line : Files.readAllLines(record)) {
+                    for (String line : Files.readAllLines(list)) {
                         Path file = patchDir.resolve(line).normalize();
                         if (!line.isBlank() && file.startsWith(patchDir) && !file.equals(patchDir)) {
                             Files.deleteIfExists(file);
@@ -190,7 +191,7 @@ final class DependencyCodegenPass {
                         }
                     }
                 }
-                Files.delete(record);
+                Files.delete(list);
             }
         }
     }
@@ -250,7 +251,7 @@ final class DependencyCodegenPass {
             String names = selected.stream().map(b -> b.hints().brick()).collect(Collectors.joining(", "));
             String file = jar.getFileName().toString();
             if (decision.signed() && !matchesAny(scanDependencies, dep)) {
-                info.accept("vidocq:generate: " + file + " is signed; not processed for " + names
+                info.accept(LOG_PREFIX + file + " is signed; not processed for " + names
                         + " (name it in scanDependencies to process it)");
                 continue;
             }
@@ -289,7 +290,7 @@ final class DependencyCodegenPass {
                 continue;
             }
             long classes = output.files().keySet().stream().filter(n -> n.endsWith(".class")).count();
-            info.accept("vidocq:generate: " + file + " — " + names + " (" + classes
+            info.accept(LOG_PREFIX + file + " — " + names + " (" + classes
                     + (classes == 1 ? " class, " : " classes, ")
                     + (cached.isPresent() ? "cached" : "generated") + ")");
             if (output.files().isEmpty()) {
@@ -325,9 +326,9 @@ final class DependencyCodegenPass {
         if (files.isEmpty()) {
             return;
         }
-        Path record = buildDir.resolve(LOG_DIR).resolve(WRITTEN_DIR).resolve(artifactId + WRITTEN_SUFFIX);
-        Files.createDirectories(record.getParent());
-        Files.write(record, files, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        Path list = buildDir.resolve(LOG_DIR).resolve(WRITTEN_DIR).resolve(artifactId + WRITTEN_SUFFIX);
+        Files.createDirectories(list.getParent());
+        Files.write(list, files, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
     }
 
     /**
@@ -342,7 +343,7 @@ final class DependencyCodegenPass {
                     .collect(Collectors.toSet());
             for (String name : output.files().keySet()) {
                 if (entries.contains(name) && !mergedResources.contains(name)) {
-                    lines.add("vidocq:generate: " + jar.getFileName() + " — " + bricks + " generated " + name
+                    lines.add(LOG_PREFIX + jar.getFileName() + " — " + bricks + " generated " + name
                             + ", which the jar already has; it is not a mergeable resource of that brick. Leave the"
                             + " jar out with <scanExcludes>" + dep.groupId() + ":" + dep.artifactId()
                             + "</scanExcludes>.");
@@ -382,7 +383,7 @@ final class DependencyCodegenPass {
     static String display(Path baseDir, Path log) {
         try {
             return baseDir.relativize(log).toString();
-        } catch (IllegalArgumentException differentRoots) {
+        } catch (IllegalArgumentException _) {
             return log.toString();
         }
     }

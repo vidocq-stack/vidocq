@@ -76,7 +76,7 @@ final class SurefireReports {
         List<Path> files;
         try (Stream<Path> listing = Files.list(reportsDir)) {
             files = listing.filter(SurefireReports::isReport).sorted().toList();
-        } catch (IOException noDirectory) {
+        } catch (IOException _) {
             return Reports.NONE;
         }
         Instant cutoff = since.minus(SLACK);
@@ -99,7 +99,7 @@ final class SurefireReports {
                 skipped += suite.counts().skipped();
                 failures.addAll(suite.failures());
                 readable++;
-            } catch (Exception unreadableReport) {
+            } catch (Exception _) {
                 unreadable++;
             }
         }

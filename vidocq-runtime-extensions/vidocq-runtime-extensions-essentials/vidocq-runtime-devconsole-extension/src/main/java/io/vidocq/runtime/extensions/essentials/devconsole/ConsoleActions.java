@@ -94,6 +94,9 @@ final class ConsoleActions {
     /** Draws the boot tokens: one generator, seeded once. */
     private static final SecureRandom TOKENS = new SecureRandom();
 
+    /** Joins the parts of a composite map key: a character no id, kind or reason holds. */
+    private static final String KEY_SEPARATOR = "\u0000";
+
     private final String token;
     private final byte[] tokenBytes;
     private final LongSupplier clock;
@@ -176,7 +179,7 @@ final class ConsoleActions {
     void refused(String kind, String reason, String origin) {
         String shown = origin == null ? "(none)" : "'" + Texts.clean(origin) + "'";
         if (refusalsLogged.size() >= MAX_REFUSALS_LOGGED
-                || !refusalsLogged.add(kind + "\u0000" + reason + "\u0000" + shown)) {
+                || !refusalsLogged.add(kind + KEY_SEPARATOR + reason + KEY_SEPARATOR + shown)) {
             return;
         }
         LOG.log(System.Logger.Level.WARNING, "[" + CROSS_SITE + "] Dev console " + kind + " refused, origin " + shown
@@ -185,7 +188,7 @@ final class ConsoleActions {
 
     /** The last outcome of {@code action} of {@code panel} this boot, or {@code null}. */
     Outcome outcome(String panel, String action) {
-        return outcomes.get(panel + "\u0000" + action);
+        return outcomes.get(panel + KEY_SEPARATOR + action);
     }
 
     /** Whether {@code action} of {@code panel} is running. */
@@ -210,7 +213,7 @@ final class ConsoleActions {
         String body;
         try {
             body = body(request, max);
-        } catch (TooLarge tooLarge) {
+        } catch (TooLarge _) {
             return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + max + " bytes.");
         } catch (IOException | RuntimeException unreadable) {
             return text(StatusCode.BAD_REQUEST, "The body is not UTF-8 text.");
@@ -241,7 +244,7 @@ final class ConsoleActions {
                     ? json(StatusCode.OK, answer(outcome))
                     : json(StatusCode.INTERNAL_SERVER_ERROR, new JsonWriter().beginObject().name("error")
                             .value(outcome.text()).endObject().toString());
-        } catch (TimeoutException | ExecutionException stillRunning) {
+        } catch (TimeoutException | ExecutionException _) {
             return stillRunning();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -301,7 +304,7 @@ final class ConsoleActions {
     }
 
     private void record(String panelId, String actionId, Outcome outcome) {
-        outcomes.put(panelId + "\u0000" + actionId, outcome);
+        outcomes.put(panelId + KEY_SEPARATOR + actionId, outcome);
         running.remove(panelId, actionId);
     }
 

@@ -80,7 +80,7 @@ final class WarJspPages {
         try {
             Class.forName("io.vidocq.ibarra.compiler.PagePrecompiler", false, WarJspPages.class.getClassLoader());
             return true;
-        } catch (ClassNotFoundException absent) {
+        } catch (ClassNotFoundException _) {
             return false;
         }
     }
@@ -337,7 +337,9 @@ final class WarJspPages {
                         throw new UncheckedIOException(e);
                     }
                 }
-                @Override public void close() {}
+                @Override public void close() {
+                    // nothing to release: every read opens and closes its own file
+                }
             };
         }
     }

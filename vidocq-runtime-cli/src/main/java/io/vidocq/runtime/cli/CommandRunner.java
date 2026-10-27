@@ -66,12 +66,14 @@ import java.util.function.Supplier;
 public final class CommandRunner {
 
     private static final String POM_XML = "pom.xml";
+    /** The Unix launcher of an installed CLI, under its {@code bin} directory. */
+    private static final String LAUNCHER = "vidocq";
 
     private CommandRunner() {}
 
     public static int run(Command command) {
         return switch (command) {
-            case Command.Version v             -> runVersion();
+            case Command.Version _             -> runVersion();
             case Command.Info _                -> runInfo(Path.of("").toAbsolutePath());
             case Command.Help h                -> runHelp(h);
             case Command.Start s               -> runStart(s);
@@ -93,7 +95,7 @@ public final class CommandRunner {
             case Command.Config cfg            -> switch (cfg) {
                 case Command.Config.Get g       -> runConfigGet(g);
                 case Command.Config.Set s       -> runConfigSet(s, Path.of("").toAbsolutePath());
-                case Command.Config.Listing l   -> runConfigList(l);
+                case Command.Config.Listing _   -> runConfigList();
             };
             case Command.Completion comp       -> runCompletion(comp);
             case Command.CompletionSetup setup -> runCompletionSetup(setup);
@@ -173,25 +175,25 @@ public final class CommandRunner {
         }
         var resolution = resolveProjectExtensions(cwd, refresh);
         return switch (resolution) {
-            case ProjectExtensions.Resolution.Failed f -> {
-                CliOutput.error("Could not resolve the project's dependencies: " + f.reason());
-                if (!f.mavenOutput().isBlank()) {
-                    System.err.println(f.mavenOutput());
+            case ProjectExtensions.Resolution.Failed(var reason, var mavenOutput) -> {
+                CliOutput.error("Could not resolve the project's dependencies: " + reason);
+                if (!mavenOutput.isBlank()) {
+                    System.err.println(mavenOutput);
                 }
                 yield 1;
             }
-            case ProjectExtensions.Resolution.Resolved r -> {
-                if (r.extensions().isEmpty()) {
+            case ProjectExtensions.Resolution.Resolved(var extensions, var cached) -> {
+                if (extensions.isEmpty()) {
                     CliOutput.println(CliOutput.dim(
                             "  (none — add one with 'vidocq extension add <id>')"));
                 }
-                r.extensions().forEach(ext ->
+                extensions.forEach(ext ->
                         System.out.printf("  %s %-26s %s%s%n",
                                 CliOutput.green("✔"),
                                 ext.id(),
                                 CliOutput.dim(ext.artifact().toString()),
                                 ext.direct() ? "" : CliOutput.dim("  (transitive)")));
-                if (r.cached()) {
+                if (cached) {
                     CliOutput.println(CliOutput.dim(
                             "  (cached — 'vidocq extension list --refresh' resolves again)"));
                 }
@@ -402,7 +404,7 @@ public final class CommandRunner {
         return 0;
     }
 
-    private static int runConfigList(Command.Config.Listing listing) {
+    private static int runConfigList() {
         Path file = locateConfig();
         if (file == null) {
             CliOutput.error("No vidocq.properties found in this project.");
@@ -449,12 +451,12 @@ public final class CommandRunner {
         try (HttpDownloads http = new HttpDownloads()) {
             var decision = updatePlan(installed, http);
             switch (decision) {
-                case UpdatePlan.UpToDate u -> {
-                    CliOutput.success("Already up to date: " + u.current());
+                case UpdatePlan.UpToDate(var current) -> {
+                    CliOutput.success("Already up to date: " + current);
                     return 0;
                 }
-                case UpdatePlan.Unavailable u -> {
-                    CliOutput.error("Could not check for updates: " + u.reason());
+                case UpdatePlan.Unavailable(var reason) -> {
+                    CliOutput.error("Could not check for updates: " + reason);
                     return 1;
                 }
                 case UpdatePlan.Update u -> {
@@ -537,7 +539,7 @@ public final class CommandRunner {
             Path modules = jar.getParent();
             Path dir = modules == null ? null : modules.getParent();
             return dir != null && "modules".equals(String.valueOf(modules.getFileName()))
-                    && Files.isRegularFile(dir.resolve("bin").resolve("vidocq")) ? dir : null;
+                    && Files.isRegularFile(dir.resolve("bin").resolve(LAUNCHER)) ? dir : null;
         } catch (Exception e) {
             return null;
         }
@@ -546,7 +548,7 @@ public final class CommandRunner {
     private static void retargetLauncher(Path target) throws IOException {
         Path bin = Path.of(env("VIDOCQ_BIN", userHome()
                 .resolve(".local").resolve("bin").toString()));
-        Path launcher = bin.resolve("vidocq");
+        Path launcher = bin.resolve(LAUNCHER);
         var retargeted = Files.isRegularFile(launcher)
                 ? CliInstaller.retargetLauncher(Files.readString(launcher), target)
                 : Optional.<String>empty();
@@ -555,7 +557,7 @@ public final class CommandRunner {
             CliOutput.success("Launcher " + launcher + " now runs " + target.getFileName());
         } else {
             CliOutput.warning("Could not update a launcher at " + launcher + " — run "
-                    + target.resolve("bin").resolve("vidocq") + " or point your PATH at it.");
+                    + target.resolve("bin").resolve(LAUNCHER) + " or point your PATH at it.");
         }
     }
 
@@ -566,7 +568,7 @@ public final class CommandRunner {
                 continue;
             }
             try {
-                Process p = new ProcessBuilder(target.resolve("bin").resolve("vidocq").toString(),
+                Process p = new ProcessBuilder(target.resolve("bin").resolve(LAUNCHER).toString(),
                         "completion", "install", shell.token())
                         .redirectErrorStream(true)
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)

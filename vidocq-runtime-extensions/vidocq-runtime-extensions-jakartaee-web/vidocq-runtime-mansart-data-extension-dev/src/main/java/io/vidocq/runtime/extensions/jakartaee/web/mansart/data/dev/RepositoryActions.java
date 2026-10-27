@@ -188,7 +188,7 @@ final class RepositoryActions {
         for (Class<?> repository : repositories) {
             try {
                 return Class.forName(className, false, repository.getClassLoader());
-            } catch (ClassNotFoundException | LinkageError notThere) {
+            } catch (ClassNotFoundException | LinkageError _) {
                 // the next repository's loader may know it
             }
         }
@@ -404,7 +404,7 @@ final class RepositoryActions {
     private Object bean(Entry entry) throws Refused {
         try {
             return beans.reference(entry.repository());
-        } catch (RuntimeException | LinkageError none) {
+        } catch (RuntimeException | LinkageError _) {
             throw new Refused("no bean for " + entry.repositoryName());
         }
     }
@@ -418,7 +418,7 @@ final class RepositoryActions {
                     "value", members.get(parameter.name())));
         }
         return Json.write(Scalars.object("method", entry.repositoryName() + "." + entry.candidate().signature(),
-                "arguments", arguments, "transaction", mode == null ? "none" : mode));
+                ARGUMENTS, arguments, TRANSACTION, mode == null ? "none" : mode));
     }
 
     /** {@code <action id> {"arguments": {...}, "transaction": "..."}}, or empty when the arguments were no object. */

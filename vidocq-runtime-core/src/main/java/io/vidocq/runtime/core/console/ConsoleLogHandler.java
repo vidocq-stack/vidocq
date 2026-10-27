@@ -55,8 +55,8 @@ public final class ConsoleLogHandler extends StreamHandler {
     }
 
     @Override
-    public synchronized void publish(LogRecord record) {
-        super.publish(record);
+    public synchronized void publish(LogRecord entry) {
+        super.publish(entry);
         flush();
     }
 

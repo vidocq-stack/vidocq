@@ -69,7 +69,7 @@ public record McpInspection(boolean twin, int namedConfigBeans, boolean configFr
             Set<Bean<?>> named = beans.getBeans(McpServerConfig.class, NamedLiteral.of(CONFIG_BEAN_NAME));
             boolean fromExtension = named.stream().anyMatch(bean -> bean.getBeanClass() == McpServerConfigProducer.class);
             return new McpInspection(false, named.size(), fromExtension);
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return NOTHING;
         }
     }

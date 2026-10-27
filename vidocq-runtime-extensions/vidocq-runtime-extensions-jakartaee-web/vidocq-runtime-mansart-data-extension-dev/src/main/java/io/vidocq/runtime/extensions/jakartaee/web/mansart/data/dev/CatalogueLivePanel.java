@@ -73,6 +73,7 @@ public final class CatalogueLivePanel implements LivePanel {
     private static final Set<String> RESERVED = Set.of("table", "columns", "model");
 
     private static final System.Logger LOG = System.getLogger(CatalogueLivePanel.class.getName());
+    private static final String MORE = " more";
 
     /** The bean manager of this boot, {@code null} before {@link #start} and after {@link #stop}. */
     private final AtomicReference<BeanManager> beans = new AtomicReference<>();
@@ -80,7 +81,9 @@ public final class CatalogueLivePanel implements LivePanel {
     private final AtomicReference<RepositoryActions> run = new AtomicReference<>(RepositoryActions.NONE);
 
     /** Created by the service loader. */
-    public CatalogueLivePanel() {}
+    public CatalogueLivePanel() {
+        // nothing to set up: the panel binds to the running application when it starts
+    }
 
     @Override
     public String id() {
@@ -114,7 +117,7 @@ public final class CatalogueLivePanel implements LivePanel {
         if (manager == null) {
             return List.of();
         }
-        return actions(BeanLookup.of(manager), TransactionRunner.of(manager), type -> EntityModels.of(type),
+        return actions(BeanLookup.of(manager), TransactionRunner.of(manager), EntityModels::of,
                 RepositoryActions::accessible);
     }
 
@@ -146,7 +149,7 @@ public final class CatalogueLivePanel implements LivePanel {
      */
     @Override
     public List<PanelLanguage> languages() {
-        return beans.get() == null ? List.of() : languages(type -> EntityModels.of(type));
+        return beans.get() == null ? List.of() : languages(EntityModels::of);
     }
 
     /** The JDQL language of what {@link MansartDataLive} holds; none without an entity, or when it cannot be built. */
@@ -199,10 +202,10 @@ public final class CatalogueLivePanel implements LivePanel {
             }
         }
         if (catalogue.moreEntities() > 0) {
-            sample.text("more-entities", "and " + catalogue.moreEntities() + " more");
+            sample.text("more-entities", "and " + catalogue.moreEntities() + MORE);
         }
         if (catalogue.moreRepositories() > 0) {
-            sample.text("more-repositories", "and " + catalogue.moreRepositories() + " more");
+            sample.text("more-repositories", "and " + catalogue.moreRepositories() + MORE);
         }
         run.get().sample(sample);
     }
@@ -222,7 +225,7 @@ public final class CatalogueLivePanel implements LivePanel {
             group.text(key + ".inherits", repository.inherits().replaceFirst("^inherits ", ""));
         }
         if (repository.moreMethods() > 0) {
-            group.text(key + ".more", "and " + repository.moreMethods() + " more");
+            group.text(key + ".more", "and " + repository.moreMethods() + MORE);
         }
     }
 

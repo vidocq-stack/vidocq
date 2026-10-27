@@ -166,11 +166,16 @@ public final class ScanSelection {
             Dependency dep = dependencies.get(i);
             JarFacts f = facts.get(i);
             List<String> bricks = bricksByJar.getOrDefault(dep.jar(), List.of());
-            Source source = anyMatch(scanDependencies, dep) ? Source.APPLICATION
-                    : anyMatch(extensionPatterns, dep) ? Source.EXTENSION
-                    : autoScan && f.beansXml() && !"none".equals(f.discoveryMode()) ? Source.AUTOMATIC
-                    : !bricks.isEmpty() ? Source.BRICK
-                    : null;
+            Source source = null;
+            if (anyMatch(scanDependencies, dep)) {
+                source = Source.APPLICATION;
+            } else if (anyMatch(extensionPatterns, dep)) {
+                source = Source.EXTENSION;
+            } else if (autoScan && f.beansXml() && !"none".equals(f.discoveryMode())) {
+                source = Source.AUTOMATIC;
+            } else if (!bricks.isEmpty()) {
+                source = Source.BRICK;
+            }
             String excluded = null;
             if (source != null) {
                 if (f.processed()) {

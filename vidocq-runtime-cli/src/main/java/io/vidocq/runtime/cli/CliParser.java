@@ -46,6 +46,12 @@ public final class CliParser {
     private static final String VSCODE = "vscode";
     private static final String ECLIPSE = "eclipse";
     private static final String OPTIONS = "Options:";
+    private static final String CREATE = "create";
+    private static final String BUILD = "build";
+    private static final String CLEAN = "clean";
+    private static final String UPDATE = "update";
+    private static final String PORT = "--port";
+    private static final String DRY_RUN = "--dry-run";
 
     private CliParser() {}
 
@@ -61,13 +67,13 @@ public final class CliParser {
             case "idea"                       -> parseIdea(args, 1);
             case VSCODE                       -> parseVscode(args, 1);
             case ECLIPSE                      -> parseEclipse(args, 1);
-            case "create"                     -> parseCreate(args, 1);
-            case "build"                      -> parseBuild(args, 1);
-            case "clean"                      -> parseClean(args, 1);
+            case CREATE                     -> parseCreate(args, 1);
+            case BUILD                      -> parseBuild(args, 1);
+            case CLEAN                      -> parseClean(args, 1);
             case "extension", "ext"           -> parseExtension(args, 1);
             case "config"                     -> parseConfig(args, 1);
             case "completion"                 -> parseCompletion(args, 1);
-            case "update"                     -> parseUpdate(args, 1);
+            case UPDATE                     -> parseUpdate(args, 1);
             default -> new Command.Plugin(args[0], rest(args, 1));
         };
     }
@@ -83,7 +89,7 @@ public final class CliParser {
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--port", "-p"   -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
+                case PORT, "-p"   -> { port = parseInt(args, ++i, PORT); portExplicit = true; }
                 case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
                 case DEBUG        -> debug  = true;
                 default               -> unknownOpt(args[i], START);
@@ -99,7 +105,7 @@ public final class CliParser {
         boolean debug = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
-                case "--port", "-p"    -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
+                case PORT, "-p"    -> { port = parseInt(args, ++i, PORT); portExplicit = true; }
                 case "--profile", "-P" -> profile = value(args, ++i, "--profile");
                 case DEBUG         -> debug   = true;
                 default                -> unknownOpt(args[i], "dev");
@@ -175,7 +181,10 @@ public final class CliParser {
     }
 
     private static Command parseCreate(String[] args, int from) {
-        String name = null, groupId = null, pkg = null, parentVersion = null;
+        String name = null;
+        String groupId = null;
+        String pkg = null;
+        String parentVersion = null;
         boolean main = false;
         Set<String> extensions = new LinkedHashSet<>();
         for (int i = from; i < args.length; i++) {
@@ -186,7 +195,7 @@ public final class CliParser {
                 case "--extension", "-x" -> extensions.add(value(args, ++i, "--extension"));
                 case "--parent-version"  -> parentVersion = value(args, ++i, "--parent-version");
                 case "--main"            -> main = true;
-                default                  -> unknownOpt(args[i], "create");
+                default                  -> unknownOpt(args[i], CREATE);
             }
         }
         if (name == null) {
@@ -204,7 +213,9 @@ public final class CliParser {
 
     private static Command.Build parseBuild(String[] args, int from) {
         BuildType type = BuildType.PACKAGE;
-        boolean offline = false, skipTests = false, dryRun = false;
+        boolean offline = false;
+        boolean skipTests = false;
+        boolean dryRun = false;
         List<String> passthrough = new ArrayList<>();
         int i = from;
         // An optional leading non-flag token selects the build flavour.
@@ -219,23 +230,24 @@ public final class CliParser {
             switch (args[i]) {
                 case "--offline", "-o" -> offline   = true;
                 case "--skip-tests"    -> skipTests = true;
-                case "--dry-run"       -> dryRun    = true;
+                case DRY_RUN       -> dryRun    = true;
                 case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
-                default                -> unknownOpt(args[i], "build");
+                default                -> unknownOpt(args[i], BUILD);
             }
         }
         return new Command.Build(type, offline, skipTests, dryRun, List.copyOf(passthrough));
     }
 
     private static Command.Clean parseClean(String[] args, int from) {
-        boolean offline = false, dryRun = false;
+        boolean offline = false;
+        boolean dryRun = false;
         List<String> passthrough = new ArrayList<>();
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case "--offline", "-o" -> offline = true;
-                case "--dry-run"       -> dryRun  = true;
+                case DRY_RUN       -> dryRun  = true;
                 case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
-                default                -> unknownOpt(args[i], "clean");
+                default                -> unknownOpt(args[i], CLEAN);
             }
         }
         return new Command.Clean(offline, dryRun, List.copyOf(passthrough));
@@ -273,7 +285,7 @@ public final class CliParser {
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case CHECK     -> check = true;
-                default        -> unknownOpt(args[i], "update");
+                default        -> unknownOpt(args[i], UPDATE);
             }
         }
         return new Command.Update(check);
@@ -310,7 +322,9 @@ public final class CliParser {
     }
 
     private static Command.Extension.Listing parseExtensionList(String[] args, int from) {
-        boolean installed = true, available = false, refresh = false;
+        boolean installed = true;
+        boolean available = false;
+        boolean refresh = false;
         for (int i = from; i < args.length; i++) {
             switch (args[i]) {
                 case "--installed" -> installed = true;
@@ -356,9 +370,9 @@ public final class CliParser {
         cmd(VSCODE,             "Write the VS Code settings, tasks and debug into .vscode/ (mvn vidocq:vscode).");
         cmd(ECLIPSE,            "Write the Eclipse run and debug configurations into .eclipse/ (mvn vidocq:eclipse).");
         cmd(DOCTOR,           "Run environment & project health checks.");
-        cmd("create",           "Scaffold a new Vidocq Maven application.");
+        cmd(CREATE,           "Scaffold a new Vidocq Maven application.");
         cmd("build [type]",     "Build/package the project (package, jlink, jpackage, docker).");
-        cmd("clean",            "Remove build output (mvn clean).");
+        cmd(CLEAN,            "Remove build output (mvn clean).");
         cmd("extension list",   "List installed (and optionally available) extensions.");
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
@@ -428,7 +442,7 @@ public final class CliParser {
                 options("--fix",         "First repair what it can: codegen paths, module-info.java, the wrapper",
                         "--verbose, -v", "Print extra details (per-status summary, minimum Java version)");
             }
-            case "create" -> {
+            case CREATE -> {
                 CliOutput.println(CliOutput.bold("vidocq create") + " — Scaffold a new Vidocq project");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
@@ -445,7 +459,7 @@ public final class CliParser {
                 CliOutput.println("  " + CliOutput.cyan(
                         "vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health"));
             }
-            case "build" -> {
+            case BUILD -> {
                 CliOutput.println(CliOutput.bold("vidocq build") + " — Build & package the project");
                 CliOutput.println();
                 CliOutput.println("Wraps the Vidocq Maven plugin. With no type it runs the package");
@@ -460,20 +474,20 @@ public final class CliParser {
                 CliOutput.println(OPTIONS);
                 opt("--offline, -o",  "Run Maven offline (-o)");
                 opt("--skip-tests",   "Skip tests (-DskipTests)");
-                opt("--dry-run",      "Print the Maven command without running it");
+                opt(DRY_RUN,      "Print the Maven command without running it");
                 opt("-- <args...>",   "Pass everything after -- straight to Maven");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan("vidocq build jlink --skip-tests"));
             }
-            case "clean" -> {
+            case CLEAN -> {
                 CliOutput.println(CliOutput.bold("vidocq clean") + " — Remove build output");
                 CliOutput.println();
                 CliOutput.println("Runs 'mvn clean' in the current project.");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
                 opt("--offline, -o", "Run Maven offline (-o)");
-                opt("--dry-run",     "Print the Maven command without running it");
+                opt(DRY_RUN,     "Print the Maven command without running it");
                 opt("-- <args...>",  "Pass everything after -- straight to Maven");
             }
             case "extension" -> {
@@ -507,7 +521,7 @@ public final class CliParser {
                 CliOutput.println("  " + CliOutput.cyan("vidocq config get vidocq.http.port"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq config set vidocq.http.port 9090"));
             }
-            case "update" -> {
+            case UPDATE -> {
                 CliOutput.println(CliOutput.bold("vidocq update") + " — Update the CLI itself");
                 CliOutput.println();
                 CliOutput.println("A release CLI moves to the latest release on Maven Central (0.3.0 → 0.4.0).");

@@ -65,6 +65,8 @@ import java.util.stream.Stream;
  */
 final class MaterializedDeployment implements AutoCloseable {
 
+    private static final String CLASS_SUFFIX = ".class";
+
     private final Path root;
     private final List<Path> libraries;
     private final URLClassLoader classLoader;
@@ -236,7 +238,7 @@ final class MaterializedDeployment implements AutoCloseable {
     List<String> beanClassNames() throws IOException {
         List<String> names = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(root)) {
-            walk.filter(p -> p.toString().endsWith(".class"))
+            walk.filter(p -> p.toString().endsWith(CLASS_SUFFIX))
                     .forEach(p -> {
                         String relative = root.relativize(p).toString().replace(File.separatorChar, '/');
                         if (relative.startsWith("WEB-INF/") || relative.startsWith("META-INF/")) {
@@ -250,7 +252,7 @@ final class MaterializedDeployment implements AutoCloseable {
             try (JarFile jar = new JarFile(library.toFile())) {
                 for (Enumeration<JarEntry> entries = jar.entries(); entries.hasMoreElements(); ) {
                     JarEntry entry = entries.nextElement();
-                    if (entry.getName().endsWith(".class")) {
+                    if (entry.getName().endsWith(CLASS_SUFFIX)) {
                         addClassName(names, entry.getName());
                     }
                 }
@@ -301,7 +303,7 @@ final class MaterializedDeployment implements AutoCloseable {
         if (resourcePath.contains("module-info")) {
             return;
         }
-        names.add(resourcePath.substring(0, resourcePath.length() - ".class".length())
+        names.add(resourcePath.substring(0, resourcePath.length() - CLASS_SUFFIX.length())
                 .replace('/', '.'));
     }
 

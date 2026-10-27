@@ -186,19 +186,19 @@ final class Csv {
          * @return {@code false}, and nothing appended, when the text would then pass the limit
          */
         boolean add(List<String> fields) {
-            StringBuilder record = new StringBuilder();
+            StringBuilder line = new StringBuilder();
             for (int i = 0; i < fields.size(); i++) {
                 if (i > 0) {
-                    record.append(separator);
+                    line.append(separator);
                 }
-                record.append(field(fields.get(i), separator));
+                line.append(field(fields.get(i), separator));
             }
-            record.append(LINE_END);
-            long size = utf8Length(record);
+            line.append(LINE_END);
+            long size = utf8Length(line);
             if (bytes + size > maxBytes) {
                 return false;
             }
-            text.append(record);
+            text.append(line);
             bytes += size;
             records++;
             return true;

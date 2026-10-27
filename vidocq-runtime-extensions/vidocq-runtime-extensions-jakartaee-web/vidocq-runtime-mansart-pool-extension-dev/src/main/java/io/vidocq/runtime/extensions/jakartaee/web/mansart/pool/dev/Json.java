@@ -40,7 +40,7 @@ final class Json {
     /** How deep a value may nest: the console's own limit. */
     static final int MAX_DEPTH = 64;
 
-    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?");
+    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?");
 
     private final String text;
     private int at;

@@ -80,7 +80,7 @@ final class PeanoAccessorRegistration {
                     if (!entry.provides().asSymbol().equals(service)) builder.provides(entry);
                 builder.provides(ModuleProvideInfo.of(service,new ArrayList<>(providers)));
             });
-            byte[] rewritten=cf.transformClass(model,ClassTransform.dropping(element->element instanceof ModuleAttribute)
+            byte[] rewritten=cf.transformClass(model,ClassTransform.dropping(ModuleAttribute.class::isInstance)
                     .andThen(ClassTransform.endHandler(builder->builder.with(replacement))));
             Files.write(descriptor,rewritten);
             return providers.size()-before;

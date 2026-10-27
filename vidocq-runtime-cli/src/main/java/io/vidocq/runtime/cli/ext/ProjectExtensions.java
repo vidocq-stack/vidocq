@@ -41,6 +41,8 @@ import java.util.Optional;
  */
 public final class ProjectExtensions {
 
+    private static final String POM_XML = "pom.xml";
+
     /**
      * An extension present in the project's runtime classpath.
      *
@@ -73,7 +75,7 @@ public final class ProjectExtensions {
             if (!Files.isRegularFile(cacheFile)) {
                 return Optional.empty();
             }
-            String pomHash = ExtensionCache.hash(Files.readString(projectDir.resolve("pom.xml")));
+            String pomHash = ExtensionCache.hash(Files.readString(projectDir.resolve(POM_XML)));
             return ExtensionCache.read(Files.readString(cacheFile))
                     .filter(e -> ExtensionCache.isValid(e, pomHash, ExtensionCache::fingerprint))
                     .map(ExtensionCache.Entry::extensions);
@@ -91,7 +93,7 @@ public final class ProjectExtensions {
         Resolution resolution = resolve(projectDir, mavenExecutable, resolved);
         if (resolution instanceof Resolution.Resolved r) {
             try {
-                String pomXml = Files.readString(projectDir.resolve("pom.xml"));
+                String pomXml = Files.readString(projectDir.resolve(POM_XML));
                 List<ExtensionCache.Fingerprint> snapshots = new ArrayList<>();
                 for (Path file : ExtensionCache.snapshotFiles(resolved, PomDependencies.parent(pomXml))) {
                     ExtensionCache.Fingerprint fp = ExtensionCache.fingerprint(file);
@@ -120,7 +122,7 @@ public final class ProjectExtensions {
 
     private static Resolution resolve(Path projectDir, String mavenExecutable,
                                       List<ResolvedArtifact> resolvedOut) {
-        Path pom = projectDir.resolve("pom.xml");
+        Path pom = projectDir.resolve(POM_XML);
         Path output = null;
         Path log = null;
         try {

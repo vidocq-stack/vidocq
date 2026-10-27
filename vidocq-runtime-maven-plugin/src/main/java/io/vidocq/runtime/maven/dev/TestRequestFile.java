@@ -57,7 +57,7 @@ final class TestRequestFile implements AutoCloseable {
         String word;
         try {
             word = Files.readString(file, StandardCharsets.UTF_8).strip();
-        } catch (NoSuchFileException none) {
+        } catch (NoSuchFileException _) {
             return Optional.empty();
         } catch (IOException unreadable) {
             return Optional.empty();
@@ -92,7 +92,7 @@ final class TestRequestFile implements AutoCloseable {
                 }
                 try {
                     Thread.sleep(POLL_MILLIS);
-                } catch (InterruptedException stopping) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                     return;
                 }

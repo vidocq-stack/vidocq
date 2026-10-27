@@ -74,8 +74,11 @@ final class TestsPanel implements DevConsolePanel {
     static final String NOTHING_TO_RERUN = "no failed test to rerun";
     static final String UNREADABLE = "results unreadable";
 
+    private static final String FAILURES = "failures";
+    private static final String ERRORS = "errors";
+    private static final String STATE = "state";
     private static final List<Chart> CHARTS = List.of(
-            new Chart("tests", "Tests", List.of(Series.line("failures"), Series.line("errors"))));
+            new Chart(ID, "Tests", List.of(Series.line(FAILURES), Series.line(ERRORS))));
     private static final List<String> FAILURE_COLUMNS = List.of("test", "type", "message");
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
 
@@ -124,7 +127,7 @@ final class TestsPanel implements DevConsolePanel {
                 refresh();
                 try {
                     Thread.sleep(POLL_MILLIS);
-                } catch (InterruptedException stopping) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                     return;
                 }
@@ -161,7 +164,7 @@ final class TestsPanel implements DevConsolePanel {
         try {
             modified = Files.getLastModifiedTime(results).toMillis();
             size = Files.size(results);
-        } catch (IOException noFileYet) {
+        } catch (IOException _) {
             return;
         }
         if (modified == lastModified && size == lastSize) {
@@ -183,7 +186,7 @@ final class TestsPanel implements DevConsolePanel {
         if (!(JsonValues.parse(text, 8) instanceof Map<?, ?> document)) {
             throw new IllegalArgumentException("not a JSON object");
         }
-        String state = string(document, "state");
+        String state = string(document, STATE);
         if (state.isEmpty()) {
             throw new IllegalArgumentException("no state");
         }
@@ -194,7 +197,7 @@ final class TestsPanel implements DevConsolePanel {
         }
         Map<?, ?> counts = shown.get("counts") instanceof Map<?, ?> c ? c : Map.of();
         List<List<String>> rows = new ArrayList<>();
-        if (shown.get("failures") instanceof List<?> failures) {
+        if (shown.get(FAILURES) instanceof List<?> failures) {
             for (Object each : failures) {
                 if (rows.size() >= MAX_ROWS) {
                     break;
@@ -205,8 +208,8 @@ final class TestsPanel implements DevConsolePanel {
             }
         }
         return new View(state, string(document, "trigger"), string(shown, "startedAt"),
-                number(shown, "durationMillis"), new Counts(number(counts, "run"), number(counts, "failures"),
-                number(counts, "errors"), number(counts, "skipped")), List.copyOf(rows), string(document, "log"));
+                number(shown, "durationMillis"), new Counts(number(counts, "run"), number(counts, FAILURES),
+                number(counts, ERRORS), number(counts, "skipped")), List.copyOf(rows), string(document, "log"));
     }
 
     private static String string(Map<?, ?> map, String key) {
@@ -277,13 +280,13 @@ final class TestsPanel implements DevConsolePanel {
     public void sample(PanelSample sample) {
         View current = view.get();
         if (current == null) {
-            sample.text("state", unreadable ? UNREADABLE : "no run yet");
+            sample.text(STATE, unreadable ? UNREADABLE : "no run yet");
             return;
         }
-        sample.text("state", unreadable ? UNREADABLE : stateText(current))
+        sample.text(STATE, unreadable ? UNREADABLE : stateText(current))
                 .gauge("run", current.counts().run(), Unit.COUNT)
-                .gauge("failures", current.counts().failures(), Unit.COUNT)
-                .gauge("errors", current.counts().errors(), Unit.COUNT)
+                .gauge(FAILURES, current.counts().failures(), Unit.COUNT)
+                .gauge(ERRORS, current.counts().errors(), Unit.COUNT)
                 .gauge("skipped", current.counts().skipped(), Unit.COUNT)
                 .table("failed-tests", FAILURE_COLUMNS, current.failures());
     }

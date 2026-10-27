@@ -64,6 +64,8 @@ public final class PostgresDevService implements DevService {
     // it never protects anything outside the developer's machine.
     private static final String DEFAULT_PASSWORD = "vidocq"; // NOSONAR java:S2068 - dev-only container credential
     private static final String DEFAULT_NAME     = "default";
+    private static final String POOL_PREFIX      = "vidocq.pool.";
+    private static final String JDBC_PREFIX      = "jdbc:";
 
     /** On the application's class path, the sign that it talks to PostgreSQL when no URL says so (rule 4). */
     static final String DRIVER = "org.postgresql.Driver";
@@ -191,13 +193,13 @@ public final class PostgresDevService implements DevService {
         Map<String, String> endpoints = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : injected.entrySet()) {
             String key = e.getKey();
-            if (!key.startsWith("vidocq.pool.") || !key.endsWith(".url")) {
+            if (!key.startsWith(POOL_PREFIX) || !key.endsWith(".url")) {
                 continue;
             }
             String name = key.equals("vidocq.pool.url")
                     ? DEFAULT_NAME
-                    : key.substring("vidocq.pool.".length(), key.length() - ".url".length());
-            URI uri = URI.create(e.getValue().substring("jdbc:".length()));
+                    : key.substring(POOL_PREFIX.length(), key.length() - ".url".length());
+            URI uri = URI.create(e.getValue().substring(JDBC_PREFIX.length()));
             endpoints.put(name, uri.getHost() + ":" + uri.getPort());
         }
         return new DevServiceState("postgres", image, endpoints, List.copyOf(injected.keySet()));
@@ -246,9 +248,9 @@ public final class PostgresDevService implements DevService {
      */
     static List<Decision> decide(DevServiceContext ctx) {
         List<Decision> out = new ArrayList<>();
-        out.add(decide(ctx, DEFAULT_NAME, "vidocq.pool.", "vidocq.dev.postgres."));
+        out.add(decide(ctx, DEFAULT_NAME, POOL_PREFIX, "vidocq.dev.postgres."));
         for (String name : parseNames(ctx.property("vidocq.dev.postgres.datasources").orElse(""))) {
-            out.add(decide(ctx, name, "vidocq.pool." + name + ".", "vidocq.dev.postgres." + name + "."));
+            out.add(decide(ctx, name, POOL_PREFIX + name + ".", "vidocq.dev.postgres." + name + "."));
         }
         return out;
     }
@@ -260,8 +262,8 @@ public final class PostgresDevService implements DevService {
         }
         String fileUrl = ctx.applicationProperty(urlKey).map(String::strip).orElse("");
         // A placeholder (${...}) or a scheme with no name is no URL the dev host can read: rule 4 (#166).
-        boolean readable = startsWithIgnoringCase(fileUrl, "jdbc:") && !fileUrl.contains("${")
-                && scheme(fileUrl).length() > "jdbc:".length();
+        boolean readable = startsWithIgnoringCase(fileUrl, JDBC_PREFIX) && !fileUrl.contains("${")
+                && scheme(fileUrl).length() > JDBC_PREFIX.length();
         if (readable) {
             if (!isPostgres(fileUrl)) {
                 return new Decision(name, null, urlKey + " is " + scheme(fileUrl) + ", not PostgreSQL");
@@ -300,7 +302,7 @@ public final class PostgresDevService implements DevService {
      * {@value #MAX_SCHEME} characters. As written, case included: {@code JDBC:H2}.
      */
     static String scheme(String url) {
-        int end = "jdbc:".length();
+        int end = JDBC_PREFIX.length();
         int max = Math.min(url.length(), MAX_SCHEME);
         while (end < max && isNameCharacter(url.charAt(end))) {
             end++;
@@ -322,7 +324,7 @@ public final class PostgresDevService implements DevService {
             return true;
         }
         String scheme = scheme(url);
-        return scheme.length() > "jdbc:".length() && !scheme.equalsIgnoreCase("jdbc:tc")
+        return scheme.length() > JDBC_PREFIX.length() && !scheme.equalsIgnoreCase("jdbc:tc")
                 && url.length() > scheme.length() && url.charAt(scheme.length()) == ':'
                 && url.regionMatches(true, scheme.length() + 1, "postgresql:", 0, "postgresql:".length());
     }

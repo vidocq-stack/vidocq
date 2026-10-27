@@ -66,6 +66,8 @@ final class CsvActions {
     private static final String SEPARATOR_MEMBER = "separator";
     private static final String ENTITY_MEMBER = "entity";
     private static final String CSV_MEMBER = "csv";
+    private static final String STRING_TYPE = "string";
+    private static final String DESCRIPTION = "description";
     private static final List<String> SEPARATORS = List.of(",", ";");
     private static final System.Logger LOG = System.getLogger(CsvActions.class.getName());
 
@@ -154,8 +156,8 @@ final class CsvActions {
 
     /** {@code ,}, the default, or {@code ;}. */
     static Map<String, Object> separatorSchema() {
-        return Scalars.object("type", "string", "enum", SEPARATORS, "default", ",",
-                "description", "between the fields: , or ; as a spreadsheet of a decimal-comma locale reads it");
+        return Scalars.object("type", STRING_TYPE, "enum", SEPARATORS, "default", ",",
+                DESCRIPTION, "between the fields: , or ; as a spreadsheet of a decimal-comma locale reads it");
     }
 
     /** Runs an export with the arguments the console checked, and keeps the call. */
@@ -220,12 +222,12 @@ final class CsvActions {
     Written write(JdqlResult result, Class<?> entity, char separator) {
         Csv.Writer out = new Csv.Writer(separator, MAX_BYTES);
         boolean fits = switch (result) {
-            case JdqlResult.Entities found -> out.add(json.names(entity)) && writeEntities(found.entities(), out);
+            case JdqlResult.Entities(var found) -> out.add(json.names(entity)) && writeEntities(found, out);
             case JdqlResult.Rows rows -> out.add(rows.columns()) && writeRows(rows, out);
-            case JdqlResult.Count count -> out.add(List.of("count"))
-                    && out.add(List.of(Long.toString(count.count())));
-            case JdqlResult.Value value -> out.add(List.of("value"))
-                    && out.add(Collections.singletonList(cell(value.value())));
+            case JdqlResult.Count(var count) -> out.add(List.of("count"))
+                    && out.add(List.of(Long.toString(count)));
+            case JdqlResult.Value(var value) -> out.add(List.of("value"))
+                    && out.add(Collections.singletonList(cell(value)));
         };
         return fits ? new Written(out.text(), out.records() - 1L, out.bytes()) : null;
     }
@@ -324,10 +326,10 @@ final class CsvActions {
 
     /** What the page shows under "Exchange" for an export: the entity, the statement, its parameters, the separator. */
     private static String exportDetails(Class<?> entity, Export export) {
-        return Json.write(Scalars.object("entity", entity == null ? null : entity.getName(),
-                "query", export == null ? null : export.query(),
-                "params", export == null ? Map.of() : export.params(),
-                "separator", export == null ? null : String.valueOf(export.separator())));
+        return Json.write(Scalars.object(ENTITY_MEMBER, entity == null ? null : entity.getName(),
+                QUERY_MEMBER, export == null ? null : export.query(),
+                PARAMS_MEMBER, export == null ? Map.of() : export.params(),
+                SEPARATOR_MEMBER, export == null ? null : String.valueOf(export.separator())));
     }
 
     /**
@@ -350,11 +352,11 @@ final class CsvActions {
     /** The JSON Schema of {@value #FILE}: the entity, one of {@code entities}; the CSV text; the separator. */
     static String importSchema(List<String> entities) {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        ENTITY_MEMBER, Scalars.object("type", "string", "enum", entities,
-                                "description", "the entity each row becomes"),
-                        CSV_MEMBER, Scalars.object("type", "string", "format", "textarea",
+                        ENTITY_MEMBER, Scalars.object("type", STRING_TYPE, "enum", entities,
+                                DESCRIPTION, "the entity each row becomes"),
+                        CSV_MEMBER, Scalars.object("type", STRING_TYPE, "format", "textarea",
                                 "contentMediaType", "text/csv",
-                                "description", "a header of attribute names, then one row per entity"),
+                                DESCRIPTION, "a header of attribute names, then one row per entity"),
                         SEPARATOR_MEMBER, separatorSchema()),
                 "required", List.of(ENTITY_MEMBER, CSV_MEMBER)));
     }
@@ -439,26 +441,26 @@ final class CsvActions {
             throw new JdqlActions.Refused(Failures.text(unreadable));
         }
         List<Row> rows = new ArrayList<>(lines.size());
-        for (Csv.Record record : lines) {
-            int count = record.fields().size();
+        for (Csv.Record csvRecord : lines) {
+            int count = csvRecord.fields().size();
             if (count != header.size()) {
-                throw new JdqlActions.Refused("line " + record.line() + ": " + count
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + count
                         + (count == 1 ? " field" : " fields") + ", the header has " + header.size());
             }
             try {
-                rows.add(new Row(record.line(), build.build(record.fields())));
+                rows.add(new Row(csvRecord.line(), build.build(csvRecord.fields())));
             } catch (ArgumentException refused) {
-                throw new JdqlActions.Refused("line " + record.line() + ", " + refused.getMessage());
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ", " + refused.getMessage());
             } catch (RuntimeException | LinkageError failed) {
-                throw new JdqlActions.Refused("line " + record.line() + ": " + Failures.text(failed));
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + Failures.text(failed));
             }
         }
         return rows;
     }
 
     /** Whether a record is what a blank line reads as: one empty unquoted field. */
-    private static boolean isBlank(Csv.Record record) {
-        return record.fields().size() == 1 && record.fields().getFirst() == null;
+    private static boolean isBlank(Csv.Record csvRecord) {
+        return csvRecord.fields().size() == 1 && csvRecord.fields().getFirst() == null;
     }
 
     /** The header: each name an attribute an import may set, once each. */
@@ -520,14 +522,14 @@ final class CsvActions {
         int count = outcome.value();
         String summary = ResultJson.count(count) + " saved" + (outcome.state() == null ? "" : " · " + outcome.state());
         return new PanelAction.ActionResult(summary, PanelAction.ActionResult.JSON, Json.write(Scalars.object(
-                "entity", entity.getName(), "saved", count, "transaction", mode)), false, details);
+                ENTITY_MEMBER, entity.getName(), "saved", count, "transaction", mode)), false, details);
     }
 
     /** What the page shows under "Exchange" for an import: the entity, the rows read, the separator, the transaction. */
     private static String importDetails(Class<?> entity, List<Row> rows, Load load, String mode) {
-        return Json.write(Scalars.object("entity", entity == null ? null : entity.getName(),
+        return Json.write(Scalars.object(ENTITY_MEMBER, entity == null ? null : entity.getName(),
                 "rows", rows == null ? null : rows.size(),
-                "separator", load == null ? null : String.valueOf(load.separator()),
+                SEPARATOR_MEMBER, load == null ? null : String.valueOf(load.separator()),
                 "transaction", mode));
     }
 

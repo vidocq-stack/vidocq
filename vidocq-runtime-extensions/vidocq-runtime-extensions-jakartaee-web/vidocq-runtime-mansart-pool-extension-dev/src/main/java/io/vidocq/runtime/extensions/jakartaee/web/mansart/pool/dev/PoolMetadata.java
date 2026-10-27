@@ -109,8 +109,12 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
         String schema = currentSchema(connection);
         String quote = meta.getIdentifierQuoteString();
         char identifierQuote = quote == null || quote.isBlank() ? '"' : quote.charAt(0);
-        String unquotedCase = meta.storesLowerCaseIdentifiers() ? "lower"
-                : meta.storesUpperCaseIdentifiers() ? "upper" : null;
+        String unquotedCase = null;
+        if (meta.storesLowerCaseIdentifiers()) {
+            unquotedCase = "lower";
+        } else if (meta.storesUpperCaseIdentifiers()) {
+            unquotedCase = "upper";
+        }
         List<String> keywords = meta.getSQLKeywords() == null ? List.of()
                 : Arrays.stream(meta.getSQLKeywords().split(",")).map(String::strip).filter(w -> !w.isEmpty())
                 .map(w -> w.toUpperCase(Locale.ROOT)).distinct().toList();
@@ -182,11 +186,11 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
         if (name.contains("(") || size <= 0) {
             return name;
         }
+        String scale = digits > 0 ? "," + digits : "";
         return switch (jdbcType) {
             case Types.CHAR, Types.VARCHAR, Types.NCHAR, Types.NVARCHAR, Types.BINARY, Types.VARBINARY ->
                     size < 1_000_000 ? name + "(" + size + ")" : name;
-            case Types.NUMERIC, Types.DECIMAL -> size < 1000 ? name + "(" + size + (digits > 0 ? "," + digits : "")
-                    + ")" : name;
+            case Types.NUMERIC, Types.DECIMAL -> size < 1000 ? name + "(" + size + scale + ")" : name;
             default -> name;
         };
     }

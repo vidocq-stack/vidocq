@@ -78,6 +78,10 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
     /** The invoker provider bean exists; the container builds it when the first MCP method is invoked. */
     static final String BUILT_AT_FIRST_CALL = "built at the first call";
 
+    private static final String INVOKER_METHODS = "invoker.methods";
+    private static final String INVOKER_MATCHES = "invoker.matches";
+    private static final String INVOKER_MISSES = "invoker.misses";
+
     /**
      * Resolves the beans of the MCP server, once, without creating any of them.
      *
@@ -160,21 +164,21 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
     /** The three invoker values, or the same absence for the three: they come from one bean. */
     private void sampleInvoker(PanelSample out) {
         if (invoker == null) {
-            out.absent("invoker.methods", REFLECTION)
-                    .absent("invoker.matches", REFLECTION)
-                    .absent("invoker.misses", REFLECTION);
+            out.absent(INVOKER_METHODS, REFLECTION)
+                    .absent(INVOKER_MATCHES, REFLECTION)
+                    .absent(INVOKER_MISSES, REFLECTION);
             return;
         }
         McpCdi41InvokerProvider provider = instance(invoker, McpCdi41InvokerProvider.class);
         if (provider == null) {
-            out.absent("invoker.methods", BUILT_AT_FIRST_CALL)
-                    .absent("invoker.matches", BUILT_AT_FIRST_CALL)
-                    .absent("invoker.misses", BUILT_AT_FIRST_CALL);
+            out.absent(INVOKER_METHODS, BUILT_AT_FIRST_CALL)
+                    .absent(INVOKER_MATCHES, BUILT_AT_FIRST_CALL)
+                    .absent(INVOKER_MISSES, BUILT_AT_FIRST_CALL);
             return;
         }
-        out.gauge("invoker.methods", provider.size(), Unit.COUNT)
-                .counter("invoker.matches", provider.matchCount(), Unit.COUNT)
-                .counter("invoker.misses", provider.missCount(), Unit.COUNT);
+        out.gauge(INVOKER_METHODS, provider.size(), Unit.COUNT)
+                .counter(INVOKER_MATCHES, provider.matchCount(), Unit.COUNT)
+                .counter(INVOKER_MISSES, provider.missCount(), Unit.COUNT);
     }
 
     /** A gauge read from an existing instance, or the absence that says why there is no number. */

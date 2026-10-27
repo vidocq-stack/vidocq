@@ -70,6 +70,10 @@ final class LogsPanel implements DevConsolePanel {
 
     /** The panel's id, reserved by the core for the console. */
     static final String ID = "logs";
+    private static final String WARNINGS = "warnings";
+    private static final String ERRORS = "errors";
+    private static final String LEVEL = "level";
+    private static final String LOGGER = "logger";
     /** The rows of the records table: the console's own limit. */
     static final int MAX_ROWS = 100;
     /** The levels the action accepts, from the most severe. */
@@ -83,9 +87,9 @@ final class LogsPanel implements DevConsolePanel {
 
     private static final String ROOT = "(root)";
     private static final List<Chart> CHARTS = List.of(
-            new Chart("problems", "Warnings and errors", List.of(Series.rate("warnings"), Series.rate("errors"))));
-    private static final List<String> RECORD_COLUMNS = List.of("time", "level", "logger", "thread", "message");
-    private static final List<String> LEVEL_COLUMNS = List.of("logger", "level", "set");
+            new Chart("problems", "Warnings and errors", List.of(Series.rate(WARNINGS), Series.rate(ERRORS))));
+    private static final List<String> RECORD_COLUMNS = List.of("time", LEVEL, LOGGER, "thread", "message");
+    private static final List<String> LEVEL_COLUMNS = List.of(LOGGER, LEVEL, "set");
 
     /** A logger whose level the action set, held so that it keeps it, and the level it had before. */
     private record Change(Logger logger, Level previous) {}
@@ -155,8 +159,7 @@ final class LogsPanel implements DevConsolePanel {
         synchronized (changes) {
             stopped = true;
             List<Change> set = new ArrayList<>(changes.values());
-            Collections.reverse(set);
-            for (Change change : set) {
+            for (Change change : set.reversed()) {
                 change.logger().setLevel(change.previous());
             }
             changes.clear();
@@ -198,8 +201,8 @@ final class LogsPanel implements DevConsolePanel {
     @Override
     public List<PanelAction> actions() {
         return List.of(new PanelAction("set-level", "Set level", null,
-                List.of(PanelAction.Argument.matching("logger", "Logger (empty for the root)", LOGGER_PATTERN),
-                        PanelAction.Argument.oneOf("level", "Level", LEVELS.toArray(String[]::new))),
+                List.of(PanelAction.Argument.matching(LOGGER, "Logger (empty for the root)", LOGGER_PATTERN),
+                        PanelAction.Argument.oneOf(LEVEL, "Level", LEVELS.toArray(String[]::new))),
                 this::setLevel));
     }
 
@@ -210,8 +213,8 @@ final class LogsPanel implements DevConsolePanel {
      * @return what was done, such as {@code io.vidocq.cassini at FINE until the next reload}
      */
     String setLevel(Map<String, String> arguments) {
-        String name = Objects.requireNonNull(arguments.get("logger"), "logger");
-        Level level = Level.parse(Objects.requireNonNull(arguments.get("level"), "level"));
+        String name = Objects.requireNonNull(arguments.get(LOGGER), LOGGER);
+        Level level = Level.parse(Objects.requireNonNull(arguments.get(LEVEL), LEVEL));
         Logger logger = name.isEmpty() ? root : Logger.getLogger(name);
         synchronized (changes) {
             if (stopped) {
@@ -231,10 +234,10 @@ final class LogsPanel implements DevConsolePanel {
             return;
         }
         if (elsewhere != null) {
-            sample.absent("warnings", elsewhere).absent("errors", elsewhere).absent("records", elsewhere);
+            sample.absent(WARNINGS, elsewhere).absent(ERRORS, elsewhere).absent("records", elsewhere);
         } else {
-            sample.counter("warnings", current.warnings(), Unit.COUNT)
-                    .counter("errors", current.errors(), Unit.COUNT);
+            sample.counter(WARNINGS, current.warnings(), Unit.COUNT)
+                    .counter(ERRORS, current.errors(), Unit.COUNT);
             List<List<String>> rows = new ArrayList<>();
             for (LogRing.Line line : current.latest(MAX_ROWS)) {
                 rows.add(List.of(line.time(), line.level(), LogRing.shortName(line.logger()), line.thread(),

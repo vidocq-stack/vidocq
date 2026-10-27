@@ -67,12 +67,15 @@ final class HealthPanel {
     /** The reason a check, or a probe, has no value: no probe request ran it since the application started. */
     static final String NEVER_CALLED = "never called";
 
+    private static final String CHECKS = "checks";
+    private static final String STATUS = "status";
+
     /** The checks UP and DOWN of each probe, over time. */
     static final List<Chart> CHARTS = List.of(
-            new Chart("checks", "Checks UP / DOWN", List.of(Series.area("up"), Series.stacked("down"))));
+            new Chart(CHECKS, "Checks UP / DOWN", List.of(Series.area("up"), Series.stacked("down"))));
 
     /** The keys a group writes itself. */
-    private static final Set<String> RESERVED = Set.of("status", "up", "down", "checks", "omitted");
+    private static final Set<String> RESERVED = Set.of(STATUS, "up", "down", CHECKS, "omitted");
 
     /** The checks whose two values fit in a group, beside the reserved keys: 64 values per scope. */
     static final int MAX_CHECK_VALUES = (64 - 5) / 2;
@@ -81,7 +84,7 @@ final class HealthPanel {
     private static final int MAX_ROWS = 100;
 
     private static final List<ProbeType> PROBES = List.of(ProbeType.LIVENESS, ProbeType.READINESS, ProbeType.STARTUP);
-    private static final List<String> COLUMNS = List.of("check", "name", "status", "at", "data");
+    private static final List<String> COLUMNS = List.of("check", "name", STATUS, "at", "data");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT);
 
     private HealthPanel() {}
@@ -142,16 +145,16 @@ final class HealthPanel {
             }
         }
         if (up + down == 0) {
-            group.absent("status", NEVER_CALLED);
+            group.absent(STATUS, NEVER_CALLED);
         } else {
-            group.text("status", down > 0 ? "DOWN" : "UP")
+            group.text(STATUS, down > 0 ? "DOWN" : "UP")
                     .gauge("up", up, names.size(), Unit.COUNT)
                     .gauge("down", down, names.size(), Unit.COUNT);
         }
         if (written < names.size()) {
             group.text("omitted", (names.size() - written) + " checks omitted");
         }
-        group.table("checks", COLUMNS, rows);
+        group.table(CHECKS, COLUMNS, rows);
     }
 
     private static String time(CheckResult result, ZoneId zone) {

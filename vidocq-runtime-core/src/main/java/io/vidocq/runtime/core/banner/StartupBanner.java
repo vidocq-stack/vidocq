@@ -224,8 +224,8 @@ public final class StartupBanner {
             case OFF -> Output.NONE;
             case CONSOLE -> Output.CONSOLE;
             case LOG -> Output.LOG;
-            case AUTO -> launch.embeddedDeployment() || launch.testRuntime() ? Output.IDENTITY_ONLY
-                    : terminal || launch.devLaunch() ? Output.CONSOLE
+            case AUTO -> !(launch.embeddedDeployment() || launch.testRuntime()) && (terminal || launch.devLaunch())
+                    ? Output.CONSOLE
                     : Output.IDENTITY_ONLY;
         };
     }
@@ -242,7 +242,7 @@ public final class StartupBanner {
         }
         try {
             return BannerMode.valueOf(raw.get().strip().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
+        } catch (IllegalArgumentException _) {
             LOG.log(System.Logger.Level.WARNING, "Configuration key ''{0}'' has an unknown value ''{1}''"
                     + " (expected auto, console, log or off); using auto", MODE_KEY, raw.get());
             return BannerMode.AUTO;
@@ -328,7 +328,10 @@ public final class StartupBanner {
                               Function<String, Optional<String>> config) {
         if (key.startsWith("ansi.")) {
             String code = ansi(key.substring("ansi.".length()));
-            return code == null ? null : colors ? code : "";
+            if (code == null) {
+                return null;
+            }
+            return colors ? code : "";
         }
         return switch (key) {
             case "vidocq.version" -> identity.vidocq().version();
@@ -418,9 +421,11 @@ public final class StartupBanner {
     }
 
     private static Optional<String> readResource(Object owner, String name) {
-        try (InputStream in = owner instanceof Class<?> type ? type.getResourceAsStream(name)
-                : owner instanceof ClassLoader loader ? loader.getResourceAsStream(name)
-                : ClassLoader.getSystemResourceAsStream(name)) {
+        try (InputStream in = switch (owner) {
+                    case Class<?> type -> type.getResourceAsStream(name);
+                    case ClassLoader loader -> loader.getResourceAsStream(name);
+                    case null, default -> ClassLoader.getSystemResourceAsStream(name);
+                }) {
             return in == null ? Optional.empty() : Optional.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException | RuntimeException unreadable) {
             return Optional.empty();

@@ -215,9 +215,14 @@ public final class CoreSections {
         List<Line> lines = new ArrayList<>();
         for (Extension extension : extensions) {
             names.add(extension.name());
-            String onStart = extension.failed() ? "onStart failed"
-                    : extension.onStartNanos() < 0 ? "not started"
-                    : "onStart " + extension.onStartNanos() / 1_000_000 + " ms";
+            String onStart;
+            if (extension.failed()) {
+                onStart = "onStart failed";
+            } else if (extension.onStartNanos() < 0) {
+                onStart = "not started";
+            } else {
+                onStart = "onStart " + extension.onStartNanos() / 1_000_000 + " ms";
+            }
             String where = extension.layer() == null || allInBootLayer ? extension.module()
                     : extension.module() + " (" + extension.layer() + ")";
             if (!extension.namespaces().isEmpty()) {

@@ -77,15 +77,18 @@ final class JvmPanel implements DevConsolePanel {
     static final String ID = "jvm";
 
     private static final String NOT_AVAILABLE = "not available";
+    private static final String HEAP_USED = "heap.used";
+    private static final String THREADS = "threads";
+    private static final String COLLECTIONS = "collections";
     private static final long MIB = 1024L * 1024;
     private static final long GIB = 1024L * MIB;
     private static final List<Chart> CHARTS = List.of(
             new Chart("memory", "Memory",
-                    List.of(Series.area("heap.used"), Series.line("heap.committed"), Series.ceiling("heap.used"))),
+                    List.of(Series.area(HEAP_USED), Series.line("heap.committed"), Series.ceiling(HEAP_USED))),
             new Chart("nonheap", "Non-heap", List.of(Series.area("nonheap.used"))),
-            new Chart("threads", "Threads", List.of(Series.line("threads"), Series.line("threads.daemon"))),
+            new Chart(THREADS, "Threads", List.of(Series.line(THREADS), Series.line("threads.daemon"))),
             new Chart("cpu", "CPU load", List.of(Series.line("cpu.process"), Series.line("cpu.system"))),
-            new Chart("gc", "Garbage collection", List.of(Series.rate("time"), Series.rate("collections"))));
+            new Chart("gc", "Garbage collection", List.of(Series.rate("time"), Series.rate(COLLECTIONS))));
 
     private final MemoryMXBean memory = ManagementFactory.getMemoryMXBean();
     private final ThreadMXBean threads = ManagementFactory.getThreadMXBean();
@@ -150,10 +153,10 @@ final class JvmPanel implements DevConsolePanel {
     public void sample(PanelSample sample) {
         MemoryUsage heap = memory.getHeapMemoryUsage();
         MemoryUsage nonHeap = memory.getNonHeapMemoryUsage();
-        sample.gauge("heap.used", heap.getUsed(), ceiling(heap), Unit.BYTES)
+        sample.gauge(HEAP_USED, heap.getUsed(), ceiling(heap), Unit.BYTES)
                 .gauge("heap.committed", heap.getCommitted(), Unit.BYTES)
                 .gauge("nonheap.used", nonHeap.getUsed(), nonHeap.getMax(), Unit.BYTES)
-                .gauge("threads", threads.getThreadCount(), Unit.COUNT)
+                .gauge(THREADS, threads.getThreadCount(), Unit.COUNT)
                 .gauge("threads.daemon", threads.getDaemonThreadCount(), Unit.COUNT)
                 .gauge("threads.peak", threads.getPeakThreadCount(), Unit.COUNT)
                 .gauge("classes", classes.getLoadedClassCount(), Unit.COUNT)
@@ -171,9 +174,9 @@ final class JvmPanel implements DevConsolePanel {
             long count = collector.getCollectionCount();
             long millis = collector.getCollectionTime();
             if (count < 0 || millis < 0) {
-                group.absent("collections", NOT_AVAILABLE).absent("time", NOT_AVAILABLE);
+                group.absent(COLLECTIONS, NOT_AVAILABLE).absent("time", NOT_AVAILABLE);
             } else {
-                group.counter("collections", count, Unit.COUNT)
+                group.counter(COLLECTIONS, count, Unit.COUNT)
                         .counter("time", millis * 1_000_000L, Unit.NANOS);
             }
         }
@@ -224,7 +227,7 @@ final class JvmPanel implements DevConsolePanel {
     private static double read(DoubleSupplier figure) {
         try {
             return figure.getAsDouble();
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return Double.NaN;
         }
     }

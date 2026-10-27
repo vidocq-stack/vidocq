@@ -54,7 +54,9 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
     private final AtomicReference<KnockLiveBean> live = new AtomicReference<>(KnockLiveBean.NONE);
 
     /** Created by the {@link java.util.ServiceLoader}. */
-    public KnockHealthExtension() {}
+    public KnockHealthExtension() {
+        // nothing to set up: the work starts in the lifecycle callbacks
+    }
 
     @Override
     public String name() {

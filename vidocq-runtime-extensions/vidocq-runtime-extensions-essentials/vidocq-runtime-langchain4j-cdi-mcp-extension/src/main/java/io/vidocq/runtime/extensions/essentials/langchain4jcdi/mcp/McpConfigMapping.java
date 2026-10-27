@@ -96,7 +96,7 @@ final class McpConfigMapping {
     private static McpMrtrMode mrtrMode(String value) {
         try {
             return McpMrtrMode.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException unknown) {
+        } catch (IllegalArgumentException _) {
             throw invalid(MRTR_MODE, "REPLAY or CONTINUATION");
         }
     }
@@ -113,7 +113,7 @@ final class McpConfigMapping {
             Duration duration;
             try {
                 duration = Duration.parse(value);
-            } catch (DateTimeParseException unparsable) {
+            } catch (DateTimeParseException _) {
                 throw invalid(key, "an ISO-8601 duration such as PT10M");
             }
             if (duration.isNegative()) {

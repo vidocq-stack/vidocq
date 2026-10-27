@@ -37,7 +37,7 @@ import java.util.regex.Pattern;
  */
 final class JsonValues {
 
-    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?");
+    private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?");
 
     private final String text;
     private final int maxDepth;
@@ -264,7 +264,7 @@ final class JsonValues {
         if (number.indexOf('.') < 0 && number.indexOf('e') < 0 && number.indexOf('E') < 0) {
             try {
                 return Long.parseLong(number);
-            } catch (NumberFormatException tooLarge) {
+            } catch (NumberFormatException _) {
                 // an integer past a long: a double, as JavaScript would read it
             }
         }

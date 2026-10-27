@@ -76,6 +76,11 @@ final class DevMcp {
     /** How deep the snapshot's own values nest, well past what it writes. */
     private static final int SNAPSHOT_DEPTH = 64;
     private static final String READ_ONLY = " Read-only: it changes nothing in the application.";
+    private static final String JSONRPC = "jsonrpc";
+    private static final String METHOD = "method";
+    private static final String PANELS = "panels";
+    private static final String TITLE = "title";
+    private static final String STARTUP = "startup";
 
     private final Snapshot snapshot;
     private final String version;
@@ -99,7 +104,7 @@ final class DevMcp {
         String body;
         try {
             body = ConsoleActions.body(request, MAX_BODY);
-        } catch (ConsoleActions.TooLarge tooLarge) {
+        } catch (ConsoleActions.TooLarge _) {
             return ConsoleActions.text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + MAX_BODY
                     + " bytes.");
         } catch (IOException | RuntimeException unreadable) {
@@ -125,18 +130,18 @@ final class DevMcp {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "A batch is not supported: send one "
                     + "request per POST."));
         }
-        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get("jsonrpc"))) {
+        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get(JSONRPC))) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
         Object id = request.get("id");
         boolean hasId = request.containsKey("id");
-        if (!request.containsKey("method")) {
+        if (!request.containsKey(METHOD)) {
             // a response from the client, which this server never asked for anything: nothing to answer
             return hasId && (request.containsKey("result") || request.containsKey("error"))
                     ? accepted()
                     : answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
-        if (!(request.get("method") instanceof String method)) {
+        if (!(request.get(METHOD) instanceof String method)) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "The method is not a string."));
         }
         if (!hasId) {
@@ -184,7 +189,7 @@ final class DevMcp {
     /** The tools, {@code vidocq_panel}'s ids those of the panels the console shows now. */
     private List<Object> tools() {
         List<Object> ids = new ArrayList<>();
-        for (Object panel : list(document().get("panels"))) {
+        for (Object panel : list(document().get(PANELS))) {
             ids.add(map(panel).get("id"));
         }
         Map<String, Object> id = new LinkedHashMap<>();
@@ -216,12 +221,12 @@ final class DevMcp {
         }
         schema.put("additionalProperties", false);
         Map<String, Object> annotations = new LinkedHashMap<>();
-        annotations.put("title", title);
+        annotations.put(TITLE, title);
         annotations.put("readOnlyHint", true);
         annotations.put("openWorldHint", false);
         Map<String, Object> tool = new LinkedHashMap<>();
         tool.put("name", name);
-        tool.put("title", title);
+        tool.put(TITLE, title);
         tool.put("description", description);
         tool.put("inputSchema", schema);
         tool.put("annotations", annotations);
@@ -240,23 +245,23 @@ final class DevMcp {
         Map<String, Object> document = document();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("state", document.get("state"));
-        Map<?, ?> startup = document.get("startup") == null ? null : map(document.get("startup"));
+        Map<?, ?> startup = document.get(STARTUP) == null ? null : map(document.get(STARTUP));
         switch (name) {
             case "vidocq_report" -> {
                 out.put("console", document.get("console"));
-                out.put("startup", startup);
+                out.put(STARTUP, startup);
             }
             case "vidocq_panels" -> {
                 List<Object> panels = new ArrayList<>();
-                for (Object each : list(document.get("panels"))) {
+                for (Object each : list(document.get(PANELS))) {
                     Map<?, ?> panel = map(each);
                     Map<String, Object> shown = new LinkedHashMap<>();
-                    for (String key : List.of("id", "title", "live", "summary")) {
+                    for (String key : List.of("id", TITLE, "live", "summary")) {
                         shown.put(key, panel.get(key));
                     }
                     panels.add(shown);
                 }
-                out.put("panels", panels);
+                out.put(PANELS, panels);
             }
             case "vidocq_panel" -> {
                 if (!(named.get("id") instanceof String id)) {
@@ -264,7 +269,7 @@ final class DevMcp {
                 }
                 Object found = null;
                 List<Object> ids = new ArrayList<>();
-                for (Object each : list(document.get("panels"))) {
+                for (Object each : list(document.get(PANELS))) {
                     ids.add(map(each).get("id"));
                     if (id.equals(map(each).get("id"))) {
                         found = each;
@@ -292,7 +297,7 @@ final class DevMcp {
      * the URL and the handler, as the report writes a route.
      */
     private static List<Object> routes(Map<String, Object> document, Map<?, ?> startup) {
-        List<Object> sections = new ArrayList<>(list(document.get("panels")));
+        List<Object> sections = new ArrayList<>(list(document.get(PANELS)));
         if (startup != null) {
             sections.addAll(list(startup.get("sections")));
         }
@@ -310,7 +315,7 @@ final class DevMcp {
                     continue;
                 }
                 Map<String, Object> route = new LinkedHashMap<>();
-                route.put("method", cells.get(1));
+                route.put(METHOD, cells.get(1));
                 route.put("url", cells.get(2));
                 route.put("handler", cells.get(3));
                 routes.add(route);
@@ -356,7 +361,7 @@ final class DevMcp {
     }
 
     private static String result(Object id, Object result) {
-        JsonWriter out = new JsonWriter().beginObject().name("jsonrpc").value("2.0").name("id");
+        JsonWriter out = new JsonWriter().beginObject().name(JSONRPC).value("2.0").name("id");
         JsonValues.write(out, id);
         out.name("result");
         JsonValues.write(out, result);
@@ -364,7 +369,7 @@ final class DevMcp {
     }
 
     private static String error(Object id, int code, String message) {
-        JsonWriter out = new JsonWriter().beginObject().name("jsonrpc").value("2.0").name("id");
+        JsonWriter out = new JsonWriter().beginObject().name(JSONRPC).value("2.0").name("id");
         JsonValues.write(out, id);
         return out.name("error").beginObject().name("code").value(code).name("message").value(message).endObject()
                 .endObject().toString();

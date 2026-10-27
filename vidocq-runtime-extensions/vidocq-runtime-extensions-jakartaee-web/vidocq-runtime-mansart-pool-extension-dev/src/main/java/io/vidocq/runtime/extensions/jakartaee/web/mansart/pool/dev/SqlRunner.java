@@ -157,11 +157,15 @@ final class SqlRunner {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("sql", sql);
         details.put("params", params);
-        details.put("transaction", reads ? "read-only" : commit ? COMMIT : ROLLBACK);
-        String refusal = sql.isBlank() ? "sql: missing"
-                : SqlText.severalStatements(sql, identifierQuote) ? "one statement at a time"
-                : reads && !SqlText.READS.contains(SqlText.firstWord(sql, identifierQuote))
-                ? "Query only reads: use Execute" : null;
+        details.put("transaction", transaction(reads, commit));
+        String refusal = null;
+        if (sql.isBlank()) {
+            refusal = "sql: missing";
+        } else if (SqlText.severalStatements(sql, identifierQuote)) {
+            refusal = "one statement at a time";
+        } else if (reads && !SqlText.READS.contains(SqlText.firstWord(sql, identifierQuote))) {
+            refusal = "Query only reads: use Execute";
+        }
         SqlText.Named named = SqlText.named(sql, identifierQuote);
         for (String name : named.names()) {
             if (refusal == null && !params.containsKey(name)) {
@@ -196,7 +200,7 @@ final class SqlRunner {
                 } else {
                     connection.rollback();
                 }
-                return result(answer, reads ? null : commit ? "committed" : "rolled back", start, details);
+                return result(answer, outcome(reads, commit), start, details);
             } catch (SQLException | RuntimeException failed) {
                 quietly(connection::rollback);
                 throw failed;
@@ -261,7 +265,29 @@ final class SqlRunner {
 
     /** {@code no row}, {@code 1 row}, {@code N rows}, or {@code first N rows} when there are more. */
     static String count(long n, boolean more) {
-        return more ? "first " + n + " rows" : n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
+        if (more) {
+            return "first " + n + " rows";
+        }
+        if (n == 0) {
+            return "no row";
+        }
+        return n == 1 ? "1 row" : n + " rows";
+    }
+
+    /** The transaction a statement runs in, as the details show it. */
+    private static String transaction(boolean reads, boolean commit) {
+        if (reads) {
+            return "read-only";
+        }
+        return commit ? COMMIT : ROLLBACK;
+    }
+
+    /** What became of a statement's transaction, as the summary shows it; {@code null} for a read. */
+    private static String outcome(boolean reads, boolean commit) {
+        if (reads) {
+            return null;
+        }
+        return commit ? "committed" : "rolled back";
     }
 
     /** Binds each {@code ?} of the statement to the parameter of that name, strings and nulls as {@code binding}. */

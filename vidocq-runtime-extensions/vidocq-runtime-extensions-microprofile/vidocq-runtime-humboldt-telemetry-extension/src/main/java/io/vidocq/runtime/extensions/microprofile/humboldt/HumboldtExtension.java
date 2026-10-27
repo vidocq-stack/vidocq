@@ -227,7 +227,7 @@ public final class HumboldtExtension implements VidocqExtension {
                 java.util.Objects.requireNonNullElse(value, java.util.Optional.<String>empty()).ifPresent(v -> env.put(
                         name.toUpperCase(Locale.ROOT).replace('.', '_'), v));
             }
-        } catch (ReflectiveOperationException | RuntimeException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException _) {
             // MP Config absent from the assembled runtime — not an error.
         }
     }

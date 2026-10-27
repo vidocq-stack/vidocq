@@ -55,7 +55,8 @@ import java.util.regex.Pattern;
  */
 final class SharedResources {
 
-    private static final Pattern VERSIONED = Pattern.compile("META-INF/versions/[0-9]+/");
+    private static final Pattern VERSIONED = Pattern.compile("META-INF/versions/\\d+/");
+    private static final String CLASS_SUFFIX = ".class";
     private static final Pattern SIGNATURE = Pattern.compile("META-INF/[^/]+\\.(SF|RSA|DSA|EC)");
 
     /** A resource directory, as {@code a/b/}, and the file names of the staged jars holding it, both sorted. */
@@ -76,7 +77,7 @@ final class SharedResources {
                         continue;
                     }
                     holders.computeIfAbsent(dir, d -> new TreeSet<>()).add(name);
-                    if (entry.getName().endsWith(".class")) {
+                    if (entry.getName().endsWith(CLASS_SUFFIX)) {
                         withClasses.computeIfAbsent(dir, d -> new TreeSet<>()).add(name);
                     }
                 }
@@ -124,7 +125,7 @@ final class SharedResources {
                 try (JarFile in = new JarFile(stage.resolve(jar).toFile())) {
                     for (JarEntry entry : Collections.list(in.entries())) {
                         if (s.directory().equals(directoryOf(entry))) {
-                            if (entry.getName().endsWith(".class")) {
+                            if (entry.getName().endsWith(CLASS_SUFFIX)) {
                                 classes = true;
                             } else {
                                 try (InputStream is = in.getInputStream(entry)) {
@@ -200,7 +201,7 @@ final class SharedResources {
         }
         var versioned = VERSIONED.matcher(name);
         if (versioned.lookingAt()) {
-            if (!name.endsWith(".class")) {
+            if (!name.endsWith(CLASS_SUFFIX)) {
                 return null;
             }
             name = name.substring(versioned.end());

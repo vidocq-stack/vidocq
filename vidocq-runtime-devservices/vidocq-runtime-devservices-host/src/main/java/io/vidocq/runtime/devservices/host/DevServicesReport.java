@@ -38,6 +38,7 @@ import java.util.TreeMap;
 public final class DevServicesReport {
 
     private static final String POOL_PREFIX = "vidocq.pool.";
+    private static final String USERNAME_FIELD = "username";
 
     /** First line of the console block — deliberately tool-neutral (not "DataGrip", not "psql"). */
     public static final String CONSOLE_HEADER = "Connection information:";
@@ -126,7 +127,7 @@ public final class DevServicesReport {
             append(sb, p, "url", c.url());
             append(sb, p, "host", c.host());
             append(sb, p, "port", c.port());
-            append(sb, p, "username", c.username());
+            append(sb, p, USERNAME_FIELD, c.username());
             append(sb, p, "password", c.password());
         }
         return sb.toString();
@@ -152,7 +153,7 @@ public final class DevServicesReport {
                 host = authority;
             }
         }
-        return new Coordinates(name, url, host, port, fields.get("username"), fields.get("password"));
+        return new Coordinates(name, url, host, port, fields.get(USERNAME_FIELD), fields.get("password"));
     }
 
     /**
@@ -191,7 +192,7 @@ public final class DevServicesReport {
     }
 
     private static boolean isField(String s) {
-        return s.equals("url") || s.equals("username") || s.equals("password");
+        return s.equals("url") || s.equals(USERNAME_FIELD) || s.equals("password");
     }
 
     private static boolean allDigits(String s) {

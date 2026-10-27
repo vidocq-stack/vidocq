@@ -50,6 +50,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class DevServiceManager implements AutoCloseable {
 
+    /** How a log line or an error names a dev service, its id and a closing quote following. */
+    private static final String DEV_SERVICE = "DevService '";
+
     private final List<DevService> started = new ArrayList<>();
     private final List<Map<String, String>> outputs = new ArrayList<>();
     private final Map<String, String> collected = new LinkedHashMap<>();
@@ -80,14 +83,14 @@ public final class DevServiceManager implements AutoCloseable {
                 if (!p.appliesWhen(ctx)) {
                     String reason = skipReason(p, ctx, log);
                     if (reason == null) {
-                        log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' skipped (already configured)");
+                        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' skipped (already configured)");
                     } else {
-                        log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' not started: " + reason);
+                        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' not started: " + reason);
                         mgr.skipped.add(new Skipped(p.id(), reason));
                     }
                     continue;
                 }
-                log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' starting…");
+                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' starting…");
                 Map<String, String> props = p.start(ctx);
                 mgr.started.add(p);
                 mgr.outputs.add(props != null ? props : Map.of());
@@ -96,10 +99,10 @@ public final class DevServiceManager implements AutoCloseable {
                     props.keySet().forEach(key -> mgr.providers.put(key, p.id()));
                     ctx.merge(props);
                 }
-                log.log(System.Logger.Level.INFO, "DevService '" + p.id() + "' started");
+                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' started");
             } catch (Exception e) {
                 mgr.close(); // roll back the providers already started, in reverse order
-                throw new DevServicesException("DevService '" + p.id() + "' failed to start: "
+                throw new DevServicesException(DEV_SERVICE + p.id() + "' failed to start: "
                         + e.getMessage() + " — set -Dvidocq.dev.devServices=false to skip", e);
             } catch (Throwable t) {
                 // An Error (e.g. a NoClassDefFoundError from a provider's dependencies) still rolls back the
@@ -134,7 +137,7 @@ public final class DevServiceManager implements AutoCloseable {
         try {
             reason = p.skipReason(ctx);
         } catch (RuntimeException e) {
-            log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' skipReason() threw "
+            log.log(System.Logger.Level.WARNING, DEV_SERVICE + p.id() + "' skipReason() threw "
                     + e.getClass().getName());
             return null;
         }
@@ -172,7 +175,7 @@ public final class DevServiceManager implements AutoCloseable {
             try {
                 state = p.describe(injected);
             } catch (RuntimeException e) {
-                log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' describe() threw "
+                log.log(System.Logger.Level.WARNING, DEV_SERVICE + p.id() + "' describe() threw "
                         + e.getClass().getName() + " — falling back to a minimal state");
                 state = DevServiceState.minimal(p.id(), injected.keySet());
             }
@@ -193,7 +196,7 @@ public final class DevServiceManager implements AutoCloseable {
             } catch (RuntimeException e) {
                 // Best-effort teardown: keep stopping the remaining providers. The class only, never the
                 // message, which may carry a secret.
-                log.log(System.Logger.Level.WARNING, "DevService '" + p.id() + "' stop() threw "
+                log.log(System.Logger.Level.WARNING, DEV_SERVICE + p.id() + "' stop() threw "
                         + e.getClass().getName() + " — its container may still be running");
             }
         }

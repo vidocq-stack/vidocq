@@ -71,6 +71,12 @@ final class IdeaApplications {
     static final String CONFIGURATION_NAME_PROPERTY = "vidocq.idea.configurationName";
     /** The IntelliJ module of an application, by default its artifactId. */
     static final String MODULE_NAME_PROPERTY = "vidocq.idea.moduleName";
+
+    /** The compile phase and goal, and the ids Maven gives the compiler's default executions. */
+    private static final String COMPILE = "compile";
+    private static final String DEFAULT_COMPILE = "default-compile";
+    private static final String DEFAULT_TEST_COMPILE = "default-testCompile";
+
     /**
      * Settings read from each module's own model. A command-line {@code -D} does not change them, and no goal
      * parameter reads them.
@@ -338,7 +344,7 @@ final class IdeaApplications {
         int port;
         try {
             port = Integer.parseInt(value.strip());
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             errors.add(PREFIX + coordinates + ": vidocq.dev.debugPort \"" + value + "\" is not a valid port number.");
             return 0;
         }
@@ -466,9 +472,9 @@ final class IdeaApplications {
         List<PluginExecution> executions = compiler.getExecutions();
         if (!executions.isEmpty()) {
             PluginExecution compile = executions.stream()
-                    .filter(e -> isExecutionOf(e, "compile", "compile", "default-compile")).findFirst().orElse(null);
+                    .filter(e -> isExecutionOf(e, COMPILE, COMPILE, DEFAULT_COMPILE)).findFirst().orElse(null);
             PluginExecution testCompile = executions.stream()
-                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", "default-testCompile"))
+                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", DEFAULT_TEST_COMPILE))
                     .findFirst().orElse(null);
             Xpp3Dom compileArgs = child(compile, "compilerArgs");
             Xpp3Dom testCompileArgs = child(testCompile, "compilerArgs");
@@ -476,10 +482,10 @@ final class IdeaApplications {
                 return "compile and testCompile use different compilerArgs";
             }
             Xpp3Dom compileToolchain = executions.stream()
-                    .filter(e -> isExecutionOf(e, "compile", "compile", "default-compile"))
+                    .filter(e -> isExecutionOf(e, COMPILE, COMPILE, DEFAULT_COMPILE))
                     .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
             Xpp3Dom testToolchain = executions.stream()
-                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", "default-testCompile"))
+                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", DEFAULT_TEST_COMPILE))
                     .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
             if (!Objects.equals(compileToolchain, testToolchain)) {
                 return "compile and testCompile use different jdkToolchain";
@@ -487,9 +493,9 @@ final class IdeaApplications {
             for (PluginExecution execution : executions) {
                 Xpp3Dom roots = child(execution, "compileSourceRoots");
                 if (roots != null && roots.getChildCount() > 0
-                        && (execution.getPhase() == null || "compile".equals(execution.getPhase()))
-                        && !"default-compile".equals(execution.getId())
-                        && !"default-testCompile".equals(execution.getId())) {
+                        && (execution.getPhase() == null || COMPILE.equals(execution.getPhase()))
+                        && !DEFAULT_COMPILE.equals(execution.getId())
+                        && !DEFAULT_TEST_COMPILE.equals(execution.getId())) {
                     return "execution '" + execution.getId() + "' adds compileSourceRoots";
                 }
             }

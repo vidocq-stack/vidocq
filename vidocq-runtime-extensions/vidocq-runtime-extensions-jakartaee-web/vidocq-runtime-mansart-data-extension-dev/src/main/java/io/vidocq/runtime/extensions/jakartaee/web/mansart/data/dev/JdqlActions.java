@@ -180,7 +180,10 @@ final class JdqlActions {
                                          String mode, long start, String details) {
         // A query runs in a transaction that is always rolled back, when there is a transaction manager: it is
         // read-only whatever it holds, should a statement that writes ever pass for a query.
-        String runs = write ? mode : transactions.available() ? TransactionRunner.ROLLBACK : null;
+        String runs = mode;
+        if (!write) {
+            runs = transactions.available() ? TransactionRunner.ROLLBACK : null;
+        }
         TransactionRunner.Outcome<ResultJson.Result> outcome = transactions.run(runs, () -> {
             JdqlResult result = runner.run(statement.query(), statement.params(), model, runtime,
                     ResultJson.MAX_ROWS + 1);
@@ -209,8 +212,8 @@ final class JdqlActions {
      */
     static ResultJson.Result shown(JdqlResult result, EntityModel<?> model, EntityJson entities) {
         return switch (result) {
-            case JdqlResult.Entities found -> ResultJson.rows(found.entities(), model, entities);
-            case JdqlResult.Rows rows -> ResultJson.rows(rows.columns(), rows.rows(), model, entities);
+            case JdqlResult.Entities(var found) -> ResultJson.rows(found, model, entities);
+            case JdqlResult.Rows(var columns, var rows) -> ResultJson.rows(columns, rows, model, entities);
             default -> answer(result, false, entities);
         };
     }
@@ -221,12 +224,12 @@ final class JdqlActions {
      */
     static ResultJson.Result answer(JdqlResult result, boolean write, EntityJson entities) {
         return switch (result) {
-            case JdqlResult.Entities found -> ResultJson.of(found.entities(), false, entities);
-            case JdqlResult.Rows rows -> ResultJson.table(rows.columns(), rows.rows(), entities);
-            case JdqlResult.Count count -> new ResultJson.Result(Long.toString(count.count()),
-                    write ? ResultJson.count(count.count()) : Long.toString(count.count()), false);
-            case JdqlResult.Value value -> {
-                Object node = ResultJson.node(value.value(), entities);
+            case JdqlResult.Entities(var found) -> ResultJson.of(found, false, entities);
+            case JdqlResult.Rows(var columns, var rows) -> ResultJson.table(columns, rows, entities);
+            case JdqlResult.Count(var count) -> new ResultJson.Result(Long.toString(count),
+                    write ? ResultJson.count(count) : Long.toString(count), false);
+            case JdqlResult.Value(var value) -> {
+                Object node = ResultJson.node(value, entities);
                 yield new ResultJson.Result(Json.write(node), String.valueOf(node), false);
             }
         };
@@ -364,7 +367,7 @@ final class JdqlActions {
     Object runtime() throws Refused {
         try {
             return beans.reference(RepositoryRuntime.class);
-        } catch (RuntimeException | LinkageError none) {
+        } catch (RuntimeException | LinkageError _) {
             throw new Refused("no RepositoryRuntime bean");
         }
     }
@@ -388,8 +391,8 @@ final class JdqlActions {
     /** What the page shows under "Exchange": the entity, the statement, its parameters, the transaction asked. */
     private static String details(Class<?> entity, Statement statement, String mode) {
         return Json.write(Scalars.object("entity", entity == null ? null : entity.getName(),
-                "query", statement == null ? null : statement.query(),
-                "params", statement == null ? Map.of() : statement.params(),
+                QUERY_MEMBER, statement == null ? null : statement.query(),
+                PARAMS_MEMBER, statement == null ? Map.of() : statement.params(),
                 "transaction", mode == null ? "read-only" : mode));
     }
 

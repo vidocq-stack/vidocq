@@ -36,7 +36,9 @@ public final class MetricsLivePanel implements LivePanel {
     private final AtomicReference<DiracLiveBean> live = new AtomicReference<>(DiracLiveBean.NONE);
 
     /** Created by the service loader. */
-    public MetricsLivePanel() {}
+    public MetricsLivePanel() {
+        // nothing to set up: the panel binds to the running application when it starts
+    }
 
     @Override
     public String id() {

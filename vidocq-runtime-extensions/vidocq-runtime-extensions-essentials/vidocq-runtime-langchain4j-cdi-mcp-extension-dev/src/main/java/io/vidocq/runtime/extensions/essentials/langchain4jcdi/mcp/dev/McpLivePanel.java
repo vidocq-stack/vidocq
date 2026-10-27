@@ -59,7 +59,9 @@ public final class McpLivePanel implements LivePanel {
     private final AtomicReference<McpInspector> inspector = new AtomicReference<>(McpInspector.OFF);
 
     /** Created by the service loader. */
-    public McpLivePanel() {}
+    public McpLivePanel() {
+        // nothing to set up: the panel binds to the running application when it starts
+    }
 
     @Override
     public String id() {

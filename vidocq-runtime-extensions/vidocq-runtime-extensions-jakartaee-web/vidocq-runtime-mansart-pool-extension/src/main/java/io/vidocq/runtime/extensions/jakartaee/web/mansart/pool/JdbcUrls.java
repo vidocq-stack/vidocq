@@ -66,6 +66,7 @@ final class JdbcUrls {
 
     /** What a URL shows once nothing can be read: its sub-protocol, when it has a readable one, then an ellipsis. */
     private static final String ELLIPSIS = "…";
+    private static final String JDBC_PREFIX = "jdbc:";
 
     /** What a parameter or setting key holds, ignoring case, when its value is a credential. */
     private static final List<String> SECRET_KEYS =
@@ -178,7 +179,7 @@ final class JdbcUrls {
         if (sub == null) {
             return null;
         }
-        int subEnd = "jdbc:".length() + sub.length();
+        int subEnd = JDBC_PREFIX.length() + sub.length();
         int headEnd = firstOf(url, "?;", subEnd);
         String head = url.substring(0, headEnd);
         boolean removed = false;
@@ -349,7 +350,7 @@ final class JdbcUrls {
      * @return the sub-protocol as written, or {@code null} when there is none
      */
     private static String subProtocol(String url) {
-        if (url == null || !url.regionMatches(true, 0, "jdbc:", 0, 5)) {
+        if (url == null || !url.regionMatches(true, 0, JDBC_PREFIX, 0, 5)) {
             return null;
         }
         int colon = url.indexOf(':', 5);
@@ -369,6 +370,6 @@ final class JdbcUrls {
     /** What a URL that cannot be read shows: {@code jdbc:<sub-protocol>:…}, or {@code jdbc:…}. */
     private static String failClosed(String url) {
         String sub = subProtocol(url);
-        return sub == null ? "jdbc:" + ELLIPSIS : "jdbc:" + sub + ":" + ELLIPSIS;
+        return sub == null ? JDBC_PREFIX + ELLIPSIS : JDBC_PREFIX + sub + ":" + ELLIPSIS;
     }
 }

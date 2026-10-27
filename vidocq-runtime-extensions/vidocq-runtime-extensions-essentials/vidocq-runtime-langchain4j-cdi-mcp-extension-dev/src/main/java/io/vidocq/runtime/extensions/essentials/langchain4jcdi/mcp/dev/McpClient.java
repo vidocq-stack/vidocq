@@ -174,7 +174,7 @@ final class McpClient implements AutoCloseable {
         HttpResponse<String> response;
         try {
             response = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException slow) {
+        } catch (TimeoutException _) {
             future.cancel(true);
             throw new McpTransportException("timed out after " + timeout.toSeconds() + " s");
         } catch (ExecutionException failed) {
@@ -317,7 +317,7 @@ final class McpClient implements AutoCloseable {
     private static JsonObject object(String text) {
         try (JsonReader reader = Json.createReader(new StringReader(text))) {
             return reader.readObject();
-        } catch (JsonException | IllegalStateException notAnObject) {
+        } catch (JsonException | IllegalStateException _) {
             return null;
         }
     }

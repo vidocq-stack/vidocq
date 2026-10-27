@@ -72,6 +72,9 @@ public final class StartupContributors {
      */
     static final int MAX_DISCOVERY_FAILURES = 50;
 
+    private static final String CONTRIBUTOR = "Startup report contributor ";
+    private static final String SECTION_SKIPPED = "); its section is skipped";
+
     private StartupContributors() {}
 
     /**
@@ -143,8 +146,8 @@ public final class StartupContributors {
             try {
                 contributor = provider.get();
             } catch (ServiceConfigurationError | RuntimeException | LinkageError e) {
-                recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, "Startup report contributor " + className
-                        + " could not be created (" + describe(e) + "); its section is skipped", null,
+                recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, CONTRIBUTOR + className
+                        + " could not be created (" + describe(e) + SECTION_SKIPPED, null,
                         StartupRecorder.CORE, e);
                 continue;
             }
@@ -219,7 +222,7 @@ public final class StartupContributors {
             return null;
         }
         if (id == null || id.isBlank()) {
-            recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, "Startup report contributor " + className
+            recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, CONTRIBUTOR + className
                     + " has no id; its section is skipped", null, StartupRecorder.CORE);
             return null;
         }
@@ -304,12 +307,12 @@ public final class StartupContributors {
 
     private static void notLoaded(Throwable e, StartupRecorder recorder) {
         recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, "A startup report contributor could not be loaded ("
-                + describe(e) + "); its section is skipped", null, StartupRecorder.CORE, e);
+                + describe(e) + SECTION_SKIPPED, null, StartupRecorder.CORE, e);
     }
 
     private static void failedToGive(String what, String className, Throwable e, StartupRecorder recorder) {
-        recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, "Startup report contributor " + className
-                + " failed to give its " + what + " (" + describe(e) + "); its section is skipped", null,
+        recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, CONTRIBUTOR + className
+                + " failed to give its " + what + " (" + describe(e) + SECTION_SKIPPED, null,
                 StartupRecorder.CORE, e);
     }
 

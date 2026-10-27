@@ -48,7 +48,9 @@ public class McpServerConfigProducer {
     static final AtomicReference<McpServerConfig> CONFIG = new AtomicReference<>();
 
     /** CDI constructor. */
-    public McpServerConfigProducer() {}
+    public McpServerConfigProducer() {
+        // nothing to set up: the producer method reads the configuration the extension published
+    }
 
     /**
      * The mapped configuration.

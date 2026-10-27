@@ -78,10 +78,11 @@ public record BuildInfo(String module, String version, String commit, Boolean di
 
     private static final String MAVEN_DIR = "META-INF/maven/";
     private static final String POM_PROPERTIES = "/pom.properties";
+    private static final String PROPERTIES_SUFFIX = ".properties";
 
     /** The build identity file of {@code artifactId}: one name per artifact, so class-path jars never collide. */
     public static String resource(String artifactId) {
-        return BUILD_INFO_DIR + artifactId + ".properties";
+        return BUILD_INFO_DIR + artifactId + PROPERTIES_SUFFIX;
     }
 
     /** What is known about the archive of {@code anchor}: its named module, or its class-path code source. */
@@ -148,7 +149,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
 
     private static BuildInfo read(String module, String rawVersion, URI location, Archive archive) throws IOException {
         List<String> buildInfos = archive.names(BUILD_INFO_DIR).stream()
-                .filter(n -> n.endsWith(".properties") && n.indexOf('/', BUILD_INFO_DIR.length()) < 0)
+                .filter(n -> n.endsWith(PROPERTIES_SUFFIX) && n.indexOf('/', BUILD_INFO_DIR.length()) < 0)
                 .toList();
         List<String> poms = archive.names(MAVEN_DIR).stream()
                 .filter(n -> n.endsWith(POM_PROPERTIES) && n.split("/").length == 5)
@@ -161,7 +162,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
         }
         if (pomEntry == null && buildInfoEntry != null) {
             String artifactId = buildInfoEntry.substring(BUILD_INFO_DIR.length(),
-                    buildInfoEntry.length() - ".properties".length());
+                    buildInfoEntry.length() - PROPERTIES_SUFFIX.length());
             pomEntry = poms.stream().filter(p -> artifactIdOf(p).equals(artifactId)).findFirst().orElse(null);
         }
         Properties build = load(archive, buildInfoEntry);
@@ -209,7 +210,12 @@ public record BuildInfo(String module, String version, String commit, Boolean di
      * directory, whose {@code ?} already says the version may not be the one running.
      */
     public String describe(boolean lastMavenBuildLabel) {
-        String text = version == null ? "version unknown" : exploded ? version + "?" : version;
+        String text;
+        if (version == null) {
+            text = "version unknown";
+        } else {
+            text = exploded ? version + "?" : version;
+        }
         String details = details(lastMavenBuildLabel);
         return details == null ? text : text + " (" + details + ")";
     }
@@ -289,7 +295,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
         }
         try {
             return OffsetDateTime.parse(v).toInstant().truncatedTo(ChronoUnit.SECONDS);
-        } catch (DateTimeParseException e) {
+        } catch (DateTimeParseException _) {
             return null;
         }
     }

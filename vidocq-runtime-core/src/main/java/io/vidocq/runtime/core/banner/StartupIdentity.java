@@ -226,7 +226,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
                     try {
                         byBrick.put(brick, BuildInfo.ofClass(Class.forName(anchor, false, loader)));
                         break;
-                    } catch (ClassNotFoundException | LinkageError absent) {
+                    } catch (ClassNotFoundException | LinkageError _) {
                         // this brick is not on the class path
                     }
                 }
@@ -273,7 +273,10 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
                            boolean withConsole) {
         List<String> parts = new ArrayList<>(5);
         parts.add(java(withVendor));
-        String mode = launch == null ? null : withReason ? launch.text() : launch.shortText();
+        String mode = null;
+        if (launch != null) {
+            mode = withReason ? launch.text() : launch.shortText();
+        }
         if (mode != null) {
             parts.add(mode);
         }

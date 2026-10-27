@@ -50,7 +50,6 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -193,16 +192,16 @@ public final class VidocqBootstrap {
      * description) and thrown as it is.
      */
     public VidocqBootstrap configure() {
-        StartupRecorder recorder = new StartupRecorder();
-        this.recorder = recorder;
-        recorder.begin("configure");
+        StartupRecorder configuring = new StartupRecorder();
+        this.recorder = configuring;
+        configuring.begin("configure");
         try {
-            configure(recorder);
+            configure(configuring);
         } catch (RuntimeException | Error e) {
             bootFailed(e);
             throw e;
         }
-        recorder.end();
+        configuring.end();
         return this;
     }
 
@@ -259,10 +258,10 @@ public final class VidocqBootstrap {
         if (recorder == null) {
             recorder = new StartupRecorder();
         }
-        StartupRecorder recorder = this.recorder;
+        StartupRecorder booting = this.recorder;
         try {
-            boot(recorder);
-            report(recorder);
+            boot(booting);
+            report(booting);
         } catch (RuntimeException | Error e) {
             bootFailed(e);
             stopFailedBoot();
@@ -515,9 +514,8 @@ public final class VidocqBootstrap {
 
     /** Calls the {@code onStop} of each of {@code extensions}, last first; one that fails is logged. */
     private static void stopInReverse(List<VidocqExtension> extensions) {
-        List<VidocqExtension> reversed = new ArrayList<>(extensions);
-        Collections.reverse(reversed);
-        for (VidocqExtension ext : reversed) {
+        List<VidocqExtension> started = new ArrayList<>(extensions);
+        for (VidocqExtension ext : started.reversed()) {
             try {
                 ext.onStop();
             } catch (Exception | LinkageError e) {

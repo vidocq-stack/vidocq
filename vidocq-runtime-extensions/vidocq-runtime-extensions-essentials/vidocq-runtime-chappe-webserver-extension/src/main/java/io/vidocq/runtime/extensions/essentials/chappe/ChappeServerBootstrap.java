@@ -60,6 +60,7 @@ import java.util.Optional;
 public final class ChappeServerBootstrap implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(ChappeServerBootstrap.class.getName());
+    private static final String LISTENER = "Chappe listener '";
 
     /**
      * Published aliases for the listener named {@code default}. They are the discoverable names —
@@ -141,18 +142,18 @@ public final class ChappeServerBootstrap implements VidocqExtension {
         mountPoint.recordBound(l.name(), bound);
 
         if (fellBack) {
-            LOG.log(System.Logger.Level.WARNING, "Chappe listener '" + l.name() + "': port " + l.port()
+            LOG.log(System.Logger.Level.WARNING, LISTENER + l.name() + "': port " + l.port()
                     + " is taken, listening on port " + bound.getPort() + " instead");
         }
         LOG.log(options.quiet() ? System.Logger.Level.DEBUG : System.Logger.Level.INFO,
-                "Chappe listener '" + l.name() + "' started on " + ChappeListener.httpUrl(bound));
+                LISTENER + l.name() + "' started on " + ChappeListener.httpUrl(bound));
 
         if (options.onBound() != null) {
             try {
                 options.onBound().accept(bound);
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING,
-                        "Chappe listener '" + l.name() + "': its onBound callback failed", e);
+                        LISTENER + l.name() + "': its onBound callback failed", e);
             }
         }
     }
@@ -182,9 +183,8 @@ public final class ChappeServerBootstrap implements VidocqExtension {
 
     @Override
     public void onStop() {
-        List<Server> reversed = new ArrayList<>(servers);
-        Collections.reverse(reversed);
-        for (Server s : reversed) {
+        List<Server> started = new ArrayList<>(servers);
+        for (Server s : started.reversed()) {
             try {
                 s.stop();
             } catch (Exception e) {

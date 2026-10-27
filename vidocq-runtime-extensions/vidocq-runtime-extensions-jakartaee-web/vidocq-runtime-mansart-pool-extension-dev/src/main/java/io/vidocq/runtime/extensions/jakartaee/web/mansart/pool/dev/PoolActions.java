@@ -79,6 +79,8 @@ final class PoolActions {
 
     private static final String SQL_MEMBER = "sql";
     private static final String PARAMS_MEMBER = "params";
+    /** The JDBC metadata column that names a column. */
+    private static final String COLUMN_NAME = "COLUMN_NAME";
     private static final System.Logger LOG = System.getLogger(PoolActions.class.getName());
 
     private final String label;
@@ -239,7 +241,7 @@ final class PoolActions {
                 views += table.view() ? 1 : 0;
             }
             int tables = rows.size() - views;
-            return ActionResult.rows(plural(tables, "table") + (views == 0 ? "" : ", " + plural(views, "view")),
+            return ActionResult.rows(plural(tables, TABLE) + (views == 0 ? "" : ", " + plural(views, "view")),
                     TABLE_COLUMNS, rows, false);
         });
     }
@@ -259,7 +261,7 @@ final class PoolActions {
             Map<String, Short> primary = new LinkedHashMap<>();
             try (ResultSet found = meta.getPrimaryKeys(metadata.catalog(), table.schema(), table.name())) {
                 while (found.next()) {
-                    primary.put(found.getString("COLUMN_NAME"), found.getShort("KEY_SEQ"));
+                    primary.put(found.getString(COLUMN_NAME), found.getShort("KEY_SEQ"));
                 }
             }
             Map<String, String> foreign = new LinkedHashMap<>();
@@ -278,12 +280,16 @@ final class PoolActions {
                             || !table.name().equals(found.getString("TABLE_NAME"))) {
                         continue;
                     }
-                    String name = found.getString("COLUMN_NAME");
-                    String nullable = found.getString("IS_NULLABLE");
+                    String name = found.getString(COLUMN_NAME);
+                    Boolean nullable = switch (found.getString("IS_NULLABLE")) {
+                        case "YES" -> Boolean.TRUE;
+                        case "NO" -> Boolean.FALSE;
+                        case null, default -> null;
+                    };
                     rows.add(Arrays.asList(name, PoolMetadata.sqlType(found.getString("TYPE_NAME"),
                                     found.getInt("DATA_TYPE"), found.getInt("COLUMN_SIZE"),
                                     found.getInt("DECIMAL_DIGITS")),
-                            "YES".equals(nullable) ? Boolean.TRUE : "NO".equals(nullable) ? Boolean.FALSE : null,
+                            nullable,
                             found.getString("COLUMN_DEF"), primary.get(name), foreign.get(name)));
                 }
             }
@@ -301,7 +307,7 @@ final class PoolActions {
                 String index = found.getString("INDEX_NAME");
                 if (index != null && found.getShort("TYPE") != DatabaseMetaData.tableIndexStatistic) {
                     byName.computeIfAbsent(index, name -> new TreeMap<>()).put(found.getShort("ORDINAL_POSITION"),
-                            Objects.requireNonNullElse(found.getString("COLUMN_NAME"), "?"));
+                            Objects.requireNonNullElse(found.getString(COLUMN_NAME), "?"));
                 }
             }
         }
