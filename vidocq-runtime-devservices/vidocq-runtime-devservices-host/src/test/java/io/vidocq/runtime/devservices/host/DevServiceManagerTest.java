@@ -194,8 +194,10 @@ class DevServiceManagerTest {
             }
         };
 
+        List<DevService> providers = List.of(a, b);
+        DefaultDevServiceContext context = ctx();
         NoClassDefFoundError e = assertThrows(NoClassDefFoundError.class,
-                () -> DevServiceManager.start(List.of(a, b), ctx(), LOG));
+                () -> DevServiceManager.start(providers, context, LOG));
 
         assertEquals("org/testcontainers/Missing", e.getMessage());
         assertEquals(1, a.stopCount, "the provider already started is stopped");
@@ -300,7 +302,7 @@ class DevServiceManagerTest {
         @Override public int order() { return 200; }
         @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
         @Override public Map<String, String> start(DevServiceContext ctx) { return Map.of(); }
-        @Override public void stop() {}
+        @Override public void stop() { /* started nothing, so nothing to stop */ }
     }
 
     /** Captures every line logged through it, as {@code "LEVEL message"}. */

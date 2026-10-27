@@ -135,7 +135,7 @@ class CsvTest {
         assertEquals(List.of(row("a", "b"), row((String) null), row("1", "2")),
                 fields(Csv.read("a,b\r\n\r\n1,2\r\n", ',')));
         assertEquals(List.of(3, 2, 4), Csv.read("a,b,c\r\n1,2\r\n1,2,3,4\r\n", ',').stream()
-                .map(record -> record.fields().size()).toList());
+                .map(row -> row.fields().size()).toList());
     }
 
     @Test

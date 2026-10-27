@@ -105,16 +105,18 @@ class MigrationExtensionTest {
 
     @Test
     void selectThrowsOnEmpty() {
-        assertThrows(IllegalStateException.class,
-                () -> MigrationExtension.select(List.of(), Optional.empty()));
+        List<SchemaMigrator> none = List.of();
+        Optional<String> anyEngine = Optional.empty();
+        assertThrows(IllegalStateException.class, () -> MigrationExtension.select(none, anyEngine));
     }
 
     @Test
     void selectThrowsAmbiguousWhenNoEngine() {
         var fly = new FakeMigrator("flyway");
         var liq = new FakeMigrator("liquibase");
-        assertThrows(IllegalStateException.class,
-                () -> MigrationExtension.select(List.of(fly, liq), Optional.empty()));
+        List<SchemaMigrator> both = List.of(fly, liq);
+        Optional<String> anyEngine = Optional.empty();
+        assertThrows(IllegalStateException.class, () -> MigrationExtension.select(both, anyEngine));
     }
 
     @Test

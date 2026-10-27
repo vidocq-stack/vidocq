@@ -100,12 +100,14 @@ class ActionResultTest {
     void aRowOfAnotherWidthOrANameOrATypePast200CharactersIsRefused() {
         List<Column> two = List.of(new Column("a", ""), new Column("b", ""));
 
+        List<List<Integer>> ragged = List.of(List.of(1, 2), List.of(3));
         IllegalArgumentException width = assertThrows(IllegalArgumentException.class,
-                () -> ActionResult.rows("x", two, List.of(List.of(1, 2), List.of(3)), false));
+                () -> ActionResult.rows("x", two, ragged, false));
         assertEquals("row 1 has 1 values for 2 columns", width.getMessage());
         assertEquals("y".repeat(200), new Column("y".repeat(200), "t").name());
-        assertThrows(IllegalArgumentException.class, () -> new Column("y".repeat(201), "t"));
-        assertThrows(IllegalArgumentException.class, () -> new Column("y", "t".repeat(201)));
+        String tooLong = "y".repeat(201);
+        assertThrows(IllegalArgumentException.class, () -> new Column(tooLong, "t"));
+        assertThrows(IllegalArgumentException.class, () -> new Column("y", tooLong));
         assertThrows(NullPointerException.class, () -> new Column(null, "t"));
     }
 

@@ -34,9 +34,9 @@ final class LogRecords implements AutoCloseable {
     private final List<LogRecord> records = new ArrayList<>();
     private final Handler handler = new Handler() {
         @Override
-        public void publish(LogRecord record) {
+        public void publish(LogRecord logRecord) {
             synchronized (records) {
-                records.add(record);
+                records.add(logRecord);
             }
         }
 
@@ -74,8 +74,8 @@ final class LogRecords implements AutoCloseable {
     }
 
     /** The formatted message of one record. */
-    static String message(LogRecord record) {
-        return new SimpleFormatter().formatMessage(record);
+    static String message(LogRecord logRecord) {
+        return new SimpleFormatter().formatMessage(logRecord);
     }
 
     @Override

@@ -47,7 +47,7 @@ class RestMountTest {
     @Provider
     static class AuditFilter implements ContainerRequestFilter, ExceptionMapper<IllegalStateException> {
         @Override
-        public void filter(ContainerRequestContext context) {}
+        public void filter(ContainerRequestContext context) { /* only its registration is tested */ }
 
         @Override
         public Response toResponse(IllegalStateException exception) {
@@ -113,8 +113,11 @@ class RestMountTest {
         RestMount mount = RestMount.of("vidocq.rest", "default", "/api", true,
                 classes(TaskResource.class, AuditFilter.class), List.of(LIST), null);
 
-        assertThrows(UnsupportedOperationException.class, () -> mount.routes().clear());
-        assertThrows(UnsupportedOperationException.class, () -> mount.resources().clear());
-        assertThrows(UnsupportedOperationException.class, () -> mount.providerGroups().getFirst().classes().clear());
+        var routes = mount.routes();
+        var resources = mount.resources();
+        var providerClasses = mount.providerGroups().getFirst().classes();
+        assertThrows(UnsupportedOperationException.class, routes::clear);
+        assertThrows(UnsupportedOperationException.class, resources::clear);
+        assertThrows(UnsupportedOperationException.class, providerClasses::clear);
     }
 }

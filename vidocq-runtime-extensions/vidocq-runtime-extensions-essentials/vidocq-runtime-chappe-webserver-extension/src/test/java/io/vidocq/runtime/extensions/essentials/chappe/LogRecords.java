@@ -35,9 +35,9 @@ final class LogRecords implements AutoCloseable {
     private final List<LogRecord> records = new ArrayList<>();
     private final Handler handler = new Handler() {
         @Override
-        public void publish(LogRecord record) {
+        public void publish(LogRecord logRecord) {
             synchronized (records) {
-                records.add(record);
+                records.add(logRecord);
             }
         }
 

@@ -115,7 +115,7 @@ class VidocqDataSourcesProcessorTest {
                 for (URL u : ucl.getURLs()) {
                     try {
                         entries.add(new File(u.toURI()).getAbsolutePath());
-                    } catch (Exception ignored) {
+                    } catch (Exception _) {
                         // non-file URL — skip
                     }
                 }

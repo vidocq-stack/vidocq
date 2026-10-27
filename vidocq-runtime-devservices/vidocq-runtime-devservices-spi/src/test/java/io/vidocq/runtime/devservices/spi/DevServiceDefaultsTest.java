@@ -56,7 +56,7 @@ class DevServiceDefaultsTest {
             @Override public String id() { return "old"; }
             @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
             @Override public Map<String, String> start(DevServiceContext ctx) { return Map.of(); }
-            @Override public void stop() { }
+            @Override public void stop() { /* never applies, so never started */ }
         };
 
         assertNull(provider.skipReason(OLD_CONTEXT));

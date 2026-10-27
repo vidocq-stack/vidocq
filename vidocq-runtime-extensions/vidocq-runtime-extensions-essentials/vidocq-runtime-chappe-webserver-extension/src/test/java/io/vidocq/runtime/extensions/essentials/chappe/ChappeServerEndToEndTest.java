@@ -104,7 +104,7 @@ class ChappeServerEndToEndTest {
     }
 
     @Test
-    void beforeAndAfterHooksExecuted() throws Exception {
+    void beforeAndAfterHooksExecuted() {
         AtomicBoolean before = new AtomicBoolean();
         AtomicBoolean after = new AtomicBoolean();
         ChappeMountPoint.instance().addBeforeStartHook(() -> before.set(true));

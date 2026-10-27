@@ -214,7 +214,7 @@ final class TestPanels {
                         runs.add(arguments);
                         try {
                             release.await(10, TimeUnit.SECONDS);
-                        } catch (InterruptedException interrupted) {
+                        } catch (InterruptedException _) {
                             Thread.currentThread().interrupt();
                         }
                         return "finally";

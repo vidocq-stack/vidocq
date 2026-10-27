@@ -79,8 +79,8 @@ class NamedDataSourceRegistryTest {
         @Override public Connection getConnection()                          { throw new UnsupportedOperationException(); }
         @Override public Connection getConnection(String u, String p)        { throw new UnsupportedOperationException(); }
         @Override public PrintWriter getLogWriter()                          { return null; }
-        @Override public void setLogWriter(PrintWriter out)                  { }
-        @Override public void setLoginTimeout(int seconds)                   { }
+        @Override public void setLogWriter(PrintWriter out)                  { /* no log */ }
+        @Override public void setLoginTimeout(int seconds)                   { /* fixed */ }
         @Override public int getLoginTimeout()                               { return 42; }
         @Override public Logger getParentLogger()                            { return null; }
         @Override public <T> T unwrap(Class<T> iface)                        { return null; }

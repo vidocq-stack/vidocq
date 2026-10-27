@@ -132,8 +132,12 @@ class LayerSplitTest {
     void aPinnedModuleThatReadsTheApplicationFails() {
         var helper = explicit("acme.helper", "acme.app");
         var app = explicit("acme.app");
-        var e = assertThrows(IllegalStateException.class, () -> LayerSplit.split(List.of(helper, app),
-                Set.of("acme.app"), List.of("acme.helper"), Map.of()));
+        List<LayerSplit.Candidate> candidates = List.of(helper, app);
+        Set<String> application = Set.of("acme.app");
+        List<String> keep = List.of("acme.helper");
+        Map<String, String> forced = Map.of();
+        var e = assertThrows(IllegalStateException.class,
+                () -> LayerSplit.split(candidates, application, keep, forced));
 
         assertTrue(e.getMessage().startsWith("acme.helper is kept in the parent layer (vidocq.app.layer.keep) "
                 + "but reads acme.app, a module of the application"), e.getMessage());
@@ -164,8 +168,13 @@ class LayerSplitTest {
         var ext = explicit("io.vidocq.runtime.extensions.x", "lib.a");
         var lib = automatic("lib.a");
         var app = explicit("acme.app");
-        var e = assertThrows(IllegalStateException.class, () -> LayerSplit.split(List.of(ext, lib, app),
-                Set.of("acme.app"), List.of(), Map.of(), Map.of("lib.a", Set.of("acme.app"))));
+        List<LayerSplit.Candidate> candidates = List.of(ext, lib, app);
+        Set<String> application = Set.of("acme.app");
+        List<String> keep = List.of();
+        Map<String, String> forced = Map.of();
+        Map<String, Set<String>> reads = Map.of("lib.a", Set.of("acme.app"));
+        var e = assertThrows(IllegalStateException.class,
+                () -> LayerSplit.split(candidates, application, keep, forced, reads));
 
         assertTrue(e.getMessage().startsWith("lib.a is kept in the parent layer (a runtime module, through "
                 + "io.vidocq.runtime.extensions.x) but reads acme.app"), e.getMessage());
@@ -177,8 +186,12 @@ class LayerSplitTest {
         var helper = explicit("acme.helper", "acme.util");
         var util = explicit("acme.util", "acme.app");
         var app = explicit("acme.app");
-        var e = assertThrows(IllegalStateException.class, () -> LayerSplit.split(List.of(helper, util, app),
-                Set.of("acme.app"), List.of("acme.helper"), Map.of()));
+        List<LayerSplit.Candidate> candidates = List.of(helper, util, app);
+        Set<String> application = Set.of("acme.app");
+        List<String> keep = List.of("acme.helper");
+        Map<String, String> forced = Map.of();
+        var e = assertThrows(IllegalStateException.class,
+                () -> LayerSplit.split(candidates, application, keep, forced));
 
         assertTrue(e.getMessage().startsWith("acme.util is kept in the parent layer "
                 + "(vidocq.app.layer.keep, through acme.helper) but reads acme.app"), e.getMessage());

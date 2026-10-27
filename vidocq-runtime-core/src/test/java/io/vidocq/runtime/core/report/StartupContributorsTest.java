@@ -72,9 +72,9 @@ class StartupContributorsTest {
     private final List<LogRecord> warnings = new ArrayList<>();
     private final Handler handler = new Handler() {
         @Override
-        public void publish(LogRecord record) {
+        public void publish(LogRecord logRecord) {
             synchronized (warnings) {
-                warnings.add(record);
+                warnings.add(logRecord);
             }
         }
 
@@ -284,8 +284,9 @@ class StartupContributorsTest {
             throw fatal;
         }));
 
+        var detailed = context(Verbosity.DETAILED);
         assertSame(fatal, assertThrows(AssertionError.class,
-                () -> StartupContributors.call(contributors, context(Verbosity.DETAILED), recorder)));
+                () -> StartupContributors.call(contributors, detailed, recorder)));
         assertEquals("contributor fatal", recorder.failing());
     }
 
@@ -375,8 +376,8 @@ class StartupContributorsTest {
         }
     }
 
-    private static String message(LogRecord record) {
-        return record.getMessage();
+    private static String message(LogRecord logRecord) {
+        return logRecord.getMessage();
     }
 
     /** An extension that is not a contributor. */

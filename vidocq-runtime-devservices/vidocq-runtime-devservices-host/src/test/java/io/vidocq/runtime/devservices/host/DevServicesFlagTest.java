@@ -69,8 +69,10 @@ class DevServicesFlagTest {
 
     @Test
     void aValueThatIsNeitherTrueNorFalseIsRejectedWithTheKeyAndValue() {
+        Optional<String> unset = Optional.empty();
+        Function<String, Optional<String>> unresolved = files("${DEV}");
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> DevServicesFlag.enabled(Optional.empty(), files("${DEV}"), true));
+                () -> DevServicesFlag.enabled(unset, unresolved, true));
         assertTrue(e.getMessage().contains(DevServicesFlag.KEY), e.getMessage());
         assertTrue(e.getMessage().contains("${DEV}"), e.getMessage());
     }
@@ -84,8 +86,9 @@ class DevServicesFlagTest {
         assertFalse(DevServicesFlag.enabled(key, Optional.empty(), both, true));
         assertTrue(DevServicesFlag.enabled(key, Optional.of("TRUE"), both, false));
         assertTrue(DevServicesFlag.enabled(key, Optional.empty(), NO_FILES, true));
+        Optional<String> maybe = Optional.of("maybe");
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> DevServicesFlag.enabled(key, Optional.of("maybe"), NO_FILES, true));
+                () -> DevServicesFlag.enabled(key, maybe, NO_FILES, true));
         assertTrue(e.getMessage().contains(key), e.getMessage());
     }
 }

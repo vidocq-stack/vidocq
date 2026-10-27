@@ -64,7 +64,7 @@ class BuildTypeTest {
 
     @Test
     void goalsAreImmutable() {
-        assertThrows(UnsupportedOperationException.class,
-                () -> BuildType.JLINK.goals().add("x"));
+        List<String> goals = BuildType.JLINK.goals();
+        assertThrows(UnsupportedOperationException.class, () -> goals.add("x"));
     }
 }

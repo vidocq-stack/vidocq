@@ -64,7 +64,8 @@ class PanelLanguageTest {
         String largest = head + "a".repeat(PanelLanguage.MAX_JSON - head.length() - tail.length()) + tail;
         assertEquals(1024 * 1024, largest.length());
         assertEquals(largest, new PanelLanguage("jdql", largest).json());
-        assertThrows(IllegalArgumentException.class, () -> new PanelLanguage("jdql", largest.replace("{", "{ ")));
+        String tooLarge = largest.replace("{", "{ ");
+        assertThrows(IllegalArgumentException.class, () -> new PanelLanguage("jdql", tooLarge));
 
         int depth = PanelAction.Argument.MAX_JSON_DEPTH;
         String deepest = "{\"a\":".repeat(depth - 1) + "{}" + "}".repeat(depth - 1);

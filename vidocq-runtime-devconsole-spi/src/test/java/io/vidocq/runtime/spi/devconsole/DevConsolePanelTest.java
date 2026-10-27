@@ -66,8 +66,8 @@ class DevConsolePanelTest {
         List<Chart> charts = new CachePanel().charts();
 
         assertEquals(List.of(), charts);
-        assertThrows(UnsupportedOperationException.class,
-                () -> charts.add(new Chart("entries", "Entries", List.of(Series.area("entries")))));
+        Chart entries = new Chart("entries", "Entries", List.of(Series.area("entries")));
+        assertThrows(UnsupportedOperationException.class, () -> charts.add(entries));
     }
 
     @Test
@@ -75,6 +75,7 @@ class DevConsolePanelTest {
         List<PanelLanguage> languages = new CachePanel().languages();
 
         assertEquals(List.of(), languages);
-        assertThrows(UnsupportedOperationException.class, () -> languages.add(new PanelLanguage("jdql", "{}")));
+        PanelLanguage jdql = new PanelLanguage("jdql", "{}");
+        assertThrows(UnsupportedOperationException.class, () -> languages.add(jdql));
     }
 }

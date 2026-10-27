@@ -68,7 +68,7 @@ final class FakeExtensionContext implements ExtensionContext {
 
     @Override
     public VidocqConfiguration configuration() {
-        return key -> config.getValue(key);
+        return config::getValue;
     }
 
     @Override

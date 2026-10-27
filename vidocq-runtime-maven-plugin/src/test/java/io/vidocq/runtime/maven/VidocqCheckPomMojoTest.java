@@ -484,6 +484,7 @@ class VidocqCheckPomMojoTest {
 
             @Override
             public void error(CharSequence content) {
+                // Kept quiet as well: the test checks what the mojo does, not what it logs.
             }
         });
         return mojo;

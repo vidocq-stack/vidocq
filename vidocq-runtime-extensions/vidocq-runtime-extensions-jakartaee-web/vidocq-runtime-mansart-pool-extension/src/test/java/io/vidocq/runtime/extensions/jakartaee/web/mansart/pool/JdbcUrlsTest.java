@@ -75,7 +75,7 @@ class JdbcUrlsTest {
                 // user info after //
                 Arguments.of("jdbc:mysql://app:s3cret@db.example:3306/app", "jdbc:mysql://db.example:3306/app", true),
                 Arguments.of("jdbc:mysql://app:s3@cret@db.example/app", "jdbc:mysql://db.example/app", true),
-                // a password may hold a /, as a base64 one does: user info runs through the last @ before ? or ;
+                // a password may hold a slash, as a base64 one does: user info runs to the last @ before the query or parameters
                 Arguments.of("jdbc:mysql://app:Xy7/Qp4@db.example/app", "jdbc:mysql://db.example/app", true),
                 Arguments.of("jdbc:mysql://app:s3@Xy7/Qp4@db.example/app", "jdbc:mysql://db.example/app", true),
                 // so an @ in a path is taken for the end of user info: too much is hidden, never too little

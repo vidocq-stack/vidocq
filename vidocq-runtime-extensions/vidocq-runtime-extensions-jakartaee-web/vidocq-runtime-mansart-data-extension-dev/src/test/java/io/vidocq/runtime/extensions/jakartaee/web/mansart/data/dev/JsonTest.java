@@ -62,7 +62,8 @@ class JsonTest {
     @Test
     void refusesADeeperNestingThanTheConsole() {
         assertInstanceOf(List.class, Json.parse("[".repeat(64) + "]".repeat(64)));
-        assertThrows(IllegalArgumentException.class, () -> Json.parse("[".repeat(65) + "]".repeat(65)));
+        String tooDeep = "[".repeat(65) + "]".repeat(65);
+        assertThrows(IllegalArgumentException.class, () -> Json.parse(tooDeep));
     }
 
     @Test

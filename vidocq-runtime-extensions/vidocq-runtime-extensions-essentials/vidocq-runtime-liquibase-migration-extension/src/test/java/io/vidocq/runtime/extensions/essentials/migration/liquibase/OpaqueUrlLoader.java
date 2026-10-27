@@ -70,7 +70,7 @@ final class OpaqueUrlLoader extends ClassLoader {
     private static boolean isDirectory(URL url) {
         try {
             return "file".equals(url.getProtocol()) && Files.isDirectory(Path.of(url.toURI()));
-        } catch (URISyntaxException e) {
+        } catch (URISyntaxException _) {
             return false;
         }
     }

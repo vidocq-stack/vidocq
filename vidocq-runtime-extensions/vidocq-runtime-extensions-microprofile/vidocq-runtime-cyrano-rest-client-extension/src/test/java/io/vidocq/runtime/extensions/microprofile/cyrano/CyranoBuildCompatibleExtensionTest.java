@@ -23,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.module.ModuleDescriptor;
-import java.util.ServiceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

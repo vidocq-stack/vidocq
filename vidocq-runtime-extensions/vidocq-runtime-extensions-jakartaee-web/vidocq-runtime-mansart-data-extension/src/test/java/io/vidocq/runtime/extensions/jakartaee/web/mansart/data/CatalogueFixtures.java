@@ -62,26 +62,26 @@ final class CatalogueFixtures {
         private String label;
         private int stockCount;
 
-        public Gadget() {}
+        public Gadget() { /* the no-argument constructor an entity needs */ }
     }
 
     /** No id field at all: Mansart cannot build its model. */
     public static class Broken {
         private String label;
 
-        public Broken() {}
+        public Broken() { /* the no-argument constructor an entity needs */ }
     }
 
     /** Its model is {@link #orderModel()}. */
     public static class Order {
-        public Order() {}
+        public Order() { /* the no-argument constructor an entity needs */ }
     }
 
     public static class Customer {
         private String id;
         private String name;
 
-        public Customer() {}
+        public Customer() { /* the no-argument constructor an entity needs */ }
     }
 
     public enum Status { OPEN, SHIPPED }

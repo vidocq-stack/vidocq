@@ -89,8 +89,10 @@ class FoyMountHandlerProviderTest {
     void declarativeMountWithoutComponentsFails(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of());
 
+        FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
+        ClassLoader loader = FoyExtensionTest.loaderWith(root, null);
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> new FoyMountHandlerProvider().create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, null)));
+                () -> provider.create(cfg, deployments, null, loader));
         assertTrue(e.getMessage().contains("vidocq.http.mount.web.type=servlet"), e.getMessage());
     }
 
@@ -109,8 +111,10 @@ class FoyMountHandlerProviderTest {
     void theServletSecurityConfigurationReachesFoy(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of("vidocq.servlet.confidential-port", "70000"));
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> new FoyMountHandlerProvider()
-                .create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
+        FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
+        ClassLoader loader = FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> provider.create(cfg, deployments, null, loader));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }
@@ -119,8 +123,10 @@ class FoyMountHandlerProviderTest {
     void aServletMountThatStripsItsPrefixIsRefused(@TempDir Path root) throws Exception {
         MountConfig cfg = mount(Map.of("vidocq.http.mount.web.strip-prefix", "true"));
 
-        IllegalStateException e = assertThrows(IllegalStateException.class, () -> new FoyMountHandlerProvider()
-                .create(cfg, deployments, null, FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML)));
+        FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
+        ClassLoader loader = FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML);
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> provider.create(cfg, deployments, null, loader));
 
         assertTrue(e.getMessage().contains("vidocq.http.mount.web.strip-prefix"), e.getMessage());
         assertTrue(deployments.all().isEmpty());
@@ -132,8 +138,9 @@ class FoyMountHandlerProviderTest {
         new FoyMountHandlerProvider().create(mount(Map.of()), deployments, null, loader);
         MountConfig admin = new MountConfig("admin", "/admin", "default", 0, FoyExtensionTest.config(Map.of()), null);
 
+        FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> new FoyMountHandlerProvider().create(admin, deployments, null, loader));
+                () -> provider.create(admin, deployments, null, loader));
 
         assertTrue(e.getMessage().contains("vidocq.http.mount.admin"), e.getMessage());
         assertTrue(e.getMessage().contains("vidocq.http.mount.web"), e.getMessage());

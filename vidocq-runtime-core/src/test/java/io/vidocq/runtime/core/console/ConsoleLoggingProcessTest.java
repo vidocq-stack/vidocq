@@ -68,8 +68,8 @@ class ConsoleLoggingProcessTest {
         List<String> lines = run.stdout().lines().toList();
         List<String> records = lines.stream().filter(l -> l.startsWith("[")).toList();
         assertEquals(ConsoleLoggingChildMain.RECORDS, records.size(), run.stdout());
-        for (String record : records) {
-            assertTrue(RECORD_LINE.matcher(record).matches(), "not one aligned record line: " + record);
+        for (String line : records) {
+            assertTrue(RECORD_LINE.matcher(line).matches(), "not one aligned record line: " + line);
         }
         for (String other : lines) {
             if (!other.startsWith("[")) {
@@ -173,7 +173,7 @@ class ConsoleLoggingProcessTest {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         manifest.getMainAttributes().put(new Attributes.Name("Premain-Class"), StandInIdeaAgent.class.getName());
-        try (OutputStream file = Files.newOutputStream(jar); JarOutputStream ignored = new JarOutputStream(file, manifest)) {
+        try (OutputStream file = Files.newOutputStream(jar); JarOutputStream _ = new JarOutputStream(file, manifest)) {
             // the manifest is the whole jar: the agent class comes from the class path
         }
         return jar;

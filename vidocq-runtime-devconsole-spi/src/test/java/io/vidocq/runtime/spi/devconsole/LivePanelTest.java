@@ -37,7 +37,7 @@ class LivePanelTest {
             }
 
             @Override
-            public void sample(PanelSample sample) {}
+            public void sample(PanelSample sample) { /* this panel has nothing to show */ }
         };
 
         assertEquals("acme", panel.id());

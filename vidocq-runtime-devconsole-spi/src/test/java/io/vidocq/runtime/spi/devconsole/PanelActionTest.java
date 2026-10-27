@@ -85,10 +85,11 @@ class PanelActionTest {
         declared.clear();
 
         assertEquals(1, action.arguments().size());
-        assertThrows(UnsupportedOperationException.class, () -> action.arguments().clear());
-        assertThrows(IllegalArgumentException.class, () -> new PanelAction("set-level", "Set", null, List.of(
-                PanelAction.Argument.oneOf("level", "Level", "INFO"),
-                PanelAction.Argument.matching("level", "Level", "[A-Z]+")), a -> "ok"));
+        List<PanelAction.Argument> arguments = action.arguments();
+        assertThrows(UnsupportedOperationException.class, arguments::clear);
+        List<PanelAction.Argument> twice = List.of(PanelAction.Argument.oneOf("level", "Level", "INFO"),
+                PanelAction.Argument.matching("level", "Level", "[A-Z]+"));
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("set-level", "Set", null, twice, a -> "ok"));
     }
 
     @Test
@@ -122,8 +123,9 @@ class PanelActionTest {
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("level", "Level"));
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("level", "Level", " "));
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.matching("logger", "Logger", "("));
+        List<String> levels = List.of("INFO");
         assertThrows(IllegalArgumentException.class,
-                () -> new PanelAction.Argument("level", "Level", List.of("INFO"), "[A-Z]+"),
+                () -> new PanelAction.Argument("level", "Level", levels, "[A-Z]+"),
                 "a list or a pattern, not both");
         assertThrows(IllegalArgumentException.class,
                 () -> new PanelAction.Argument("level", "Level", null, null), "a list or a pattern");
@@ -177,8 +179,8 @@ class PanelActionTest {
                 PanelAction.Argument.matching("tag", "Tag", "[a-z]{1,10}")), a -> "ok");
 
         assertEquals(3, mixed.arguments().size());
-        assertThrows(IllegalArgumentException.class,
-                () -> new PanelAction("call", "Call", null, List.of(one, two), a -> "ok"));
+        List<PanelAction.Argument> both = List.of(one, two);
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("call", "Call", null, both, a -> "ok"));
     }
 
     @Test
@@ -208,15 +210,18 @@ class PanelActionTest {
     void aGroupAndADescriptionAreBounded() {
         Function<Map<String, String>, PanelAction.ActionResult> ok = a -> PanelAction.ActionResult.of("ok");
 
-        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, List.of(), ok, " ", null));
+        List<PanelAction.Argument> none = List.of();
+        String longGroup = "g".repeat(41);
+        String longDescription = "d".repeat(2001);
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, none, ok, " ", null));
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, none, ok, longGroup, null));
+        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, none, ok, null, ""));
         assertThrows(IllegalArgumentException.class,
-                () -> new PanelAction("a", "A", null, List.of(), ok, "g".repeat(41), null));
-        assertThrows(IllegalArgumentException.class, () -> new PanelAction("a", "A", null, List.of(), ok, null, ""));
-        assertThrows(IllegalArgumentException.class,
-                () -> new PanelAction("a", "A", null, List.of(), ok, null, "d".repeat(2001)));
+                () -> new PanelAction("a", "A", null, none, ok, null, longDescription));
         PanelAction longest = new PanelAction("a", "A", null, List.of(), ok, "g".repeat(40), "d".repeat(2000));
         assertEquals(40, longest.group().length());
         assertEquals(2000, longest.description().length());
-        assertThrows(NullPointerException.class, () -> new PanelAction("a", "A", null, List.of(), null, null, null));
+        List<PanelAction.Argument> noArgument = List.of();
+        assertThrows(NullPointerException.class, () -> new PanelAction("a", "A", null, noArgument, null, null, null));
     }
 }

@@ -122,7 +122,8 @@ class RecordingSampleTest {
         RecordingSample sample = new RecordingSample();
 
         assertThrows(IllegalArgumentException.class, () -> sample.gauge("Heap", 1, Unit.BYTES));
-        assertThrows(IllegalArgumentException.class, () -> sample.group("pool").counter("a b", 1, Unit.COUNT));
+        var pool = sample.group("pool");
+        assertThrows(IllegalArgumentException.class, () -> pool.counter("a b", 1, Unit.COUNT));
         assertThrows(NullPointerException.class, () -> sample.text(null, "x"));
         assertThrows(NullPointerException.class, () -> sample.gauge("heap", 1, null));
     }
@@ -200,7 +201,8 @@ class RecordingSampleTest {
         assertEquals(64, values(written).size());
         assertEquals(99L, values(written).get(0).get("value"), "a key already there is still written");
         assertEquals(64, groups(written).size());
-        assertThrows(IllegalArgumentException.class, () -> sample.group("g69").counter("Bad", 1, Unit.COUNT),
+        var beyond = sample.group("g69");
+        assertThrows(IllegalArgumentException.class, () -> beyond.counter("Bad", 1, Unit.COUNT),
                 "a group beyond the limit still checks its keys");
     }
 

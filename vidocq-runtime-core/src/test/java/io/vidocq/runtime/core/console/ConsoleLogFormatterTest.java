@@ -39,19 +39,19 @@ class ConsoleLogFormatterTest {
     private static final String NL = System.lineSeparator();
     private static final Instant INSTANT = Instant.parse("2026-09-17T17:39:19.902Z");
 
-    private static LogRecord record(Level level, String message) {
-        LogRecord record = new LogRecord(level, message);
-        record.setInstant(INSTANT);
-        record.setLoggerName("io.vidocq.runtime.core.VidocqBootstrap");
-        record.setSourceClassName("io.vidocq.runtime.core.VidocqBootstrap");
-        record.setSourceMethodName("configure");
-        return record;
+    private static LogRecord logRecord(Level level, String message) {
+        LogRecord logRecord = new LogRecord(level, message);
+        logRecord.setInstant(INSTANT);
+        logRecord.setLoggerName("io.vidocq.runtime.core.VidocqBootstrap");
+        logRecord.setSourceClassName("io.vidocq.runtime.core.VidocqBootstrap");
+        logRecord.setSourceMethodName("configure");
+        return logRecord;
     }
 
-    private static String formatOnThread(ConsoleLogFormatter formatter, LogRecord record, Thread.Builder builder)
+    private static String formatOnThread(ConsoleLogFormatter formatter, LogRecord logRecord, Thread.Builder builder)
             throws InterruptedException {
         AtomicReference<String> line = new AtomicReference<>();
-        builder.start(() -> line.set(formatter.format(record))).join();
+        builder.start(() -> line.set(formatter.format(logRecord))).join();
         return line.get();
     }
 
@@ -65,7 +65,7 @@ class ConsoleLogFormatterTest {
     void formatsOneAlignedLine() throws InterruptedException {
         ConsoleLogFormatter formatter = new ConsoleLogFormatter(false, ZoneOffset.UTC);
 
-        String line = formatOnThread(formatter, record(Level.INFO, "Vidocq - Configuration phase"),
+        String line = formatOnThread(formatter, logRecord(Level.INFO, "Vidocq - Configuration phase"),
                 Thread.ofPlatform().name("main"));
 
         assertEquals("[INFO ][2026-09-17 17:39:19.902][main" + " ".repeat(11) + "]"
@@ -79,7 +79,7 @@ class ConsoleLogFormatterTest {
             "SEVERE, ERROR", "WARNING, WARN", "INFO, INFO", "CONFIG, CONF",
             "FINE, DEBUG", "FINER, TRACE", "FINEST, TRACE", "OFF, ERROR", "ALL, TRACE"})
     void namesLevelsLikeSystemLoggerAndPadsThemToFiveColumns(String jul, String expected) {
-        String line = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(record(Level.parse(jul), "m"));
+        String line = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(logRecord(Level.parse(jul), "m"));
 
         assertTrue(line.startsWith("[" + expected + " ".repeat(5 - expected.length()) + "]["), line);
     }
@@ -100,7 +100,7 @@ class ConsoleLogFormatterTest {
         Level level = Level.parse(jul);
         String name = ConsoleLogFormatter.levelName(level);
 
-        String line = new ConsoleLogFormatter(true, ZoneOffset.UTC).format(record(level, "message"));
+        String line = new ConsoleLogFormatter(true, ZoneOffset.UTC).format(logRecord(level, "message"));
 
         assertTrue(line.startsWith("[" + color + name + "[0m" + " ".repeat(5 - name.length()) + "]["), line);
         assertEquals(2, line.split("", -1).length - 1, "only the level carries escapes: " + line);
@@ -108,14 +108,14 @@ class ConsoleLogFormatterTest {
 
     @Test
     void noEscapeWithoutColours() {
-        String line = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(record(Level.SEVERE, "message"));
+        String line = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(logRecord(Level.SEVERE, "message"));
 
         assertFalse(line.contains(""), line);
     }
 
     @Test
     void timestampIsLocalDateTimeWithMilliseconds() {
-        String line = new ConsoleLogFormatter(false).format(record(Level.INFO, "m"));
+        String line = new ConsoleLogFormatter(false).format(logRecord(Level.INFO, "m"));
 
         assertTrue(Pattern.compile("^\\[INFO \\]\\[\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}]\\[")
                 .matcher(line).find(), line);
@@ -123,7 +123,7 @@ class ConsoleLogFormatterTest {
 
     @Test
     void padsTheThreadNameToFifteenColumns() throws InterruptedException {
-        String line = formatOnThread(new ConsoleLogFormatter(false, ZoneOffset.UTC), record(Level.INFO, "m"),
+        String line = formatOnThread(new ConsoleLogFormatter(false, ZoneOffset.UTC), logRecord(Level.INFO, "m"),
                 Thread.ofPlatform().name("worker-1"));
 
         assertEquals("worker-1       ", threadColumn(line));
@@ -131,7 +131,7 @@ class ConsoleLogFormatterTest {
 
     @Test
     void aLongerThreadNameKeepsItsEnd() throws InterruptedException {
-        String line = formatOnThread(new ConsoleLogFormatter(false, ZoneOffset.UTC), record(Level.INFO, "m"),
+        String line = formatOnThread(new ConsoleLogFormatter(false, ZoneOffset.UTC), logRecord(Level.INFO, "m"),
                 Thread.ofPlatform().name("chappe-listener-default-42"));
 
         assertEquals("~ner-default-42", threadColumn(line));
@@ -144,7 +144,7 @@ class ConsoleLogFormatterTest {
         ConsoleLogFormatter formatter = new ConsoleLogFormatter(false, ZoneOffset.UTC);
         Thread.ofVirtual().start(() -> {
             id.set(Thread.currentThread().threadId());
-            line.set(formatter.format(record(Level.INFO, "m")));
+            line.set(formatter.format(logRecord(Level.INFO, "m")));
         }).join();
 
         String expected = "virtual-" + id.get();
@@ -205,12 +205,12 @@ class ConsoleLogFormatterTest {
 
     @Test
     void recordWithoutSourceClassUsesTheLoggerName() {
-        LogRecord record = record(Level.INFO, "m");
-        record.setSourceClassName(null);
-        record.setSourceMethodName(null);
-        record.setLoggerName("chappe.access");
+        LogRecord logRecord = logRecord(Level.INFO, "m");
+        logRecord.setSourceClassName(null);
+        logRecord.setSourceMethodName(null);
+        logRecord.setLoggerName("chappe.access");
 
-        assertTrue(new ConsoleLogFormatter(false).format(record).contains("][" + pad("c.access") + "] : m"));
+        assertTrue(new ConsoleLogFormatter(false).format(logRecord).contains("][" + pad("c.access") + "] : m"));
     }
 
     @Test
@@ -222,11 +222,11 @@ class ConsoleLogFormatterTest {
 
     @Test
     void stackTraceFollowsTheLine() {
-        LogRecord record = record(Level.WARNING, "A warning with its stack trace");
+        LogRecord logRecord = logRecord(Level.WARNING, "A warning with its stack trace");
         IllegalStateException boom = new IllegalStateException("No McpServerSPI implementation found.");
-        record.setThrown(boom);
+        logRecord.setThrown(boom);
 
-        String output = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(record);
+        String output = new ConsoleLogFormatter(false, ZoneOffset.UTC).format(logRecord);
 
         String[] lines = output.split(Pattern.quote(NL), -1);
         assertTrue(lines[0].endsWith("] : A warning with its stack trace"), lines[0]);
@@ -239,17 +239,17 @@ class ConsoleLogFormatterTest {
     @Test
     void extraMessageLinesFollowUnchanged() {
         String output = new ConsoleLogFormatter(false, ZoneOffset.UTC)
-                .format(record(Level.INFO, "Multi-line message:\n  second line"));
+                .format(logRecord(Level.INFO, "Multi-line message:\n  second line"));
 
         assertTrue(output.endsWith("] : Multi-line message:\n  second line" + NL), output);
     }
 
     @Test
     void messageParametersAreFormatted() {
-        LogRecord record = record(Level.INFO, "Starting extension: {0} ({1})");
-        record.setParameters(new Object[] {"chappe", 2});
+        LogRecord logRecord = logRecord(Level.INFO, "Starting extension: {0} ({1})");
+        logRecord.setParameters(new Object[] {"chappe", 2});
 
-        assertTrue(new ConsoleLogFormatter(false).format(record).endsWith("] : Starting extension: chappe (2)" + NL));
+        assertTrue(new ConsoleLogFormatter(false).format(logRecord).endsWith("] : Starting extension: chappe (2)" + NL));
     }
 
     private static String pad(String value) {

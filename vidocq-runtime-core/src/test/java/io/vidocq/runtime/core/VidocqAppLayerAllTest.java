@@ -133,7 +133,7 @@ class VidocqAppLayerAllTest {
         return paths.stream().map(p -> {
             try {
                 return p.toRealPath();
-            } catch (java.io.IOException e) {
+            } catch (java.io.IOException _) {
                 return p.toAbsolutePath().normalize();
             }
         }).collect(java.util.stream.Collectors.toSet());

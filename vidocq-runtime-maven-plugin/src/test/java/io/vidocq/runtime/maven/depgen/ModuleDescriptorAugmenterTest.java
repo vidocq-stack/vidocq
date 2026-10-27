@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven.depgen;
 import org.junit.jupiter.api.Test;
 
 import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleExportInfo;
 import java.lang.classfile.attribute.ModuleOpenInfo;
@@ -140,7 +141,7 @@ class ModuleDescriptorAugmenterTest {
                 .withInterfaceSymbols(ClassDesc.of("org.spi.Component"))
                 .withField("f", ClassDesc.of("org.field.Type").arrayType(), ClassFile.ACC_PRIVATE)
                 .withMethodBody("m", MethodTypeDesc.of(ConstantDescs.CD_void, ClassDesc.of("org.param.P")),
-                        ClassFile.ACC_PUBLIC, cob -> cob.return_()));
+                        ClassFile.ACC_PUBLIC, CodeBuilder::return_));
 
         assertEquals(Set.of("org.dep", "java.lang", "org.spi", "org.field", "org.param"),
                 ModuleDescriptorAugmenter.referencedPackages(List.of(cls)));

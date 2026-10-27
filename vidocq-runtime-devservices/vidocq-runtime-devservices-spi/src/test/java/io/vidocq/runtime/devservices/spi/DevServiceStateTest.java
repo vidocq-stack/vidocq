@@ -60,7 +60,7 @@ class DevServiceStateTest {
             }
 
             @Override
-            public void stop() {}
+            public void stop() { /* started nothing, so nothing to stop */ }
         };
         assertEquals(DevServiceState.minimal("third-party", List.of("k")), p.describe(Map.of("k", "v")));
     }
@@ -69,7 +69,9 @@ class DevServiceStateTest {
     void theStateIsImmutable() {
         DevServiceState s = new DevServiceState(
                 "x", "img", new LinkedHashMap<>(Map.of("a", "h:1")), new ArrayList<>(List.of("k")));
-        assertThrows(UnsupportedOperationException.class, () -> s.endpoints().put("b", "h:2"));
-        assertThrows(UnsupportedOperationException.class, () -> s.injectedKeys().add("z"));
+        Map<String, String> endpoints = s.endpoints();
+        List<String> injectedKeys = s.injectedKeys();
+        assertThrows(UnsupportedOperationException.class, () -> endpoints.put("b", "h:2"));
+        assertThrows(UnsupportedOperationException.class, () -> injectedKeys.add("z"));
     }
 }

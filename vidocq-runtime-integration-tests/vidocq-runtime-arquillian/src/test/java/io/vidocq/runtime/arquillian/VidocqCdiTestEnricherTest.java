@@ -61,9 +61,11 @@ class VidocqCdiTestEnricherTest {
         GreetingBean notInjectable;
 
         public void probe(GreetingBean bean) {
+            // Only its parameter matters: the enricher resolves it.
         }
 
         public void unresolvableProbe(Runnable notABean) {
+            // Only its parameter matters: the enricher cannot resolve it.
         }
     }
 

@@ -81,9 +81,9 @@ class DevConsoleSnapshotTest {
     private static final List<LogRecord> RECORDS = new ArrayList<>();
     private static final Handler CAPTURE = new Handler() {
         @Override
-        public void publish(LogRecord record) {
+        public void publish(LogRecord logRecord) {
             synchronized (RECORDS) {
-                RECORDS.add(record);
+                RECORDS.add(logRecord);
             }
         }
 
@@ -133,9 +133,9 @@ class DevConsoleSnapshotTest {
     void printsOneClickableUrl() {
         List<String> urls = consoleMessages().stream().filter(m -> m.startsWith("Vidocq dev console: http")).toList();
         assertEquals(1, urls.size(), "one URL record: " + urls);
-        Matcher record = URL_RECORD.matcher(urls.getFirst());
-        assertTrue(record.matches(), "the URL last, nothing after its final slash: " + urls.getFirst());
-        assertTrue(Integer.parseInt(record.group(2)) > 0, "the port the console bound, not the 0 it asked for");
+        Matcher url = URL_RECORD.matcher(urls.getFirst());
+        assertTrue(url.matches(), "the URL last, nothing after its final slash: " + urls.getFirst());
+        assertTrue(Integer.parseInt(url.group(2)) > 0, "the port the console bound, not the 0 it asked for");
     }
 
     @Test
@@ -425,9 +425,9 @@ class DevConsoleSnapshotTest {
     /** The URL the console logged. */
     private static String consoleUrl() {
         for (String message : consoleMessages()) {
-            Matcher record = URL_RECORD.matcher(message);
-            if (record.matches()) {
-                return record.group(1);
+            Matcher url = URL_RECORD.matcher(message);
+            if (url.matches()) {
+                return url.group(1);
             }
         }
         return fail("no dev console URL on " + CONSOLE_LOGGER + ": " + consoleMessages());

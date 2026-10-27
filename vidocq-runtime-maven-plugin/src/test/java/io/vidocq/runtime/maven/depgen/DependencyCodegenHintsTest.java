@@ -69,26 +69,26 @@ class DependencyCodegenHintsTest {
 
     @Test
     void missingBrickFails() {
-        var e = assertThrows(IllegalArgumentException.class,
-                () -> DependencyCodegenHints.parse(props("resources", "a"), "bundle-x"));
+        Properties noBrick = props("resources", "a");
+        var e = assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(noBrick, "bundle-x"));
         assertTrue(e.getMessage().contains("bundle-x"), e.getMessage());
         assertTrue(e.getMessage().contains("brick"), e.getMessage());
-        assertThrows(IllegalArgumentException.class,
-                () -> DependencyCodegenHints.parse(props("brick", "  ", "resources", "a"), "bundle-x"));
+        Properties blankBrick = props("brick", "  ", "resources", "a");
+        assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(blankBrick, "bundle-x"));
     }
 
     @Test
     void unknownKeyFailsNamingTheBundle() {
-        var e = assertThrows(IllegalArgumentException.class,
-                () -> DependencyCodegenHints.parse(props("brick", "foy", "resources", "a", "bogus", "1"), "foy-bundle"));
+        Properties unknownKey = props("brick", "foy", "resources", "a", "bogus", "1");
+        var e = assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(unknownKey, "foy-bundle"));
         assertEquals("foy-bundle: unknown key 'bogus' in META-INF/vidocq/dependency-codegen.properties "
                 + "(allowed: brick, resources, class-bytes, markers, merge, whole-jar)", e.getMessage());
     }
 
     @Test
     void noHintFails() {
-        var e = assertThrows(IllegalArgumentException.class,
-                () -> DependencyCodegenHints.parse(props("brick", "foy", "markers", "m"), "foy-bundle"));
+        Properties markers = props("brick", "foy", "markers", "m");
+        var e = assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(markers, "foy-bundle"));
         assertTrue(e.getMessage().contains("foy-bundle"), e.getMessage());
         assertTrue(e.getMessage().contains("resources") && e.getMessage().contains("class-bytes"), e.getMessage());
     }

@@ -42,11 +42,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LogRingTest {
 
-    private static LogRecord record(Level level, String logger, String message, Object... parameters) {
-        LogRecord record = new LogRecord(level, message);
-        record.setLoggerName(logger);
-        record.setParameters(parameters.length == 0 ? null : parameters);
-        return record;
+    private static LogRecord logRecord(Level level, String logger, String message, Object... parameters) {
+        LogRecord logRecord = new LogRecord(level, message);
+        logRecord.setLoggerName(logger);
+        logRecord.setParameters(parameters.length == 0 ? null : parameters);
+        return logRecord;
     }
 
     /**
@@ -57,7 +57,7 @@ class LogRingTest {
     void anOlderLineStoredLastNeverReplacesTheNewerOneOfItsSlot() {
         LogRing ring = new LogRing();
         for (int i = 0; i <= LogRing.CAPACITY; i++) {
-            ring.publish(record(Level.INFO, "io.vidocq.test", "record " + i));
+            ring.publish(logRecord(Level.INFO, "io.vidocq.test", "record " + i));
         }
         // record 0 and record CAPACITY share slot 0; replay the older one arriving late.
         ring.store(new LogRing.Line(0, "00:00:00.000", "INFO", "io.vidocq.test", "late", "record 0"));
@@ -71,7 +71,7 @@ class LogRingTest {
     void itKeepsTheLastRecordsNewestFirst() {
         LogRing ring = new LogRing();
         for (int i = 0; i < LogRing.CAPACITY + 20; i++) {
-            ring.publish(record(Level.INFO, "io.vidocq.test", "record " + i));
+            ring.publish(logRecord(Level.INFO, "io.vidocq.test", "record " + i));
         }
 
         List<LogRing.Line> all = ring.latest(Integer.MAX_VALUE);
@@ -92,11 +92,11 @@ class LogRingTest {
     void theCountersCountEveryWarningAndErrorSinceItWasInstalledNotOnlyThoseKept() {
         LogRing ring = new LogRing();
         for (int i = 0; i < 600; i++) {
-            ring.publish(record(Level.WARNING, "a", "w"));
+            ring.publish(logRecord(Level.WARNING, "a", "w"));
         }
-        ring.publish(record(Level.SEVERE, "a", "e"));
-        ring.publish(record(Level.INFO, "a", "i"));
-        ring.publish(record(Level.FINE, "a", "f"));
+        ring.publish(logRecord(Level.SEVERE, "a", "e"));
+        ring.publish(logRecord(Level.INFO, "a", "i"));
+        ring.publish(logRecord(Level.FINE, "a", "f"));
 
         assertEquals(600, ring.warnings());
         assertEquals(1, ring.errors());
@@ -107,7 +107,7 @@ class LogRingTest {
         LogRing ring = new LogRing();
         ring.publish(null);
         ring.setFilter(r -> false);
-        ring.publish(record(Level.SEVERE, "a", "e"));
+        ring.publish(logRecord(Level.SEVERE, "a", "e"));
 
         assertEquals(List.of(), ring.latest(100));
         assertEquals(0, ring.seen());
@@ -117,7 +117,7 @@ class LogRingTest {
     @Test
     void aLineIsWrittenOnceInStrings() {
         LogRing ring = new LogRing();
-        ring.publish(record(Level.WARNING, "io.vidocq.cassini.CassiniExtension", "{0} routes on {1}", 3, "default"));
+        ring.publish(logRecord(Level.WARNING, "io.vidocq.cassini.CassiniExtension", "{0} routes on {1}", 3, "default"));
 
         LogRing.Line line = ring.latest(1).getFirst();
         assertEquals("WARNING", line.level());
@@ -147,9 +147,9 @@ class LogRingTest {
     @Test
     void aThrowableAddsItsClassAndTheFirstLineOfItsMessageNeverItsStack() {
         LogRing ring = new LogRing();
-        LogRecord record = record(Level.SEVERE, "a", "Request failed");
-        record.setThrown(new IllegalStateException("first line\nsecond line\n\tat com.acme.Secret.run"));
-        ring.publish(record);
+        LogRecord logRecord = logRecord(Level.SEVERE, "a", "Request failed");
+        logRecord.setThrown(new IllegalStateException("first line\nsecond line\n\tat com.acme.Secret.run"));
+        ring.publish(logRecord);
 
         assertEquals("Request failed - java.lang.IllegalStateException: first line",
                 ring.latest(1).getFirst().message());
@@ -158,7 +158,7 @@ class LogRingTest {
     @Test
     void theCredentialsOfAUrlAreRemovedAsTheConfigPanelRemovesThem() {
         LogRing ring = new LogRing();
-        ring.publish(record(Level.INFO, "a", "Connecting to jdbc:postgresql://admin:s3cr3t@db/orders?password=pw2"));
+        ring.publish(logRecord(Level.INFO, "a", "Connecting to jdbc:postgresql://admin:s3cr3t@db/orders?password=pw2"));
 
         String message = ring.latest(1).getFirst().message();
         assertEquals("Connecting to jdbc:postgresql://***@db/orders?password=***", message);
@@ -167,7 +167,7 @@ class LogRingTest {
     @Test
     void aLongMessageIsCut() {
         LogRing ring = new LogRing();
-        ring.publish(record(Level.INFO, "a", "x".repeat(10_000)));
+        ring.publish(logRecord(Level.INFO, "a", "x".repeat(10_000)));
 
         assertEquals(LogRing.MAX_MESSAGE, ring.latest(1).getFirst().message().length());
     }
@@ -181,7 +181,7 @@ class LogRingTest {
                 throw new IllegalStateException("no");
             }
         };
-        ring.publish(record(Level.INFO, "a", "value {0}", failing));
+        ring.publish(logRecord(Level.INFO, "a", "value {0}", failing));
 
         assertEquals("value {0}", ring.latest(1).getFirst().message());
     }
@@ -198,11 +198,11 @@ class LogRingTest {
             Thread publisher = Thread.ofPlatform().start(() -> {
                 try {
                     go.await();
-                } catch (InterruptedException interrupted) {
+                } catch (InterruptedException _) {
                     return;
                 }
                 for (int i = 0; i < each; i++) {
-                    ring.publish(record(Level.INFO, "a", "m"));
+                    ring.publish(logRecord(Level.INFO, "a", "m"));
                     if (i % 100 == 0) {
                         try {
                             assertOrdered(ring.latest(LogRing.CAPACITY));

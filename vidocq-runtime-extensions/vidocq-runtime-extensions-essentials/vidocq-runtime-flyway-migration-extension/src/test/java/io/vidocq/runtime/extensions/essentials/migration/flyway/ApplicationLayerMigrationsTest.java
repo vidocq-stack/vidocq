@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.io.BufferedReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,8 +75,10 @@ class ApplicationLayerMigrationsTest {
     void anEmptyLocationFailsOnlyWhenAskedTo() {
         assertTrue(new ApplicationLayerMigrations(TEST_MIGRATION, directory -> List.of(), new NameOnlyLoader(),
                 StandardCharsets.UTF_8, false).getResources("V", new String[]{".sql"}).isEmpty());
-        FlywayException e = assertThrows(FlywayException.class, () -> new ApplicationLayerMigrations(TEST_MIGRATION,
-                directory -> List.of(), new NameOnlyLoader(), StandardCharsets.UTF_8, true));
+        Function<String, List<String>> nothing = directory -> List.of();
+        NameOnlyLoader loader = new NameOnlyLoader();
+        FlywayException e = assertThrows(FlywayException.class,
+                () -> new ApplicationLayerMigrations(TEST_MIGRATION, nothing, loader, StandardCharsets.UTF_8, true));
         assertEquals("Unable to resolve location classpath:db/testmigration.", e.getMessage());
     }
 

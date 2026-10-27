@@ -123,8 +123,10 @@ class DevServicesSessionTest {
         a.describe = n -> {
             throw new AssertionError("describe blew up");
         };
+        List<DevService> providers = List.of(a);
+        DefaultDevServiceContext context = ctx(basedir);
         AssertionError e = assertThrows(AssertionError.class,
-                () -> DevServicesSession.open("test", basedir, List.of(a), ctx(basedir), LOG, CLOCK));
+                () -> DevServicesSession.open("test", basedir, providers, context, LOG, CLOCK));
         assertEquals("describe blew up", e.getMessage());
         assertEquals(1, a.stops, "stopped exactly once");
     }
@@ -148,7 +150,7 @@ class DevServicesSessionTest {
                 return "vidocq.pool.url is jdbc:h2, not PostgreSQL";
             }
             @Override public Map<String, String> start(DevServiceContext ctx) { throw new AssertionError("started"); }
-            @Override public void stop() { }
+            @Override public void stop() { /* never started, so nothing to stop */ }
         };
         String skipped = "\"skipped\":[{\"id\":\"postgres\",\"reason\":\"vidocq.pool.url is jdbc:h2, not PostgreSQL\"}]";
 

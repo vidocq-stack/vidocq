@@ -54,7 +54,7 @@ class LiquibaseSchemaMigratorTest {
     // ── Liquibase analytics ───────────────────────────────────────────────────
 
     @Test
-    void aMigrationRunsWithLiquibaseAnalyticsOff() throws Exception {
+    void aMigrationRunsWithLiquibaseAnalyticsOff() {
         // Liquibase 4.30+ sends usage data to Liquibase by default for OSS users
         // (liquibase.analytics.enabled). A Vidocq application does not talk to a third party
         // unless it says so: read the effective value while Liquibase reads the changelog.
@@ -90,9 +90,10 @@ class LiquibaseSchemaMigratorTest {
 
     @Test
     void liquibaseCannotOpenTheUrlsOfTheApplicationLayersLoader() {
-        IllegalStateException e = assertThrows(IllegalStateException.class, () -> new LiquibaseSchemaMigrator()
-                .migrate(target(url(), "db/testchangelog/db.changelog-master.xml"),
-                        new ClassLoaderResourceAccessor(new OpaqueUrlLoader())));
+        LiquibaseSchemaMigrator migrator = new LiquibaseSchemaMigrator();
+        MigrationTarget target = target(url(), "db/testchangelog/db.changelog-master.xml");
+        ClassLoaderResourceAccessor opaque = new ClassLoaderResourceAccessor(new OpaqueUrlLoader());
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> migrator.migrate(target, opaque));
         assertTrue(e.getMessage().contains("unknown protocol: vauban"), e.getMessage());
     }
 
@@ -168,7 +169,8 @@ class LiquibaseSchemaMigratorTest {
         MigrationTarget target = target(url, "db/testchangelog/db.changelog-master.xml");
         new LiquibaseSchemaMigrator().migrate(target);
 
-        assertThrows(IllegalStateException.class, () -> new LiquibaseSchemaMigrator().clean(target));
+        LiquibaseSchemaMigrator migrator = new LiquibaseSchemaMigrator();
+        assertThrows(IllegalStateException.class, () -> migrator.clean(target));
 
         assertEquals(0, count(url, "widget"), "the table is still there");
     }

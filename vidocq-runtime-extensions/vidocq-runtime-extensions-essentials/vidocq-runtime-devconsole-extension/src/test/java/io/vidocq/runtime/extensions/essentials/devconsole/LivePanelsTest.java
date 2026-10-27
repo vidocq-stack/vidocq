@@ -57,7 +57,7 @@ class LivePanelsTest {
         }
 
         @Override
-        public void sample(PanelSample sample) {}
+        public void sample(PanelSample sample) { /* this panel has nothing to show */ }
     }
 
     @Test

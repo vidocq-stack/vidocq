@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.foy.spi.security.IdentityStore;
+import io.vidocq.runtime.spi.config.VidocqConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -56,17 +57,17 @@ class ServletSecurityTest {
 
     @Test
     void aUserWithoutPasswordIsRefused() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ServletSecurity.from(FoyExtensionTest.config(Map.of("vidocq.servlet.users.carol.roles", "admin"))));
+        VidocqConfig config = FoyExtensionTest.config(Map.of("vidocq.servlet.users.carol.roles", "admin"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSecurity.from(config));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.users.carol.password"), e.getMessage());
     }
 
     @Test
     void anUnknownUserPropertyIsRefused() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ServletSecurity.from(FoyExtensionTest.config(Map.of(
-                        "vidocq.servlet.users.dave.password", "pw", "vidocq.servlet.users.dave.role", "admin"))));
+        VidocqConfig config = FoyExtensionTest.config(Map.of(
+                "vidocq.servlet.users.dave.password", "pw", "vidocq.servlet.users.dave.role", "admin"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSecurity.from(config));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.users.dave.role"), e.getMessage());
     }
@@ -83,16 +84,16 @@ class ServletSecurityTest {
 
     @Test
     void aBadConfidentialPortNamesItsKey() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ServletSecurity.from(FoyExtensionTest.config(Map.of("vidocq.servlet.confidential-port", "https"))));
+        VidocqConfig config = FoyExtensionTest.config(Map.of("vidocq.servlet.confidential-port", "https"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSecurity.from(config));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }
 
     @Test
     void aBadRotationFlagNamesItsKey() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ServletSecurity.from(FoyExtensionTest.config(Map.of("vidocq.servlet.rotate-session-id-on-login", "maybe"))));
+        VidocqConfig config = FoyExtensionTest.config(Map.of("vidocq.servlet.rotate-session-id-on-login", "maybe"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSecurity.from(config));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.rotate-session-id-on-login"), e.getMessage());
     }
@@ -102,8 +103,9 @@ class ServletSecurityTest {
         ServletSecurity security = ServletSecurity.from(FoyExtensionTest.config(Map.of(
                 "vidocq.servlet.users.alice.password", "pw")));
 
-        IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> security.applyTo(FoyChappeBoot.builder(), Optional.of(IdentityStore.none())));
+        FoyChappeBoot.Builder builder = FoyChappeBoot.builder();
+        Optional<IdentityStore> bean = Optional.of(IdentityStore.none());
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> security.applyTo(builder, bean));
 
         assertTrue(e.getMessage().contains("IdentityStore bean"), e.getMessage());
         assertTrue(e.getMessage().contains("vidocq.servlet.users"), e.getMessage());
@@ -114,8 +116,10 @@ class ServletSecurityTest {
         ServletSecurity security = ServletSecurity.from(FoyExtensionTest.config(Map.of(
                 "vidocq.servlet.confidential-port", "70000")));
 
+        FoyChappeBoot.Builder builder = FoyChappeBoot.builder();
+        Optional<IdentityStore> noBean = Optional.empty();
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> security.applyTo(FoyChappeBoot.builder(), Optional.empty()));
+                () -> security.applyTo(builder, noBean));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }

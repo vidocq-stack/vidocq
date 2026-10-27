@@ -53,5 +53,6 @@ public final class FixtureAuditDevService implements DevService {
 
     @Override
     public void stop() {
+        // Starts no container: nothing to stop.
     }
 }

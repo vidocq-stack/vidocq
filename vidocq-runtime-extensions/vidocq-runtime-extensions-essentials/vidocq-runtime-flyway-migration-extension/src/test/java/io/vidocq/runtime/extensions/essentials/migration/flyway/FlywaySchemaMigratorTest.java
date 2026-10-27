@@ -122,13 +122,14 @@ class FlywaySchemaMigratorTest {
     void strictModeFailsOnALocationThatHoldsNothing() {
         MigrationTarget strict = new MigrationTarget("default", url(), "sa", "",
                 List.of("classpath:db/nowhere"), true);
-        FlywayException scanned = assertThrows(FlywayException.class,
-                () -> new FlywaySchemaMigrator().migrate(strict));
+        FlywaySchemaMigrator migrator = new FlywaySchemaMigrator();
+        FlywayException scanned = assertThrows(FlywayException.class, () -> migrator.migrate(strict));
         assertTrue(scanned.getMessage().contains("Unable to resolve location classpath:db/nowhere"),
                 scanned.getMessage());
 
-        FlywayException listed = assertThrows(FlywayException.class,
-                () -> new FlywaySchemaMigrator().migrate(strict, lister(Map.of()), new NameOnlyLoader()));
+        Function<String, List<String>> nothing = lister(Map.of());
+        NameOnlyLoader loader = new NameOnlyLoader();
+        FlywayException listed = assertThrows(FlywayException.class, () -> migrator.migrate(strict, nothing, loader));
         assertTrue(listed.getMessage().contains("Unable to resolve location classpath:db/nowhere"),
                 listed.getMessage());
     }
@@ -177,13 +178,14 @@ class FlywaySchemaMigratorTest {
         new FlywaySchemaMigrator().migrate(target);
         assertTrue(target.cleanDisabled(), "the default, as Flyway's own");
 
-        assertThrows(IllegalStateException.class, () -> new FlywaySchemaMigrator().clean(target));
+        FlywaySchemaMigrator migrator = new FlywaySchemaMigrator();
+        assertThrows(IllegalStateException.class, () -> migrator.clean(target));
 
         assertEquals(0, count(url, "widget"), "the table is still there");
     }
 
     @Test
-    void cleanDropsTheSchemaWhenCleanIsNotDisabled() throws Exception {
+    void cleanDropsTheSchemaWhenCleanIsNotDisabled() {
         String url = url();
         MigrationTarget target = new MigrationTarget("default", url, "sa", "", List.of("classpath:db/testmigration"),
                 false, false);

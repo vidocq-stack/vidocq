@@ -178,8 +178,10 @@ class FoyExtensionTest {
     void theServletSecurityConfigurationReachesFoy(@TempDir Path root) throws Exception {
         FoyExtension extension = configured(Map.of());
 
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> extension.start(null,
-                config(Map.of("vidocq.servlet.confidential-port", "70000")), loaderWith(root, WEB_XML)));
+        VidocqConfig config = config(Map.of("vidocq.servlet.confidential-port", "70000"));
+        ClassLoader loader = loaderWith(root, WEB_XML);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> extension.start(null, config, loader));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }

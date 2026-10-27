@@ -145,19 +145,21 @@ class MansartPoolExtensionTest {
 
     @Test
     void xaTrueOnUnknownDriverFailsLoudly() {
-        assertThrows(IllegalArgumentException.class, () -> ext.configure(MapConfig.of(Map.of(
+        var config = MapConfig.of(Map.of(
                 "vidocq.pool.url", "jdbc:exotic:whatever",
                 "vidocq.pool.xa", "true"
-        ))), "xa=true without a derivable XADataSource class must fail at configure time");
+        ));
+        assertThrows(IllegalArgumentException.class, () -> ext.configure(config),
+                "xa=true without a derivable XADataSource class must fail at configure time");
     }
 
     @Test
     void xaOnUnknownDriverNamesTheUrlWithoutItsCredentials() {
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> ext.configure(MapConfig.of(Map.of(
-                        "vidocq.pool.url", "jdbc:exotic://app:s3cret@db.example/app;password=s3cret;mode=x",
-                        "vidocq.pool.xa", "true"
-                ))));
+        var config = MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:exotic://app:s3cret@db.example/app;password=s3cret;mode=x",
+                "vidocq.pool.xa", "true"
+        ));
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> ext.configure(config));
         assertTrue(failure.getMessage().contains("'jdbc:exotic://db.example/app;mode=x'"), failure.getMessage());
         assertFalse(failure.getMessage().contains("s3cret"), failure.getMessage());
     }
@@ -165,11 +167,11 @@ class MansartPoolExtensionTest {
     @Test
     void xaOnMysqlNeverNamesAPasswordThatHoldsASemicolon() {
         // MySQL takes a ; in user info, past the part the redactor looks for it in: the URL fails closed
-        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
-                () -> ext.configure(MapConfig.of(Map.of(
-                        "vidocq.pool.url", "jdbc:mysql://app:pa;ss@db.example/app",
-                        "vidocq.pool.xa", "true"
-                ))));
+        var config = MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:mysql://app:pa;ss@db.example/app",
+                "vidocq.pool.xa", "true"
+        ));
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> ext.configure(config));
         assertTrue(failure.getMessage().contains("'jdbc:mysql:…'"), failure.getMessage());
         assertFalse(failure.getMessage().contains("app:pa"), failure.getMessage());
         assertFalse(failure.getMessage().contains("ss@"), failure.getMessage());
@@ -178,10 +180,11 @@ class MansartPoolExtensionTest {
     @Test
     void invalidConfigSurfaced() {
         // maxSize < 1 → Builder.build() throws IllegalArgumentException
-        assertThrows(IllegalArgumentException.class, () -> ext.configure(MapConfig.of(Map.of(
+        var config = MapConfig.of(Map.of(
                 "vidocq.pool.url", "jdbc:h2:mem:bad",
                 "vidocq.pool.maxSize", "0"
-        ))));
+        ));
+        assertThrows(IllegalArgumentException.class, () -> ext.configure(config));
     }
 
     @Test

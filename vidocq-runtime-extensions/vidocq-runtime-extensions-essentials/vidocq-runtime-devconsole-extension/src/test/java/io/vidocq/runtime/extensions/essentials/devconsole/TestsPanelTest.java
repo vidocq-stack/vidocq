@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
 import io.vidocq.runtime.spi.devconsole.PanelAction;
+import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -108,7 +109,7 @@ class TestsPanelTest {
         assertEquals("tests", entry.id());
         assertEquals("Tests", panel.title());
         assertEquals(List.of("failures", "errors"),
-                entry.charts().getFirst().series().stream().map(series -> series.key()).toList());
+                entry.charts().getFirst().series().stream().map(Series::key).toList());
         assertEquals(List.of("run-all", "rerun-failed"), entry.actions().stream().map(PanelAction::id).toList());
         assertEquals(List.of("Run all tests", "Rerun failed tests"),
                 entry.actions().stream().map(PanelAction::label).toList());

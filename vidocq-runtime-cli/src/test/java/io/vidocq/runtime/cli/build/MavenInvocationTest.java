@@ -71,14 +71,16 @@ class MavenInvocationTest {
 
     @Test
     void blankExecutableRejected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> MavenInvocation.command("  ", List.of("package"), MavenInvocation.Options.none()));
+        List<String> goals = List.of("package");
+        MavenInvocation.Options none = MavenInvocation.Options.none();
+        assertThrows(IllegalArgumentException.class, () -> MavenInvocation.command("  ", goals, none));
     }
 
     @Test
     void emptyGoalsRejected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> MavenInvocation.command("mvn", List.of(), MavenInvocation.Options.none()));
+        List<String> noGoal = List.of();
+        MavenInvocation.Options none = MavenInvocation.Options.none();
+        assertThrows(IllegalArgumentException.class, () -> MavenInvocation.command("mvn", noGoal, none));
     }
 
     @Test

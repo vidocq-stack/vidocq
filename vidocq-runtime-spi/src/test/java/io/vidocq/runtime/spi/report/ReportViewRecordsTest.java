@@ -49,7 +49,8 @@ class ReportViewRecordsTest {
         assertNull(section.headline());
         assertNull(section.summary());
         assertEquals(List.of(), section.lines());
-        assertThrows(NullPointerException.class, () -> new ReportSection(null, "headline", "summary", List.of()));
+        List<ReportLine> noLine = List.of();
+        assertThrows(NullPointerException.class, () -> new ReportSection(null, "headline", "summary", noLine));
     }
 
     @Test
@@ -61,7 +62,8 @@ class ReportViewRecordsTest {
         lines.clear();
 
         assertEquals(List.of(weaving), section.lines());
-        assertThrows(UnsupportedOperationException.class, () -> section.lines().add(weaving));
+        List<ReportLine> sectionLines = section.lines();
+        assertThrows(UnsupportedOperationException.class, () -> sectionLines.add(weaving));
     }
 
     @Test
@@ -83,7 +85,8 @@ class ReportViewRecordsTest {
         values.clear();
 
         assertEquals(List.of("h2", "null"), line.values());
-        assertThrows(UnsupportedOperationException.class, () -> line.values().add("postgresql"));
+        List<String> lineValues = line.values();
+        assertThrows(UnsupportedOperationException.class, () -> lineValues.add("postgresql"));
         assertEquals(List.of(), new ReportLine("databases", null).values());
     }
 

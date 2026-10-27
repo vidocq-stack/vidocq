@@ -38,8 +38,8 @@ class ListenerOptionsTest {
 
     @Test
     void negativeGracePeriodRejected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ListenerOptions(false, false, Duration.ofSeconds(-1), null));
+        Duration negative = Duration.ofSeconds(-1);
+        assertThrows(IllegalArgumentException.class, () -> new ListenerOptions(false, false, negative, null));
     }
 
     @Test

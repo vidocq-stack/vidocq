@@ -56,8 +56,8 @@ class ServletSettingsTest {
 
     @Test
     void badSessionTimeoutNamesTheKey() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ServletSettings.from(new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "abc"))));
+        MapConfiguration config = new MapConfiguration(Map.of("vidocq.servlet.session-timeout", "abc"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ServletSettings.from(config));
         assertTrue(e.getMessage().contains("vidocq.servlet.session-timeout"), e.getMessage());
     }
 

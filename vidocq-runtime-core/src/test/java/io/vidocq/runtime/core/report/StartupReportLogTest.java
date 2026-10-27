@@ -51,7 +51,7 @@ class StartupReportLogTest {
     void vidocqConsoleFormatterKeepsTheLinesOfTheReportInColumnZero() {
         String text = StartupReportRenderer.render(REPORT);
 
-        List<String> lines = new ConsoleLogFormatter(false).format(record(text)).lines().toList();
+        List<String> lines = new ConsoleLogFormatter(false).format(logRecord(text)).lines().toList();
 
         assertTrue(lines.getFirst().startsWith("[INFO "), lines.getFirst());
         assertTrue(lines.getFirst().endsWith(" : " + StartupReportRenderer.TITLE), lines.getFirst());
@@ -62,7 +62,7 @@ class StartupReportLogTest {
     void theJdkFormatterKeepsThemToo() {
         String text = StartupReportRenderer.render(REPORT);
 
-        String formatted = new SimpleFormatter().format(record(text));
+        String formatted = new SimpleFormatter().format(logRecord(text));
 
         assertTrue(formatted.lines().anyMatch(line -> line.endsWith(": " + StartupReportRenderer.TITLE)), formatted);
         assertTrue(formatted.contains(text.substring(text.indexOf('\n'))), formatted);
@@ -70,9 +70,9 @@ class StartupReportLogTest {
                 "a report has no parameters: " + formatted);
     }
 
-    private static LogRecord record(String text) {
-        LogRecord record = new LogRecord(Level.INFO, text);
-        record.setLoggerName(StartupRecorder.LOGGER_NAME);
-        return record;
+    private static LogRecord logRecord(String text) {
+        LogRecord logRecord = new LogRecord(Level.INFO, text);
+        logRecord.setLoggerName(StartupRecorder.LOGGER_NAME);
+        return logRecord;
     }
 }

@@ -63,30 +63,31 @@ class ChartTest {
         series.clear();
 
         assertEquals(List.of(Series.area("active"), Series.stacked("idle")), chart.series());
-        assertThrows(UnsupportedOperationException.class, () -> chart.series().add(Series.line("waiting")));
+        List<Series> chartSeries = chart.series();
+        Series waiting = Series.line("waiting");
+        assertThrows(UnsupportedOperationException.class, () -> chartSeries.add(waiting));
     }
 
     @Test
     void theIdFollowsTheRuleOfValueKeys() {
         assertEquals("gc", new Chart("gc", "GC", List.of(Series.rate("time"))).id());
-        assertThrows(IllegalArgumentException.class, () -> new Chart("Connections", "Connections",
-                List.of(Series.area("active"))));
-        assertThrows(NullPointerException.class, () -> new Chart(null, "Connections",
-                List.of(Series.area("active"))));
+        List<Series> active = List.of(Series.area("active"));
+        assertThrows(IllegalArgumentException.class, () -> new Chart("Connections", "Connections", active));
+        assertThrows(NullPointerException.class, () -> new Chart(null, "Connections", active));
     }
 
     @Test
     void aChartHasATitle() {
-        assertThrows(NullPointerException.class, () -> new Chart("connections", null,
-                List.of(Series.area("active"))));
-        assertThrows(IllegalArgumentException.class, () -> new Chart("connections", " \t",
-                List.of(Series.area("active"))));
+        List<Series> active = List.of(Series.area("active"));
+        assertThrows(NullPointerException.class, () -> new Chart("connections", null, active));
+        assertThrows(IllegalArgumentException.class, () -> new Chart("connections", " \t", active));
     }
 
     @Test
     void aChartDrawsAtLeastOneSeriesAndNoNullOne() {
         assertThrows(NullPointerException.class, () -> new Chart("connections", "Connections", null));
-        assertThrows(IllegalArgumentException.class, () -> new Chart("connections", "Connections", List.of()));
+        List<Series> none = List.of();
+        assertThrows(IllegalArgumentException.class, () -> new Chart("connections", "Connections", none));
         List<Series> withNull = new ArrayList<>();
         withNull.add(Series.area("active"));
         withNull.add(null);
@@ -100,10 +101,10 @@ class ChartTest {
         new Chart("memory", "Memory", List.of(Series.area("eden"), Series.line("committed"),
                 Series.stacked("old")));
 
-        assertThrows(IllegalArgumentException.class, () -> new Chart("memory", "Memory",
-                List.of(Series.stacked("old"))));
-        assertThrows(IllegalArgumentException.class, () -> new Chart("memory", "Memory",
-                List.of(Series.line("committed"), Series.stacked("old"), Series.area("eden"))));
+        List<Series> stackedAlone = List.of(Series.stacked("old"));
+        List<Series> stackedOnALine = List.of(Series.line("committed"), Series.stacked("old"), Series.area("eden"));
+        assertThrows(IllegalArgumentException.class, () -> new Chart("memory", "Memory", stackedAlone));
+        assertThrows(IllegalArgumentException.class, () -> new Chart("memory", "Memory", stackedOnALine));
     }
 
     @Test
@@ -112,7 +113,7 @@ class ChartTest {
                 Series.stacked("idle"), Series.line("waiting"), Series.ceiling("active")));
         assertEquals(4, connections.series().size());
 
-        assertThrows(IllegalArgumentException.class, () -> new Chart("throughput", "Throughput",
-                List.of(Series.rate("borrows"), Series.rate("borrows"))));
+        List<Series> twice = List.of(Series.rate("borrows"), Series.rate("borrows"));
+        assertThrows(IllegalArgumentException.class, () -> new Chart("throughput", "Throughput", twice));
     }
 }

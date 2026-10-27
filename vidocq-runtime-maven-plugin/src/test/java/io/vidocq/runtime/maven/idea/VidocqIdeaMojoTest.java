@@ -45,7 +45,6 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -149,7 +148,7 @@ class VidocqIdeaMojoTest {
     }
 
     @Test
-    void theCheckFailsForAMissingFile() throws Exception {
+    void theCheckFailsForAMissingFile() {
         MojoFailureException failure = assertThrows(MojoFailureException.class, this::check);
 
         assertTrue(failure.getMessage().startsWith("Vidocq idea: 2 of 2 run configuration(s)"), failure.getMessage());
@@ -348,7 +347,7 @@ class VidocqIdeaMojoTest {
     }
 
     @Test
-    void configurationErrorsFailBeforeAnythingIsWritten() throws Exception {
+    void configurationErrorsFailBeforeAnythingIsWritten() {
         projects.get(2).getProperties().setProperty("vidocq.mainClass", "not a class");
 
         MojoFailureException failure = assertThrows(MojoFailureException.class, this::run);

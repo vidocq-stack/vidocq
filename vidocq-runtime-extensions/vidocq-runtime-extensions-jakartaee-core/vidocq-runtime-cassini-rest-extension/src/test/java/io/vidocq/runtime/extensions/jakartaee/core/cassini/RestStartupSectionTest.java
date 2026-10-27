@@ -46,7 +46,7 @@ class RestStartupSectionTest {
     @Provider
     static class AuditFilter implements ContainerRequestFilter {
         @Override
-        public void filter(ContainerRequestContext context) {}
+        public void filter(ContainerRequestContext context) { /* only its registration is tested */ }
     }
 
     private static final String TASKS = TaskResource.class.getName();
