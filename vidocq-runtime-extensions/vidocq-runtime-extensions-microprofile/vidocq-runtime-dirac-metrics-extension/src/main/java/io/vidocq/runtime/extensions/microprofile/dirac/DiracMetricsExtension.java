@@ -26,6 +26,8 @@ import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * The {@code metrics} section of the startup report: what Dirac's registries hold. The live panel of the dev
  * console moved to {@code vidocq-runtime-dirac-metrics-extension-dev} (Vidocq/vidocq#143): only {@code vidocq:dev}
@@ -47,7 +49,7 @@ public final class DiracMetricsExtension implements VidocqExtension, StartupRepo
      * The producer bean {@link #contribute} reads, resolved once in {@link #onStart}; {@link DiracLiveBean#NONE}
      * before it and after {@link #onStop}.
      */
-    private volatile DiracLiveBean live = DiracLiveBean.NONE;
+    private final AtomicReference<DiracLiveBean> live = new AtomicReference<>(DiracLiveBean.NONE);
 
     /** Created by the {@link java.util.ServiceLoader}. */
     public DiracMetricsExtension() {}
@@ -60,13 +62,13 @@ public final class DiracMetricsExtension implements VidocqExtension, StartupRepo
     /** Resolves the producer bean, once, without creating it. */
     @Override
     public void onStart(ExtensionContext context) {
-        live = DiracLiveBean.of(context.beanManager());
+        live.set(DiracLiveBean.of(context.beanManager()));
     }
 
     /** Clears what {@link #contribute} and the live panel read first. */
     @Override
     public void onStop() {
-        live = DiracLiveBean.NONE;
+        live.set(DiracLiveBean.NONE);
     }
 
     @Override
@@ -81,7 +83,7 @@ public final class DiracMetricsExtension implements VidocqExtension, StartupRepo
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        DiracLiveBean read = live;
+        DiracLiveBean read = live.get();
         MetricsStartupSection.write(read.registries(), read.absence(), context, section);
     }
 }

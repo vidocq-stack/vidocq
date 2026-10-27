@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -131,8 +132,8 @@ final class Snapshot implements Handler {
     private final Set<String> failed = ConcurrentHashMap.newKeySet();
     /** Five minutes of every measure, filled by {@link #tick()} whether or not a page is watching. */
     private final PanelHistory history = new PanelHistory();
-    private volatile Bound bound;
-    private volatile Contributed contributed;
+    private final AtomicReference<Bound> bound = new AtomicReference<>();
+    private final AtomicReference<Contributed> contributed = new AtomicReference<>();
 
     /**
      * Where the console listens.
@@ -242,7 +243,7 @@ final class Snapshot implements Handler {
      * @param port       the port bound
      */
     void bound(String url, int configured, int port) {
-        this.bound = new Bound(url, configured, port);
+        bound.set(new Bound(url, configured, port));
     }
 
     /** The snapshot as JSON, {@code application/json; charset=utf-8}, never cached; a HEAD gets its headers. */
@@ -362,15 +363,15 @@ final class Snapshot implements Handler {
 
     private Optional<StartupReportView> view() {
         try {
-            Optional<StartupReportView> view = report.get();
-            return view == null ? Optional.empty() : view;
+            // a supplier breaking its contract with null reads as no report
+            return Objects.requireNonNullElse(report.get(), Optional.empty());
         } catch (RuntimeException unreadable) {
             return Optional.empty();
         }
     }
 
     private void writeConsole(JsonWriter out, long time, boolean page) {
-        Bound where = bound;
+        Bound where = bound.get();
         out.name("console").beginObject()
                 .name("vidocq").value(vidocq)
                 .name("url").value(where == null ? null : where.url())
@@ -393,15 +394,15 @@ final class Snapshot implements Handler {
 
     /** The panels of {@code view}, read on the first poll that sees it. */
     private Contributed contributed(StartupReportView view) {
-        Contributed current = contributed;
+        Contributed current = contributed.get();
         if (current != null && current.view() == view) {
             return current;
         }
         synchronized (this) {
-            current = contributed;
+            current = contributed.get();
             if (current == null || current.view() != view) {
                 current = read(view, actions != null);
-                contributed = current;
+                contributed.set(current);
             }
             return current;
         }

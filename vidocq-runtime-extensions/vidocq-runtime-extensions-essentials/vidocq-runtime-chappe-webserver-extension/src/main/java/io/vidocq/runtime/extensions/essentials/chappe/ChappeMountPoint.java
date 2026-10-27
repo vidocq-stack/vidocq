@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Single attachment point shared between extensions to contribute handlers to the Chappe engine.
@@ -54,7 +55,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ChappeMountPoint {
 
-    private static volatile ChappeMountPoint instance;
+    private static final AtomicReference<ChappeMountPoint> INSTANCE = new AtomicReference<>();
 
     /** Names the class that declares a listener, for the error when the configuration lists it too. */
     private static final StackWalker CALLER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
@@ -78,7 +79,7 @@ public final class ChappeMountPoint {
      * <p>Access the singleton. Non-null after {@link ChappeEngineExtension} has started.</p>
      */
     public static ChappeMountPoint instance() {
-        ChappeMountPoint i = instance;
+        ChappeMountPoint i = INSTANCE.get();
         if (i == null) {
             throw new IllegalStateException(
                     "ChappeMountPoint not initialized — ChappeEngineExtension must run first");
@@ -87,11 +88,11 @@ public final class ChappeMountPoint {
     }
 
     static void install(ChappeMountPoint mp) {
-        instance = mp;
+        INSTANCE.set(mp);
     }
 
     static void uninstall() {
-        instance = null;
+        INSTANCE.set(null);
     }
 
     /**

@@ -39,6 +39,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -74,9 +75,9 @@ public final class CatalogueLivePanel implements LivePanel {
     private static final System.Logger LOG = System.getLogger(CatalogueLivePanel.class.getName());
 
     /** The bean manager of this boot, {@code null} before {@link #start} and after {@link #stop}. */
-    private volatile BeanManager beans;
+    private final AtomicReference<BeanManager> beans = new AtomicReference<>();
     /** The actions of this boot, {@link RepositoryActions#NONE} until {@link #actions()} builds them. */
-    private volatile RepositoryActions run = RepositoryActions.NONE;
+    private final AtomicReference<RepositoryActions> run = new AtomicReference<>(RepositoryActions.NONE);
 
     /** Created by the service loader. */
     public CatalogueLivePanel() {}
@@ -89,11 +90,11 @@ public final class CatalogueLivePanel implements LivePanel {
     /** Keeps the bean manager the actions resolve the repositories and the transaction manager with. */
     @Override
     public void start(ExtensionContext context) {
-        run = RepositoryActions.NONE;
+        run.set(RepositoryActions.NONE);
         try {
-            beans = context.beanManager();
+            beans.set(context.beanManager());
         } catch (RuntimeException | LinkageError unavailable) {
-            beans = null;
+            beans.set(null);
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: no bean manager, no action: "
                     + unavailable.getClass().getName());
         }
@@ -102,14 +103,14 @@ public final class CatalogueLivePanel implements LivePanel {
     /** Drops the bean manager, the actions and their history: nothing of this boot outlives a dev reload. */
     @Override
     public void stop() {
-        beans = null;
-        run = RepositoryActions.NONE;
+        beans.set(null);
+        run.set(RepositoryActions.NONE);
     }
 
     /** The run actions of this boot, built now; none before {@link #start}, or without a catalogue. */
     @Override
     public List<PanelAction> actions() {
-        BeanManager manager = beans;
+        BeanManager manager = beans.get();
         if (manager == null) {
             return List.of();
         }
@@ -123,18 +124,18 @@ public final class CatalogueLivePanel implements LivePanel {
         Optional<MansartDataCatalogue> catalogue = MansartDataLive.catalogue();
         List<Class<?>> repositories = MansartDataLive.repositories();
         if (catalogue.isEmpty() || repositories.isEmpty()) {
-            run = RepositoryActions.NONE;
+            run.set(RepositoryActions.NONE);
             return List.of();
         }
         try {
             RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(), lookup, transactions,
                     models, accessible, RepositoryActions.MAX_ACTIONS, JdqlRunner.MANSART, EntitySaver.MANSART);
-            run = built;
+            run.set(built);
             return built.actions();
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, "Mansart Data: the run actions could not be built: "
                     + failed.getClass().getName());
-            run = RepositoryActions.NONE;
+            run.set(RepositoryActions.NONE);
             return List.of();
         }
     }
@@ -145,7 +146,7 @@ public final class CatalogueLivePanel implements LivePanel {
      */
     @Override
     public List<PanelLanguage> languages() {
-        return beans == null ? List.of() : languages(type -> EntityModels.of(type));
+        return beans.get() == null ? List.of() : languages(type -> EntityModels.of(type));
     }
 
     /** The JDQL language of what {@link MansartDataLive} holds; none without an entity, or when it cannot be built. */
@@ -203,7 +204,7 @@ public final class CatalogueLivePanel implements LivePanel {
         if (catalogue.moreRepositories() > 0) {
             sample.text("more-repositories", "and " + catalogue.moreRepositories() + " more");
         }
-        run.sample(sample);
+        run.get().sample(sample);
     }
 
     private static List<String> row(Column column) {

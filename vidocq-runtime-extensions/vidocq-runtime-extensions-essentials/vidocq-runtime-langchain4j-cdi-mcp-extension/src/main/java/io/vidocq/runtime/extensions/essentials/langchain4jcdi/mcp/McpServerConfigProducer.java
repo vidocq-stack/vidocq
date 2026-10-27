@@ -25,6 +25,8 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Named;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Produces the {@code @Named("mcp-server")} {@link McpServerConfig} that langchain4j-cdi's
  * {@code McpServerConfigResolver} reads, from what {@link McpExtension} mapped out of the {@code vidocq.mcp.*} keys.
@@ -43,7 +45,7 @@ import jakarta.inject.Named;
 public class McpServerConfigProducer {
 
     /** Set by {@link McpExtension#beforeStart} before the container is built, cleared by {@link McpExtension#onStop}. */
-    static volatile McpServerConfig config;
+    static final AtomicReference<McpServerConfig> CONFIG = new AtomicReference<>();
 
     /** CDI constructor. */
     public McpServerConfigProducer() {}
@@ -58,7 +60,7 @@ public class McpServerConfigProducer {
     @Alternative
     @Priority(100)
     public McpServerConfig mcpServerConfig() {
-        McpServerConfig mapped = config;
+        McpServerConfig mapped = CONFIG.get();
         if (mapped == null) {
             throw new IllegalStateException("No vidocq.mcp.* configuration was published: McpExtension adds this "
                     + "class only when a vidocq.mcp.* key is set");

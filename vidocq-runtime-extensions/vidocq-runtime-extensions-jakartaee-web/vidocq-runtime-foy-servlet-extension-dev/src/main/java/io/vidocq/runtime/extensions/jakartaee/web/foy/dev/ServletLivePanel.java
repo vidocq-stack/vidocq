@@ -29,6 +29,7 @@ import io.vidocq.runtime.spi.devconsole.Series;
 import io.vidocq.runtime.spi.devconsole.Unit;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The servlet section, live: the active sessions of each servlet deployment of this boot, one group per
@@ -44,13 +45,13 @@ public final class ServletLivePanel implements LivePanel {
             new Chart("sessions", "Active sessions", List.of(Series.area("sessions"))));
 
     /** The boot's container, the key of its mounts; set by {@link #start}. */
-    private volatile Object boot;
+    private final AtomicReference<Object> boot = new AtomicReference<>();
 
     /** Created by the service loader. */
     public ServletLivePanel() {}
 
     ServletLivePanel(Object boot) {
-        this.boot = boot;
+        this.boot.set(boot);
     }
 
     @Override
@@ -60,7 +61,7 @@ public final class ServletLivePanel implements LivePanel {
 
     @Override
     public void start(ExtensionContext context) {
-        boot = context.container();
+        boot.set(context.container());
     }
 
     @Override
@@ -70,7 +71,8 @@ public final class ServletLivePanel implements LivePanel {
 
     @Override
     public void sample(PanelSample sample) {
-        List<ServletMount> mounts = boot == null ? List.of() : ServletMounts.of(boot);
+        Object container = boot.get();
+        List<ServletMount> mounts = container == null ? List.of() : ServletMounts.of(container);
         if (mounts.isEmpty()) {
             sample.absent("sessions", "no servlet deployed");
             return;

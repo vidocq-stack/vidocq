@@ -32,6 +32,7 @@ import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Hosts a langchain4j-cdi MCP server on Vidocq.
@@ -64,9 +65,9 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
     private static final System.Logger LOG = System.getLogger(McpExtension.class.getName());
 
     /** What the {@code vidocq.mcp.*} keys describe; {@code null} when none is set. */
-    private volatile McpServerConfig mapped;
+    private final AtomicReference<McpServerConfig> mapped = new AtomicReference<>();
     /** What {@link #onStart} read from the container; {@link McpInspection#NOTHING} before and after. */
-    private volatile McpInspection inspection = McpInspection.NOTHING;
+    private final AtomicReference<McpInspection> inspection = new AtomicReference<>(McpInspection.NOTHING);
 
     /** Created by the {@link java.util.ServiceLoader}. */
     public McpExtension() {}
@@ -88,17 +89,17 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void configure(VidocqConfiguration config) {
-        mapped = McpConfigMapping.map(config).orElse(null);
-        if (mapped != null) {
+        mapped.set(McpConfigMapping.map(config).orElse(null));
+        if (mapped.get() != null) {
             LOG.log(System.Logger.Level.DEBUG, "MCP server configuration mapped from vidocq.mcp.*");
         }
     }
 
     @Override
     public void beforeStart(VaubanContainerBuilder builder) {
-        McpServerConfig config = mapped;
+        McpServerConfig config = mapped.get();
         if (config != null) {
-            McpServerConfigProducer.config = config;
+            McpServerConfigProducer.CONFIG.set(config);
             builder.addSyntheticArchiveClass(McpServerConfigProducer.class);
         }
     }
@@ -111,15 +112,15 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
      */
     @Override
     public void onStart(ExtensionContext context) {
-        inspection = McpInspection.of(context.beanManager());
+        inspection.set(McpInspection.of(context.beanManager()));
     }
 
     /** Clears what {@link #contribute} last read, before anything it refers to may be closed. */
     @Override
     public void onStop() {
         McpEndpointLive.clear();
-        inspection = McpInspection.NOTHING;
-        McpServerConfigProducer.config = null;
+        inspection.set(McpInspection.NOTHING);
+        McpServerConfigProducer.CONFIG.set(null);
     }
 
     @Override
@@ -134,7 +135,7 @@ public final class McpExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        McpStartupSection.write(inspection, mapped != null, McpEndpoint.class.getModule(), context, section);
+        McpStartupSection.write(inspection.get(), mapped.get() != null, McpEndpoint.class.getModule(), context, section);
         // The MCP inspector of the -dev module calls the URL the report prints: it cannot resolve routes itself.
         McpEndpointLive.publish(McpStartupSection.endpointUrls(context.routeUrls(McpStartupSection.ENDPOINT)));
     }

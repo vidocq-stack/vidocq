@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The console's own {@code tests} panel (#122, spec §3), in a dev launch run by {@code vidocq:dev} with continuous
@@ -90,9 +91,9 @@ final class TestsPanel implements DevConsolePanel {
 
     private final Path results;
     private final Path request;
-    private volatile View view;
+    private final AtomicReference<View> view = new AtomicReference<>();
     private volatile boolean unreadable;
-    private volatile Thread reader;
+    private final AtomicReference<Thread> reader = new AtomicReference<>();
     /** Guarded by this: the modification time last read, or -1. */
     private long lastModified = -1;
     /** Guarded by this: the size last read, or -1. */
@@ -118,22 +119,23 @@ final class TestsPanel implements DevConsolePanel {
     }
 
     private void startReading() {
-        reader = Thread.ofPlatform().name("vidocq-devconsole-tests").daemon(true).start(() -> {
+        reader.set(Thread.ofVirtual().name("vidocq-devconsole-tests").start(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 refresh();
                 try {
                     Thread.sleep(POLL_MILLIS);
                 } catch (InterruptedException stopping) {
+                    Thread.currentThread().interrupt();
                     return;
                 }
             }
-        });
+        }));
     }
 
     /** Stops the reader thread; idempotent. */
     void stop() {
-        Thread running = reader;
-        reader = null;
+        Thread running = reader.get();
+        reader.set(null);
         if (running != null) {
             running.interrupt();
             try {
@@ -146,7 +148,7 @@ final class TestsPanel implements DevConsolePanel {
 
     /** The reader thread, or {@code null} once stopped. */
     Thread reader() {
-        return reader;
+        return reader.get();
     }
 
     /**
@@ -168,7 +170,7 @@ final class TestsPanel implements DevConsolePanel {
         lastModified = modified;
         lastSize = size;
         try {
-            view = parse(Files.readString(results, StandardCharsets.UTF_8));
+            view.set(parse(Files.readString(results, StandardCharsets.UTF_8)));
             unreadable = false;
         } catch (IOException | RuntimeException failed) {
             unreadable = true;
@@ -232,7 +234,7 @@ final class TestsPanel implements DevConsolePanel {
     /** The last run when the console starts, where its results and log are. */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        View current = view;
+        View current = view.get();
         section.summary(current == null ? "continuous testing, no run yet" : "last run " + stateText(current))
                 .row("results", results.toString())
                 .row("log", current == null || current.log().isEmpty() ? "target/vidocq-dev-tests.log"
@@ -255,7 +257,7 @@ final class TestsPanel implements DevConsolePanel {
     }
 
     private String rerunFailed() {
-        View current = view;
+        View current = view.get();
         if (current == null || current.failures().isEmpty()) {
             return NOTHING_TO_RERUN;
         }
@@ -273,7 +275,7 @@ final class TestsPanel implements DevConsolePanel {
 
     @Override
     public void sample(PanelSample sample) {
-        View current = view;
+        View current = view.get();
         if (current == null) {
             sample.text("state", unreadable ? UNREADABLE : "no run yet");
             return;

@@ -22,6 +22,8 @@ package io.vidocq.runtime.core;
 import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.spi.VidocqApp;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Entry points to the Vidocq server.
  *
@@ -51,9 +53,9 @@ public final class Vidocq {
     private static final System.Logger LOG = System.getLogger(Vidocq.class.getName());
 
     /** The bootstrap of the current deployment — target of {@link #waitForExit()}. */
-    private static volatile VidocqBootstrap current;
+    private static final AtomicReference<VidocqBootstrap> CURRENT = new AtomicReference<>();
     /** The module of the class that called {@link #run}: the application the banner names. */
-    private static volatile Module applicationModule;
+    private static final AtomicReference<Module> APPLICATION_MODULE = new AtomicReference<>();
 
     private Vidocq() {}
 
@@ -90,7 +92,7 @@ public final class Vidocq {
         ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
-        applicationModule = caller.getModule();
+        APPLICATION_MODULE.set(caller.getModule());
         ensureLayer(caller);
         String reloadFile = System.getProperty(VidocqDevReloadLoop.RELOAD_FILE_PROPERTY, "").strip();
         if (!reloadFile.isEmpty()) {
@@ -112,7 +114,7 @@ public final class Vidocq {
         ConsoleLogging.installIfDefault();
         var caller = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass();
-        applicationModule = caller.getModule();
+        APPLICATION_MODULE.set(caller.getModule());
         ensureLayer(caller);
         var bootstrap = bootAndRegister();
         try {
@@ -129,7 +131,7 @@ public final class Vidocq {
 
     /** Blocks until the current deployment shuts down (Ctrl+C, SIGTERM, programmatic). */
     public static void waitForExit() {
-        var bootstrap = current;
+        var bootstrap = CURRENT.get();
         if (bootstrap != null) {
             bootstrap.awaitShutdown();
         }
@@ -141,7 +143,7 @@ public final class Vidocq {
      * {@code -m} module unless it is the runtime's. Never guessed among the application archives.
      */
     static Module applicationModule() {
-        Module caller = applicationModule;
+        Module caller = APPLICATION_MODULE.get();
         if (caller != null && caller.isNamed()) {
             return caller;
         }
@@ -201,7 +203,7 @@ public final class Vidocq {
 
     private static VidocqBootstrap bootAndRegister() {
         var bootstrap = VidocqBootstrap.create().configure().start();
-        current = bootstrap;
+        CURRENT.set(bootstrap);
         return bootstrap;
     }
 

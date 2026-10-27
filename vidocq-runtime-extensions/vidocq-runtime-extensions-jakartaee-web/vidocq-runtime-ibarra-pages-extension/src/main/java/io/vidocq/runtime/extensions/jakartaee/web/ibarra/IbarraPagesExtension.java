@@ -31,6 +31,7 @@ import io.vidocq.runtime.spi.report.StartupReportSection;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -41,7 +42,7 @@ import java.util.function.Supplier;
 public final class IbarraPagesExtension implements VidocqExtension, StartupReportContributor {
 
     private final Supplier<List<String>> catalog;
-    private volatile List<String> pages;
+    private final AtomicReference<List<String>> pages = new AtomicReference<>();
 
     /** Created by the runtime's service loader: the pages of the application layer. */
     public IbarraPagesExtension() {
@@ -58,17 +59,17 @@ public final class IbarraPagesExtension implements VidocqExtension, StartupRepor
 
     @Override
     public void onStart(ExtensionContext context) {
-        pages = catalog.get();
+        pages.set(catalog.get());
     }
 
     @Override
     public void onStop() {
-        pages = null;
+        pages.set(null);
     }
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        List<String> compiled = pages;
+        List<String> compiled = pages.get();
         section.summary("Jakarta Pages 4.0");
         if (compiled == null) {
             section.row("pages", "not initialized");

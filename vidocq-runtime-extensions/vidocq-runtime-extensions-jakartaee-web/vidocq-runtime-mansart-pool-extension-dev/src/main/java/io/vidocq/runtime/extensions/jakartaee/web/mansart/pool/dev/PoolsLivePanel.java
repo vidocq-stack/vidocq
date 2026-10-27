@@ -33,6 +33,7 @@ import io.vidocq.runtime.spi.devconsole.Unit;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The pool section, live: one group per open pool, from {@link MansartPoolsLive}, the holder the runtime extension
@@ -54,7 +55,7 @@ public final class PoolsLivePanel implements LivePanel {
     private static final System.Logger LOG = System.getLogger(PoolsLivePanel.class.getName());
 
     /** The pools of this boot and what was read of their tables; {@code null} until the first call needs them. */
-    private volatile List<PoolActions> pools;
+    private final AtomicReference<List<PoolActions>> pools = new AtomicReference<>();
 
     /** Created by the service loader. */
     public PoolsLivePanel() {}
@@ -67,12 +68,12 @@ public final class PoolsLivePanel implements LivePanel {
     /** Forgets the previous boot's pools: a dev reload reads its own. */
     @Override
     public void start(ExtensionContext context) {
-        pools = null;
+        pools.set(null);
     }
 
     @Override
     public void stop() {
-        pools = null;
+        pools.set(null);
     }
 
     /** Each pool's tab of actions, {@code @Default} first, then the named pools in name order. */
@@ -105,10 +106,10 @@ public final class PoolsLivePanel implements LivePanel {
 
     /** The pools of this boot, their tables read now on the first call. */
     private synchronized List<PoolActions> pools() {
-        List<PoolActions> read = pools;
+        List<PoolActions> read = pools.get();
         if (read == null) {
             read = PoolActions.of(MansartPoolsLive.pools());
-            pools = read;
+            pools.set(read);
         }
         return read;
     }

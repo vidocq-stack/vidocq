@@ -57,6 +57,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -142,17 +143,17 @@ public final class VidocqBootstrap {
     /** What this boot records for its report, from {@link #configure()} on. */
     private StartupRecorder recorder;
     /** The report of this boot, once {@link #start()} ended or a phase failed; read by the extensions' threads. */
-    private volatile StartupReport startupReport;
+    private final AtomicReference<StartupReport> startupReport = new AtomicReference<>();
     /**
      * The contributors whose sections the report of this boot has, the very instances, in report order; empty
      * before the report and once the boot stops.
      */
-    private volatile List<StartupReportContributor> reportContributors = List.of();
+    private final AtomicReference<List<StartupReportContributor>> reportContributors = new AtomicReference<>(List.of());
     /**
      * The read-only view of the report of this boot that {@link ExtensionContext#startupReport()} answers:
      * {@code null} until the report is written, and again from {@link #shutdown()} on.
      */
-    private volatile StartupReportView reportView;
+    private final AtomicReference<StartupReportView> reportView = new AtomicReference<>();
     /** The extensions to boot instead of those the {@link java.util.ServiceLoader} finds, for tests. */
     private List<VidocqExtension> givenExtensions;
     /**
@@ -404,21 +405,21 @@ public final class VidocqBootstrap {
             StartupContributors.Contributed contributed = StartupContributors.contribute(extensions,
                     Thread.currentThread().getContextClassLoader(), collected(), launchMode(), beanManager(),
                     recorder);
-            reportContributors = contributed.contributors();
+            reportContributors.set(contributed.contributors());
             List<Section> sections = new ArrayList<>(StartupFacts.coreSections(recorder.weaving(), config, extensions,
                     recorder.onStartNanos(), null, DisplayPaths.current(), enrichedReader()));
             sections.addAll(contributed.sections());
             String runtime = runtime();
             recorder.end();
             StartupReport report = recorder.report(launchMode(), launchReason(), verbosity, runtime, sections, null);
-            this.startupReport = report;
+            startupReport.set(report);
             StartupRecorder.log(report);
         } catch (RuntimeException | LinkageError e) {
             StartupRecorder.skipped(e);
-            if (startupReport == null) {
+            if (startupReport.get() == null) {
                 // a report with no section has no contributor to offer either
-                reportContributors = List.of();
-                startupReport = headerOnly(recorder);
+                reportContributors.set(List.of());
+                startupReport.set(headerOnly(recorder));
             }
         }
         publishView();
@@ -429,12 +430,12 @@ public final class VidocqBootstrap {
      * a view that cannot be built leaves the extensions without a report, never the boot without its start.
      */
     private void publishView() {
-        StartupReport report = startupReport;
+        StartupReport report = startupReport.get();
         if (report == null) {
             return;
         }
         try {
-            reportView = new CoreStartupReportView(report, reportContributors);
+            reportView.set(new CoreStartupReportView(report, reportContributors.get()));
         } catch (RuntimeException | LinkageError unpublished) {
             LOG.log(System.Logger.Level.DEBUG, "Startup report not offered to the extensions", unpublished);
         }
@@ -442,7 +443,7 @@ public final class VidocqBootstrap {
 
     /** The view of the report of this boot, once it is written and until the boot stops. */
     private Optional<StartupReportView> publishedView() {
-        return Optional.ofNullable(reportView);
+        return Optional.ofNullable(reportView.get());
     }
 
     /**
@@ -478,7 +479,7 @@ public final class VidocqBootstrap {
             List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
                     recorder.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
             StartupReport partial = recorder.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
-            this.startupReport = partial;
+            startupReport.set(partial);
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);
         } catch (RuntimeException | LinkageError unreported) {
             // the failure of the boot is what matters, and the caller rethrows it untouched
@@ -531,7 +532,7 @@ public final class VidocqBootstrap {
      * boot that went well but whose report could not be written keeps its header facts, with no section.
      */
     Optional<StartupReport> startupReport() {
-        return Optional.ofNullable(startupReport);
+        return Optional.ofNullable(startupReport.get());
     }
 
     /** Boots {@code extensions} instead of those the {@link java.util.ServiceLoader} finds: for tests. */
@@ -728,8 +729,8 @@ public final class VidocqBootstrap {
         }
         LOG.log(System.Logger.Level.INFO, "Vidocq - Shutting down");
         // what the report offered the extensions goes first: nothing reads it from a boot being torn down
-        reportView = null;
-        reportContributors = List.of();
+        reportView.set(null);
+        reportContributors.set(List.of());
 
         // Stop extensions in reverse order
         stopInReverse(extensions);

@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Universal-loader launch mode (Vauban class-loader study, M2): when
@@ -67,11 +68,11 @@ public final class VidocqAppLayer {
     private static final System.Logger LOG = System.getLogger(VidocqAppLayer.class.getName());
 
     /** The layer installed by this JVM, kept for {@link #runAppMainIfConfigured}. */
-    private static volatile VaubanLayerFactory.AppLayer installed;
+    private static final AtomicReference<VaubanLayerFactory.AppLayer> INSTALLED = new AtomicReference<>();
     /** The context loader that was active before the layer install (reload restores it). */
-    private static volatile ClassLoader parentLoaderBeforeInstall;
+    private static final AtomicReference<ClassLoader> PARENT_LOADER_BEFORE_INSTALL = new AtomicReference<>();
     /** How the installed layer was found, for the startup report; {@code null} without a layer. */
-    private static volatile Installation installation;
+    private static final AtomicReference<Installation> INSTALLATION = new AtomicReference<>();
 
     /**
      * How the application layer was found, as the startup report prints it: strings only, so that the
@@ -100,13 +101,13 @@ public final class VidocqAppLayer {
      * reference; its archive readers are closed here.
      */
     static void resetForReload() {
-        var layer = installed;
+        var layer = INSTALLED.get();
         if (layer == null) {
             return;
         }
-        installed = null;
-        installation = null;
-        Thread.currentThread().setContextClassLoader(parentLoaderBeforeInstall);
+        INSTALLED.set(null);
+        INSTALLATION.set(null);
+        Thread.currentThread().setContextClassLoader(PARENT_LOADER_BEFORE_INSTALL.get());
         try {
             int drivers = LayerJdbcDrivers.deregister(layer);
             if (drivers > 0) {
@@ -226,13 +227,28 @@ public final class VidocqAppLayer {
         var paths = explicit.isEmpty()
                 ? applicationPaths(configuration, callerModule.getName(), mode,
                         LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned)
-                : explicitPaths(configuration, java.util.Set.of(explicit.split("\\s*,\\s*")));
+                : explicitPaths(configuration, java.util.Set.of(commaSeparated(explicit).toArray(String[]::new)));
         if (paths.isEmpty()) {
             return false;
         }
         String origin = "boot-layer detection from " + callerModule.getName();
         return installLayer(paths, callerLayer, origin,
                 new Installation(origin, paths.stream().map(Path::toString).toList(), false, pinned));
+    }
+
+    /**
+     * The comma-separated items of {@code text}, the blanks around each comma dropped, and the empty items at the
+     * end too, as {@link String#split(String)} drops them.
+     */
+    private static List<String> commaSeparated(String text) {
+        java.util.ArrayList<String> items = new java.util.ArrayList<>();
+        for (String item : text.split(",", -1)) {
+            items.add(item.strip());
+        }
+        while (!items.isEmpty() && items.getLast().isEmpty()) {
+            items.removeLast();
+        }
+        return List.copyOf(items);
     }
 
     /** The {@code file:} locations of the modules named by {@code -Dvidocq.app.modules}. */
@@ -301,10 +317,10 @@ public final class VidocqAppLayer {
             var parentLoader = Thread.currentThread().getContextClassLoader();
             var appLayer = VaubanLayerFactory.createAppLayer(paths, parentLayer,
                     parentLoader, pluginContext());
-            parentLoaderBeforeInstall = parentLoader;
+            PARENT_LOADER_BEFORE_INSTALL.set(parentLoader);
             Thread.currentThread().setContextClassLoader(appLayer.loader());
-            installed = appLayer;
-            installation = found;
+            INSTALLED.set(appLayer);
+            INSTALLATION.set(found);
             LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
                     appLayer.moduleNames(), origin);
             return true;
@@ -335,13 +351,13 @@ public final class VidocqAppLayer {
 
     /** The application layer installed by this JVM, or {@code null}. */
     static ModuleLayer installedLayer() {
-        var layer = installed;
+        var layer = INSTALLED.get();
         return layer == null ? null : layer.layer();
     }
 
     /** How the installed application layer was found, or {@code null} when there is none. */
     static Installation installation() {
-        return installed == null ? null : installation;
+        return INSTALLED.get() == null ? null : INSTALLATION.get();
     }
 
     static boolean alreadyInLayer() {
@@ -359,7 +375,7 @@ public final class VidocqAppLayer {
      * type (packages are fully encapsulated).
      */
     static void exportToRuntime(Class<?> layerClass) {
-        var layer = installed;
+        var layer = INSTALLED.get();
         if (layer != null && layerClass.getModule().getLayer() == layer.layer()) {
             layer.controller().addExports(layerClass.getModule(),
                     layerClass.getPackageName(), VidocqAppLayer.class.getModule());
@@ -373,7 +389,7 @@ public final class VidocqAppLayer {
      * only for an open package (vidocq#88).
      */
     static void openToRuntime(Class<?> layerClass) {
-        var layer = installed;
+        var layer = INSTALLED.get();
         if (layer != null && layerClass.getModule().getLayer() == layer.layer()) {
             layer.controller().addOpens(layerClass.getModule(),
                     layerClass.getPackageName(), VidocqAppLayer.class.getModule());

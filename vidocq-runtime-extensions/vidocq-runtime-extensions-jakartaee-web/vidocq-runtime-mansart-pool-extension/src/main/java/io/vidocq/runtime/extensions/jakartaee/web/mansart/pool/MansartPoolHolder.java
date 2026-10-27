@@ -26,6 +26,7 @@ import javax.sql.DataSource;
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 
 /**
@@ -53,10 +54,10 @@ import java.util.logging.Logger;
 public class MansartPoolHolder implements DataSource {
 
     /** Set by {@link MansartPoolExtension#beforeStart} before the container boots. */
-    static volatile MansartDataSource INSTANCE;
+    static final AtomicReference<MansartDataSource> INSTANCE = new AtomicReference<>();
 
     private static MansartDataSource delegate() {
-        MansartDataSource ds = INSTANCE;
+        MansartDataSource ds = INSTANCE.get();
         if (ds == null) {
             throw new IllegalStateException(
                     "MansartPoolExtension did not publish a DataSource — is vidocq.pool.url set?");

@@ -28,6 +28,7 @@ import io.vidocq.runtime.spi.devconsole.PanelSample;
 
 import java.time.ZoneId;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The health section, live: the last answer of each check, read in memory. No check is called and no bean is
@@ -35,7 +36,7 @@ import java.util.List;
  */
 public final class HealthLivePanel implements LivePanel {
 
-    private volatile KnockLiveBean live = KnockLiveBean.NONE;
+    private final AtomicReference<KnockLiveBean> live = new AtomicReference<>(KnockLiveBean.NONE);
 
     /** Created by the service loader. */
     public HealthLivePanel() {}
@@ -48,12 +49,12 @@ public final class HealthLivePanel implements LivePanel {
     /** Resolves the registry bean, once, without creating it. */
     @Override
     public void start(ExtensionContext context) {
-        live = KnockLiveBean.of(context.beanManager());
+        live.set(KnockLiveBean.of(context.beanManager()));
     }
 
     @Override
     public void stop() {
-        live = KnockLiveBean.NONE;
+        live.set(KnockLiveBean.NONE);
     }
 
     @Override
@@ -63,7 +64,7 @@ public final class HealthLivePanel implements LivePanel {
 
     @Override
     public void sample(PanelSample sample) {
-        KnockLiveBean read = live;
+        KnockLiveBean read = live.get();
         if (read.beans() == null) {
             return;
         }

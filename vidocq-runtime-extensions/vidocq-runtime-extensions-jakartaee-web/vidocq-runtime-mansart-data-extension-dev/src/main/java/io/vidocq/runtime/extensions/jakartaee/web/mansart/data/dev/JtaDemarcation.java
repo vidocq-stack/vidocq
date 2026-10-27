@@ -24,6 +24,7 @@ import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.transaction.TransactionManager;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -34,7 +35,7 @@ import java.util.function.Supplier;
 final class JtaDemarcation implements TransactionRunner.Demarcation {
 
     private final Supplier<TransactionManager> resolve;
-    private volatile TransactionManager manager;
+    private final AtomicReference<TransactionManager> manager = new AtomicReference<>();
 
     JtaDemarcation(Supplier<TransactionManager> resolve) {
         this.resolve = Objects.requireNonNull(resolve, "resolve");
@@ -53,10 +54,10 @@ final class JtaDemarcation implements TransactionRunner.Demarcation {
     }
 
     private TransactionManager manager() {
-        TransactionManager found = manager;
+        TransactionManager found = manager.get();
         if (found == null) {
             found = resolve.get();
-            manager = found;
+            manager.set(found);
         }
         return found;
     }

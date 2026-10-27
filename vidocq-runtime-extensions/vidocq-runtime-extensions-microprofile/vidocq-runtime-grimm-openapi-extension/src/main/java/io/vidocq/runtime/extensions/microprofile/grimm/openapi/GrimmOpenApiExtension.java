@@ -36,6 +36,8 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import io.vidocq.vauban.core.container.VaubanContainer;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * Vidocq extension that serves the Grimm (MicroProfile OpenAPI 4.2) document at {@code /openapi}.
  *
@@ -70,7 +72,7 @@ import io.vidocq.vauban.core.container.VaubanContainer;
 public final class GrimmOpenApiExtension implements VidocqExtension, StartupReportContributor {
 
     /** The model this boot serves, kept for the {@code openapi} section; {@code null} before and after. */
-    private volatile GrimmModelCache served;
+    private final AtomicReference<GrimmModelCache> served = new AtomicReference<>();
 
     private static final System.Logger LOG = System.getLogger(GrimmOpenApiExtension.class.getName());
 
@@ -107,13 +109,13 @@ public final class GrimmOpenApiExtension implements VidocqExtension, StartupRepo
         OpenApiResource resource = new OpenApiResource(cache);
         ChappeMountPoint.instance().mount(MOUNT_PREFIX, request -> render(resource, request));
         ChappeMountPoint.instance().advertise(ChappeListener.DEFAULT, "OpenAPI document", MOUNT_PREFIX);
-        served = cache;
+        served.set(cache);
         LOG.log(System.Logger.Level.INFO, "OpenAPI document served at {0}", MOUNT_PREFIX);
     }
 
     @Override
     public void onStop() {
-        served = null;
+        served.set(null);
     }
 
     @Override
@@ -133,7 +135,7 @@ public final class GrimmOpenApiExtension implements VidocqExtension, StartupRepo
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        GrimmModelCache cache = served;
+        GrimmModelCache cache = served.get();
         if (cache == null) {
             section.summary("not served");
             return;

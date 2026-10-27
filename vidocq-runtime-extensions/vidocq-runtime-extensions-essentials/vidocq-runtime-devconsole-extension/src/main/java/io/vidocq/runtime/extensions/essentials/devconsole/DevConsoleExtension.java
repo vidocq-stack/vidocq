@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 import java.util.random.RandomGenerator;
 import java.util.regex.Pattern;
@@ -134,15 +135,15 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     private final ConsoleMemory memory;
     private final LongSupplier clock;
 
-    private volatile DevConsoleSettings settings;
-    private volatile Snapshot snapshot;
-    private volatile InetSocketAddress boundAddress;
+    private final AtomicReference<DevConsoleSettings> settings = new AtomicReference<>();
+    private final AtomicReference<Snapshot> snapshot = new AtomicReference<>();
+    private final AtomicReference<InetSocketAddress> boundAddress = new AtomicReference<>();
     private volatile String url;
     private volatile String notStarted;
-    private volatile Thread ticker;
-    private volatile LogsPanel logs;
-    private volatile TestsPanel tests;
-    private volatile LivePanels livePanels = LivePanels.NONE;
+    private final AtomicReference<Thread> ticker = new AtomicReference<>();
+    private final AtomicReference<LogsPanel> logs = new AtomicReference<>();
+    private final AtomicReference<TestsPanel> tests = new AtomicReference<>();
+    private final AtomicReference<LivePanels> livePanels = new AtomicReference<>(LivePanels.NONE);
 
     /** The console Vidocq loads as a service, remembering what it printed across the dev reloads of this JVM. */
     public DevConsoleExtension() {
@@ -191,7 +192,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     @Override
     public void onStart(ExtensionContext context) {
         DevConsoleSettings resolved = DevConsoleSettings.resolve(context.config(), context.launchMode());
-        settings = resolved;
+        settings.set(resolved);
         if (!resolved.on()) {
             return;
         }
@@ -202,16 +203,16 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 : null;
         // The logs panel shows what the application logs: in a dev launch only, its ring removed in onStop.
         LogsPanel logged = resolved.launchMode() == LaunchMode.DEV ? LogsPanel.start() : null;
-        logs = logged;
+        logs.set(logged);
         // The tests panel shows vidocq:dev's continuous testing: in a dev launch only, when the plugin named the
         // results file; its reader thread stops in onStop.
         TestsPanel tested = resolved.launchMode() == LaunchMode.DEV
                 ? TestsPanel.start(System.getProperty(TestsPanel.PROPERTY)).orElse(null)
                 : null;
-        tests = tested;
+        tests.set(tested);
         // the live halves of report sections, from the -dev modules vidocq:dev adds (Vidocq/vidocq#143)
         LivePanels live = LivePanels.load(DevConsoleExtension.class.getClassLoader());
-        livePanels = live;
+        livePanels.set(live);
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
                 VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged, tested),
                 clock, actions, live, context);
@@ -220,7 +221,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 .indexFile("index.html")
                 .cacheControl("no-cache")
                 .build();
-        snapshot = boot;
+        snapshot.set(boot);
         try {
             ChappeMountPoint mountPoint = ChappeMountPoint.instance();
             mountPoint.declareListener(ChappeListener.http(LISTENER, resolved.host(), port),
@@ -229,9 +230,9 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             DevMcp mcp = resolved.launchMode() == LaunchMode.DEV ? new DevMcp(boot, VIDOCQ_VERSION) : null;
             mountPoint.mount(LISTENER, "", new ConsoleHandler(new HostGuard(resolved.host()), this::boundPort, boot,
                     page, mcp));
-            ticker = startTicking(boot);
+            ticker.set(startTicking(boot));
         } catch (RuntimeException failed) {
-            snapshot = null;
+            snapshot.set(null);
             notStarted = String.valueOf(failed.getMessage());
             LOG.log(System.Logger.Level.WARNING, "Vidocq dev console not started: " + notStarted);
         }
@@ -249,6 +250,8 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      * the next one may well succeed — a panel reading a bean that was not there yet, for instance.
      */
     private static Thread startTicking(Snapshot boot) {
+        // A platform thread on purpose: it shows in Thread.getAllStackTraces(), which is how the dev-reload tests prove
+        // that a reload leaves exactly one ticker; a virtual thread does not show there. One thread per boot, mostly asleep.
         Thread thread = Thread.ofPlatform().name(TICKER).daemon(true).unstarted(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
@@ -257,7 +260,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                     LOG.log(System.Logger.Level.DEBUG, "Dev console history tick failed", costsThisTick);
                 }
                 try {
-                    Thread.sleep(Snapshot.POLL_MILLIS);
+                    Thread.sleep(Snapshot.POLL_MILLIS); // NOSONAR java:S6881 - platform thread kept, see above
                 } catch (InterruptedException stopping) {
                     Thread.currentThread().interrupt();
                 }
@@ -320,12 +323,12 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      * @param address the address the listener bound
      */
     void bound(InetSocketAddress address) {
-        DevConsoleSettings resolved = settings;
+        DevConsoleSettings resolved = settings.get();
         String bound = ChappeListener.httpUrl(address);
-        boundAddress = address;
+        boundAddress.set(address);
         url = bound;
         memory.bound(address.getPort());
-        Snapshot boot = snapshot;
+        Snapshot boot = snapshot.get();
         if (boot != null) {
             boot.bound(bound, resolved.port(), address.getPort());
         }
@@ -342,7 +345,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
 
     /** The port the console listens on, {@code 0} until it is bound. */
     int boundPort() {
-        InetSocketAddress address = boundAddress;
+        InetSocketAddress address = boundAddress.get();
         return address == null ? 0 : address.getPort();
     }
 
@@ -352,7 +355,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        DevConsoleSettings resolved = settings;
+        DevConsoleSettings resolved = settings.get();
         if (resolved == null) {
             section.summary("not started");
             return;
@@ -364,7 +367,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             section.summary(resolved.offReason());
             return;
         }
-        InetSocketAddress address = boundAddress;
+        InetSocketAddress address = boundAddress.get();
         section.row("enabled", resolved.enabled())
                 .row("configured", hostAndPort(resolved.host(), resolved.port()));
         if (address == null) {
@@ -409,8 +412,8 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
      */
     @Override
     public void onStop() {
-        Thread ticking = ticker;
-        ticker = null;
+        Thread ticking = ticker.get();
+        ticker.set(null);
         if (ticking != null) {
             ticking.interrupt();
             try {
@@ -419,25 +422,25 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
                 Thread.currentThread().interrupt();
             }
         }
-        LivePanels live = livePanels;
-        livePanels = LivePanels.NONE;
+        LivePanels live = livePanels.get();
+        livePanels.set(LivePanels.NONE);
         live.stopAll();
-        LogsPanel logged = logs;
-        logs = null;
+        LogsPanel logged = logs.get();
+        logs.set(null);
         if (logged != null) {
             logged.stop();
         }
-        TestsPanel tested = tests;
-        tests = null;
+        TestsPanel tested = tests.get();
+        tests.set(null);
         if (tested != null) {
             tested.stop();
         }
-        Snapshot boot = snapshot;
+        Snapshot boot = snapshot.get();
         if (boot != null) {
             boot.history().clear();
         }
-        snapshot = null;
-        boundAddress = null;
+        snapshot.set(null);
+        boundAddress.set(null);
         url = null;
     }
 
@@ -488,8 +491,10 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
     /** The version of Vidocq: this module's, from its descriptor on the module path, else from its build identity. */
     private static String version() {
         Module module = DevConsoleExtension.class.getModule();
-        if (module.getDescriptor() != null && module.getDescriptor().rawVersion().isPresent()) {
-            return module.getDescriptor().rawVersion().get();
+        java.util.Optional<String> declared = java.util.Optional.ofNullable(module.getDescriptor())
+                .flatMap(java.lang.module.ModuleDescriptor::rawVersion);
+        if (declared.isPresent()) {
+            return declared.get();
         }
         try (InputStream in = DevConsoleExtension.class.getResourceAsStream(BUILD_INFO)) {
             if (in == null) {

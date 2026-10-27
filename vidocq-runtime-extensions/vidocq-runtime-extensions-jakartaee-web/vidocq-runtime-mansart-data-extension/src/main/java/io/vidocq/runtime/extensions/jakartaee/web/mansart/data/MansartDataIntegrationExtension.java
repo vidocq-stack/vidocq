@@ -39,6 +39,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -85,7 +86,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
             "Check its mapping annotations; Mansart could not build its model, so its repositories may fail too.";
 
     /** The catalogue of this boot, {@code null} before {@code onStart} and after {@code onStop}. */
-    private volatile MansartDataCatalogue catalogue;
+    private final AtomicReference<MansartDataCatalogue> catalogue = new AtomicReference<>();
 
     /** Why there is no catalogue although {@code onStart} ran: the class of the exception; {@code null} otherwise. */
     private volatile String unavailable;
@@ -130,7 +131,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         try {
             repositories = CatalogueBuilder.repositoryInterfaces(beanClasses.get());
         } catch (RuntimeException | LinkageError failure) {
-            catalogue = null;
+            catalogue.set(null);
             unavailable = failure.getClass().getName();
             MansartDataLive.clear();
             LOG.log(System.Logger.Level.WARNING, "Mansart Data: the repositories could not be listed", failure);
@@ -150,11 +151,11 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     void catalogue(List<Class<?>> repositories, Function<Class<?>, EntityModel<?>> models, CatalogueBuilder builder) {
         try {
             MansartDataCatalogue built = builder.build(repositories, models);
-            catalogue = built;
+            catalogue.set(built);
             unavailable = null;
             MansartDataLive.publish(built);
         } catch (RuntimeException | LinkageError failure) {
-            catalogue = null;
+            catalogue.set(null);
             unavailable = failure.getClass().getName();
             MansartDataLive.clear();
             LOG.log(System.Logger.Level.WARNING, "Mansart Data: the catalogue could not be built", failure);
@@ -165,7 +166,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     public void onStop() {
         // First: a dev console poll from now on reads no catalogue.
         MansartDataLive.clear();
-        catalogue = null;
+        catalogue.set(null);
         unavailable = null;
     }
 
@@ -175,7 +176,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        MansartDataCatalogue read = catalogue;
+        MansartDataCatalogue read = catalogue.get();
         if (read == null) {
             String why = unavailable;
             section.summary(why == null ? "no catalogue: the extension did not start" : "no catalogue (" + why + ")");

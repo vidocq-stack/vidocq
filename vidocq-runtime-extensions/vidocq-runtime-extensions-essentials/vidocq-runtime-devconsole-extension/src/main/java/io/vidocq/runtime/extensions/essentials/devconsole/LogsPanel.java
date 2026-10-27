@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -96,7 +97,7 @@ final class LogsPanel implements DevConsolePanel {
     /** Guarded by itself; the action writes it, {@link #stop} empties it. */
     private final Map<String, Change> changes = new LinkedHashMap<>();
 
-    private volatile LogRing ring;
+    private final AtomicReference<LogRing> ring = new AtomicReference<>();
     private boolean stopped;
 
     /**
@@ -128,7 +129,7 @@ final class LogsPanel implements DevConsolePanel {
      * a previous boot, one that never stopped, is removed first: a dev reload never stacks two.
      */
     void install() {
-        if (ring != null) {
+        if (ring.get() != null) {
             return;
         }
         for (Handler handler : root.getHandlers()) {
@@ -138,7 +139,7 @@ final class LogsPanel implements DevConsolePanel {
         }
         LogRing installed = new LogRing();
         root.addHandler(installed);
-        ring = installed;
+        ring.set(installed);
     }
 
     /**
@@ -146,8 +147,8 @@ final class LogsPanel implements DevConsolePanel {
      * the loggers let go. Idempotent.
      */
     void stop() {
-        LogRing installed = ring;
-        ring = null;
+        LogRing installed = ring.get();
+        ring.set(null);
         if (installed != null) {
             root.removeHandler(installed);
         }
@@ -164,7 +165,7 @@ final class LogsPanel implements DevConsolePanel {
 
     /** The ring of this boot, or {@code null} once stopped. */
     LogRing ring() {
-        return ring;
+        return ring.get();
     }
 
     @Override
@@ -225,7 +226,7 @@ final class LogsPanel implements DevConsolePanel {
     /** The counters, the last records, newest first, and the loggers whose level is set. */
     @Override
     public void sample(PanelSample sample) {
-        LogRing current = ring;
+        LogRing current = ring.get();
         if (current == null) {
             return;
         }

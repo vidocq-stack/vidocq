@@ -22,6 +22,7 @@ package io.vidocq.runtime.arquillian;
 import io.vidocq.runtime.spi.ApplicationLayer;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The application layer of the current deployment, for the embedded container, which runs on the class path and
@@ -30,21 +31,21 @@ import java.util.Optional;
  */
 public final class DeploymentApplicationLayer implements ApplicationLayer {
 
-    private static volatile ModuleLayer current;
+    private static final AtomicReference<ModuleLayer> CURRENT = new AtomicReference<>();
 
     /** Created by the service loader. */
     public DeploymentApplicationLayer() {}
 
     static void set(ModuleLayer layer) {
-        current = layer;
+        CURRENT.set(layer);
     }
 
     static void clear() {
-        current = null;
+        CURRENT.set(null);
     }
 
     @Override
     public Optional<ModuleLayer> layer() {
-        return Optional.ofNullable(current);
+        return Optional.ofNullable(CURRENT.get());
     }
 }

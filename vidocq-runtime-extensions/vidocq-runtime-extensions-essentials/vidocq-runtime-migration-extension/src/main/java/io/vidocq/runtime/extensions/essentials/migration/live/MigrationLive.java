@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.extensions.essentials.migration.live;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * The migration control the runtime extension publishes, for its -dev panel only (Vidocq/vidocq#143): published
  * once a migrator is selected, cleared first when the extension stops, so that a dev reload never shows the
@@ -26,20 +28,20 @@ package io.vidocq.runtime.extensions.essentials.migration.live;
  */
 public final class MigrationLive {
 
-    private static volatile MigrationControl control;
+    private static final AtomicReference<MigrationControl> CONTROL = new AtomicReference<>();
 
     private MigrationLive() {}
 
     /** The control the running boot published, or {@code null} when nothing is published. */
     public static MigrationControl control() {
-        return control;
+        return CONTROL.get();
     }
 
     public static void publish(MigrationControl c) {
-        control = c;
+        CONTROL.set(c);
     }
 
     public static void clear() {
-        control = null;
+        CONTROL.set(null);
     }
 }

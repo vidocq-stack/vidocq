@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -44,7 +45,7 @@ final class TestRequestFile implements AutoCloseable {
     private final Path file;
     private final Consumer<String> warn;
     private boolean warnedUnknown;
-    private volatile Thread poller;
+    private final AtomicReference<Thread> poller = new AtomicReference<>();
 
     TestRequestFile(Path file, Consumer<String> warn) {
         this.file = file;
@@ -82,7 +83,7 @@ final class TestRequestFile implements AutoCloseable {
     static TestRequestFile poll(Path file, Consumer<Trigger> onRequest, Consumer<String> warn) throws IOException {
         Files.deleteIfExists(file);
         TestRequestFile requests = new TestRequestFile(file, warn);
-        requests.poller = Thread.ofPlatform().name("vidocq-tests-requests").daemon(true).start(() -> {
+        requests.poller.set(Thread.ofVirtual().name("vidocq-tests-requests").start(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     requests.take().ifPresent(onRequest);
@@ -92,18 +93,19 @@ final class TestRequestFile implements AutoCloseable {
                 try {
                     Thread.sleep(POLL_MILLIS);
                 } catch (InterruptedException stopping) {
+                    Thread.currentThread().interrupt();
                     return;
                 }
             }
-        });
+        }));
         return requests;
     }
 
     /** Stops polling; idempotent. */
     @Override
     public void close() {
-        Thread running = poller;
-        poller = null;
+        Thread running = poller.get();
+        poller.set(null);
         if (running != null) {
             running.interrupt();
             try {

@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The last {@value #MAX} calls of each repository this boot (spec §8), newest first, in memory. They are published as
@@ -66,30 +67,30 @@ final class CallHistory {
                 String replay) {}
 
     private long sequence;
-    private volatile Map<String, List<Call>> calls = Map.of();
+    private final AtomicReference<Map<String, List<Call>>> calls = new AtomicReference<>(Map.of());
 
     /** Adds a call of the repository whose group is {@code group}, first, dropping its oldest past {@value #MAX}. */
     synchronized void add(String group, long time, String method, String outcome, long millis, String arguments,
                           String replay) {
         Call call = new Call(++sequence, time, method, outcome, millis, Failures.cut(arguments, MAX_ARGUMENTS),
                 replay.length() > PanelSample.MAX_REPLAY_CELL ? "" : replay);
-        Map<String, List<Call>> next = new HashMap<>(calls);
+        Map<String, List<Call>> next = new HashMap<>(calls.get());
         List<Call> previous = next.getOrDefault(group, List.of());
         List<Call> kept = new ArrayList<>(MAX);
         kept.add(call);
         kept.addAll(previous.subList(0, Math.min(previous.size(), MAX - 1)));
         next.put(group, List.copyOf(kept));
-        calls = Map.copyOf(next);
+        calls.set(Map.copyOf(next));
     }
 
     /** The calls of {@code group}, newest first. */
     List<Call> calls(String group) {
-        return calls.getOrDefault(group, List.of());
+        return calls.get().getOrDefault(group, List.of());
     }
 
     /** Writes the {@code calls} table: every repository's calls, newest first, {@value #MAX_ROWS} at most. */
     void writeTo(PanelSample out) {
-        List<List<String>> rows = calls.values().stream()
+        List<List<String>> rows = calls.get().values().stream()
                 .flatMap(List::stream)
                 .sorted((a, b) -> Long.compare(b.sequence(), a.sequence()))
                 .limit(MAX_ROWS)

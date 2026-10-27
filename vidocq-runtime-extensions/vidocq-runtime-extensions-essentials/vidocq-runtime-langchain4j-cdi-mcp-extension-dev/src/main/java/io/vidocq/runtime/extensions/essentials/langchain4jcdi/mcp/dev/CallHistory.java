@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The last {@value #MAX} calls of the boot (spec §3.4), newest first, in memory, published as the {@code calls}
@@ -59,25 +60,26 @@ final class CallHistory {
     record Call(long time, String actionId, String label, String arguments, String summary, boolean error,
                 long millis, String details, String replay) {}
 
-    private volatile List<Call> calls = List.of();
+    private final AtomicReference<List<Call>> calls = new AtomicReference<>(List.of());
 
     /** Adds {@code call} first, dropping the oldest past {@value #MAX}. */
     synchronized void add(Call call) {
         List<Call> next = new ArrayList<>(MAX);
         next.add(call);
-        next.addAll(calls.subList(0, Math.min(calls.size(), MAX - 1)));
-        calls = List.copyOf(next);
+        List<Call> current = calls.get();
+        next.addAll(current.subList(0, Math.min(current.size(), MAX - 1)));
+        calls.set(List.copyOf(next));
     }
 
     /** The calls, newest first. */
     List<Call> calls() {
-        return calls;
+        return calls.get();
     }
 
     /** Writes the {@code calls} table. */
     void writeTo(PanelSample out) {
         List<List<String>> rows = new ArrayList<>();
-        for (Call call : calls) {
+        for (Call call : calls.get()) {
             rows.add(List.of(TIME.format(Instant.ofEpochMilli(call.time())), call.label(),
                     call.error() ? "error" : "ok", call.summary(), Long.toString(call.millis()), call.arguments(),
                     call.replay()));

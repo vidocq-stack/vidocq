@@ -27,6 +27,8 @@ import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * The {@code health} section of the startup report: Knock's checks by probe, and the last answer of each. The live
  * panel of the dev console moved to {@code vidocq-runtime-knock-health-extension-dev} (Vidocq/vidocq#143): only
@@ -49,7 +51,7 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
      * The registry bean {@link #contribute} reads, resolved once in {@link #onStart}; {@link KnockLiveBean#NONE}
      * before it and after {@link #onStop}.
      */
-    private volatile KnockLiveBean live = KnockLiveBean.NONE;
+    private final AtomicReference<KnockLiveBean> live = new AtomicReference<>(KnockLiveBean.NONE);
 
     /** Created by the {@link java.util.ServiceLoader}. */
     public KnockHealthExtension() {}
@@ -62,13 +64,13 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
     /** Resolves the registry bean, once, without creating it. */
     @Override
     public void onStart(ExtensionContext context) {
-        live = KnockLiveBean.of(context.beanManager());
+        live.set(KnockLiveBean.of(context.beanManager()));
     }
 
     /** Clears what {@link #sample} reads first. */
     @Override
     public void onStop() {
-        live = KnockLiveBean.NONE;
+        live.set(KnockLiveBean.NONE);
     }
 
     @Override
@@ -83,7 +85,7 @@ public final class KnockHealthExtension implements VidocqExtension, StartupRepor
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        KnockLiveBean read = live;
+        KnockLiveBean read = live.get();
         HealthStartupSection.write(read.read(), read.absence(), context, section);
     }
 }

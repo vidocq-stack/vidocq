@@ -29,6 +29,7 @@ import io.vidocq.runtime.spi.report.StartupReportSection;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Reads the dev services state file (spec §4.2, {@code vidocq-runtime-devservices-host}'s {@code StateFile}) and
@@ -48,7 +49,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
     /** Copy of {@code io.vidocq.runtime.devservices.host.StateFile.PROPERTY} — see the class Javadoc. */
     static final String STATE_PROPERTY = "vidocq.devservices.state";
 
-    private volatile DevServicesSnapshot snapshot = DevServicesSnapshot.NONE;
+    private final AtomicReference<DevServicesSnapshot> snapshot = new AtomicReference<>(DevServicesSnapshot.NONE);
     private volatile String readProblem;
     private volatile String stateFile;
 
@@ -74,7 +75,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
             return;
         }
         try {
-            snapshot = StateReader.parse(Files.readString(file));
+            snapshot.set(StateReader.parse(Files.readString(file)));
         } catch (IOException | IllegalArgumentException e) {
             readProblem = e.getClass().getSimpleName();
         }
@@ -82,7 +83,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
 
     @Override
     public void onStop() {
-        snapshot = DevServicesSnapshot.NONE;
+        snapshot.set(DevServicesSnapshot.NONE);
         readProblem = null;
         stateFile = null;
     }
@@ -99,7 +100,7 @@ public final class DevServicesExtension implements VidocqExtension, DevConsolePa
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        DevServicesSection.write(snapshot, readProblem, stateFile, context, section);
+        DevServicesSection.write(snapshot.get(), readProblem, stateFile, context, section);
     }
 
     /**

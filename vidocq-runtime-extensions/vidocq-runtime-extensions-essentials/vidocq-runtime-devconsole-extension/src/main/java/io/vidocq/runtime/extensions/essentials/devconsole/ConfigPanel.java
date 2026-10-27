@@ -35,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -94,7 +95,7 @@ final class ConfigPanel implements DevConsolePanel {
     /** The startup report of the boot, once written. */
     private final Supplier<Optional<StartupReportView>> report;
     /** The rows with their status, once the report was found; {@code null} until then. */
-    private volatile List<List<String>> audited;
+    private final AtomicReference<List<List<String>>> audited = new AtomicReference<>();
 
     /**
      * @param inventory what the configuration held at boot, or {@code null} when there was none
@@ -166,7 +167,7 @@ final class ConfigPanel implements DevConsolePanel {
 
     /** The rows with their status: kept once the report is found, the inventory's with no status until then. */
     private List<List<String>> rows(ConfigInventory held) {
-        List<List<String>> kept = audited;
+        List<List<String>> kept = audited.get();
         if (kept != null) {
             return kept;
         }
@@ -180,7 +181,7 @@ final class ConfigPanel implements DevConsolePanel {
             return withStatus(held.rows(), key -> NOT_WRITTEN);
         }
         List<List<String>> rows = withStatus(held.rows(), Audit.of(written.get())::status);
-        audited = rows;
+        audited.set(rows);
         return rows;
     }
 

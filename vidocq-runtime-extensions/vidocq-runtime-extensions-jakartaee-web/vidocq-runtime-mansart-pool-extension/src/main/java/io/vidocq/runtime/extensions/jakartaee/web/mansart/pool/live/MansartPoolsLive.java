@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live;
 import io.vidocq.mansart.pool.core.MansartDataSource;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The pools the Mansart extension opened, for its -dev panel only (Vidocq/vidocq#143): published when the pools are
@@ -32,19 +33,19 @@ public final class MansartPoolsLive {
     /** An open pool and its label, such as {@code @Default}. */
     public record Pool(String label, MansartDataSource pool) {}
 
-    private static volatile List<Pool> pools = List.of();
+    private static final AtomicReference<List<Pool>> POOLS = new AtomicReference<>(List.of());
 
     private MansartPoolsLive() {}
 
     public static List<Pool> pools() {
-        return pools;
+        return POOLS.get();
     }
 
     public static void publish(List<Pool> opened) {
-        pools = List.copyOf(opened);
+        POOLS.set(List.copyOf(opened));
     }
 
     public static void clear() {
-        pools = List.of();
+        POOLS.set(List.of());
     }
 }

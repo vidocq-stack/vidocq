@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp.live;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The absolute URLs of {@code /mcp} the startup report resolved, for the MCP inspector of the {@code -dev} module
@@ -29,22 +30,22 @@ import java.util.List;
  */
 public final class McpEndpointLive {
 
-    private static volatile List<String> urls = List.of();
+    private static final AtomicReference<List<String>> URLS = new AtomicReference<>(List.of());
 
     private McpEndpointLive() {}
 
     /** The URLs of this boot, each once, without the internal listen route; empty before the report is written. */
     public static List<String> urls() {
-        return urls;
+        return URLS.get();
     }
 
     /** Publishes the URLs of this boot. */
     public static void publish(List<String> resolved) {
-        urls = List.copyOf(resolved);
+        URLS.set(List.copyOf(resolved));
     }
 
     /** Forgets them. */
     public static void clear() {
-        urls = List.of();
+        URLS.set(List.of());
     }
 }

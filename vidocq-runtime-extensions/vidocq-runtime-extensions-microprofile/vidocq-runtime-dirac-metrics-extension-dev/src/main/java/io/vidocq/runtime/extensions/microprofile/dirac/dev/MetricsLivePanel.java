@@ -25,13 +25,15 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * The metrics section, live: the values Dirac's registries hold, read in memory. No gauge is called and no bean is
  * created: when the producer does not exist yet, a single absent {@code registries} says why.
  */
 public final class MetricsLivePanel implements LivePanel {
 
-    private volatile DiracLiveBean live = DiracLiveBean.NONE;
+    private final AtomicReference<DiracLiveBean> live = new AtomicReference<>(DiracLiveBean.NONE);
 
     /** Created by the service loader. */
     public MetricsLivePanel() {}
@@ -44,17 +46,17 @@ public final class MetricsLivePanel implements LivePanel {
     /** Resolves the producer bean, once, without creating it. */
     @Override
     public void start(ExtensionContext context) {
-        live = DiracLiveBean.of(context.beanManager());
+        live.set(DiracLiveBean.of(context.beanManager()));
     }
 
     @Override
     public void stop() {
-        live = DiracLiveBean.NONE;
+        live.set(DiracLiveBean.NONE);
     }
 
     @Override
     public void sample(PanelSample sample) {
-        DiracLiveBean read = live;
+        DiracLiveBean read = live.get();
         if (read.beans() == null) {
             return;
         }

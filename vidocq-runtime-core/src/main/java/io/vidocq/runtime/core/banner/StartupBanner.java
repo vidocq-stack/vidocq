@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -71,7 +72,7 @@ public final class StartupBanner {
 
     private static final System.Logger LOG = System.getLogger(StartupBanner.class.getName());
     private static final AtomicBoolean SHOWN = new AtomicBoolean();
-    private static volatile StartupIdentity emitted;
+    private static final AtomicReference<StartupIdentity> EMITTED = new AtomicReference<>();
 
     /** What the banner finally does. */
     enum Output {
@@ -153,7 +154,7 @@ public final class StartupBanner {
 
     /** The identity the banner emitted in this JVM, empty when it printed nothing. */
     public static Optional<StartupIdentity> emittedIdentity() {
-        return Optional.ofNullable(emitted);
+        return Optional.ofNullable(EMITTED.get());
     }
 
     static boolean showOnce(Function<String, Optional<String>> config, Supplier<Launch> launch,
@@ -172,7 +173,7 @@ public final class StartupBanner {
     /** Lets the next {@link #showOnce} print again. */
     static void reset() {
         SHOWN.set(false);
-        emitted = null;
+        EMITTED.set(null);
     }
 
     static void show(Function<String, Optional<String>> config, Launch launch, ConsoleSupport console,
@@ -206,7 +207,7 @@ public final class StartupBanner {
             // handled above
             case NONE -> "";
         };
-        emitted = identity;
+        EMITTED.set(identity);
         debuggerRecord(launch, identity, shown).ifPresent(record -> LOG.log(System.Logger.Level.INFO, record));
         Optional<String> bricks = identity.bricksLine();
         if (bricks.isPresent()) {

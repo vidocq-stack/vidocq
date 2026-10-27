@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * What the Mansart Data extension found, for its {@code -dev} panel only: the catalogue it built and the repository
@@ -32,32 +33,32 @@ import java.util.Optional;
  */
 public final class MansartDataLive {
 
-    private static volatile MansartDataCatalogue catalogue;
-    private static volatile List<Class<?>> repositories = List.of();
+    private static final AtomicReference<MansartDataCatalogue> CATALOGUE = new AtomicReference<>();
+    private static final AtomicReference<List<Class<?>>> REPOSITORIES = new AtomicReference<>(List.of());
 
     private MansartDataLive() {}
 
     /** The catalogue of the running boot, empty before it is built and once the extension stopped. */
     public static Optional<MansartDataCatalogue> catalogue() {
-        return Optional.ofNullable(catalogue);
+        return Optional.ofNullable(CATALOGUE.get());
     }
 
     public static void publish(MansartDataCatalogue built) {
-        catalogue = Objects.requireNonNull(built, "catalogue");
+        CATALOGUE.set(Objects.requireNonNull(built, "catalogue"));
     }
 
     /** The {@code @Repository} interfaces of the running boot, by name; empty before and after it. */
     public static List<Class<?>> repositories() {
-        return repositories;
+        return REPOSITORIES.get();
     }
 
     public static void publishRepositories(List<Class<?>> found) {
-        repositories = List.copyOf(found);
+        REPOSITORIES.set(List.copyOf(found));
     }
 
     /** Forgets the catalogue and the repository interfaces. */
     public static void clear() {
-        catalogue = null;
-        repositories = List.of();
+        CATALOGUE.set(null);
+        REPOSITORIES.set(List.of());
     }
 }

@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -161,11 +162,11 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
      * every pool is open, and emptied first thing in {@code onStop}, before any is closed. The same pools are
      * published to {@link MansartPoolsLive} for the {@code -dev} panel to read.
      */
-    private volatile List<PoolView> views = List.of();
+    private final AtomicReference<List<PoolView>> views = new AtomicReference<>(List.of());
     /** The labels of the named pools no {@code @Named} {@link DataSource} bean serves, found in {@code onStart}. */
-    private volatile Set<String> namedWithoutBean = Set.of();
+    private final AtomicReference<Set<String>> namedWithoutBean = new AtomicReference<>(Set.of());
     /** The labels of the pools whose {@code minIdle} pre-fill opened nothing, found in {@code onStart}. */
-    private volatile Set<String> prefillFailed = Set.of();
+    private final AtomicReference<Set<String>> prefillFailed = new AtomicReference<>(Set.of());
 
     /**
      * One open pool as the report and the dev console show it, built once when the pool opens. It holds no secret:
@@ -232,7 +233,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
             this.pool = MansartDataSource.of(poolConfig);
             // Publish to the holder BEFORE adding it as a bean class so the holder has its singleton
             // ready by the time Vauban's bean discovery enumerates it.
-            MansartPoolHolder.INSTANCE = this.pool;
+            MansartPoolHolder.INSTANCE.set(this.pool);
             builder.addBeanClass(MansartPoolHolder.class);
             opened.add(view(DEFAULT_LABEL, true, PREFIX, pool));
         }
@@ -245,7 +246,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
             NamedDataSourceRegistry.register(e.getKey(), ds);
             opened.add(view(e.getKey(), false, PREFIX + e.getKey() + ".", ds));
         }
-        views = List.copyOf(opened);
+        views.set(List.copyOf(opened));
         MansartPoolsLive.publish(
                 opened.stream().map(v -> new MansartPoolsLive.Pool(v.label(), v.pool())).toList());
     }
@@ -257,7 +258,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
      */
     @Override
     public void onStart(ExtensionContext context) {
-        List<PoolView> opened = views;
+        List<PoolView> opened = views.get();
         Set<String> failed = new HashSet<>();
         for (PoolView v : opened) {
             PoolMetrics m = v.pool().snapshot();
@@ -265,8 +266,8 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
                 failed.add(v.label());
             }
         }
-        prefillFailed = Set.copyOf(failed);
-        namedWithoutBean = namedWithoutBean(opened, context);
+        prefillFailed.set(Set.copyOf(failed));
+        namedWithoutBean.set(namedWithoutBean(opened, context));
     }
 
     /**
@@ -297,9 +298,9 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
     public void onStop() {
         // First, before any pool is closed: a dev console poll from now on reads no pool.
         MansartPoolsLive.clear();
-        views = List.of();
-        namedWithoutBean = Set.of();
-        prefillFailed = Set.of();
+        views.set(List.of());
+        namedWithoutBean.set(Set.of());
+        prefillFailed.set(Set.of());
         for (Map.Entry<String, MansartDataSource> e : namedPools.entrySet()) {
             try {
                 e.getValue().close();
@@ -319,7 +320,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
                 LOG.log(System.Logger.Level.WARNING, "Error closing Mansart pool", e);
             } finally {
                 pool = null;
-                MansartPoolHolder.INSTANCE = null;
+                MansartPoolHolder.INSTANCE.set(null);
             }
         }
     }
@@ -445,7 +446,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        List<PoolView> opened = views;
+        List<PoolView> opened = views.get();
         if (opened.isEmpty()) {
             section.summary("idle: no vidocq.pool[.<name>].url");
             return;
@@ -460,8 +461,8 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
                 rows(section, v, dev);
             }
         }
-        Set<String> failed = prefillFailed;
-        Set<String> beanless = namedWithoutBean;
+        Set<String> failed = prefillFailed.get();
+        Set<String> beanless = namedWithoutBean.get();
         for (PoolView v : opened) {
             String label = v.label();
             if (failed.contains(label)) {

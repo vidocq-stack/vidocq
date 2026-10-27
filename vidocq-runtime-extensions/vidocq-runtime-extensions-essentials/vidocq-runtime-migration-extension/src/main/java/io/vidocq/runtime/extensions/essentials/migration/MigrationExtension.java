@@ -40,6 +40,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -103,7 +104,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
      * Written by {@link #beforeStart} and replaced by each action, read by {@link #contribute} and by
      * {@link #outcomes()}: an immutable list of immutable outcomes, cleared first in {@link #onStop}.
      */
-    private volatile List<Outcome> outcomes = List.of();
+    private final AtomicReference<List<Outcome>> outcomes = new AtomicReference<>(List.of());
     /** Set first in {@link #onStop}: an action that starts afterwards runs nothing. */
     private volatile boolean stopped;
     /** One monitor per datasource: two actions on one datasource run one after the other. */
@@ -180,7 +181,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
                             + " applied=" + r.applied()
                             + " version=" + r.version());
         }
-        this.outcomes = List.copyOf(done);
+        outcomes.set(List.copyOf(done));
     }
 
     /**
@@ -210,7 +211,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
     public void onStop() {
         MigrationLive.clear();
         stopped = true;
-        outcomes = List.of();
+        outcomes.set(List.of());
     }
 
     /**
@@ -224,7 +225,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
             section.summary("disabled: vidocq.migration.enabled=false");
             return;
         }
-        List<Outcome> done = outcomes;
+        List<Outcome> done = outcomes.get();
         if (migrator == null || done.isEmpty()) {
             section.summary("idle: no vidocq.pool[.<name>].url");
             return;
@@ -265,7 +266,7 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
          */
         @Override
         public List<LiveOutcome> outcomes() {
-            return outcomes.stream()
+            return outcomes.get().stream()
                     .map(o -> new LiveOutcome(o.dataSourceName(), o.result().version(), o.lastRun(),
                             o.cleanDisabled(), cleanDisabledKey(o.dataSourceName()), o.info(), o.infoAbsent()))
                     .toList();
@@ -378,19 +379,19 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
             if (stopped) {
                 return;
             }
-            List<Outcome> next = new ArrayList<>(outcomes);
+            List<Outcome> next = new ArrayList<>(outcomes.get());
             next.replaceAll(current -> current.dataSourceName().equals(o.dataSourceName()) ? o : current);
-            outcomes = List.copyOf(next);
+            outcomes.set(List.copyOf(next));
         }
     }
 
     /** The outcomes the report and the control read now, for the tests. */
     List<Outcome> outcomes() {
-        return outcomes;
+        return outcomes.get();
     }
 
     private Outcome outcome(String name) {
-        return outcomes.stream().filter(o -> o.dataSourceName().equals(name)).findFirst().orElse(null);
+        return outcomes.get().stream().filter(o -> o.dataSourceName().equals(name)).findFirst().orElse(null);
     }
 
     private MigrationTarget target(String name) {
@@ -442,13 +443,28 @@ public final class MigrationExtension implements VidocqExtension, StartupReportC
         return Set.copyOf(keys);
     }
 
+    /**
+     * The comma-separated items of {@code text}, the blanks around each comma dropped, and the empty items at the
+     * end too, as {@link String#split(String)} drops them.
+     */
+    private static List<String> commaSeparated(String text) {
+        java.util.ArrayList<String> items = new java.util.ArrayList<>();
+        for (String item : text.split(",", -1)) {
+            items.add(item.strip());
+        }
+        while (!items.isEmpty() && items.getLast().isEmpty()) {
+            items.removeLast();
+        }
+        return List.copyOf(items);
+    }
+
     private static MigrationTarget target(VidocqConfiguration cfg, String name,
                                           String poolPrefix, String locKey, boolean strict) {
         return new MigrationTarget(name,
                 cfg.property(poolPrefix + "url").orElseThrow(),
                 cfg.property(poolPrefix + "username").orElse(null),
                 cfg.property(poolPrefix + "password").orElse(null),
-                cfg.property(locKey).map(s -> List.of(s.split("\\s*,\\s*"))).orElse(List.of()),
+                cfg.property(locKey).map(MigrationExtension::commaSeparated).orElse(List.of()),
                 strict,
                 // anything but false keeps the schema safe from clean
                 cfg.property(cleanDisabledKey(name)).map(v -> !"false".equalsIgnoreCase(v.strip())).orElse(true));

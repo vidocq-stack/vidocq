@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.core.cassini.live;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The Cassini stacks mounted during this boot, for the {@code rest} section of the startup report and, since
@@ -34,24 +35,24 @@ import java.util.List;
  */
 public final class RestMounts {
 
-    private static volatile List<RestMount> mounts = List.of();
+    private static final AtomicReference<List<RestMount>> MOUNTS = new AtomicReference<>(List.of());
 
     private RestMounts() {}
 
     /** Adds a mount, after those already recorded. */
     public static synchronized void record(RestMount mount) {
-        List<RestMount> next = new ArrayList<>(mounts);
+        List<RestMount> next = new ArrayList<>(MOUNTS.get());
         next.add(mount);
-        mounts = List.copyOf(next);
+        MOUNTS.set(List.copyOf(next));
     }
 
     /** The mounts of this boot, in the order they were made. */
     public static List<RestMount> all() {
-        return mounts;
+        return MOUNTS.get();
     }
 
     /** Forgets every mount, before the application is stopped or loaded again. */
     public static synchronized void clear() {
-        mounts = List.of();
+        MOUNTS.set(List.of());
     }
 }

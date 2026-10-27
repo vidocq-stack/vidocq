@@ -30,6 +30,7 @@ import io.vidocq.runtime.spi.devconsole.Series;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The {@code mcp} section of the startup report, live: the values langchain4j-cdi's MCP server holds in memory,
@@ -54,8 +55,8 @@ public final class McpLivePanel implements LivePanel {
                     List.of(Series.area("sessions"), Series.line("streams"), Series.line("listens"))),
             new Chart("server-requests", "Server-to-client requests", List.of(Series.line("pending"))));
 
-    private volatile McpLiveBeans live = McpLiveBeans.NONE;
-    private volatile McpInspector inspector = McpInspector.OFF;
+    private final AtomicReference<McpLiveBeans> live = new AtomicReference<>(McpLiveBeans.NONE);
+    private final AtomicReference<McpInspector> inspector = new AtomicReference<>(McpInspector.OFF);
 
     /** Created by the service loader. */
     public McpLivePanel() {}
@@ -73,17 +74,17 @@ public final class McpLivePanel implements LivePanel {
     @Override
     public void start(ExtensionContext context) {
         McpInspection inspection = McpInspection.of(context.beanManager());
-        live = McpLiveBeans.of(inspection, context.beanManager());
-        inspector.close();
-        inspector = McpInspector.start(context.beanManager(), inspection, McpEndpointLive.urls(), CALL_TIMEOUT);
+        live.set(McpLiveBeans.of(inspection, context.beanManager()));
+        inspector.get().close();
+        inspector.set(McpInspector.start(context.beanManager(), inspection, McpEndpointLive.urls(), CALL_TIMEOUT));
     }
 
     /** Drops the beans, the catalogue and the inspector's history: a dev reload builds them again. */
     @Override
     public void stop() {
-        live = McpLiveBeans.NONE;
-        inspector.close();
-        inspector = McpInspector.OFF;
+        live.set(McpLiveBeans.NONE);
+        inspector.get().close();
+        inspector.set(McpInspector.OFF);
     }
 
     @Override
@@ -94,7 +95,7 @@ public final class McpLivePanel implements LivePanel {
     /** The inspector's actions: one per tool, prompt, resource and resource template; none before {@link #start}. */
     @Override
     public List<PanelAction> actions() {
-        return inspector.actions();
+        return inspector.get().actions();
     }
 
     /**
@@ -105,7 +106,7 @@ public final class McpLivePanel implements LivePanel {
      */
     @Override
     public void sample(PanelSample sample) {
-        live.sample(sample);
-        inspector.sample(sample);
+        live.get().sample(sample);
+        inspector.get().sample(sample);
     }
 }
