@@ -19,12 +19,15 @@
  */
 package io.vidocq.runtime.extensions.essentials.devconsole;
 
+import io.vidocq.runtime.spi.config.ConfigSource;
+import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvFileSource;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -128,5 +131,42 @@ class DevConsoleSettingsTest {
         assertEquals("127.0.0.1", DevConsoleSettings.host("x\u202Ey"), "what it refuses, it does not listen on");
         assertEquals("127.0.0.1", DevConsoleSettings.host("h".repeat(256)), "longer than any host name");
         assertEquals("h".repeat(255), DevConsoleSettings.host("h".repeat(255)));
+    }
+
+    @Test
+    void aConfigurationThatCannotBeReadLeavesEverySettingAtItsDefault() {
+        VidocqConfig unreadable = new VidocqConfig() {
+            @Override
+            public Optional<String> getValue(String key) {
+                throw new IllegalStateException("unreadable " + key);
+            }
+
+            @Override
+            public <T> Optional<T> getValue(String key, Class<T> type) {
+                throw new IllegalStateException("unreadable " + key);
+            }
+
+            @Override
+            public <T> List<T> getValues(String key, Class<T> elementType) {
+                throw new IllegalStateException("unreadable " + key);
+            }
+
+            @Override
+            public Iterable<String> getPropertyNames() {
+                return List.of();
+            }
+
+            @Override
+            public Iterable<ConfigSource> getConfigSources() {
+                return List.of();
+            }
+        };
+
+        DevConsoleSettings settings = DevConsoleSettings.resolve(unreadable, LaunchMode.DEV);
+
+        assertTrue(settings.on());
+        assertEquals(DevConsoleSettings.DEFAULT_PORT, settings.port());
+        assertEquals(DevConsoleSettings.DEFAULT_HOST, settings.host());
+        assertTrue(settings.invalid().isEmpty(), settings.invalid().toString());
     }
 }
