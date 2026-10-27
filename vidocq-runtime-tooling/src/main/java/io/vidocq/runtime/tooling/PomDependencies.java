@@ -221,8 +221,8 @@ public final class PomDependencies {
                     case XMLStreamConstants.END_ELEMENT -> {
                         if (path.size() == 3 && "parent".equals(path.toArray()[1])) {
                             switch (reader.getLocalName()) {
-                                case "groupId"    -> groupId = text.toString().trim();
-                                case "artifactId" -> artifactId = text.toString().trim();
+                                case GROUP_ID    -> groupId = text.toString().trim();
+                                case ARTIFACT_ID -> artifactId = text.toString().trim();
                                 case "version"    -> version = text.toString().trim();
                                 default -> { /* relativePath */ }
                             }

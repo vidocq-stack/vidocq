@@ -24,7 +24,6 @@ import io.vidocq.runtime.cli.completion.Shell;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Sealed hierarchy of every command the Vidocq CLI understands.
