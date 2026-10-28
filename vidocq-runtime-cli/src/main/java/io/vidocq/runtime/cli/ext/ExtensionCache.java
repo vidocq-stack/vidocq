@@ -213,25 +213,31 @@ public final class ExtensionCache {
      */
     private static Optional<Path> localRepository(List<ResolvedArtifact> resolved) {
         for (ResolvedArtifact a : resolved) {
-            Path versionDir = a.file().getParent();
-            if (versionDir == null || !baseVersion(a.version()).equals(name(versionDir))) {
-                continue;
-            }
-            Path dir = versionDir.getParent();
-            if (dir == null || !a.artifactId().equals(name(dir))) {
-                continue;
-            }
-            String[] group = a.groupId().split("\\.");
-            boolean matches = true;
-            for (int i = group.length - 1; i >= 0 && matches; i--) {
-                dir = dir.getParent();
-                matches = dir != null && group[i].equals(name(dir));
-            }
-            if (matches && dir.getParent() != null) {
-                return Optional.of(dir.getParent());
+            Path root = repositoryRoot(a);
+            if (root != null) {
+                return Optional.of(root);
             }
         }
         return Optional.empty();
+    }
+
+    /** The repository root {@code a} lives under, or {@code null} when its file is not laid out as Maven does. */
+    private static Path repositoryRoot(ResolvedArtifact a) {
+        Path versionDir = a.file().getParent();
+        if (versionDir == null || !baseVersion(a.version()).equals(name(versionDir))) {
+            return null;
+        }
+        Path dir = versionDir.getParent();
+        if (dir == null || !a.artifactId().equals(name(dir))) {
+            return null;
+        }
+        String[] group = a.groupId().split("\\.");
+        boolean matches = true;
+        for (int i = group.length - 1; i >= 0 && matches; i--) {
+            dir = dir.getParent();
+            matches = dir != null && group[i].equals(name(dir));
+        }
+        return matches ? dir.getParent() : null;
     }
 
     private static String name(Path path) {

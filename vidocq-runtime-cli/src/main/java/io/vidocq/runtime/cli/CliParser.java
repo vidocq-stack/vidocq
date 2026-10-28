@@ -51,6 +51,8 @@ public final class CliParser {
     private static final String CLEAN = "clean";
     private static final String UPDATE = "update";
     private static final String DRY_RUN = "--dry-run";
+    private static final String PORT = "--port";
+    private static final String EXAMPLES = "Examples:";
 
     private CliParser() {}
 
@@ -86,12 +88,14 @@ public final class CliParser {
         boolean portExplicit = false;
         Path config = null;
         boolean debug = false;
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
-                case "--port", "-p"   -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
-                case "--config", "-c" -> config = Path.of(value(args, ++i, "--config"));
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case PORT, "-p"       -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
+                case "--config", "-c" -> config = Path.of(next(it, "--config"));
                 case DEBUG        -> debug  = true;
-                default               -> unknownOpt(args[i], START);
+                default               -> unknownOpt(arg, START);
             }
         }
         return new Command.Start(port, portExplicit, config, debug);
@@ -102,12 +106,14 @@ public final class CliParser {
         boolean portExplicit = false;
         String profile = "dev";
         boolean debug = false;
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
-                case "--port", "-p"    -> { port = parseInt(args, ++i, "--port"); portExplicit = true; }
-                case "--profile", "-P" -> profile = value(args, ++i, "--profile");
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case PORT, "-p"        -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
+                case "--profile", "-P" -> profile = next(it, "--profile");
                 case DEBUG         -> debug   = true;
-                default                -> unknownOpt(args[i], "dev");
+                default                -> unknownOpt(arg, "dev");
             }
         }
         return new Command.Dev(port, portExplicit, profile, debug);
@@ -186,15 +192,17 @@ public final class CliParser {
         String parentVersion = null;
         boolean main = false;
         Set<String> extensions = new LinkedHashSet<>();
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
-                case "--name", "-n"      -> name    = value(args, ++i, "--name");
-                case "--group-id", "-g"  -> groupId = value(args, ++i, "--group-id");
-                case "--package"         -> pkg     = value(args, ++i, "--package");
-                case "--extension", "-x" -> extensions.add(value(args, ++i, "--extension"));
-                case "--parent-version"  -> parentVersion = value(args, ++i, "--parent-version");
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case "--name", "-n"      -> name    = next(it, "--name");
+                case "--group-id", "-g"  -> groupId = next(it, "--group-id");
+                case "--package"         -> pkg     = next(it, "--package");
+                case "--extension", "-x" -> extensions.add(next(it, "--extension"));
+                case "--parent-version"  -> parentVersion = next(it, "--parent-version");
                 case "--main"            -> main = true;
-                default                  -> unknownOpt(args[i], CREATE);
+                default                  -> unknownOpt(arg, CREATE);
             }
         }
         if (name == null) {
@@ -216,22 +224,25 @@ public final class CliParser {
         boolean skipTests = false;
         boolean dryRun = false;
         List<String> passthrough = new ArrayList<>();
-        int i = from;
+        int first = from;
         // An optional leading non-flag token selects the build flavour.
-        if (i < args.length && !args[i].startsWith("-")) {
+        if (first < args.length && !args[first].startsWith("-")) {
             try {
-                type = BuildType.fromToken(args[i++]);
+                type = BuildType.fromToken(args[first]);
             } catch (IllegalArgumentException e) {
                 throw new CliException(e.getMessage());
             }
+            first++;
         }
-        for (; i < args.length; i++) {
-            switch (args[i]) {
+        Iterator<String> it = tokens(args, first);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
                 case "--offline", "-o" -> offline   = true;
                 case "--skip-tests"    -> skipTests = true;
                 case DRY_RUN       -> dryRun    = true;
-                case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
-                default                -> unknownOpt(args[i], BUILD);
+                case "--"              -> it.forEachRemaining(passthrough::add);
+                default                -> unknownOpt(arg, BUILD);
             }
         }
         return new Command.Build(type, offline, skipTests, dryRun, List.copyOf(passthrough));
@@ -241,21 +252,21 @@ public final class CliParser {
         boolean offline = false;
         boolean dryRun = false;
         List<String> passthrough = new ArrayList<>();
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
                 case "--offline", "-o" -> offline = true;
                 case DRY_RUN       -> dryRun  = true;
-                case "--"              -> { passthrough.addAll(rest(args, i + 1)); i = args.length; }
-                default                -> unknownOpt(args[i], CLEAN);
+                case "--"              -> it.forEachRemaining(passthrough::add);
+                default                -> unknownOpt(arg, CLEAN);
             }
         }
         return new Command.Clean(offline, dryRun, List.copyOf(passthrough));
     }
 
     private static List<String> rest(String[] args, int from) {
-        List<String> out = new ArrayList<>();
-        for (int i = from; i < args.length; i++) out.add(args[i]);
-        return out;
+        return new ArrayList<>(Arrays.asList(args).subList(from, args.length));
     }
 
     private static Command parseConfig(String[] args, int from) {
@@ -281,10 +292,11 @@ public final class CliParser {
 
     private static Command.Update parseUpdate(String[] args, int from) {
         boolean check = false;
-        for (int i = from; i < args.length; i++) {
-            switch (args[i]) {
-                case CHECK     -> check = true;
-                default        -> unknownOpt(args[i], UPDATE);
+        for (String arg : Arrays.asList(args).subList(from, args.length)) {
+            if (CHECK.equals(arg)) {
+                check = true;
+            } else {
+                unknownOpt(arg, UPDATE);
             }
         }
         return new Command.Update(check);
@@ -501,7 +513,7 @@ public final class CliParser {
                         + "), an explicit " + CliOutput.cyan("groupId:artifactId") + ",");
                 CliOutput.println("or any name (resolved as io.vidocq.runtime:vidocq-runtime-<id>-extension).");
                 CliOutput.println();
-                CliOutput.println("Examples:");
+                CliOutput.println(EXAMPLES);
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension list --available"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension add cassini-rest knock-health"));
             }
@@ -516,7 +528,7 @@ public final class CliParser {
                 cmd("set <key> <value>", "Set (or add) <key> to <value>");
                 cmd("list",              "Print every key=value pair");
                 CliOutput.println();
-                CliOutput.println("Examples:");
+                CliOutput.println(EXAMPLES);
                 CliOutput.println("  " + CliOutput.cyan("vidocq config get vidocq.http.port"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq config set vidocq.http.port 9090"));
             }
@@ -545,7 +557,7 @@ public final class CliParser {
                 CliOutput.println();
                 CliOutput.println("Shells: " + String.join(", ", Shell.tokens()));
                 CliOutput.println();
-                CliOutput.println("Examples:");
+                CliOutput.println(EXAMPLES);
                 CliOutput.println("  " + CliOutput.cyan("vidocq completion install"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq completion uninstall zsh"));
                 CliOutput.println("  " + CliOutput.cyan("source <(vidocq completion bash)"));
@@ -597,18 +609,17 @@ public final class CliParser {
     // Utilities
     // -------------------------------------------------------------------------
 
-    private static int parseInt(String[] args, int idx, String opt) {
-        String raw = value(args, idx, opt);
+    /** The arguments from index {@code from} on, consumed one by one (an option may take the next one as value). */
+    private static Iterator<String> tokens(String[] args, int from) {
+        return Arrays.asList(args).subList(from, args.length).iterator();
+    }
+
+    private static int parseInt(String raw, String opt) {
         try {
             return Integer.parseInt(raw);
         } catch (NumberFormatException _) {
             throw new CliException("Option " + opt + " expects an integer, got: " + raw);
         }
-    }
-
-    private static String value(String[] args, int idx, String opt) {
-        if (idx >= args.length) throw new CliException("Option " + opt + " requires a value.");
-        return args[idx];
     }
 
     private static void unknownOpt(String flag, String cmd) {

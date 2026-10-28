@@ -93,11 +93,7 @@ public final class MavenLauncher {
             try {
                 return process.waitFor();
             } finally {
-                try {
-                    Runtime.getRuntime().removeShutdownHook(waitForMaven);
-                } catch (IllegalStateException _) {
-                    // the hook is already running
-                }
+                removeShutdownHook(waitForMaven);
             }
         } catch (IOException e) {
             System.err.println("Failed to launch Maven (" + command.get(0) + "): " + e.getMessage());
@@ -106,6 +102,14 @@ public final class MavenLauncher {
             Thread.currentThread().interrupt();
             System.err.println("Build interrupted.");
             return 1;
+        }
+    }
+
+    private static void removeShutdownHook(Thread hook) {
+        try {
+            Runtime.getRuntime().removeShutdownHook(hook);
+        } catch (IllegalStateException _) {
+            // the hook is already running
         }
     }
 }

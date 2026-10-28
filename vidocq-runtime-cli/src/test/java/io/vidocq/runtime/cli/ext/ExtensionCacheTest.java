@@ -149,6 +149,32 @@ class ExtensionCacheTest {
     }
 
     @Test
+    void artifactsNotLaidOutAsInARepositoryAreSkippedWhenLocatingIt() throws IOException {
+        Path repo = dir.resolve("repository");
+        Path flat = Files.writeString(Files.createDirectories(dir.resolve("flat")).resolve("x-1.0.jar"), "jar");
+        Path wrongArtifactDir = artifact(repo, "com.acme", "other", "1.0");
+        Path wrongGroup = artifact(repo, "org.elsewhere", "lib", "1.0");
+        Path good = artifact(repo, "com.acme", "lib", "1.0");
+        var parent = new PomDependencies.Parent("com.acme", "parent", "2.0-SNAPSHOT");
+
+        List<Path> files = ExtensionCache.snapshotFiles(List.of(
+                new ResolvedArtifact("com.acme", "x", "1.0", flat),
+                new ResolvedArtifact("com.acme", "lib", "1.0", wrongArtifactDir),
+                new ResolvedArtifact("com.acme", "lib", "1.0", wrongGroup),
+                new ResolvedArtifact("com.acme", "lib", "1.0", good)), Optional.of(parent));
+
+        assertEquals(List.of(repo.resolve("com/acme/parent/2.0-SNAPSHOT/parent-2.0-SNAPSHOT.pom")), files);
+    }
+
+    @Test
+    void noRepositoryFoundMeansNoParentPom() throws IOException {
+        Path flat = Files.writeString(Files.createDirectories(dir.resolve("flat")).resolve("x-1.0.jar"), "jar");
+
+        assertTrue(ExtensionCache.snapshotFiles(List.of(new ResolvedArtifact("g", "x", "1.0", flat)),
+                Optional.of(new PomDependencies.Parent("g", "parent", "1.0-SNAPSHOT"))).isEmpty());
+    }
+
+    @Test
     void releaseParentIsNotFingerprinted() throws IOException {
         Path jar = artifact(dir.resolve("repository"), "g", "a", "1.0");
 
