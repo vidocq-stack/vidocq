@@ -766,3 +766,33 @@ is null`.
 ### Fix
 `entityForRepo` falls back to the entity of the repository being written. Regression test:
 `FindByAndOrderByTest.bindsTheIdOfAnInheritedFindMethod`.
+
+## MANSART-023 — JDQL: a literal shaped like `pkg.Class.MEMBER` loaded the class it named
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/jdql-enum-literal-lookup`, SonarQube/Opengrep unsafe reflection)
+- **Severity**: high (security: class loading chosen by runtime input)
+- **Module**: `mansart-data-core` (`JdqlExecutor`)
+
+### Symptom
+Any string or identifier literal of a JDQL statement with at least one dot and an uppercase last segment, such as
+`WHERE label = 'com.example.payload.Gadget.RUN'`, made Mansart call `Class.forName("com.example.payload.Gadget", false,
+TCCL)` (then the same name with each dot in turn replaced by `$`), whatever the attribute compared. `JdqlExecutor.run`
+takes statements as text at run time — the Vidocq dev console's JDQL tab sends them over HTTP — so the caller chose
+which classes were looked up, and an enum it named was taken as the value even for an attribute of another type.
+
+### Minimal repro
+`JdqlEnumLiteralTest.aLiteralNamingAnotherClassIsNeverLoaded` (`mansart-data-tests`): with a context class loader
+that records each requested name, the statement above asked it for `com.example.payload.Gadget`.
+
+### Cause
+`JdqlExecutor.resolveLiteral` resolved enum literals by loading the class named by the literal's qualifier
+(`loadClassForEnum`), with no link to the entity model.
+
+### Fix
+`resolveLiteral` takes the type of the attribute the literal meets, from the entity model. A literal is an enum
+constant only when that type is an enum and the qualifier is that enum's canonical (`pkg.Outer.Inner`) or binary
+(`pkg.Outer$Inner`) name; the constant is looked up among that enum's constants. Otherwise the literal stays text.
+`loadClassForEnum` is removed: no class is loaded from a name in the statement. Regression tests:
+`JdqlEnumLiteralTest` (foreign class never requested, top-level and nested enum literals in comparisons, `IN` and
+`SET`, a literal naming another enum refused for the attribute's enum).

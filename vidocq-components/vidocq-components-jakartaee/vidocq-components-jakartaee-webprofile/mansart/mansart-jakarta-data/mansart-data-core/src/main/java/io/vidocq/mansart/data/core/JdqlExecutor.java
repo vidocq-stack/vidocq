@@ -697,7 +697,7 @@ public final class JdqlExecutor {
      */
     private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, CallShape shape, Class<?> target) {
         if (ref.isLiteral) {
-            Object value = resolveLiteral(ref.literal);
+            Object value = resolveLiteral(ref.literal, target);
             return shape.convert() ? JdqlValues.convert(value, target, literalLabel(ref.literal)) : value;
         }
         Object value;
@@ -720,39 +720,31 @@ public final class JdqlExecutor {
     }
 
     /**
-     * Lift a JDQL literal token to a runtime value. Strings whose form is
-     * {@code pkg.Class.MEMBER} (≥ 2 dots, last segment uppercase) are loaded as enum constants;
-     * strings without dots are returned verbatim; numbers/booleans pass through.
+     * Lift a JDQL literal token to a runtime value. A string of the form {@code pkg.Enum.CONSTANT} met by an attribute
+     * whose type is an enum, and whose qualifier names that very enum (its canonical name, {@code pkg.Outer.Inner}, or
+     * its binary name, {@code pkg.Outer$Inner}), is that enum's constant. No class is ever loaded from a name the
+     * statement holds (MANSART-023): the enum is the one the entity model gives. Any other literal is returned verbatim.
      */
-    private static Object resolveLiteral(Object lit) {
-        if (lit instanceof String s && s.indexOf('.') > 0) {
+    private static Object resolveLiteral(Object lit, Class<?> target) {
+        if (lit instanceof String s && target != null && target.isEnum()) {
             int last = s.lastIndexOf('.');
-            String member = s.substring(last + 1);
-            if (!member.isEmpty() && Character.isUpperCase(member.charAt(0))) {
-                String enumFqn = s.substring(0, last);
-                try {
-                    Class<?> raw = loadClassForEnum(enumFqn);
-                    if (raw != null && raw.isEnum()) {
-                        @SuppressWarnings({"rawtypes", "unchecked"})
-                        Enum<?> v = Enum.valueOf((Class) raw, member);
-                        return v;
-                    }
-                } catch (Exception ignored) { /* fall through — treat as plain string */ }
+            if (last > 0 && namesEnum(s.substring(0, last), target)) {
+                Object constant = enumConstant(target, s.substring(last + 1));
+                if (constant != null) return constant;
             }
         }
         return lit;
     }
 
-    private static Class<?> loadClassForEnum(String fqn) {
-        ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        if (cl == null) cl = JdqlExecutor.class.getClassLoader();
-        // Try as-is, then progressively replace inner-class dot separators with '$'
-        try { return Class.forName(fqn, false, cl); } catch (ClassNotFoundException ignored) {}
-        StringBuilder sb = new StringBuilder(fqn);
-        for (int i = sb.length() - 1; i > 0; i--) {
-            if (sb.charAt(i) != '.') continue;
-            sb.setCharAt(i, '$');
-            try { return Class.forName(sb.toString(), false, cl); } catch (ClassNotFoundException ignored) {}
+    /** Whether {@code qualifier} names {@code enumType}, by its canonical or its binary name. */
+    private static boolean namesEnum(String qualifier, Class<?> enumType) {
+        return qualifier.equals(enumType.getName()) || qualifier.equals(enumType.getCanonicalName());
+    }
+
+    /** The constant {@code name} of {@code enumType}, or {@code null} when it has none of that name. */
+    private static Object enumConstant(Class<?> enumType, String name) {
+        for (Object constant : enumType.getEnumConstants()) {
+            if (((Enum<?>) constant).name().equals(name)) return constant;
         }
         return null;
     }
