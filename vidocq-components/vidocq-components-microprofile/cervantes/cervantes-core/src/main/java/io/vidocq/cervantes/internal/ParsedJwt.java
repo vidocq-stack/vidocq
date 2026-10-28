@@ -41,12 +41,13 @@ record ParsedJwt(JsonObject header, JsonObject claims, byte[] signingInput, byte
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ParsedJwt that
-                && header.equals(that.header)
-                && claims.equals(that.claims)
-                && Arrays.equals(signingInput, that.signingInput)
-                && Arrays.equals(signature, that.signature)
-                && Objects.equals(rawToken, that.rawToken);
+        return other instanceof ParsedJwt(var otherHeader, var otherClaims, var otherSigningInput,
+                                          var otherSignature, var otherRawToken)
+                && header.equals(otherHeader)
+                && claims.equals(otherClaims)
+                && Arrays.equals(signingInput, otherSigningInput)
+                && Arrays.equals(signature, otherSignature)
+                && Objects.equals(rawToken, otherRawToken);
     }
 
     @Override
