@@ -116,15 +116,9 @@ final class JaxRsResourceScanner {
         String basePath = normalizeBasePath(classPath.value());
 
         for (Method method : clazz.getDeclaredMethods()) {
-            if (method.isSynthetic()) {
-                continue;
-            }
-            String httpMethod = findHttpMethod(method);
-            if (httpMethod == null) {
-                continue;
-            }
+            String httpMethod = method.isSynthetic() ? null : findHttpMethod(method);
             Operation opAnn = method.getAnnotation(Operation.class);
-            if (opAnn != null && opAnn.hidden()) {
+            if (httpMethod == null || (opAnn != null && opAnn.hidden())) {
                 continue;
             }
 
@@ -369,32 +363,31 @@ final class JaxRsResourceScanner {
     private static void applyClassAndMethodTags(Class<?> resourceClass,
                                                 Method method,
                                                 org.eclipse.microprofile.openapi.models.Operation op) {
-        var methodTags = method.getAnnotationsByType(org.eclipse.microprofile.openapi.annotations.tags.Tag.class);
-        boolean hasMethodTagAnnotation = methodTags.length > 0;
-        for (var t : methodTags) {
+        boolean hasMethodTagAnnotation = addAnnotatedTags(op,
+                method.getAnnotationsByType(org.eclipse.microprofile.openapi.annotations.tags.Tag.class),
+                method.getAnnotation(Tags.class));
+        if (!hasMethodTagAnnotation) {
+            addAnnotatedTags(op,
+                    resourceClass.getAnnotationsByType(org.eclipse.microprofile.openapi.annotations.tags.Tag.class),
+                    resourceClass.getAnnotation(Tags.class));
+        }
+        // @Operation in MP OpenAPI has no `tags()` member.
+    }
+
+    /** Adds the {@code @Tag} names (or refs) and the {@code @Tags} refs; {@code true} when any is declared. */
+    private static boolean addAnnotatedTags(org.eclipse.microprofile.openapi.models.Operation op,
+                                            org.eclipse.microprofile.openapi.annotations.tags.Tag[] tags,
+                                            Tags tagContainer) {
+        for (var t : tags) {
             String tag = !t.name().isEmpty() ? t.name() : t.ref();
             addOperationTag(op, tag);
         }
-        Tags methodTagContainer = method.getAnnotation(Tags.class);
-        if (methodTagContainer != null) {
-            hasMethodTagAnnotation = true;
-            for (String ref : methodTagContainer.refs()) {
+        if (tagContainer != null) {
+            for (String ref : tagContainer.refs()) {
                 addOperationTag(op, ref);
             }
         }
-        if (!hasMethodTagAnnotation) {
-            for (var t : resourceClass.getAnnotationsByType(org.eclipse.microprofile.openapi.annotations.tags.Tag.class)) {
-                String tag = !t.name().isEmpty() ? t.name() : t.ref();
-                addOperationTag(op, tag);
-            }
-            Tags classTagContainer = resourceClass.getAnnotation(Tags.class);
-            if (classTagContainer != null) {
-                for (String ref : classTagContainer.refs()) {
-                    addOperationTag(op, ref);
-                }
-            }
-        }
-        // @Operation in MP OpenAPI has no `tags()` member.
+        return tags.length > 0 || tagContainer != null;
     }
 
     private static void addOperationTag(org.eclipse.microprofile.openapi.models.Operation op, String tag) {
@@ -469,38 +462,52 @@ final class JaxRsResourceScanner {
         }
 
         for (int i = 0; i < paramAnnotations.length; i++) {
-            Annotation[] anns = paramAnnotations[i];
-            Type genericType = paramGenericTypes[i];
-
-            if (isContextOrFormParameter(anns)) {
-                continue; // @Context never appears in OpenAPI; @FormParam contributes to RequestBody (deferred).
-            }
-
-            Parameter explicit = findAnnotation(anns, Parameter.class);
-            if (explicit != null && explicit.hidden()) {
-                continue;
-            }
-
-            PathParam pp = findAnnotation(anns, PathParam.class);
-            QueryParam qp = findAnnotation(anns, QueryParam.class);
-            HeaderParam hp = findAnnotation(anns, HeaderParam.class);
-            CookieParam cp = findAnnotation(anns, CookieParam.class);
-
-            String inferredName = null;
-            In inferredIn = null;
-            if (pp != null) { inferredName = pp.value(); inferredIn = In.PATH; }
-            else if (qp != null) { inferredName = qp.value(); inferredIn = In.QUERY; }
-            else if (hp != null) { inferredName = hp.value(); inferredIn = In.HEADER; }
-            else if (cp != null) { inferredName = cp.value(); inferredIn = In.COOKIE; }
-
-            if (inferredIn == null && explicit == null) {
-                // Not a parameter — it's the request body entity (handled elsewhere).
-                continue;
-            }
-
-            var modelParam = buildExplicitParameter(explicit, inferredName, inferredIn, genericType, anns);
-            addParameter(op, modelParam);
+            addParameter(op, inferredParameter(paramAnnotations[i], paramGenericTypes[i]));
         }
+    }
+
+    /** The JAX-RS name and location of a parameter; both {@code null} when it has no JAX-RS param annotation. */
+    private record JaxRsParameter(String name, In in) {
+    }
+
+    /**
+     * The parameter of a method argument, or {@code null} for a context, form, hidden or entity
+     * argument.
+     */
+    private org.eclipse.microprofile.openapi.models.parameters.Parameter inferredParameter(Annotation[] anns, Type genericType) {
+        if (isContextOrFormParameter(anns)) {
+            return null; // @Context never appears in OpenAPI; @FormParam contributes to RequestBody (deferred).
+        }
+        Parameter explicit = findAnnotation(anns, Parameter.class);
+        if (explicit != null && explicit.hidden()) {
+            return null;
+        }
+        JaxRsParameter inferred = jaxRsParameter(anns);
+        if (inferred.in() == null && explicit == null) {
+            // Not a parameter — it's the request body entity (handled elsewhere).
+            return null;
+        }
+        return buildExplicitParameter(explicit, inferred.name(), inferred.in(), genericType, anns);
+    }
+
+    private static JaxRsParameter jaxRsParameter(Annotation[] anns) {
+        PathParam pp = findAnnotation(anns, PathParam.class);
+        if (pp != null) {
+            return new JaxRsParameter(pp.value(), In.PATH);
+        }
+        QueryParam qp = findAnnotation(anns, QueryParam.class);
+        if (qp != null) {
+            return new JaxRsParameter(qp.value(), In.QUERY);
+        }
+        HeaderParam hp = findAnnotation(anns, HeaderParam.class);
+        if (hp != null) {
+            return new JaxRsParameter(hp.value(), In.HEADER);
+        }
+        CookieParam cp = findAnnotation(anns, CookieParam.class);
+        if (cp != null) {
+            return new JaxRsParameter(cp.value(), In.COOKIE);
+        }
+        return new JaxRsParameter(null, null);
     }
 
     private static void addParameter(org.eclipse.microprofile.openapi.models.Operation op,
@@ -521,7 +528,6 @@ final class JaxRsResourceScanner {
 
     private org.eclipse.microprofile.openapi.models.parameters.Parameter buildExplicitParameter(
             Parameter explicit, String inferredName, In inferredIn, Type sourceType, Annotation[] sourceAnnotations) {
-        var p = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.Parameter.class);
         boolean hasExplicitContent = explicit != null && explicit.content().length > 0;
 
         String name = (explicit != null && !explicit.name().isEmpty()) ? explicit.name() : inferredName;
@@ -530,6 +536,7 @@ final class JaxRsResourceScanner {
         if (name == null) {
             return null;
         }
+        var p = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.Parameter.class);
         p.setName(name);
         if (in != null) {
             p.setIn(in);
@@ -538,64 +545,82 @@ final class JaxRsResourceScanner {
             p.setRequired(Boolean.TRUE);
         }
         if (explicit != null) {
-            if (!explicit.description().isEmpty()) {
-                p.setDescription(explicit.description());
-            }
-            if (explicit.required()) {
-                p.setRequired(Boolean.TRUE);
-            }
-            if (explicit.deprecated()) {
-                p.setDeprecated(Boolean.TRUE);
-            }
-            if (explicit.allowEmptyValue()) {
-                p.setAllowEmptyValue(Boolean.TRUE);
-            }
-            if (explicit.style() != ParameterStyle.DEFAULT) {
-                p.setStyle(toModelParameterStyle(explicit.style()));
-            }
-            if (!explicit.example().isEmpty()) {
-                p.setExample(explicit.example());
-            }
-            AnnotationModelMappings.applyExtensions(p, explicit.extensions());
-            if (hasExplicitContent) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                for (Content c : explicit.content()) {
-                    String mt = c.mediaType().isEmpty() ? "*/*" : c.mediaType();
-                    MediaType mediaType = OASFactory.createObject(MediaType.class);
-                    applyContentAnnotation(c, mediaType, sourceType, true);
-                    content.addMediaType(mt, mediaType);
-                }
-                p.setContent(content);
-            }
+            applyExplicitParameter(p, explicit, sourceType);
         }
         if (sourceAnnotations != null && BeanValidationMapper.hasNotNull(sourceAnnotations)) {
             p.setRequired(Boolean.TRUE);
         }
-        // Schema (§3.10): site-level @Schema on the parameter, or inferred from the type.
         if (!hasExplicitContent && schemaGenerator != null) {
-            var sourceSchema = sourceAnnotations != null
-                    ? findAnnotation(sourceAnnotations, org.eclipse.microprofile.openapi.annotations.media.Schema.class)
-                    : null;
-            if (sourceSchema != null && sourceSchema.hidden()) {
-                return p;
-            }
-            var siteAnn = explicit != null ? explicit.schema() : null;
-            if (siteAnn == null && sourceSchema != null) {
-                siteAnn = sourceSchema;
-            }
-            // The annotation's default name is empty — treat a zero-content @Schema as absent.
-            if (siteAnn != null && SchemaGenerator.hasContent(siteAnn)) {
-                Type targetType = sourceType != null ? sourceType : Object.class;
-                var schema = schemaGenerator.generate(targetType, siteAnn);
-                BeanValidationMapper.apply(schema, sourceAnnotations);
-                p.setSchema(schema);
-            } else if (sourceType != null) {
-                var schema = schemaGenerator.generate(sourceType);
-                BeanValidationMapper.apply(schema, sourceAnnotations);
-                p.setSchema(schema);
-            }
+            applyParameterSchema(p, explicit, sourceType, sourceAnnotations);
         }
         return p;
+    }
+
+    private void applyExplicitParameter(org.eclipse.microprofile.openapi.models.parameters.Parameter p, Parameter explicit, Type sourceType) {
+        if (!explicit.description().isEmpty()) {
+            p.setDescription(explicit.description());
+        }
+        if (explicit.required()) {
+            p.setRequired(Boolean.TRUE);
+        }
+        if (explicit.deprecated()) {
+            p.setDeprecated(Boolean.TRUE);
+        }
+        if (explicit.allowEmptyValue()) {
+            p.setAllowEmptyValue(Boolean.TRUE);
+        }
+        if (explicit.style() != ParameterStyle.DEFAULT) {
+            p.setStyle(toModelParameterStyle(explicit.style()));
+        }
+        if (!explicit.example().isEmpty()) {
+            p.setExample(explicit.example());
+        }
+        AnnotationModelMappings.applyExtensions(p, explicit.extensions());
+        if (explicit.content().length > 0) {
+            p.setContent(explicitContent(explicit.content(), sourceType, true));
+        }
+    }
+
+    /** Schema (§3.10): site-level @Schema on the parameter, or inferred from the type. */
+    private void applyParameterSchema(org.eclipse.microprofile.openapi.models.parameters.Parameter p, Parameter explicit, Type sourceType,
+                                      Annotation[] sourceAnnotations) {
+        var sourceSchema = sourceAnnotations != null
+                ? findAnnotation(sourceAnnotations, org.eclipse.microprofile.openapi.annotations.media.Schema.class)
+                : null;
+        if (sourceSchema != null && sourceSchema.hidden()) {
+            return;
+        }
+        var siteAnn = explicit != null ? explicit.schema() : null;
+        if (siteAnn == null && sourceSchema != null) {
+            siteAnn = sourceSchema;
+        }
+        // The annotation's default name is empty — treat a zero-content @Schema as absent.
+        if (siteAnn != null && SchemaGenerator.hasContent(siteAnn)) {
+            Type targetType = sourceType != null ? sourceType : Object.class;
+            var schema = schemaGenerator.generate(targetType, siteAnn);
+            BeanValidationMapper.apply(schema, sourceAnnotations);
+            p.setSchema(schema);
+        } else if (sourceType != null) {
+            var schema = schemaGenerator.generate(sourceType);
+            BeanValidationMapper.apply(schema, sourceAnnotations);
+            p.setSchema(schema);
+        }
+    }
+
+    /**
+     * The Content Object of explicit {@code @Content} annotations, a media type without one being
+     * {@code *}{@code /*}.
+     */
+    private org.eclipse.microprofile.openapi.models.media.Content explicitContent(Content[] contentAnnotations, Type schemaType,
+                                              boolean inferSchemaWhenAbsent) {
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        for (Content c : contentAnnotations) {
+            String mt = c.mediaType().isEmpty() ? "*/*" : c.mediaType();
+            MediaType mediaType = OASFactory.createObject(MediaType.class);
+            applyContentAnnotation(c, mediaType, schemaType, inferSchemaWhenAbsent);
+            content.addMediaType(mt, mediaType);
+        }
+        return content;
     }
 
     private static boolean isContextOrFormParameter(Annotation[] annotations) {
@@ -639,115 +664,138 @@ final class JaxRsResourceScanner {
         var paramAnnotations = method.getParameterAnnotations();
         var paramGenericTypes = method.getGenericParameterTypes();
 
+        BodyArguments body = bodyArguments(paramAnnotations);
+        // Also check method-level @RequestBody
+        RequestBody explicit = body.explicit() != null ? body.explicit() : method.getAnnotation(RequestBody.class);
+        int entityIndex = body.entityIndex();
+
+        if (entityIndex == -1 && explicit == null) {
+            // Synthesize a form-urlencoded request body when only @FormParam params are present.
+            if (!body.formParamIndices().isEmpty()) {
+                op.setRequestBody(buildFormUrlEncodedBody(paramAnnotations, paramGenericTypes,
+                        body.formParamIndices(), consumes));
+            }
+            return;
+        }
+
+        Type entityType = (entityIndex >= 0) ? paramGenericTypes[entityIndex] : null;
+        var modelBody = OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
+        if (explicit != null) {
+            applyExplicitRequestBody(modelBody, explicit,
+                    body.schemaType() != null ? body.schemaType() : entityType);
+        }
+        if (modelBody.getContent() == null) {
+            // infer content from @Consumes
+            org.eclipse.microprofile.openapi.annotations.media.Schema entitySchemaAnnotation = entityIndex >= 0
+                    ? findAnnotation(paramAnnotations[entityIndex], org.eclipse.microprofile.openapi.annotations.media.Schema.class)
+                    : null;
+            modelBody.setContent(inferredRequestContent(consumes, body.schemaType(), entityType, entitySchemaAnnotation));
+        }
+        if (modelBody.getRequired() == null) {
+            modelBody.setRequired(defaultRequired(explicit != null, entityIndex >= 0));
+        }
+        op.setRequestBody(modelBody);
+    }
+
+    /**
+     * An entity argument without {@code @RequestBody} is required; a declared {@code @RequestBody} that
+     * does not say so is not; otherwise {@code null} (unset).
+     */
+    private static Boolean defaultRequired(boolean declared, boolean hasEntity) {
+        if (declared) {
+            return Boolean.FALSE;
+        }
+        return hasEntity ? Boolean.TRUE : null;
+    }
+
+    /**
+     * Where the request body of a method comes from: the {@code @RequestBody} argument if any, the
+     * entity argument (the first argument without a JAX-RS param annotation), the
+     * {@code @RequestBodySchema} type and the {@code @FormParam} arguments.
+     */
+    private record BodyArguments(RequestBody explicit, int entityIndex, Class<?> schemaType,
+                                 List<Integer> formParamIndices) {
+    }
+
+    private static BodyArguments bodyArguments(Annotation[][] paramAnnotations) {
         RequestBody explicit = null;
         int entityIndex = -1;
         Class<?> requestBodySchemaType = null;
         List<Integer> formParamIndices = new ArrayList<>();
-
         for (int i = 0; i < paramAnnotations.length; i++) {
             Annotation[] anns = paramAnnotations[i];
             if (hasAnnotation(anns, FormParam.class)) {
                 formParamIndices.add(i);
-                continue;
-            }
-            if (isNonBodyJaxRsParameter(anns)) {
+            } else if (!isNonBodyJaxRsParameter(anns)) {
                 // Non-body JAX-RS params are handled in processParameters.
-                continue;
-            }
-            RequestBody rb = findAnnotation(anns, RequestBody.class);
-            RequestBodySchema requestBodySchema = findAnnotation(anns, RequestBodySchema.class);
-            if (rb != null) {
-                explicit = rb;
-                entityIndex = i;
-            } else if (entityIndex == -1) {
-                // first un-annotated parameter = entity body
-                entityIndex = i;
-            }
-            if (requestBodySchema != null) {
-                requestBodySchemaType = requestBodySchema.value();
-                if (entityIndex == -1) {
+                RequestBody rb = findAnnotation(anns, RequestBody.class);
+                if (rb != null) {
+                    explicit = rb;
+                    entityIndex = i;
+                } else if (entityIndex == -1) {
+                    // first un-annotated parameter = entity body
                     entityIndex = i;
                 }
-            }
-        }
-
-        // Also check method-level @RequestBody
-        if (explicit == null) {
-            RequestBody methodLevel = method.getAnnotation(RequestBody.class);
-            if (methodLevel != null) {
-                explicit = methodLevel;
-            }
-        }
-
-        // Synthesize a form-urlencoded request body when only @FormParam params are present.
-        if (entityIndex == -1 && explicit == null && !formParamIndices.isEmpty()) {
-            op.setRequestBody(buildFormUrlEncodedBody(paramAnnotations, paramGenericTypes, formParamIndices, consumes));
-            return;
-        }
-
-        if (entityIndex == -1 && explicit == null) {
-            return;
-        }
-
-        var modelBody = OASFactory.createObject(
-                org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
-        if (explicit != null) {
-            if (!explicit.description().isEmpty()) {
-                modelBody.setDescription(explicit.description());
-            }
-            if (explicit.required()) {
-                modelBody.setRequired(Boolean.TRUE);
-            }
-            if (!explicit.ref().isEmpty()) {
-                modelBody.setRef(explicit.ref());
-            }
-            AnnotationModelMappings.applyExtensions(modelBody, explicit.extensions());
-            if (explicit.content().length > 0) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                Type bodyType = requestBodySchemaType != null
-                        ? requestBodySchemaType
-                        : (entityIndex >= 0 ? paramGenericTypes[entityIndex] : null);
-                for (Content c : explicit.content()) {
-                    String mt = c.mediaType().isEmpty() ? "*/*" : c.mediaType();
-                    MediaType mediaType = OASFactory.createObject(MediaType.class);
-                    applyContentAnnotation(c, mediaType, bodyType, true);
-                    content.addMediaType(mt, mediaType);
+                RequestBodySchema requestBodySchema = findAnnotation(anns, RequestBodySchema.class);
+                if (requestBodySchema != null) {
+                    requestBodySchemaType = requestBodySchema.value();
                 }
-                modelBody.setContent(content);
             }
         }
-        if (modelBody.getContent() == null) {
-            // infer content from @Consumes
-            var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-            String[] effective = consumes.length > 0 ? consumes : new String[]{"application/json"};
-            Type entityType = (entityIndex >= 0) ? paramGenericTypes[entityIndex] : null;
-            org.eclipse.microprofile.openapi.annotations.media.Schema entitySchemaAnnotation = entityIndex >= 0
-                    ? findAnnotation(paramAnnotations[entityIndex], org.eclipse.microprofile.openapi.annotations.media.Schema.class)
-                    : null;
-            for (String mt : effective) {
-                MediaType mediaType = OASFactory.createObject(MediaType.class);
-                if (schemaGenerator != null && requestBodySchemaType != null) {
-                    mediaType.setSchema(schemaGenerator.generate(requestBodySchemaType));
-                } else if (schemaGenerator != null && entityType != null) {
-                    if (entitySchemaAnnotation != null && entitySchemaAnnotation.hidden()) {
-                        // @Schema(hidden=true) on entity parameter suppresses requestBody schema publication.
-                    } else if (entitySchemaAnnotation != null && SchemaGenerator.hasContent(entitySchemaAnnotation)) {
-                        mediaType.setSchema(schemaGenerator.generate(entityType, entitySchemaAnnotation));
-                    } else {
-                        mediaType.setSchema(schemaGenerator.generate(entityType));
-                    }
-                }
-                content.addMediaType(mt, mediaType);
-            }
-            modelBody.setContent(content);
+        return new BodyArguments(explicit, entityIndex, requestBodySchemaType, formParamIndices);
+    }
+
+    private void applyExplicitRequestBody(org.eclipse.microprofile.openapi.models.parameters.RequestBody modelBody, RequestBody explicit,
+                                          Type bodyType) {
+        if (!explicit.description().isEmpty()) {
+            modelBody.setDescription(explicit.description());
         }
-        if (modelBody.getRequired() == null && explicit == null && entityIndex >= 0) {
+        if (explicit.required()) {
             modelBody.setRequired(Boolean.TRUE);
         }
-        if (modelBody.getRequired() == null && explicit != null) {
-            modelBody.setRequired(Boolean.FALSE);
+        if (!explicit.ref().isEmpty()) {
+            modelBody.setRef(explicit.ref());
         }
-        op.setRequestBody(modelBody);
+        AnnotationModelMappings.applyExtensions(modelBody, explicit.extensions());
+        if (explicit.content().length > 0) {
+            modelBody.setContent(explicitContent(explicit.content(), bodyType, true));
+        }
+    }
+
+    /** The request body content inferred from {@code @Consumes}, {@code application/json} by default. */
+    private org.eclipse.microprofile.openapi.models.media.Content inferredRequestContent(String[] consumes, Class<?> requestBodySchemaType,
+            Type entityType, org.eclipse.microprofile.openapi.annotations.media.Schema entitySchemaAnnotation) {
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        String[] effective = consumes.length > 0 ? consumes : new String[]{"application/json"};
+        for (String mt : effective) {
+            MediaType mediaType = OASFactory.createObject(MediaType.class);
+            var schema = inferredBodySchema(requestBodySchemaType, entityType, entitySchemaAnnotation);
+            if (schema != null) {
+                mediaType.setSchema(schema);
+            }
+            content.addMediaType(mt, mediaType);
+        }
+        return content;
+    }
+
+    /** The schema of an inferred request body media type, or {@code null} when none is published. */
+    private org.eclipse.microprofile.openapi.models.media.Schema inferredBodySchema(Class<?> requestBodySchemaType, Type entityType,
+            org.eclipse.microprofile.openapi.annotations.media.Schema entitySchemaAnnotation) {
+        if (schemaGenerator == null) {
+            return null;
+        }
+        if (requestBodySchemaType != null) {
+            return schemaGenerator.generate(requestBodySchemaType);
+        }
+        if (entityType == null || (entitySchemaAnnotation != null && entitySchemaAnnotation.hidden())) {
+            // @Schema(hidden=true) on entity parameter suppresses requestBody schema publication.
+            return null;
+        }
+        if (entitySchemaAnnotation != null && SchemaGenerator.hasContent(entitySchemaAnnotation)) {
+            return schemaGenerator.generate(entityType, entitySchemaAnnotation);
+        }
+        return schemaGenerator.generate(entityType);
     }
 
     private org.eclipse.microprofile.openapi.models.parameters.RequestBody buildFormUrlEncodedBody(
@@ -791,50 +839,10 @@ final class JaxRsResourceScanner {
         APIResponse[] declared = collectResponses(resourceClass, method);
         if (declared.length == 0) {
             // Spec §3.9: infer a default 200 response.
-            var inferred = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-            inferred.setDescription("OK");
-            if (produces.length > 0 && method.getReturnType() != void.class && method.getReturnType() != Void.class) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                Type returnType = method.getGenericReturnType();
-                for (String mt : produces) {
-                    MediaType mediaType = OASFactory.createObject(MediaType.class);
-                    if (schemaGenerator != null) {
-                        mediaType.setSchema(schemaGenerator.generate(returnType));
-                    }
-                    content.addMediaType(mt, mediaType);
-                }
-                inferred.setContent(content);
-            }
-            responses.addAPIResponse("200", inferred);
+            responses.addAPIResponse("200", inferredResponse(method, produces));
         } else {
             for (APIResponse r : declared) {
-                String code = r.responseCode().isEmpty() ? "default" : r.responseCode();
-                var modelResp = OASFactory.createObject(
-                        org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-                if (!r.description().isEmpty()) {
-                    modelResp.setDescription(r.description());
-                }
-                if (!r.ref().isEmpty()) {
-                    modelResp.setRef(r.ref());
-                }
-                if (r.content().length > 0) {
-                    var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                    for (Content c : r.content()) {
-                        String[] mediaTypes = c.mediaType().isEmpty()
-                                ? (produces.length > 0 ? produces : new String[] {"*/*"})
-                                : new String[] {c.mediaType()};
-                        for (String mt : mediaTypes) {
-                            MediaType mediaType = OASFactory.createObject(MediaType.class);
-                            applyContentAnnotation(c, mediaType, method.getGenericReturnType(), false);
-                            content.addMediaType(mt, mediaType);
-                        }
-                    }
-                    modelResp.setContent(content);
-                }
-                applyResponseHeaders(r, modelResp);
-                applyResponseLinks(r, modelResp);
-                AnnotationModelMappings.applyExtensions(modelResp, r.extensions());
-                responses.addAPIResponse(code, modelResp);
+                responses.addAPIResponse(responseCode(r), toDeclaredResponse(r, method, produces));
             }
         }
 
@@ -846,61 +854,42 @@ final class JaxRsResourceScanner {
         op.setResponses(responses);
     }
 
-    private void applyExceptionMapperResponses(Method method,
-                                               org.eclipse.microprofile.openapi.models.responses.APIResponses responses,
-                                               String[] produces) {
-        ClassLoader classLoader = method.getDeclaringClass().getClassLoader();
-        for (Class<?> exceptionType : method.getExceptionTypes()) {
-            String mapperClassName = exceptionType.getPackageName() + "." + exceptionType.getSimpleName() + "Mapper";
-            Class<?> mapperClass;
-            try {
-                mapperClass = Class.forName(mapperClassName, false, classLoader);
-            } catch (ClassNotFoundException ignored) {
-                continue;
-            }
-            if (!ExceptionMapper.class.isAssignableFrom(mapperClass)) {
-                continue;
-            }
-            for (APIResponse mapperResponse : mapperClass.getAnnotationsByType(APIResponse.class)) {
-                addExceptionMapperResponse(method, responses, produces, mapperResponse);
-            }
-            for (Method mapperMethod : mapperClass.getDeclaredMethods()) {
-                if (mapperMethod.isSynthetic()
-                        || !"toResponse".equals(mapperMethod.getName())
-                        || mapperMethod.getParameterCount() != 1
-                        || !mapperMethod.getParameterTypes()[0].isAssignableFrom(exceptionType)) {
-                    continue;
-                }
-                for (APIResponse mapperResponse : mapperMethod.getAnnotationsByType(APIResponse.class)) {
-                    addExceptionMapperResponse(method, responses, produces, mapperResponse);
-                }
-            }
-        }
+    private static String responseCode(APIResponse responseAnnotation) {
+        return responseAnnotation.responseCode().isEmpty() ? "default" : responseAnnotation.responseCode();
     }
 
-    private void addExceptionMapperResponse(Method method,
-                                            org.eclipse.microprofile.openapi.models.responses.APIResponses responses,
-                                            String[] produces,
-                                            APIResponse mapperResponse) {
-        String code = mapperResponse.responseCode().isEmpty() ? "default" : mapperResponse.responseCode();
-        if (responses.getAPIResponse(code) != null) {
-            return;
+    private org.eclipse.microprofile.openapi.models.responses.APIResponse inferredResponse(Method method, String[] produces) {
+        var inferred = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
+        inferred.setDescription("OK");
+        if (produces.length > 0 && method.getReturnType() != void.class && method.getReturnType() != Void.class) {
+            var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+            Type returnType = method.getGenericReturnType();
+            for (String mt : produces) {
+                MediaType mediaType = OASFactory.createObject(MediaType.class);
+                if (schemaGenerator != null) {
+                    mediaType.setSchema(schemaGenerator.generate(returnType));
+                }
+                content.addMediaType(mt, mediaType);
+            }
+            inferred.setContent(content);
         }
+        return inferred;
+    }
+
+    /** A declared {@code @APIResponse}, of the operation or of an exception mapper. */
+    private org.eclipse.microprofile.openapi.models.responses.APIResponse toDeclaredResponse(APIResponse r, Method method, String[] produces) {
         var modelResp = OASFactory.createObject(
                 org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-        if (!mapperResponse.description().isEmpty()) {
-            modelResp.setDescription(mapperResponse.description());
+        if (!r.description().isEmpty()) {
+            modelResp.setDescription(r.description());
         }
-        if (!mapperResponse.ref().isEmpty()) {
-            modelResp.setRef(mapperResponse.ref());
+        if (!r.ref().isEmpty()) {
+            modelResp.setRef(r.ref());
         }
-        if (mapperResponse.content().length > 0) {
+        if (r.content().length > 0) {
             var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-            for (Content c : mapperResponse.content()) {
-                String[] mediaTypes = c.mediaType().isEmpty()
-                        ? (produces.length > 0 ? produces : new String[] {"*/*"})
-                        : new String[] {c.mediaType()};
-                for (String mt : mediaTypes) {
+            for (Content c : r.content()) {
+                for (String mt : responseMediaTypes(c, produces)) {
                     MediaType mediaType = OASFactory.createObject(MediaType.class);
                     applyContentAnnotation(c, mediaType, method.getGenericReturnType(), false);
                     content.addMediaType(mt, mediaType);
@@ -908,10 +897,76 @@ final class JaxRsResourceScanner {
             }
             modelResp.setContent(content);
         }
-        applyResponseHeaders(mapperResponse, modelResp);
-        applyResponseLinks(mapperResponse, modelResp);
-        AnnotationModelMappings.applyExtensions(modelResp, mapperResponse.extensions());
-        responses.addAPIResponse(code, modelResp);
+        applyResponseHeaders(r, modelResp);
+        applyResponseLinks(r, modelResp);
+        AnnotationModelMappings.applyExtensions(modelResp, r.extensions());
+        return modelResp;
+    }
+
+    /** The media type of a response {@code @Content}, else the produced ones, else {@code *}{@code /*}. */
+    private static String[] responseMediaTypes(Content contentAnnotation, String[] produces) {
+        if (!contentAnnotation.mediaType().isEmpty()) {
+            return new String[] {contentAnnotation.mediaType()};
+        }
+        return produces.length > 0 ? produces : new String[] {"*/*"};
+    }
+
+    private void applyExceptionMapperResponses(Method method,
+                                               org.eclipse.microprofile.openapi.models.responses.APIResponses responses,
+                                               String[] produces) {
+        ClassLoader classLoader = method.getDeclaringClass().getClassLoader();
+        for (Class<?> exceptionType : method.getExceptionTypes()) {
+            Class<?> mapperClass = exceptionMapperOf(exceptionType, classLoader);
+            if (mapperClass != null) {
+                addExceptionMapperResponses(method, responses, produces, exceptionType, mapperClass);
+            }
+        }
+    }
+
+    /** The {@code <Exception>Mapper} class next to {@code exceptionType}, or {@code null} when there is none. */
+    private static Class<?> exceptionMapperOf(Class<?> exceptionType, ClassLoader classLoader) {
+        String mapperClassName = exceptionType.getPackageName() + "." + exceptionType.getSimpleName() + "Mapper";
+        Class<?> mapperClass;
+        try {
+            mapperClass = Class.forName(mapperClassName, false, classLoader);
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+        return ExceptionMapper.class.isAssignableFrom(mapperClass) ? mapperClass : null;
+    }
+
+    private void addExceptionMapperResponses(Method method,
+                                             org.eclipse.microprofile.openapi.models.responses.APIResponses responses,
+                                             String[] produces,
+                                             Class<?> exceptionType,
+                                             Class<?> mapperClass) {
+        for (APIResponse mapperResponse : mapperClass.getAnnotationsByType(APIResponse.class)) {
+            addExceptionMapperResponse(method, responses, produces, mapperResponse);
+        }
+        for (Method mapperMethod : mapperClass.getDeclaredMethods()) {
+            if (isToResponseOf(mapperMethod, exceptionType)) {
+                for (APIResponse mapperResponse : mapperMethod.getAnnotationsByType(APIResponse.class)) {
+                    addExceptionMapperResponse(method, responses, produces, mapperResponse);
+                }
+            }
+        }
+    }
+
+    private static boolean isToResponseOf(Method mapperMethod, Class<?> exceptionType) {
+        return !mapperMethod.isSynthetic()
+                && "toResponse".equals(mapperMethod.getName())
+                && mapperMethod.getParameterCount() == 1
+                && mapperMethod.getParameterTypes()[0].isAssignableFrom(exceptionType);
+    }
+
+    private void addExceptionMapperResponse(Method method,
+                                            org.eclipse.microprofile.openapi.models.responses.APIResponses responses,
+                                            String[] produces,
+                                            APIResponse mapperResponse) {
+        String code = responseCode(mapperResponse);
+        if (responses.getAPIResponse(code) == null) {
+            responses.addAPIResponse(code, toDeclaredResponse(mapperResponse, method, produces));
+        }
     }
 
     @SuppressWarnings("removal")
@@ -947,44 +1002,45 @@ final class JaxRsResourceScanner {
                                     org.eclipse.microprofile.openapi.models.responses.APIResponse modelResponse) {
         for (Link linkAnnotation : responseAnnotation.links()) {
             String name = linkAnnotation.name();
-            if (name == null || name.isBlank()) {
-                continue;
+            if (name != null && !name.isBlank()) {
+                modelResponse.addLink(name, toResponseLink(linkAnnotation));
             }
-            var link = OASFactory.createObject(org.eclipse.microprofile.openapi.models.links.Link.class);
-            if (!linkAnnotation.ref().isEmpty()) {
-                link.setRef(linkAnnotation.ref());
-            }
-            if (!linkAnnotation.operationId().isEmpty()) {
-                link.setOperationId(linkAnnotation.operationId());
-            }
-            if (!linkAnnotation.operationRef().isEmpty()) {
-                link.setOperationRef(linkAnnotation.operationRef());
-            }
-            if (!linkAnnotation.description().isEmpty()) {
-                link.setDescription(linkAnnotation.description());
-            }
-            if (!linkAnnotation.requestBody().isEmpty()) {
-                link.setRequestBody(linkAnnotation.requestBody());
-            }
-            if (linkAnnotation.parameters().length > 0) {
-                for (LinkParameter parameter : linkAnnotation.parameters()) {
-                    if (!parameter.name().isEmpty() && !parameter.expression().isEmpty()) {
-                        link.addParameter(parameter.name(), parameter.expression());
-                    }
-                }
-            }
-            if (!linkAnnotation.server().url().isEmpty()) {
-                var server = OASFactory.createObject(org.eclipse.microprofile.openapi.models.servers.Server.class);
-                server.setUrl(linkAnnotation.server().url());
-                if (!linkAnnotation.server().description().isEmpty()) {
-                    server.setDescription(linkAnnotation.server().description());
-                }
-                AnnotationModelMappings.applyExtensions(server, linkAnnotation.server().extensions());
-                link.setServer(server);
-            }
-            AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
-            modelResponse.addLink(name, link);
         }
+    }
+
+    private static org.eclipse.microprofile.openapi.models.links.Link toResponseLink(Link linkAnnotation) {
+        var link = OASFactory.createObject(org.eclipse.microprofile.openapi.models.links.Link.class);
+        if (!linkAnnotation.ref().isEmpty()) {
+            link.setRef(linkAnnotation.ref());
+        }
+        if (!linkAnnotation.operationId().isEmpty()) {
+            link.setOperationId(linkAnnotation.operationId());
+        }
+        if (!linkAnnotation.operationRef().isEmpty()) {
+            link.setOperationRef(linkAnnotation.operationRef());
+        }
+        if (!linkAnnotation.description().isEmpty()) {
+            link.setDescription(linkAnnotation.description());
+        }
+        if (!linkAnnotation.requestBody().isEmpty()) {
+            link.setRequestBody(linkAnnotation.requestBody());
+        }
+        for (LinkParameter parameter : linkAnnotation.parameters()) {
+            if (!parameter.name().isEmpty() && !parameter.expression().isEmpty()) {
+                link.addParameter(parameter.name(), parameter.expression());
+            }
+        }
+        if (!linkAnnotation.server().url().isEmpty()) {
+            var server = OASFactory.createObject(org.eclipse.microprofile.openapi.models.servers.Server.class);
+            server.setUrl(linkAnnotation.server().url());
+            if (!linkAnnotation.server().description().isEmpty()) {
+                server.setDescription(linkAnnotation.server().description());
+            }
+            AnnotationModelMappings.applyExtensions(server, linkAnnotation.server().extensions());
+            link.setServer(server);
+        }
+        AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
+        return link;
     }
 
     private void processResponseSchemas(
@@ -1008,21 +1064,25 @@ final class JaxRsResourceScanner {
             } else if (response.getDescription() == null || response.getDescription().isBlank()) {
                 response.setDescription(defaultDescriptionForStatus(responseCode));
             }
+            applyResponseSchema(response, schemaAnnotation.value(), produces);
+        }
+    }
 
-            var content = response.getContent();
-            if (content == null) {
-                content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                response.setContent(content);
+    /** Sets the schema of {@code type} on each produced media type of {@code response}, creating them. */
+    private void applyResponseSchema(org.eclipse.microprofile.openapi.models.responses.APIResponse response, Class<?> type, String[] produces) {
+        var content = response.getContent();
+        if (content == null) {
+            content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+            response.setContent(content);
+        }
+        String[] mediaTypes = produces.length > 0 ? produces : new String[] {"*/*"};
+        for (String mediaTypeName : mediaTypes) {
+            MediaType mediaType = content.getMediaType(mediaTypeName);
+            if (mediaType == null) {
+                mediaType = OASFactory.createObject(MediaType.class);
+                content.addMediaType(mediaTypeName, mediaType);
             }
-            String[] mediaTypes = produces.length > 0 ? produces : new String[] {"*/*"};
-            for (String mediaTypeName : mediaTypes) {
-                MediaType mediaType = content.getMediaType(mediaTypeName);
-                if (mediaType == null) {
-                    mediaType = OASFactory.createObject(MediaType.class);
-                    content.addMediaType(mediaTypeName, mediaType);
-                }
-                mediaType.setSchema(schemaGenerator.generate(schemaAnnotation.value()));
-            }
+            mediaType.setSchema(schemaGenerator.generate(type));
         }
     }
 
@@ -1057,84 +1117,67 @@ final class JaxRsResourceScanner {
         if (single != null) {
             all.add(single);
         }
-        if (all.isEmpty()) {
-            return;
-        }
         for (Callback cb : all) {
-            if (cb.name().isEmpty()) {
-                continue;
+            if (!cb.name().isEmpty()) {
+                op.addCallback(cb.name(), toOperationCallback(cb, method.getGenericReturnType()));
             }
-            var modelCb = OASFactory.createObject(org.eclipse.microprofile.openapi.models.callbacks.Callback.class);
-            if (!cb.ref().isEmpty()) {
-                modelCb.setRef(cb.ref());
-            }
-            AnnotationModelMappings.applyExtensions(modelCb, cb.extensions());
-            String urlExpr = cb.callbackUrlExpression();
-            if (!urlExpr.isEmpty() && cb.operations().length > 0) {
-                var pathItem = OASFactory.createObject(PathItem.class);
-                for (CallbackOperation co : cb.operations()) {
-                    var inner = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
-                    if (!co.summary().isEmpty()) {
-                        inner.setSummary(co.summary());
-                    }
-                    if (!co.description().isEmpty()) {
-                        inner.setDescription(co.description());
-                    }
-                    AnnotationModelMappings.applyExtensions(inner, co.extensions());
-                    for (SecurityRequirement requirement : co.security()) {
-                        addSecurityRequirement(inner, requirement);
-                    }
-                    for (var requirementSet : co.securitySets()) {
-                        if (requirementSet.value().length == 0) {
-                            inner.addSecurityRequirement(
-                                    OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityRequirement.class)
-                            );
-                            continue;
-                        }
-                        var groupedRequirement = OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityRequirement.class);
-                        boolean hasScheme = false;
-                        for (SecurityRequirement requirement : requirementSet.value()) {
-                            if (!requirement.name().isEmpty()) {
-                                groupedRequirement.addScheme(requirement.name(), List.of(requirement.scopes()));
-                                hasScheme = true;
-                            }
-                        }
-                        if (hasScheme) {
-                            inner.addSecurityRequirement(groupedRequirement);
-                        }
-                    }
-                    for (APIResponse responseAnnotation : co.responses()) {
-                        String code = responseAnnotation.responseCode().isEmpty() ? "default" : responseAnnotation.responseCode();
-                        if (inner.getResponses() == null) {
-                            inner.setResponses(OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponses.class));
-                        }
-                        var callbackResponse = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-                        if (!responseAnnotation.description().isEmpty()) {
-                            callbackResponse.setDescription(responseAnnotation.description());
-                        }
-                        if (!responseAnnotation.ref().isEmpty()) {
-                            callbackResponse.setRef(responseAnnotation.ref());
-                        }
-                        if (responseAnnotation.content().length > 0) {
-                            var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                            for (Content contentAnnotation : responseAnnotation.content()) {
-                                String mediaTypeName = contentAnnotation.mediaType().isEmpty()
-                                        ? "*/*"
-                                        : contentAnnotation.mediaType();
-                                MediaType mediaType = OASFactory.createObject(MediaType.class);
-                                applyContentAnnotation(contentAnnotation, mediaType, method.getGenericReturnType(), false);
-                                content.addMediaType(mediaTypeName, mediaType);
-                            }
-                            callbackResponse.setContent(content);
-                        }
-                        inner.getResponses().addAPIResponse(code, callbackResponse);
-                    }
-                    assignOperation(pathItem, co.method().toUpperCase(), inner);
-                }
-                modelCb.addPathItem(urlExpr, pathItem);
-            }
-            op.addCallback(cb.name(), modelCb);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.callbacks.Callback toOperationCallback(Callback cb, Type returnType) {
+        var modelCb = OASFactory.createObject(org.eclipse.microprofile.openapi.models.callbacks.Callback.class);
+        if (!cb.ref().isEmpty()) {
+            modelCb.setRef(cb.ref());
+        }
+        AnnotationModelMappings.applyExtensions(modelCb, cb.extensions());
+        String urlExpr = cb.callbackUrlExpression();
+        if (!urlExpr.isEmpty() && cb.operations().length > 0) {
+            var pathItem = OASFactory.createObject(PathItem.class);
+            for (CallbackOperation co : cb.operations()) {
+                assignOperation(pathItem, co.method().toUpperCase(), toCallbackOperation(co, returnType));
+            }
+            modelCb.addPathItem(urlExpr, pathItem);
+        }
+        return modelCb;
+    }
+
+    private org.eclipse.microprofile.openapi.models.Operation toCallbackOperation(CallbackOperation co, Type returnType) {
+        var inner = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
+        if (!co.summary().isEmpty()) {
+            inner.setSummary(co.summary());
+        }
+        if (!co.description().isEmpty()) {
+            inner.setDescription(co.description());
+        }
+        AnnotationModelMappings.applyExtensions(inner, co.extensions());
+        for (SecurityRequirement requirement : co.security()) {
+            addSecurityRequirement(inner, requirement);
+        }
+        for (var requirementSet : co.securitySets()) {
+            addSecurityRequirementSet(inner, requirementSet);
+        }
+        for (APIResponse responseAnnotation : co.responses()) {
+            if (inner.getResponses() == null) {
+                inner.setResponses(OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponses.class));
+            }
+            inner.getResponses().addAPIResponse(responseCode(responseAnnotation),
+                    toCallbackResponse(responseAnnotation, returnType));
+        }
+        return inner;
+    }
+
+    private org.eclipse.microprofile.openapi.models.responses.APIResponse toCallbackResponse(APIResponse responseAnnotation, Type returnType) {
+        var callbackResponse = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
+        if (!responseAnnotation.description().isEmpty()) {
+            callbackResponse.setDescription(responseAnnotation.description());
+        }
+        if (!responseAnnotation.ref().isEmpty()) {
+            callbackResponse.setRef(responseAnnotation.ref());
+        }
+        if (responseAnnotation.content().length > 0) {
+            callbackResponse.setContent(explicitContent(responseAnnotation.content(), returnType, false));
+        }
+        return callbackResponse;
     }
 
     // ---------- Utility ----------
@@ -1183,40 +1226,43 @@ final class JaxRsResourceScanner {
         }
         for (SecurityScheme schemeAnnotation : annotations) {
             String name = schemeAnnotation.securitySchemeName();
-            if (name == null || name.isBlank()) {
-                continue;
+            if (name != null && !name.isBlank()) {
+                components.addSecurityScheme(name, toModelSecurityScheme(schemeAnnotation));
             }
-            var scheme = OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityScheme.class);
-            if (!schemeAnnotation.description().isEmpty()) {
-                scheme.setDescription(schemeAnnotation.description());
-            }
-            if (!schemeAnnotation.ref().isEmpty()) {
-                scheme.setRef(schemeAnnotation.ref());
-            }
-            if (!schemeAnnotation.apiKeyName().isEmpty()) {
-                scheme.setName(schemeAnnotation.apiKeyName());
-            }
-            if (!schemeAnnotation.scheme().isEmpty()) {
-                scheme.setScheme(schemeAnnotation.scheme());
-            }
-            if (!schemeAnnotation.bearerFormat().isEmpty()) {
-                scheme.setBearerFormat(schemeAnnotation.bearerFormat());
-            }
-            if (!schemeAnnotation.openIdConnectUrl().isEmpty()) {
-                scheme.setOpenIdConnectUrl(schemeAnnotation.openIdConnectUrl());
-            }
-            scheme.setType(toModelSecuritySchemeType(schemeAnnotation.type()));
-            org.eclipse.microprofile.openapi.models.security.SecurityScheme.In in = toModelSecuritySchemeIn(schemeAnnotation.in());
-            if (in != null) {
-                scheme.setIn(in);
-            }
-            org.eclipse.microprofile.openapi.models.security.OAuthFlows flows = toModelFlows(schemeAnnotation.flows());
-            if (flows != null) {
-                scheme.setFlows(flows);
-            }
-            AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
-            components.addSecurityScheme(name, scheme);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.security.SecurityScheme toModelSecurityScheme(SecurityScheme schemeAnnotation) {
+        var scheme = OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityScheme.class);
+        if (!schemeAnnotation.description().isEmpty()) {
+            scheme.setDescription(schemeAnnotation.description());
+        }
+        if (!schemeAnnotation.ref().isEmpty()) {
+            scheme.setRef(schemeAnnotation.ref());
+        }
+        if (!schemeAnnotation.apiKeyName().isEmpty()) {
+            scheme.setName(schemeAnnotation.apiKeyName());
+        }
+        if (!schemeAnnotation.scheme().isEmpty()) {
+            scheme.setScheme(schemeAnnotation.scheme());
+        }
+        if (!schemeAnnotation.bearerFormat().isEmpty()) {
+            scheme.setBearerFormat(schemeAnnotation.bearerFormat());
+        }
+        if (!schemeAnnotation.openIdConnectUrl().isEmpty()) {
+            scheme.setOpenIdConnectUrl(schemeAnnotation.openIdConnectUrl());
+        }
+        scheme.setType(toModelSecuritySchemeType(schemeAnnotation.type()));
+        org.eclipse.microprofile.openapi.models.security.SecurityScheme.In in = toModelSecuritySchemeIn(schemeAnnotation.in());
+        if (in != null) {
+            scheme.setIn(in);
+        }
+        org.eclipse.microprofile.openapi.models.security.OAuthFlows flows = toModelFlows(schemeAnnotation.flows());
+        if (flows != null) {
+            scheme.setFlows(flows);
+        }
+        AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
+        return scheme;
     }
 
     private void applySecurityRequirements(
@@ -1373,45 +1419,45 @@ final class JaxRsResourceScanner {
             mediaType.setExample(contentAnnotation.example());
         }
         for (ExampleObject exampleAnnotation : contentAnnotation.examples()) {
-            if (exampleAnnotation.name().isEmpty()) {
-                continue;
+            if (!exampleAnnotation.name().isEmpty()) {
+                mediaType.addExample(exampleAnnotation.name(), AnnotationModelMappings.toModelExample(exampleAnnotation));
             }
-            var example = AnnotationModelMappings.toModelExample(exampleAnnotation);
-            mediaType.addExample(exampleAnnotation.name(), example);
         }
         for (Encoding encodingAnnotation : contentAnnotation.encoding()) {
-            if (encodingAnnotation.name().isEmpty()) {
-                continue;
+            if (!encodingAnnotation.name().isEmpty()) {
+                mediaType.addEncoding(encodingAnnotation.name(), toModelEncoding(encodingAnnotation));
             }
-            var encoding = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Encoding.class);
-            if (!encodingAnnotation.contentType().isEmpty()) {
-                encoding.setContentType(encodingAnnotation.contentType());
-            }
-            if (encodingAnnotation.explode()) {
-                encoding.setExplode(Boolean.TRUE);
-            }
-            if (encodingAnnotation.allowReserved()) {
-                encoding.setAllowReserved(Boolean.TRUE);
-            }
-            if (!encodingAnnotation.style().isEmpty()) {
-                try {
-                    encoding.setStyle(org.eclipse.microprofile.openapi.models.media.Encoding.Style
-                            .valueOf(toEncodingStyleName(encodingAnnotation.style())));
-                } catch (IllegalArgumentException ignored) {
-                    // Ignore unknown style values.
-                }
-            }
-            for (Header headerAnnotation : encodingAnnotation.headers()) {
-                String headerName = resolveHeaderName(headerAnnotation);
-                if (headerName == null || headerName.isEmpty()) {
-                    continue;
-                }
-                encoding.addHeader(headerName, toModelHeader(headerAnnotation));
-            }
-            AnnotationModelMappings.applyExtensions(encoding, encodingAnnotation.extensions());
-            mediaType.addEncoding(encodingAnnotation.name(), encoding);
         }
         AnnotationModelMappings.applyExtensions(mediaType, contentAnnotation.extensions());
+    }
+
+    private org.eclipse.microprofile.openapi.models.media.Encoding toModelEncoding(Encoding encodingAnnotation) {
+        var encoding = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Encoding.class);
+        if (!encodingAnnotation.contentType().isEmpty()) {
+            encoding.setContentType(encodingAnnotation.contentType());
+        }
+        if (encodingAnnotation.explode()) {
+            encoding.setExplode(Boolean.TRUE);
+        }
+        if (encodingAnnotation.allowReserved()) {
+            encoding.setAllowReserved(Boolean.TRUE);
+        }
+        if (!encodingAnnotation.style().isEmpty()) {
+            try {
+                encoding.setStyle(org.eclipse.microprofile.openapi.models.media.Encoding.Style
+                        .valueOf(toEncodingStyleName(encodingAnnotation.style())));
+            } catch (IllegalArgumentException _) {
+                // Ignore unknown style values.
+            }
+        }
+        for (Header headerAnnotation : encodingAnnotation.headers()) {
+            String headerName = resolveHeaderName(headerAnnotation);
+            if (headerName != null && !headerName.isEmpty()) {
+                encoding.addHeader(headerName, toModelHeader(headerAnnotation));
+            }
+        }
+        AnnotationModelMappings.applyExtensions(encoding, encodingAnnotation.extensions());
+        return encoding;
     }
 
     @SuppressWarnings("removal")
