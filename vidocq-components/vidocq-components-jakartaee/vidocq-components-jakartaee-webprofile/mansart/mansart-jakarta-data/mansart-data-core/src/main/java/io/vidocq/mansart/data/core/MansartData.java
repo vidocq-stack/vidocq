@@ -43,6 +43,8 @@ public final class MansartData {
 
     private final RepositoryRuntime runtime;
     private final ConcurrentMap<Class<?>, Object> repositories = new ConcurrentHashMap<>();
+    /** Separate from {@link #repositories}: each path keeps its own instance (MANSART-012). */
+    private final ConcurrentMap<Class<?>, Object> runtimeRepositories = new ConcurrentHashMap<>();
 
     private MansartData(RepositoryRuntime runtime) {
         this.runtime = runtime;
@@ -72,7 +74,7 @@ public final class MansartData {
      */
     @SuppressWarnings("unchecked")
     public <R> R runtimeRepository(Class<R> repositoryInterface) {
-        return (R) repositories.computeIfAbsent(repositoryInterface,
+        return (R) runtimeRepositories.computeIfAbsent(repositoryInterface,
                 itf -> RuntimeRepositoryProxy.create((Class) itf, runtime));
     }
 

@@ -518,3 +518,23 @@ reference (SonarQube java:S6218).
 ### Fix
 `Keyset` overrides `equals`, `hashCode` and `toString` with `Arrays.equals`/`Arrays.hashCode`/`Arrays.toString` on the
 cursor. Regression test: `PaginationKeysetTest`.
+## MANSART-012 — `MansartData.runtimeRepository` returned the generated implementation (shared cache)
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: low (the result depended on the order of the calls on one `MansartData`)
+- **Module**: `mansart-data-core` (`MansartData`)
+
+### Symptom
+On one `MansartData`, `runtimeRepository(R.class)` after `repository(R.class)` returned the annotation-processor
+`RImpl` instead of the runtime implementation, and `repository(R.class)` after `runtimeRepository(R.class)` returned
+the runtime implementation instead of `RImpl`.
+
+### Minimal repro
+`MansartDataRepositoriesTest` (`mansart-data-tests`): call both methods for `AuthorRepository` on one `MansartData`.
+
+### Cause
+Both methods cached their instance in the same map, keyed by the repository interface only.
+
+### Fix
+`runtimeRepository` keeps its instances in a map of its own. Regression test: `MansartDataRepositoriesTest`.
