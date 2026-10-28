@@ -631,3 +631,31 @@ array to the entity: the generated class did not compile (`incompatible types`).
 ### Fix
 `RepositoryWriter.lifecycleBody` recognises an array or `Iterable` parameter and `batchLifecycleBody` applies the
 strict operation to each entity in order, returning nothing, a list or an array. Regression test: `LifecycleBatchTest`.
+
+## MANSART-017 — `CrudRepository.insert`, `insertAll`, `update` and `updateAll` threw `UnsupportedOperationException`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: high (four of the methods every `CrudRepository` inherits did not work, on both paths)
+- **Modules**: `mansart-data-processor` (`RepositoryWriter`), `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+On a repository extending `CrudRepository<E, K>`, `insert`, `insertAll`, `update` and `updateAll` threw
+`UnsupportedOperationException`: the annotation processor warned "Mansart could not derive a query for
+'jakarta.data.repository.CrudRepository.insert'" and generated a throwing stub; the runtime proxy reported
+"compile-time Impl missing AND not handled by runtime fallback".
+
+### Minimal repro
+`ArticleCrudRepository` + `LifecycleBatchTest.crudRepositoryInsertsAndUpdates` (`mansart-data-tests`), through both
+implementations.
+
+### Cause
+Both paths implement the inherited methods by name (`save`, `saveAll`, `findById`, `findAll`, `delete…`, `count`,
+`existsById`), a list that only covered `BasicRepository`; the lifecycle annotations these four carry are ignored on
+inherited methods on purpose (`BasicRepository.save` and `delete` have other semantics).
+
+### Fix
+`RepositoryWriter.crudBody` and `RuntimeRepositoryProxy.crudDispatcher` implement the four methods with
+`insertStrict` and `updateStrict` (one entity, or each entity of the list in order). `inheritedDispatcher` is split
+(`findAll`, `deleteAll`) to stay under the complexity limit. Regression test:
+`LifecycleBatchTest.crudRepositoryInsertsAndUpdates`.

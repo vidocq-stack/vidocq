@@ -991,8 +991,31 @@ final class RepositoryWriter {
             }
             case "count"       -> arity == 0 ? "return runtime.count(" + metamodel + ".$MODEL);" : null;
             case "existsById"  -> arity == 1 ? "return runtime.existsById(" + metamodel + ".$MODEL, " + p(0) + ");" : null;
-            default            -> null;
+            default            -> arity == 1 ? crudBody(name, returnType, metamodel, entityFqn) : null;
         };
+    }
+
+    /**
+     * The methods {@code CrudRepository} adds to {@code BasicRepository} (MANSART-017): {@code <S extends T> S
+     * insert(S)}, {@code update(S)} and their {@code List<S>} forms {@code insertAll} and {@code updateAll}.
+     */
+    private String crudBody(String name, TypeMirror returnType, String metamodel, String entityFqn) {
+        String op = switch (name) {
+            case "insert", "insertAll" -> "insertStrict";
+            case "update", "updateAll" -> "updateStrict";
+            default -> null;
+        };
+        if (op == null) return null;
+        if (!name.endsWith("All")) {
+            String s = returnType.toString();
+            return "@SuppressWarnings(\"unchecked\") " + s + " _r = (" + s + ") runtime." + op + "(" + metamodel
+                    + ".$MODEL, (" + entityFqn + ") " + p(0) + "); return _r;";
+        }
+        if (!(returnType instanceof DeclaredType list) || list.getTypeArguments().size() != 1) return null;
+        String s = list.getTypeArguments().get(0).toString();
+        return "var _out = new java.util.ArrayList<" + s + ">(); for (" + s + " _e : " + p(0) + ") { "
+                + "@SuppressWarnings(\"unchecked\") " + s + " _r = (" + s + ") runtime." + op + "(" + metamodel
+                + ".$MODEL, (" + entityFqn + ") _e); _out.add(_r); } return _out;";
     }
 
     private String saveBody(String metamodel, String entityFqn) {

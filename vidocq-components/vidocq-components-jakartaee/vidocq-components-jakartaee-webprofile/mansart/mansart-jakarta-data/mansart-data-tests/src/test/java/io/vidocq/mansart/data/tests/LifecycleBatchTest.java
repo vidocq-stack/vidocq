@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.core.MansartData;
+import jakarta.data.exceptions.OptimisticLockingFailureException;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** MANSART-016: lifecycle methods taking a list or an array of entities, through both implementations. */
 class LifecycleBatchTest {
@@ -105,5 +107,31 @@ class LifecycleBatchTest {
 
         repo.removeAll(created.subList(0, 2));
         assertThat(titles(repo)).containsExactly("C", "d");
+    }
+
+    static Stream<Named<ArticleCrudRepository>> crudRepositories() {
+        return Stream.of(
+                Named.of("annotation processor", generatedData.repository(ArticleCrudRepository.class)),
+                Named.of("runtime proxy", runtimeData.runtimeRepository(ArticleCrudRepository.class)));
+    }
+
+    /** MANSART-017: the methods {@code CrudRepository} adds to {@code BasicRepository}. */
+    @ParameterizedTest
+    @MethodSource("crudRepositories")
+    void crudRepositoryInsertsAndUpdates(ArticleCrudRepository repo) {
+        Article one = repo.insert(article("one"));
+        List<Article> more = repo.insertAll(List.of(article("two"), article("three")));
+        assertThat(one.getId()).isNotNull();
+        assertThat(more).extracting(Article::getId).doesNotContainNull();
+
+        one.setTitle("ONE");
+        assertThat(repo.update(one).getVersion()).isEqualTo(1);
+        more.forEach(a -> a.setTitle(a.getTitle().toUpperCase()));
+        assertThat(repo.updateAll(more)).extracting(Article::getVersion).containsExactly(1, 1);
+        assertThat(repo.findAll().map(Article::getTitle).sorted()).containsExactly("ONE", "THREE", "TWO");
+
+        Article stale = article("stale");
+        stale.setId(one.getId());
+        assertThatThrownBy(() -> repo.update(stale)).isInstanceOf(OptimisticLockingFailureException.class);
     }
 }

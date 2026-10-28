@@ -486,38 +486,49 @@ public final class RuntimeRepositoryProxy {
     private static Dispatcher inheritedDispatcher(Method m) {
         return switch (m.getName()) {
             case "save"        -> (rt, em, args) -> rt.save((EntityModel) em, args[0]);
-            case "saveAll"     -> (rt, em, args) -> {
-                List<Object> out = new ArrayList<>();
-                for (Object e : (Iterable<?>) args[0]) out.add(rt.save((EntityModel) em, e));
-                return out;
-            };
+            case "saveAll"     -> (rt, em, args) -> batchApply(args[0], e -> rt.save((EntityModel) em, e), false,
+                    List.class);
             case "findById"    -> (rt, em, args) -> rt.findById((EntityModel) em, args[0]);
-            case "findAll" -> (rt, em, args) -> {
-                if (args == null || args.length == 0) {
-                    return rt.findAll((EntityModel) em).stream();
-                }
-                if (args.length == 2 && args[0] instanceof jakarta.data.page.PageRequest pr) {
-                    return rt.queryPage((EntityModel) em,
-                            Where.ALWAYS_TRUE,
-                            rt.toOrderBy((EntityModel) em, (jakarta.data.Order) args[1]),
-                            pr);
-                }
-                throw unsupported(m, "unsupported findAll arity");
-            };
+            case "findAll"     -> (rt, em, args) -> findAll(m, rt, em, args);
             case "deleteById"  -> (rt, em, args) -> { rt.deleteById((EntityModel) em, args[0]); return null; };
             case "delete"      -> (rt, em, args) -> { rt.delete((EntityModel) em, args[0]); return null; };
-            case "deleteAll" -> (rt, em, args) -> {
-                if (args == null || args.length == 0) {
-                    for (Object e : rt.findAll((EntityModel) em)) rt.delete((EntityModel) em, e);
-                } else {
-                    for (Object e : (Iterable<?>) args[0]) rt.delete((EntityModel) em, e);
-                }
-                return null;
-            };
+            case "deleteAll"   -> (rt, em, args) -> deleteAll(rt, em, args);
             case "count"       -> (rt, em, args) -> rt.count((EntityModel) em);
             case "existsById"  -> (rt, em, args) -> rt.existsById((EntityModel) em, args[0]);
-            default            -> null;
+            default            -> crudDispatcher(m.getName());
         };
+    }
+
+    /** The methods {@code CrudRepository} adds to {@code BasicRepository} (MANSART-017). */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Dispatcher crudDispatcher(String name) {
+        return switch (name) {
+            case "insert"    -> (rt, em, args) -> rt.insertStrict((EntityModel) em, args[0]);
+            case "update"    -> (rt, em, args) -> rt.updateStrict((EntityModel) em, args[0]);
+            case "insertAll" -> (rt, em, args) -> batchApply(args[0], e -> rt.insertStrict((EntityModel) em, e),
+                    false, List.class);
+            case "updateAll" -> (rt, em, args) -> batchApply(args[0], e -> rt.updateStrict((EntityModel) em, e),
+                    false, List.class);
+            default          -> null;
+        };
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object findAll(Method m, RepositoryRuntime rt, EntityModel em, Object[] args) {
+        if (args == null || args.length == 0) {
+            return rt.findAll(em).stream();
+        }
+        if (args.length == 2 && args[0] instanceof jakarta.data.page.PageRequest pr) {
+            return rt.queryPage(em, Where.ALWAYS_TRUE, rt.toOrderBy(em, (jakarta.data.Order) args[1]), pr);
+        }
+        throw unsupported(m, "unsupported findAll arity");
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object deleteAll(RepositoryRuntime rt, EntityModel em, Object[] args) {
+        Iterable<?> entities = args == null || args.length == 0 ? rt.findAll(em) : (Iterable<?>) args[0];
+        for (Object e : entities) rt.delete(em, e);
+        return null;
     }
 
     /* ---- @Find dispatcher (M7-8 push) ----
