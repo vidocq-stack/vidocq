@@ -87,6 +87,16 @@ final class RestStartupSection {
         }
 
         // Links before the level check: the dev console shows them whatever the log's level.
+        writeLinks(mounts, pages, section);
+
+        if (context.verbosity() == Verbosity.DETAILED) {
+            writeDetails(mounts, resources, section);
+        }
+    }
+
+    /** The pages advertised on every listener a mount is on, as links. */
+    private static void writeLinks(List<RestMount> mounts, Function<String, List<ChappeMountPoint.Page>> pages,
+                                   StartupReportSection section) {
         Set<String> listeners = new LinkedHashSet<>();
         mounts.forEach(mount -> listeners.add(mount.listener()));
         for (String listener : listeners) {
@@ -94,10 +104,11 @@ final class RestStartupSection {
                 section.link(page.label(), listener, page.path());
             }
         }
+    }
 
-        if (context.verbosity() != Verbosity.DETAILED) {
-            return;
-        }
+    /** The detailed part of the section: a row per mount, the resource classes, and the providers by kind. */
+    private static void writeDetails(List<RestMount> mounts, Set<String> resources,
+                                     StartupReportSection section) {
         for (RestMount mount : mounts) {
             section.row("mount " + mount.name(), "listener " + mount.listener() + ", prefix " + mount.displayPrefix()
                     + (mount.stripPrefix() ? "" : " (not stripped)") + ", "

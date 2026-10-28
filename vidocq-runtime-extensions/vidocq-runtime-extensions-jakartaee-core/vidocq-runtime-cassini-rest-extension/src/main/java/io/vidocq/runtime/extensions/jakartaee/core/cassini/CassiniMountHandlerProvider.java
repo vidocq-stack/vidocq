@@ -91,9 +91,9 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
      * (e.g. {@code /api} for the application, {@code /health} for MicroProfile Health). Only
      * {@link #getResourceClasses()} is filtered; bean lookup is delegated untouched.
      */
-    private record PackageScopedBeanProvider(BeanProvider delegate,
-                                             List<String> include,
-                                             List<String> exclude) implements BeanProvider {
+    record PackageScopedBeanProvider(BeanProvider delegate,
+                                     List<String> include,
+                                     List<String> exclude) implements BeanProvider {
 
         @Override
         public <T> T getBean(Class<T> type) {
@@ -110,13 +110,10 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
             Set<Class<?>> result = new LinkedHashSet<>();
             for (Class<?> c : delegate.getResourceClasses()) {
                 String pkg = c.getPackageName();
-                if (!include.isEmpty() && noneMatches(include, pkg)) {
-                    continue;
+                boolean excluded = (!include.isEmpty() && noneMatches(include, pkg)) || anyMatches(exclude, pkg);
+                if (!excluded) {
+                    result.add(c);
                 }
-                if (anyMatches(exclude, pkg)) {
-                    continue;
-                }
-                result.add(c);
             }
             return result;
         }
