@@ -21,6 +21,8 @@ package io.vidocq.heisenberg.internal;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Immutable configuration for the {@code @CircuitBreaker} policy.
@@ -72,5 +74,32 @@ public record CircuitBreakerConfig(
     public Duration delayDuration() {
         return Duration.of(delay, delayUnit);
     }
-}
 
+    /** Compares the exception-type arrays by content, as a value record should. */
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof CircuitBreakerConfig that
+                && requestVolumeThreshold == that.requestVolumeThreshold
+                && Double.compare(failureRatio, that.failureRatio) == 0
+                && delay == that.delay
+                && delayUnit == that.delayUnit
+                && successThreshold == that.successThreshold
+                && Arrays.equals(failOn, that.failOn)
+                && Arrays.equals(skipOn, that.skipOn);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(requestVolumeThreshold, failureRatio, delay, delayUnit, successThreshold);
+        result = 31 * result + Arrays.hashCode(failOn);
+        return 31 * result + Arrays.hashCode(skipOn);
+    }
+
+    @Override
+    public String toString() {
+        return "CircuitBreakerConfig[requestVolumeThreshold=" + requestVolumeThreshold
+                + ", failureRatio=" + failureRatio + ", delay=" + delay + ", delayUnit=" + delayUnit
+                + ", successThreshold=" + successThreshold + ", failOn=" + Arrays.toString(failOn)
+                + ", skipOn=" + Arrays.toString(skipOn) + "]";
+    }
+}

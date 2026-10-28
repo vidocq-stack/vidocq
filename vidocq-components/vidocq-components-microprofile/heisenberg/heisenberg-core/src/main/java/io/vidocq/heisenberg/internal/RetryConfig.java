@@ -21,6 +21,8 @@ package io.vidocq.heisenberg.internal;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Objects;
 
 public record RetryConfig(
         int maxRetries,
@@ -62,5 +64,35 @@ public record RetryConfig(
 
     public Duration jitterDuration() {
         return Duration.of(jitter, jitterDelayUnit);
+    }
+
+    /** Compares the exception-type arrays by content, as a value record should. */
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof RetryConfig that
+                && maxRetries == that.maxRetries
+                && delay == that.delay
+                && maxDuration == that.maxDuration
+                && jitter == that.jitter
+                && delayUnit == that.delayUnit
+                && durationUnit == that.durationUnit
+                && jitterDelayUnit == that.jitterDelayUnit
+                && Arrays.equals(retryOn, that.retryOn)
+                && Arrays.equals(abortOn, that.abortOn);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(maxRetries, delay, delayUnit, maxDuration, durationUnit, jitter, jitterDelayUnit);
+        result = 31 * result + Arrays.hashCode(retryOn);
+        return 31 * result + Arrays.hashCode(abortOn);
+    }
+
+    @Override
+    public String toString() {
+        return "RetryConfig[maxRetries=" + maxRetries + ", delay=" + delay + ", delayUnit=" + delayUnit
+                + ", maxDuration=" + maxDuration + ", durationUnit=" + durationUnit + ", jitter=" + jitter
+                + ", jitterDelayUnit=" + jitterDelayUnit + ", retryOn=" + Arrays.toString(retryOn)
+                + ", abortOn=" + Arrays.toString(abortOn) + "]";
     }
 }

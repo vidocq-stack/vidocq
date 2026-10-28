@@ -19,6 +19,8 @@
  */
 package io.vidocq.heisenberg.internal;
 
+import java.util.Arrays;
+import java.util.Objects;
 import org.eclipse.microprofile.faulttolerance.FallbackHandler;
 
 /**
@@ -65,5 +67,27 @@ public record FallbackConfig(
         }
         return false;
     }
-}
 
+    /** Compares the exception-type arrays by content, as a value record should. */
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof FallbackConfig that
+                && Arrays.equals(applyOn, that.applyOn)
+                && Arrays.equals(skipOn, that.skipOn)
+                && Objects.equals(fallbackMethod, that.fallbackMethod)
+                && Objects.equals(fallbackHandlerClass, that.fallbackHandlerClass);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Arrays.hashCode(applyOn);
+        result = 31 * result + Arrays.hashCode(skipOn);
+        return 31 * result + Objects.hash(fallbackMethod, fallbackHandlerClass);
+    }
+
+    @Override
+    public String toString() {
+        return "FallbackConfig[applyOn=" + Arrays.toString(applyOn) + ", skipOn=" + Arrays.toString(skipOn)
+                + ", fallbackMethod=" + fallbackMethod + ", fallbackHandlerClass=" + fallbackHandlerClass + "]";
+    }
+}
