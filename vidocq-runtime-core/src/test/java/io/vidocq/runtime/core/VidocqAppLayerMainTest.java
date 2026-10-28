@@ -60,13 +60,13 @@ class VidocqAppLayerMainTest {
     }
 
     public static final class ThrowsUnchecked {
-        public static void main(String[] args) {
+        public static void main() {
             throw UNCHECKED;
         }
     }
 
     public static final class ThrowsChecked {
-        public static void main(String[] args) throws Exception {
+        public static void main() throws Exception {
             throw new Exception("checked, from the application");
         }
     }
@@ -81,7 +81,7 @@ class VidocqAppLayerMainTest {
 
         System.setProperty(VidocqAppLayer.APP_MAIN_PROPERTY, "   ");
         assertFalse(VidocqAppLayer.runAppMainIfConfigured(new String[0]), "a blank property is an absent one");
-        assertEquals(List.of(), CALLS);
+        assertEquals(List.of(), List.copyOf(CALLS));
     }
 
     @Test
@@ -90,7 +90,7 @@ class VidocqAppLayerMainTest {
         System.setProperty(VidocqAppLayer.APP_MAIN_PROPERTY, Runs.class.getName());
 
         assertTrue(VidocqAppLayer.runAppMainIfConfigured(new String[] {"--port", "9090"}));
-        assertEquals(List.of("ran with --port 9090"), CALLS);
+        assertEquals(List.of("ran with --port 9090"), List.copyOf(CALLS));
     }
 
     @Test

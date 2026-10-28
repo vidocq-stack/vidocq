@@ -32,7 +32,7 @@ public final class ConsoleLoggingChildMain {
 
     private ConsoleLoggingChildMain() {}
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main() throws InterruptedException {
         VidocqBootstrap.create();
         System.Logger log = System.getLogger("io.vidocq.runtime.core.console.Child");
         log.log(System.Logger.Level.INFO, "Vidocq - Configuration phase");

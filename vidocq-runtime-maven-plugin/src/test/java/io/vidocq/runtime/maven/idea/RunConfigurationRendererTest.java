@@ -310,8 +310,8 @@ class RunConfigurationRendererTest {
     @Test
     void constants_haveTheDocumentedValues() {
         assertEquals("vidocq:dev", RunConfigurationRenderer.DEV_GOAL);
-        assertEquals(List.of("process-classes", "vidocq:dev"), RunConfigurationRenderer.DEV_GOALS);
-        assertEquals(List.of("vidocq:run"), RunConfigurationRenderer.RUN_GOALS);
+        assertEquals(List.of("process-classes", "vidocq:dev"), List.copyOf(RunConfigurationRenderer.DEV_GOALS));
+        assertEquals(List.of("vidocq:run"), List.copyOf(RunConfigurationRenderer.RUN_GOALS));
         assertEquals(" (dev)", RunConfigurationRenderer.DEV_SUFFIX);
         assertEquals(" (run)", RunConfigurationRenderer.RUN_SUFFIX);
         assertEquals(" (debug)", RunConfigurationRenderer.DEBUG_SUFFIX);

@@ -90,7 +90,8 @@ class ApplicationMainTest {
         ApplicationMain.of(PublicStaticWithArgs.class).invoke(ARGS);
         ApplicationMain.of(PackagePrivateStaticWithArgs.class).invoke(ARGS);
 
-        assertEquals(List.of("public static main(String[]) --port 9090", "static main(String[]) --port 9090"), CALLS);
+        assertEquals(List.of("public static main(String[]) --port 9090", "static main(String[]) --port 9090"),
+                List.copyOf(CALLS));
     }
 
     @Test
@@ -100,7 +101,8 @@ class ApplicationMainTest {
         ApplicationMain.of(InstanceWithArgs.class).invoke(ARGS);
         ApplicationMain.of(InstanceNoArgs.class).invoke(ARGS);
 
-        assertEquals(List.of("static main()", "instance main(String[]) --port 9090", "instance main()"), CALLS);
+        assertEquals(List.of("static main()", "instance main(String[]) --port 9090", "instance main()"),
+                List.copyOf(CALLS));
     }
 
     // --- selection order -------------------------------------------------------------------
@@ -136,7 +138,8 @@ class ApplicationMainTest {
         ApplicationMain.of(Derived.class).invoke(ARGS);
         ApplicationMain.of(DerivedWithOwnNoArgs.class).invoke(ARGS);
 
-        assertEquals(List.of("main(String[])", "inherited main(String[])", "inherited main(String[])"), CALLS);
+        assertEquals(List.of("main(String[])", "inherited main(String[])", "inherited main(String[])"),
+                List.copyOf(CALLS));
     }
 
     // --- interfaces ------------------------------------------------------------------------
@@ -182,7 +185,7 @@ class ApplicationMainTest {
         assertEquals(List.of("interface default main()",
                         "interface default main(String[]) --port 9090",
                         "interface default main(String[]) --port 9090"),
-                CALLS,
+                List.copyOf(CALLS),
                 "an interface default main counts, and main(String[]) still wins over main()");
 
         var staticInInterface = assertThrows(IllegalStateException.class,
@@ -219,7 +222,7 @@ class ApplicationMainTest {
         ApplicationMain.of(PrivateArgsWithNoArgs.class).invoke(ARGS);
         ApplicationMain.of(HidesWithPrivate.class).invoke(ARGS);
 
-        assertEquals(List.of("fallback main()", "base main()"), CALLS,
+        assertEquals(List.of("fallback main()", "base main()"), List.copyOf(CALLS),
                 "the search stops at a declared match, usable or not, and the no-argument search resumes from the top");
     }
 
@@ -268,7 +271,7 @@ class ApplicationMainTest {
         assertTrue(none.getMessage().contains("Java 25 accepts main(String[]) or main(), static or not"),
                 none.getMessage());
 
-        assertEquals(List.of(), CALLS, "a rejected main is never invoked");
+        assertEquals(List.of(), List.copyOf(CALLS), "a rejected main is never invoked");
     }
 
     @Test
@@ -283,7 +286,7 @@ class ApplicationMainTest {
         var isAbstract = assertThrows(IllegalStateException.class, () -> abstractMain.invoke(ARGS));
         assertTrue(isAbstract.getMessage().contains("is abstract"), isAbstract.getMessage());
 
-        assertEquals(List.of(), CALLS, "a rejected main is never invoked");
+        assertEquals(List.of(), List.copyOf(CALLS), "a rejected main is never invoked");
     }
 
     // --- what the caller sees --------------------------------------------------------------
