@@ -403,3 +403,22 @@ Track reproducible bugs with:
   not start with `x-` are ignored.
 - **status**: FIXED — 2026-10-28. `toSecurityScheme` maps `flows` through `toOAuthFlows` / `toOAuthFlow`
   (URLs, `scopes`, `x-` extensions on both levels). Regression test: `StaticOAuthFlowsTest`.
+
+### BUG-20261028-21 — Static YAML files with common layouts are misread or silently truncated
+
+- **id**: BUG-20261028-21
+- **date**: 2026-10-28
+- **symptom**: `META-INF/openapi.yaml` written in usual YAML styles loses content without an error:
+  4-space indentation gives `info: null`; a sequence at the indentation of its key (`servers:` then
+  `- url: ...`) is dropped; a trailing comment becomes part of the value (`3.1.0 # version`); flow
+  collections (`tags: [a, b]`, `required: [id]`) stay strings; a `---` marker, multi-line plain scalars,
+  `|-` / `>-` / `|+` chomping and `\uXXXX` escapes are not read; lines after a stray indentation are ignored.
+- **minimal repro**: `YamlDeserializerTest` — e.g. `openapi: 3.1.0\ninfo:\n    title: t\n` gives no title.
+- **hypothesis (confirmed)**: `YamlDeserializer.NodeParser` assumed every child two columns deeper than
+  its parent, only accepted sequences deeper than their key, and had no comment, flow, chomping or
+  document-marker handling; the parse stopped at the first unexpected indentation.
+- **status**: FIXED — 2026-10-28. The parser reads the child indentation from the document, accepts a
+  sequence at its key's column, strips comments outside quotes, parses flow collections (also over several
+  lines), joins multi-line scalars, applies block chomping, reads `---` / `...`, and rejects a stray
+  indentation with an `IllegalArgumentException`. The three static files of the official TCK and Grimm's
+  own test files parse to the same maps as before. Regression test: `YamlDeserializerTest`.
