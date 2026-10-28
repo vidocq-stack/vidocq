@@ -23,6 +23,7 @@ import io.opentelemetry.api.metrics.DoubleCounter;
 import io.opentelemetry.api.metrics.DoubleCounterBuilder;
 import io.opentelemetry.api.metrics.ObservableDoubleCounter;
 import io.opentelemetry.api.metrics.ObservableDoubleMeasurement;
+import io.vidocq.humboldt.sdk.metric.aggregation.DoubleLastValueAggregator;
 import io.vidocq.humboldt.sdk.metric.aggregation.DoubleSumAggregator;
 import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
 import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
@@ -52,7 +53,7 @@ public final class SdkDoubleCounterBuilder implements DoubleCounterBuilder {
 
     @Override
     public ObservableDoubleCounter buildWithCallback(Consumer<ObservableDoubleMeasurement> callback) {
-        DoubleSumAggregator agg = new DoubleSumAggregator();
+        DoubleLastValueAggregator agg = new DoubleLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_COUNTER, AggregationTemporality.CUMULATIVE, true, agg));
         var measurement = new ObservableDoubleMeasurementImpl(agg);
@@ -62,7 +63,7 @@ public final class SdkDoubleCounterBuilder implements DoubleCounterBuilder {
 
     @Override
     public ObservableDoubleMeasurement buildObserver() {
-        DoubleSumAggregator agg = new DoubleSumAggregator();
+        DoubleLastValueAggregator agg = new DoubleLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_COUNTER, AggregationTemporality.CUMULATIVE, true, agg));
         return new ObservableDoubleMeasurementImpl(agg);

@@ -23,6 +23,7 @@ import io.opentelemetry.api.metrics.DoubleUpDownCounter;
 import io.opentelemetry.api.metrics.DoubleUpDownCounterBuilder;
 import io.opentelemetry.api.metrics.ObservableDoubleMeasurement;
 import io.opentelemetry.api.metrics.ObservableDoubleUpDownCounter;
+import io.vidocq.humboldt.sdk.metric.aggregation.DoubleLastValueAggregator;
 import io.vidocq.humboldt.sdk.metric.aggregation.DoubleSumAggregator;
 import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
 import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
@@ -56,7 +57,7 @@ public final class SdkDoubleUpDownCounterBuilder implements DoubleUpDownCounterB
 
     @Override
     public ObservableDoubleUpDownCounter buildWithCallback(Consumer<ObservableDoubleMeasurement> callback) {
-        DoubleSumAggregator agg = new DoubleSumAggregator();
+        DoubleLastValueAggregator agg = new DoubleLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_UP_DOWN_COUNTER, AggregationTemporality.CUMULATIVE, false, agg));
         var measurement = new ObservableDoubleMeasurementImpl(agg);
@@ -66,7 +67,7 @@ public final class SdkDoubleUpDownCounterBuilder implements DoubleUpDownCounterB
 
     @Override
     public ObservableDoubleMeasurement buildObserver() {
-        DoubleSumAggregator agg = new DoubleSumAggregator();
+        DoubleLastValueAggregator agg = new DoubleLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_UP_DOWN_COUNTER, AggregationTemporality.CUMULATIVE, false, agg));
         return new ObservableDoubleMeasurementImpl(agg);

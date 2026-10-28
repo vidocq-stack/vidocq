@@ -24,6 +24,7 @@ import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.api.metrics.LongUpDownCounterBuilder;
 import io.opentelemetry.api.metrics.ObservableLongMeasurement;
 import io.opentelemetry.api.metrics.ObservableLongUpDownCounter;
+import io.vidocq.humboldt.sdk.metric.aggregation.LongLastValueAggregator;
 import io.vidocq.humboldt.sdk.metric.aggregation.SumAggregator;
 import io.vidocq.humboldt.sdk.metric.data.AggregationTemporality;
 import io.vidocq.humboldt.sdk.metric.data.InstrumentType;
@@ -57,7 +58,7 @@ public final class SdkLongUpDownCounterBuilder implements LongUpDownCounterBuild
 
     @Override
     public ObservableLongUpDownCounter buildWithCallback(Consumer<ObservableLongMeasurement> callback) {
-        SumAggregator agg = new SumAggregator();
+        LongLastValueAggregator agg = new LongLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_UP_DOWN_COUNTER, AggregationTemporality.CUMULATIVE, false, agg));
         var measurement = new ObservableLongMeasurementImpl(agg);
@@ -67,7 +68,7 @@ public final class SdkLongUpDownCounterBuilder implements LongUpDownCounterBuild
 
     @Override
     public ObservableLongMeasurement buildObserver() {
-        SumAggregator agg = new SumAggregator();
+        LongLastValueAggregator agg = new LongLastValueAggregator();
         meter.register(new InstrumentEntry(name, description, unit,
                 InstrumentType.OBSERVABLE_UP_DOWN_COUNTER, AggregationTemporality.CUMULATIVE, false, agg));
         return new ObservableLongMeasurementImpl(agg);

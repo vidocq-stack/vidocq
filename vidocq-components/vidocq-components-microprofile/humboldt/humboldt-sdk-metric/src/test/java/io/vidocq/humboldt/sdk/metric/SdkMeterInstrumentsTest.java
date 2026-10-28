@@ -432,4 +432,33 @@ class SdkMeterInstrumentsTest {
         assertTrue(p.shutdown().isSuccess());
         assertEquals(Resource.empty(), p.getResource());
     }
+
+    // Asynchronous Counter / UpDownCounter callbacks report the absolute (cumulative) value,
+    // not a delta: OTel metrics API spec, "Asynchronous Counter" (BUG-20261028-02).
+    @Test
+    void observable_counters_report_the_observed_value_on_every_collection() {
+        meter.counterBuilder("obs.long").buildWithCallback(m -> m.record(5));
+        meter.counterBuilder("obs.double").ofDoubles().buildWithCallback(m -> m.record(2.5));
+        meter.upDownCounterBuilder("obs.updown.long").buildWithCallback(m -> m.record(-3));
+        meter.upDownCounterBuilder("obs.updown.double").ofDoubles().buildWithCallback(m -> m.record(-1.5));
+        reader.collect();
+        List<MetricData> second = reader.collect();
+        assertEquals(4, second.size());
+        for (MetricData m : second) {
+            switch (m.name()) {
+                case "obs.long" -> assertEquals(5L, longValue(m));
+                case "obs.double" -> assertEquals(2.5, doubleValue(m));
+                case "obs.updown.long" -> assertEquals(-3L, longValue(m));
+                default -> assertEquals(-1.5, doubleValue(m));
+            }
+        }
+    }
+
+    @Test
+    void observable_counter_observer_keeps_the_last_observed_value() {
+        ObservableLongMeasurement observer = meter.counterBuilder("obs.observer").buildObserver();
+        observer.record(5);
+        observer.record(7);
+        assertEquals(7L, longValue(only()));
+    }
 }

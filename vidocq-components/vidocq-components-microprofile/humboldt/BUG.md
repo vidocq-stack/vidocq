@@ -505,3 +505,24 @@
 - **Fix**: `join` fails the result when `await` returns `false` or is interrupted (the interrupt flag is kept).
 - **Regression test**: `CompletableResultCodeTest.join_fails_the_code_when_it_times_out`,
   `join_fails_the_code_and_keeps_the_interrupt_flag_when_interrupted`.
+
+## BUG-20261028-02 — asynchronous counters add up their callback observations at every collection
+
+- **Date**: 2026-10-28
+- **Status**: FIXED (branch `fix/sdk-metric-observable-counters`, 2026-10-28)
+- **Component**: humboldt-sdk-metric
+- **Affected**: 0.4.0-SNAPSHOT and earlier
+- **Symptom**: `meter.counterBuilder("probe").buildWithCallback(m -> m.record(5))` exports 5 on the first
+  collection, 10 on the second, 15 on the third... The same holds for the double and up-down variants and for
+  `buildObserver()`. The OpenTelemetry metrics API defines the value reported by an asynchronous Counter /
+  UpDownCounter as the absolute (cumulative) value, so every collection must report 5. The runtime's JVM metrics
+  bound as observable counters (CPU time, GC counts...) therefore grew with every export.
+- **Minimal reproduction**: `SdkMeterInstrumentsTest.observable_counters_report_the_observed_value_on_every_collection`
+  (two collections, the second reports 10 instead of 5).
+- **Cause**: the observable builders of `SdkLongCounterBuilder`, `SdkDoubleCounterBuilder`,
+  `SdkLongUpDownCounterBuilder` and `SdkDoubleUpDownCounterBuilder` stored the observations in the cumulative
+  `SumAggregator` / `DoubleSumAggregator` of the synchronous instruments, which add every recording.
+- **Fix**: the observable variants use `LongLastValueAggregator` / `DoubleLastValueAggregator`, which keep the last
+  observed value per attribute set; the exported shape (sum, monotonicity, cumulative temporality) is unchanged.
+- **Regression test**: `SdkMeterInstrumentsTest.observable_counters_report_the_observed_value_on_every_collection`,
+  `observable_counter_observer_keeps_the_last_observed_value`.
