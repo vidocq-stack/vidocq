@@ -49,17 +49,7 @@ final class ApplicationDrivers {
         // A broken provider (missing class, failing constructor) must not hide the next one, as in DriverManager.
         List<ServiceConfigurationError> broken = new ArrayList<>();
         Iterator<Driver> drivers = ServiceLoader.load(Driver.class, loader).iterator();
-        while (true) {
-            Driver driver;
-            try {
-                if (!drivers.hasNext()) {
-                    break;
-                }
-                driver = drivers.next();
-            } catch (ServiceConfigurationError e) {
-                broken.add(e);
-                continue;
-            }
+        for (Driver driver = next(drivers, broken); driver != null; driver = next(drivers, broken)) {
             if (driver.acceptsURL(url)) {
                 Connection connection = driver.connect(url, info);
                 if (connection != null) {
@@ -71,5 +61,16 @@ final class ApplicationDrivers {
                 + " add the JDBC driver as a dependency of the application");
         broken.forEach(none::addSuppressed);
         throw none;
+    }
+
+    /** The next driver that loads, a broken provider skipped and added to {@code broken}; {@code null} at the end. */
+    private static Driver next(Iterator<Driver> drivers, List<ServiceConfigurationError> broken) {
+        while (true) {
+            try {
+                return drivers.hasNext() ? drivers.next() : null;
+            } catch (ServiceConfigurationError e) {
+                broken.add(e);
+            }
+        }
     }
 }
