@@ -243,24 +243,7 @@ public final class CatalogueLivePanel implements LivePanel {
      * clash included: the run actions build their ids {@code m.<repository>.<method>} with it. Adds it to {@code used}.
      */
     static String key(String name, Set<String> used, int max) {
-        StringBuilder out = new StringBuilder();
-        char previous = 0;
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if (c >= 'A' && c <= 'Z') {
-                boolean afterWord = (previous >= 'a' && previous <= 'z') || (previous >= '0' && previous <= '9');
-                if (!out.isEmpty() && afterWord) {
-                    out.append('-');
-                }
-                out.append((char) (c + ('a' - 'A')));
-            } else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
-                out.append(c);
-            } else if (!out.isEmpty() && out.charAt(out.length() - 1) != '-') {
-                out.append('-');
-            }
-            previous = c;
-        }
-        String base = out.toString();
+        String base = kebab(name);
         if (base.isEmpty() || base.charAt(0) < 'a' || base.charAt(0) > 'z') {
             base = "r-" + base;
         }
@@ -271,6 +254,31 @@ public final class CatalogueLivePanel implements LivePanel {
             key = trim(base, max - suffix.length()) + suffix;
         }
         return key;
+    }
+
+    /** {@code name} in kebab case: lower case, a {@code -} before each word and for each run of other characters. */
+    private static String kebab(String name) {
+        StringBuilder out = new StringBuilder();
+        char previous = 0;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c >= 'A' && c <= 'Z') {
+                if (!out.isEmpty() && isLowerOrDigit(previous)) {
+                    out.append('-');
+                }
+                out.append((char) (c + ('a' - 'A')));
+            } else if (isLowerOrDigit(c)) {
+                out.append(c);
+            } else if (!out.isEmpty() && out.charAt(out.length() - 1) != '-') {
+                out.append('-');
+            }
+            previous = c;
+        }
+        return out.toString();
+    }
+
+    private static boolean isLowerOrDigit(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
     }
 
     private static String trim(String key, int max) {

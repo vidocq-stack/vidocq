@@ -441,19 +441,25 @@ final class CsvActions {
         } catch (RuntimeException | LinkageError unreadable) {
             throw new JdqlActions.Refused(Failures.text(unreadable));
         }
+        return rows(lines, header.size(), build);
+    }
+
+    /** Each line built into an entity, with {@code columns} fields; the first failure stops it with its line. */
+    private static List<Row> rows(List<Csv.Record> lines, int columns, EntityJson.TextRows build)
+            throws JdqlActions.Refused {
         List<Row> rows = new ArrayList<>(lines.size());
-        for (Csv.Record record : lines) {
-            int count = record.fields().size();
-            if (count != header.size()) {
-                throw new JdqlActions.Refused("line " + record.line() + ": " + count
-                        + (count == 1 ? " field" : " fields") + ", the header has " + header.size());
+        for (Csv.Record csvRecord : lines) {
+            int count = csvRecord.fields().size();
+            if (count != columns) {
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + count
+                        + (count == 1 ? " field" : " fields") + ", the header has " + columns);
             }
             try {
-                rows.add(new Row(record.line(), build.build(record.fields())));
+                rows.add(new Row(csvRecord.line(), build.build(csvRecord.fields())));
             } catch (ArgumentException refused) {
-                throw new JdqlActions.Refused("line " + record.line() + ", " + refused.getMessage());
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ", " + refused.getMessage());
             } catch (RuntimeException | LinkageError failed) {
-                throw new JdqlActions.Refused("line " + record.line() + ": " + Failures.text(failed));
+                throw new JdqlActions.Refused("line " + csvRecord.line() + ": " + Failures.text(failed));
             }
         }
         return rows;

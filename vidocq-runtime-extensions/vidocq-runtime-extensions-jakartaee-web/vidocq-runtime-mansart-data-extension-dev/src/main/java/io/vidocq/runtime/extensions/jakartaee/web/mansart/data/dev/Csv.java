@@ -71,8 +71,10 @@ final class Csv {
     /** How many bytes {@code text} takes in UTF-8; a lone surrogate counts three. */
     static long utf8Length(CharSequence text) {
         long bytes = 0;
-        for (int i = 0; i < text.length(); i++) {
+        int i = 0;
+        while (i < text.length()) {
             char c = text.charAt(i);
+            int chars = 1;
             if (c < 0x80) {
                 bytes++;
             } else if (c < 0x800) {
@@ -80,10 +82,11 @@ final class Csv {
             } else if (Character.isHighSurrogate(c) && i + 1 < text.length()
                     && Character.isLowSurrogate(text.charAt(i + 1))) {
                 bytes += 4;
-                i++;
+                chars = 2;
             } else {
                 bytes += 3;
             }
+            i += chars;
         }
         return bytes;
     }
@@ -97,60 +100,95 @@ final class Csv {
      */
     static List<Record> read(String text, char separator) throws Malformed {
         List<Record> records = new ArrayList<>();
-        int length = text.length();
-        int at = length > 0 && text.charAt(0) == '\uFEFF' ? 1 : 0;
-        int line = 1;
-        while (at < length) {
+        Reader reader = new Reader(text, separator);
+        while (reader.at < reader.length) {
+            records.add(reader.record());
+        }
+        return records;
+    }
+
+    /** Where {@link #read} is in the text: the index of the next character, and its line. */
+    private static final class Reader {
+
+        private final String text;
+        private final char separator;
+        private final int length;
+        private int at;
+        private int line = 1;
+
+        Reader(String text, char separator) {
+            this.text = text;
+            this.separator = separator;
+            this.length = text.length();
+            this.at = length > 0 && text.charAt(0) == '\uFEFF' ? 1 : 0;
+        }
+
+        Record record() throws Malformed {
             int first = line;
             List<String> fields = new ArrayList<>();
             boolean more = true;
             while (more) {
-                if (at < length && text.charAt(at) == '"') {
-                    int opened = line;
-                    StringBuilder field = new StringBuilder();
-                    at++;
-                    while (true) {
-                        if (at >= length) {
-                            throw new Malformed(opened, "unterminated quoted field");
-                        }
-                        char c = text.charAt(at++);
-                        if (c == '"') {
-                            if (at < length && text.charAt(at) == '"') {
-                                field.append('"');
-                                at++;
-                                continue;
-                            }
-                            break;
-                        }
-                        if (c == '\n') {
-                            line++;
-                        }
-                        field.append(c);
-                    }
-                    fields.add(field.toString());
-                } else {
-                    int from = at;
-                    while (at < length && text.charAt(at) != separator && lineEnd(text, at) == 0) {
-                        at++;
-                    }
-                    fields.add(at == from ? null : text.substring(from, at));
-                }
-                // after a field: the separator, a line end or the end of the text; after a quote, nothing else
+                fields.add(at < length && text.charAt(at) == '"' ? quoted() : unquoted());
+                more = separatorFollows();
+            }
+            return new Record(first, Collections.unmodifiableList(fields));
+        }
+
+        /** The field whose opening quote is at {@code at}, read past its closing quote. */
+        private String quoted() throws Malformed {
+            int opened = line;
+            StringBuilder field = new StringBuilder();
+            at++;
+            boolean open = true;
+            while (open) {
                 if (at >= length) {
-                    more = false;
-                } else if (text.charAt(at) == separator) {
+                    throw new Malformed(opened, "unterminated quoted field");
+                }
+                char c = text.charAt(at++);
+                if (c != '"') {
+                    if (c == '\n') {
+                        line++;
+                    }
+                    field.append(c);
+                } else if (at < length && text.charAt(at) == '"') {
+                    field.append('"');
                     at++;
-                } else if (lineEnd(text, at) > 0) {
-                    at += lineEnd(text, at);
-                    line++;
-                    more = false;
                 } else {
-                    throw new Malformed(line, "text after a closing quote");
+                    open = false;
                 }
             }
-            records.add(new Record(first, Collections.unmodifiableList(fields)));
+            return field.toString();
         }
-        return records;
+
+        /** The field at {@code at}, up to the separator or the line end; {@code null} when empty. */
+        private String unquoted() {
+            int from = at;
+            while (at < length && text.charAt(at) != separator && lineEnd(text, at) == 0) {
+                at++;
+            }
+            return at == from ? null : text.substring(from, at);
+        }
+
+        /**
+         * After a field: the separator, read, and {@code true}; or a line end, read, or the end of the text, and
+         * {@code false}; after a quote, nothing else.
+         */
+        private boolean separatorFollows() throws Malformed {
+            if (at >= length) {
+                return false;
+            }
+            if (text.charAt(at) == separator) {
+                at++;
+                return true;
+            }
+            int end = lineEnd(text, at);
+            if (end == 0) {
+                throw new Malformed(line, "text after a closing quote");
+            }
+            at += end;
+            line++;
+            return false;
+        }
     }
 
     /** The length of the line end at {@code at}: 2 for {@code \r\n}, 1 for {@code \n}, 0 for none. */

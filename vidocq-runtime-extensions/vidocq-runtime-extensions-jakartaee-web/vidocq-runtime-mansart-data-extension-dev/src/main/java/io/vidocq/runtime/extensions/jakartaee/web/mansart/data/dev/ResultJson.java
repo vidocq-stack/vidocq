@@ -47,6 +47,11 @@ final class ResultJson {
     /** How deep nested collections are followed; past it an element is its text. */
     private static final int MAX_DEPTH = 8;
 
+    private static final String NO_ROW = "no row";
+    private static final String ONE_ROW = "1 row";
+    /** The summary of a list cut at {@value #MAX_ROWS} rows. */
+    private static final String FIRST_ROWS = "first " + MAX_ROWS + " rows";
+
     /**
      * @param body the JSON text, {@code null} for {@code void}
      * @param what {@code 3 rows}, {@code first 100 rows}, {@code 1 row}, {@code no row}, the value such as
@@ -67,32 +72,20 @@ final class ResultJson {
             return new Result(null, "done", false);
         }
         if (value == null) {
-            return new Result("null", "no row", false);
+            return new Result("null", NO_ROW, false);
         }
         if (value instanceof Optional<?> optional) {
             return optional.isPresent()
-                    ? new Result(Json.write(node(optional.get(), entities, 0)), "1 row", false)
-                    : new Result("null", "no row", false);
+                    ? new Result(Json.write(node(optional.get(), entities, 0)), ONE_ROW, false)
+                    : new Result("null", NO_ROW, false);
         }
         if (value instanceof Stream<?> stream) {
             try (stream) {
-                List<Object> read = new ArrayList<>();
-                Iterator<?> iterator = stream.iterator();
-                while (read.size() <= MAX_ROWS && iterator.hasNext()) {
-                    read.add(iterator.next());
-                }
-                return rows(read, entities);
+                return rows(firstRows(stream.iterator()), entities);
             }
         }
         if (value instanceof Collection<?> collection) {
-            List<Object> read = new ArrayList<>();
-            for (Object row : collection) {
-                if (read.size() > MAX_ROWS) {
-                    break;
-                }
-                read.add(row);
-            }
-            return rows(read, entities);
+            return rows(firstRows(collection.iterator()), entities);
         }
         if (value.getClass().isArray()) {
             List<Object> read = new ArrayList<>();
@@ -103,8 +96,17 @@ final class ResultJson {
             return rows(read, entities);
         }
         Object node = node(value, entities, 0);
-        return new Result(Json.write(node), entities.isEntity(value.getClass()) ? "1 row" : String.valueOf(node),
+        return new Result(Json.write(node), entities.isEntity(value.getClass()) ? ONE_ROW : String.valueOf(node),
                 false);
+    }
+
+    /** Up to {@value #MAX_ROWS} + 1 rows of {@code iterator}, the next one left unread. */
+    private static List<Object> firstRows(Iterator<?> iterator) {
+        List<Object> read = new ArrayList<>();
+        while (read.size() <= MAX_ROWS && iterator.hasNext()) {
+            read.add(iterator.next());
+        }
+        return read;
     }
 
     /** {@code read} holds up to {@value #MAX_ROWS} + 1 rows: the last one only says there were more. */
@@ -115,12 +117,15 @@ final class ResultJson {
         for (Object row : kept) {
             json.add(node(row, entities, 1));
         }
-        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(kept.size()), true);
+        return new Result(Json.write(json), more ? FIRST_ROWS : count(kept.size()), true);
     }
 
     /** {@code no row}, {@code 1 row} or {@code N rows}. */
     static String count(long n) {
-        return n == 0 ? "no row" : n == 1 ? "1 row" : n + " rows";
+        if (n == 0) {
+            return NO_ROW;
+        }
+        return n == 1 ? ONE_ROW : n + " rows";
     }
 
     /**
@@ -138,7 +143,7 @@ final class ResultJson {
             }
             json.add(object);
         }
-        return new Result(Json.write(json), more ? "first " + MAX_ROWS + " rows" : count(json.size()), true);
+        return new Result(Json.write(json), more ? FIRST_ROWS : count(json.size()), true);
     }
 
     /**
@@ -159,7 +164,7 @@ final class ResultJson {
         List<Column> columns = types.entrySet().stream().map(type -> new Column(type.getKey(), type.getValue()))
                 .toList();
         return new Result(ActionResult.rows(null, columns, rows, more).body(),
-                more ? "first " + MAX_ROWS + " rows" : count(rows.size()), true);
+                more ? FIRST_ROWS : count(rows.size()), true);
     }
 
     /**
@@ -170,7 +175,18 @@ final class ResultJson {
     static Result rows(List<String> columns, List<Object[]> rows, EntityModel<?> model, EntityJson entities) {
         boolean more = rows.size() > MAX_ROWS;
         List<Object[]> kept = more ? rows.subList(0, MAX_ROWS) : rows;
-        Map<String, String> types = entities.types(model.entityClass());
+        List<Column> shown = shownColumns(columns, kept, entities.types(model.entityClass()), entities);
+        List<List<Object>> out = new ArrayList<>();
+        for (Object[] row : kept) {
+            out.add(cells(row, columns.size(), entities));
+        }
+        return new Result(ActionResult.rows(null, shown, out, more).body(),
+                more ? FIRST_ROWS : count(out.size()), true);
+    }
+
+    /** The columns, each typed from {@code types} by its name, or {@code object} when it holds entities. */
+    private static List<Column> shownColumns(List<String> columns, List<Object[]> kept, Map<String, String> types,
+                                             EntityJson entities) {
         List<Column> shown = new ArrayList<>();
         for (int i = 0; i < columns.size(); i++) {
             int at = i;
@@ -178,17 +194,17 @@ final class ResultJson {
                     .anyMatch(value -> value != null && entities.isEntity(value.getClass()));
             shown.add(new Column(columns.get(i), holdsEntities ? "object" : types.getOrDefault(columns.get(i), "")));
         }
-        List<List<Object>> out = new ArrayList<>();
-        for (Object[] row : kept) {
-            List<Object> values = new ArrayList<>(columns.size());
-            for (int i = 0; i < columns.size(); i++) {
-                Object node = node(i < row.length ? row[i] : null, entities, 1);
-                values.add(node instanceof Map<?, ?> || node instanceof List<?> ? Json.write(node) : node);
-            }
-            out.add(values);
+        return shown;
+    }
+
+    /** The first {@code width} values of {@code row}, a missing one {@code null}, an entity or a list as JSON text. */
+    private static List<Object> cells(Object[] row, int width, EntityJson entities) {
+        List<Object> values = new ArrayList<>(width);
+        for (int i = 0; i < width; i++) {
+            Object node = node(i < row.length ? row[i] : null, entities, 1);
+            values.add(node instanceof Map<?, ?> || node instanceof List<?> ? Json.write(node) : node);
         }
-        return new Result(ActionResult.rows(null, shown, out, more).body(),
-                more ? "first " + MAX_ROWS + " rows" : count(out.size()), true);
+        return values;
     }
 
     /** {@code value} as JSON, as an element of a list is written: an entity as an object, a scalar as itself. */
@@ -203,28 +219,27 @@ final class ResultJson {
         if (entities.isEntity(value.getClass())) {
             return entities.toJson(value);
         }
-        if (depth < MAX_DEPTH) {
-            if (value instanceof Optional<?> optional) {
-                return optional.isPresent() ? node(optional.get(), entities, depth + 1) : null;
+        if (depth >= MAX_DEPTH) {
+            return Scalars.toJson(value);
+        }
+        if (value instanceof Optional<?> optional) {
+            return optional.isPresent() ? node(optional.get(), entities, depth + 1) : null;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> out = new ArrayList<>();
+            Iterator<?> elements = collection.iterator();
+            while (out.size() < MAX_ROWS && elements.hasNext()) {
+                out.add(node(elements.next(), entities, depth + 1));
             }
-            if (value instanceof Collection<?> collection) {
-                List<Object> out = new ArrayList<>();
-                for (Object element : collection) {
-                    if (out.size() == MAX_ROWS) {
-                        break;
-                    }
-                    out.add(node(element, entities, depth + 1));
-                }
-                return out;
+            return out;
+        }
+        if (value.getClass().isArray()) {
+            List<Object> out = new ArrayList<>();
+            int length = Math.min(Array.getLength(value), MAX_ROWS);
+            for (int i = 0; i < length; i++) {
+                out.add(node(Array.get(value, i), entities, depth + 1));
             }
-            if (value.getClass().isArray()) {
-                List<Object> out = new ArrayList<>();
-                int length = Math.min(Array.getLength(value), MAX_ROWS);
-                for (int i = 0; i < length; i++) {
-                    out.add(node(Array.get(value, i), entities, depth + 1));
-                }
-                return out;
-            }
+            return out;
         }
         return Scalars.toJson(value);
     }

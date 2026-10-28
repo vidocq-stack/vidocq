@@ -266,12 +266,8 @@ final class RepositoryActions {
         for (int i = 0; i < candidates.size(); i++) {
             RepositoryMethods.Candidate candidate = candidates.get(i);
             Signature signature = signatures.get(i);
-            if (signature.reason() != null) {
-                notRunnable.add(List.of(name, candidate.signature(), signature.reason()));
-                continue;
-            }
-            if (actions.size() >= maxActions) {
-                moreMethods++;
+            if (signature.reason() != null || actions.size() >= maxActions) {
+                skip(name, candidate, signature);
                 continue;
             }
             String method = candidate.method().getName();
@@ -287,6 +283,15 @@ final class RepositoryActions {
                 notRunnable.add(List.of(name, candidate.signature(), "unreadable: "
                         + unreadable.getClass().getName()));
             }
+        }
+    }
+
+    /** A method with no action: not runnable, for its signature's reason, or past the limit, counted. */
+    private void skip(String name, RepositoryMethods.Candidate candidate, Signature signature) {
+        if (signature.reason() != null) {
+            notRunnable.add(List.of(name, candidate.signature(), signature.reason()));
+        } else {
+            moreMethods++;
         }
     }
 

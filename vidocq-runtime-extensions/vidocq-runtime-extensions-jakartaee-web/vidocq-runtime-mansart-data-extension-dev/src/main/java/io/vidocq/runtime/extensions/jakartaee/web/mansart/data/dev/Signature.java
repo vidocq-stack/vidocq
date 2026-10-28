@@ -69,27 +69,33 @@ final class Signature {
             String name = candidate.names().get(i);
             Class<?> type = candidate.types().get(i);
             boolean entity = entities.isEntity(type);
-            parameters.add(new Parameter(name, type, entity));
-            if (reason != null) {
-                continue;
-            }
-            Map<String, Object> property;
-            try {
-                property = entity ? entities.schema(type) : Scalars.schema(type);
-            } catch (RuntimeException | LinkageError failed) {
-                reason = "parameter " + name + ": " + type.getSimpleName() + " has no model ("
-                        + failed.getClass().getName() + ")";
-                continue;
-            }
-            if (property == null) {
-                reason = "parameter " + name + ": " + type.getSimpleName() + " is not supported";
-            } else {
-                properties.put(name, property);
+            Parameter parameter = new Parameter(name, type, entity);
+            parameters.add(parameter);
+            if (reason == null) {
+                reason = addProperty(properties, parameter, entities);
             }
         }
         String schema = reason != null ? null : Json.write(Scalars.object("type", "object", "properties", properties,
                 "required", parameters.stream().map(Parameter::name).toList()));
         return new Signature(List.copyOf(parameters), reason, schema, entities);
+    }
+
+    /** Puts the schema of {@code parameter} in {@code properties}; why it has none, {@code null} when it has one. */
+    private static String addProperty(Map<String, Object> properties, Parameter parameter, EntityJson entities) {
+        String name = parameter.name();
+        Class<?> type = parameter.type();
+        Map<String, Object> property;
+        try {
+            property = parameter.entity() ? entities.schema(type) : Scalars.schema(type);
+        } catch (RuntimeException | LinkageError failed) {
+            return "parameter " + name + ": " + type.getSimpleName() + " has no model ("
+                    + failed.getClass().getName() + ")";
+        }
+        if (property == null) {
+            return "parameter " + name + ": " + type.getSimpleName() + " is not supported";
+        }
+        properties.put(name, property);
+        return null;
     }
 
     List<Parameter> parameters() {

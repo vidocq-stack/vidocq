@@ -210,22 +210,32 @@ final class RepositoryMethods {
             return print(array.getGenericComponentType(), bindings, depth + 1) + "[]";
         }
         if (type instanceof TypeVariable<?> variable) {
-            Type bound = bindings.get(variable);
-            if (bound != null) {
-                return print(bound, bindings, depth + 1);
-            }
-            Type[] bounds = variable.getBounds();
-            return bounds.length == 0 || bounds[0] == Object.class
-                    ? variable.getName() : print(bounds[0], bindings, depth + 1);
+            return printVariable(variable, bindings, depth);
         }
         if (type instanceof WildcardType wildcard) {
-            if (wildcard.getLowerBounds().length > 0) {
-                return "? super " + print(wildcard.getLowerBounds()[0], bindings, depth + 1);
-            }
-            Type[] upper = wildcard.getUpperBounds();
-            return upper.length == 0 || upper[0] == Object.class
-                    ? "?" : "? extends " + print(upper[0], bindings, depth + 1);
+            return printWildcard(wildcard, bindings, depth);
         }
         return type.getTypeName();
+    }
+
+    /** A type variable as its binding, else its first bound, else its name. */
+    private static String printVariable(TypeVariable<?> variable, Map<TypeVariable<?>, Type> bindings, int depth) {
+        Type bound = bindings.get(variable);
+        if (bound != null) {
+            return print(bound, bindings, depth + 1);
+        }
+        Type[] bounds = variable.getBounds();
+        return bounds.length == 0 || bounds[0] == Object.class
+                ? variable.getName() : print(bounds[0], bindings, depth + 1);
+    }
+
+    /** A wildcard as {@code ? super X}, {@code ? extends X} or {@code ?}. */
+    private static String printWildcard(WildcardType wildcard, Map<TypeVariable<?>, Type> bindings, int depth) {
+        if (wildcard.getLowerBounds().length > 0) {
+            return "? super " + print(wildcard.getLowerBounds()[0], bindings, depth + 1);
+        }
+        Type[] upper = wildcard.getUpperBounds();
+        return upper.length == 0 || upper[0] == Object.class
+                ? "?" : "? extends " + print(upper[0], bindings, depth + 1);
     }
 }
