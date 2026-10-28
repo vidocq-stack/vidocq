@@ -19,7 +19,6 @@
  */
 package io.vidocq.knock.runtime;
 
-import io.vidocq.knock.spi.HealthCheckRegistry;
 import io.vidocq.knock.spi.ProbeType;
 
 /**

@@ -35,6 +35,9 @@ public final class Knock {
     /** Logical name of the implementation. */
     public static final String IMPLEMENTATION_NAME = "knock";
 
+    /** Version reported when the filtered version resource cannot be read. */
+    private static final String UNKNOWN_VERSION = "unknown";
+
     /**
      * Knock implementation version, filtered by the Maven build into a
      * same-module resource. Not a compile-time constant on purpose: consumers
@@ -52,13 +55,13 @@ public final class Knock {
     private static String loadVersion() {
         try (InputStream in = Knock.class.getResourceAsStream("version.properties")) {
             if (in == null) {
-                return "unknown";
+                return UNKNOWN_VERSION;
             }
             Properties props = new Properties();
             props.load(in);
-            return props.getProperty("version", "unknown");
-        } catch (IOException e) {
-            return "unknown";
+            return props.getProperty("version", UNKNOWN_VERSION);
+        } catch (IOException _) {
+            return UNKNOWN_VERSION;
         }
     }
 }
