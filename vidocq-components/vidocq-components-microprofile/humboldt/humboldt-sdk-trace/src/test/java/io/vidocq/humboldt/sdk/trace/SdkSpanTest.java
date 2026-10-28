@@ -42,6 +42,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -245,7 +246,7 @@ class SdkSpanTest {
         parent.end();
         SpanData child = exporter.getFinishedSpans().getFirst();
         assertNull(child.parentSpanContext());
-        assertFalse(child.spanContext().getTraceId().equals(parent.getSpanContext().getTraceId()));
+        assertNotEquals(parent.getSpanContext().getTraceId(), child.spanContext().getTraceId());
     }
 
     @Test

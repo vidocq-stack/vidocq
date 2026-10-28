@@ -61,7 +61,7 @@ class HumboldtBuildCompatibleExtensionTest {
         return proxy(ClassConfig.class, (self, method, args) -> switch (method.getName()) {
             case "info" -> info;
             case "methods" -> methods;
-            case ADD_ANNOTATION -> record(name, args, self);
+            case ADD_ANNOTATION -> recordCall(name, args, self);
             default -> null;
         });
     }
@@ -70,12 +70,12 @@ class HumboldtBuildCompatibleExtensionTest {
         Object info = annotationTarget(jakarta.enterprise.lang.model.declarations.MethodInfo.class, name, annotated);
         return proxy(MethodConfig.class, (self, method, args) -> switch (method.getName()) {
             case "info" -> info;
-            case ADD_ANNOTATION -> record(name, args, self);
+            case ADD_ANNOTATION -> recordCall(name, args, self);
             default -> null;
         });
     }
 
-    private Object record(String name, Object[] args, Object self) {
+    private Object recordCall(String name, Object[] args, Object self) {
         assertEquals(SpanBinding.class, args[0]);
         added.add(name);
         return self;

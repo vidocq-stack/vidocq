@@ -70,7 +70,7 @@ class LoggingLogRecordExporterLifecycleTest {
         Path file = dir.resolve(LOG_FILE);
         Files.writeString(file, "previous" + System.lineSeparator());
         LoggingLogRecordExporter exporter = LoggingLogRecordExporter.toFile(file);
-        exporter.export(List.of(record("next")));
+        exporter.export(List.of(sampleRecord("next")));
         exporter.shutdown();
 
         List<String> lines = Files.readAllLines(file);
@@ -84,7 +84,7 @@ class LoggingLogRecordExporterLifecycleTest {
         LoggingLogRecordExporter exporter = LoggingLogRecordExporter.toFile(dir.resolve(LOG_FILE));
         assertTrue(exporter.shutdown().isSuccess());
 
-        assertFalse(exporter.export(List.of(record("late"))).isSuccess());
+        assertFalse(exporter.export(List.of(sampleRecord("late"))).isSuccess());
         assertFalse(exporter.flush().isSuccess());
         assertTrue(exporter.shutdown().isSuccess(), "a second shutdown is a successful no-op");
     }
@@ -103,7 +103,7 @@ class LoggingLogRecordExporterLifecycleTest {
         System.setProperty(LOG_FILE_PROPERTY, file.toString());
         try {
             LoggingLogRecordExporter exporter = LoggingLogRecordExporter.create();
-            exporter.export(List.of(record("from create")));
+            exporter.export(List.of(sampleRecord("from create")));
             exporter.shutdown();
         } finally {
             restore(previous);
@@ -121,7 +121,7 @@ class LoggingLogRecordExporterLifecycleTest {
         System.setOut(capture);
         try {
             LoggingLogRecordExporter exporter = LoggingLogRecordExporter.create();
-            assertTrue(exporter.export(List.of(record("to stdout"))).isSuccess());
+            assertTrue(exporter.export(List.of(sampleRecord("to stdout"))).isSuccess());
             assertTrue(exporter.flush().isSuccess());
             assertTrue(exporter.shutdown().isSuccess());
             capture.print("still open");
@@ -144,7 +144,7 @@ class LoggingLogRecordExporterLifecycleTest {
         }
     }
 
-    private static LogRecordData record(String body) {
+    private static LogRecordData sampleRecord(String body) {
         return new LogRecordData(
                 Resource.empty(), new InstrumentationScope("io.vidocq.test", "1.0", null, Attributes.empty()),
                 1_000L, 2_000L, SpanContext.getInvalid(),

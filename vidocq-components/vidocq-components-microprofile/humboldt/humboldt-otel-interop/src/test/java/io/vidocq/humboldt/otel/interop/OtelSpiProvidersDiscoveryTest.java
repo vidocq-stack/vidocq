@@ -260,7 +260,7 @@ class OtelSpiProvidersDiscoveryTest {
 
     private static Map<String, String> injected(TextMapPropagator propagator) {
         Map<String, String> carrier = new HashMap<>();
-        propagator.inject(Context.root(), carrier, (c, k, v) -> c.put(k, v));
+        propagator.inject(Context.root(), carrier, Map::put);
         return carrier;
     }
 

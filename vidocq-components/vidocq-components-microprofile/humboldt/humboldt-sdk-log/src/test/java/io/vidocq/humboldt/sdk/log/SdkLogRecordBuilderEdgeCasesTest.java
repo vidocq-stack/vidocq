@@ -176,7 +176,7 @@ class SdkLogRecordBuilderEdgeCasesTest {
         assertTrue(processor.flush().isSuccess());
         assertTrue(processor.shutdown().isSuccess());
         assertTrue(processor.shutdown().isSuccess());
-        processor.onEmit(record());
+        processor.onEmit(sampleRecord());
         assertEquals(0, exporter.exported.size());
         assertEquals(1, exporter.shutdowns.get());
         assertEquals(1, exporter.flushes.get());
@@ -204,8 +204,8 @@ class SdkLogRecordBuilderEdgeCasesTest {
                 .setScheduleDelay(Duration.ofMinutes(10))
                 .build();
         try {
-            processor.onEmit(record());
-            processor.onEmit(record());
+            processor.onEmit(sampleRecord());
+            processor.onEmit(sampleRecord());
             assertTrue(processor.flush().join(5, TimeUnit.SECONDS).isSuccess());
             assertEquals(2, exporter.exported.size());
             // Nothing queued any more: the flush goes straight to the exporter.
@@ -222,7 +222,7 @@ class SdkLogRecordBuilderEdgeCasesTest {
         AtomicInteger shutdowns = new AtomicInteger();
         LogRecordProcessor processor = new LogRecordProcessor() {
             @Override
-            public void onEmit(LogRecordData record) {
+            public void onEmit(LogRecordData logRecord) {
                 // records are not needed by this test
             }
 
@@ -257,7 +257,7 @@ class SdkLogRecordBuilderEdgeCasesTest {
         assertEquals(Resource.empty(), r.resource());
     }
 
-    private static LogRecordData record() {
+    private static LogRecordData sampleRecord() {
         return new LogRecordData(
                 Resource.empty(), null, 1L, 2L, SpanContext.getInvalid(),
                 Severity.INFO, "INFO", "body", Attributes.empty(), "");

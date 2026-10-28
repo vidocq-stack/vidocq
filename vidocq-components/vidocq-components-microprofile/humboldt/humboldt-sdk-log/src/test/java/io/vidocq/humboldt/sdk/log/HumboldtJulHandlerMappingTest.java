@@ -66,45 +66,45 @@ class HumboldtJulHandlerMappingTest {
     @ParameterizedTest
     @MethodSource("levels")
     void maps_the_jul_level_to_the_otel_severity_and_text(Level level, Severity severity, String text) {
-        LogRecordData r = publishOne(record(level, "message"));
+        LogRecordData r = publishOne(sampleRecord(level, "message"));
         assertEquals(severity, r.severity());
         assertEquals(text, r.severityText());
     }
 
     @Test
     void the_record_timestamp_is_the_jul_instant() {
-        LogRecord record = record(Level.INFO, "at a fixed time");
-        record.setInstant(Instant.ofEpochSecond(1_700_000_000L, 123));
-        LogRecordData r = publishOne(record);
+        LogRecord logRecord = sampleRecord(Level.INFO, "at a fixed time");
+        logRecord.setInstant(Instant.ofEpochSecond(1_700_000_000L, 123));
+        LogRecordData r = publishOne(logRecord);
         assertEquals(1_700_000_000_000_000_123L, r.timestampEpochNanos());
     }
 
     @Test
     void a_record_without_a_logger_name_uses_the_empty_scope() {
-        LogRecord record = new LogRecord(Level.INFO, "anonymous");
-        LogRecordData r = publishOne(record);
+        LogRecord logRecord = new LogRecord(Level.INFO, "anonymous");
+        LogRecordData r = publishOne(logRecord);
         assertEquals("", r.scope().name());
         assertEquals("anonymous", r.body());
     }
 
     @Test
     void a_record_without_a_message_has_an_empty_body() {
-        LogRecordData r = publishOne(record(Level.INFO, null));
+        LogRecordData r = publishOne(sampleRecord(Level.INFO, null));
         assertEquals("", r.body());
     }
 
     @Test
     void an_invalid_message_pattern_is_kept_raw() {
-        LogRecord record = record(Level.INFO, "broken {0");
-        record.setParameters(new Object[] {"x"});
-        assertEquals("broken {0", publishOne(record).body());
+        LogRecord logRecord = sampleRecord(Level.INFO, "broken {0");
+        logRecord.setParameters(new Object[] {"x"});
+        assertEquals("broken {0", publishOne(logRecord).body());
     }
 
     @Test
     void an_empty_parameter_array_leaves_the_message_unformatted() {
-        LogRecord record = record(Level.INFO, "literal {0}");
-        record.setParameters(new Object[0]);
-        assertEquals("literal {0}", publishOne(record).body());
+        LogRecord logRecord = sampleRecord(Level.INFO, "literal {0}");
+        logRecord.setParameters(new Object[0]);
+        assertEquals("literal {0}", publishOne(logRecord).body());
     }
 
     @Test
@@ -112,8 +112,8 @@ class HumboldtJulHandlerMappingTest {
         List<LogRecordData> out = publish(handler -> {
             handler.setLevel(Level.WARNING);
             handler.publish(null);
-            handler.publish(record(Level.INFO, "too low"));
-            handler.publish(record(Level.SEVERE, "kept"));
+            handler.publish(sampleRecord(Level.INFO, "too low"));
+            handler.publish(sampleRecord(Level.SEVERE, "kept"));
         });
         assertEquals(1, out.size());
         assertEquals("kept", out.getFirst().body());
@@ -122,8 +122,8 @@ class HumboldtJulHandlerMappingTest {
     @Test
     void loggers_are_cached_per_jul_logger_name() {
         List<LogRecordData> out = publish(handler -> {
-            handler.publish(record(Level.INFO, "one"));
-            handler.publish(record(Level.INFO, "two"));
+            handler.publish(sampleRecord(Level.INFO, "one"));
+            handler.publish(sampleRecord(Level.INFO, "two"));
             LogRecord other = new LogRecord(Level.INFO, "three");
             other.setLoggerName("other.app");
             handler.publish(other);
@@ -144,7 +144,7 @@ class HumboldtJulHandlerMappingTest {
             handler.flush();
             handler.close();
             // The provider still exports after the handler was closed.
-            new HumboldtJulHandler(p).publish(record(Level.INFO, "after close"));
+            new HumboldtJulHandler(p).publish(sampleRecord(Level.INFO, "after close"));
         }
         assertEquals("after close", exporter.getCollected().getFirst().body());
     }
@@ -155,7 +155,7 @@ class HumboldtJulHandlerMappingTest {
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
                 .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
                 .build()) {
-            new HumboldtJulHandler(openTelemetryWith(p)).publish(record(Level.WARNING, "via OpenTelemetry"));
+            new HumboldtJulHandler(openTelemetryWith(p)).publish(sampleRecord(Level.WARNING, "via OpenTelemetry"));
         }
         LogRecordData r = exporter.getCollected().getFirst();
         assertEquals("via OpenTelemetry", r.body());
@@ -181,14 +181,14 @@ class HumboldtJulHandlerMappingTest {
         };
     }
 
-    private static LogRecord record(Level level, String message) {
-        LogRecord record = new LogRecord(level, message);
-        record.setLoggerName(LOGGER_NAME);
-        return record;
+    private static LogRecord sampleRecord(Level level, String message) {
+        LogRecord logRecord = new LogRecord(level, message);
+        logRecord.setLoggerName(LOGGER_NAME);
+        return logRecord;
     }
 
-    private static LogRecordData publishOne(LogRecord record) {
-        List<LogRecordData> out = publish(handler -> handler.publish(record));
+    private static LogRecordData publishOne(LogRecord logRecord) {
+        List<LogRecordData> out = publish(handler -> handler.publish(logRecord));
         assertEquals(1, out.size());
         return out.getFirst();
     }

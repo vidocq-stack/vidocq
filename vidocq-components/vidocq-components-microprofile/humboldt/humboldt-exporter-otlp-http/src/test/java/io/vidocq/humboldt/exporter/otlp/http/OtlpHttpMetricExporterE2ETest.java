@@ -207,7 +207,7 @@ class OtlpHttpMetricExporterE2ETest {
     private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
-            try { Thread.sleep(20); } catch (InterruptedException _) {
+            try { Thread.sleep(20); } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt(); return;
             }
         }
