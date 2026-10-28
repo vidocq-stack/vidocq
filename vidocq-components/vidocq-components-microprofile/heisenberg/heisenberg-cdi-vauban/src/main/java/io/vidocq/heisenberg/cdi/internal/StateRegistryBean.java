@@ -37,8 +37,8 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     private static final class CircuitBreakerSnapshot {
         volatile CircuitBreakerState state = CircuitBreakerState.CLOSED;
         volatile long openedAtNanos = 0;
-        volatile int successesInHalfOpen = 0;
-        volatile int failureCount = 0;
+        final AtomicInteger successesInHalfOpen = new AtomicInteger();
+        final AtomicInteger failureCount = new AtomicInteger();
     }
 
     private final ConcurrentHashMap<String, CircuitBreakerSnapshot> states = new ConcurrentHashMap<>();
@@ -62,13 +62,13 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     @Override
     public void recordSuccess(String beanClass, String methodName) {
         CircuitBreakerSnapshot snap = getOrCreate(key(beanClass, methodName));
-        snap.successesInHalfOpen++;
+        snap.successesInHalfOpen.incrementAndGet();
     }
 
     @Override
     public void recordFailure(String beanClass, String methodName) {
         CircuitBreakerSnapshot snap = getOrCreate(key(beanClass, methodName));
-        snap.failureCount++;
+        snap.failureCount.incrementAndGet();
     }
 
     @Override
@@ -82,15 +82,15 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     public void setClosed(String beanClass, String methodName) {
         CircuitBreakerSnapshot snap = getOrCreate(key(beanClass, methodName));
         snap.state = CircuitBreakerState.CLOSED;
-        snap.successesInHalfOpen = 0;
-        snap.failureCount = 0;
+        snap.successesInHalfOpen.set(0);
+        snap.failureCount.set(0);
     }
 
     @Override
     public void setHalfOpen(String beanClass, String methodName) {
         CircuitBreakerSnapshot snap = getOrCreate(key(beanClass, methodName));
         snap.state = CircuitBreakerState.HALF_OPEN;
-        snap.successesInHalfOpen = 0;
+        snap.successesInHalfOpen.set(0);
     }
 
     @Override
@@ -103,7 +103,7 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     @Override
     public int getSuccessesInHalfOpen(String beanClass, String methodName) {
         CircuitBreakerSnapshot snap = states.get(key(beanClass, methodName));
-        return snap != null ? snap.successesInHalfOpen : 0;
+        return snap != null ? snap.successesInHalfOpen.get() : 0;
     }
 }
 
