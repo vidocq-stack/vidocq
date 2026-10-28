@@ -101,7 +101,7 @@ public class CountedInterceptor {
             if (classLevel && java.lang.reflect.Modifier.isPrivate(method.getModifiers())) continue;
             var resolved = counters.computeIfAbsent(new CacheKey(beanClass, method),
                     ignored -> createResolvedCounter(beanClass, method, counted));
-            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.tags());
+            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.metricID().getTagsAsArray());
         }
     }
 
@@ -151,6 +151,7 @@ public class CountedInterceptor {
     }
 
     private static FoundCounted findCounted(Method method, Class<?> beanClass) {
+        Objects.requireNonNull(beanClass);
         var onMethod = findCountedOnElement(method);
         if (onMethod != null) {
             return new FoundCounted(method, onMethod);
@@ -215,7 +216,7 @@ public class CountedInterceptor {
                 .withDescription(counted.description())
                 .withUnit(counted.unit())
                 .build();
-        return new ResolvedCounter(new MetricID(metricName, tags), metadata, tags, normalizeScope(counted.scope()));
+        return new ResolvedCounter(new MetricID(metricName, tags), metadata, normalizeScope(counted.scope()));
     }
 
     private static String resolveMetricName(Class<?> beanClass, Method method, Counted counted) {
@@ -275,7 +276,7 @@ public class CountedInterceptor {
     private record CacheKey(Class<?> beanClass, Method method) {
     }
 
-    private record ResolvedCounter(MetricID metricID, Metadata metadata, Tag[] tags, String scope) {
+    private record ResolvedCounter(MetricID metricID, Metadata metadata, String scope) {
     }
 
     private record FoundCounted(Method sourceMethod, Counted counted) {

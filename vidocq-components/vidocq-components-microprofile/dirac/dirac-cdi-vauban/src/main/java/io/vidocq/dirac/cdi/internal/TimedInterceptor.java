@@ -105,7 +105,7 @@ public class TimedInterceptor {
             if (classLevel && java.lang.reflect.Modifier.isPrivate(method.getModifiers())) continue;
             var resolved = timers.computeIfAbsent(new CacheKey(beanClass, method),
                     ignored -> createResolvedTimer(beanClass, method, timed));
-            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.tags());
+            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
         }
     }
 
@@ -201,6 +201,7 @@ public class TimedInterceptor {
     }
 
     private static FoundTimed findTimed(Method method, Class<?> beanClass) {
+        Objects.requireNonNull(beanClass);
         var onMethod = findTimedOnElement(method);
         if (onMethod != null) {
             return new FoundTimed(method, onMethod);
@@ -265,7 +266,7 @@ public class TimedInterceptor {
                 .withDescription(timed.description())
                 .withUnit(timed.unit())
                 .build();
-        return new ResolvedTimer(new MetricID(metricName, tags), metadata, tags, normalizeScope(timed.scope()));
+        return new ResolvedTimer(new MetricID(metricName, tags), metadata, normalizeScope(timed.scope()));
     }
 
     private static String resolveMetricName(Class<?> beanClass, Method method, Timed timed) {
@@ -325,7 +326,7 @@ public class TimedInterceptor {
     private record CacheKey(Class<?> beanClass, Method method) {
     }
 
-    private record ResolvedTimer(MetricID metricID, Metadata metadata, Tag[] tags, String scope) {
+    private record ResolvedTimer(MetricID metricID, Metadata metadata, String scope) {
     }
 
     private record FoundTimed(Method sourceMethod, Timed timed) {

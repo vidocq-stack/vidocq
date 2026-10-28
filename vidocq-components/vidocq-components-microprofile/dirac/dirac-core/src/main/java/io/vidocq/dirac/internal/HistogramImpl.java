@@ -198,7 +198,7 @@ final class HistogramImpl implements Histogram {
                 return 0d;
             }
             var rank = (int) Math.ceil(percentile * sortedValues.length);
-            var index = Math.clamp(rank - 1, 0, sortedValues.length - 1);
+            var index = Math.clamp(rank - 1L, 0, sortedValues.length - 1);
             return sortedValues[index];
         }
     }

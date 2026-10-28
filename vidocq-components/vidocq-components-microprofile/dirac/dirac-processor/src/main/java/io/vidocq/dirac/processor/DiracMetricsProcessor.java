@@ -363,7 +363,7 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                         .append(g.methodName()).append("())");
             }
         }
-        out.append(gauges.isEmpty() ? ");\n" : ");\n").append("    }\n");
+        out.append(");\n").append("    }\n");
         out.append("}\n");
 
         try {
