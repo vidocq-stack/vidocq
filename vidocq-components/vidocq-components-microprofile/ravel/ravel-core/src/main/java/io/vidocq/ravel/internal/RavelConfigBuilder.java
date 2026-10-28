@@ -192,24 +192,27 @@ public final class RavelConfigBuilder implements ConfigBuilder {
         }
     }
 
+    /** Each boxed type mapped to its primitive and each primitive to its boxed type. */
+    private static final Map<Class<?>, Class<?>> BOXING_TWINS = Map.ofEntries(
+            Map.entry(Boolean.class, boolean.class),
+            Map.entry(Byte.class, byte.class),
+            Map.entry(Short.class, short.class),
+            Map.entry(Integer.class, int.class),
+            Map.entry(Long.class, long.class),
+            Map.entry(Float.class, float.class),
+            Map.entry(Double.class, double.class),
+            Map.entry(Character.class, char.class),
+            Map.entry(boolean.class, Boolean.class),
+            Map.entry(byte.class, Byte.class),
+            Map.entry(short.class, Short.class),
+            Map.entry(int.class, Integer.class),
+            Map.entry(long.class, Long.class),
+            Map.entry(float.class, Float.class),
+            Map.entry(double.class, Double.class),
+            Map.entry(char.class, Character.class));
+
     private static Class<?> primitiveBoxingTwin(Class<?> type) {
-        if (type == Boolean.class) return boolean.class;
-        if (type == Byte.class) return byte.class;
-        if (type == Short.class) return short.class;
-        if (type == Integer.class) return int.class;
-        if (type == Long.class) return long.class;
-        if (type == Float.class) return float.class;
-        if (type == Double.class) return double.class;
-        if (type == Character.class) return char.class;
-        if (type == boolean.class) return Boolean.class;
-        if (type == byte.class) return Byte.class;
-        if (type == short.class) return Short.class;
-        if (type == int.class) return Integer.class;
-        if (type == long.class) return Long.class;
-        if (type == float.class) return Float.class;
-        if (type == double.class) return Double.class;
-        if (type == char.class) return Character.class;
-        return null;
+        return BOXING_TWINS.get(type);
     }
 
     private static Class<?> inferConverterTargetType(Class<?> converterClass) {
