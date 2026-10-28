@@ -170,16 +170,18 @@ class OtlpHttpMetricExporterE2ETest {
         List<LogRecord> logged = new CopyOnWriteArrayList<>();
         Handler capture = new Handler() {
             @Override
-            public void publish(LogRecord record) {
-                logged.add(record);
+            public void publish(LogRecord logRecord) {
+                logged.add(logRecord);
             }
 
             @Override
             public void flush() {
+                // nothing buffered
             }
 
             @Override
             public void close() {
+                // nothing to release
             }
         };
         boolean parentHandlers = logger.getUseParentHandlers();
@@ -205,7 +207,7 @@ class OtlpHttpMetricExporterE2ETest {
     private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
-            try { Thread.sleep(20); } catch (InterruptedException ie) {
+            try { Thread.sleep(20); } catch (InterruptedException _) {
                 Thread.currentThread().interrupt(); return;
             }
         }

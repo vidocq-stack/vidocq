@@ -126,14 +126,14 @@ class WithSpanInterceptorTest {
                 }));
         SpanData captured = exporter.getFinishedSpans().getFirst();
         assertNull(seen[0]); // not written, but the span is still created
-        assertEquals(captured.spanContext().getTraceId().length(), 32);
+        assertEquals(32, captured.spanContext().getTraceId().length());
     }
 
     @Test
     void parent_child_relationship_when_outer_span_active() throws Exception {
         Tracer t = provider.get("test.outer");
         Span outer = t.spanBuilder("outer").startSpan();
-        try (var ignored = outer.makeCurrent()) {
+        try (var _ = outer.makeCurrent()) {
             interceptor.aroundInvoke(invocationFor("annotatedDefault", "v"));
         }
         outer.end();
@@ -178,7 +178,7 @@ class WithSpanInterceptorTest {
     @Test
     void inheritContext_false_starts_a_new_trace() throws Exception {
         Span parent = provider.get("test").spanBuilder("parent").startSpan();
-        try (var ignored = parent.makeCurrent()) {
+        try (var _ = parent.makeCurrent()) {
             interceptor.aroundInvoke(new TestInvocationContext(method("detached"), new Object[0], () -> {
                 // a span created inside the method must be parented to the detached span
                 provider.get("test").spanBuilder("inner").startSpan().end();
@@ -202,7 +202,7 @@ class WithSpanInterceptorTest {
         // instrumentation-annotations: with inheritContext = false the span uses Context.root() as its parent,
         // so nothing the caller put in its context (here baggage) leaks into the detached call.
         String[] seen = new String[1];
-        try (var ignored = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
+        try (var _ = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
             interceptor.aroundInvoke(new TestInvocationContext(method("detached"), new Object[0], () -> {
                 seen[0] = Baggage.current().getEntryValue("tenant");
                 return "x";
@@ -214,7 +214,7 @@ class WithSpanInterceptorTest {
     @Test
     void inherited_context_keeps_the_caller_baggage() throws Exception {
         String[] seen = new String[1];
-        try (var ignored = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
+        try (var _ = Context.current().with(Baggage.builder().put("tenant", "acme").build()).makeCurrent()) {
             interceptor.aroundInvoke(new TestInvocationContext(method("annotatedDefault"), new Object[]{"v"}, () -> {
                 seen[0] = Baggage.current().getEntryValue("tenant");
                 return "x";
@@ -225,7 +225,7 @@ class WithSpanInterceptorTest {
 
     // ----- helpers -----
 
-    private InvocationContext invocationFor(String methodName, Object... args) throws Exception {
+    private InvocationContext invocationFor(String methodName, Object... args) {
         return new TestInvocationContext(method(methodName), args, () -> {
             // simulates the method "OK:<arg>"
             return "OK:" + (args.length > 0 ? args[0] : "");
@@ -291,7 +291,7 @@ class WithSpanInterceptorTest {
         @Override public Method getMethod() { return method; }
         @Override public java.lang.reflect.Constructor<?> getConstructor() { return null; }
         @Override public Object[] getParameters() { return params; }
-        @Override public void setParameters(Object[] params) {}
+        @Override public void setParameters(Object[] params) { /* arguments are fixed in this fixture */ }
         @Override public Map<String, Object> getContextData() { return Map.of(); }
         @Override public Object proceed() throws Exception {
             return body.call();

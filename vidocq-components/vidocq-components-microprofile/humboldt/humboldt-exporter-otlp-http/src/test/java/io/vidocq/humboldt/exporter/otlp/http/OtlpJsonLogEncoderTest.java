@@ -42,14 +42,14 @@ class OtlpJsonLogEncoderTest {
 
     @Test
     void encodes_the_event_name_as_the_otlp_eventName_field() {
-        String json = OtlpJsonLogEncoder.encode(List.of(record("checkout.completed", Attributes.empty())));
+        String json = OtlpJsonLogEncoder.encode(List.of(logRecord("checkout.completed", Attributes.empty())));
 
         assertTrue(json.contains("\"eventName\":\"checkout.completed\""), json);
     }
 
     @Test
     void omits_eventName_for_a_plain_log_record() {
-        String json = OtlpJsonLogEncoder.encode(List.of(record("", Attributes.empty())));
+        String json = OtlpJsonLogEncoder.encode(List.of(logRecord("", Attributes.empty())));
 
         assertFalse(json.contains("eventName"), json);
     }
@@ -98,7 +98,7 @@ class OtlpJsonLogEncoderTest {
 
     @Test
     void encodes_a_string_body_as_a_stringValue() {
-        String json = OtlpJsonLogEncoder.encode(List.of(record("", Attributes.empty())));
+        String json = OtlpJsonLogEncoder.encode(List.of(logRecord("", Attributes.empty())));
 
         assertTrue(json.contains("\"body\":{\"stringValue\":\"done\"}"), json);
     }
@@ -128,7 +128,7 @@ class OtlpJsonLogEncoderTest {
         assertFalse(json.contains("\"body\""), json);
     }
 
-    static LogRecordData record(String eventName, Attributes attributes) {
+    static LogRecordData logRecord(String eventName, Attributes attributes) {
         return new LogRecordData(
                 Resource.empty(), InstrumentationScope.of("io.vidocq.test"),
                 1_000L, 2_000L, SpanContext.getInvalid(),

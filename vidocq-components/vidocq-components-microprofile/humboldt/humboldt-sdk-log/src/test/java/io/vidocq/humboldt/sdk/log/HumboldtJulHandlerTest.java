@@ -47,11 +47,11 @@ class HumboldtJulHandlerTest {
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
                 .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
                 .build()) {
-            LogRecord record = new LogRecord(Level.SEVERE, "payment {0} failed");
-            record.setLoggerName("my.app");
-            record.setParameters(new Object[] {"p-42"});
-            record.setThrown(new IllegalStateException("boom"));
-            new HumboldtJulHandler(p).publish(record);
+            LogRecord logRecord = new LogRecord(Level.SEVERE, "payment {0} failed");
+            logRecord.setLoggerName("my.app");
+            logRecord.setParameters(new Object[] {"p-42"});
+            logRecord.setThrown(new IllegalStateException("boom"));
+            new HumboldtJulHandler(p).publish(logRecord);
         }
 
         LogRecordData r = exporter.getCollected().getFirst();
@@ -72,9 +72,9 @@ class HumboldtJulHandlerTest {
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
                 .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
                 .build()) {
-            LogRecord record = new LogRecord(Level.INFO, "all good");
-            record.setLoggerName("my.app");
-            new HumboldtJulHandler(p).publish(record);
+            LogRecord logRecord = new LogRecord(Level.INFO, "all good");
+            logRecord.setLoggerName("my.app");
+            new HumboldtJulHandler(p).publish(logRecord);
         }
 
         LogRecordData r = exporter.getCollected().getFirst();

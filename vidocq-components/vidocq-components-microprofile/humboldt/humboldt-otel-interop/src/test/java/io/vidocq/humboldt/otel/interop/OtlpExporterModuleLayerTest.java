@@ -201,11 +201,11 @@ class OtlpExporterModuleLayerTest {
         Logger logger = Logger.getLogger(INTEROP + ".OtelSpiAutoConfiguration");
         List<String> messages = new ArrayList<>();
         Handler capture = new Handler() {
-            @Override public void publish(LogRecord record) {
-                messages.add(MessageFormat.format(record.getMessage(), record.getParameters()));
+            @Override public void publish(LogRecord logRecord) {
+                messages.add(MessageFormat.format(logRecord.getMessage(), logRecord.getParameters()));
             }
-            @Override public void flush() {}
-            @Override public void close() {}
+            @Override public void flush() { /* nothing buffered */ }
+            @Override public void close() { /* nothing to release */ }
         };
         boolean useParentHandlers = logger.getUseParentHandlers();
         Level loggerLevel = logger.getLevel();
@@ -297,8 +297,8 @@ class OtlpExporterModuleLayerTest {
                         inMemory);
                 Object builder = sdk.callStatic("io.opentelemetry.sdk.trace.SdkTracerProvider", "builder");
                 sdk.call(builder, "io.opentelemetry.sdk.trace.SdkTracerProviderBuilder", "addSpanProcessor", processor);
-                Object provider = sdk.call(builder, "io.opentelemetry.sdk.trace.SdkTracerProviderBuilder", "build");
-                Object tracer = sdk.call(provider, "io.opentelemetry.api.trace.TracerProvider", "get", "fc4");
+                Object sdkProvider = sdk.call(builder, "io.opentelemetry.sdk.trace.SdkTracerProviderBuilder", "build");
+                Object tracer = sdk.call(sdkProvider, "io.opentelemetry.api.trace.TracerProvider", "get", "fc4");
                 Object spanBuilder = sdk.call(tracer, "io.opentelemetry.api.trace.Tracer", "spanBuilder", "exported");
                 // A remote parent with a trace state: the span inherits it, and the OTLP marshaler encodes a
                 // non-empty trace state only (W3CTraceContextEncoding).
@@ -325,8 +325,8 @@ class OtlpExporterModuleLayerTest {
                 Object builder = sdk.callStatic("io.opentelemetry.sdk.metrics.SdkMeterProvider", "builder");
                 sdk.call(builder, "io.opentelemetry.sdk.metrics.SdkMeterProviderBuilder", "registerMetricReader",
                         reader);
-                Object provider = sdk.call(builder, "io.opentelemetry.sdk.metrics.SdkMeterProviderBuilder", "build");
-                Object meter = sdk.call(provider, "io.opentelemetry.api.metrics.MeterProvider", "get", "fc4");
+                Object sdkProvider = sdk.call(builder, "io.opentelemetry.sdk.metrics.SdkMeterProviderBuilder", "build");
+                Object meter = sdk.call(sdkProvider, "io.opentelemetry.api.metrics.MeterProvider", "get", "fc4");
                 Object counterBuilder = sdk.call(meter, "io.opentelemetry.api.metrics.Meter", "counterBuilder",
                         "exported");
                 Object counter = sdk.call(counterBuilder, "io.opentelemetry.api.metrics.LongCounterBuilder", "build");
@@ -343,11 +343,11 @@ class OtlpExporterModuleLayerTest {
                 Object builder = sdk.callStatic("io.opentelemetry.sdk.logs.SdkLoggerProvider", "builder");
                 sdk.call(builder, "io.opentelemetry.sdk.logs.SdkLoggerProviderBuilder", "addLogRecordProcessor",
                         processor);
-                Object provider = sdk.call(builder, "io.opentelemetry.sdk.logs.SdkLoggerProviderBuilder", "build");
-                Object logger = sdk.call(provider, "io.opentelemetry.api.logs.LoggerProvider", "get", "fc4");
-                Object record = sdk.call(logger, "io.opentelemetry.api.logs.Logger", "logRecordBuilder");
-                sdk.call(record, "io.opentelemetry.api.logs.LogRecordBuilder", "setBody", "exported");
-                sdk.call(record, "io.opentelemetry.api.logs.LogRecordBuilder", "emit");
+                Object sdkProvider = sdk.call(builder, "io.opentelemetry.sdk.logs.SdkLoggerProviderBuilder", "build");
+                Object logger = sdk.call(sdkProvider, "io.opentelemetry.api.logs.LoggerProvider", "get", "fc4");
+                Object logBuilder = sdk.call(logger, "io.opentelemetry.api.logs.Logger", "logRecordBuilder");
+                sdk.call(logBuilder, "io.opentelemetry.api.logs.LogRecordBuilder", "setBody", "exported");
+                sdk.call(logBuilder, "io.opentelemetry.api.logs.LogRecordBuilder", "emit");
                 return sdk.call(inMemory, TESTING + "InMemoryLogRecordExporter", "getFinishedLogRecordItems");
             }
         };

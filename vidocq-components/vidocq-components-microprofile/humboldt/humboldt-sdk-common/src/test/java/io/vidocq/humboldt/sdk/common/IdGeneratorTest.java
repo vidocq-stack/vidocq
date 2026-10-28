@@ -25,7 +25,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IdGeneratorTest {
@@ -38,7 +38,7 @@ class IdGeneratorTest {
             String id = gen.generateTraceId();
             assertEquals(32, id.length(), "traceId must be 32 characters: " + id);
             assertTrue(id.matches("[0-9a-f]{32}"), "traceId must be lowercase hex: " + id);
-            assertFalse(id.equals("0".repeat(32)), "traceId must not be all-zero");
+            assertNotEquals("0".repeat(32), id, "traceId must not be all-zero");
         }
     }
 
@@ -48,7 +48,7 @@ class IdGeneratorTest {
             String id = gen.generateSpanId();
             assertEquals(16, id.length(), "spanId must be 16 characters: " + id);
             assertTrue(id.matches("[0-9a-f]{16}"), "spanId must be lowercase hex: " + id);
-            assertFalse(id.equals("0".repeat(16)), "spanId must not be all-zero");
+            assertNotEquals("0".repeat(16), id, "spanId must not be all-zero");
         }
     }
 

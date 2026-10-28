@@ -128,8 +128,9 @@ class OtlpJsonMetricEncoderTest {
         HistogramPointData histogramPoint = new HistogramPointData(
                 1L, 2L, Attributes.empty(), 3.0, 1L, 3.0, 3.0, List.of(10.0), List.of(1L, 0L));
 
+        LongPointData numberPoint = new LongPointData(1L, 2L, Attributes.empty(), 7L);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> encode(type, true, new LongPointData(1L, 2L, Attributes.empty(), 7L), histogramPoint));
+                () -> encode(type, true, numberPoint, histogramPoint));
 
         assertTrue(e.getMessage().contains("'m'") && e.getMessage().contains(type.name())
                 && e.getMessage().contains("HistogramPointData"), e.getMessage());
@@ -137,8 +138,9 @@ class OtlpJsonMetricEncoderTest {
 
     @Test
     void rejects_a_number_point_in_a_histogram_instead_of_dropping_it() {
+        DoublePointData numberPoint = new DoublePointData(1L, 2L, Attributes.empty(), 2.5);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> encode(InstrumentType.HISTOGRAM, false, new DoublePointData(1L, 2L, Attributes.empty(), 2.5)));
+                () -> encode(InstrumentType.HISTOGRAM, false, numberPoint));
 
         assertTrue(e.getMessage().contains("'m'") && e.getMessage().contains("HISTOGRAM")
                 && e.getMessage().contains("DoublePointData"), e.getMessage());

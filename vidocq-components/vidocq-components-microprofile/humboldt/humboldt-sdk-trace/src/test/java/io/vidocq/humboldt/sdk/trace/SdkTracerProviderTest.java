@@ -28,8 +28,6 @@ import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.InMemorySpanExporter;
@@ -97,7 +95,7 @@ class SdkTracerProviderTest {
     @Test
     void parent_child_relationship_via_context() {
         Span parent = tracer.spanBuilder("parent").startSpan();
-        try (Scope sc = parent.makeCurrent()) {
+        try (var _ = parent.makeCurrent()) {
             Span child = tracer.spanBuilder("child").startSpan();
             child.end();
         }
@@ -119,7 +117,7 @@ class SdkTracerProviderTest {
     @Test
     void no_parent_starts_new_trace() {
         Span parent = tracer.spanBuilder("parent").startSpan();
-        try (Scope sc = parent.makeCurrent()) {
+        try (var _ = parent.makeCurrent()) {
             Span sibling = tracer.spanBuilder("orphan").setNoParent().startSpan();
             sibling.end();
         }

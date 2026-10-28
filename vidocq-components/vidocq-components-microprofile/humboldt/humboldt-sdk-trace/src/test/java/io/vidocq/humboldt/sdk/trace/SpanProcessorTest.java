@@ -19,7 +19,6 @@
  */
 package io.vidocq.humboldt.sdk.trace;
 
-import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.vidocq.humboldt.sdk.trace.export.InMemorySpanExporter;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;

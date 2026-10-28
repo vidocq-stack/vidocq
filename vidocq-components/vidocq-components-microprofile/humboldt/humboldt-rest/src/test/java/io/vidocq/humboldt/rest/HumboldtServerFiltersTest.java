@@ -47,6 +47,7 @@ import java.util.Map;
 
 import static io.opentelemetry.api.trace.SpanKind.SERVER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -147,7 +148,7 @@ class HumboldtServerFiltersTest {
     void span_property_is_cleared_after_response() {
         ContainerRequestContext req = req("GET", "/x", null);
         reqFilter.filter(req);
-        assertTrue(req.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY) != null,
+        assertNotNull(req.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY),
                 "request filter must set SPAN property");
         respFilter.filter(req, resp(200));
         assertNull(req.getProperty(HumboldtServerRequestFilter.SPAN_PROPERTY),

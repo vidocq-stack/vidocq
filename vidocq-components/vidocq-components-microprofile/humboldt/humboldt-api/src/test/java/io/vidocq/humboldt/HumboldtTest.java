@@ -21,6 +21,7 @@ package io.vidocq.humboldt;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -39,6 +40,6 @@ class HumboldtTest {
 
     @Test
     void start_does_not_throw() {
-        Humboldt.start();
+        assertDoesNotThrow(Humboldt::start);
     }
 }

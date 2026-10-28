@@ -54,7 +54,7 @@ class HumboldtContextStorageTest {
     @Test
     void attach_and_close_restores_previous() {
         Context ctx = Context.root().with(KEY, "value-A");
-        try (Scope s = ctx.makeCurrent()) {
+        try (var _ = ctx.makeCurrent()) {
             assertEquals("value-A", Context.current().get(KEY));
         }
         assertNull(Context.current().get(KEY));
@@ -64,9 +64,9 @@ class HumboldtContextStorageTest {
     void nested_attaches_unwind_in_lifo_order() {
         Context outer = Context.root().with(KEY, "outer");
         Context inner = Context.root().with(KEY, "inner");
-        try (Scope s1 = outer.makeCurrent()) {
+        try (var _ = outer.makeCurrent()) {
             assertEquals("outer", Context.current().get(KEY));
-            try (Scope s2 = inner.makeCurrent()) {
+            try (var _ = inner.makeCurrent()) {
                 assertEquals("inner", Context.current().get(KEY));
             }
             assertEquals("outer", Context.current().get(KEY));
@@ -80,7 +80,7 @@ class HumboldtContextStorageTest {
         AtomicReference<String> seenInChild = new AtomicReference<>("UNSET");
         CountDownLatch done = new CountDownLatch(1);
 
-        try (Scope ignored = parent.makeCurrent()) {
+        try (var _ = parent.makeCurrent()) {
             // Without explicit wrapping, a new VT must NOT inherit the parent Context.
             Thread.ofVirtual().start(() -> {
                 seenInChild.set(Context.current().get(KEY));
@@ -98,7 +98,7 @@ class HumboldtContextStorageTest {
         AtomicReference<String> seenInChild = new AtomicReference<>("UNSET");
         CountDownLatch done = new CountDownLatch(1);
 
-        try (Scope ignored = parent.makeCurrent()) {
+        try (var _ = parent.makeCurrent()) {
             // With Context.wrap(Runnable), OTel reattaches the captured Context
             // in the child VT.
             Runnable task = Context.current().wrap(() -> {

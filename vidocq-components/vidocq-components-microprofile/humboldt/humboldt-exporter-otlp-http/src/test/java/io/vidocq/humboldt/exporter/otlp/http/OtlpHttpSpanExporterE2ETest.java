@@ -27,7 +27,6 @@ import io.opentelemetry.api.trace.Tracer;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
 import io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor;
-import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -125,7 +124,6 @@ class OtlpHttpSpanExporterE2ETest {
                 .setRequestTimeout(Duration.ofSeconds(2))
                 .build();
 
-        CompletableResultCode rc;
         try (SdkTracerProvider p = SdkTracerProvider.builder()
                 .setSampler(Sampler.alwaysOn())
                 .addSpanProcessor(SimpleSpanProcessor.create(exporter))
@@ -174,7 +172,7 @@ class OtlpHttpSpanExporterE2ETest {
         while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
             try {
                 Thread.sleep(20);
-            } catch (InterruptedException ie) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 return;
             }

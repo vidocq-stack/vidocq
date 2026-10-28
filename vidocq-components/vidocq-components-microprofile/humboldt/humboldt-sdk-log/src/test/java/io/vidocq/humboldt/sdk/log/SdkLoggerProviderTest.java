@@ -31,7 +31,6 @@ import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import io.vidocq.humboldt.sdk.log.export.InMemoryLogRecordExporter;
@@ -89,7 +88,7 @@ class SdkLoggerProviderTest {
         try (SdkLoggerProvider p = SdkLoggerProvider.builder()
                 .addLogRecordProcessor(SimpleLogRecordProcessor.create(exporter))
                 .build()) {
-            try (Scope ignored = Context.root().with(Span.wrap(ctx)).makeCurrent()) {
+            try (var _ = Context.root().with(Span.wrap(ctx)).makeCurrent()) {
                 p.get("x").logRecordBuilder()
                         .setBody("in-trace")
                         .emit();

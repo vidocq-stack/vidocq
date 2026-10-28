@@ -45,8 +45,7 @@ class W3CPropagatorsTest {
 
     private final TextMapPropagator propagator = W3CPropagators.textMap();
 
-    private static final TextMapSetter<Map<String, String>> SETTER =
-            (carrier, key, value) -> carrier.put(key, value);
+    private static final TextMapSetter<Map<String, String>> SETTER = Map::put;
 
     private static final TextMapGetter<Map<String, String>> GETTER = new TextMapGetter<>() {
         @Override

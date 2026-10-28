@@ -42,7 +42,7 @@ class LoggingLogRecordExporterTest {
 
     @Test
     void prints_the_event_name_before_the_scope(@TempDir Path dir) throws Exception {
-        List<String> lines = export(dir, record("checkout.completed"));
+        List<String> lines = export(dir, logRecord("checkout.completed"));
 
         assertEquals(1, lines.size());
         assertTrue(lines.getFirst().endsWith(" INFO done eventName:checkout.completed scopeInfo:io.vidocq.test:1.0"),
@@ -53,7 +53,7 @@ class LoggingLogRecordExporterTest {
 
     @Test
     void keeps_the_line_unchanged_without_an_event_name(@TempDir Path dir) throws Exception {
-        List<String> lines = export(dir, record(""));
+        List<String> lines = export(dir, logRecord(""));
 
         assertTrue(lines.getFirst().endsWith(" INFO done scopeInfo:io.vidocq.test:1.0"), lines.getFirst());
     }
@@ -77,21 +77,21 @@ class LoggingLogRecordExporterTest {
 
     @Test
     void a_string_body_record_exposes_the_body_as_a_string_value() {
-        LogRecordData r = record("");
+        LogRecordData r = logRecord("");
 
         assertEquals("done", r.body());
         assertEquals(Value.of("done"), r.bodyValue());
     }
 
-    private static List<String> export(Path dir, LogRecordData record) throws Exception {
+    private static List<String> export(Path dir, LogRecordData logRecord) throws Exception {
         Path file = dir.resolve("logs.txt");
         LoggingLogRecordExporter exporter = LoggingLogRecordExporter.toFile(file);
-        assertTrue(exporter.export(List.of(record)).isSuccess());
+        assertTrue(exporter.export(List.of(logRecord)).isSuccess());
         exporter.shutdown();
         return Files.readAllLines(file);
     }
 
-    private static LogRecordData record(String eventName) {
+    private static LogRecordData logRecord(String eventName) {
         return new LogRecordData(
                 Resource.empty(), new InstrumentationScope("io.vidocq.test", "1.0", null, Attributes.empty()),
                 1_000L, 2_000L, SpanContext.getInvalid(),
