@@ -71,7 +71,8 @@ final class DependencyCodegenPass {
     }
 
     static final Generator JAVAC = (jar, bricks, classes, classpath, release, coordinates, log) ->
-            DependencyCodegen.run(jar, bricks, classes, classpath, release, coordinates, log.file(), log.display());
+            DependencyCodegen.run(jar, bricks, classes, classpath, release, coordinates,
+                    new DependencyCodegen.LogFile(log.file(), log.display()));
 
     /** Where the javac output of each jar goes, under {@code target/}. */
     static final String LOG_DIR = "vidocq-depgen";

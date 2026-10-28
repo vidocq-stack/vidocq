@@ -81,6 +81,14 @@ public final class DependencyCodegen {
 
     private static final String CANNOT_PROCESS_JAR = "cannot process the jar";
 
+    /**
+     * The file that receives javac's full output of one jar, and that file as a failure line prints it.
+     *
+     * @param file    {@code target/vidocq-depgen/<artifactId>.log}
+     * @param display {@code file} relative to the project's base directory
+     */
+    public record LogFile(Path file, String display) {}
+
     private DependencyCodegen() {
     }
 
@@ -92,11 +100,10 @@ public final class DependencyCodegen {
      * @param classpath   the jar's compile classpath: the project's dependency jars (the jar itself included)
      * @param release     the {@code --release} value
      * @param coordinates {@code groupId:artifactId} of the jar, for the {@code scanExcludes} hint of a failure line
-     * @param log         the file that receives javac's full output, {@code target/vidocq-depgen/<artifactId>.log}
-     * @param logDisplay  {@code log} as a failure line prints it, relative to the project's base directory
+     * @param log         where javac's full output goes, and how a failure line names it
      */
     public static Output run(Path jar, List<Brick> bricks, List<String> classNames, List<Path> classpath,
-                             int release, String coordinates, Path log, String logDisplay)
+                             int release, String coordinates, LogFile log)
             throws Failure, IOException {
         if (bricks.isEmpty()) {
             throw new IllegalArgumentException("no brick for " + jar);
@@ -106,7 +113,7 @@ public final class DependencyCodegen {
         if (classNames.isEmpty()) {
             return new Output(Map.of(), List.of());
         }
-        var problem = new Problem(jar, coordinates, logDisplay);
+        var problem = new Problem(jar, coordinates, log.display());
         String allBricks = bricks.stream().map(b -> b.hints().brick()).distinct().collect(Collectors.joining(", "));
         // Whatever ends the run, an Error included, the temporary directory goes; its deletion must not hide why the
         // run failed: try-with-resources adds it as suppressed.
@@ -123,8 +130,8 @@ public final class DependencyCodegen {
             if (job.lines.isEmpty()) {
                 job.compileGenerated(src, classes);
             }
-            Files.createDirectories(log.toAbsolutePath().getParent());
-            Files.writeString(log, job.javacOutput, StandardCharsets.UTF_8);
+            Files.createDirectories(log.file().toAbsolutePath().getParent());
+            Files.writeString(log.file(), job.javacOutput, StandardCharsets.UTF_8);
             if (!job.lines.isEmpty()) {
                 throw new Failure(job.lines);
             }

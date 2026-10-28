@@ -77,7 +77,7 @@ class DependencyCodegenTest {
     private DependencyCodegen.Output run(Path jar, Brick... bricks) throws Exception {
         return DependencyCodegen.run(jar, List.of(bricks), DepgenFixtures.topLevelClasses(jar), List.of(jar), RELEASE,
                 "com.acme:lib",
-                dir.resolve("target/vidocq-depgen/lib.log"), "shown/lib.log");
+                new DependencyCodegen.LogFile(dir.resolve("target/vidocq-depgen/lib.log"), "shown/lib.log"));
     }
 
     private static String text(DependencyCodegen.Output output, String path) {
