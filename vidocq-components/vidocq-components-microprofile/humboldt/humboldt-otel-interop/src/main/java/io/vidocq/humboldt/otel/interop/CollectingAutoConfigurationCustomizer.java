@@ -54,6 +54,9 @@ import java.util.function.Supplier;
  */
 public final class CollectingAutoConfigurationCustomizer implements AutoConfigurationCustomizer {
 
+    /** Stateless placeholder handed to the span exporter customizers; nothing to close. */
+    private static final SpanExporter NO_OP_SPAN_EXPORTER = new NoOpSpanExporter();
+
     private final List<BiFunction<? super Resource, ConfigProperties, ? extends Resource>> resourceCustomizers = new ArrayList<>();
     private final List<BiFunction<? super TextMapPropagator, ConfigProperties, ? extends TextMapPropagator>> propagatorCustomizers = new ArrayList<>();
     private final List<Function<ConfigProperties, Map<String, String>>> propertiesCustomizers = new ArrayList<>();
@@ -204,7 +207,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
     void invokeSpanExporterCustomizers(Map<String, String> props) {
         if (spanExporterCustomizers.isEmpty()) return;
         ConfigProperties cfg = new MapConfigProperties(props, classLoader);
-        SpanExporter placeholder = new NoOpSpanExporter();
+        SpanExporter placeholder = NO_OP_SPAN_EXPORTER;
         for (var c : spanExporterCustomizers) {
             try { placeholder = c.apply(placeholder, cfg); }
             catch (RuntimeException ignored) { /* side-effect-only */ }
