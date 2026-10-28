@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.LongStream;
@@ -160,5 +161,39 @@ class ResultJsonTest {
         ResultJson.Result result = ResultJson.of(List.of(RunFixtures.part(5L, bolt(7), "left")), false, entities);
 
         assertEquals("[{\"id\":5,\"gizmo\":7,\"label\":\"left\"}]", result.body());
+    }
+
+    @Test
+    void anElementOptionalIsItsValueOrNull() {
+        assertEquals(5, ResultJson.node(Optional.of(5), entities));
+        assertNull(ResultJson.node(Optional.empty(), entities));
+        assertNull(ResultJson.node(null, entities));
+    }
+
+    @Test
+    void anElementCollectionOrArrayIsAListCutAtOneHundred() {
+        assertEquals(List.of(1, "a"), ResultJson.node(List.of(1, "a"), entities));
+        assertEquals(List.of(3L, 4L), ResultJson.node(new long[] {3, 4}, entities));
+        List<Long> many = LongStream.rangeClosed(1, 150).boxed().toList();
+        assertEquals(100, ((List<?>) ResultJson.node(many, entities)).size());
+        assertEquals(100, ((List<?>) ResultJson.node(LongStream.rangeClosed(1, 150).toArray(), entities)).size());
+        assertEquals("[{\"id\":2,\"name\":\"bolt\",\"stock\":3,\"level\":\"LOW\",\"due\":null,\"price\":null}]",
+                Json.write(ResultJson.node(Set.of(bolt(2)), entities)), "an entity in a collection is an object");
+    }
+
+    @Test
+    void anElementNestedPastTheDepthIsItsText() {
+        Object nested = "x";
+        for (int i = 0; i < 9; i++) {
+            nested = List.of(nested);
+        }
+        Object node = ResultJson.node(nested, entities);
+        int levels = 0;
+        while (node instanceof List<?> list) {
+            node = list.getFirst();
+            levels++;
+        }
+        assertEquals(7, levels);
+        assertEquals("[[x]]", node);
     }
 }
