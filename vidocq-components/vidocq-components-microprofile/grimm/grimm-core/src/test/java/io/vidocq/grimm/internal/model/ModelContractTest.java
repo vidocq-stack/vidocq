@@ -101,16 +101,17 @@ class ModelContractTest {
     void everyPropertySetIsTheValueRead(Class<? extends Constructible> type) throws Exception {
         int checked = 0;
         for (Method setter : type.getMethods()) {
-            Optional<Method> getter = getterOf(type, setter);
-            Object value = getter.isPresent() ? valueFor(setter.getGenericParameterTypes()[0]) : null;
+            Method getter = getterOf(type, setter).orElse(null);
+            Object value = getter == null ? null : valueFor(setter.getGenericParameterTypes()[0]);
             if (value == null) {
                 continue;
             }
             Constructible model = OASFactory.createObject(type);
+            String label = type.getSimpleName() + "." + setter.getName();
             setter.invoke(model, value);
-            assertEquals(value, getter.get().invoke(model), type.getSimpleName() + "." + setter.getName());
+            assertEquals(value, getter.invoke(model), label);
             setter.invoke(model, (Object) null);
-            assertTrue(isNullOrEmpty(getter.get().invoke(model)), type.getSimpleName() + "." + setter.getName() + "(null)");
+            assertTrue(isNullOrEmpty(getter.invoke(model)), label + "(null)");
             checked++;
         }
         assertTrue(checked > 0, type.getSimpleName() + " has no property");
@@ -121,8 +122,8 @@ class ModelContractTest {
     void addedElementsAreRemovedAgain(Class<? extends Constructible> type) throws Exception {
         for (Method add : type.getMethods()) {
             Object[] args = add.getName().startsWith("add") ? argumentsFor(add) : null;
-            Optional<Method> remove = args == null ? Optional.empty() : removerOf(type, add);
-            if (remove.isEmpty()) {
+            Method remove = args == null ? null : removerOf(type, add).orElse(null);
+            if (remove == null) {
                 continue;
             }
             Constructible model = OASFactory.createObject(type);
@@ -130,7 +131,7 @@ class ModelContractTest {
             int before = elementCount(model);
             add.invoke(model, args);
             assertTrue(elementCount(model) > before, label + " added nothing");
-            remove.get().invoke(model, removeArgument(add, remove.get(), args));
+            remove.invoke(model, removeArgument(add, remove, args));
             assertEquals(before, elementCount(model), label + " then remove");
         }
     }
@@ -174,11 +175,11 @@ class ModelContractTest {
     void removingFromAnEmptyModelChangesNothing(Class<? extends Constructible> type) throws Exception {
         for (Method add : type.getMethods()) {
             Object[] args = add.getName().startsWith("add") ? argumentsFor(add) : null;
-            Optional<Method> remove = args == null ? Optional.empty() : removerOf(type, add);
-            if (remove.isPresent()) {
+            Method remove = args == null ? null : removerOf(type, add).orElse(null);
+            if (remove != null) {
                 Constructible model = OASFactory.createObject(type);
-                remove.get().invoke(model, removeArgument(add, remove.get(), args));
-                assertEquals(0, elementCount(model), type.getSimpleName() + "." + remove.get().getName());
+                remove.invoke(model, removeArgument(add, remove, args));
+                assertEquals(0, elementCount(model), type.getSimpleName() + "." + remove.getName());
             }
         }
         assertTrue(type.isInstance(OASFactory.createObject(type)));
