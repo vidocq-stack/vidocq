@@ -348,10 +348,7 @@ class McpLivePanelTest {
     }
 
     private static void awaitStubRequest(StubMcp stub) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (stub.received().isEmpty() && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
+        assertTrue(stub.awaitRequest(Duration.ofSeconds(5)), "the call never reached the stub");
     }
 
     /** A container with the MCP server's beans, with {@code panel} started on it. */

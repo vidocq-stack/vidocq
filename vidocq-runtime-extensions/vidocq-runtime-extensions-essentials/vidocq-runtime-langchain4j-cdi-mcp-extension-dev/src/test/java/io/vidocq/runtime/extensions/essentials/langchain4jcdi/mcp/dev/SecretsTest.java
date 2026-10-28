@@ -52,7 +52,7 @@ class SecretsTest {
     void maskReplacesASecretMemberAtAnyDepth() {
         assertEquals(object("{\"zone\":\"UTC\",\"apiKey\":\"***\",\"auth\":{\"password\":\"***\"},"
                         + "\"list\":[{\"token\":\"***\"}]}"),
-                Secrets.mask(object("{\"zone\":\"UTC\",\"apiKey\":\"k-123\",\"auth\":{\"password\":\"hunter22\"},"
+                Secrets.maskSecrets(object("{\"zone\":\"UTC\",\"apiKey\":\"k-123\",\"auth\":{\"password\":\"hunter22\"},"
                         + "\"list\":[{\"token\":{\"a\":1}}]}")));
     }
 

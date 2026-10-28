@@ -89,18 +89,18 @@ class McpCatalogueTest {
 
     @Test
     void aToolAsksForConfirmationUnlessItIsReadOnlyAndNotDestructive() {
-        assertNull(McpCatalogue.confirmation(InspectorFixtures.tool("currentTime")), "read-only");
+        assertNull(McpCatalogue.confirmationOf(InspectorFixtures.tool("currentTime")), "read-only");
         assertEquals("Call reset_counter? It runs the application's code, and may change data.",
-                McpCatalogue.confirmation(InspectorFixtures.tool("resetCounter")), "no annotation");
+                McpCatalogue.confirmationOf(InspectorFixtures.tool("resetCounter")), "no annotation");
         assertEquals("Call a_tool_whose_name_is_far_longer_than_forty_characters? It runs the application's code, "
-                + "and may change data.", McpCatalogue.confirmation(InspectorFixtures.tool("longName")),
+                + "and may change data.", McpCatalogue.confirmationOf(InspectorFixtures.tool("longName")),
                 "not destructive, but not read-only either");
         McpToolDescriptor plain = InspectorFixtures.tool("currentTime");
         McpToolDescriptor destructive = new McpToolDescriptor(plain.getName(), plain.getDescription(),
                 plain.getInputSchema(), plain.getModernInputSchema(), plain.getBeanType(), plain.getMethod(), null,
                 null, new McpToolAnnotationsModel(null, Boolean.TRUE, Boolean.TRUE, null, null));
         assertEquals("Call current_time? It runs the application's code, and may change data.",
-                McpCatalogue.confirmation(destructive), "read-only, yet destructive");
+                McpCatalogue.confirmationOf(destructive), "read-only, yet destructive");
         assertNull(item(all(), "prompt.plan-meeting").confirmation(), "a prompt never asks");
         assertNull(item(all(), "tpl.72bba68d").confirmation(), "a resource never asks");
     }

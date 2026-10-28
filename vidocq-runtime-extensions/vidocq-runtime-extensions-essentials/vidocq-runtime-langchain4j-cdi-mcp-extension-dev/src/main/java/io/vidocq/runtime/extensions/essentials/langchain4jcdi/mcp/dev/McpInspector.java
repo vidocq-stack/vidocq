@@ -131,7 +131,7 @@ final class McpInspector {
         for (String url : urls) {
             try {
                 uris.add(URI.create(url));
-            } catch (IllegalArgumentException malformed) {
+            } catch (IllegalArgumentException _) {
                 // a URL the report printed but no client could call: skipped
             }
         }
@@ -198,7 +198,7 @@ final class McpInspector {
     private static PanelAction.Argument argument(McpCatalogue.Kind kind, String schema) {
         try {
             return PanelAction.Argument.json(kind.argument(), kind.argumentLabel(), schema);
-        } catch (IllegalArgumentException unusable) {
+        } catch (IllegalArgumentException _) {
             return PanelAction.Argument.json(kind.argument(), kind.argumentLabel(), McpCatalogue.OPEN_SCHEMA);
         }
     }
@@ -216,7 +216,7 @@ final class McpInspector {
         JsonObject values = argumentName == null ? JsonValue.EMPTY_JSON_OBJECT : parse(given.get(argumentName));
         Set<String> secrets = Secrets.values(values);
         PanelAction.ActionResult result = send(item, values, secrets);
-        JsonObject masked = (JsonObject) Secrets.mask(values);
+        JsonObject masked = (JsonObject) Secrets.maskSecrets(values);
         history.add(new CallHistory.Call(System.currentTimeMillis(), item.id(), item.label(),
                 argumentName == null ? "" : masked.toString(), result.summary(), result.error(),
                 (System.nanoTime() - start) / 1_000_000, result.details(), replay(item.id(), argumentName, masked)));
@@ -271,15 +271,15 @@ final class McpInspector {
      */
     private static String details(JsonObject request, McpClient.Exchange exchange, Set<String> secrets) {
         JsonObjectBuilder out = Json.createObjectBuilder()
-                .add("request", Secrets.scrubTree(Secrets.mask(request), secrets));
+                .add("request", Secrets.scrubTree(Secrets.maskSecrets(request), secrets));
         if (exchange != null) {
             out.add("status", exchange.status());
             if (!exchange.events().isEmpty()) {
                 JsonArrayBuilder events = Json.createArrayBuilder();
-                exchange.events().forEach(event -> events.add(Secrets.scrubTree(Secrets.mask(event), secrets)));
+                exchange.events().forEach(event -> events.add(Secrets.scrubTree(Secrets.maskSecrets(event), secrets)));
                 out.add("events", events);
             }
-            out.add("response", Secrets.scrubTree(Secrets.mask(exchange.response()), secrets));
+            out.add("response", Secrets.scrubTree(Secrets.maskSecrets(exchange.response()), secrets));
         }
         return out.build().toString();
     }

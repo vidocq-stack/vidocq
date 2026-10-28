@@ -160,7 +160,7 @@ record McpCatalogue(List<Item> items, String absent) {
             String title = tool.getTitle();
             items.add(new Item(Kind.TOOL, ids.named("tool.", tool.getName()), tool.getName(),
                     title == null || title.isBlank() ? tool.getName() : title, description(tool.getDescription()),
-                    schema(tool), confirmation(tool), Map.copyOf(tool.getHeaderDesignations())));
+                    schema(tool), confirmationOf(tool), Map.copyOf(tool.getHeaderDesignations())));
         }
         for (McpPromptDescriptor prompt : sorted(prompts, McpPromptDescriptor::getName)) {
             items.add(new Item(Kind.PROMPT, ids.named("prompt.", prompt.getName()), prompt.getName(),
@@ -191,7 +191,7 @@ record McpCatalogue(List<Item> items, String absent) {
      * {@code destructiveHint: true}. langchain4j-cdi keeps an annotation member only when it differs from its
      * default, so a {@code @Tool} never carries {@code destructiveHint: true}; a descriptor built by hand may.
      */
-    static String confirmation(McpToolDescriptor tool) {
+    static String confirmationOf(McpToolDescriptor tool) {
         McpToolAnnotationsModel annotations = tool.getAnnotations();
         boolean readOnly = annotations != null && Boolean.TRUE.equals(annotations.readOnlyHint());
         boolean destructive = annotations != null && Boolean.TRUE.equals(annotations.destructiveHint());

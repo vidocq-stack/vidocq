@@ -208,11 +208,7 @@ class McpInspectorTest {
         Thread caller = new Thread(() -> captured.add(action(inspector, "tool.current-time").call()
                 .apply(Map.of("arguments", "{\"zone\":\"UTC\"}"))));
         caller.start();
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (stub.received().isEmpty() && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
-        assertFalse(stub.received().isEmpty(), "the call never reached the stub");
+        assertTrue(stub.awaitRequest(Duration.ofSeconds(5)), "the call never reached the stub");
 
         long start = System.nanoTime();
         inspector.close();

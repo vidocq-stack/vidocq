@@ -104,7 +104,7 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
                     resolve(beans, McpSubscriptionRegistry.class),
                     resolve(beans, McpServerRequestManager.class),
                     invokerBean(beans));
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return NONE;
         }
     }
@@ -118,7 +118,7 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
         try {
             Bean<?> bean = beans.resolve(beans.getBeans(type));
             return bean != null && bean.getBeanClass() == type ? bean : null;
-        } catch (RuntimeException | LinkageError unresolvable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -131,7 +131,7 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
     private static Bean<?> invokerBean(BeanManager beans) {
         try {
             return resolve(beans, McpCdi41InvokerProvider.class);
-        } catch (RuntimeException | LinkageError absent) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -206,7 +206,7 @@ record McpLiveBeans(BeanManager beans, Bean<?> sessions, Bean<?> streams, Bean<?
             Context context = beans.getContext(bean.getScope());
             Object existing = context.get(bean);
             return type.isInstance(existing) ? type.cast(existing) : null;
-        } catch (RuntimeException | LinkageError noInstance) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

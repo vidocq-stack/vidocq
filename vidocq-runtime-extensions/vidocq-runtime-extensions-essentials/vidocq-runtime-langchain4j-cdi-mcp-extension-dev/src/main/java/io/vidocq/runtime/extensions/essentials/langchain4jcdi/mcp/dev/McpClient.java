@@ -48,6 +48,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -179,7 +180,7 @@ final class McpClient implements AutoCloseable {
             throw new McpTransportException("timed out after " + timeout.toSeconds() + " s");
         } catch (ExecutionException failed) {
             throw transportFailure(failed.getCause());
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw new McpTransportException("interrupted while waiting for /mcp");
         }
@@ -191,7 +192,7 @@ final class McpClient implements AutoCloseable {
             events = events(response.body());
             answer = finalResponse(events, request.get("id"));
         } else {
-            answer = object(response.body());
+            answer = object(response.body()).orElse(null);
         }
         if (answer == null || !(answer.containsKey("result") || answer.containsKey("error"))) {
             throw new McpTransportException("HTTP " + response.statusCode());
@@ -295,10 +296,7 @@ final class McpClient implements AutoCloseable {
         if (data.isEmpty()) {
             return;
         }
-        JsonObject event = object(data.toString());
-        if (event != null) {
-            events.add(event);
-        }
+        object(data.toString()).ifPresent(events::add);
         data.setLength(0);
     }
 
@@ -313,12 +311,12 @@ final class McpClient implements AutoCloseable {
         return last;
     }
 
-    /** {@code text} as a JSON object, or {@code null} when it is none. */
-    private static JsonObject object(String text) {
+    /** {@code text} as a JSON object, or empty when it is none. */
+    private static Optional<JsonObject> object(String text) {
         try (JsonReader reader = Json.createReader(new StringReader(text))) {
-            return reader.readObject();
+            return Optional.of(reader.readObject());
         } catch (JsonException | IllegalStateException _) {
-            return null;
+            return Optional.empty();
         }
     }
 

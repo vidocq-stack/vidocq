@@ -33,11 +33,14 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -55,6 +58,7 @@ final class StubMcp implements AutoCloseable {
 
     private final HttpServer server;
     private final List<Received> received = new CopyOnWriteArrayList<>();
+    private final CountDownLatch firstRequest = new CountDownLatch(1);
     private volatile Function<JsonObject, Answer> responder = request -> result(request, "{}");
     private volatile String rejected;
     private volatile long endlessStreamChunkDelayMillis = -1;
@@ -89,6 +93,11 @@ final class StubMcp implements AutoCloseable {
         endlessStreamChunkDelayMillis = chunkDelayMillis;
     }
 
+    /** Waits up to {@code timeout} for a first request; whether one arrived. */
+    boolean awaitRequest(Duration timeout) throws InterruptedException {
+        return firstRequest.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
     List<Received> received() {
         return List.copyOf(received);
     }
@@ -115,6 +124,7 @@ final class StubMcp implements AutoCloseable {
         Map<String, String> headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         exchange.getRequestHeaders().forEach((name, values) -> headers.put(name, values.getFirst()));
         received.add(new Received(headers, body));
+        firstRequest.countDown();
         JsonObject request = Json.createReader(new StringReader(body)).readObject();
         try {
             McpEraDetector.detect(McpJsonRpcParser.parseRequest(request), headers::get);

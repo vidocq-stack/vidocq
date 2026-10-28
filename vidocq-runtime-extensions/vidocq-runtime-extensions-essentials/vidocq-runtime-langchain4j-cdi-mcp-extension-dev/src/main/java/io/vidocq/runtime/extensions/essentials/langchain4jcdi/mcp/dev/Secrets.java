@@ -61,15 +61,15 @@ final class Secrets {
     }
 
     /** {@code value} with every member whose name is a secret's replaced by {@value #MASK}, at any depth. */
-    static JsonValue mask(JsonValue value) {
+    static JsonValue maskSecrets(JsonValue value) {
         if (value instanceof JsonObject object) {
             JsonObjectBuilder out = Json.createObjectBuilder();
-            object.forEach((name, member) -> out.add(name, secret(name) ? Json.createValue(MASK) : mask(member)));
+            object.forEach((name, member) -> out.add(name, secret(name) ? Json.createValue(MASK) : maskSecrets(member)));
             return out.build();
         }
         if (value instanceof JsonArray array) {
             JsonArrayBuilder out = Json.createArrayBuilder();
-            array.forEach(item -> out.add(mask(item)));
+            array.forEach(item -> out.add(maskSecrets(item)));
             return out.build();
         }
         return value;

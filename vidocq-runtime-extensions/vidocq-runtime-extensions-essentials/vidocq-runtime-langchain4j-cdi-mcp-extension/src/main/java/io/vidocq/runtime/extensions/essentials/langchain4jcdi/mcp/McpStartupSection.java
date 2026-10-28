@@ -68,6 +68,21 @@ final class McpStartupSection {
 
     private McpStartupSection() {}
 
+    /** The anomaly of a langchain4j-cdi MCP server module that is not open or does not provide the server SPI. */
+    private static void descriptorAnomaly(Module serverModule, StartupReportSection section) {
+        ModuleDescriptor descriptor = serverModule.getDescriptor();
+        if (descriptor == null) {
+            return;
+        }
+        List<String> problems = McpChecks.descriptorProblems(descriptor);
+        if (!problems.isEmpty()) {
+            section.anomaly(CODE_DESCRIPTOR,
+                    "Module " + descriptor.name() + " " + String.join("; it ", problems) + ".",
+                    "Use a langchain4j-cdi version whose dev.langchain4j.cdi.mcp.server module is open and "
+                            + "provides " + McpChecks.SERVER_SPI + ".");
+        }
+    }
+
     /**
      * Writes the section.
      *
@@ -79,16 +94,7 @@ final class McpStartupSection {
      */
     static void write(McpInspection inspection, boolean mapped, Module serverModule, StartupReportContext context,
                       StartupReportSection section) {
-        ModuleDescriptor descriptor = serverModule.getDescriptor();
-        if (descriptor != null) {
-            List<String> problems = McpChecks.descriptorProblems(descriptor);
-            if (!problems.isEmpty()) {
-                section.anomaly(CODE_DESCRIPTOR,
-                        "Module " + descriptor.name() + " " + String.join("; it ", problems) + ".",
-                        "Use a langchain4j-cdi version whose dev.langchain4j.cdi.mcp.server module is open and "
-                                + "provides " + McpChecks.SERVER_SPI + ".");
-            }
-        }
+        descriptorAnomaly(serverModule, section);
         if (inspection.twin()) {
             section.summary("loaded twice");
             section.anomaly(CODE_TWIN, "langchain4j-cdi's MCP server is loaded twice: its beans come from the "
