@@ -69,7 +69,7 @@ class KeycloakDevServiceTest {
                 "vidocq.dev.keycloak.issuer-keys", "arago.oidc.issuer",
                 "vidocq.dev.keycloak.public-url-key", "arago.public.url",
                 "vidocq.dev.public-url", "http://localhost:9999"));
-        try {
+        try (HttpClient client = HttpClient.newHttpClient()) {
             Map<String, String> props = svc.start(ctx);
 
             String issuer = props.get("mp.jwt.verify.issuer");
@@ -84,7 +84,7 @@ class KeycloakDevServiceTest {
             // key. (The ephemeral master realm guards the deeper OIDC endpoints — discovery/certs — with
             // a 403; an imported realm, as Arago uses, does not. The issuer root is public either way and
             // is exactly what the container's wait strategy already validated.)
-            HttpResponse<String> realmInfo = HttpClient.newHttpClient().send(
+            HttpResponse<String> realmInfo = client.send(
                     HttpRequest.newBuilder(URI.create(issuer))
                             .timeout(Duration.ofSeconds(10)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());

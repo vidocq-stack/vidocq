@@ -53,10 +53,10 @@ class AppLayerJspIT {
         Path log = Fixture.logs().resolve("jsp-run.log");
 
         Process mvn = Fixture.start(project.resolve("jsp"), log, "vidocq:run");
-        try {
+        try (HttpClient client = HttpClient.newHttpClient()) {
             Fixture.awaitLog(mvn, log, "Vidocq - Started in");
             assertTrue(Fixture.read(log).contains("JSP pages compiled by Ibarra: 1"), Fixture.read(log));
-            HttpResponse<String> response = HttpClient.newHttpClient().send(
+            HttpResponse<String> response = client.send(
                     HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/hello.jsp?x=Ada")).build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, response.statusCode(), response.body() + "\n" + Fixture.read(log));

@@ -141,8 +141,8 @@ class ConsoleLoggingTest {
     void recordsGoToStandardOutput() {
         PrintStream original = System.out;
         ByteArrayOutputStream captured = new ByteArrayOutputStream();
-        try {
-            System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try (PrintStream capturing = new PrintStream(captured, true, StandardCharsets.UTF_8)) {
+            System.setOut(capturing);
             assertTrue(ConsoleLogging.installIfDefault());
             System.getLogger("io.vidocq.runtime.core.console.Sample")
                     .log(System.Logger.Level.WARNING, "on stdout, {0}", "formatted");
