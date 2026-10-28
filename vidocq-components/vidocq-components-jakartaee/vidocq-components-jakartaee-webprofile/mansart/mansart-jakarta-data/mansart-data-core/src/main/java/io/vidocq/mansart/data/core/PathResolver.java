@@ -45,13 +45,15 @@ import io.vidocq.mansart.data.dialect.attribute.ReferenceAttribute;
 // `PathResolver.resolve(metamodel.$MODEL, "author.name")` for path expressions.
 public final class PathResolver {
 
+    private static final String ON_ENTITY = "' on ";
+
     private PathResolver() {}
 
     public static Attribute<?, ?> resolve(EntityModel<?> rootModel, String path) {
         int dot = path.indexOf('.');
         if (dot < 0) {
             return rootModel.attribute(path).orElseThrow(() ->
-                    new MansartDataException("Unknown attribute '" + path + "' on "
+                    new MansartDataException("Unknown attribute '" + path + ON_ENTITY
                             + rootModel.entityClass().getSimpleName()));
         }
         String[] segments = path.split("\\.");
@@ -62,7 +64,7 @@ public final class PathResolver {
             final EntityModel<?> here = currentModel;
             Attribute<?, ?> a = here.attribute(seg).orElseThrow(() ->
                     new MansartDataException("Unknown segment '" + seg + "' in path '" + path
-                            + "' on " + here.entityClass().getSimpleName()));
+                            + ON_ENTITY + here.entityClass().getSimpleName()));
             if (!(a instanceof ReferenceAttribute<?, ?> ref)) {
                 throw new MansartDataException("Path segment '" + seg + "' in '" + path
                         + "' is not a @ManyToOne/@OneToOne relation");
@@ -81,7 +83,7 @@ public final class PathResolver {
         final EntityModel<?> leafModel = currentModel;
         Attribute<?, ?> leaf = leafModel.attribute(leafName).orElseThrow(() ->
                 new MansartDataException("Unknown leaf '" + leafName + "' in path '" + path
-                        + "' on " + leafModel.entityClass().getSimpleName()));
+                        + ON_ENTITY + leafModel.entityClass().getSimpleName()));
         return new JoinedAttribute<>(leaf, new JoinPath(steps), rootModel.entityClass());
     }
 }

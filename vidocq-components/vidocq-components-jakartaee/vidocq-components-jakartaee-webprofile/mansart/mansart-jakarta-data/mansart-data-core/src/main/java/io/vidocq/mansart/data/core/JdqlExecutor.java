@@ -49,6 +49,8 @@ import java.util.Map;
 // package-private (visibility narrowed where possible).
 public final class JdqlExecutor {
 
+    private static final String LENGTH = "LENGTH";
+
     private JdqlExecutor() {}
 
     /**
@@ -235,28 +237,41 @@ public final class JdqlExecutor {
         while (i < n) {
             char c = jdql.charAt(i);
             if (c == '\'') {
-                i++;
-                while (i < n) {
-                    if (jdql.charAt(i) == '\'') {
-                        // '' inside a literal is one quote
-                        if (i + 1 < n && jdql.charAt(i + 1) == '\'') { i += 2; continue; }
-                        i++;
-                        break;
-                    }
-                    i++;
-                }
+                i = endOfLiteral(jdql, i + 1);
             } else if (c == ':' || c == '?' || Character.isDigit(c)) {
-                i++;
-                while (i < n && isWordPart(jdql.charAt(i))) i++;
+                i = endOfWord(jdql, i + 1);
             } else if (Character.isLetter(c) || c == '_') {
                 int start = i;
-                while (i < n && isWordPart(jdql.charAt(i))) i++;
+                i = endOfWord(jdql, i);
                 out.add(jdql.substring(start, i));
             } else {
                 i++;
             }
         }
         return out;
+    }
+
+    /** The index past the word part starting at {@code from}. */
+    private static int endOfWord(String jdql, int from) {
+        int i = from;
+        while (i < jdql.length() && isWordPart(jdql.charAt(i))) i++;
+        return i;
+    }
+
+    /** The index past the quote closing a string literal whose text starts at {@code from}; {@code ''} is one quote. */
+    private static int endOfLiteral(String jdql, int from) {
+        int n = jdql.length();
+        int i = from;
+        while (i < n) {
+            if (jdql.charAt(i) != '\'') {
+                i++;
+            } else if (i + 1 < n && jdql.charAt(i + 1) == '\'') {
+                i += 2;
+            } else {
+                return i + 1;
+            }
+        }
+        return i;
     }
 
     private static boolean isWordPart(char c) {
@@ -369,7 +384,6 @@ public final class JdqlExecutor {
 
     /** {@link #execute(JdqlAst.Stmt, CallShape, EntityModel, Map, RepositoryRuntime, Object[])}, entities and rows read
      *  in {@code pagination}'s page (a SQL LIMIT for {@link #run(String, Map, EntityModel, RepositoryRuntime, int)}). */
-    @SuppressWarnings({"rawtypes", "unchecked"})
     static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,
                           RepositoryRuntime runtime, Object[] args, Pagination pagination) {
@@ -377,167 +391,180 @@ public final class JdqlExecutor {
         // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
         // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
         orderBy = appendRuntimeSorts(orderBy, args, attrIndex);
+        Execution call = new Execution(shape, model, runtime, args, orderBy, pagination);
 
         return switch (stmt.kind) {
-            case SELECT, COUNT -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                if (stmt.kind == JdqlAst.Stmt.Kind.COUNT) {
-                    yield bw.where == Where.ALWAYS_FALSE ? 0L
-                            : runtime.countWhere((EntityModel) model, bw.where, bw.args);
-                }
-                Class<?> rt = shape.returnType();
-                boolean optional = rt == java.util.Optional.class;
-                boolean stream   = rt == java.util.stream.Stream.class;
-                boolean list     = java.util.List.class.isAssignableFrom(rt)
-                                 || java.util.Collection.class == rt
-                                 || Iterable.class == rt;
-                boolean array    = rt.isArray();
-                boolean longRet  = rt == long.class || rt == Long.class;
-                boolean boolRet  = rt == boolean.class || rt == Boolean.class;
-                boolean pageRet  = jakarta.data.page.Page.class.isAssignableFrom(rt);
-                boolean cursorRet = jakarta.data.page.CursoredPage.class.isAssignableFrom(rt);
-                if (bw.where == Where.ALWAYS_FALSE) {
-                    if (optional) yield java.util.Optional.empty();
-                    if (stream)   yield java.util.stream.Stream.empty();
-                    if (list)     yield java.util.List.of();
-                    if (longRet)  yield 0L;
-                    if (boolRet)  yield false;
-                    throw new MansartDataException("@Query empty IN with single-entity return");
-                }
-                if (longRet)  yield runtime.countWhere((EntityModel) model, bw.where, bw.args);
-                if (boolRet)  yield runtime.existsWhere((EntityModel) model, bw.where, bw.args);
-                if (cursorRet || pageRet) {
-                    jakarta.data.page.PageRequest pr = findPageRequest(args);
-                    if (pr == null) {
-                        throw new MansartDataException("@Query returning Page/CursoredPage requires a PageRequest argument");
-                    }
-                    if (cursorRet) yield runtime.queryCursored((EntityModel) model, bw.where, orderBy, pr, bw.args);
-                    yield runtime.queryPage((EntityModel) model, bw.where, orderBy, pr, bw.args);
-                }
-                if (optional) yield runtime.queryOne((EntityModel) model, bw.where, bw.args);
-                List<Object> data = runtime.queryList((EntityModel) model, bw.where, orderBy, pagination, bw.args);
-                jakarta.data.Limit lim2 = findLimit(args);
-                if (lim2 != null) {
-                    int from = Math.max(0, (int) (lim2.startAt() - 1));
-                    int to = Math.min(data.size(), from + (int) lim2.maxResults());
-                    data = (from >= data.size()) ? new ArrayList<>()
-                                                  : new ArrayList<>(data.subList(from, to));
-                }
-                if (stream) yield data.stream();
-                if (list)   yield data;
-                if (array)  {
-                    Object arr = java.lang.reflect.Array.newInstance(rt.getComponentType(), data.size());
-                    for (int i = 0; i < data.size(); i++) java.lang.reflect.Array.set(arr, i, data.get(i));
-                    yield arr;
-                }
-                java.util.Optional<?> one = runtime.queryOne((EntityModel) model, bw.where, bw.args);
-                if (one.isEmpty()) {
-                    throw new jakarta.data.exceptions.EmptyResultException(
-                            "@Query returned no result for " + model.entityClass().getSimpleName());
-                }
-                yield one.get();
-            }
-            case AGGREGATE -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
-                Class<?> rt = shape.returnType();
-                Class<?> boxed = boxed(rt);
-                Object v = runtime.aggregate((EntityModel) model, stmt.aggregateOp, attr, boxed, bw.where, bw.args);
-                if (v == null && rt.isPrimitive()) yield zeroFor(rt);
-                yield v;
-            }
-            case PROJECT_MULTI -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                java.util.List<Attribute<?, ?>> attrs = new ArrayList<>(stmt.projectAttrs.size());
-                for (String name : stmt.projectAttrs) {
-                    attrs.add(lookup(model, attrIndex, name));
-                }
-                Class<?> rt = shape.returnType();
-                List<Object[]> rows = runtime.projectColumns((EntityModel) model, attrs,
-                        bw.where, orderBy, pagination, bw.args);
-                jakarta.data.Limit lim = findLimit(args);
-                if (lim != null) {
-                    int from = Math.max(0, (int) (lim.startAt() - 1));
-                    int to = Math.min(rows.size(), from + (int) lim.maxResults());
-                    rows = (from >= rows.size()) ? java.util.List.of()
-                                                  : new ArrayList<>(rows.subList(from, to));
-                }
-                yield dispatchMultiProjection(rt, shape.element(), rows, attrs);
-            }
-            case PROJECT -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                Attribute<?, ?> attr = lookup(model, attrIndex, stmt.scalarAttr);
-                Class<?> rt = shape.returnType();
-                Class<?> elem = shape.element();
-                List<Object> col = runtime.projectColumn((EntityModel) model, attr,
-                        (Class) elem, bw.where, orderBy, pagination, bw.args);
-                // Apply a Limit argument (Jakarta Data control parameter) by slicing.
-                jakarta.data.Limit lim = findLimit(args);
-                if (lim != null) {
-                    int from = Math.max(0, (int) (lim.startAt() - 1));
-                    int to = Math.min(col.size(), from + (int) lim.maxResults());
-                    col = (from >= col.size()) ? java.util.List.of()
-                                               : new ArrayList<>(col.subList(from, to));
-                }
-                if (jakarta.data.page.Page.class.isAssignableFrom(rt)) {
-                    jakarta.data.page.PageRequest pr2 = findPageRequest(args);
-                    if (pr2 == null) {
-                        throw new MansartDataException("@Query projection returning Page requires a PageRequest argument");
-                    }
-                    int pageSize = pr2.size();
-                    int offset = (int) ((pr2.page() - 1) * pageSize);
-                    int from = Math.min(offset, col.size());
-                    int to   = Math.min(offset + pageSize, col.size());
-                    java.util.List<Object> pageContent = new ArrayList<>(col.subList(from, to));
-                    yield new MansartPage<>(pageContent, pr2, col.size());
-                }
-                if (java.util.List.class.isAssignableFrom(rt)
-                        || java.util.Collection.class == rt
-                        || Iterable.class == rt) yield col;
-                if (rt == java.util.stream.Stream.class) yield col.stream();
-                if (rt == java.util.Optional.class) yield col.isEmpty()
-                        ? java.util.Optional.empty()
-                        : java.util.Optional.ofNullable(col.get(0));
-                if (rt.isArray()) {
-                    Object arr = java.lang.reflect.Array.newInstance(rt.getComponentType(), col.size());
-                    for (int i = 0; i < col.size(); i++) java.lang.reflect.Array.set(arr, i, col.get(i));
-                    yield arr;
-                }
-                if (col.isEmpty()) {
-                    throw new jakarta.data.exceptions.EmptyResultException(
-                            "Projection of " + stmt.scalarAttr + " returned no result");
-                }
-                yield col.get(0);
-            }
-            case UPDATE -> {
-                StringBuilder setSql = new StringBuilder();
-                List<Object> setVals = new ArrayList<>();
-                List<Class<?>> setTypes = new ArrayList<>();
-                boolean firstSet = true;
-                for (JdqlAst.SetAssign sa : stmt.setAssignments) {
-                    // SET LHS doesn't allow path expressions (cannot UPDATE through a join). Stay
-                    // on the flat attrIndex and reject paths explicitly.
-                    if (sa.attr().indexOf('.') >= 0) {
-                        throw new MansartDataException("UPDATE SET LHS cannot be a path expression: " + sa.attr());
-                    }
-                    Attribute<?, ?> a = attrIndex.get(sa.attr());
-                    if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
-                    if (!firstSet) setSql.append(", ");
-                    setSql.append('"').append(a.columnName()).append("\" = ");
-                    renderExpr(setSql, sa.value(), attrIndex, args, shape, setVals, setTypes, a.javaType());
-                    firstSet = false;
-                }
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                long n = runtime.executeUpdateRaw((EntityModel) model, setSql.toString(),
-                        setVals, setTypes, bw.where, bw.args);
-                yield wrapLongResult(shape.returnType(), n);
-            }
-            case DELETE -> {
-                BuiltWhere bw = buildWhere(stmt.where, model, attrIndex, args, shape);
-                long n = runtime.deleteWhere((EntityModel) model, bw.where, bw.args);
-                yield wrapLongResult(shape.returnType(), n);
-            }
+            case COUNT -> call.count(buildWhere(stmt.where, model, attrIndex, args, shape));
+            case SELECT -> call.select(buildWhere(stmt.where, model, attrIndex, args, shape));
+            case AGGREGATE -> call.aggregate(buildWhere(stmt.where, model, attrIndex, args, shape),
+                    stmt.aggregateOp, lookup(model, attrIndex, stmt.scalarAttr));
+            case PROJECT_MULTI -> call.projectColumns(buildWhere(stmt.where, model, attrIndex, args, shape),
+                    lookupAll(model, attrIndex, stmt.projectAttrs));
+            case PROJECT -> call.projectColumn(buildWhere(stmt.where, model, attrIndex, args, shape),
+                    lookup(model, attrIndex, stmt.scalarAttr), stmt.scalarAttr);
+            case UPDATE -> call.update(renderSet(stmt.setAssignments, attrIndex, args, shape),
+                    buildWhere(stmt.where, model, attrIndex, args, shape));
+            case DELETE -> call.delete(buildWhere(stmt.where, model, attrIndex, args, shape));
         };
+    }
+
+    private static List<Attribute<?, ?>> lookupAll(EntityModel<?> model, Map<String, Attribute<?, ?>> attrIndex,
+                                                   List<String> names) {
+        List<Attribute<?, ?>> attrs = new ArrayList<>(names.size());
+        for (String name : names) attrs.add(lookup(model, attrIndex, name));
+        return attrs;
+    }
+
+    /** The {@code SET} clause of an {@code UPDATE}: its SQL and the values it binds, with their types. */
+    private record SetClause(String sql, List<Object> values, List<Class<?>> types) {}
+
+    private static SetClause renderSet(List<JdqlAst.SetAssign> assignments, Map<String, Attribute<?, ?>> attrIndex,
+                                       Object[] args, CallShape shape) {
+        StringBuilder setSql = new StringBuilder();
+        List<Object> setVals = new ArrayList<>();
+        List<Class<?>> setTypes = new ArrayList<>();
+        for (JdqlAst.SetAssign sa : assignments) {
+            // SET LHS doesn't allow path expressions (cannot UPDATE through a join). Stay
+            // on the flat attrIndex and reject paths explicitly.
+            if (sa.attr().indexOf('.') >= 0) {
+                throw new MansartDataException("UPDATE SET LHS cannot be a path expression: " + sa.attr());
+            }
+            Attribute<?, ?> a = attrIndex.get(sa.attr());
+            if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
+            if (!setSql.isEmpty()) setSql.append(", ");
+            setSql.append('"').append(a.columnName()).append("\" = ");
+            renderExpr(setSql, sa.value(), attrIndex, args, shape, setVals, setTypes, a.javaType());
+        }
+        return new SetClause(setSql.toString(), setVals, setTypes);
+    }
+
+    /** The rows {@code limit} keeps of {@code rows} (all of them without a limit), in a new list. */
+    private static <E> List<E> applyLimit(List<E> rows, jakarta.data.Limit limit) {
+        if (limit == null) return rows;
+        int from = Math.max(0, (int) (limit.startAt() - 1));
+        int to = Math.min(rows.size(), from + limit.maxResults());
+        return from >= rows.size() ? new ArrayList<>() : new ArrayList<>(rows.subList(from, to));
+    }
+
+    /** The value of an empty-IN query (no row can match), as the return type asks for it. */
+    private static Object noMatch(Class<?> rt) {
+        if (rt == java.util.Optional.class) return java.util.Optional.empty();
+        if (rt == java.util.stream.Stream.class) return java.util.stream.Stream.empty();
+        if (isListLike(rt)) return java.util.List.of();
+        if (rt == long.class || rt == Long.class) return 0L;
+        if (rt == boolean.class || rt == Boolean.class) return false;
+        throw new MansartDataException("@Query empty IN with single-entity return");
+    }
+
+    /** One run of a statement: the call's shape, arguments, ordering and page, against one entity model. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static final class Execution {
+        private final CallShape shape;
+        private final EntityModel model;
+        private final RepositoryRuntime runtime;
+        private final Object[] args;
+        private final OrderBy orderBy;
+        private final Pagination pagination;
+
+        Execution(CallShape shape, EntityModel<?> model, RepositoryRuntime runtime, Object[] args,
+                  OrderBy orderBy, Pagination pagination) {
+            this.shape = shape;
+            this.model = model;
+            this.runtime = runtime;
+            this.args = args;
+            this.orderBy = orderBy;
+            this.pagination = pagination;
+        }
+
+        Object count(BuiltWhere bw) {
+            return bw.where == Where.ALWAYS_FALSE ? 0L : runtime.countWhere(model, bw.where, bw.args);
+        }
+
+        Object select(BuiltWhere bw) {
+            Class<?> rt = shape.returnType();
+            if (bw.where == Where.ALWAYS_FALSE) return noMatch(rt);
+            if (rt == long.class || rt == Long.class) return runtime.countWhere(model, bw.where, bw.args);
+            if (rt == boolean.class || rt == Boolean.class) return runtime.existsWhere(model, bw.where, bw.args);
+            boolean cursorRet = jakarta.data.page.CursoredPage.class.isAssignableFrom(rt);
+            if (cursorRet || jakarta.data.page.Page.class.isAssignableFrom(rt)) {
+                jakarta.data.page.PageRequest pr = findPageRequest(args);
+                if (pr == null) {
+                    throw new MansartDataException("@Query returning Page/CursoredPage requires a PageRequest argument");
+                }
+                if (cursorRet) return runtime.queryCursored(model, bw.where, orderBy, pr, bw.args);
+                return runtime.queryPage(model, bw.where, orderBy, pr, bw.args);
+            }
+            if (rt == java.util.Optional.class) return runtime.queryOne(model, bw.where, bw.args);
+            return entities(bw, rt);
+        }
+
+        private Object entities(BuiltWhere bw, Class<?> rt) {
+            List<Object> data = applyLimit(runtime.queryList(model, bw.where, orderBy, pagination, bw.args),
+                    findLimit(args));
+            if (rt == java.util.stream.Stream.class) return data.stream();
+            if (isListLike(rt)) return data;
+            if (rt.isArray()) return toArray(rt.getComponentType(), data);
+            java.util.Optional<?> one = runtime.queryOne(model, bw.where, bw.args);
+            if (one.isEmpty()) {
+                throw new jakarta.data.exceptions.EmptyResultException(
+                        "@Query returned no result for " + model.entityClass().getSimpleName());
+            }
+            return one.get();
+        }
+
+        Object aggregate(BuiltWhere bw, String op, Attribute<?, ?> attr) {
+            Class<?> rt = shape.returnType();
+            Object v = runtime.aggregate(model, op, attr, boxed(rt), bw.where, bw.args);
+            if (v == null && rt.isPrimitive()) return zeroFor(rt);
+            return v;
+        }
+
+        Object projectColumns(BuiltWhere bw, List<Attribute<?, ?>> attrs) {
+            List<Object[]> rows = applyLimit(
+                    runtime.projectColumns(model, attrs, bw.where, orderBy, pagination, bw.args), findLimit(args));
+            return dispatchMultiProjection(shape.returnType(), shape.element(), rows, attrs);
+        }
+
+        Object projectColumn(BuiltWhere bw, Attribute<?, ?> attr, String attrName) {
+            Class<?> rt = shape.returnType();
+            // Apply a Limit argument (Jakarta Data control parameter) by slicing.
+            List<Object> col = applyLimit(
+                    runtime.projectColumn(model, attr, (Class) shape.element(), bw.where, orderBy, pagination, bw.args),
+                    findLimit(args));
+            if (jakarta.data.page.Page.class.isAssignableFrom(rt)) return columnPage(col);
+            if (isListLike(rt)) return col;
+            if (rt == java.util.stream.Stream.class) return col.stream();
+            if (rt == java.util.Optional.class) {
+                return col.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(col.get(0));
+            }
+            if (rt.isArray()) return toArray(rt.getComponentType(), col);
+            if (col.isEmpty()) {
+                throw new jakarta.data.exceptions.EmptyResultException(
+                        "Projection of " + attrName + " returned no result");
+            }
+            return col.get(0);
+        }
+
+        private Object columnPage(List<Object> col) {
+            jakarta.data.page.PageRequest pr = findPageRequest(args);
+            if (pr == null) {
+                throw new MansartDataException("@Query projection returning Page requires a PageRequest argument");
+            }
+            int pageSize = pr.size();
+            int offset = (int) ((pr.page() - 1) * pageSize);
+            int from = Math.min(offset, col.size());
+            int to   = Math.min(offset + pageSize, col.size());
+            return new MansartPage<>(new ArrayList<>(col.subList(from, to)), pr, col.size());
+        }
+
+        Object update(SetClause set, BuiltWhere bw) {
+            long n = runtime.executeUpdateRaw(model, set.sql(), set.values(), set.types(), bw.where, bw.args);
+            return wrapLongResult(shape.returnType(), n);
+        }
+
+        Object delete(BuiltWhere bw) {
+            return wrapLongResult(shape.returnType(), runtime.deleteWhere(model, bw.where, bw.args));
+        }
     }
 
     private static Object wrapLongResult(Class<?> rt, long n) {
@@ -636,7 +663,7 @@ public final class JdqlExecutor {
      * for {@code LENGTH}, which counts characters, else the attribute's own.
      */
     private static Class<?> comparedType(String fn, Attribute<?, ?> a) {
-        return "LENGTH".equals(fn) ? Integer.class : a.javaType();
+        return LENGTH.equals(fn) ? Integer.class : a.javaType();
     }
 
     private static Where cmpOf(Attribute<?, ?> a, JdqlAst.Op op) {
@@ -786,8 +813,8 @@ public final class JdqlExecutor {
             // Bound parameters in fn args inherit the SET column's targetType — sufficient for
             // the common case where all CONCAT pieces are strings.
             case JdqlAst.ExprFunc(var name, var args) -> {
-                String sqlFn = "LENGTH".equals(name) ? "CHAR_LENGTH" : name;
-                Class<?> innerType = "LENGTH".equals(name) ? Integer.class : targetType;
+                String sqlFn = LENGTH.equals(name) ? "CHAR_LENGTH" : name;
+                Class<?> innerType = LENGTH.equals(name) ? Integer.class : targetType;
                 sb.append(sqlFn).append('(');
                 for (int i = 0; i < args.size(); i++) {
                     if (i > 0) sb.append(", ");
@@ -902,28 +929,13 @@ public final class JdqlExecutor {
         boolean isRecordTarget = elem != null && elem != Object[].class && elem.isRecord();
 
         // Object[]-shaped returns
-        if (java.util.List.class.isAssignableFrom(rt) || java.util.Collection.class == rt || Iterable.class == rt) {
-            if (!isRecordTarget) return rows;
-            return mapRowsToRecords(rows, elem, attrs);
+        if (isListLike(rt)) {
+            return isRecordTarget ? mapRowsToRecords(rows, elem, attrs) : rows;
         }
         if (rt == java.util.stream.Stream.class) {
             return isRecordTarget ? mapRowsToRecords(rows, elem, attrs).stream() : rows.stream();
         }
-        if (rt.isArray()) {
-            Class<?> comp = rt.getComponentType();
-            if (comp == Object[].class) {
-                Object[][] arr = new Object[rows.size()][];
-                for (int i = 0; i < rows.size(); i++) arr[i] = rows.get(i);
-                return arr;
-            }
-            if (comp.isRecord()) {
-                java.util.List<Object> recs = mapRowsToRecords(rows, comp, attrs);
-                Object arr = java.lang.reflect.Array.newInstance(comp, recs.size());
-                for (int i = 0; i < recs.size(); i++) java.lang.reflect.Array.set(arr, i, recs.get(i));
-                return arr;
-            }
-            throw new MansartDataException("Multi-projection array return must be Object[][] or RecordType[], got: " + rt);
-        }
+        if (rt.isArray()) return multiProjectionArray(rt, rows, attrs);
         if (rt == java.util.Optional.class) {
             if (rows.isEmpty()) return java.util.Optional.empty();
             return isRecordTarget ? java.util.Optional.of(mapRowToRecord(rows.get(0), elem, attrs))
@@ -937,6 +949,27 @@ public final class JdqlExecutor {
             return mapRowToRecord(rows.get(0), rt, attrs);
         }
         throw new MansartDataException("Unsupported multi-projection return type: " + rt);
+    }
+
+    /** {@code Object[][]} holding the rows, or {@code R[]} holding one record per row. */
+    private static Object multiProjectionArray(Class<?> rt, List<Object[]> rows,
+                                               java.util.List<Attribute<?, ?>> attrs) {
+        Class<?> comp = rt.getComponentType();
+        if (comp == Object[].class) return rows.toArray(new Object[0][]);
+        if (comp.isRecord()) return toArray(comp, mapRowsToRecords(rows, comp, attrs));
+        throw new MansartDataException("Multi-projection array return must be Object[][] or RecordType[], got: " + rt);
+    }
+
+    /** A {@code List}, a {@code Collection} or an {@code Iterable}: the return types a list is handed back as. */
+    private static boolean isListLike(Class<?> rt) {
+        return java.util.List.class.isAssignableFrom(rt) || java.util.Collection.class == rt || Iterable.class == rt;
+    }
+
+    /** An array of {@code component} holding {@code values} in order. */
+    private static Object toArray(Class<?> component, List<?> values) {
+        Object arr = java.lang.reflect.Array.newInstance(component, values.size());
+        for (int i = 0; i < values.size(); i++) java.lang.reflect.Array.set(arr, i, values.get(i));
+        return arr;
     }
 
     private static java.util.List<Object> mapRowsToRecords(List<Object[]> rows, Class<?> recordType,

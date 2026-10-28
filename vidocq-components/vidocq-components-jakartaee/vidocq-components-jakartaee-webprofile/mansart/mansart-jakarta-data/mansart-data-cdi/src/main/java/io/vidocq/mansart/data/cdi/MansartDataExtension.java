@@ -92,22 +92,30 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 throw new UncheckedIOException(e);
             }
             while (resources.hasMoreElements()) {
-                URL url = resources.nextElement();
-                try (BufferedReader r = new BufferedReader(
-                        new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = r.readLine()) != null) {
-                        line = line.trim();
-                        if (line.isEmpty() || line.startsWith("#")) continue;
-                        int eq = line.indexOf('=');
-                        if (eq < 0) continue;
-                        entries.add(new RepoEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim()));
-                    }
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
+                readIndex(resources.nextElement());
             }
         }
+    }
+
+    /** Adds the {@code itf=impl} entries of one index file; blank lines and {@code #} comments are skipped. */
+    private void readIndex(URL url) {
+        try (BufferedReader r = new BufferedReader(
+                new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                RepoEntry entry = parseEntry(line.trim());
+                if (entry != null) entries.add(entry);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static RepoEntry parseEntry(String line) {
+        if (line.isEmpty() || line.startsWith("#")) return null;
+        int eq = line.indexOf('=');
+        if (eq < 0) return null;
+        return new RepoEntry(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
     }
 
     /**
@@ -161,11 +169,12 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         }
         for (Class<?> itf : impl.getInterfaces()) {
             Repository ann = itf.getAnnotation(Repository.class);
-            if (ann == null) continue;
-            if (isRouted(ann.dataStore())) {
-                clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+            if (ann != null) {
+                if (isRouted(ann.dataStore())) {
+                    clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+                }
+                return;
             }
-            return;
         }
     }
 
@@ -174,45 +183,49 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         ClassLoader cl = currentClassLoader();
 
         // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
-        for (RepoEntry e : entries) {
-            Class<?> itf;
-            Class<?> impl;
-            try {
-                itf  = cl.loadClass(e.itfFqn());
-                impl = cl.loadClass(e.implFqn());
-            } catch (ClassNotFoundException _) {
-                // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
-                // Skip silently — the runtime container will register the bean correctly when it
-                // re-runs this BCE with a classloader that can see the user module.
-                continue;
-            }
-            Repository ann = itf.getAnnotation(Repository.class);
-            boolean routed = ann != null && isRouted(ann.dataStore());
-            // Default dataStore: skip if the impl is already a managed CDI bean (recent
-            // mansart-data-processor versions emit @Singleton on *RepositoryImpl) — its
-            // unqualified RepositoryRuntime injection is correct there, and re-registering a
-            // synthetic bean would create an ambiguous dependency for @Inject MyRepository.
-            // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
-            // synthetic bean below is the only one and its creator routes via DataStoreResolver.
-            if (!routed && isAlreadyManagedBean(impl)) continue;
-            registerCompileTime(components, itf, impl);
-        }
+        for (RepoEntry e : entries) registerCompileTimeEntry(components, cl, e);
 
         // Runtime path (M7-4) — @Repository interfaces with no APT-generated impl (e.g. TCK).
-        for (String fqn : runtimeRepoFqns) {
-            Class<?> itf;
-            try {
-                itf = cl.loadClass(fqn);
-            } catch (ClassNotFoundException _) {
-                // Same compile-time tolerance as above: defer to runtime.
-                continue;
-            }
-            // Skip if a sibling *RepositoryImpl bean already covers this interface (handles the
-            // case where the runtime path saw a @Repository whose impl is actually APT-generated
-            // and managed by CDI — happens when the bean archive contains both).
-            if (hasManagedImplFor(cl, fqn)) continue;
-            registerRuntime(components, itf);
+        for (String fqn : runtimeRepoFqns) registerRuntimeEntry(components, cl, fqn);
+    }
+
+    private static void registerCompileTimeEntry(SyntheticComponents components, ClassLoader cl, RepoEntry e) {
+        Class<?> itf;
+        Class<?> impl;
+        try {
+            itf  = cl.loadClass(e.itfFqn());
+            impl = cl.loadClass(e.implFqn());
+        } catch (ClassNotFoundException _) {
+            // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
+            // Skip silently — the runtime container will register the bean correctly when it
+            // re-runs this BCE with a classloader that can see the user module.
+            return;
         }
+        Repository ann = itf.getAnnotation(Repository.class);
+        boolean routed = ann != null && isRouted(ann.dataStore());
+        // Default dataStore: skip if the impl is already a managed CDI bean (recent
+        // mansart-data-processor versions emit @Singleton on *RepositoryImpl) — its
+        // unqualified RepositoryRuntime injection is correct there, and re-registering a
+        // synthetic bean would create an ambiguous dependency for @Inject MyRepository.
+        // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
+        // synthetic bean below is the only one and its creator routes via DataStoreResolver.
+        if (!routed && isAlreadyManagedBean(impl)) return;
+        registerCompileTime(components, itf, impl);
+    }
+
+    private static void registerRuntimeEntry(SyntheticComponents components, ClassLoader cl, String fqn) {
+        Class<?> itf;
+        try {
+            itf = cl.loadClass(fqn);
+        } catch (ClassNotFoundException _) {
+            // Same compile-time tolerance as above: defer to runtime.
+            return;
+        }
+        // Skip if a sibling *RepositoryImpl bean already covers this interface (handles the
+        // case where the runtime path saw a @Repository whose impl is actually APT-generated
+        // and managed by CDI — happens when the bean archive contains both).
+        if (hasManagedImplFor(cl, fqn)) return;
+        registerRuntime(components, itf);
     }
 
     private static boolean isAlreadyManagedBean(Class<?> impl) {

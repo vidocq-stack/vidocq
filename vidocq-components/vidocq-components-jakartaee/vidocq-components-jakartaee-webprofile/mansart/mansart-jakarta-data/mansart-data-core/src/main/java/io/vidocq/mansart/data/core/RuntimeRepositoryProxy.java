@@ -58,6 +58,8 @@ import java.util.Map;
  */
 public final class RuntimeRepositoryProxy {
 
+    private static final String JAKARTA_DATA = "jakarta.data.";
+
     private RuntimeRepositoryProxy() {}
 
     public static <R> R create(Class<R> repoInterface, RepositoryRuntime runtime) {
@@ -148,8 +150,9 @@ public final class RuntimeRepositoryProxy {
         Map<Class<?>, EntityModel<?>> out = new java.util.HashMap<>();
         out.put(primary.entityClass(), primary);
         for (Method m : allInterfaceMethods(repoInterface)) {
-            if (m.getDeclaringClass() == Object.class) continue;
-            if (m.getDeclaringClass().getName().startsWith("jakarta.data.")) continue;
+            if (m.getDeclaringClass() == Object.class || m.getDeclaringClass().getName().startsWith(JAKARTA_DATA)) {
+                continue;
+            }
             for (Type pt : m.getGenericParameterTypes()) {
                 Class<?> e = entityFromCarrier(pt);
                 if (e != null && !out.containsKey(e)) addModel(out, e, runtime);
@@ -183,11 +186,7 @@ public final class RuntimeRepositoryProxy {
         Map<Method, EntityModel<?>> out = new HashMap<>();
         for (Method m : allInterfaceMethods(repoInterface)) {
             if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
-            EntityModel<?> chosen = primary;
-            for (Type pt : m.getGenericParameterTypes()) {
-                Class<?> e = entityFromCarrier(pt);
-                if (e != null && models.containsKey(e)) { chosen = models.get(e); break; }
-            }
+            EntityModel<?> chosen = modelOfParameters(m, primary, models);
             if (chosen == primary) {
                 Class<?> e = entityFromCarrier(m.getGenericReturnType());
                 if (e != null && models.containsKey(e)) chosen = models.get(e);
@@ -195,19 +194,31 @@ public final class RuntimeRepositoryProxy {
             // Last resort: extract the simple entity name from a @Query "FROM X", "UPDATE X",
             // or "DELETE FROM X" clause and match it against the registered models. Covers
             // resizeAll(int, int) where the entity is only implied by "UPDATE Box SET …".
-            if (chosen == primary) {
-                String entityName = entityNameFromQueryAnnotation(m);
-                if (entityName != null) {
-                    for (var entry : models.entrySet()) {
-                        if (entry.getKey().getSimpleName().equals(entityName)) {
-                            chosen = entry.getValue(); break;
-                        }
-                    }
-                }
-            }
+            if (chosen == primary) chosen = modelNamedInQuery(m, primary, models);
             out.put(m, chosen);
         }
         return out;
+    }
+
+    /** The model of the first parameter that carries a registered entity; {@code primary} when none does. */
+    private static EntityModel<?> modelOfParameters(Method m, EntityModel<?> primary,
+                                                    Map<Class<?>, EntityModel<?>> models) {
+        for (Type pt : m.getGenericParameterTypes()) {
+            Class<?> e = entityFromCarrier(pt);
+            if (e != null && models.containsKey(e)) return models.get(e);
+        }
+        return primary;
+    }
+
+    /** The model whose entity the method's {@code @Query} names; {@code primary} when it names none of them. */
+    private static EntityModel<?> modelNamedInQuery(Method m, EntityModel<?> primary,
+                                                    Map<Class<?>, EntityModel<?>> models) {
+        String entityName = entityNameFromQueryAnnotation(m);
+        if (entityName == null) return primary;
+        for (var entry : models.entrySet()) {
+            if (entry.getKey().getSimpleName().equals(entityName)) return entry.getValue();
+        }
+        return primary;
     }
 
     private static String entityNameFromQueryAnnotation(Method m) {
@@ -239,22 +250,26 @@ public final class RuntimeRepositoryProxy {
         Map<Method, Dispatcher> out = new HashMap<>();
         for (Method m : allInterfaceMethods(repoInterface)) {
             if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
-            EntityModel<?> em = methodModel.getOrDefault(m, primary);
-            java.util.Set<String> attributeNames = new java.util.LinkedHashSet<>();
-            for (Attribute<?, ?> a : em.attributes()) attributeNames.add(a.name());
-            Dispatcher d = jdqlDispatcher(m, em, attributeNames);
-            if (d == null) d = findAnnotationDispatcher(m, em, attributeNames);
-            if (d == null) d = lifecycleDispatcher(m, em);
-            if (d == null) d = inheritedDispatcher(m);
-            if (d == null) d = derivedDispatcher(m, em, attributeNames);
-            if (d == null) {
-                d = (rt, ignored, args) -> { throw unsupported(m,
-                        "compile-time Impl missing AND not handled by runtime fallback (no @Query, no lifecycle, "
-                      + "no inherited match, no parseable derived name)."); };
-            }
-            out.put(m, d);
+            out.put(m, dispatcherFor(m, methodModel.getOrDefault(m, primary)));
         }
         return out;
+    }
+
+    /** The first dispatcher that handles {@code m}: {@code @Query}, {@code @Find}, lifecycle, inherited, derived. */
+    private static Dispatcher dispatcherFor(Method m, EntityModel<?> em) {
+        java.util.Set<String> attributeNames = new java.util.LinkedHashSet<>();
+        for (Attribute<?, ?> a : em.attributes()) attributeNames.add(a.name());
+        Dispatcher d = jdqlDispatcher(m, em, attributeNames);
+        if (d == null) d = findAnnotationDispatcher(m, em, attributeNames);
+        if (d == null) d = lifecycleDispatcher(m);
+        if (d == null) d = inheritedDispatcher(m);
+        if (d == null) d = derivedDispatcher(m, em, attributeNames);
+        if (d == null) {
+            d = (_, _, _) -> { throw unsupported(m,
+                    "compile-time Impl missing AND not handled by runtime fallback (no @Query, no lifecycle, "
+                  + "no inherited match, no parseable derived name)."); };
+        }
+        return d;
     }
 
     private record EntityAndKey(Class<?> entity, Class<?> key) {}
@@ -309,7 +324,7 @@ public final class RuntimeRepositoryProxy {
         if (c == Object.class || c == String.class) return null;
         if (Number.class.isAssignableFrom(c) || Boolean.class == c || Character.class == c) return null;
         if (c.getName().startsWith("java.")) return null;
-        if (c.getName().startsWith("jakarta.data.")) return null;
+        if (c.getName().startsWith(JAKARTA_DATA)) return null;
         return c;
     }
 
@@ -376,46 +391,50 @@ public final class RuntimeRepositoryProxy {
 
     /* ---- Lifecycle dispatchers (@Insert/@Update/@Delete/@Save) — M7-3 ---- */
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static Dispatcher lifecycleDispatcher(Method m, EntityModel<?> model) {
+    private static Dispatcher lifecycleDispatcher(Method m) {
         if (m.getParameterCount() != 1) return null;
         // Only fire for methods declared on the user's repository — Jakarta Data's BasicRepository
         // .save / .delete carry @Save / @Delete in the spec but with upsert / silent-delete
         // semantics, handled by inheritedDispatcher.
         String declFqn = m.getDeclaringClass().getName();
-        if (declFqn.startsWith("jakarta.data.")) return null;
-        boolean isVoid = m.getReturnType() == void.class;
+        if (declFqn.startsWith(JAKARTA_DATA)) return null;
+        LifecycleOperation operation = lifecycleOperation(m);
+        if (operation == null) return null;
+        // A delete hands nothing back, whatever the method declares.
+        boolean discard = m.getReturnType() == void.class || hasJakartaAnnotation(m, "jakarta.data.repository.Delete");
+        Class<?> returnType = m.getReturnType();
         // M7-10 — lifecycle methods can be batch-shaped: List<E> / Iterable<E> / E[] / varargs.
         // Detect this from the parameter type so the dispatcher iterates and calls the
         // single-entity runtime method per element instead of treating the carrier as one entity.
         boolean batch = isBatchShape(m.getParameterTypes()[0]);
+        return (rt, em, args) -> {
+            if (batch) return batchApply(args[0], e -> operation.apply(rt, em, e), discard, returnType);
+            Object out = operation.apply(rt, em, args[0]);
+            return discard ? null : out;
+        };
+    }
+
+    /** What a lifecycle method does to one entity. */
+    @FunctionalInterface
+    private interface LifecycleOperation {
+        Object apply(RepositoryRuntime runtime, EntityModel<?> model, Object entity);
+    }
+
+    /** The operation of {@code @Insert}, {@code @Update}, {@code @Save} or {@code @Delete}; {@code null} for none. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static LifecycleOperation lifecycleOperation(Method m) {
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
-            return (rt, em, args) -> {
-                if (batch) return batchApply(args[0], e -> rt.insertStrict((EntityModel) em, e), isVoid, m.getReturnType());
-                Object out = rt.insertStrict((EntityModel) em, args[0]);
-                return isVoid ? null : out;
-            };
+            return (rt, em, e) -> rt.insertStrict((EntityModel) em, e);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) {
-            return (rt, em, args) -> {
-                if (batch) return batchApply(args[0], e -> rt.updateStrict((EntityModel) em, e), isVoid, m.getReturnType());
-                Object out = rt.updateStrict((EntityModel) em, args[0]);
-                return isVoid ? null : out;
-            };
+            return (rt, em, e) -> rt.updateStrict((EntityModel) em, e);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) {
-            return (rt, em, args) -> {
-                if (batch) return batchApply(args[0], e -> rt.save((EntityModel) em, e), isVoid, m.getReturnType());
-                Object out = rt.save((EntityModel) em, args[0]);
-                return isVoid ? null : out;
-            };
+            return (rt, em, e) -> rt.save((EntityModel) em, e);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
-            return (rt, em, args) -> {
-                if (batch) {
-                    return batchApply(args[0], e -> { rt.deleteStrict((EntityModel) em, e); return null; }, true, m.getReturnType());
-                }
-                rt.deleteStrict((EntityModel) em, args[0]);
+            return (rt, em, e) -> {
+                rt.deleteStrict((EntityModel) em, e);
                 return null;
             };
         }
@@ -428,7 +447,7 @@ public final class RuntimeRepositoryProxy {
     }
 
     private static Object batchApply(Object batch,
-                                     java.util.function.Function<Object, Object> op,
+                                     java.util.function.UnaryOperator<Object> op,
                                      boolean isVoid, Class<?> returnType) {
         List<Object> out = new ArrayList<>();
         if (batch == null) return isVoid ? null : out;
@@ -866,75 +885,27 @@ public final class RuntimeRepositoryProxy {
 
     private record BuiltWhere(Where where, Object[] args) {}
 
-    @SuppressWarnings("unchecked")
     private static BuiltWhere buildWhere(QueryMethodParser.QueryDescriptor desc,
                                          Map<String, Attribute<?, ?>> attrIndex, Object[] callArgs) {
         List<Where> parts = new ArrayList<>(desc.predicates().size());
         List<Object> args = new ArrayList<>();
-        int paramIdx = 0;
+        ArgCursor values = new ArgCursor(callArgs);
         for (QueryMethodParser.Predicate p : desc.predicates()) {
             Attribute<?, ?> a = attrIndex.get(p.attribute());
             if (a == null) throw new MansartDataException("Unknown attribute: " + p.attribute());
-            int argsBefore = args.size();
-            switch (p.comparator()) {
-                case EQ        -> { parts.add(new Where.Eq(a));    args.add(callArgs[paramIdx++]); }
-                case NOT_EQ    -> { parts.add(new Where.NotEq(a)); args.add(callArgs[paramIdx++]); }
-                case LT        -> { parts.add(new Where.Lt(a));    args.add(callArgs[paramIdx++]); }
-                case LTE       -> { parts.add(new Where.Lte(a));   args.add(callArgs[paramIdx++]); }
-                case GT        -> { parts.add(new Where.Gt(a));    args.add(callArgs[paramIdx++]); }
-                case GTE       -> { parts.add(new Where.Gte(a));   args.add(callArgs[paramIdx++]); }
-                case LIKE      -> { parts.add(new Where.Like(a));  args.add(callArgs[paramIdx++]); }
-                case BETWEEN   -> {
-                    parts.add(new Where.Between(a));
-                    args.add(callArgs[paramIdx++]);
-                    args.add(callArgs[paramIdx++]);
-                }
-                case IS_NULL    -> parts.add(new Where.IsNull(a));
-                case IS_NOT_NULL -> parts.add(new Where.IsNotNull(a));
-                case CONTAINS    -> {
-                    parts.add(new Where.Like(a));
-                    args.add("%" + callArgs[paramIdx++] + "%");
-                }
-                case STARTS_WITH -> {
-                    parts.add(new Where.Like(a));
-                    args.add(callArgs[paramIdx++] + "%");
-                }
-                case ENDS_WITH   -> {
-                    parts.add(new Where.Like(a));
-                    args.add("%" + callArgs[paramIdx++]);
-                }
-                case TRUE  -> { parts.add(new Where.Eq(a)); args.add(Boolean.TRUE); }
-                case FALSE -> { parts.add(new Where.Eq(a)); args.add(Boolean.FALSE); }
-                case EMPTY     -> parts.add(new Where.IsNull(a));
-                case NOT_EMPTY -> parts.add(new Where.IsNotNull(a));
-                case IN -> {
-                    Object v = callArgs[paramIdx++];
-                    if (v instanceof Collection<?> col) {
-                        if (col.isEmpty()) {
-                            // Whole derived query reduces to FALSE — caller short-circuits.
-                            return new BuiltWhere(Where.ALWAYS_FALSE, new Object[0]);
-                        }
-                        parts.add(new Where.In(a, col.size()));
-                        for (Object e : col) args.add(e);
-                    } else {
-                        parts.add(new Where.In(a, 1));
-                        args.add(v);
-                    }
-                }
+            Where w = predicate(p.comparator(), a, values, args);
+            if (w == null) {
+                // An empty IN: the whole derived query reduces to FALSE — caller short-circuits.
+                return new BuiltWhere(Where.ALWAYS_FALSE, new Object[0]);
             }
             // M7-27 — IgnoreCase now wraps the predicate so the dialect emits
             // LOWER(col) <op> LOWER(?). Done BEFORE the Not wrapping so the SQL renders as
             // NOT (LOWER(col) <op> LOWER(?)) which is the expected semantics. Wraps any
             // single-attribute comparator on a String column (Eq, NotEq, Lt, Lte, Gt, Gte,
             // Like, Between, In) — the dialect rejects the unsupported ones.
-            if (p.ignoreCase()) {
-                Where last = parts.remove(parts.size() - 1);
-                parts.add(new Where.IgnoreCase(last));
-            }
-            if (p.negated()) {
-                Where last = parts.remove(parts.size() - 1);
-                parts.add(new Where.Not(last));
-            }
+            if (p.ignoreCase()) w = new Where.IgnoreCase(w);
+            if (p.negated()) w = new Where.Not(w);
+            parts.add(w);
         }
         Where w;
         if (parts.isEmpty()) w = Where.ALWAYS_TRUE;
@@ -942,6 +913,66 @@ public final class RuntimeRepositoryProxy {
         else w = (desc.combinator() == QueryMethodParser.Combinator.OR)
                 ? new Where.Or(parts) : new Where.And(parts);
         return new BuiltWhere(w, args.toArray());
+    }
+
+    /** The call's arguments, taken in order by the predicates that bind a value. */
+    private static final class ArgCursor {
+        private final Object[] values;
+        private int next;
+
+        ArgCursor(Object[] values) {
+            this.values = values;
+        }
+
+        Object next() {
+            return values[next++];
+        }
+    }
+
+    /**
+     * The predicate {@code comparator} puts on {@code a}, the values it binds added to {@code args};
+     * {@code null} for an {@code IN} over an empty collection, which no row can match.
+     */
+    private static Where predicate(QueryMethodParser.Comparator comparator, Attribute<?, ?> a,
+                                   ArgCursor values, List<Object> args) {
+        return switch (comparator) {
+            case EQ          -> bindValue(new Where.Eq(a), values.next(), args);
+            case NOT_EQ      -> bindValue(new Where.NotEq(a), values.next(), args);
+            case LT          -> bindValue(new Where.Lt(a), values.next(), args);
+            case LTE         -> bindValue(new Where.Lte(a), values.next(), args);
+            case GT          -> bindValue(new Where.Gt(a), values.next(), args);
+            case GTE         -> bindValue(new Where.Gte(a), values.next(), args);
+            case LIKE        -> bindValue(new Where.Like(a), values.next(), args);
+            case BETWEEN     -> {
+                args.add(values.next());
+                args.add(values.next());
+                yield new Where.Between(a);
+            }
+            case IS_NULL, EMPTY         -> new Where.IsNull(a);
+            case IS_NOT_NULL, NOT_EMPTY -> new Where.IsNotNull(a);
+            case CONTAINS    -> bindValue(new Where.Like(a), "%" + values.next() + "%", args);
+            case STARTS_WITH -> bindValue(new Where.Like(a), values.next() + "%", args);
+            case ENDS_WITH   -> bindValue(new Where.Like(a), "%" + values.next(), args);
+            case TRUE        -> bindValue(new Where.Eq(a), Boolean.TRUE, args);
+            case FALSE       -> bindValue(new Where.Eq(a), Boolean.FALSE, args);
+            case IN          -> inPredicate(a, values.next(), args);
+        };
+    }
+
+    /** {@code where}, its value added to the bound arguments. */
+    private static Where bindValue(Where where, Object value, List<Object> args) {
+        args.add(value);
+        return where;
+    }
+
+    private static Where inPredicate(Attribute<?, ?> a, Object value, List<Object> args) {
+        if (!(value instanceof Collection<?> col)) {
+            args.add(value);
+            return new Where.In(a, 1);
+        }
+        if (col.isEmpty()) return null;
+        args.addAll(col);
+        return new Where.In(a, col.size());
     }
 
     private static Object emptyForReturn(boolean stream, boolean optional, boolean list) {

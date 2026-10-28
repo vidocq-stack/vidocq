@@ -47,6 +47,8 @@ import java.util.List;
  */
 final class RuntimeRepositoryClassGenerator {
 
+    private static final String VALUE_OF = "valueOf";
+
     private RuntimeRepositoryClassGenerator() {}
 
     /** Returned by {@link #generate} so callers can match a Method to its index. */
@@ -95,19 +97,21 @@ final class RuntimeRepositoryClassGenerator {
 
     private static void collectAbstractMethods(Class<?> itf, List<Method> out) {
         for (Method m : itf.getDeclaredMethods()) {
-            if (m.isDefault()) continue;
-            if (m.getDeclaringClass() == Object.class) continue;
             // Avoid duplicate signature when an interface re-declares an inherited method.
-            boolean dup = false;
-            for (Method o : out) {
-                if (o.getName().equals(m.getName())
-                        && java.util.Arrays.equals(o.getParameterTypes(), m.getParameterTypes())) {
-                    dup = true; break;
-                }
-            }
-            if (!dup) out.add(m);
+            if (!m.isDefault() && m.getDeclaringClass() != Object.class && !isCollected(m, out)) out.add(m);
         }
         for (Class<?> parent : itf.getInterfaces()) collectAbstractMethods(parent, out);
+    }
+
+    /** Whether {@code out} already holds a method with the name and parameter types of {@code m}. */
+    private static boolean isCollected(Method m, List<Method> out) {
+        for (Method o : out) {
+            if (o.getName().equals(m.getName())
+                    && java.util.Arrays.equals(o.getParameterTypes(), m.getParameterTypes())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void emitMethod(java.lang.classfile.ClassBuilder cb, ClassDesc thisCd,
@@ -157,42 +161,42 @@ final class RuntimeRepositoryClassGenerator {
      *  for everything else). */
     private static int loadAndBox(java.lang.classfile.CodeBuilder code, Class<?> paramType, int slot) {
         if (paramType == boolean.class) {
-            code.iload(slot).invokestatic(ConstantDescs.CD_Boolean, "valueOf",
+            code.iload(slot).invokestatic(ConstantDescs.CD_Boolean, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Boolean, ConstantDescs.CD_boolean));
             return 1;
         }
         if (paramType == byte.class) {
-            code.iload(slot).invokestatic(ConstantDescs.CD_Byte, "valueOf",
+            code.iload(slot).invokestatic(ConstantDescs.CD_Byte, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Byte, ConstantDescs.CD_byte));
             return 1;
         }
         if (paramType == short.class) {
-            code.iload(slot).invokestatic(ConstantDescs.CD_Short, "valueOf",
+            code.iload(slot).invokestatic(ConstantDescs.CD_Short, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Short, ConstantDescs.CD_short));
             return 1;
         }
         if (paramType == int.class) {
-            code.iload(slot).invokestatic(ConstantDescs.CD_Integer, "valueOf",
+            code.iload(slot).invokestatic(ConstantDescs.CD_Integer, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Integer, ConstantDescs.CD_int));
             return 1;
         }
         if (paramType == long.class) {
-            code.lload(slot).invokestatic(ConstantDescs.CD_Long, "valueOf",
+            code.lload(slot).invokestatic(ConstantDescs.CD_Long, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Long, ConstantDescs.CD_long));
             return 2;
         }
         if (paramType == float.class) {
-            code.fload(slot).invokestatic(ConstantDescs.CD_Float, "valueOf",
+            code.fload(slot).invokestatic(ConstantDescs.CD_Float, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Float, ConstantDescs.CD_float));
             return 1;
         }
         if (paramType == double.class) {
-            code.dload(slot).invokestatic(ConstantDescs.CD_Double, "valueOf",
+            code.dload(slot).invokestatic(ConstantDescs.CD_Double, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Double, ConstantDescs.CD_double));
             return 2;
         }
         if (paramType == char.class) {
-            code.iload(slot).invokestatic(ConstantDescs.CD_Character, "valueOf",
+            code.iload(slot).invokestatic(ConstantDescs.CD_Character, VALUE_OF,
                     MethodTypeDesc.of(ConstantDescs.CD_Character, ConstantDescs.CD_char));
             return 1;
         }

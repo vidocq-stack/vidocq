@@ -33,6 +33,12 @@ import java.util.Set;
  */
 public final class JdqlAst {
 
+    private static final String WHERE = "WHERE";
+    private static final String UPDATE = "UPDATE";
+    private static final String DELETE = "DELETE";
+    private static final String BETWEEN = "BETWEEN";
+    private static final String CONCAT = "CONCAT";
+
     private JdqlAst() {}
 
     /* ---------- AST ---------- */
@@ -120,95 +126,129 @@ public final class JdqlAst {
         private int pos;
         private Token lookahead;
         Lexer(String src) { this.src = src; }
-        Token peek() { if (lookahead == null) lookahead = scan(); return lookahead; }
+        Token peek() {
+            if (lookahead == null) lookahead = scan();
+            return lookahead;
+        }
         Token consume() { Token t = peek(); lookahead = null; return t; }
         private void skipWs() { while (pos < src.length() && Character.isWhitespace(src.charAt(pos))) pos++; }
         private Token scan() {
             skipWs();
             if (pos >= src.length()) return new Token(Tk.EOF, "");
             char c = src.charAt(pos);
-            switch (c) {
-                case '(': pos++; return new Token(Tk.LPAREN, "(");
-                case ')': pos++; return new Token(Tk.RPAREN, ")");
-                case ',': pos++; return new Token(Tk.COMMA, ",");
-                case '*': pos++; return new Token(Tk.STAR, "*");
-                case '+': pos++; return new Token(Tk.PLUS, "+");
-                case '/': pos++; return new Token(Tk.SLASH, "/");
-                case '-':
+            Token punctuation = scanPunctuation(c);
+            if (punctuation != null) return punctuation;
+            if (Character.isDigit(c)) return scanNumber();
+            if (c == '\'') return scanString();
+            if (Character.isLetter(c) || c == '_') return scanWord();
+            throw new ParseException("Unexpected '" + c + "' at " + pos);
+        }
+
+        /** Operators, parentheses and parameters; {@code null} when {@code c} starts none of them. */
+        private Token scanPunctuation(char c) {
+            return switch (c) {
+                case '(' -> single(Tk.LPAREN, "(");
+                case ')' -> single(Tk.RPAREN, ")");
+                case ',' -> single(Tk.COMMA, ",");
+                case '*' -> single(Tk.STAR, "*");
+                case '+' -> single(Tk.PLUS, "+");
+                case '/' -> single(Tk.SLASH, "/");
+                case '-' -> single(Tk.MINUS, "-");
+                case '=' -> single(Tk.EQ, "=");
+                case '<' -> scanLess();
+                case '>' -> scanGreater();
+                case '!' -> scanBang();
+                case ':' -> scanNamed();
+                case '?' -> scanPositional();
+                default -> null;
+            };
+        }
+
+        private Token single(Tk kind, String text) {
+            pos++;
+            return new Token(kind, text);
+        }
+
+        private boolean nextIs(char expected) {
+            return pos < src.length() && src.charAt(pos) == expected;
+        }
+
+        private Token scanLess() {
+            pos++;
+            if (nextIs('=')) return single(Tk.LTE, "<=");
+            if (nextIs('>')) return single(Tk.NE, "<>");
+            return new Token(Tk.LT, "<");
+        }
+
+        private Token scanGreater() {
+            pos++;
+            if (nextIs('=')) return single(Tk.GTE, ">=");
+            return new Token(Tk.GT, ">");
+        }
+
+        private Token scanBang() {
+            pos++;
+            if (nextIs('=')) return single(Tk.NE, "!=");
+            throw new ParseException("Unexpected '!'");
+        }
+
+        private Token scanNamed() {
+            pos++;
+            int s = pos;
+            while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos)) || src.charAt(pos) == '_')) pos++;
+            if (s == pos) throw new ParseException("Empty named parameter ':'");
+            return new Token(Tk.NAMED, src.substring(s, pos));
+        }
+
+        private Token scanPositional() {
+            pos++;
+            int s = pos;
+            while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
+            if (s == pos) throw new ParseException("Positional parameter '?' must be followed by digits");
+            return new Token(Tk.POS, src.substring(s, pos));
+        }
+
+        private Token scanNumber() {
+            int s = pos;
+            while (pos < src.length() && (Character.isDigit(src.charAt(pos)) || src.charAt(pos) == '.')) pos++;
+            // JDQL accepts the Java numeric suffixes l/L (long), f/F (float), d/D (double).
+            // Strip them for parsing — the AST stores Long / Double values.
+            int end = pos;
+            if (pos < src.length() && "lLfFdD".indexOf(src.charAt(pos)) >= 0) pos++;
+            return new Token(Tk.NUM_LIT, src.substring(s, end));
+        }
+
+        private Token scanString() {
+            pos++;
+            StringBuilder text = new StringBuilder();
+            while (pos < src.length()) {
+                char ch = src.charAt(pos);
+                if (ch != '\'') {
+                    text.append(ch);
                     pos++;
-                    return new Token(Tk.MINUS, "-");
-                case '=': pos++; return new Token(Tk.EQ, "=");
-                case '<':
+                } else if (pos + 1 < src.length() && src.charAt(pos + 1) == '\'') {
+                    // SQL-style escape: '' inside a string literal stands for one '
+                    text.append('\'');
+                    pos += 2;
+                } else {
                     pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.LTE, "<="); }
-                    if (pos < src.length() && src.charAt(pos) == '>') { pos++; return new Token(Tk.NE, "<>"); }
-                    return new Token(Tk.LT, "<");
-                case '>':
-                    pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.GTE, ">="); }
-                    return new Token(Tk.GT, ">");
-                case '!':
-                    pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.NE, "!="); }
-                    throw new ParseException("Unexpected '!'");
-                case ':': {
-                    pos++;
-                    int s = pos;
-                    while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos)) || src.charAt(pos) == '_')) pos++;
-                    if (s == pos) throw new ParseException("Empty named parameter ':'");
-                    return new Token(Tk.NAMED, src.substring(s, pos));
+                    return new Token(Tk.STR_LIT, text.toString());
                 }
-                case '?': {
-                    pos++;
-                    int s = pos;
-                    while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
-                    if (s == pos) throw new ParseException("Positional parameter '?' must be followed by digits");
-                    return new Token(Tk.POS, src.substring(s, pos));
-                }
-                default:
-                    if (Character.isDigit(c)) {
-                        int s = pos;
-                        while (pos < src.length() && (Character.isDigit(src.charAt(pos)) || src.charAt(pos) == '.')) pos++;
-                        // JDQL accepts the Java numeric suffixes l/L (long), f/F (float), d/D (double).
-                        // Strip them for parsing — the AST stores Long / Double values.
-                        int end = pos;
-                        if (pos < src.length()) {
-                            char sfx = src.charAt(pos);
-                            if (sfx == 'l' || sfx == 'L' || sfx == 'f' || sfx == 'F' || sfx == 'd' || sfx == 'D') pos++;
-                        }
-                        return new Token(Tk.NUM_LIT, src.substring(s, end));
-                    }
-                    if (c == '\'') {
-                        pos++;
-                        StringBuilder text = new StringBuilder();
-                        while (pos < src.length()) {
-                            char ch = src.charAt(pos);
-                            if (ch == '\'') {
-                                // SQL-style escape: '' inside a string literal stands for one '
-                                if (pos + 1 < src.length() && src.charAt(pos + 1) == '\'') {
-                                    text.append('\''); pos += 2; continue;
-                                }
-                                pos++;
-                                return new Token(Tk.STR_LIT, text.toString());
-                            }
-                            text.append(ch); pos++;
-                        }
-                        throw new ParseException("Unterminated string literal");
-                    }
-                    if (Character.isLetter(c) || c == '_') {
-                        int s = pos;
-                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
-                                || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
-                            pos++;
-                        String w = src.substring(s, pos);
-                        if (w.equalsIgnoreCase("true") || w.equalsIgnoreCase("false")) {
-                            return new Token(Tk.BOOL_LIT, w.toLowerCase());
-                        }
-                        if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
-                        return new Token(Tk.IDENT, w);
-                    }
-                    throw new ParseException("Unexpected '" + c + "' at " + pos);
             }
+            throw new ParseException("Unterminated string literal");
+        }
+
+        private Token scanWord() {
+            int s = pos;
+            while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
+                    || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
+                pos++;
+            String w = src.substring(s, pos);
+            if (w.equalsIgnoreCase("true") || w.equalsIgnoreCase("false")) {
+                return new Token(Tk.BOOL_LIT, w.toLowerCase());
+            }
+            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+            return new Token(Tk.IDENT, w);
         }
         private static boolean isKeyword(String w) {
             // M8-1 — scalar function names (UPPER/LOWER/LENGTH/ABS/CONCAT) are NOT registered
@@ -216,9 +256,9 @@ public final class JdqlAst {
             // TCK uses an entity attribute called {@code length}). The parser detects them
             // contextually as IDENT followed by '('.
             return switch (w.toUpperCase()) {
-                case "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT",
-                     "IS", "NULL", "BETWEEN", "LIKE", "ASC", "DESC",
-                     "SELECT", "UPDATE", "DELETE", "SET", "IN", "COUNT", "THIS",
+                case "FROM", WHERE, "ORDER", "BY", "AND", "OR", "NOT",
+                     "IS", "NULL", BETWEEN, "LIKE", "ASC", "DESC",
+                     "SELECT", UPDATE, DELETE, "SET", "IN", "COUNT", "THIS",
                      "SUM", "AVG", "MIN", "MAX" -> true;
                 default -> false;
             };
@@ -235,82 +275,16 @@ public final class JdqlAst {
 
         Stmt parseStmt() {
             Stmt s = new Stmt();
-            boolean selected = peekKw("SELECT");
-            if (selected) {
+            if (peekKw("SELECT")) {
                 lex.consume();
-                if (peekKw("COUNT")) {
-                    lex.consume();
-                    if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '(' after COUNT");
-                    lex.consume();
-                    Token inside = lex.consume();
-                    boolean ok = inside.kind == Tk.STAR
-                            || (inside.kind == Tk.KW && inside.text.equals("THIS"));
-                    if (!ok) throw new ParseException("Expected COUNT(*) or COUNT(this), got: " + inside.text);
-                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after COUNT(...)");
-                    lex.consume();
-                    s.kind = Stmt.Kind.COUNT;
-                } else if (peekKw("THIS")) {
-                    lex.consume();
-                } else if (peekAggregate()) {
-                    Token agg = lex.consume();
-                    if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '('");
-                    lex.consume();
-                    String attr = expectAttr();
-                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
-                    lex.consume();
-                    s.kind = Stmt.Kind.AGGREGATE;
-                    s.aggregateOp = agg.text;
-                    s.scalarAttr = attr;
-                } else if (lex.peek().kind == Tk.IDENT) {
-                    // M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multiple → PROJECT_MULTI.
-                    String first = expectAttr();
-                    if (lex.peek().kind == Tk.COMMA) {
-                        s.kind = Stmt.Kind.PROJECT_MULTI;
-                        s.projectAttrs.add(first);
-                        while (lex.peek().kind == Tk.COMMA) {
-                            lex.consume();
-                            s.projectAttrs.add(expectAttr());
-                        }
-                    } else {
-                        s.kind = Stmt.Kind.PROJECT;
-                        s.scalarAttr = first;
-                    }
-                } else {
-                    throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
+                parseSelectClause(s);
+                if (peekKw(UPDATE) || peekKw(DELETE)) {
+                    // a SELECT clause reads: an UPDATE or a DELETE after one would run a write that reads as a query
+                    throw new ParseException("An UPDATE or a DELETE cannot follow a SELECT clause");
                 }
             }
-            if (selected && (peekKw("UPDATE") || peekKw("DELETE"))) {
-                // a SELECT clause reads: an UPDATE or a DELETE after one would run a write that reads as a query
-                throw new ParseException("An UPDATE or a DELETE cannot follow a SELECT clause");
-            }
-            if (peekKw("UPDATE")) {
-                lex.consume();
-                if (lex.peek().kind == Tk.IDENT) {
-                    String t = expectIdent();
-                    if (!t.equals(entityName)) throw new ParseException("UPDATE " + t + " ≠ " + entityName);
-                }
-                expectKw("SET");
-                s.kind = Stmt.Kind.UPDATE;
-                s.setAssignments.add(parseSetAssign());
-                while (lex.peek().kind == Tk.COMMA) { lex.consume(); s.setAssignments.add(parseSetAssign()); }
-                if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
-                expectEof();
-                return s;
-            }
-            if (peekKw("DELETE")) {
-                lex.consume();
-                if (peekKw("FROM")) {
-                    lex.consume();
-                    if (lex.peek().kind == Tk.IDENT) {
-                        String t = expectIdent();
-                        if (!t.equals(entityName)) throw new ParseException("DELETE FROM " + t + " ≠ " + entityName);
-                    }
-                }
-                s.kind = Stmt.Kind.DELETE;
-                if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
-                expectEof();
-                return s;
-            }
+            if (peekKw(UPDATE)) return parseUpdate(s);
+            if (peekKw(DELETE)) return parseDelete(s);
             // Jakarta Data 1.0 — FROM is optional. The implicit entity is the one bound to the
             // repository.  If the query starts with WHERE / ORDER BY (or is just "WHERE …" after
             // a SELECT prefix) the entity is inferred.
@@ -319,7 +293,7 @@ public final class JdqlAst {
                 String from = expectIdent();
                 if (!from.equals(entityName)) throw new ParseException("FROM " + from + " ≠ " + entityName);
             }
-            if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
+            parseOptionalWhere(s);
             if (peekKw("ORDER")) {
                 lex.consume(); expectKw("BY");
                 s.orderBy.add(parseOrder());
@@ -327,6 +301,96 @@ public final class JdqlAst {
             }
             expectEof();
             return s;
+        }
+
+        /** What follows {@code SELECT}: {@code COUNT(*)}, {@code this}, an aggregate or a projection. */
+        private void parseSelectClause(Stmt s) {
+            if (peekKw("COUNT")) {
+                parseCount(s);
+            } else if (peekKw("THIS")) {
+                lex.consume();
+            } else if (peekAggregate()) {
+                parseAggregate(s);
+            } else if (lex.peek().kind == Tk.IDENT) {
+                parseProjection(s);
+            } else {
+                throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
+            }
+        }
+
+        private void parseCount(Stmt s) {
+            lex.consume();
+            if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '(' after COUNT");
+            lex.consume();
+            Token inside = lex.consume();
+            boolean ok = inside.kind == Tk.STAR
+                    || (inside.kind == Tk.KW && inside.text.equals("THIS"));
+            if (!ok) throw new ParseException("Expected COUNT(*) or COUNT(this), got: " + inside.text);
+            if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after COUNT(...)");
+            lex.consume();
+            s.kind = Stmt.Kind.COUNT;
+        }
+
+        private void parseAggregate(Stmt s) {
+            Token agg = lex.consume();
+            if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '('");
+            lex.consume();
+            String attr = expectAttr();
+            if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')'");
+            lex.consume();
+            s.kind = Stmt.Kind.AGGREGATE;
+            s.aggregateOp = agg.text;
+            s.scalarAttr = attr;
+        }
+
+        /** M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multiple → PROJECT_MULTI. */
+        private void parseProjection(Stmt s) {
+            String first = expectAttr();
+            if (lex.peek().kind == Tk.COMMA) {
+                s.kind = Stmt.Kind.PROJECT_MULTI;
+                s.projectAttrs.add(first);
+                while (lex.peek().kind == Tk.COMMA) {
+                    lex.consume();
+                    s.projectAttrs.add(expectAttr());
+                }
+            } else {
+                s.kind = Stmt.Kind.PROJECT;
+                s.scalarAttr = first;
+            }
+        }
+
+        private Stmt parseUpdate(Stmt s) {
+            lex.consume();
+            if (lex.peek().kind == Tk.IDENT) {
+                String t = expectIdent();
+                if (!t.equals(entityName)) throw new ParseException("UPDATE " + t + " ≠ " + entityName);
+            }
+            expectKw("SET");
+            s.kind = Stmt.Kind.UPDATE;
+            s.setAssignments.add(parseSetAssign());
+            while (lex.peek().kind == Tk.COMMA) { lex.consume(); s.setAssignments.add(parseSetAssign()); }
+            parseOptionalWhere(s);
+            expectEof();
+            return s;
+        }
+
+        private Stmt parseDelete(Stmt s) {
+            lex.consume();
+            if (peekKw("FROM")) {
+                lex.consume();
+                if (lex.peek().kind == Tk.IDENT) {
+                    String t = expectIdent();
+                    if (!t.equals(entityName)) throw new ParseException("DELETE FROM " + t + " ≠ " + entityName);
+                }
+            }
+            s.kind = Stmt.Kind.DELETE;
+            parseOptionalWhere(s);
+            expectEof();
+            return s;
+        }
+
+        private void parseOptionalWhere(Stmt s) {
+            if (peekKw(WHERE)) { lex.consume(); s.where = parseExpr(); }
         }
 
         Order parseOrder() {
@@ -408,7 +472,7 @@ public final class JdqlAst {
         }
 
         private static boolean isScalarFn(String upper) {
-            return switch (upper) { case "UPPER", "LOWER", "LENGTH", "ABS", "CONCAT" -> true; default -> false; };
+            return isUnaryFn(upper) || CONCAT.equals(upper);
         }
 
         private static boolean isUnaryFn(String upper) {
@@ -416,15 +480,12 @@ public final class JdqlAst {
         }
 
         private static void checkFnArity(String fn, int n) {
-            switch (fn) {
-                case "UPPER", "LOWER", "LENGTH", "ABS" -> {
-                    if (n != 1) throw new ParseException(fn + " expects 1 argument, got " + n);
-                }
-                case "CONCAT" -> {
-                    if (n < 2) throw new ParseException("CONCAT expects 2+ arguments, got " + n);
-                }
-                default -> throw new ParseException("Unknown scalar function: " + fn);
+            if (isUnaryFn(fn)) {
+                if (n != 1) throw new ParseException(fn + " expects 1 argument, got " + n);
+                return;
             }
+            if (!CONCAT.equals(fn)) throw new ParseException("Unknown scalar function: " + fn);
+            if (n < 2) throw new ParseException("CONCAT expects 2+ arguments, got " + n);
         }
 
         Pred parseExpr() { return parseOr(); }
@@ -470,29 +531,31 @@ public final class JdqlAst {
             // We detect this contextually: an IDENT whose name matches a scalar function and
             // is immediately followed by '(' — this avoids shadowing entity attributes that
             // happen to be named "length" etc.
-            if (lex.peek().kind == Tk.IDENT) {
-                Token saved = lex.peek();
-                String upper = saved.text.toUpperCase();
-                if (isUnaryFn(upper)) {
-                    // We need to look one further — but the lexer is single-token lookahead. Use a
-                    // throw-away consume sequence guarded by attribute fallback.
-                    lex.consume();
-                    if (lex.peek().kind == Tk.LPAREN) {
-                        lex.consume();
-                        String attr = expectAttr();
-                        if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(attr)");
-                        lex.consume();
-                        return parseFnRhs(upper, attr);
-                    }
-                    // Not a function call — must be an attribute named "length" / "upper" etc.
-                    if (!attrNames.contains(saved.text)) {
-                        throw new ParseException("Unknown attribute '" + saved.text + "' on " + entityName);
-                    }
-                    return parseRhs(saved.text);
-                }
+            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase())) {
+                return parseFnOrHomonymAttribute();
             }
             String attr = expectAttr();
             return parseRhs(attr);
+        }
+
+        /** An identifier named like a unary function: {@code fn(attr) …}, or an attribute of that name. */
+        private Pred parseFnOrHomonymAttribute() {
+            // We need to look one further — but the lexer is single-token lookahead. Use a
+            // throw-away consume sequence guarded by attribute fallback.
+            Token saved = lex.consume();
+            String upper = saved.text.toUpperCase();
+            if (lex.peek().kind == Tk.LPAREN) {
+                lex.consume();
+                String attr = expectAttr();
+                if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(attr)");
+                lex.consume();
+                return parseFnRhs(upper, attr);
+            }
+            // Not a function call — must be an attribute named "length" / "upper" etc.
+            if (!attrNames.contains(saved.text)) {
+                throw new ParseException("Unknown attribute '" + saved.text + "' on " + entityName);
+            }
+            return parseRhs(saved.text);
         }
 
         private Pred parseRhs(String attr) {
@@ -504,7 +567,7 @@ public final class JdqlAst {
                 return new IsNull(attr, negated);
             }
             boolean infixNot = consumeInfixNot(attr);
-            if (peekKw("BETWEEN")) {
+            if (peekKw(BETWEEN)) {
                 lex.consume();
                 ArgRef lo = parseArg();
                 expectKw("AND");
@@ -535,7 +598,7 @@ public final class JdqlAst {
                 return new FnIsNull(fn, attr, negated);
             }
             boolean infixNot = consumeInfixNot(fn + "(" + attr + ")");
-            if (peekKw("BETWEEN")) {
+            if (peekKw(BETWEEN)) {
                 lex.consume();
                 ArgRef lo = parseArg();
                 expectKw("AND");
@@ -560,7 +623,7 @@ public final class JdqlAst {
             if (!peekKw("NOT")) return false;
             Token saved = lex.peek();
             lex.consume();
-            if (peekKw("BETWEEN") || peekKw("LIKE") || peekKw("IN")) return true;
+            if (peekKw(BETWEEN) || peekKw("LIKE") || peekKw("IN")) return true;
             throw new ParseException("Unexpected NOT after '" + label + "': " + saved.text);
         }
 

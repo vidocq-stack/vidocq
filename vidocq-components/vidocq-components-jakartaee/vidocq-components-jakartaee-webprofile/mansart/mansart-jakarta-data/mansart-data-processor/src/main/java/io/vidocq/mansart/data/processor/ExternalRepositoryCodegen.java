@@ -70,31 +70,16 @@ public final class ExternalRepositoryCodegen {
         List<TypeElement> repos = new ArrayList<>();
         for (String repoFqn : repoFqns) {
             TypeElement repo = elements.getTypeElement(repoFqn);
-            if (repo == null) continue;
-            TypeElement entity = repoWriter.entityTypeOf(repo);
-            if (entity == null) continue; // not a BasicRepository<E, K>-shaped repository
+            // not a BasicRepository<E, K>-shaped repository when there is no entity
+            TypeElement entity = repo == null ? null : repoWriter.entityTypeOf(repo);
+            if (entity == null) continue;
             repos.add(repo);
 
             String entityFqn = entity.getQualifiedName().toString();
-            if (entityToMetamodel.containsKey(entityFqn)) continue;
-
-            // Reuse the dependency's own _Entity metamodel when present (lib was APT-built): no
-            // regeneration, and no reflection into the external entity's private fields.
-            String entityPkg = elements.getPackageOf(entity).getQualifiedName().toString();
-            String entitySimple = entity.getSimpleName().toString();
-            String existingMeta = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
-            if (elements.getTypeElement(existingMeta) != null) {
-                entityToMetamodel.put(entityFqn, existingMeta);
-                continue;
+            if (!entityToMetamodel.containsKey(entityFqn)) {
+                String metamodel = metamodelOf(entity, elements, scanner, registry, metaWriter, targetPackage);
+                if (metamodel != null) entityToMetamodel.put(entityFqn, metamodel);
             }
-
-            EntityScanner.EntityDescriptor descriptor = scanner.scan(entity);
-            if (descriptor == null) continue; // not a valid @Entity (e.g. missing @Id)
-            registry.register(entityFqn, descriptor);
-            String metaSimple = "_" + mangle(entityFqn);
-            String metaFqn = targetPackage.isEmpty() ? metaSimple : targetPackage + "." + metaSimple;
-            metaWriter.write(descriptor, targetPackage, metaSimple, entityFqn);
-            entityToMetamodel.put(entityFqn, metaFqn);
         }
 
         // Pass 2 — emit a relocated Impl per repository, wired to the resolved metamodel.
@@ -110,6 +95,28 @@ public final class ExternalRepositoryCodegen {
             }
         }
         return entries;
+    }
+
+    /**
+     * The metamodel of {@code entity}: the dependency's own {@code _Entity} when present (lib was APT-built: no
+     * regeneration, and no reflection into the external entity's private fields), else one emitted into
+     * {@code targetPackage}; {@code null} when the entity is not a valid {@code @Entity} (e.g. missing {@code @Id}).
+     */
+    private static String metamodelOf(TypeElement entity, Elements elements, EntityScanner scanner,
+                                      EntityRegistry registry, MansartMetamodelWriter metaWriter,
+                                      String targetPackage) throws IOException {
+        String entityFqn = entity.getQualifiedName().toString();
+        String entityPkg = elements.getPackageOf(entity).getQualifiedName().toString();
+        String entitySimple = entity.getSimpleName().toString();
+        String existingMeta = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
+        if (elements.getTypeElement(existingMeta) != null) return existingMeta;
+
+        EntityScanner.EntityDescriptor descriptor = scanner.scan(entity);
+        if (descriptor == null) return null;
+        registry.register(entityFqn, descriptor);
+        String metaSimple = "_" + mangle(entityFqn);
+        metaWriter.write(descriptor, targetPackage, metaSimple, entityFqn);
+        return targetPackage.isEmpty() ? metaSimple : targetPackage + "." + metaSimple;
     }
 
     /** Turns a fully-qualified name into a collision-free identifier segment. */

@@ -55,15 +55,13 @@ final class RowMapper {
             // Long (most common id type) — fully materialising the related entity would require
             // an eager fetch (out of scope here; stays a M3a stub).
             Object value = ColumnValues.fromColumn(a, dialect.extract(rs, idx++, ColumnValues.columnType(a)));
-            if (value == null) continue;
-            if (a instanceof ReferenceAttribute<?, ?>) {
-                // The FK id is in `value` but we do not materialize a stub yet.
-                continue;
-            }
-            try {
-                ((Attribute<E, Object>) a).setter().invoke(entity, value);
-            } catch (Throwable t) {
-                throw new MansartDataException("Failed to set " + a.name() + " on " + model.entityClass(), t);
+            // For a reference the FK id is in `value` but we do not materialize a stub yet.
+            if (value != null && !(a instanceof ReferenceAttribute<?, ?>)) {
+                try {
+                    ((Attribute<E, Object>) a).setter().invoke(entity, value);
+                } catch (Throwable t) {
+                    throw new MansartDataException("Failed to set " + a.name() + " on " + model.entityClass(), t);
+                }
             }
         }
         return entity;

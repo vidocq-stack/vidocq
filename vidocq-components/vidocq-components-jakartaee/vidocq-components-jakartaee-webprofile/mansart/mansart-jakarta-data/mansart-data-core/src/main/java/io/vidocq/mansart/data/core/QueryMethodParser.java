@@ -103,33 +103,10 @@ public final class QueryMethodParser {
 
     public static QueryDescriptor parse(String methodName, Set<String> attributeNames, int[] limitOut,
                                         PathResolver pathResolver) {
-        Operation op;
-        String rest;
-        // findFirst<N>By — N is an inline numeric limit (Jakarta Data 1.0).
-        if (methodName.startsWith("findFirst")) {
-            int i = "findFirst".length();
-            int j = i;
-            while (j < methodName.length() && Character.isDigit(methodName.charAt(j))) j++;
-            if (j > i && methodName.startsWith("By", j)) {
-                limitOut[0] = Integer.parseInt(methodName.substring(i, j));
-                methodName = "findBy" + methodName.substring(j + 2);
-                // fall through with rewritten method name
-            }
-        }
-        if      (startsWith(methodName, "findFirstBy")) { op = Operation.FIND_ONE; rest = methodName.substring("findFirstBy".length()); }
-        else if (startsWith(methodName, "findOneBy"))   { op = Operation.FIND_ONE; rest = methodName.substring("findOneBy".length()); }
-        else if (startsWith(methodName, "findAllBy"))   { op = Operation.FIND;     rest = methodName.substring("findAllBy".length()); }
-        else if (startsWith(methodName, "findBy"))      { op = Operation.FIND;     rest = methodName.substring("findBy".length()); }
-        else if (startsWith(methodName, "countBy"))     { op = Operation.COUNT;    rest = methodName.substring("countBy".length()); }
-        else if (startsWith(methodName, "existsBy"))    { op = Operation.EXISTS;   rest = methodName.substring("existsBy".length()); }
-        else if (startsWith(methodName, "deleteBy"))    { op = Operation.DELETE;   rest = methodName.substring("deleteBy".length()); }
-        else if (startsWith(methodName, "removeBy"))    { op = Operation.DELETE;   rest = methodName.substring("removeBy".length()); }
-        // Jakarta Data 1.0 — methods with no By clause: countAll, deleteAll, findAll
-        // (find/delete/count/exists with empty predicate set, optional OrderBy / FirstN suffix)
-        else if (methodName.equals("countAll"))         { op = Operation.COUNT;  rest = ""; }
-        else if (methodName.equals("deleteAll"))        { op = Operation.DELETE; rest = ""; }
-        else if (methodName.equals("removeAll"))        { op = Operation.DELETE; rest = ""; }
-        else                                            return null;
+        Subject subject = subjectOf(inlineFirstN(methodName, limitOut));
+        if (subject == null) return null;
+        Operation op = subject.op();
+        String rest = subject.rest();
 
         // Split off OrderBy clause
         List<Order> orders = List.of();
@@ -168,6 +145,54 @@ public final class QueryMethodParser {
         return new QueryDescriptor(op, preds, combinator, orders);
     }
 
+    /**
+     * {@code findFirst<N>By…} — N is an inline numeric limit (Jakarta Data 1.0), written into {@code limitOut[0]}; the
+     * name then reads as {@code findBy…}. Any other name is returned as is.
+     */
+    private static String inlineFirstN(String methodName, int[] limitOut) {
+        if (!methodName.startsWith("findFirst")) return methodName;
+        int i = "findFirst".length();
+        int j = i;
+        while (j < methodName.length() && Character.isDigit(methodName.charAt(j))) j++;
+        if (j > i && methodName.startsWith("By", j)) {
+            limitOut[0] = Integer.parseInt(methodName.substring(i, j));
+            return "findBy" + methodName.substring(j + 2);
+        }
+        return methodName;
+    }
+
+    /** What a method name asks for, and the predicates / ordering part that follows its subject. */
+    private record Subject(Operation op, String rest) {}
+
+    /** The subject prefixes of a derived query method, in the order they are tried. */
+    private enum SubjectPrefix {
+        FIND_FIRST_BY("findFirstBy", Operation.FIND_ONE),
+        FIND_ONE_BY("findOneBy", Operation.FIND_ONE),
+        FIND_ALL_BY("findAllBy", Operation.FIND),
+        FIND_BY("findBy", Operation.FIND),
+        COUNT_BY("countBy", Operation.COUNT),
+        EXISTS_BY("existsBy", Operation.EXISTS),
+        DELETE_BY("deleteBy", Operation.DELETE),
+        REMOVE_BY("removeBy", Operation.DELETE);
+
+        final String prefix;
+        final Operation op;
+        SubjectPrefix(String prefix, Operation op) { this.prefix = prefix; this.op = op; }
+    }
+
+    private static Subject subjectOf(String methodName) {
+        for (SubjectPrefix p : SubjectPrefix.values()) {
+            if (startsWith(methodName, p.prefix)) return new Subject(p.op, methodName.substring(p.prefix.length()));
+        }
+        // Jakarta Data 1.0 — methods with no By clause: countAll, deleteAll, findAll
+        // (find/delete/count/exists with empty predicate set, optional OrderBy / FirstN suffix)
+        return switch (methodName) {
+            case "countAll" -> new Subject(Operation.COUNT, "");
+            case "deleteAll", "removeAll" -> new Subject(Operation.DELETE, "");
+            default -> null;
+        };
+    }
+
     /** {@code parsePredicate("AgeBetween")} → {@code (age, BETWEEN)}. */
     private static Predicate parsePredicate(String token, Set<String> attributeNames, PathResolver pathResolver) {
         // M7-8 — recognise "<Attr>NotNull" as IS_NOT_NULL directly: otherwise the IS_NULL suffix
@@ -186,25 +211,29 @@ public final class QueryMethodParser {
         }
         // Try comparator suffixes longest first
         for (Suffix s : Suffix.byLengthDesc()) {
-            if (token.endsWith(s.suffix)) {
-                String attrPart = token.substring(0, token.length() - s.suffix.length());
-                // Allow "<attr>Not<Suffix>" — e.g. NameNotLike, AgeNotBetween, IdNotIn.
-                boolean negated = false;
-                if (attrPart.endsWith("Not")) {
-                    String maybeAttr = attrPart.substring(0, attrPart.length() - 3);
-                    String matched = matchAttributeOrPath(maybeAttr, attributeNames, pathResolver);
-                    if (matched != null) {
-                        negated = true;
-                        attrPart = maybeAttr;
-                    }
-                }
-                String attr = matchAttributeOrPath(attrPart, attributeNames, pathResolver);
-                if (attr != null) return new Predicate(attr, s.comparator, ignoreCase, negated);
-            }
+            Predicate p = token.endsWith(s.text) ? withSuffix(token, s, ignoreCase, attributeNames, pathResolver) : null;
+            if (p != null) return p;
         }
         // No suffix — implicit EQ
         String attr = matchAttributeOrPath(token, attributeNames, pathResolver);
         return attr == null ? null : new Predicate(attr, Comparator.EQ, ignoreCase, false);
+    }
+
+    /** The predicate of {@code token} read as {@code <attr>[Not]<suffix>}; {@code null} when no attribute matches. */
+    private static Predicate withSuffix(String token, Suffix s, boolean ignoreCase, Set<String> attributeNames,
+                                        PathResolver pathResolver) {
+        String attrPart = token.substring(0, token.length() - s.text.length());
+        // Allow "<attr>Not<Suffix>" — e.g. NameNotLike, AgeNotBetween, IdNotIn.
+        boolean negated = false;
+        if (attrPart.endsWith("Not")) {
+            String maybeAttr = attrPart.substring(0, attrPart.length() - 3);
+            if (matchAttributeOrPath(maybeAttr, attributeNames, pathResolver) != null) {
+                negated = true;
+                attrPart = maybeAttr;
+            }
+        }
+        String attr = matchAttributeOrPath(attrPart, attributeNames, pathResolver);
+        return attr == null ? null : new Predicate(attr, s.comparator, ignoreCase, negated);
     }
 
     /** M8-3i — flat match first, then defer to the {@link PathResolver} for cross-relation paths. */
@@ -232,7 +261,7 @@ public final class QueryMethodParser {
             if (matchedAttr == null) break;
             String tail = s.substring(matchedEnd);
             boolean asc = true;
-            if      (tail.startsWith("Asc"))  { asc = true;  tail = tail.substring(3); }
+            if      (tail.startsWith("Asc"))  { tail = tail.substring(3); }
             else if (tail.startsWith("Desc")) { asc = false; tail = tail.substring(4); }
             orders.add(new Order(matchedAttr, asc));
             s = tail;
@@ -243,13 +272,13 @@ public final class QueryMethodParser {
     private static boolean containsToken(String s, String token, Set<String> attributeNames,
                                          PathResolver pathResolver) {
         List<String> parts = splitAll(s, token, attributeNames, pathResolver);
-        return parts != null && parts.size() >= 2;
+        return parts.size() >= 2;
     }
 
     private static String[] splitOnToken(String s, String token, Set<String> attributeNames,
                                          PathResolver pathResolver) {
         List<String> parts = splitAll(s, token, attributeNames, pathResolver);
-        return parts == null ? new String[] { s } : parts.toArray(new String[0]);
+        return parts.isEmpty() ? new String[] { s } : parts.toArray(new String[0]);
     }
 
     /**
@@ -261,7 +290,7 @@ public final class QueryMethodParser {
      * <p>Strategy: a chunk that is itself one valid predicate is returned as-is; otherwise take the
      * shortest valid left predicate and recurse on the right, backtracking to a longer left chunk
      * when the remainder cannot be decomposed (so attribute names that embed the token still parse).
-     * Returns {@code null} when {@code s} cannot be fully decomposed into valid predicates.</p>
+     * Returns an empty list when {@code s} cannot be fully decomposed into valid predicates.</p>
      */
     private static List<String> splitAll(String s, String token, Set<String> attributeNames,
                                          PathResolver pathResolver) {
@@ -277,14 +306,14 @@ public final class QueryMethodParser {
                 continue;
             }
             List<String> rest = splitAll(s.substring(i + token.length()), token, attributeNames, pathResolver);
-            if (rest != null) {
+            if (!rest.isEmpty()) {
                 List<String> parts = new ArrayList<>(rest.size() + 1);
                 parts.add(left);
                 parts.addAll(rest);
                 return parts;
             }
         }
-        return null;
+        return List.of();
     }
 
     private static boolean chunkLooksValid(String chunk, Set<String> attributeNames, PathResolver pathResolver) {
@@ -315,13 +344,13 @@ public final class QueryMethodParser {
         IN          ("In",               Comparator.IN),
         NOT_EQ      ("Not",              Comparator.NOT_EQ);
 
-        final String suffix;
+        final String text;
         final Comparator comparator;
-        Suffix(String s, Comparator c) { suffix = s; comparator = c; }
+        Suffix(String s, Comparator c) { text = s; comparator = c; }
 
         static Suffix[] byLengthDesc() {
             Suffix[] all = values();
-            java.util.Arrays.sort(all, java.util.Comparator.comparingInt((Suffix x) -> -x.suffix.length()));
+            java.util.Arrays.sort(all, java.util.Comparator.comparingInt((Suffix x) -> -x.text.length()));
             return all;
         }
     }

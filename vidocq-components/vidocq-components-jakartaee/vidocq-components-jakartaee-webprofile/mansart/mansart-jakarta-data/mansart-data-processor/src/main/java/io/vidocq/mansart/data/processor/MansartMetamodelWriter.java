@@ -40,6 +40,10 @@ import java.io.PrintWriter;
  */
 final class MansartMetamodelWriter {
 
+    private static final String CLASS_ARG = ".class, ";
+    private static final String QUOTED_ARG_SEPARATOR = "\", \"";
+    private static final String CLOSE_MEMBER = "    }";
+
     private final SourceSink sink;
 
     MansartMetamodelWriter(SourceSink sink) { this.sink = sink; }
@@ -89,7 +93,7 @@ final class MansartMetamodelWriter {
             w.println("        } catch (IllegalAccessException ex) {");
             w.println("            throw new ExceptionInInitializerError(ex);");
             w.println("        }");
-            w.println("    }");
+            w.println(CLOSE_MEMBER);
             w.println();
             for (AttributeDescriptor a : e.attributes()) {
                 writeAttribute(w, entityRef, a, a == e.id(), a == e.version());
@@ -111,36 +115,36 @@ final class MansartMetamodelWriter {
 
         switch (a.kind()) {
             case ID -> w.println("    public static final IdAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new IdAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + boxed + ".class, " + entityRef + ".class, " + a.generated() + ", "
+                    + a.name() + " = new IdAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.generated() + ", "
                     + getterMh + ", " + setterMh + ");");
             case VERSION -> w.println("    public static final VersionAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new VersionAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + boxed + ".class, " + entityRef + ".class, " + getterMh + ", " + setterMh + ");");
+                    + a.name() + " = new VersionAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + boxed + CLASS_ARG + entityRef + CLASS_ARG + getterMh + ", " + setterMh + ");");
             case TEXT -> w.println("    public static final TextAttribute<" + entityRef + "> "
-                    + a.name() + " = new TextAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + entityRef + ".class, " + a.nullable() + ", " + a.unique() + ", "
+                    + a.name() + " = new TextAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique() + ", "
                     + a.length() + ", " + getterMh + ", " + setterMh + ");");
             case NUMERIC -> w.println("    public static final NumericAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new NumericAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + boxed + ".class, " + entityRef + ".class, " + a.nullable() + ", " + a.unique()
+                    + a.name() + " = new NumericAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", 0, 0, " + getterMh + ", " + setterMh + ");");
             case BOOLEAN -> w.println("    public static final BooleanAttribute<" + entityRef + "> "
-                    + a.name() + " = new BooleanAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + entityRef + ".class, " + a.nullable() + ", " + a.unique() + ", "
+                    + a.name() + " = new BooleanAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique() + ", "
                     + getterMh + ", " + setterMh + ");");
             case TEMPORAL -> w.println("    public static final TemporalAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new TemporalAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + boxed + ".class, " + entityRef + ".class, " + a.nullable() + ", " + a.unique()
+                    + a.name() + " = new TemporalAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", " + getterMh + ", " + setterMh + ");");
             case REFERENCE -> w.println("    public static final ReferenceAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new ReferenceAttribute<>(\"" + a.name() + "\", \"" + a.columnName() + "\", "
-                    + boxed + ".class, " + entityRef + ".class, " + a.nullable() + ", " + a.unique()
+                    + a.name() + " = new ReferenceAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", false, \"" + a.referencedColumn() + "\", " + getterMh + ", " + setterMh + ");");
             case ENUM -> w.println("    @SuppressWarnings({\"rawtypes\", \"unchecked\"})\n"
                     + "    public static final EnumAttribute " + a.name() + " = new EnumAttribute(\""
-                    + a.name() + "\", \"" + a.columnName() + "\", " + boxed + ".class, "
-                    + entityRef + ".class, " + a.nullable() + ", " + a.unique()
+                    + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", " + boxed + CLASS_ARG
+                    + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", io.vidocq.mansart.data.dialect.attribute.EnumStorage."
                     + (a.ordinalEnum() ? "ORDINAL" : "STRING") + ", "
                     + getterMh + ", " + setterMh + ");");
@@ -171,19 +175,19 @@ final class MansartMetamodelWriter {
         w.println("    private static MethodHandle getterMh(String fieldName, Class<?> type) {");
         w.println("        try { return LOOKUP.findGetter(" + entityRef + ".class, fieldName, type); }");
         w.println("        catch (NoSuchFieldException | IllegalAccessException ex) { throw new ExceptionInInitializerError(ex); }");
-        w.println("    }");
+        w.println(CLOSE_MEMBER);
         w.println();
         w.println("    private static MethodHandle setterMh(String fieldName, Class<?> type) {");
         w.println("        try { return LOOKUP.findSetter(" + entityRef + ".class, fieldName, type); }");
         w.println("        catch (NoSuchFieldException | IllegalAccessException ex) { throw new ExceptionInInitializerError(ex); }");
-        w.println("    }");
+        w.println(CLOSE_MEMBER);
         w.println();
         w.println("    private static MethodHandle constructorMh() {");
         w.println("        try { return LOOKUP.findConstructor(" + entityRef + ".class, java.lang.invoke.MethodType.methodType(void.class)); }");
         w.println("        catch (NoSuchMethodException | IllegalAccessException ex) {");
         w.println("            throw new ExceptionInInitializerError(\"" + entityRef + " must have a no-arg constructor\");");
         w.println("        }");
-        w.println("    }");
+        w.println(CLOSE_MEMBER);
     }
 
     private static String packageOf(String fqn) {

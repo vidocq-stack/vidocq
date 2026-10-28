@@ -57,30 +57,24 @@ final class DriverLocator {
     static Driver find(String jdbcUrl, ClassLoader loader) throws SQLException {
         Iterator<Driver> providers = ServiceLoader.load(Driver.class, loader).iterator();
         int consecutiveErrors = 0;
-        while (true) {
-            Driver driver;
+        boolean more = true;
+        while (more && consecutiveErrors < MAX_CONSECUTIVE_PROVIDER_ERRORS) {
+            Driver driver = null;
             try {
-                if (!providers.hasNext()) {
-                    break;
+                more = providers.hasNext();
+                if (more) {
+                    driver = providers.next();
+                    consecutiveErrors = 0;
                 }
-                driver = providers.next();
-                consecutiveErrors = 0;
             } catch (ServiceConfigurationError _) {
                 // Usually the JDK's lazy iterator has already advanced past the failing entry, so looping again
                 // reaches the next provider and a provider that cannot be loaded does not hide the next one.
                 // But when the lookup itself fails, the iterator fails again on every call: give up on the
                 // providers after a few errors in a row and let DriverManager answer.
-                if (++consecutiveErrors >= MAX_CONSECUTIVE_PROVIDER_ERRORS) {
-                    break;
-                }
-                continue;
+                consecutiveErrors++;
             }
-            try {
-                if (driver.acceptsURL(jdbcUrl)) {
-                    return driver;
-                }
-            } catch (SQLException | RuntimeException | LinkageError _) {
-                // this driver cannot even judge the URL: try the next one
+            if (driver != null && accepts(driver, jdbcUrl)) {
+                return driver;
             }
         }
         try {
@@ -88,6 +82,15 @@ final class DriverLocator {
         } catch (SQLException none) {
             throw new SQLException("No JDBC driver accepts " + jdbcUrl + ": searched the java.sql.Driver providers"
                     + " visible to " + loader + " and the drivers registered with DriverManager", "08001", none);
+        }
+    }
+
+    private static boolean accepts(Driver driver, String jdbcUrl) {
+        try {
+            return driver.acceptsURL(jdbcUrl);
+        } catch (SQLException | RuntimeException | LinkageError _) {
+            // this driver cannot even judge the URL: try the next one
+            return false;
         }
     }
 }

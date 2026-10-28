@@ -176,17 +176,21 @@ public class GenerateExternalRepositoriesMojo extends AbstractMojo {
         StringBuilder sb = new StringBuilder();
         for (String seg : segments) {
             if (seg.isEmpty()) continue;
-            StringBuilder s = new StringBuilder();
-            for (int i = 0; i < seg.length(); i++) {
-                char c = seg.charAt(i);
-                s.append(Character.isJavaIdentifierPart(c) ? c : '_');
-            }
-            if (s.length() == 0) continue;
-            if (!Character.isJavaIdentifierStart(s.charAt(0))) s.insert(0, '_');
-            if (sb.length() > 0) sb.append('.');
-            sb.append(s);
+            if (!sb.isEmpty()) sb.append('.');
+            sb.append(identifierSegment(seg));
         }
-        return sb.length() == 0 ? "mansart" : sb.toString();
+        return sb.isEmpty() ? "mansart" : sb.toString();
+    }
+
+    /** {@code segment} (not empty) as a Java identifier: other characters become {@code _}, prefixed with {@code _} when it cannot start one. */
+    private static String identifierSegment(String segment) {
+        StringBuilder s = new StringBuilder();
+        for (int i = 0; i < segment.length(); i++) {
+            char c = segment.charAt(i);
+            s.append(Character.isJavaIdentifierPart(c) ? c : '_');
+        }
+        if (!Character.isJavaIdentifierStart(s.charAt(0))) s.insert(0, '_');
+        return s.toString();
     }
 
     /** A minimal in-memory compilation unit so the processing round fires; never compiled (-proc:only). */

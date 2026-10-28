@@ -39,8 +39,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -62,6 +60,8 @@ import java.util.Optional;
  * « zero external impl » philosophy holds with the standard names.
  */
 public final class RuntimeEntityModelBuilder {
+
+    private static final String COLUMN = "jakarta.persistence.Column";
 
     private RuntimeEntityModelBuilder() {}
 
@@ -87,10 +87,7 @@ public final class RuntimeEntityModelBuilder {
 
             List<Field> persistedFields = new ArrayList<>();
             for (Field field : entityClass.getDeclaredFields()) {
-                int mods = field.getModifiers();
-                if (Modifier.isStatic(mods) || Modifier.isTransient(mods)) continue;
-                if (hasAnnotation(field, "jakarta.persistence.Transient")) continue;
-                persistedFields.add(field);
+                if (isPersisted(field)) persistedFields.add(field);
             }
 
             // M7-5 — pick the implicit id field BEFORE iterating attributes so describeField
@@ -127,6 +124,12 @@ public final class RuntimeEntityModelBuilder {
         }
     }
 
+    private static boolean isPersisted(Field field) {
+        int mods = field.getModifiers();
+        return !Modifier.isStatic(mods) && !Modifier.isTransient(mods)
+                && !hasAnnotation(field, "jakarta.persistence.Transient");
+    }
+
     private static boolean isExplicitId(Field field) {
         return hasAnnotation(field, "jakarta.persistence.Id");
     }
@@ -139,38 +142,45 @@ public final class RuntimeEntityModelBuilder {
     private static Field pickImplicitIdField(Class<?> entityClass, List<Field> persisted, Class<?> idTypeHint) {
         for (Field f : persisted) if (isExplicitId(f)) return null;
 
-        for (Field f : persisted) {
-            if ("id".equals(f.getName()) && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
-        }
+        Field named = fieldNamed(persisted, "id", idTypeHint);
+        if (named != null) return named;
 
         if (idTypeHint != null) {
-            Field unique = null;
-            int matchCount = 0;
-            for (Field f : persisted) {
-                if (matchesType(f, idTypeHint)) { unique = f; matchCount++; }
-            }
-            if (matchCount == 1) return unique;
+            Field unique = singleFieldOfType(persisted, idTypeHint);
+            if (unique != null) return unique;
         }
 
         String entityName = entityClass.getSimpleName();
-        if (!entityName.isEmpty()) {
-            String suffix = Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Id";
-            for (Field f : persisted) {
-                if (suffix.equals(f.getName())
-                        && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
-            }
-            // Also accept "<entityName>Identifier" / "<entityName>Key" — the TCK uses
-            // boxIdentifier on Box.
-            for (String alt : new String[] {
-                    Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Identifier",
-                    Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1) + "Key" }) {
-                for (Field f : persisted) {
-                    if (alt.equals(f.getName())
-                            && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
-                }
-            }
+        if (entityName.isEmpty()) return null;
+        String stem = Character.toLowerCase(entityName.charAt(0)) + entityName.substring(1);
+        // "<entityName>Id", then also "<entityName>Identifier" / "<entityName>Key" — the TCK uses
+        // boxIdentifier on Box.
+        for (String suffix : new String[] {"Id", "Identifier", "Key"}) {
+            Field f = fieldNamed(persisted, stem + suffix, idTypeHint);
+            if (f != null) return f;
         }
         return null;
+    }
+
+    /** The field called {@code name}, when its type matches {@code idTypeHint} (any type without a hint). */
+    private static Field fieldNamed(List<Field> persisted, String name, Class<?> idTypeHint) {
+        for (Field f : persisted) {
+            if (name.equals(f.getName()) && (idTypeHint == null || matchesType(f, idTypeHint))) return f;
+        }
+        return null;
+    }
+
+    /** The only field whose type matches {@code idTypeHint}; {@code null} when none or several do. */
+    private static Field singleFieldOfType(List<Field> persisted, Class<?> idTypeHint) {
+        Field unique = null;
+        int matchCount = 0;
+        for (Field f : persisted) {
+            if (matchesType(f, idTypeHint)) {
+                unique = f;
+                matchCount++;
+            }
+        }
+        return matchCount == 1 ? unique : null;
     }
 
     private static boolean matchesType(Field f, Class<?> hint) {
@@ -200,7 +210,8 @@ public final class RuntimeEntityModelBuilder {
         boolean unique    = readBooleanColumnAttr(field, "unique",   false);
         int     length    = (int) readIntColumnAttr(field, "length", 255);
 
-        MethodHandle getter, setter;
+        MethodHandle getter;
+        MethodHandle setter;
         try {
             getter = lookup.findGetter(entityClass, name, field.getType());
             setter = lookup.findSetter(entityClass, name, field.getType());
@@ -216,22 +227,12 @@ public final class RuntimeEntityModelBuilder {
             return new VersionAttribute(name, columnName, type, entityClass, getter, setter);
         }
         if (isReference) {
-            // M8-3 — referencedColumnName from @JoinColumn(referencedColumnName = ...) defaults to "id".
-            String referencedCol = readAnnoMember(field, "jakarta.persistence.JoinColumn",
-                    "referencedColumnName", String.class, "");
-            if (referencedCol.isEmpty()) referencedCol = "id";
             return new ReferenceAttribute<>(name, columnName, type, entityClass,
-                    nullable, unique, false, referencedCol, getter, setter);
+                    nullable, unique, false, referencedColumn(field), getter, setter);
         }
         if (type.isEnum()) {
-            // MANSART-003 — @Enumerated(ORDINAL) (and a bare @Enumerated) stores the index; no
-            // @Enumerated, or STRING, stores the name: Mansart's default, where JPA would store the index.
-            Enum<?> enumType = readAnnoMember(field, "jakarta.persistence.Enumerated", "value", Enum.class, null);
-            var storage = enumType != null && "ORDINAL".equals(enumType.name())
-                    ? io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL
-                    : io.vidocq.mansart.data.dialect.attribute.EnumStorage.STRING;
             return new EnumAttribute(name, columnName, type, entityClass,
-                    nullable, unique, storage, getter, setter);
+                    nullable, unique, enumStorage(field), getter, setter);
         }
         if (type == String.class) {
             return new TextAttribute<>(name, columnName, entityClass, nullable, unique, length, getter, setter);
@@ -242,13 +243,27 @@ public final class RuntimeEntityModelBuilder {
         if (type == Boolean.class) {
             return new BooleanAttribute<>(name, columnName, entityClass, nullable, unique, getter, setter);
         }
-        if (isNumeric(type)) {
-            return new NumericAttribute(name, columnName, type, entityClass,
-                    nullable, unique, 0, 0, getter, setter);
-        }
-        // Fallback — let the dialect figure it out via Types.OTHER
+        // Numbers, and the fallback for any other type — the dialect figures it out via Types.OTHER
         return new NumericAttribute(name, columnName, type, entityClass,
                 nullable, unique, 0, 0, getter, setter);
+    }
+
+    /** M8-3 — {@code @JoinColumn(referencedColumnName = ...)}, {@code id} by default. */
+    private static String referencedColumn(Field field) {
+        String referencedCol = readAnnoMember(field, "jakarta.persistence.JoinColumn",
+                "referencedColumnName", String.class, "");
+        return referencedCol.isEmpty() ? "id" : referencedCol;
+    }
+
+    /**
+     * MANSART-003 — {@code @Enumerated(ORDINAL)} (and a bare {@code @Enumerated}) stores the index; no
+     * {@code @Enumerated}, or {@code STRING}, stores the name: Mansart's default, where JPA would store the index.
+     */
+    private static io.vidocq.mansart.data.dialect.attribute.EnumStorage enumStorage(Field field) {
+        Enum<?> enumType = readAnnoMember(field, "jakarta.persistence.Enumerated", "value", Enum.class, null);
+        return enumType != null && "ORDINAL".equals(enumType.name())
+                ? io.vidocq.mansart.data.dialect.attribute.EnumStorage.ORDINAL
+                : io.vidocq.mansart.data.dialect.attribute.EnumStorage.STRING;
     }
 
     /* ---- annotation reading via reflection-by-name (no compile dep on JPA) ---- */
@@ -290,7 +305,7 @@ public final class RuntimeEntityModelBuilder {
     }
 
     private static String readColumnName(Field field, boolean isReference) {
-        String n = readAnnoMember(field, "jakarta.persistence.Column", "name", String.class, "");
+        String n = readAnnoMember(field, COLUMN, "name", String.class, "");
         if (n.isEmpty()) n = readAnnoMember(field, "jakarta.persistence.JoinColumn", "name", String.class, "");
         if (n.isEmpty()) {
             n = isReference
@@ -301,12 +316,12 @@ public final class RuntimeEntityModelBuilder {
     }
 
     private static boolean readBooleanColumnAttr(Field field, String member, boolean def) {
-        Boolean b = readAnnoMember(field, "jakarta.persistence.Column", member, Boolean.class, null);
+        Boolean b = readAnnoMember(field, COLUMN, member, Boolean.class, null);
         return b == null ? def : b;
     }
 
     private static long readIntColumnAttr(Field field, String member, long def) {
-        Integer i = readAnnoMember(field, "jakarta.persistence.Column", member, Integer.class, null);
+        Integer i = readAnnoMember(field, COLUMN, member, Integer.class, null);
         return i == null ? def : i.longValue();
     }
 
@@ -326,11 +341,5 @@ public final class RuntimeEntityModelBuilder {
         return c == LocalDate.class || c == LocalDateTime.class || c == LocalTime.class
                 || c == OffsetDateTime.class || c == java.time.Instant.class
                 || c == java.util.Date.class || c == java.sql.Date.class;
-    }
-
-    private static boolean isNumeric(Class<?> c) {
-        return c == Byte.class || c == Short.class || c == Integer.class || c == Long.class
-                || c == Float.class || c == Double.class
-                || c == BigDecimal.class || c == BigInteger.class;
     }
 }

@@ -49,6 +49,16 @@ import java.util.Map;
  */
 final class EntityScanner {
 
+    private static final String ID_ANNO = "jakarta.persistence.Id";
+    private static final String VERSION_ANNO = "jakarta.persistence.Version";
+    private static final String COLUMN_ANNO = "jakarta.persistence.Column";
+    private static final String TABLE_ANNO = "jakarta.persistence.Table";
+    private static final String TRANSIENT_ANNO = "jakarta.persistence.Transient";
+    private static final String GENERATED_VALUE_ANNO = "jakarta.persistence.GeneratedValue";
+    private static final String MANY_TO_ONE_ANNO = "jakarta.persistence.ManyToOne";
+    private static final String ONE_TO_ONE_ANNO = "jakarta.persistence.OneToOne";
+    private static final String JOIN_COLUMN_ANNO = "jakarta.persistence.JoinColumn";
+
     private final Elements elements;
     private final Types    types;
     private final Messager messager; // nullable — null in the Maven-plugin path
@@ -68,24 +78,17 @@ final class EntityScanner {
             return null;
         }
 
-        AnnotationDialect dialect = AnnotationDialect.JPA;
-        String tableName = readEntityTable(type, dialect);
-        String schema    = readEntitySchema(type, dialect);
+        String tableName = readEntityTable(type);
+        String schema    = readEntitySchema(type);
 
         List<AttributeDescriptor> attributes = new ArrayList<>();
         AttributeDescriptor       id         = null;
         AttributeDescriptor       version    = null;
 
         for (Element member : type.getEnclosedElements()) {
-            if (member.getKind() != ElementKind.FIELD) continue;
-            if (member.getModifiers().contains(Modifier.STATIC)) continue;
-            if (member.getModifiers().contains(Modifier.TRANSIENT)) continue;
-            if (hasAnnotation(member, dialect.transientAnno)) continue;
-
+            if (!isPersistentField(member)) continue;
             VariableElement field = (VariableElement) member;
-            AttributeDescriptor a = describe(field, dialect);
-            if (a == null) continue;
-
+            AttributeDescriptor a = describe(field);
             attributes.add(a);
             if (a.kind == AttributeKind.ID) {
                 if (id != null) {
@@ -107,67 +110,77 @@ final class EntityScanner {
         return new EntityDescriptor(type, tableName, schema, id, version, attributes);
     }
 
-    private AttributeDescriptor describe(VariableElement field, AnnotationDialect dialect) {
+    /** An instance field that is neither {@code transient} nor {@code @Transient}. */
+    private boolean isPersistentField(Element member) {
+        return member.getKind() == ElementKind.FIELD
+                && !member.getModifiers().contains(Modifier.STATIC)
+                && !member.getModifiers().contains(Modifier.TRANSIENT)
+                && !hasAnnotation(member, TRANSIENT_ANNO);
+    }
+
+    private AttributeDescriptor describe(VariableElement field) {
         String name = field.getSimpleName().toString();
         TypeMirror typeMirror = field.asType();
         String javaTypeFqn = typeMirror.toString();
+        AttributeKind kind = kindOf(field, typeMirror, javaTypeFqn);
 
-        boolean isId      = hasAnnotation(field, dialect.idAnno);
-        boolean isVersion = hasAnnotation(field, dialect.versionAnno);
-        boolean isManyToOne = hasAnnotation(field, dialect.manyToOneAnno);
-        boolean isOneToOne  = hasAnnotation(field, dialect.oneToOneAnno);
-        boolean isEnum      = isEnumType(typeMirror);
+        Map<String, ? extends AnnotationValue> column = annotationValues(field, COLUMN_ANNO);
+        Map<String, ? extends AnnotationValue> joinColumn = annotationValues(field, JOIN_COLUMN_ANNO);
 
-        AttributeKind kind;
-        if (isId)                          kind = AttributeKind.ID;
-        else if (isVersion)                kind = AttributeKind.VERSION;
-        else if (isManyToOne || isOneToOne) kind = AttributeKind.REFERENCE;
-        else if (isEnum)                   kind = AttributeKind.ENUM;
-        else if (isTextType(javaTypeFqn))  kind = AttributeKind.TEXT;
-        else if (isBoolean(javaTypeFqn))   kind = AttributeKind.BOOLEAN;
-        else if (isTemporal(javaTypeFqn))  kind = AttributeKind.TEMPORAL;
-        else if (isNumeric(javaTypeFqn))   kind = AttributeKind.NUMERIC;
-        else                               kind = AttributeKind.NUMERIC; // fallback — refined later
-
-        Map<String, ? extends AnnotationValue> column =
-                annotationValues(field, dialect.columnAnno);
-        Map<String, ? extends AnnotationValue> joinColumn =
-                annotationValues(field, dialect.joinColumnAnno);
-
-        String columnName;
-        if (column != null && column.containsKey("name") && !column.get("name").getValue().toString().isEmpty()) {
-            columnName = column.get("name").getValue().toString();
-        } else if (joinColumn != null && joinColumn.containsKey("name") && !joinColumn.get("name").getValue().toString().isEmpty()) {
-            columnName = joinColumn.get("name").getValue().toString();
-        } else if (kind == AttributeKind.REFERENCE) {
-            columnName = io.vidocq.mansart.data.dialect.SqlNames.foreignKeyColumn(name);
-        } else {
-            columnName = io.vidocq.mansart.data.dialect.SqlNames.columnName(name);
-        }
-
+        String columnName = columnNameOf(name, kind, column, joinColumn);
         boolean nullable = readBoolean(column, "nullable", true) && readBoolean(joinColumn, "nullable", true);
         boolean unique   = readBoolean(column, "unique", false)   || readBoolean(joinColumn, "unique", false);
         int     length   = (int) readNumber(column, "length", 255L);
-        boolean generated = hasAnnotation(field, dialect.generatedValueAnno);
+        boolean generated = hasAnnotation(field, GENERATED_VALUE_ANNO);
 
         // M8-3 — referencedColumnName from @JoinColumn — only meaningful when REFERENCE.
-        String referencedColumn = "id";
-        if (kind == AttributeKind.REFERENCE && joinColumn != null
-                && joinColumn.containsKey("referencedColumnName")) {
-            String rc = joinColumn.get("referencedColumnName").getValue().toString();
-            if (!rc.isEmpty()) referencedColumn = rc;
-        }
-
-        boolean ordinalEnum = false;
-        if (kind == AttributeKind.ENUM) {
-            Map<String, ? extends AnnotationValue> enumerated =
-                    annotationValues(field, "jakarta.persistence.Enumerated");
-            ordinalEnum = enumerated != null && enumerated.containsKey("value")
-                    && "ORDINAL".equals(enumerated.get("value").getValue().toString());
-        }
+        String referencedColumn = kind == AttributeKind.REFERENCE
+                ? nonEmptyText(joinColumn, "referencedColumnName", "id")
+                : "id";
+        boolean ordinalEnum = kind == AttributeKind.ENUM && isOrdinal(field);
 
         return new AttributeDescriptor(field, name, columnName, javaTypeFqn, kind,
                 nullable, unique, length, generated, referencedColumn, ordinalEnum);
+    }
+
+    private AttributeKind kindOf(VariableElement field, TypeMirror typeMirror, String javaTypeFqn) {
+        if (hasAnnotation(field, ID_ANNO))      return AttributeKind.ID;
+        if (hasAnnotation(field, VERSION_ANNO)) return AttributeKind.VERSION;
+        if (hasAnnotation(field, MANY_TO_ONE_ANNO) || hasAnnotation(field, ONE_TO_ONE_ANNO)) {
+            return AttributeKind.REFERENCE;
+        }
+        if (isEnumType(typeMirror))        return AttributeKind.ENUM;
+        if (isTextType(javaTypeFqn))       return AttributeKind.TEXT;
+        if (isBoolean(javaTypeFqn))        return AttributeKind.BOOLEAN;
+        if (isTemporal(javaTypeFqn))       return AttributeKind.TEMPORAL;
+        // numbers, and the fallback for any other type — refined later
+        return AttributeKind.NUMERIC;
+    }
+
+    /** {@code @Column(name)}, else {@code @JoinColumn(name)}, else the name derived from the field. */
+    private static String columnNameOf(String name, AttributeKind kind, Map<String, ? extends AnnotationValue> column,
+                                       Map<String, ? extends AnnotationValue> joinColumn) {
+        String fromColumn = nonEmptyText(column, "name", null);
+        if (fromColumn != null) return fromColumn;
+        String fromJoinColumn = nonEmptyText(joinColumn, "name", null);
+        if (fromJoinColumn != null) return fromJoinColumn;
+        return kind == AttributeKind.REFERENCE
+                ? io.vidocq.mansart.data.dialect.SqlNames.foreignKeyColumn(name)
+                : io.vidocq.mansart.data.dialect.SqlNames.columnName(name);
+    }
+
+    /** The text of {@code key} when the annotation sets it to a non-empty value, else {@code fallback}. */
+    private static String nonEmptyText(Map<String, ? extends AnnotationValue> values, String key, String fallback) {
+        AnnotationValue value = values.get(key);
+        if (value == null) return fallback;
+        String text = value.getValue().toString();
+        return text.isEmpty() ? fallback : text;
+    }
+
+    /** MANSART-003 — {@code @Enumerated(ORDINAL)}. */
+    private boolean isOrdinal(VariableElement field) {
+        Map<String, ? extends AnnotationValue> enumerated = annotationValues(field, "jakarta.persistence.Enumerated");
+        return enumerated.containsKey("value") && "ORDINAL".equals(enumerated.get("value").getValue().toString());
     }
 
     /* ----- helpers ---- */
@@ -198,31 +211,27 @@ final class EntityScanner {
                 return values;
             }
         }
-        return null;
+        return Map.of();
     }
 
     private boolean readBoolean(Map<String, ? extends AnnotationValue> values, String key, boolean def) {
-        if (values == null || !values.containsKey(key)) return def;
+        if (!values.containsKey(key)) return def;
         return (Boolean) values.get(key).getValue();
     }
 
     private long readNumber(Map<String, ? extends AnnotationValue> values, String key, long def) {
-        if (values == null || !values.containsKey(key)) return def;
+        if (!values.containsKey(key)) return def;
         return ((Number) values.get(key).getValue()).longValue();
     }
 
-    private String readEntityTable(TypeElement type, AnnotationDialect d) {
-        Map<String, ? extends AnnotationValue> table = annotationValues(type, d.tableAnno);
-        if (table != null && table.containsKey("name")) {
-            String n = table.get("name").getValue().toString();
-            if (!n.isEmpty()) return n;
-        }
-        return io.vidocq.mansart.data.dialect.SqlNames.tableName(type.getSimpleName().toString());
+    private String readEntityTable(TypeElement type) {
+        String n = nonEmptyText(annotationValues(type, TABLE_ANNO), "name", null);
+        return n != null ? n : io.vidocq.mansart.data.dialect.SqlNames.tableName(type.getSimpleName().toString());
     }
 
-    private String readEntitySchema(TypeElement type, AnnotationDialect d) {
-        Map<String, ? extends AnnotationValue> table = annotationValues(type, d.tableAnno);
-        if (table != null && table.containsKey("schema")) {
+    private String readEntitySchema(TypeElement type) {
+        Map<String, ? extends AnnotationValue> table = annotationValues(type, TABLE_ANNO);
+        if (table.containsKey("schema")) {
             return table.get("schema").getValue().toString();
         }
         return "";
@@ -238,16 +247,6 @@ final class EntityScanner {
 
     private boolean isTemporal(String fqn) {
         return fqn.startsWith("java.time.") || "java.util.Date".equals(fqn) || "java.sql.Date".equals(fqn);
-    }
-
-    private boolean isNumeric(String fqn) {
-        return switch (fqn) {
-            case "byte", "short", "int", "long", "float", "double",
-                 "java.lang.Byte", "java.lang.Short", "java.lang.Integer", "java.lang.Long",
-                 "java.lang.Float", "java.lang.Double",
-                 "java.math.BigInteger", "java.math.BigDecimal" -> true;
-            default -> false;
-        };
     }
 
     private boolean isEnumType(TypeMirror t) {
@@ -291,27 +290,4 @@ final class EntityScanner {
             AttributeDescriptor version,
             List<AttributeDescriptor> attributes
     ) {}
-
-    private enum AnnotationDialect {
-        JPA(
-                "jakarta.persistence.Id",
-                "jakarta.persistence.Version",
-                "jakarta.persistence.Column",
-                "jakarta.persistence.Table",
-                "jakarta.persistence.Transient",
-                "jakarta.persistence.GeneratedValue",
-                "jakarta.persistence.ManyToOne",
-                "jakarta.persistence.OneToOne",
-                "jakarta.persistence.JoinColumn");
-
-        final String idAnno, versionAnno, columnAnno, tableAnno, transientAnno,
-                generatedValueAnno, manyToOneAnno, oneToOneAnno, joinColumnAnno;
-
-        AnnotationDialect(String id, String version, String column, String table, String tr,
-                          String gv, String m2o, String o2o, String join) {
-            this.idAnno = id; this.versionAnno = version; this.columnAnno = column;
-            this.tableAnno = table; this.transientAnno = tr; this.generatedValueAnno = gv;
-            this.manyToOneAnno = m2o; this.oneToOneAnno = o2o; this.joinColumnAnno = join;
-        }
-    }
 }

@@ -51,9 +51,19 @@ import java.util.Set;
  */
 final class JdqlParser {
 
+    private static final String WHERE = "WHERE";
+    private static final String BETWEEN = "BETWEEN";
     private static final String PROJECTED_LIST = "var _list = runtime.projectColumn(";
     private static final String MODEL_ARG = ".$MODEL, ";
     private static final String CLASS_WHERE_ARGS = ".class, _w, _ob, _xs); ";
+    private static final String WHERE_VAR = "io.vidocq.mansart.data.dialect.Where _w = ";
+    private static final String ARGS_VAR = "java.lang.Object[] _xs = new java.lang.Object[]{";
+    private static final String EXTENDS_WILDCARD = "? extends ";
+    private static final String SUPER_WILDCARD = "? super ";
+    private static final String OBJECT_ARRAY = "java.lang.Object[]";
+    private static final String FUNC_OPEN = ".Func(\"";
+    private static final String RETURN_COUNT_WHERE = "return runtime.countWhere(";
+    private static final String MODEL_WHERE_ARGS = ".$MODEL, _w, _xs);";
 
     private JdqlParser() {}
 
@@ -100,13 +110,13 @@ final class JdqlParser {
     private static String emitAggregate(Stmt stmt, ExecutableElement method, String metamodel,
                                         Map<String, Integer> nameToIdx, TypeMirror returnType) {
         StringBuilder sb = new StringBuilder();
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; ");
 
         List<ArgRef> argsInOrder = new ArrayList<>();
         if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         for (int i = 0; i < argsInOrder.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
@@ -131,7 +141,7 @@ final class JdqlParser {
     private static String emitProject(Stmt stmt, ExecutableElement method, String metamodel,
                                       Map<String, Integer> nameToIdx, TypeMirror returnType) {
         StringBuilder sb = new StringBuilder();
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; io.vidocq.mansart.data.dialect.OrderBy _ob = ");
         emitOrderBy(sb, stmt.orderBy, metamodel);
@@ -139,7 +149,7 @@ final class JdqlParser {
 
         List<ArgRef> argsInOrder = new ArrayList<>();
         if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         for (int i = 0; i < argsInOrder.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
@@ -193,7 +203,7 @@ final class JdqlParser {
     private static String emitProjectMulti(Stmt stmt, ExecutableElement method, String metamodel,
                                            Map<String, Integer> nameToIdx, TypeMirror returnType) {
         StringBuilder sb = new StringBuilder();
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; io.vidocq.mansart.data.dialect.OrderBy _ob = ");
         emitOrderBy(sb, stmt.orderBy, metamodel);
@@ -208,7 +218,7 @@ final class JdqlParser {
 
         List<ArgRef> argsInOrder = new ArrayList<>();
         if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         for (int i = 0; i < argsInOrder.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
@@ -232,11 +242,11 @@ final class JdqlParser {
             int lt = rt.indexOf('<');
             int gt = rt.lastIndexOf('>');
             String inner = rt.substring(lt + 1, gt).trim();
-            if (inner.startsWith("? extends ")) inner = inner.substring("? extends ".length());
-            if (inner.startsWith("? super "))   inner = inner.substring("? super ".length());
-            return inner.equals("java.lang.Object[]") ? "java.lang.Object[]" : inner;
+            if (inner.startsWith(EXTENDS_WILDCARD)) inner = inner.substring(EXTENDS_WILDCARD.length());
+            if (inner.startsWith(SUPER_WILDCARD))   inner = inner.substring(SUPER_WILDCARD.length());
+            return inner.equals(OBJECT_ARRAY) ? OBJECT_ARRAY : inner;
         }
-        if (rt.endsWith("[][]")) return "java.lang.Object[]";
+        if (rt.endsWith("[][]")) return OBJECT_ARRAY;
         if (rt.endsWith("[]"))   return rt.substring(0, rt.length() - 2);
         return rt;
     }
@@ -252,8 +262,8 @@ final class JdqlParser {
         if (lt < 0 || gt < 0) return "java.lang.Object";
         String inner = genericRt.substring(lt + 1, gt).trim();
         // Strip wildcard markers and bounds for simple reflection-friendly extraction
-        if (inner.startsWith("? extends ")) inner = inner.substring("? extends ".length());
-        if (inner.startsWith("? super "))   inner = inner.substring("? super ".length());
+        if (inner.startsWith(EXTENDS_WILDCARD)) inner = inner.substring(EXTENDS_WILDCARD.length());
+        if (inner.startsWith(SUPER_WILDCARD))   inner = inner.substring(SUPER_WILDCARD.length());
         return inner;
     }
 
@@ -292,7 +302,7 @@ final class JdqlParser {
                     trailingPageRequest, isCursoredPageReturn);
         }
 
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; ");
 
@@ -303,7 +313,7 @@ final class JdqlParser {
         List<ArgRef> argsInOrder = new ArrayList<>();
         if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
 
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         for (int i = 0; i < argsInOrder.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
@@ -311,7 +321,7 @@ final class JdqlParser {
         sb.append("}; ");
 
         if (stmt.kind == Stmt.Kind.COUNT) {
-            sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, _w, _xs);");
+            sb.append(RETURN_COUNT_WHERE).append(metamodel).append(MODEL_WHERE_ARGS);
         } else {
             sb.append(dispatch(returnType, metamodel, trailingPageRequest, isCursoredPageReturn, method));
         }
@@ -329,12 +339,12 @@ final class JdqlParser {
         }
         sb.append("); ");
 
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; ");
 
         // args = SET values (in order) then WHERE args (in render order)
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         boolean first = true;
         for (SetAssign sa : stmt.setAssignments) {
             if (!first) sb.append(", ");
@@ -359,14 +369,14 @@ final class JdqlParser {
     private static String emitDelete(Stmt stmt, ExecutableElement method, String metamodel,
                                      Map<String, Integer> nameToIdx, TypeMirror returnType) {
         StringBuilder sb = new StringBuilder();
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         emitPredicate(sb, stmt.where, metamodel);
         sb.append("; ");
 
         List<ArgRef> argsInOrder = new ArrayList<>();
         if (stmt.where != null) collectArgs(stmt.where, argsInOrder);
 
-        sb.append("java.lang.Object[] _xs = new java.lang.Object[]{");
+        sb.append(ARGS_VAR);
         for (int i = 0; i < argsInOrder.size(); i++) {
             if (i > 0) sb.append(", ");
             sb.append(resolveArg(argsInOrder.get(i), nameToIdx, method));
@@ -403,7 +413,7 @@ final class JdqlParser {
         sb.append("java.util.List<java.lang.Object> _args = new java.util.ArrayList<>(); ");
 
         // 3) Build the Where as a single Java expression; emitArgs side-effect appends to _args.
-        sb.append("io.vidocq.mansart.data.dialect.Where _w = ");
+        sb.append(WHERE_VAR);
         sb.append(buildWhereExpr(stmt.where, metamodel, nameToIdx, method, ctx));
         sb.append("; ");
 
@@ -417,7 +427,7 @@ final class JdqlParser {
         sb.append("; ");
 
         if (stmt.kind == Stmt.Kind.COUNT) {
-            sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, _w, _xs);");
+            sb.append(RETURN_COUNT_WHERE).append(metamodel).append(MODEL_WHERE_ARGS);
             return sb.toString();
         }
         sb.append(dispatch(returnType, metamodel, trailingPageRequest, isCursoredPageReturn, method));
@@ -515,7 +525,7 @@ final class JdqlParser {
     }
 
     private static String wrapFunc(String pkg, String fn, String inner) {
-        return "new " + pkg + ".Func(\"" + fn + "\", " + inner + ")";
+        return "new " + pkg + FUNC_OPEN + fn + "\", " + inner + ")";
     }
 
     /**
@@ -603,35 +613,36 @@ final class JdqlParser {
                                  Map<String, Integer> nameToIdx, ExecutableElement m, DynCtx ctx) {
         if (p == null) return;
         switch (p) {
-            case Cmp c       -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
-            case FnCmp c     -> sb.append("_args.add(").append(resolveArg(c.arg, nameToIdx, m)).append("); ");
-            case IsNull n    -> {}
-            case FnIsNull n  -> {}
-            case Between b   -> {
-                sb.append("_args.add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
-                sb.append("_args.add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
+            case Cmp(_, _, var arg)       -> emitArg(sb, arg, nameToIdx, m);
+            case FnCmp(_, _, _, var arg)  -> emitArg(sb, arg, nameToIdx, m);
+            case IsNull _, FnIsNull _     -> { /* no argument */ }
+            case Between(_, var lo, var hi) -> {
+                emitArg(sb, lo, nameToIdx, m);
+                emitArg(sb, hi, nameToIdx, m);
             }
-            case FnBetween b -> {
-                sb.append("_args.add(").append(resolveArg(b.lo, nameToIdx, m)).append("); ");
-                sb.append("_args.add(").append(resolveArg(b.hi, nameToIdx, m)).append("); ");
+            case FnBetween(_, _, var lo, var hi) -> {
+                emitArg(sb, lo, nameToIdx, m);
+                emitArg(sb, hi, nameToIdx, m);
             }
-            case In in -> {
-                if (in.collection) {
-                    sb.append("for (Object _v : ").append(ctx.colVar.get(in)).append(") _args.add(_v); ");
-                } else {
-                    for (ArgRef a : in.args) sb.append("_args.add(").append(resolveArg(a, nameToIdx, m)).append("); ");
-                }
-            }
-            case FnIn in -> {
-                if (in.collection) {
-                    sb.append("for (Object _v : ").append(ctx.colVar.get(in)).append(") _args.add(_v); ");
-                } else {
-                    for (ArgRef a : in.args) sb.append("_args.add(").append(resolveArg(a, nameToIdx, m)).append("); ");
-                }
-            }
-            case And a -> { for (Pred c : a.children) emitArgs(sb, c, nameToIdx, m, ctx); }
-            case Or  o -> { for (Pred c : o.children) emitArgs(sb, c, nameToIdx, m, ctx); }
-            case Not n -> emitArgs(sb, n.child, nameToIdx, m, ctx);
+            case In in   -> emitInArgs(sb, in.collection(), in.args(), ctx.colVar.get(in), nameToIdx, m);
+            case FnIn in -> emitInArgs(sb, in.collection(), in.args(), ctx.colVar.get(in), nameToIdx, m);
+            case And(var children) -> { for (Pred c : children) emitArgs(sb, c, nameToIdx, m, ctx); }
+            case Or(var children)  -> { for (Pred c : children) emitArgs(sb, c, nameToIdx, m, ctx); }
+            case Not(var child)    -> emitArgs(sb, child, nameToIdx, m, ctx);
+        }
+    }
+
+    private static void emitArg(StringBuilder sb, ArgRef arg, Map<String, Integer> nameToIdx, ExecutableElement m) {
+        sb.append("_args.add(").append(resolveArg(arg, nameToIdx, m)).append("); ");
+    }
+
+    /** The values of an IN: each element of the collection variable, or each listed argument. */
+    private static void emitInArgs(StringBuilder sb, boolean collection, List<ArgRef> args, String colVar,
+                                   Map<String, Integer> nameToIdx, ExecutableElement m) {
+        if (collection) {
+            sb.append("for (Object _v : ").append(colVar).append(") _args.add(_v); ");
+        } else {
+            for (ArgRef a : args) emitArg(sb, a, nameToIdx, m);
         }
     }
 
@@ -690,7 +701,7 @@ final class JdqlParser {
                     + lastIdx + ", _xs);";
         }
         if (rt.startsWith("java.util.Optional")) {
-            return "return runtime.queryOne(" + metamodel + ".$MODEL, _w, _xs);";
+            return "return runtime.queryOne(" + metamodel + MODEL_WHERE_ARGS;
         }
         if (rt.startsWith("java.util.stream.Stream")) {
             return "return runtime.queryList(" + metamodel + ".$MODEL, _w, _ob, _xs).stream();";
@@ -701,10 +712,10 @@ final class JdqlParser {
             return "return runtime.queryList(" + metamodel + ".$MODEL, _w, _ob, _xs);";
         }
         if (rt.equals("long")) {
-            return "return runtime.countWhere(" + metamodel + ".$MODEL, _w, _xs);";
+            return RETURN_COUNT_WHERE + metamodel + MODEL_WHERE_ARGS;
         }
         if (rt.equals("boolean")) {
-            return "return runtime.existsWhere(" + metamodel + ".$MODEL, _w, _xs);";
+            return "return runtime.existsWhere(" + metamodel + MODEL_WHERE_ARGS;
         }
         // Single-entity return → fetch one, throw if absent.
         return "return runtime.queryOne(" + metamodel + ".$MODEL, _w, _xs).orElseThrow("
@@ -763,19 +774,19 @@ final class JdqlParser {
         switch (p) {
             case Cmp c -> emitCmpExpr(sb, pkg, metamodel, c.op, c.attr);
             case FnCmp c -> {
-                sb.append("new ").append(pkg).append(".Func(\"").append(c.fn).append("\", ");
+                sb.append("new ").append(pkg).append(FUNC_OPEN).append(c.fn).append("\", ");
                 emitCmpExpr(sb, pkg, metamodel, c.op, c.attr);
                 sb.append(')');
             }
             case IsNull(var attr, var negated) -> emitIsNullExpr(sb, pkg, metamodel, negated, attr);
             case FnIsNull(var fn, var attr, var negated) -> {
-                sb.append("new ").append(pkg).append(".Func(\"").append(fn).append("\", ");
+                sb.append("new ").append(pkg).append(FUNC_OPEN).append(fn).append("\", ");
                 emitIsNullExpr(sb, pkg, metamodel, negated, attr);
                 sb.append(')');
             }
             case Between b -> emitBetweenExpr(sb, pkg, metamodel, b.attr);
             case FnBetween b -> {
-                sb.append("new ").append(pkg).append(".Func(\"").append(b.fn).append("\", ");
+                sb.append("new ").append(pkg).append(FUNC_OPEN).append(b.fn).append("\", ");
                 emitBetweenExpr(sb, pkg, metamodel, b.attr);
                 sb.append(')');
             }
@@ -785,7 +796,7 @@ final class JdqlParser {
             }
             case FnIn(var fn, var attr, var args, var collection) -> {
                 if (collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
-                sb.append("new ").append(pkg).append(".Func(\"").append(fn).append("\", ");
+                sb.append("new ").append(pkg).append(FUNC_OPEN).append(fn).append("\", ");
                 emitInExpr(sb, pkg, metamodel, attr, args.size());
                 sb.append(')');
             }
@@ -890,66 +901,77 @@ final class JdqlParser {
             skipWs();
             if (pos >= src.length()) return new Token(Tk.EOF, "");
             char c = src.charAt(pos);
-            switch (c) {
-                case '(': pos++; return new Token(Tk.LPAREN, "(");
-                case ')': pos++; return new Token(Tk.RPAREN, ")");
-                case ',': pos++; return new Token(Tk.COMMA, ",");
-                case '*': pos++; return new Token(Tk.STAR, "*");
-                case '=': pos++; return new Token(Tk.EQ, "=");
-                case '<': {
-                    pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.LTE, "<="); }
-                    if (pos < src.length() && src.charAt(pos) == '>') { pos++; return new Token(Tk.NE, "<>"); }
-                    return new Token(Tk.LT, "<");
-                }
-                case '>': {
-                    pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.GTE, ">="); }
-                    return new Token(Tk.GT, ">");
-                }
-                case '!': {
-                    pos++;
-                    if (pos < src.length() && src.charAt(pos) == '=') { pos++; return new Token(Tk.NE, "!="); }
-                    throw new ParseException("Unexpected '!'");
-                }
-                case ':': {
-                    pos++;
-                    int s = pos;
-                    while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos)) || src.charAt(pos) == '_')) pos++;
-                    if (s == pos) throw new ParseException("Empty named parameter ':'");
-                    return new Token(Tk.NAMED, src.substring(s, pos));
-                }
-                case '?': {
-                    pos++;
-                    int s = pos;
-                    while (pos < src.length() && Character.isDigit(src.charAt(pos))) pos++;
-                    if (s == pos) throw new ParseException("Positional parameter '?' must be followed by digits");
-                    return new Token(Tk.POS, src.substring(s, pos));
-                }
-                default: {
-                    if (Character.isLetter(c) || c == '_') {
-                        int s = pos;
-                        // M8-3 — allow dotted paths (book.author.name) inside an IDENT.
-                        while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
-                                || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
-                            pos++;
-                        String w = src.substring(s, pos);
-                        // Keywords are matched on the *full* token but only when they don't contain
-                        // a dot — a dotted token is necessarily an attribute path.
-                        if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
-                        return new Token(Tk.IDENT, w);
-                    }
-                    throw new ParseException("Unexpected character '" + c + "' at position " + pos);
-                }
+            Tk single = switch (c) {
+                case '(' -> Tk.LPAREN;
+                case ')' -> Tk.RPAREN;
+                case ',' -> Tk.COMMA;
+                case '*' -> Tk.STAR;
+                case '=' -> Tk.EQ;
+                default -> null;
+            };
+            if (single != null) {
+                pos++;
+                return new Token(single, String.valueOf(c));
             }
+            return switch (c) {
+                case '<', '>', '!' -> comparison(c);
+                case ':' -> parameter(Tk.NAMED, ch -> Character.isLetterOrDigit(ch) || ch == '_',
+                        "Empty named parameter ':'");
+                case '?' -> parameter(Tk.POS, Character::isDigit,
+                        "Positional parameter '?' must be followed by digits");
+                default -> word(c);
+            };
+        }
+
+        /** {@code <}, {@code <=}, {@code <>}, {@code >}, {@code >=} or {@code !=}. */
+        private Token comparison(char c) {
+            pos++;
+            String pair = pos < src.length() ? "" + c + src.charAt(pos) : "";
+            Tk two = switch (pair) {
+                case "<=" -> Tk.LTE;
+                case "<>", "!=" -> Tk.NE;
+                case ">=" -> Tk.GTE;
+                default -> null;
+            };
+            if (two != null) {
+                pos++;
+                return new Token(two, pair);
+            }
+            if (c == '!') throw new ParseException("Unexpected '!'");
+            return c == '<' ? new Token(Tk.LT, "<") : new Token(Tk.GT, ">");
+        }
+
+        /** A {@code :name} or {@code ?N} parameter: the characters after the sigil that {@code part} accepts. */
+        private Token parameter(Tk kind, java.util.function.IntPredicate part, String whenEmpty) {
+            pos++;
+            int start = pos;
+            while (pos < src.length() && part.test(src.charAt(pos))) pos++;
+            if (start == pos) throw new ParseException(whenEmpty);
+            return new Token(kind, src.substring(start, pos));
+        }
+
+        /** A keyword or an identifier — M8-3: a dotted path (book.author.name) is one identifier. */
+        private Token word(char c) {
+            if (!Character.isLetter(c) && c != '_') {
+                throw new ParseException("Unexpected character '" + c + "' at position " + pos);
+            }
+            int start = pos;
+            while (pos < src.length() && (Character.isLetterOrDigit(src.charAt(pos))
+                    || src.charAt(pos) == '_' || src.charAt(pos) == '.'))
+                pos++;
+            String w = src.substring(start, pos);
+            // Keywords are matched on the *full* token but only when they don't contain
+            // a dot — a dotted token is necessarily an attribute path.
+            if (isKeyword(w) && w.indexOf('.') < 0) return new Token(Tk.KW, w.toUpperCase());
+            return new Token(Tk.IDENT, w);
         }
         private static boolean isKeyword(String w) {
             // M8-1 — scalar function names (UPPER/LOWER/LENGTH/ABS/CONCAT) are NOT registered
             // as keywords here — they would shadow homonym attribute names (e.g. TCK Box.length).
             // The parser detects them contextually as IDENT followed by '('.
             return switch (w.toUpperCase()) {
-                case "FROM", "WHERE", "ORDER", "BY", "AND", "OR", "NOT",
-                     "IS", "NULL", "BETWEEN", "LIKE", "ASC", "DESC",
+                case "FROM", WHERE, "ORDER", "BY", "AND", "OR", "NOT",
+                     "IS", "NULL", BETWEEN, "LIKE", "ASC", "DESC",
                      "SELECT", "UPDATE", "DELETE", "SET", "IN", "COUNT", "THIS",
                      "SUM", "AVG", "MIN", "MAX" -> true;
                 default -> false;
@@ -973,83 +995,16 @@ final class JdqlParser {
             Stmt s = new Stmt();
             if (peekKw("SELECT")) {
                 lex.consume();
-                if (peekKw("COUNT")) {
-                    lex.consume();
-                    if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '(' after COUNT");
-                    lex.consume();
-                    Token inside = lex.consume();
-                    boolean ok = inside.kind == Tk.STAR
-                            || (inside.kind == Tk.KW && inside.text.equals("THIS"));
-                    if (!ok) throw new ParseException("Expected COUNT(*) or COUNT(this), got: " + inside.text);
-                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after COUNT(...)");
-                    lex.consume();
-                    s.kind = Stmt.Kind.COUNT;
-                } else if (peekKw("THIS")) {
-                    lex.consume();
-                    // SELECT this — same as default
-                } else if (peekAggregate()) {
-                    Token agg = lex.consume();
-                    if (lex.peek().kind != Tk.LPAREN) throw new ParseException("Expected '(' after " + agg.text);
-                    lex.consume();
-                    String attr = expectAttr();
-                    if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + agg.text + "(...)");
-                    lex.consume();
-                    s.kind = Stmt.Kind.AGGREGATE;
-                    s.aggregateOp = agg.text;
-                    s.scalarAttr = attr;
-                } else if (lex.peek().kind == Tk.IDENT) {
-                    // M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multi → PROJECT_MULTI.
-                    String first = expectAttr();
-                    if (lex.peek().kind == Tk.COMMA) {
-                        s.kind = Stmt.Kind.PROJECT_MULTI;
-                        s.projectAttrs.add(first);
-                        while (lex.peek().kind == Tk.COMMA) {
-                            lex.consume();
-                            s.projectAttrs.add(expectAttr());
-                        }
-                    } else {
-                        s.kind = Stmt.Kind.PROJECT;
-                        s.scalarAttr = first;
-                    }
-                } else {
-                    throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
-                }
+                parseSelected(s);
             }
-            if (peekKw("UPDATE")) {
-                lex.consume();
-                String upTarget = expectIdent();
-                if (!upTarget.equals(entityName)) {
-                    throw new ParseException("@Query UPDATE " + upTarget + " does not match repository entity " + entityName);
-                }
-                expectKw("SET");
-                s.kind = Stmt.Kind.UPDATE;
-                s.setAssignments.add(parseSetAssign());
-                while (lex.peek().kind == Tk.COMMA) { lex.consume(); s.setAssignments.add(parseSetAssign()); }
-                if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
-                expectEof();
-                return s;
-            }
-            if (peekKw("DELETE")) {
-                lex.consume();
-                expectKw("FROM");
-                String delFrom = expectIdent();
-                if (!delFrom.equals(entityName)) {
-                    throw new ParseException("@Query DELETE FROM " + delFrom + " does not match repository entity " + entityName);
-                }
-                s.kind = Stmt.Kind.DELETE;
-                if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
-                expectEof();
-                return s;
-            }
+            if (peekKw("UPDATE")) return parseUpdate(s);
+            if (peekKw("DELETE")) return parseDelete(s);
             // JDQL leaves FROM out when the repository has a primary entity: the query targets it (mansart#41).
             if (peekKw("FROM")) {
                 lex.consume();
-                String from = expectIdent();
-                if (!from.equals(entityName)) {
-                    throw new ParseException("@Query FROM " + from + " does not match repository entity " + entityName);
-                }
+                expectEntity("@Query FROM ");
             }
-            if (peekKw("WHERE")) { lex.consume(); s.where = parseExpr(); }
+            parseWhere(s);
             if (peekKw("ORDER")) {
                 lex.consume(); expectKw("BY");
                 s.orderBy.add(parseOrder());
@@ -1057,6 +1012,91 @@ final class JdqlParser {
             }
             expectEof();
             return s;
+        }
+
+        /** What a SELECT clause selects: {@code COUNT(*)}, {@code this}, an aggregate or attributes. */
+        private void parseSelected(Stmt s) {
+            if (peekKw("COUNT")) {
+                lex.consume();
+                expect(Tk.LPAREN, "Expected '(' after COUNT");
+                Token inside = lex.consume();
+                boolean ok = inside.kind == Tk.STAR
+                        || (inside.kind == Tk.KW && inside.text.equals("THIS"));
+                if (!ok) throw new ParseException("Expected COUNT(*) or COUNT(this), got: " + inside.text);
+                expect(Tk.RPAREN, "Expected ')' after COUNT(...)");
+                s.kind = Stmt.Kind.COUNT;
+            } else if (peekKw("THIS")) {
+                lex.consume();
+                // SELECT this — same as default
+            } else if (peekAggregate()) {
+                Token agg = lex.consume();
+                expect(Tk.LPAREN, "Expected '(' after " + agg.text);
+                String attr = expectAttr();
+                expect(Tk.RPAREN, "Expected ')' after " + agg.text + "(...)");
+                s.kind = Stmt.Kind.AGGREGATE;
+                s.aggregateOp = agg.text;
+                s.scalarAttr = attr;
+            } else if (lex.peek().kind == Tk.IDENT) {
+                parseProjected(s);
+            } else {
+                throw new ParseException("Unexpected token after SELECT: " + lex.peek().text);
+            }
+        }
+
+        /** M8-2 — SELECT a [, b, c, …] : single attr → PROJECT, multi → PROJECT_MULTI. */
+        private void parseProjected(Stmt s) {
+            String first = expectAttr();
+            if (lex.peek().kind != Tk.COMMA) {
+                s.kind = Stmt.Kind.PROJECT;
+                s.scalarAttr = first;
+                return;
+            }
+            s.kind = Stmt.Kind.PROJECT_MULTI;
+            s.projectAttrs.add(first);
+            while (lex.peek().kind == Tk.COMMA) {
+                lex.consume();
+                s.projectAttrs.add(expectAttr());
+            }
+        }
+
+        private Stmt parseUpdate(Stmt s) {
+            lex.consume();
+            expectEntity("@Query UPDATE ");
+            expectKw("SET");
+            s.kind = Stmt.Kind.UPDATE;
+            s.setAssignments.add(parseSetAssign());
+            while (lex.peek().kind == Tk.COMMA) { lex.consume(); s.setAssignments.add(parseSetAssign()); }
+            parseWhere(s);
+            expectEof();
+            return s;
+        }
+
+        private Stmt parseDelete(Stmt s) {
+            lex.consume();
+            expectKw("FROM");
+            expectEntity("@Query DELETE FROM ");
+            s.kind = Stmt.Kind.DELETE;
+            parseWhere(s);
+            expectEof();
+            return s;
+        }
+
+        /** The entity name after {@code clause}, which must be the repository's. */
+        private void expectEntity(String clause) {
+            String named = expectIdent();
+            if (!named.equals(entityName)) {
+                throw new ParseException(clause + named + " does not match repository entity " + entityName);
+            }
+        }
+
+        private void parseWhere(Stmt s) {
+            if (peekKw(WHERE)) { lex.consume(); s.where = parseExpr(); }
+        }
+
+        /** Consumes the next token, which must be of {@code kind}. */
+        private void expect(Tk kind, String message) {
+            if (lex.peek().kind != kind) throw new ParseException(message);
+            lex.consume();
         }
 
         SetAssign parseSetAssign() {
@@ -1122,26 +1162,26 @@ final class JdqlParser {
             // M8-1 — LHS may be a unary scalar function on an attribute: UPPER(name) = ?, …
             // Detected contextually (IDENT immediately followed by '(') so that attribute
             // names like Box.length are not shadowed by the LENGTH function name.
-            if (lex.peek().kind == Tk.IDENT) {
-                Token saved = lex.peek();
-                String upper = saved.text.toUpperCase();
-                if (isUnaryFn(upper)) {
-                    lex.consume();
-                    if (lex.peek().kind == Tk.LPAREN) {
-                        lex.consume();
-                        String attr = expectAttr();
-                        if (lex.peek().kind != Tk.RPAREN) throw new ParseException("Expected ')' after " + upper + "(attr)");
-                        lex.consume();
-                        return parseFnRhs(upper, attr);
-                    }
-                    if (!attrNames.contains(saved.text)) {
-                        throw new ParseException("Unknown attribute '" + saved.text + "' on entity " + entityName);
-                    }
-                    return parseRhs(saved.text);
-                }
+            if (lex.peek().kind == Tk.IDENT && isUnaryFn(lex.peek().text.toUpperCase())) {
+                return parseFunctionOrAttribute(lex.consume());
             }
             String attr = expectAttr();
             return parseRhs(attr);
+        }
+
+        /** After an identifier named like a unary function: {@code fn(attr) …}, or the attribute of that name. */
+        private Pred parseFunctionOrAttribute(Token name) {
+            String upper = name.text.toUpperCase();
+            if (lex.peek().kind == Tk.LPAREN) {
+                lex.consume();
+                String attr = expectAttr();
+                expect(Tk.RPAREN, "Expected ')' after " + upper + "(attr)");
+                return parseFnRhs(upper, attr);
+            }
+            if (!attrNames.contains(name.text)) {
+                throw new ParseException("Unknown attribute '" + name.text + "' on entity " + entityName);
+            }
+            return parseRhs(name.text);
         }
 
         private Pred parseRhs(String attr) {
@@ -1152,7 +1192,7 @@ final class JdqlParser {
                 expectKw("NULL");
                 return new IsNull(attr, negated);
             }
-            if (peekKw("BETWEEN")) {
+            if (peekKw(BETWEEN)) {
                 lex.consume();
                 ArgRef lo = parseArg();
                 expectKw("AND");
@@ -1189,7 +1229,7 @@ final class JdqlParser {
                 expectKw("NULL");
                 return new FnIsNull(fn, attr, negated);
             }
-            if (peekKw("BETWEEN")) {
+            if (peekKw(BETWEEN)) {
                 lex.consume();
                 ArgRef lo = parseArg();
                 expectKw("AND");

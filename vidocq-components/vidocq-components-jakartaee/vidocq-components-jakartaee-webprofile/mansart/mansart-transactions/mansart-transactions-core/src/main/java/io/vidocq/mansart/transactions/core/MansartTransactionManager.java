@@ -227,55 +227,73 @@ public class MansartTransactionManager implements TransactionManager {
         // BRANCH (same gtrid, distinct bqual), so reconciliation matches on the global
         // transaction id and a driver may hold several branches of the same transaction.
         var driverIndex = new LinkedHashMap<XAResource, java.util.Map<GtridKey, java.util.List<Xid>>>();
-        for (XAResource r : resources) {
-            var index = new LinkedHashMap<GtridKey, java.util.List<Xid>>();
-            try {
-                Xid[] xids = r.recover(XAResource.TMSTARTRSCAN | XAResource.TMENDRSCAN);
-                if (xids != null) {
-                    for (Xid x : xids) {
-                        index.computeIfAbsent(GtridKey.of(x), k -> new ArrayList<>()).add(x);
-                    }
-                }
-            } catch (XAException ignored) {
-                // Driver scan failed — treat as empty ; affected records stay in doubt.
-            }
-            driverIndex.put(r, index);
-        }
+        for (XAResource r : resources) driverIndex.put(r, inDoubtBranches(r));
 
         var committed   = new ArrayList<Xid>();
         var rolledBack  = new ArrayList<Xid>();
         var unresolved  = new ArrayList<RecoveryLog.Record>();
 
         for (RecoveryLog.Record rec : inDoubt) {
-            var key = GtridKey.of(rec.xid());
-            boolean matched = false;
-            boolean failed = false;
-            // Branches of one transaction may be spread over SEVERAL drivers — resolve them all.
-            for (var entry : driverIndex.entrySet()) {
-                var branches = entry.getValue().get(key);
-                if (branches == null) continue;
-                matched = true;
-                for (Xid branch : branches) {
-                    try {
-                        if (rec.type() == RecoveryLog.Type.COMMITTING) {
-                            entry.getKey().commit(branch, false);
-                            committed.add(branch);
-                        } else {
-                            // PREPARED — no durable commit decision was made.
-                            entry.getKey().rollback(branch);
-                            rolledBack.add(branch);
-                        }
-                    } catch (XAException ex) {
-                        // Driver rejected our resolution attempt — surface as still-in-doubt.
-                        failed = true;
-                    }
-                }
-            }
-            if (!matched || failed) {
+            if (!resolve(rec, driverIndex, committed, rolledBack)) {
                 unresolved.add(rec);
             }
         }
         return new RecoveryReport(committed, rolledBack, unresolved);
+    }
+
+    /** The in-doubt branches a driver holds, by global transaction id; none when its scan fails. */
+    private static java.util.Map<GtridKey, java.util.List<Xid>> inDoubtBranches(XAResource r) {
+        var index = new LinkedHashMap<GtridKey, java.util.List<Xid>>();
+        try {
+            Xid[] xids = r.recover(XAResource.TMSTARTRSCAN | XAResource.TMENDRSCAN);
+            if (xids != null) {
+                for (Xid x : xids) {
+                    index.computeIfAbsent(GtridKey.of(x), k -> new ArrayList<>()).add(x);
+                }
+            }
+        } catch (XAException _) {
+            // Driver scan failed — treat as empty ; affected records stay in doubt.
+        }
+        return index;
+    }
+
+    /**
+     * Commits or rolls back every branch of {@code rec} the drivers hold; {@code false} when no driver holds one or
+     * a driver rejects the resolution, the record then staying in doubt.
+     */
+    private static boolean resolve(RecoveryLog.Record rec,
+                                   java.util.Map<XAResource, java.util.Map<GtridKey, java.util.List<Xid>>> driverIndex,
+                                   List<Xid> committed, List<Xid> rolledBack) {
+        var key = GtridKey.of(rec.xid());
+        boolean matched = false;
+        boolean failed = false;
+        // Branches of one transaction may be spread over SEVERAL drivers — resolve them all.
+        for (var entry : driverIndex.entrySet()) {
+            var branches = entry.getValue().getOrDefault(key, List.of());
+            matched |= !branches.isEmpty();
+            for (Xid branch : branches) {
+                failed |= !resolveBranch(entry.getKey(), branch, rec.type(), committed, rolledBack);
+            }
+        }
+        return matched && !failed;
+    }
+
+    private static boolean resolveBranch(XAResource driver, Xid branch, RecoveryLog.Type type,
+                                         List<Xid> committed, List<Xid> rolledBack) {
+        try {
+            if (type == RecoveryLog.Type.COMMITTING) {
+                driver.commit(branch, false);
+                committed.add(branch);
+            } else {
+                // PREPARED — no durable commit decision was made.
+                driver.rollback(branch);
+                rolledBack.add(branch);
+            }
+            return true;
+        } catch (XAException _) {
+            // Driver rejected our resolution attempt — surface as still-in-doubt.
+            return false;
+        }
     }
 
     /** Global-transaction-id equality wrapper — branch qualifiers deliberately excluded. */

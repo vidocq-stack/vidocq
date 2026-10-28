@@ -124,49 +124,30 @@ final class MansartTransaction implements Transaction {
             status = Status.STATUS_COMMITTING;
             status = Status.STATUS_COMMITTED;
             invokeAfterCompletion(Status.STATUS_COMMITTED);
-            return;
+        } else if (resources.size() == 1) {
+            commitOnePhase(resources.get(0));
+        } else {
+            commitTwoPhase();
         }
-        if (resources.size() == 1) {
-            // 1PC degenerate path — skip prepare entirely.
-            status = Status.STATUS_COMMITTING;
-            try {
-                resources.get(0).commit(xidFor(resources.get(0)), true);
-            } catch (XAException ex) {
-                status = Status.STATUS_UNKNOWN;
-                invokeAfterCompletion(Status.STATUS_UNKNOWN);
-                throw new SystemException("XA single-resource commit failed: " + ex.errorCode);
-            }
-            status = Status.STATUS_COMMITTED;
-            invokeAfterCompletion(Status.STATUS_COMMITTED);
-            return;
-        }
+    }
 
-        // 2PC path : prepare every resource, abort if anyone votes rollback, then commit.
-        status = Status.STATUS_PREPARING;
-        var prepared = new ArrayList<XAResource>();
-        boolean rollback = false;
-        for (XAResource r : resources) {
-            try {
-                int vote = r.prepare(xidFor(r));
-                if (vote == XAResource.XA_OK) {
-                    prepared.add(r);
-                }
-                // XA_RDONLY : resource is read-only and can be forgotten — no commit needed.
-            } catch (XAException ex) {
-                rollback = true;
-                // The resource voted rollback — it has finalised its branch on its side.
-            }
+    /** 1PC degenerate path — a single resource: skip prepare entirely. */
+    private void commitOnePhase(XAResource resource) throws SystemException {
+        status = Status.STATUS_COMMITTING;
+        try {
+            resource.commit(xidFor(resource), true);
+        } catch (XAException ex) {
+            status = Status.STATUS_UNKNOWN;
+            invokeAfterCompletion(Status.STATUS_UNKNOWN);
+            throw new SystemException("XA single-resource commit failed: " + ex.errorCode);
         }
-        if (rollback) {
-            // Roll back every resource that voted YES (they are still holding locks).
-            status = Status.STATUS_ROLLING_BACK;
-            for (XAResource r : prepared) {
-                try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
-            }
-            status = Status.STATUS_ROLLEDBACK;
-            invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
-            throw new RollbackException("At least one resource voted rollback during prepare");
-        }
+        status = Status.STATUS_COMMITTED;
+        invokeAfterCompletion(Status.STATUS_COMMITTED);
+    }
+
+    /** 2PC path : prepare every resource, abort if anyone votes rollback, then commit. */
+    private void commitTwoPhase() throws RollbackException, SystemException {
+        List<XAResource> prepared = prepareAll();
         status = Status.STATUS_PREPARED;
 
         // Durable record : every yes-voter is now in-doubt until COMPLETED is appended.
@@ -185,26 +166,7 @@ final class MansartTransaction implements Transaction {
         for (XAResource r : prepared) {
             (r instanceof SinglePhaseResource ? lastResources : twoPhase).add(r);
         }
-        for (int i = 0; i < lastResources.size(); i++) {
-            try {
-                lastResources.get(i).commit(xidFor(lastResources.get(i)), false);
-            } catch (XAException ex) {
-                status = Status.STATUS_ROLLING_BACK;
-                for (XAResource r : twoPhase) {
-                    try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
-                }
-                // Remaining single-phase resources have not committed yet — roll them back too.
-                for (XAResource r : lastResources.subList(i + 1, lastResources.size())) {
-                    try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
-                }
-                status = Status.STATUS_ROLLEDBACK;
-                invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
-                RollbackException rex = new RollbackException(
-                        "Last-resource commit failed — transaction rolled back");
-                rex.initCause(ex);
-                throw rex;
-            }
-        }
+        commitLastResources(lastResources, twoPhase);
 
         status = Status.STATUS_COMMITTING;
         // Crossing the point of no return — write before any resource.commit() call so that a
@@ -224,6 +186,63 @@ final class MansartTransaction implements Transaction {
         status = Status.STATUS_COMMITTED;
         appendOrFailSystem(RecoveryLog.Type.COMPLETED);
         invokeAfterCompletion(Status.STATUS_COMMITTED);
+    }
+
+    /**
+     * Prepares every resource and returns those that voted yes ({@code XA_RDONLY} ones are read-only and
+     * forgotten: no commit needed); when one votes rollback, rolls the yes-voters back and throws.
+     */
+    private List<XAResource> prepareAll() throws RollbackException {
+        status = Status.STATUS_PREPARING;
+        var prepared = new ArrayList<XAResource>();
+        boolean rollback = false;
+        for (XAResource r : resources) {
+            try {
+                if (r.prepare(xidFor(r)) == XAResource.XA_OK) prepared.add(r);
+            } catch (XAException _) {
+                // The resource voted rollback — it has finalised its branch on its side.
+                rollback = true;
+            }
+        }
+        if (rollback) {
+            // Roll back every resource that voted YES (they are still holding locks).
+            status = Status.STATUS_ROLLING_BACK;
+            rollbackQuietly(prepared);
+            status = Status.STATUS_ROLLEDBACK;
+            invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+            throw new RollbackException("At least one resource voted rollback during prepare");
+        }
+        return prepared;
+    }
+
+    /**
+     * Commits the single-phase resources one by one; when one fails, rolls back the prepared two-phase branches and
+     * the single-phase resources not committed yet, then throws.
+     */
+    private void commitLastResources(List<XAResource> lastResources, List<XAResource> twoPhase)
+            throws RollbackException {
+        for (int i = 0; i < lastResources.size(); i++) {
+            try {
+                lastResources.get(i).commit(xidFor(lastResources.get(i)), false);
+            } catch (XAException ex) {
+                status = Status.STATUS_ROLLING_BACK;
+                rollbackQuietly(twoPhase);
+                // Remaining single-phase resources have not committed yet — roll them back too.
+                rollbackQuietly(lastResources.subList(i + 1, lastResources.size()));
+                status = Status.STATUS_ROLLEDBACK;
+                invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+                RollbackException rex = new RollbackException(
+                        "Last-resource commit failed — transaction rolled back");
+                rex.initCause(ex);
+                throw rex;
+            }
+        }
+    }
+
+    private void rollbackQuietly(List<XAResource> branches) {
+        for (XAResource r : branches) {
+            try { r.rollback(xidFor(r)); } catch (XAException _) { /* best effort */ }
+        }
     }
 
     private void appendOrFailSystem(RecoveryLog.Type type) throws SystemException {

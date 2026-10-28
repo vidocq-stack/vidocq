@@ -26,7 +26,6 @@ import java.io.InputStreamReader;
 import java.lang.classfile.Annotation;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
-import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
 import java.lang.reflect.AccessFlag;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -73,29 +72,34 @@ final class RepositoryClassScanner {
         for (String element : classpath) {
             Path p = Path.of(element);
             if (!Files.exists(p)) continue;
-            if (Files.isDirectory(p)) {
-                for (String res : INDEX_RESOURCES) {
-                    Path list = p.resolve(res);
-                    if (Files.exists(list)) {
-                        try (BufferedReader r = Files.newBufferedReader(list, StandardCharsets.UTF_8)) {
-                            readIndex(r, covered);
-                        }
-                    }
-                }
-            } else if (element.endsWith(".jar")) {
-                try (JarFile jar = new JarFile(p.toFile())) {
-                    for (String res : INDEX_RESOURCES) {
-                        JarEntry e = jar.getJarEntry(res);
-                        if (e == null) continue;
-                        try (BufferedReader r = new BufferedReader(
-                                new InputStreamReader(jar.getInputStream(e), StandardCharsets.UTF_8))) {
-                            readIndex(r, covered);
-                        }
-                    }
+            if (Files.isDirectory(p)) readDirectoryIndexes(p, covered);
+            else if (element.endsWith(".jar")) readJarIndexes(p, covered);
+        }
+        return covered;
+    }
+
+    private static void readDirectoryIndexes(Path directory, Set<String> covered) throws IOException {
+        for (String res : INDEX_RESOURCES) {
+            Path list = directory.resolve(res);
+            if (Files.exists(list)) {
+                try (BufferedReader r = Files.newBufferedReader(list, StandardCharsets.UTF_8)) {
+                    readIndex(r, covered);
                 }
             }
         }
-        return covered;
+    }
+
+    private static void readJarIndexes(Path jarPath, Set<String> covered) throws IOException {
+        try (JarFile jar = new JarFile(jarPath.toFile())) {
+            for (String res : INDEX_RESOURCES) {
+                JarEntry e = jar.getJarEntry(res);
+                if (e == null) continue;
+                try (BufferedReader r = new BufferedReader(
+                        new InputStreamReader(jar.getInputStream(e), StandardCharsets.UTF_8))) {
+                    readIndex(r, covered);
+                }
+            }
+        }
     }
 
     private static void readIndex(BufferedReader r, Set<String> out) throws IOException {
@@ -113,13 +117,20 @@ final class RepositoryClassScanner {
             Enumeration<JarEntry> entries = jar.entries();
             while (entries.hasMoreElements()) {
                 JarEntry e = entries.nextElement();
-                if (e.isDirectory() || !e.getName().endsWith(".class")) continue;
-                if (e.getName().endsWith("module-info.class") || e.getName().endsWith("package-info.class")) continue;
-                try (InputStream in = jar.getInputStream(e)) {
-                    inspect(in.readAllBytes(), out);
+                if (isTypeClassFile(e)) {
+                    try (InputStream in = jar.getInputStream(e)) {
+                        inspect(in.readAllBytes(), out);
+                    }
                 }
             }
         }
+    }
+
+    /** A class file of a type: not a directory, a {@code module-info} or a {@code package-info}. */
+    private static boolean isTypeClassFile(JarEntry e) {
+        String name = e.getName();
+        return !e.isDirectory() && name.endsWith(".class")
+                && !name.endsWith("module-info.class") && !name.endsWith("package-info.class");
     }
 
     private static void scanDirectory(Path root, Set<String> out) throws IOException {
@@ -144,7 +155,7 @@ final class RepositoryClassScanner {
         if (!cm.flags().has(AccessFlag.INTERFACE)) return;
         var attr = cm.findAttribute(java.lang.classfile.Attributes.runtimeVisibleAnnotations());
         if (attr.isEmpty()) return;
-        for (Annotation a : ((RuntimeVisibleAnnotationsAttribute) attr.get()).annotations()) {
+        for (Annotation a : attr.get().annotations()) {
             if (REPOSITORY_DESC.equals(a.className().stringValue())) {
                 // Internal name com/acme/Outer$Inner -> canonical com.acme.Outer.Inner
                 String internal = cm.thisClass().asInternalName();

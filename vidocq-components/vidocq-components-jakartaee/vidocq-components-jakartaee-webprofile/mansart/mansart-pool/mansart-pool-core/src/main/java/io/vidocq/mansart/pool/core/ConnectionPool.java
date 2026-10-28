@@ -175,8 +175,7 @@ final class ConnectionPool implements AutoCloseable {
     void detectLeaks(long nowNanos) {
         if (!leakDetectionEnabled) return;
         for (PooledEntry e : inUse) {
-            if (e.leakWarned)                                                continue;
-            if (!e.leaked(leakDetectionThresholdNanos, nowNanos))             continue;
+            if (e.leakWarned || !e.leaked(leakDetectionThresholdNanos, nowNanos)) continue;
             e.leakWarned = true;
             totalLeaks.incrementAndGet();
             LOG.log(System.Logger.Level.WARNING,

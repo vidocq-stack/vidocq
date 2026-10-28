@@ -30,8 +30,10 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * The values of a statement {@code JdqlExecutor.run} runs, converted to the Java type of the attribute they are
@@ -53,6 +55,16 @@ import java.util.UUID;
 final class JdqlValues {
 
     /** The numeric types, boxed, that a number or a text converts to exactly. */
+    /** The types read from their ISO text form, with the parser of each. */
+    private static final Map<Class<?>, Function<String, Object>> TEXT_PARSERS = Map.of(
+            LocalDate.class, LocalDate::parse,
+            LocalDateTime.class, LocalDateTime::parse,
+            LocalTime.class, LocalTime::parse,
+            OffsetDateTime.class, OffsetDateTime::parse,
+            ZonedDateTime.class, ZonedDateTime::parse,
+            Instant.class, Instant::parse,
+            UUID.class, UUID::fromString);
+
     private static final Set<Class<?>> NUMBERS = Set.of(Byte.class, Short.class, Integer.class, Long.class,
             Float.class, Double.class, BigDecimal.class, BigInteger.class);
 
@@ -101,40 +113,27 @@ final class JdqlValues {
         if (target.isEnum()) {
             return constant(target, text);
         }
-        if (target == LocalDate.class) {
-            return LocalDate.parse(text);
-        }
-        if (target == LocalDateTime.class) {
-            return LocalDateTime.parse(text);
-        }
-        if (target == LocalTime.class) {
-            return LocalTime.parse(text);
-        }
-        if (target == OffsetDateTime.class) {
-            return OffsetDateTime.parse(text);
-        }
-        if (target == ZonedDateTime.class) {
-            return ZonedDateTime.parse(text);
-        }
-        if (target == Instant.class) {
-            return Instant.parse(text);
+        Function<String, Object> parser = TEXT_PARSERS.get(target);
+        if (parser != null) {
+            return parser.apply(text);
         }
         if (target == Boolean.class) {
-            if (text.equals("true")) {
-                return Boolean.TRUE;
-            }
-            if (text.equals("false")) {
-                return Boolean.FALSE;
-            }
-            throw new IllegalArgumentException("neither true nor false");
-        }
-        if (target == UUID.class) {
-            return UUID.fromString(text);
+            return booleanOf(text);
         }
         if (NUMBERS.contains(target)) {
             return fromNumber(new BigDecimal(text.strip()), target);
         }
         return text;
+    }
+
+    private static Boolean booleanOf(String text) {
+        if (text.equals("true")) {
+            return Boolean.TRUE;
+        }
+        if (text.equals("false")) {
+            return Boolean.FALSE;
+        }
+        throw new IllegalArgumentException("neither true nor false");
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

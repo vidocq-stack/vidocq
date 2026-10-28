@@ -42,6 +42,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -54,6 +55,24 @@ import java.util.Optional;
  * Pagination, derived queries, JDQL come in M3b/M5.
  */
 public final class RepositoryRuntime {
+
+    /** The column type {@code ensureTable} declares for each (boxed) Java type; anything else, enums included, is text. */
+    private static final Map<Class<?>, String> DDL_TYPES = Map.ofEntries(
+            Map.entry(Long.class, "BIGINT"),
+            Map.entry(Integer.class, "INTEGER"),
+            Map.entry(Short.class, "SMALLINT"),
+            Map.entry(Byte.class, "SMALLINT"),
+            Map.entry(Boolean.class, "BOOLEAN"),
+            Map.entry(Double.class, "DOUBLE PRECISION"),
+            Map.entry(Float.class, "REAL"),
+            Map.entry(java.math.BigDecimal.class, "NUMERIC(38, 10)"),
+            Map.entry(java.math.BigInteger.class, "NUMERIC(38, 10)"),
+            Map.entry(java.time.LocalDate.class, "DATE"),
+            Map.entry(java.time.LocalTime.class, "TIME"),
+            Map.entry(java.time.LocalDateTime.class, "TIMESTAMP"),
+            Map.entry(java.time.OffsetDateTime.class, "TIMESTAMP WITH TIME ZONE"),
+            Map.entry(java.time.Instant.class, "TIMESTAMP WITH TIME ZONE"),
+            Map.entry(java.util.UUID.class, "UUID"));
 
     private final DataSource dataSource;
     private final Dialect    dialect;
@@ -102,23 +121,8 @@ public final class RepositoryRuntime {
     }
 
     private static String sqlDdlType(Class<?> t) {
-        if (t == Long.class || t == long.class)         return "BIGINT";
-        if (t == Integer.class || t == int.class)       return "INTEGER";
-        if (t == Short.class || t == short.class)       return "SMALLINT";
-        if (t == Byte.class || t == byte.class)         return "SMALLINT";
-        if (t == Boolean.class || t == boolean.class)   return "BOOLEAN";
-        if (t == Double.class || t == double.class)     return "DOUBLE PRECISION";
-        if (t == Float.class || t == float.class)       return "REAL";
-        if (t == java.math.BigDecimal.class
-                || t == java.math.BigInteger.class)     return "NUMERIC(38, 10)";
-        if (t == java.time.LocalDate.class)             return "DATE";
-        if (t == java.time.LocalTime.class)             return "TIME";
-        if (t == java.time.LocalDateTime.class)         return "TIMESTAMP";
-        if (t == java.time.OffsetDateTime.class
-                || t == java.time.Instant.class)        return "TIMESTAMP WITH TIME ZONE";
-        if (t == java.util.UUID.class)                  return "UUID";
-        if (t.isEnum())                                 return "VARCHAR(255)";
-        return "VARCHAR(255)";
+        Class<?> boxed = java.lang.invoke.MethodType.methodType(t).wrap().returnType();
+        return DDL_TYPES.getOrDefault(boxed, "VARCHAR(255)");
     }
 
     /* -------- CRUD ---------- */

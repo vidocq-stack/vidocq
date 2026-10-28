@@ -55,6 +55,15 @@ final class RepositoryWriter {
     private static final String VALUE      = "value";
     private static final String RETURN     = "return ";
     private static final String MODEL_CAST = ".$MODEL, (";
+    private static final String TRANSACTIONAL = "jakarta.transaction.Transactional";
+    private static final String ADD_PART = "_parts.add(";
+    private static final String ADD_ARG = "_args.add(";
+    private static final String IS_NULL_OPEN = ".IsNull(";
+    private static final String IS_NOT_NULL_OPEN = ".IsNotNull(";
+    private static final String LIKE_OPEN = ".Like(";
+    private static final String RETURN_QUERY_ONE = "return runtime.queryOne(";
+    private static final String MODEL_WHERE_ARGS = ".$MODEL, _w, _xs);";
+    private static final String MODEL_ARG = ".$MODEL, ";
 
     private final SourceSink sink;
     private final Elements elements;
@@ -91,16 +100,21 @@ final class RepositoryWriter {
         // Greedy from longest — favour the longer attribute match so "primaryAddress" beats "primary".
         for (int len = lcFirst.length(); len > 0; len--) {
             String head = lcFirst.substring(0, len);
-            if (!facet.attrs().contains(head)) continue;
-            // Full-chunk match → terminal attribute (no further descent).
-            if (len == camelChunk.length()) return head;
-            // Suffix exists → head must be a relation to descend.
-            String targetFqn = facet.relations().get(head);
-            if (targetFqn == null) continue;
-            String tail = resolvePath(camelChunk.substring(len), targetFqn);
-            if (tail != null) return head + "." + tail;
+            String path = facet.attrs().contains(head) ? pathFrom(head, camelChunk.substring(len), facet) : null;
+            if (path != null) return path;
         }
         return null;
+    }
+
+    /** The path starting at attribute {@code head} of {@code facet} when {@code rest} of the chunk resolves from it. */
+    private String pathFrom(String head, String rest, EntityRegistry.EntityFacet facet) {
+        // Full-chunk match → terminal attribute (no further descent).
+        if (rest.isEmpty()) return head;
+        // Suffix exists → head must be a relation to descend.
+        String targetFqn = facet.relations().get(head);
+        if (targetFqn == null) return null;
+        String tail = resolvePath(rest, targetFqn);
+        return tail == null ? null : head + "." + tail;
     }
 
     /** @return the entity {@link TypeElement} backing {@code repo}, or {@code null} when it is not
@@ -182,9 +196,9 @@ final class RepositoryWriter {
             w.println("import java.util.List;");
             w.println("import java.util.Optional;");
             // Conditional import for @Transactional when needed
-            boolean classTransactional = hasAnnotation(repo, "jakarta.transaction.Transactional");
+            boolean classTransactional = hasAnnotation(repo, TRANSACTIONAL);
             boolean anyMethodTransactional = abstractMethods(repo).stream()
-                    .anyMatch(m -> hasAnnotation(m, "jakarta.transaction.Transactional"));
+                    .anyMatch(m -> hasAnnotation(m, TRANSACTIONAL));
             if (classTransactional || anyMethodTransactional) {
                 w.println("import jakarta.transaction.Transactional;");
             }
@@ -237,7 +251,7 @@ final class RepositoryWriter {
         // Even if the class already has a class-level @Transactional, the method-level annotation
         // may specify a different TxType (e.g. REQUIRES_NEW) — CDI interceptor binding uses the
         // most specific (method-level) annotation, so we must always reproduce it faithfully.
-        if (hasAnnotation(m, "jakarta.transaction.Transactional")) {
+        if (hasAnnotation(m, TRANSACTIONAL)) {
             emitTransactionalAnnotation(w, m, "    ");
         }
         w.println(signature(m, resolved, name));
@@ -584,15 +598,15 @@ final class RepositoryWriter {
 
         if (trailingPageRequest && d.op() == QueryMethodParser.Operation.FIND) {
             String runtimeMethod = isCursoredPageReturn(returnType) ? "queryCursored" : "queryPage";
-            return "return runtime." + runtimeMethod + "(" + metamodel + ".$MODEL, " + where + ", " + orderBy
+            return "return runtime." + runtimeMethod + "(" + metamodel + MODEL_ARG + where + ", " + orderBy
                     + ", " + p(paramTypes.size() - 1) + ", " + args + ");";
         }
 
         return switch (d.op()) {
             case FIND     -> findBody(returnType, metamodel, where, orderBy, args);
-            case FIND_ONE -> "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
-            case COUNT    -> "return runtime.countWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
-            case EXISTS   -> "return runtime.existsWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+            case FIND_ONE -> RETURN_QUERY_ONE + metamodel + MODEL_ARG + where + ", " + args + ");";
+            case COUNT    -> "return runtime.countWhere(" + metamodel + MODEL_ARG + where + ", " + args + ");";
+            case EXISTS   -> "return runtime.existsWhere(" + metamodel + MODEL_ARG + where + ", " + args + ");";
             case DELETE   -> deleteBody(returnType, metamodel, where, args);
         };
     }
@@ -646,54 +660,54 @@ final class RepositoryWriter {
                           .append(emptyInReturn(d.op(), returnType)).append(' ');
                         partExpr = "new " + pkg + ".In(" + attr + ", _col" + idx + ".size())";
                         partExpr = wrapIgnoreCaseAndNot(partExpr, p, pkg);
-                        sb.append("_parts.add(").append(partExpr).append("); ");
+                        sb.append(ADD_PART).append(partExpr).append("); ");
                         sb.append("for (Object _v : _col").append(idx).append(") _args.add(_v); ");
                     } else {
                         partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".In(" + attr + ", 1)", p, pkg);
-                        sb.append("_parts.add(").append(partExpr).append("); ");
-                        sb.append("_args.add(").append(paramName).append("); ");
+                        sb.append(ADD_PART).append(partExpr).append("); ");
+                        sb.append(ADD_ARG).append(paramName).append("); ");
                     }
                     idx += 1;
                 }
                 case BETWEEN -> {
                     partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Between(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
-                    sb.append("_args.add(").append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
+                    sb.append(ADD_PART).append(partExpr).append("); ");
+                    sb.append(ADD_ARG).append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
                     idx += 2;
                 }
                 case IS_NULL, EMPTY -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".IsNull(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + IS_NULL_OPEN + attr + ")", p, pkg);
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                 }
                 case IS_NOT_NULL, NOT_EMPTY -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".IsNotNull(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + IS_NOT_NULL_OPEN + attr + ")", p, pkg);
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                 }
                 case TRUE -> {
                     partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                     sb.append("_args.add(java.lang.Boolean.TRUE); ");
                 }
                 case FALSE -> {
                     partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                     sb.append("_args.add(java.lang.Boolean.FALSE); ");
                 }
                 case CONTAINS -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                     sb.append("_args.add(\"%\" + ").append(paramName).append(" + \"%\"); ");
                     idx += 1;
                 }
                 case STARTS_WITH -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
-                    sb.append("_args.add(").append(paramName).append(" + \"%\"); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
+                    sb.append(ADD_PART).append(partExpr).append("); ");
+                    sb.append(ADD_ARG).append(paramName).append(" + \"%\"); ");
                     idx += 1;
                 }
                 case ENDS_WITH -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Like(" + attr + ")", p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
+                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
+                    sb.append(ADD_PART).append(partExpr).append("); ");
                     sb.append("_args.add(\"%\" + ").append(paramName).append("); ");
                     idx += 1;
                 }
@@ -701,8 +715,8 @@ final class RepositoryWriter {
                     partExpr = wrapIgnoreCaseAndNot(
                             "new " + pkg + '.' + comparatorClass(p.comparator()) + '(' + attr + ')',
                             p, pkg);
-                    sb.append("_parts.add(").append(partExpr).append("); ");
-                    sb.append("_args.add(").append(paramName).append("); ");
+                    sb.append(ADD_PART).append(partExpr).append("); ");
+                    sb.append(ADD_ARG).append(paramName).append("); ");
                     idx += 1;
                 }
             }
@@ -722,9 +736,9 @@ final class RepositoryWriter {
         }
         return switch (d.op()) {
             case FIND     -> sb.append(findBody(returnType, metamodel, "_w", orderBy, "_xs")).toString();
-            case FIND_ONE -> sb.append("return runtime.queryOne(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
-            case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
-            case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, _w, _xs);").toString();
+            case FIND_ONE -> sb.append(RETURN_QUERY_ONE).append(metamodel).append(MODEL_WHERE_ARGS).toString();
+            case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(MODEL_WHERE_ARGS).toString();
+            case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(MODEL_WHERE_ARGS).toString();
             case DELETE   -> sb.append(deleteBody(returnType, metamodel, "_w", "_xs")).toString();
         };
     }
@@ -789,21 +803,21 @@ final class RepositoryWriter {
 
     private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {
         String rt = returnType.toString();
-        String list = "runtime.queryList(" + metamodel + ".$MODEL, " + where + ", " + orderBy + ", " + args + ")";
+        String list = "runtime.queryList(" + metamodel + MODEL_ARG + where + ", " + orderBy + ", " + args + ")";
         if (rt.startsWith(OPTIONAL)) {
-            return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
+            return RETURN_QUERY_ONE + metamodel + MODEL_ARG + where + ", " + args + ");";
         }
         if (rt.startsWith(STREAM))    return RETURN + list + ".stream();";
         if (rt.startsWith(LIST))             return RETURN + list + ";";
         if (rt.startsWith(COLLECTION))       return RETURN + list + ";";
         if (rt.startsWith(ITERABLE))         return RETURN + list + ";";
         // Single-entity return → use queryOne and unwrap (throws if missing per Jakarta Data semantics)
-        return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args
+        return RETURN_QUERY_ONE + metamodel + MODEL_ARG + where + ", " + args
                 + ").orElseThrow(() -> new jakarta.data.exceptions.EmptyResultException(\"No result\"));";
     }
 
     private String deleteBody(TypeMirror returnType, String metamodel, String where, String args) {
-        String call = "runtime.deleteWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ")";
+        String call = "runtime.deleteWhere(" + metamodel + MODEL_ARG + where + ", " + args + ")";
         return switch (returnType.getKind()) {
             case VOID -> call + ";";
             case LONG -> RETURN + call + ";";
@@ -849,18 +863,18 @@ final class RepositoryWriter {
             case LTE       -> "new " + pkg + ".Lte(" + attr + ")";
             case GT        -> "new " + pkg + ".Gt(" + attr + ")";
             case GTE       -> "new " + pkg + ".Gte(" + attr + ")";
-            case LIKE      -> "new " + pkg + ".Like(" + attr + ")";
+            case LIKE      -> "new " + pkg + LIKE_OPEN + attr + ")";
             case BETWEEN   -> "new " + pkg + ".Between(" + attr + ")";
             case IN        -> "new " + pkg + ".In(" + attr + ", 1)"; // arity refined when caller passes a List — M3c
-            case IS_NULL    -> "new " + pkg + ".IsNull(" + attr + ")";
-            case IS_NOT_NULL -> "new " + pkg + ".IsNotNull(" + attr + ")";
+            case IS_NULL    -> "new " + pkg + IS_NULL_OPEN + attr + ")";
+            case IS_NOT_NULL -> "new " + pkg + IS_NOT_NULL_OPEN + attr + ")";
             // M7-28 — wildcards materialised in renderArgsForPredicates; the predicate
             // itself is a plain Like.
-            case CONTAINS, STARTS_WITH, ENDS_WITH -> "new " + pkg + ".Like(" + attr + ")";
+            case CONTAINS, STARTS_WITH, ENDS_WITH -> "new " + pkg + LIKE_OPEN + attr + ")";
             // M7-28 — TRUE/FALSE: same Eq predicate, args populated with Boolean literal.
             case TRUE, FALSE                      -> "new " + pkg + ".Eq(" + attr + ")";
-            case EMPTY                             -> "new " + pkg + ".IsNull(" + attr + ")";
-            case NOT_EMPTY                         -> "new " + pkg + ".IsNotNull(" + attr + ")";
+            case EMPTY                             -> "new " + pkg + IS_NULL_OPEN + attr + ")";
+            case NOT_EMPTY                         -> "new " + pkg + IS_NOT_NULL_OPEN + attr + ")";
         };
         // M7-28 — IgnoreCase wraps the inner predicate so the dialect emits LOWER(col) <op> LOWER(?).
         // Done BEFORE Not so the SQL renders as NOT (LOWER(col) <op> LOWER(?)).
@@ -901,52 +915,37 @@ final class RepositoryWriter {
      * The parameter index advances only when a real method parameter is consumed.
      */
     private String renderArgsForPredicates(List<QueryMethodParser.Predicate> preds) {
-        StringBuilder sb = new StringBuilder();
+        List<String> args = new java.util.ArrayList<>(preds.size());
         int paramIdx = 0;
-        boolean first = true;
         for (QueryMethodParser.Predicate pr : preds) {
-            switch (pr.comparator()) {
-                case CONTAINS -> {
-                    if (!first) sb.append(", ");
-                    sb.append("\"%\" + ").append(p(paramIdx++)).append(" + \"%\"");
-                    first = false;
-                }
-                case STARTS_WITH -> {
-                    if (!first) sb.append(", ");
-                    sb.append(p(paramIdx++)).append(" + \"%\"");
-                    first = false;
-                }
-                case ENDS_WITH -> {
-                    if (!first) sb.append(", ");
-                    sb.append("\"%\" + ").append(p(paramIdx++));
-                    first = false;
-                }
-                case TRUE -> {
-                    if (!first) sb.append(", ");
-                    sb.append("java.lang.Boolean.TRUE");
-                    first = false;
-                }
-                case FALSE -> {
-                    if (!first) sb.append(", ");
-                    sb.append("java.lang.Boolean.FALSE");
-                    first = false;
-                }
-                case BETWEEN -> {
-                    if (!first) sb.append(", ");
-                    sb.append(p(paramIdx++)).append(", ").append(p(paramIdx++));
-                    first = false;
-                }
-                case IS_NULL, IS_NOT_NULL, EMPTY, NOT_EMPTY -> {
-                    /* no argument */
-                }
-                default -> {
-                    if (!first) sb.append(", ");
-                    sb.append(p(paramIdx++));
-                    first = false;
-                }
-            }
+            String arg = argFor(pr.comparator(), paramIdx);
+            if (arg != null) args.add(arg);
+            paramIdx += parametersOf(pr.comparator());
         }
-        return sb.toString();
+        return String.join(", ", args);
+    }
+
+    /** The value expression(s) a predicate binds, reading from parameter {@code idx}; {@code null} for none. */
+    private String argFor(QueryMethodParser.Comparator comparator, int idx) {
+        return switch (comparator) {
+            case CONTAINS    -> "\"%\" + " + p(idx) + " + \"%\"";
+            case STARTS_WITH -> p(idx) + " + \"%\"";
+            case ENDS_WITH   -> "\"%\" + " + p(idx);
+            case TRUE        -> "java.lang.Boolean.TRUE";
+            case FALSE       -> "java.lang.Boolean.FALSE";
+            case BETWEEN     -> p(idx) + ", " + p(idx + 1);
+            case IS_NULL, IS_NOT_NULL, EMPTY, NOT_EMPTY -> null;
+            default          -> p(idx);
+        };
+    }
+
+    /** How many method parameters a predicate consumes. */
+    private static int parametersOf(QueryMethodParser.Comparator comparator) {
+        return switch (comparator) {
+            case BETWEEN -> 2;
+            case TRUE, FALSE, IS_NULL, IS_NOT_NULL, EMPTY, NOT_EMPTY -> 0;
+            default -> 1;
+        };
     }
 
     private java.util.Set<String> collectAttributeNames(TypeElement entity) {
@@ -969,17 +968,17 @@ final class RepositoryWriter {
         return switch (name) {
             case "save"        -> arity == 1 ? saveBody(metamodel, entityFqn) : null;
             case "saveAll"     -> arity == 1 ? saveAllBody(metamodel, entityFqn) : null;
-            case "findById"    -> arity == 1 ? "return runtime.findById(" + metamodel + ".$MODEL, " + p(0) + ");" : null;
+            case "findById"    -> arity == 1 ? "return runtime.findById(" + metamodel + MODEL_ARG + p(0) + ");" : null;
             case "findAll" -> {
                 if (arity == 0) yield findAllBody(metamodel, returnsStream);
                 if (arity == 2 && isPageRequest(paramTypes.get(0)) && isOrder(paramTypes.get(1))) {
-                    yield "return runtime.queryPage(" + metamodel + ".$MODEL, "
+                    yield "return runtime.queryPage(" + metamodel + MODEL_ARG
                             + "io.vidocq.mansart.data.dialect.Where.ALWAYS_TRUE, "
-                            + "runtime.toOrderBy(" + metamodel + ".$MODEL, " + p(1) + "), "
+                            + "runtime.toOrderBy(" + metamodel + MODEL_ARG + p(1) + "), "
                             + p(0) + ", new java.lang.Object[0]);";
                 }
                 if (arity == 1 && isPageRequest(paramTypes.get(0))) {
-                    yield "return runtime.queryPage(" + metamodel + ".$MODEL, "
+                    yield "return runtime.queryPage(" + metamodel + MODEL_ARG
                             + "io.vidocq.mansart.data.dialect.Where.ALWAYS_TRUE, "
                             + "io.vidocq.mansart.data.dialect.OrderBy.NONE, "
                             + p(0) + ", new java.lang.Object[0]);";
@@ -996,7 +995,7 @@ final class RepositoryWriter {
                 yield null;
             }
             case "count"       -> arity == 0 ? "return runtime.count(" + metamodel + ".$MODEL);" : null;
-            case "existsById"  -> arity == 1 ? "return runtime.existsById(" + metamodel + ".$MODEL, " + p(0) + ");" : null;
+            case "existsById"  -> arity == 1 ? "return runtime.existsById(" + metamodel + MODEL_ARG + p(0) + ");" : null;
             default            -> arity == 1 ? crudBody(name, returnType, metamodel, entityFqn) : null;
         };
     }
@@ -1041,7 +1040,7 @@ final class RepositoryWriter {
     }
 
     private String simpleVoidOrBool(String op, String metamodel, boolean isVoid) {
-        String call = "runtime." + op + "(" + metamodel + ".$MODEL, " + p(0) + ")";
+        String call = "runtime." + op + "(" + metamodel + MODEL_ARG + p(0) + ")";
         return isVoid ? call + ";" : RETURN + call + ";";
     }
 
@@ -1089,7 +1088,7 @@ final class RepositoryWriter {
                                              String indent) {
         for (var mirror : element.getAnnotationMirrors()) {
             TypeElement annType = (TypeElement) mirror.getAnnotationType().asElement();
-            if (!annType.getQualifiedName().contentEquals("jakarta.transaction.Transactional")) continue;
+            if (!annType.getQualifiedName().contentEquals(TRANSACTIONAL)) continue;
 
             // Only iterate over explicitly set values (mirror.getElementValues() excludes defaults).
             java.util.List<String> parts = new java.util.ArrayList<>();

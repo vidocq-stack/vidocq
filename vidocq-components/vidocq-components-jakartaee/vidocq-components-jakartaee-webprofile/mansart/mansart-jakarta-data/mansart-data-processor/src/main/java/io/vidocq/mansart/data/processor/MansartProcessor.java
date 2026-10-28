@@ -75,44 +75,50 @@ public final class MansartProcessor extends AbstractProcessor {
 
         for (TypeElement annotation : annotations) {
             String fqn = annotation.getQualifiedName().toString();
+            Set<TypeElement> into = switch (fqn) {
+                case "jakarta.data.repository.Repository" -> repositories;
+                case "jakarta.persistence.Entity" -> entities;
+                default -> null;
+            };
+            if (into == null) continue;
             for (Element e : round.getElementsAnnotatedWith(annotation)) {
-                if (!(e instanceof TypeElement t)) continue;
-                if (fqn.equals("jakarta.data.repository.Repository")) repositories.add(t);
-                else if (fqn.equals("jakarta.persistence.Entity"))    entities.add(t);
+                if (e instanceof TypeElement t) into.add(t);
             }
         }
 
-        for (TypeElement type : entities) {
-            EntityScanner.EntityDescriptor descriptor = scanner.scan(type);
-            if (descriptor == null) continue;
-            // M8-3i — register the entity facet so RepositoryWriter can resolve
-            // method-name path expressions (findByAuthorName) in the same round.
-            entityRegistry.register(type.getQualifiedName().toString(), descriptor);
-            try {
-                mansartWriter.write(descriptor);
-                if (jpaWriter != null) jpaWriter.write(descriptor);
-            } catch (IOException ex) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                        "[mansart-data] Failed to write metamodel for "
-                                + type.getQualifiedName() + ": " + ex.getMessage(), type);
-            }
-        }
-
-        for (TypeElement repo : repositories) {
-            try {
-                String implFqn = repositoryWriter.writeIfRepository(repo);
-                if (implFqn != null) {
-                    String itfFqn = repo.getQualifiedName().toString();
-                    repoEntries.add(itfFqn + "=" + implFqn);
-                }
-            } catch (IOException ex) {
-                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                        "[mansart-data] Failed to write repository impl for "
-                                + repo.getQualifiedName() + ": " + ex.getMessage(), repo);
-            }
-        }
-
+        for (TypeElement type : entities) writeMetamodels(type);
+        for (TypeElement repo : repositories) writeRepository(repo);
         return true;
+    }
+
+    private void writeMetamodels(TypeElement type) {
+        EntityScanner.EntityDescriptor descriptor = scanner.scan(type);
+        if (descriptor == null) return;
+        // M8-3i — register the entity facet so RepositoryWriter can resolve
+        // method-name path expressions (findByAuthorName) in the same round.
+        entityRegistry.register(type.getQualifiedName().toString(), descriptor);
+        try {
+            mansartWriter.write(descriptor);
+            if (jpaWriter != null) jpaWriter.write(descriptor);
+        } catch (IOException ex) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "[mansart-data] Failed to write metamodel for "
+                            + type.getQualifiedName() + ": " + ex.getMessage(), type);
+        }
+    }
+
+    private void writeRepository(TypeElement repo) {
+        try {
+            String implFqn = repositoryWriter.writeIfRepository(repo);
+            if (implFqn != null) {
+                String itfFqn = repo.getQualifiedName().toString();
+                repoEntries.add(itfFqn + "=" + implFqn);
+            }
+        } catch (IOException ex) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "[mansart-data] Failed to write repository impl for "
+                            + repo.getQualifiedName() + ": " + ex.getMessage(), repo);
+        }
     }
 
     /** Writes {@code META-INF/mansart-repositories.list} consumed by the CDI BCE. */
