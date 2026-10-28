@@ -112,10 +112,9 @@ final class Fixture {
             if (read(log).contains(text)) {
                 return;
             }
-            if (!process.isAlive()) {
+            if (process.waitFor(250, TimeUnit.MILLISECONDS) && !read(log).contains(text)) {
                 fail("the process exited with " + process.exitValue() + " before '" + text + "':\n" + read(log));
             }
-            Thread.sleep(250);
         }
         fail("no '" + text + "' within " + TIMEOUT + ":\n" + read(log));
     }

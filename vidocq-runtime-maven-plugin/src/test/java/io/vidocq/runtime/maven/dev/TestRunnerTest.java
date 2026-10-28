@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRunnerTest {
 
+    private static final Duration PID_TIMEOUT = Duration.ofSeconds(20);
+
     @Test
     void allTestsRunWithoutDevServicesOfTheirOwn() {
         assertEquals(List.of("mvn", "-ntp", "-o", "-q", "test-compile", "surefire:test",
@@ -100,11 +102,7 @@ class TestRunnerTest {
         TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
                 dir.resolve("target/surefire-reports"));
         ContinuousTesting.Launched launched = runner.launch(List.of());
-        Path pidFile = dir.resolve("child.pid");
-        while (!Files.exists(pidFile) || Files.readString(pidFile).isBlank()) {
-            Thread.sleep(50);
-        }
-        long child = Long.parseLong(Files.readString(pidFile).strip());
+        long child = writtenPid(dir.resolve("child.pid"));
 
         launched.cancel();
 
@@ -121,16 +119,12 @@ class TestRunnerTest {
     @DisabledOnOs(OS.WINDOWS)
     @Timeout(30)
     void aDescendantThatIgnoresTheTermSignalDoesNotDelayTheCancel(@TempDir Path dir) throws Exception {
-        Path maven = script(dir, "sh -c 'trap \"\" TERM; while :; do sleep 0.1; done' &\necho $! > child.pid\nwait\n");
+        // The child writes its own pid once its trap is set: the cancel below always meets a child ignoring TERM.
+        Path maven = script(dir, "sh -c 'trap \"\" TERM; echo $$ > child.pid; while :; do sleep 0.1; done' &\nwait\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
                 dir.resolve("target/surefire-reports"));
         ContinuousTesting.Launched launched = runner.launch(List.of());
-        Path pidFile = dir.resolve("child.pid");
-        while (!Files.exists(pidFile) || Files.readString(pidFile).isBlank()) {
-            Thread.sleep(50);
-        }
-        long child = Long.parseLong(Files.readString(pidFile).strip());
-        Thread.sleep(200);
+        long child = writtenPid(dir.resolve("child.pid"));
 
         long t0 = System.nanoTime();
         launched.cancel();
@@ -138,11 +132,14 @@ class TestRunnerTest {
 
         assertTrue(millis < TestRunner.GRACE.toMillis() / 2, "the cancel took " + millis + " ms");
         // SIGKILL is delivered asynchronously: give the kernel a moment, far below the grace period.
-        long deadline = System.currentTimeMillis() + 2_000;
-        while (!gone(child) && System.currentTimeMillis() < deadline) {
-            Thread.sleep(20);
-        }
-        assertTrue(gone(child), "the descendant that ignored SIGTERM");
+        assertTrue(goneWithin(child, Duration.ofSeconds(2)), "the descendant that ignored SIGTERM");
+    }
+
+    /** The pid the script wrote to {@code pidFile}, once it is there. */
+    private static long writtenPid(Path pidFile) throws Exception {
+        assertTrue(Poll.until(PID_TIMEOUT, () -> Files.exists(pidFile) && !Files.readString(pidFile).isBlank()),
+                "the script writes the pid of its child");
+        return Long.parseLong(Files.readString(pidFile).strip());
     }
 
     /**
@@ -150,14 +147,7 @@ class TestRunnerTest {
      * {@code destroy} returns, so a check made right after the cancel races the kernel on a busy runner.
      */
     private static boolean goneWithin(long pid, Duration timeout) throws Exception {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (!gone(pid)) {
-            if (System.nanoTime() > deadline) {
-                return false;
-            }
-            Thread.sleep(20);
-        }
-        return true;
+        return Poll.until(timeout, () -> gone(pid));
     }
 
     /**

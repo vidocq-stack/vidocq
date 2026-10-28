@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
@@ -90,6 +91,7 @@ class VidocqTestMojoTest {
     void aSecondShutdownWaitsForTheFirstToFinishKillingTheTests(@TempDir Path dir) throws Exception {
         AtomicBoolean killed = new AtomicBoolean();
         CountDownLatch running = new CountDownLatch(1);
+        CountDownLatch killing = new CountDownLatch(1);
         CompletableFuture<Integer> exit = new CompletableFuture<>();
         ContinuousTesting testing = new ContinuousTesting(tests -> {
             running.countDown();
@@ -105,6 +107,7 @@ class VidocqTestMojoTest {
 
                 @Override
                 public void cancel() {
+                    killing.countDown();
                     try {
                         Thread.sleep(500); // a slow kill
                     } catch (InterruptedException _) {
@@ -128,7 +131,7 @@ class VidocqTestMojoTest {
         VidocqTestMojo mojo = new VidocqTestMojo();
 
         Thread hook = Thread.ofPlatform().start(() -> mojo.shutdown(testing, null));
-        Thread.sleep(100);
+        assertTrue(killing.await(5, TimeUnit.SECONDS), "the hook is killing the test process");
         mojo.shutdown(testing, null);
 
         assertTrue(killed.get(), "the finally returned before the hook finished killing the test process");

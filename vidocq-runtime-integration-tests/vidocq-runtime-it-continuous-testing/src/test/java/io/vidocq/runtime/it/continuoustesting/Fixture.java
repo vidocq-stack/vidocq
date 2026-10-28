@@ -39,7 +39,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -53,6 +55,8 @@ final class Fixture {
     static final int FIRST_PORT = 18093;
     static final int LAST_PORT = 18099;
     static final Duration TIMEOUT = Duration.ofMinutes(3);
+
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
     static final String EXPECTATION = "src/test/java/io/vidocq/it/ct/ExpectationTest.java";
 
     private Fixture() {}
@@ -128,10 +132,9 @@ final class Fixture {
             if (read(log).contains(text)) {
                 return;
             }
-            if (!process.isAlive()) {
+            if (process.waitFor(250, TimeUnit.MILLISECONDS) && !read(log).contains(text)) {
                 fail("mvn exited with " + process.exitValue() + " before '" + text + "':\n" + read(log));
             }
-            Thread.sleep(250);
         }
         fail("no '" + text + "' within " + TIMEOUT + ":\n" + read(log));
     }
@@ -139,18 +142,26 @@ final class Fixture {
     /** Polls the results file until {@code done} accepts it. */
     static Map<String, Object> awaitResults(Path project, Predicate<Map<String, Object>> done) throws Exception {
         Path file = project.resolve("target/vidocq-dev-tests.json");
-        long deadline = System.currentTimeMillis() + TIMEOUT.toMillis();
-        Map<String, Object> last = null;
-        while (System.currentTimeMillis() < deadline) {
-            if (Files.exists(file)) {
-                last = json(read(file));
-                if (done.test(last)) {
-                    return last;
-                }
-            }
-            Thread.sleep(250);
+        Predicate<Map<String, Object>> matches = results -> results != null && done.test(results);
+        Map<String, Object> last = poll(TIMEOUT, () -> Files.exists(file) ? json(read(file)) : null, matches);
+        if (matches.test(last)) {
+            return last;
         }
         return fail("no matching results within " + TIMEOUT + "; the last: " + last);
+    }
+
+    /**
+     * Reads {@code probe} until {@code done} accepts the value or {@code timeout} passes, and returns the last value
+     * read: the caller asserts on it, so a timeout shows what was seen.
+     */
+    static <T> T poll(Duration timeout, Callable<T> probe, Predicate<T> done) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        T value = probe.call();
+        while (!done.test(value) && System.nanoTime() - deadline < 0) {
+            LockSupport.parkNanos(POLL_INTERVAL.toNanos());
+            value = probe.call();
+        }
+        return value;
     }
 
     @SuppressWarnings("unchecked")

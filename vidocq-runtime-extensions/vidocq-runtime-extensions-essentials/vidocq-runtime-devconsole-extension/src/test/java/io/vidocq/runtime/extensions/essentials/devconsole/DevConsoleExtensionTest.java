@@ -161,15 +161,11 @@ class DevConsoleExtensionTest {
         assertTrue(tickers().get(0).isDaemon(), "a daemon: the history must never hold a JVM open");
 
         // It fills on its own, with no page asking for anything: that is the whole point of moving it here.
-        boolean ticked = false;
-        for (int attempt = 0; attempt < 40 && !ticked; attempt++) {
+        boolean ticked = Poll.until(Duration.ofSeconds(4), () -> {
             Map<String, Object> filled = Json.object(get(url(boot.console().boundPort()) + "api/snapshot").body());
             List<?> panels = (List<?>) filled.get("panels");
-            ticked = panels.stream().anyMatch(panel -> !((List<?>) ((Map<?, ?>) panel).get("history")).isEmpty());
-            if (!ticked) {
-                Thread.sleep(100);
-            }
-        }
+            return panels.stream().anyMatch(panel -> !((List<?>) ((Map<?, ?>) panel).get("history")).isEmpty());
+        }, Boolean::booleanValue);
         assertTrue(ticked, "the jvm panel has points, and nobody asked for them");
 
         boot.stop();

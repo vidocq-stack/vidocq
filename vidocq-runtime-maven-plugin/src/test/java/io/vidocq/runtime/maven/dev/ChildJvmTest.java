@@ -63,9 +63,9 @@ class ChildJvmTest {
         long pid = jvm.start();
         assertTrue(pid > 0, "spawned PID must be positive");
 
-        // The child will exit on its own (unknown module) — give it time, then
-        // call stop() and verify isAlive() flips to false.
-        Thread.sleep(1500);
+        // The child will exit on its own (unknown module) — wait for it, then
+        // call stop() and verify isAlive() stays false.
+        assertTrue(Poll.until(Duration.ofSeconds(20), () -> !jvm.isAlive()), "an unknown module ends the child");
         jvm.stop(Duration.ofSeconds(5));
         assertFalse(jvm.isAlive(), "child JVM should have exited");
     }

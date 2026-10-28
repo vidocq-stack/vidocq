@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.logging.Level;
 
@@ -359,13 +360,7 @@ class ConsoleActionsTest {
         assertEquals(1, panel.runs.size(), "clear never ran");
 
         panel.release.countDown();
-        Object last = null;
-        for (int attempt = 0; attempt < 100 && last == null; attempt++) {
-            last = actionOf("slow").get("last");
-            if (last == null) {
-                Thread.sleep(20);
-            }
-        }
+        Object last = Poll.until(Duration.ofSeconds(2), () -> actionOf("slow").get("last"), Objects::nonNull);
         assertEquals(Map.of("text", "finally", "time", NOW, "ok", true), last);
         assertEquals(false, actionOf("slow").get("running"));
         assertEquals(200, post("clear", "{}").status().code(), "the panel is free again");

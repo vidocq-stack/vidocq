@@ -25,9 +25,11 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,15 +95,14 @@ class ContinuousTestingDevGoalIT {
 
     /** The snapshot, once the panel's reader thread has seen {@code failures} failures. */
     private static Map<String, Object> awaitPanelFailures(String console, int failures) throws Exception {
-        long deadline = System.currentTimeMillis() + 10_000;
-        Map<String, Object> snapshot = null;
-        while (System.currentTimeMillis() < deadline) {
-            snapshot = Fixture.json(Fixture.get(console + "/api/snapshot"));
-            Map<?, ?> value = Fixture.value(Fixture.panel(snapshot, "tests"), "failures");
-            if (value != null && ((Number) value.get("value")).intValue() == failures) {
-                return snapshot;
-            }
-            Thread.sleep(250);
+        Predicate<Map<String, Object>> shows = shown -> {
+            Map<?, ?> value = Fixture.value(Fixture.panel(shown, "tests"), "failures");
+            return value != null && ((Number) value.get("value")).intValue() == failures;
+        };
+        Map<String, Object> snapshot = Fixture.poll(Duration.ofSeconds(10),
+                () -> Fixture.json(Fixture.get(console + "/api/snapshot")), shows);
+        if (shows.test(snapshot)) {
+            return snapshot;
         }
         return fail("the tests panel never showed " + failures + " failure(s): " + snapshot);
     }

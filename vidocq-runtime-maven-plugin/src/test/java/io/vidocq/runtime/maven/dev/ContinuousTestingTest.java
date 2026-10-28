@@ -32,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -52,6 +53,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(20)
 class ContinuousTestingTest {
 
+    private static final Duration GATE_TIMEOUT = Duration.ofSeconds(20);
+
     /** A run the test ends by hand. */
     static final class FakeRun implements ContinuousTesting.Launched {
         final List<String> tests;
@@ -59,6 +62,8 @@ class ContinuousTestingTest {
         volatile boolean cancelled;
         /** When set, waitFor() holds the exit code until it opens: the process ended, the worker has not yet read it. */
         volatile CountDownLatch collected;
+        /** Opens once waitFor() has the exit code and holds it on {@link #collected}. */
+        final CountDownLatch holding = new CountDownLatch(1);
 
         FakeRun(List<String> tests) {
             this.tests = tests;
@@ -70,6 +75,7 @@ class ContinuousTestingTest {
                 int code = exit.get();
                 CountDownLatch hold = collected;
                 if (hold != null) {
+                    holding.countDown();
                     hold.await();
                 }
                 return code;
@@ -230,13 +236,13 @@ class ContinuousTestingTest {
 
     @Test
     void interruptDropsTheChangeWaitingForItsGate() throws Exception {
+        CountDownLatch waiting = new CountDownLatch(1);
         testing.changed(Trigger.CHANGE, abandoned -> {
-            while (!abandoned.getAsBoolean()) {
-                Thread.sleep(10);
-            }
+            waiting.countDown();
+            Poll.until(GATE_TIMEOUT, abandoned::getAsBoolean);
             return false;
         });
-        Thread.sleep(100);
+        assertTrue(waiting.await(5, TimeUnit.SECONDS), "the change waits for its gate");
 
         testing.interrupt();
 
@@ -303,16 +309,17 @@ class ContinuousTestingTest {
     @Test
     void aTestChangeDuringTheReloadWaitsForTheReloadToo() throws Exception {
         CountDownLatch reloaded = new CountDownLatch(1);
+        CountDownLatch waiting = new CountDownLatch(1);
         testing.changed(Trigger.CHANGE, abandoned -> {
-            while (reloaded.getCount() > 0) {
+            waiting.countDown();
+            while (!reloaded.await(10, TimeUnit.MILLISECONDS)) {
                 if (abandoned.getAsBoolean()) {
                     return false;
                 }
-                Thread.sleep(10);
             }
             return true;
         });
-        Thread.sleep(100);
+        assertTrue(waiting.await(5, TimeUnit.SECONDS), "the change waits for the reload");
 
         testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
 
@@ -332,7 +339,7 @@ class ContinuousTestingTest {
         CountDownLatch collected = new CountDownLatch(1);
         run.collected = collected;
         run.finish(0);
-        Thread.sleep(100);
+        assertTrue(run.holding.await(5, TimeUnit.SECONDS), "the worker read the exit code and waits to collect");
 
         testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
         collected.countDown();

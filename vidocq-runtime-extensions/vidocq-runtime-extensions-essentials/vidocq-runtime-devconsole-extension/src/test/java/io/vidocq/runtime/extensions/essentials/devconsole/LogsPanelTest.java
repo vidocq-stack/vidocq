@@ -26,6 +26,8 @@ import io.vidocq.runtime.spi.report.ReportSection;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.ref.WeakReference;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -231,10 +233,11 @@ class LogsPanelTest {
         LogsPanel panel = panel(JDK_FINDER);
         String name = LOGGER + ".weak";
         panel.setLevel(Map.of("logger", name, "level", "FINE"));
-        for (int i = 0; i < 5; i++) {
+        WeakReference<Object> sentinel = new WeakReference<>(new Object());
+        assertTrue(Poll.until(Duration.ofSeconds(5), () -> {
             System.gc();
-            Thread.sleep(10);
-        }
+            return sentinel.get() == null;
+        }, Boolean::booleanValue), "a collection that clears weakly held objects ran");
 
         assertEquals(Level.FINE, Logger.getLogger(name).getLevel(), "java.util.logging holds its loggers weakly");
 

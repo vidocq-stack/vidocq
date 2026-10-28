@@ -68,10 +68,9 @@ class SourceWatcherTest {
             t.start();
             threadStarted.await();
 
-            // Give the watcher a moment to register before we touch the file —
-            // otherwise on slow CI the modification may land before the key
-            // is armed.
-            Thread.sleep(500);
+            // Wait for the watcher to block on its keys before we touch the file —
+            // otherwise on slow CI the modification may land before it waits.
+            awaitBlocked(t);
             Files.writeString(file, "class Hello { /* edit */ }");
 
             t.join(TimeUnit.SECONDS.toMillis(15));
@@ -95,7 +94,7 @@ class SourceWatcherTest {
                 }
             });
             t.start();
-            Thread.sleep(500);
+            awaitBlocked(t);
             // .log is NOT in the watched set — this must not wake up awaitChange.
             Files.writeString(tmp.resolve("ignore.log"), "noise updated");
 
@@ -143,7 +142,7 @@ class SourceWatcherTest {
                 }
             });
             t.start();
-            Thread.sleep(500);
+            awaitBlocked(t);
             Files.writeString(testFile, "class HelloTest { /* edit */ }");
 
             t.join(TimeUnit.SECONDS.toMillis(15));
@@ -170,7 +169,7 @@ class SourceWatcherTest {
                 }
             });
             t.start();
-            Thread.sleep(500);
+            awaitBlocked(t);
             Files.createDirectories(test.resolve("a"));
             Files.writeString(test.resolve("a/HelloTest.java"), "class HelloTest {}");
 
@@ -200,6 +199,12 @@ class SourceWatcherTest {
 
             assertEquals(new SourceWatcher.Change(true, true), watcher.awaitChanges());
         }
+    }
+
+    /** Waits until {@code watching} blocks in the watcher, waiting for an event. */
+    private static void awaitBlocked(Thread watching) throws InterruptedException {
+        assertTrue(Poll.until(Duration.ofSeconds(5), () -> watching.getState() == Thread.State.WAITING
+                || watching.getState() == Thread.State.TIMED_WAITING), "the watcher waits for a change");
     }
 
     @Test
