@@ -34,20 +34,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @ApplicationScoped
 public class GaugeRegistrationBean {
-    @Inject
-    MetricRegistryProducerBean registries;
+    private final MetricRegistryProducerBean registries;
 
     // This container's metrics, synthesised by DiracExtension (dirac#23). An Instance, not a plain
     // injection point: the synthetic bean exists only once the extension ran in this container.
-    @Inject
-    Instance<DiscoveredMetrics> discovered;
+    private final Instance<DiscoveredMetrics> discovered;
 
     // Gauge beans are looked up in this container, not through CDI.current(), which is ambiguous
     // when several containers run in one JVM.
-    @Inject
-    Instance<Object> beans;
+    private final Instance<Object> beans;
 
     private final AtomicBoolean registered = new AtomicBoolean();
+
+    /** Required by CDI for the client proxy of this normal-scoped bean; never used to serve calls. */
+    protected GaugeRegistrationBean() {
+        this(null, null, null);
+    }
+
+    @Inject
+    public GaugeRegistrationBean(MetricRegistryProducerBean registries, Instance<DiscoveredMetrics> discovered,
+                                 Instance<Object> beans) {
+        this.registries = registries;
+        this.discovered = discovered;
+        this.beans = beans;
+    }
 
     @PostConstruct
     void registerMetrics() {
