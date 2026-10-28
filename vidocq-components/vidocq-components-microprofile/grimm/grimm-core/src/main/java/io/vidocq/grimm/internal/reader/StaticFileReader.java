@@ -173,7 +173,7 @@ public final class StaticFileReader {
     }
 
     private Optional<String> readResource(Class<?> type, String resourcePath) {
-        String absolutePath = "/" + resourcePath;
+        String absolutePath = '/' + resourcePath;
         try (InputStream is = type.getResourceAsStream(absolutePath)) {
             if (is == null) {
                 return Optional.empty();

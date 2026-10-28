@@ -104,9 +104,7 @@ class OpenApiModelMapperTest {
         assertFalse(yaml.contains("x-vendor"), yaml);
     }
 
-    @Test
-    void everyStandardSchemaKeywordLandsOnItsTypedProperty() {
-        String json = """
+    private static final String ALL_SCHEMA_KEYWORDS_JSON = """
                 {
                   "openapi": "3.1.0",
                   "info": {"title": "t", "version": "1"},
@@ -158,7 +156,14 @@ class OpenApiModelMapperTest {
                   }
                 }
                 """;
-        Schema s = schema(new JsonDeserializer().deserialize(json), "All");
+
+    private static Schema allKeywordsSchema() {
+        return schema(new JsonDeserializer().deserialize(ALL_SCHEMA_KEYWORDS_JSON), "All");
+    }
+
+    @Test
+    void everyNumericSchemaKeywordLandsOnItsTypedProperty() {
+        Schema s = allKeywordsSchema();
 
         assertEquals(Map.of("x-vendor", "v"), s.getExtensions());
 
@@ -176,6 +181,11 @@ class OpenApiModelMapperTest {
         assertEquals(3, s.getMinProperties());
         assertEquals(4, s.getMaxContains());
         assertEquals(2, s.getMinContains());
+    }
+
+    @Test
+    void everySubschemaKeywordLandsOnItsTypedProperty() {
+        Schema s = allKeywordsSchema();
 
         assertEquals(List.of(Schema.SchemaType.STRING), s.getNot().getType());
         assertEquals(List.of(Schema.SchemaType.INTEGER), s.getIfSchema().getType());
@@ -188,6 +198,11 @@ class OpenApiModelMapperTest {
         assertEquals(Boolean.FALSE, s.getUnevaluatedProperties().getBooleanSchema());
         assertEquals(List.of(Schema.SchemaType.STRING), s.getContentSchema().getType());
         assertEquals(List.of(Schema.SchemaType.STRING), s.getAdditionalPropertiesSchema().getType());
+    }
+
+    @Test
+    void everyComposedSchemaKeywordLandsOnItsTypedProperty() {
+        Schema s = allKeywordsSchema();
 
         assertEquals(List.of(Schema.SchemaType.OBJECT), assertInstanceOf(Schema.class, s.getAllOf().getFirst()).getType());
         assertEquals(List.of(Schema.SchemaType.STRING), assertInstanceOf(Schema.class, s.getAnyOf().getFirst()).getType());
@@ -197,6 +212,11 @@ class OpenApiModelMapperTest {
         assertEquals(List.of(Schema.SchemaType.STRING),
                 assertInstanceOf(Schema.class, s.getPatternProperties().get("^x")).getType());
         assertEquals(Map.of("a", List.of("b", "c")), s.getDependentRequired());
+    }
+
+    @Test
+    void everyObjectAndContentSchemaKeywordLandsOnItsTypedProperty() {
+        Schema s = allKeywordsSchema();
 
         assertEquals("kind", s.getDiscriminator().getPropertyName());
         assertEquals(Map.of("cat", "#/components/schemas/Cat"), s.getDiscriminator().getMapping());

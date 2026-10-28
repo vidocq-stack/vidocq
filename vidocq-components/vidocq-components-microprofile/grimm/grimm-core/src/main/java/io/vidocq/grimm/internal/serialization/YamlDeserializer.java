@@ -36,11 +36,11 @@ import java.util.Map;
  */
 public final class YamlDeserializer {
 
-    private static final java.util.regex.Pattern INTEGER = java.util.regex.Pattern.compile("[-+]?[0-9]+");
+    private static final java.util.regex.Pattern INTEGER = java.util.regex.Pattern.compile("[-+]?\\d+");
     private static final java.util.regex.Pattern OCTAL = java.util.regex.Pattern.compile("0o[0-7]+");
     private static final java.util.regex.Pattern HEXADECIMAL = java.util.regex.Pattern.compile("0x[0-9a-fA-F]+");
     private static final java.util.regex.Pattern FLOAT = java.util.regex.Pattern.compile(
-            "[-+]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][-+]?[0-9]+)?");
+            "[-+]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?");
     private static final java.util.regex.Pattern BLOCK_INDICATOR = java.util.regex.Pattern.compile(
             "[|>][-+]?[1-9]?");
 

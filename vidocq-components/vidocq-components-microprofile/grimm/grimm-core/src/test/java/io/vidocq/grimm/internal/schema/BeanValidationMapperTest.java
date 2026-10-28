@@ -23,6 +23,8 @@ import jakarta.validation.constraints.Digits;
 import org.eclipse.microprofile.openapi.OASFactory;
 import org.eclipse.microprofile.openapi.models.media.Schema;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.annotation.Annotation;
 import java.math.BigDecimal;
@@ -70,25 +72,16 @@ class BeanValidationMapperTest {
                 () -> "multipleOf was " + s.getMultipleOf());
     }
 
-    @Test
-    void digitsOnFloatSetsMultipleOfFromFraction() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+            "digitsFloat32, 0.001",
+            "digitsFloat64, 0.000001",
+            "digitsDecimal, 0.0000000001"
+    })
+    void digitsOnNumberSetsMultipleOfFromFraction(String field, String expectedMultipleOf) throws Exception {
         Schema s = typed(Schema.SchemaType.NUMBER);
-        BeanValidationMapper.apply(s, annotationsOf("digitsFloat32"));
-        assertMultipleOf("0.001", s);
-    }
-
-    @Test
-    void digitsOnDoubleSetsMultipleOfFromFraction() throws Exception {
-        Schema s = typed(Schema.SchemaType.NUMBER);
-        BeanValidationMapper.apply(s, annotationsOf("digitsFloat64"));
-        assertMultipleOf("0.000001", s);
-    }
-
-    @Test
-    void digitsOnBigDecimalSetsTinyMultipleOf() throws Exception {
-        Schema s = typed(Schema.SchemaType.NUMBER);
-        BeanValidationMapper.apply(s, annotationsOf("digitsDecimal"));
-        assertMultipleOf("0.0000000001", s);
+        BeanValidationMapper.apply(s, annotationsOf(field));
+        assertMultipleOf(expectedMultipleOf, s);
     }
 
     @Test

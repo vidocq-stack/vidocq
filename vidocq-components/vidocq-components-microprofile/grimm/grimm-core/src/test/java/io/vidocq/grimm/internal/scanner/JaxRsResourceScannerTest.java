@@ -169,8 +169,8 @@ class JaxRsResourceScannerTest {
 
     @Test
     void infersRequestBodyFromEntityParameter() {
-        // Spec §3.8: a JAX-RS body parameter (no JAX-RS param annotation) yields a RequestBody;
-        // @Consumes provides media types.
+        // Spec section 3.8: a JAX-RS body parameter, without any JAX-RS param annotation, yields a
+        // request body whose media types come from @Consumes.
         AnnotationScanner scanner = new AnnotationScanner(ScanConfig.defaultConfig());
         OpenAPI model = scanner.scanClasses(List.of(RequestBodyResource.class));
 

@@ -171,6 +171,22 @@ class YamlDeserializerTest {
     }
 
     @Test
+    void floatScalarForms() {
+        Map<?, ?> map = parse("lead: .5", "trail: 2.", "neg: -1.25E-2", "exp: 3e2", "plus: +4.0e+1",
+                "noMantissa: e5", "dotOnly: .", "badExp: 1e", "twoSigns: --1.0");
+
+        assertEquals(0.5, map.get("lead"));
+        assertEquals(2.0, map.get("trail"));
+        assertEquals(-0.0125, map.get("neg"));
+        assertEquals(300.0, map.get("exp"));
+        assertEquals(40.0, map.get("plus"));
+        assertEquals("e5", map.get("noMantissa"));
+        assertEquals(".", map.get("dotOnly"));
+        assertEquals("1e", map.get("badExp"));
+        assertEquals("--1.0", map.get("twoSigns"));
+    }
+
+    @Test
     void doubleQuotedEscapes() {
         assertEquals("a\nb\tc\r\"\\A\0/", value("k: \"a\\nb\\tc\\r\\\"\\\\\\u0041\\0\\/\""));
         assertEquals("end\\", value("k: \"end\\\""));
