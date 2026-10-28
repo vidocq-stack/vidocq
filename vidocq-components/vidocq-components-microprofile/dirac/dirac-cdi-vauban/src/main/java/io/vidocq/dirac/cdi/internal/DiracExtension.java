@@ -306,15 +306,16 @@ public class DiracExtension implements BuildCompatibleExtension {
         // same gauge discovered twice is kept once in the DiscoveredMetrics sets (DRC-007).
         @Override
         public boolean equals(Object other) {
-            return other instanceof ResolvedGauge that
-                    && staticMethod == that.staticMethod
-                    && beanClass == that.beanClass
-                    && Objects.equals(methodHandle, that.methodHandle)
-                    && Objects.equals(metricID, that.metricID)
-                    && Objects.equals(metadata, that.metadata)
-                    && Arrays.equals(tags, that.tags)
-                    && Objects.equals(scope, that.scope)
-                    && Objects.equals(invoker, that.invoker);
+            return other instanceof ResolvedGauge(var otherBeanClass, var otherHandle, var otherStatic,
+                    var otherId, var otherMetadata, var otherTags, var otherScope, var otherInvoker)
+                    && staticMethod == otherStatic
+                    && beanClass == otherBeanClass
+                    && Objects.equals(methodHandle, otherHandle)
+                    && Objects.equals(metricID, otherId)
+                    && Objects.equals(metadata, otherMetadata)
+                    && Arrays.equals(tags, otherTags)
+                    && Objects.equals(scope, otherScope)
+                    && Objects.equals(invoker, otherInvoker);
         }
 
         @Override
@@ -351,10 +352,10 @@ public class DiracExtension implements BuildCompatibleExtension {
         // Tags compared by content: the same metric discovered twice is kept once (DRC-007).
         @Override
         public boolean equals(Object other) {
-            return other instanceof PreRegisteredMetric that
-                    && Objects.equals(metadata, that.metadata)
-                    && Arrays.equals(tags, that.tags)
-                    && Objects.equals(scope, that.scope);
+            return other instanceof PreRegisteredMetric(var otherMetadata, var otherTags, var otherScope)
+                    && Objects.equals(metadata, otherMetadata)
+                    && Arrays.equals(tags, otherTags)
+                    && Objects.equals(scope, otherScope);
         }
 
         @Override

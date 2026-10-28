@@ -220,7 +220,8 @@ class CountedInterceptorResolutionTest {
         }
 
         public void run() {
-            // metric target only
+            // the private method stays reachable: a class-level annotation must skip it, not its caller
+            hidden();
         }
 
         private void hidden() {
@@ -245,18 +246,22 @@ class CountedInterceptorResolutionTest {
     static class CtorCountedBean {
         @Counted(name = "ctor.counter", absolute = true)
         CtorCountedBean() {
+            // constructor metric target only
         }
 
         @Counted
         CtorCountedBean(int ignoredValue) {
+            // constructor metric target only
         }
 
         @Counted(absolute = true)
         CtorCountedBean(String ignoredValue) {
+            // constructor metric target only
         }
 
         @Counted(name = "relative")
         CtorCountedBean(long ignoredValue) {
+            // constructor metric target only
         }
     }
 

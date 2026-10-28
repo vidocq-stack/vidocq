@@ -220,7 +220,8 @@ class TimedInterceptorResolutionTest {
         }
 
         public void run() {
-            // metric target only
+            // the private method stays reachable: a class-level annotation must skip it, not its caller
+            hidden();
         }
 
         private void hidden() {
@@ -245,18 +246,22 @@ class TimedInterceptorResolutionTest {
     static class CtorTimedBean {
         @Timed(name = "ctor.timer", absolute = true)
         CtorTimedBean() {
+            // constructor metric target only
         }
 
         @Timed
         CtorTimedBean(int ignoredValue) {
+            // constructor metric target only
         }
 
         @Timed(absolute = true)
         CtorTimedBean(String ignoredValue) {
+            // constructor metric target only
         }
 
         @Timed(name = "relative")
         CtorTimedBean(long ignoredValue) {
+            // constructor metric target only
         }
     }
 
