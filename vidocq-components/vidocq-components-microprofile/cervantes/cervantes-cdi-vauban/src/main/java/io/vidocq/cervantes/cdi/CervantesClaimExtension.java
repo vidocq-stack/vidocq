@@ -122,45 +122,49 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
 
     @Synthesis
     public void synthesizeClaimBeans(SyntheticComponents components, Types types) {
-        //First pass: unwrap Provider<T>/Instance<T> → collect the effective types to
-        // register. CDI/Vauban strips Provider<T> and Instance<T> wrappers and looks up a bean of
-        //type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
-        //Provider<T>/Instance<T>. ClaimValue<T>, Optional<T>, Supplier<T> are NOT hit —
-        // ClaimSyntheticCreator inspects the full InjectionPoint type and handles the wrapping.
-        Map<String, Type> effectiveTypes = new LinkedHashMap<>();
-        for (Type type : claimTypes.values()) {
-            if (type instanceof ParameterizedType pt) {
-                String rawName = rawTypeName(pt);
-                if ("jakarta.inject.Provider".equals(rawName)
-                        || "jakarta.enterprise.inject.Instance".equals(rawName)) {
-                    // Unwrap: register a bean for the inner type T
-                    Type innerType = pt.typeArguments().isEmpty() ? null : pt.typeArguments().get(0);
-                    if (innerType != null) {
-                        effectiveTypes.putIfAbsent(innerType.toString(), innerType);
-                    }
-                    // Do NOT add Provider<T>/Instance<T> itself
-                    continue;
-                }
-            }
-            effectiveTypes.put(type.toString(), type);
-        }
-
         Set<String> registered = new HashSet<>();
-        for (Type type : effectiveTypes.values()) {
+        for (Type type : effectiveClaimTypes().values()) {
             //Primitives (boolean, int, long,...): the bean is recorded in boxed type — Weld/Vauban
             //solves a primitive injection from a bean wrapper via auto-unboxing (cf.
             //ConfigCdiRavel Extension). Requires the lang-model to exhibit a PrimitiveType
             //for a primitive injection site (corrected in Vauban — TypeMapper / VAU-INJ-PRIM).
-            Class<?> effectiveClass = type instanceof PrimitiveType pt ? boxPrimitive(pt.primitiveKind()) : null;
-            if (effectiveClass != null) {
-                if (!registered.add(effectiveClass.getName())) {
-                    continue;
+            if (type instanceof PrimitiveType pt) {
+                Class<?> boxed = boxPrimitive(pt.primitiveKind());
+                if (registered.add(boxed.getName())) {
+                    addClaimBean(components, boxed);
                 }
-                addClaimBean(components, effectiveClass);
-                continue;
+            } else {
+                registerForType(components, registered, type);
             }
-            registerForType(components, registered, type);
         }
+    }
+
+    /**
+     * First pass: unwrap Provider&lt;T&gt;/Instance&lt;T&gt; → collect the effective types to
+     * register. CDI/Vauban strips Provider&lt;T&gt; and Instance&lt;T&gt; wrappers and looks up a bean of
+     * type T directly (CDI spec §6.6). We must register a synthetic @Claim bean for T, not for
+     * Provider&lt;T&gt;/Instance&lt;T&gt;. ClaimValue&lt;T&gt;, Optional&lt;T&gt;, Supplier&lt;T&gt; are NOT hit —
+     * ClaimSyntheticCreator inspects the full InjectionPoint type and handles the wrapping.
+     */
+    private Map<String, Type> effectiveClaimTypes() {
+        Map<String, Type> effectiveTypes = new LinkedHashMap<>();
+        for (Type type : claimTypes.values()) {
+            if (type instanceof ParameterizedType pt && isLookupWrapper(pt)) {
+                // Unwrap: register a bean for the inner type T, never for Provider<T>/Instance<T> itself
+                if (!pt.typeArguments().isEmpty()) {
+                    Type innerType = pt.typeArguments().get(0);
+                    effectiveTypes.putIfAbsent(innerType.toString(), innerType);
+                }
+            } else {
+                effectiveTypes.put(type.toString(), type);
+            }
+        }
+        return effectiveTypes;
+    }
+
+    private static boolean isLookupWrapper(ParameterizedType pt) {
+        String rawName = rawTypeName(pt);
+        return "jakarta.inject.Provider".equals(rawName) || "jakarta.enterprise.inject.Instance".equals(rawName);
     }
 
     private static void registerForType(SyntheticComponents components, Set<String> registered, Type type) {
@@ -191,8 +195,8 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
     /** Registers a {@code @Claim} {@code @Dependent} {@code SyntheticBean} of type {@code beanClass}. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void addClaimBean(SyntheticComponents components, Class<?> beanClass) {
-        ((SyntheticBeanBuilder) components.addBean(beanClass))
-                .type(beanClass)
+        SyntheticBeanBuilder builder = components.addBean(beanClass);
+        builder.type(beanClass)
                 .qualifier(Claim.class)
                 .scope(Dependent.class)
                 .createWith(ClaimSyntheticCreator.class);
@@ -223,7 +227,7 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
     private static Class<?> toRuntimeClassOrNull(Type type) {
         try {
             return toRuntimeClass(type);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -254,10 +258,10 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
     private static Class<?> loadClass(String name) {
         try {
             return Class.forName(name, false, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             try {
                 return Class.forName(name);
-            } catch (ClassNotFoundException ignored) {
+            } catch (ClassNotFoundException _) {
                 return null;
             }
         }

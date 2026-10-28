@@ -123,19 +123,19 @@ public final class ClaimResolver {
         }
         if (raw == String.class) {
             Object c = token.getClaim(name);
-            return c == null ? null : (c instanceof String s ? s : c.toString());
+            return c == null ? null : c.toString();
         }
-        if (raw == Long.class || raw == long.class) {
+        if (isEither(raw, Long.class, long.class)) {
             return asLong(token.getClaim(name));
         }
-        if (raw == Integer.class || raw == int.class) {
+        if (isEither(raw, Integer.class, int.class)) {
             Long l = asLong(token.getClaim(name));
             return l == null ? null : l.intValue();
         }
-        if (raw == Boolean.class || raw == boolean.class) {
+        if (isEither(raw, Boolean.class, boolean.class)) {
             return token.getClaim(name) instanceof Boolean b ? b : null;
         }
-        if (raw == Double.class || raw == double.class) {
+        if (isEither(raw, Double.class, double.class)) {
             return token.getClaim(name) instanceof Number n ? n.doubleValue() : null;
         }
         if (raw == Set.class) {
@@ -144,6 +144,10 @@ public final class ClaimResolver {
         //Fold: the value that getClaim can produce (Set<String> for groups/aud, JsonValue for
         //an object/table, etc.) — covers standard claims not listed above.
         return token.getClaim(name);
+    }
+
+    private static boolean isEither(Class<?> raw, Class<?> boxed, Class<?> primitive) {
+        return raw == boxed || raw == primitive;
     }
 
     private static Long asLong(Object c) {
@@ -165,9 +169,11 @@ public final class ClaimResolver {
             //Claim absent: JsonValue → JsonValue.NULL; typed subtypes → null.
             return raw == JsonValue.class ? JsonValue.NULL : null;
         }
-        if (raw == JsonValue.class) {
-            return v;
-        }
+        return narrow(v, raw);
+    }
+
+    /** The claim value as the requested JSON-P subtype, or {@code null} when it is of another kind. */
+    private static JsonValue narrow(JsonValue v, Class<?> raw) {
         if (raw == JsonObject.class) {
             return v.getValueType() == JsonValue.ValueType.OBJECT ? v.asJsonObject() : null;
         }
@@ -182,7 +188,7 @@ public final class ClaimResolver {
         if (raw == JsonNumber.class) {
             return v instanceof JsonNumber ? v : null;
         }
-        return v;
+        return v; // JsonValue itself
     }
 
     private static JsonValue rawJson(JsonWebToken token, String name) {

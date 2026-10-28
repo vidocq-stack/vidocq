@@ -96,7 +96,7 @@ public final class JwksKeyResolver implements KeyResolver {
     private Snapshot tryRefresh(Snapshot stale) {
         try {
             return refresh(stale);
-        } catch (JwtValidationException e) {
+        } catch (JwtValidationException _) {
             return snapshot.get(); //keeps the existing snapshot in case of transient network failure
         }
     }

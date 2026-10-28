@@ -94,7 +94,7 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
             SecurityContext previous = requestContext.getSecurityContext();
             boolean secure = previous != null && previous.isSecure();
             requestContext.setSecurityContext(new JwtSecurityContext(jwt, secure));
-        } catch (JwtValidationException e) {
+        } catch (JwtValidationException _) {
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED).build());
         }
     }
@@ -113,7 +113,7 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
             var cfg = ConfigProvider.getConfig();
             tokenHeader = cfg.getOptionalValue("mp.jwt.token.header", String.class).orElse(DEFAULT_TOKEN_HEADER);
             cookieName = cfg.getOptionalValue("mp.jwt.token.cookie", String.class).orElse("Bearer");
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Config not available during test doubles — fall through to default
         }
 

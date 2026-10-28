@@ -49,7 +49,7 @@ public final class Jwe {
     }
 
     /** @deprecated Use {@link #decryptorFromInlinePem(String, String)} */
-    @Deprecated
+    @Deprecated(since = "0.1.1")
     public static JweDecryptor decryptorFromInlinePem(String value) throws JwtValidationException {
         return decryptorFromInlinePem(value, null);
     }
@@ -67,7 +67,7 @@ public final class Jwe {
     }
 
     /** @deprecated Use {@link #decryptorFromLocation(String, String)} */
-    @Deprecated
+    @Deprecated(since = "0.1.1")
     public static JweDecryptor decryptorFromLocation(String location) throws JwtValidationException {
         return decryptorFromLocation(location, null);
     }

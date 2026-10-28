@@ -59,13 +59,29 @@ final class JwkParser {
     private JwkParser() {}
 
     static Jwks parse(byte[] json) throws JwtValidationException {
-        JsonObject root;
-        try (JsonReader reader = Json.createReader(new ByteArrayInputStream(json))) {
-            root = reader.readObject();
-        } catch (RuntimeException e) {
-            throw new JwtValidationException("invalid JWKS JSON", e);
+        Map<String, PublicKey> byKid = new LinkedHashMap<>();
+        List<PublicKey> all = new ArrayList<>();
+        for (JsonObject jwk : entries(readRoot(json, "invalid JWKS JSON"))) {
+            PublicKey key = "enc".equals(string(jwk, "use")) ? null : toPublicKey(jwk); //signature keys only
+            if (key != null) {
+                all.add(key);
+                String kid = string(jwk, "kid");
+                if (kid != null) byKid.put(kid, key);
+            }
         }
+        return new Jwks(byKid, all);
+    }
 
+    private static JsonObject readRoot(byte[] json, String error) throws JwtValidationException {
+        try (JsonReader reader = Json.createReader(new ByteArrayInputStream(json))) {
+            return reader.readObject();
+        } catch (RuntimeException e) {
+            throw new JwtValidationException(error, e);
+        }
+    }
+
+    /** The JWKs of a document: the objects of its {@code keys} array, or the document itself (single JWK). */
+    private static List<JsonObject> entries(JsonObject root) {
         List<JsonObject> jwks = new ArrayList<>();
         if (root.containsKey("keys") && root.get("keys").getValueType() == JsonValue.ValueType.ARRAY) {
             for (JsonValue v : root.getJsonArray("keys")) {
@@ -74,18 +90,7 @@ final class JwkParser {
         } else {
             jwks.add(root); // JWK unique
         }
-
-        Map<String, PublicKey> byKid = new LinkedHashMap<>();
-        List<PublicKey> all = new ArrayList<>();
-        for (JsonObject jwk : jwks) {
-            if ("enc".equals(string(jwk, "use"))) continue; //signature keys only
-            PublicKey key = toPublicKey(jwk);
-            if (key == null) continue;
-            all.add(key);
-            String kid = string(jwk, "kid");
-            if (kid != null) byKid.put(kid, key);
-        }
-        return new Jwks(byKid, all);
+        return jwks;
     }
 
     private static PublicKey toPublicKey(JsonObject jwk) {
@@ -97,7 +102,7 @@ final class JwkParser {
                 case "EC" -> ecKey(jwk);
                 default -> null; //Oct (HMAC) and other unsupported
             };
-        } catch (GeneralSecurityException | RuntimeException e) {
+        } catch (GeneralSecurityException | RuntimeException _) {
             return null; //individual key illegible: we ignore it
         }
     }
@@ -131,34 +136,26 @@ final class JwkParser {
      * @throws JwtValidationException if no RSA private key is found or parsing fails
      */
     static PrivateKey parsePrivateKey(byte[] json) throws JwtValidationException {
-        JsonObject root;
-        try (JsonReader reader = Json.createReader(new ByteArrayInputStream(json))) {
-            root = reader.readObject();
-        } catch (RuntimeException e) {
-            throw new JwtValidationException("invalid JWK(S) JSON for private key", e);
-        }
-
-        List<JsonObject> jwks = new ArrayList<>();
-        if (root.containsKey("keys") && root.get("keys").getValueType() == JsonValue.ValueType.ARRAY) {
-            for (JsonValue v : root.getJsonArray("keys")) {
-                if (v.getValueType() == JsonValue.ValueType.OBJECT) jwks.add(v.asJsonObject());
-            }
-        } else {
-            jwks.add(root);
-        }
-
-        for (JsonObject jwk : jwks) {
-            String kty = string(jwk, "kty");
-            if (!"RSA".equals(kty)) continue;
-            // Must have 'd' (private exponent) to be a private key
-            if (string(jwk, "d") == null) continue;
-            try {
-                return rsaPrivateKey(jwk);
-            } catch (GeneralSecurityException | RuntimeException e) {
-                // Try next key if available
+        for (JsonObject jwk : entries(readRoot(json, "invalid JWK(S) JSON for private key"))) {
+            PrivateKey key = isRsaPrivateKey(jwk) ? rsaPrivateKeyOrNull(jwk) : null;
+            if (key != null) {
+                return key;
             }
         }
         throw new JwtValidationException("no RSA private key found in JWK(S) document");
+    }
+
+    /** An RSA JWK with a {@code d} member (private exponent) holds a private key. */
+    private static boolean isRsaPrivateKey(JsonObject jwk) {
+        return "RSA".equals(string(jwk, "kty")) && string(jwk, "d") != null;
+    }
+
+    private static PrivateKey rsaPrivateKeyOrNull(JsonObject jwk) {
+        try {
+            return rsaPrivateKey(jwk);
+        } catch (GeneralSecurityException | RuntimeException _) {
+            return null; // unreadable key: try the next one
+        }
     }
 
     private static PrivateKey rsaPrivateKey(JsonObject jwk) throws GeneralSecurityException {

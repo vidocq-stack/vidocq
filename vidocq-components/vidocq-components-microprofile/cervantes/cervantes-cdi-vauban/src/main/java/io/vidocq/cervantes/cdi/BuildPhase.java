@@ -33,7 +33,7 @@ final class BuildPhase {
     static boolean isBuildTime() {
         try {
             return ExtensionPhase.isBuildTime();
-        } catch (LinkageError vaubanApiAbsent) {
+        } catch (LinkageError _) { // vauban-api absent: not a Vauban build
             return false;
         }
     }

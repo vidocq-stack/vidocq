@@ -48,7 +48,7 @@ final class JwtSignatureVerifier {
                 sigBytes = EcdsaSignatures.joseToDer(sigBytes, alg.ecCoordinateOctets());
             }
             return signature.verify(sigBytes);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             //poorly sized EC signature (transcoding impossible) → invalid signature, not server error
             return false;
         } catch (GeneralSecurityException e) {

@@ -59,7 +59,7 @@ public final class KeyResolvers {
                     byte[] bytes = decodedStr.getBytes(StandardCharsets.UTF_8);
                     return new JwksKeyResolver(() -> bytes);
                 }
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException _) {
                 //Not valid base64 — fall through to PEM parsing
             }
         }
