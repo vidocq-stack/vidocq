@@ -19,7 +19,6 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
-import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
@@ -34,7 +33,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -102,29 +100,24 @@ final class RepositoryActions {
      *
      * @param repositories the repository interfaces {@code MansartDataLive} holds
      * @param catalogue    the catalogue, for the names and the entities
-     * @param beans        the beans, resolved at each call
-     * @param transactions the transactions of a write
-     * @param models       the model of an entity class, {@code EntityModels.of}
+     * @param backend      the beans, the transactions of a write and the entity models the calls reach
      * @param accessible   whether reflection may call a method, making it accessible; see {@link #accessible}
      * @param maxActions   the most actions, {@value #MAX_ACTIONS}; the rest is counted as {@code more-methods}
      */
-    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, BeanLookup beans,
-                                   TransactionRunner transactions, Function<Class<?>, EntityModel<?>> models,
+    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, Backend backend,
                                    Predicate<Method> accessible, int maxActions) {
-        return build(repositories, catalogue, beans, transactions, models, accessible, maxActions, null);
+        return build(repositories, catalogue, backend, accessible, maxActions, null);
     }
 
     /**
      * The actions of {@code repositories} and the <i>JDQL</i> tab's {@link JdqlActions}, without its CSV actions.
      *
      * @param jdql runs a JDQL statement, {@link JdqlRunner#MANSART} outside tests; {@code null} for no JDQL tab
-     * @see #build(List, MansartDataCatalogue, BeanLookup, TransactionRunner, Function, Predicate, int, JdqlRunner,
-     *      EntitySaver)
+     * @see #build(List, MansartDataCatalogue, Backend, Predicate, int, JdqlRunner, EntitySaver)
      */
-    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, BeanLookup beans,
-                                   TransactionRunner transactions, Function<Class<?>, EntityModel<?>> models,
+    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, Backend backend,
                                    Predicate<Method> accessible, int maxActions, JdqlRunner jdql) {
-        return build(repositories, catalogue, beans, transactions, models, accessible, maxActions, jdql, null);
+        return build(repositories, catalogue, backend, accessible, maxActions, jdql, null);
     }
 
     /**
@@ -135,12 +128,10 @@ final class RepositoryActions {
      *
      * @param jdql  runs a JDQL statement, {@link JdqlRunner#MANSART} outside tests; {@code null} for no JDQL tab
      * @param saver saves an imported entity, {@link EntitySaver#MANSART} outside tests; {@code null} for no CSV action
-     * @see #build(List, MansartDataCatalogue, BeanLookup, TransactionRunner, Function, Predicate, int)
+     * @see #build(List, MansartDataCatalogue, Backend, Predicate, int)
      */
-    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, BeanLookup beans,
-                                   TransactionRunner transactions, Function<Class<?>, EntityModel<?>> models,
-                                   Predicate<Method> accessible, int maxActions, JdqlRunner jdql,
-                                   EntitySaver saver) {
+    static RepositoryActions build(List<Class<?>> repositories, MansartDataCatalogue catalogue, Backend backend,
+                                   Predicate<Method> accessible, int maxActions, JdqlRunner jdql, EntitySaver saver) {
         Set<String> entityNames = new HashSet<>();
         for (MansartDataCatalogue.Entity entity : catalogue.entities()) {
             entityNames.add(entity.className());
@@ -152,7 +143,8 @@ final class RepositoryActions {
                 entityNames.add(repository.entityClassName());
             }
         }
-        RepositoryActions built = new RepositoryActions(beans, transactions, new EntityJson(models, entityNames));
+        RepositoryActions built = new RepositoryActions(backend.beans(), backend.transactions(),
+                new EntityJson(backend.models(), entityNames));
         List<Class<?>> ordered = new ArrayList<>(repositories);
         ordered.sort(Comparator.comparing((Class<?> type) -> names.getOrDefault(type.getName(), type.getName())));
         Set<String> keys = new HashSet<>();
@@ -168,11 +160,11 @@ final class RepositoryActions {
         if (withJdql) {
             String jdqlGroup = group(JdqlActions.GROUP, groups);
             JdqlActions tab = new JdqlActions(catalogue.entities(), className -> load(className, repositories),
-                    models, built.entities, beans, transactions, jdql, built.history, jdqlGroup);
+                    backend, built.entities, jdql, built.history, jdqlGroup);
             built.actions.addAll(tab.actions());
             if (withCsv) {
-                built.actions.addAll(new CsvActions(tab, built.entities, transactions, jdql, saver, built.history,
-                        jdqlGroup).actions());
+                built.actions.addAll(new CsvActions(tab, built.entities, backend.transactions(), jdql, saver,
+                        built.history, jdqlGroup).actions());
             }
         }
         return built;

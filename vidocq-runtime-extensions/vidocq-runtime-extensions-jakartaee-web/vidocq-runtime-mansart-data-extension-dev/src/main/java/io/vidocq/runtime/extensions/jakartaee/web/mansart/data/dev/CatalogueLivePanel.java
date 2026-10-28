@@ -131,8 +131,9 @@ public final class CatalogueLivePanel implements LivePanel {
             return List.of();
         }
         try {
-            RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(), lookup, transactions,
-                    models, accessible, RepositoryActions.MAX_ACTIONS, JdqlRunner.MANSART, EntitySaver.MANSART);
+            RepositoryActions built = RepositoryActions.build(repositories, catalogue.get(),
+                    new Backend(lookup, transactions, models), accessible, RepositoryActions.MAX_ACTIONS,
+                    JdqlRunner.MANSART, EntitySaver.MANSART);
             run.set(built);
             return built.actions();
         } catch (RuntimeException | LinkageError failed) {

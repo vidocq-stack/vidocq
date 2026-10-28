@@ -88,12 +88,12 @@ class JdqlActionsTest {
     }
 
     private RepositoryActions build(TransactionRunner transactions) {
-        return RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), type -> {
+        return RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), new Backend(type -> {
             if (type == RepositoryRuntime.class) {
                 return RUNTIME;
             }
             throw new BeanLookup.NoBean();
-        }, transactions, RunFixtures::model, method -> true, RepositoryActions.MAX_ACTIONS, runner);
+        }, transactions, RunFixtures::model), method -> true, RepositoryActions.MAX_ACTIONS, runner);
     }
 
     private RepositoryActions build() {
@@ -372,9 +372,9 @@ class JdqlActionsTest {
     @Test
     void withoutARepositoryRuntimeBeanTheCallSaysSo() {
         RepositoryActions actions = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(),
-                type -> {
+                new Backend(type -> {
                     throw new BeanLookup.NoBean();
-                }, TransactionRunner.NONE, RunFixtures::model, method -> true, RepositoryActions.MAX_ACTIONS, runner);
+                }, TransactionRunner.NONE, RunFixtures::model), method -> true, RepositoryActions.MAX_ACTIONS, runner);
 
         ActionResult result = query(actions, "{\"query\":\"FROM Gizmo\"}");
 
@@ -392,7 +392,7 @@ class JdqlActionsTest {
         JdqlActions tab = new JdqlActions(twins, className -> {
             loaded.add(className);
             return Gizmo.class;
-        }, RunFixtures::model, RunFixtures.entities(), type -> RUNTIME, TransactionRunner.NONE, runner,
+        }, new Backend(type -> RUNTIME, TransactionRunner.NONE, RunFixtures::model), RunFixtures.entities(), runner,
                 new CallHistory(), JdqlActions.GROUP);
 
         ActionResult ambiguous = tab.call(false, Map.of("statement", "{\"query\":\"FROM Gizmo\"}"));
@@ -434,9 +434,9 @@ class JdqlActionsTest {
                 ReportQueries.class.getName(), null, null, null, List.of(), 1, "");
         MansartDataCatalogue noEntity = new MansartDataCatalogue(List.of(), List.of(reports), 0, 1, 1);
 
-        List<String> ids = RepositoryActions.build(List.of(ReportQueries.class), noEntity, type -> RUNTIME,
-                        TransactionRunner.NONE, RunFixtures::model, method -> true, RepositoryActions.MAX_ACTIONS,
-                        runner)
+        List<String> ids = RepositoryActions.build(List.of(ReportQueries.class), noEntity,
+                        new Backend(type -> RUNTIME, TransactionRunner.NONE, RunFixtures::model), method -> true,
+                        RepositoryActions.MAX_ACTIONS, runner)
                 .actions().stream().map(PanelAction::id).toList();
 
         assertEquals(List.of("m.report-queries.gizmo-count"), ids);
@@ -445,7 +445,8 @@ class JdqlActionsTest {
     @Test
     void theTabTakesItsTwoActionsFromThePanelsLimit() {
         List<String> ids = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(),
-                        type -> RUNTIME, TransactionRunner.NONE, RunFixtures::model, method -> true, 5, runner)
+                        new Backend(type -> RUNTIME, TransactionRunner.NONE, RunFixtures::model), method -> true, 5,
+                        runner)
                 .actions().stream().map(PanelAction::id).toList();
 
         assertEquals(5, ids.size());

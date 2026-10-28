@@ -82,23 +82,21 @@ final class JdqlActions {
     /**
      * @param entities     the catalogue's entities, those a statement may name
      * @param classes      the class of an entity by its full name, as the application loads it
-     * @param models       the model of an entity class, {@code EntityModels.of} outside tests
+     * @param backend      the beans, resolved at each call (the {@code RepositoryRuntime}), the transactions of a
+     *                     write and the model of an entity class, {@code EntityModels.of} outside tests
      * @param json         how entities are written
-     * @param beans        the beans, resolved at each call: the {@code RepositoryRuntime}
-     * @param transactions the transactions of a write
      * @param runner       runs a statement, {@link JdqlRunner#MANSART} outside tests
      * @param history      the panel's history, which the repositories' actions write too
      * @param group        the tab's title, {@value #GROUP} unless a repository's tab has it already
      */
-    JdqlActions(List<MansartDataCatalogue.Entity> entities, Function<String, Class<?>> classes,
-                Function<Class<?>, EntityModel<?>> models, EntityJson json, BeanLookup beans,
-                TransactionRunner transactions, JdqlRunner runner, CallHistory history, String group) {
+    JdqlActions(List<MansartDataCatalogue.Entity> entities, Function<String, Class<?>> classes, Backend backend,
+                EntityJson json, JdqlRunner runner, CallHistory history, String group) {
         this.entities = List.copyOf(entities);
         this.classes = Objects.requireNonNull(classes, "classes");
-        this.models = Objects.requireNonNull(models, "models");
+        this.models = Objects.requireNonNull(backend.models(), "models");
         this.json = Objects.requireNonNull(json, "json");
-        this.beans = Objects.requireNonNull(beans, "beans");
-        this.transactions = Objects.requireNonNull(transactions, "transactions");
+        this.beans = Objects.requireNonNull(backend.beans(), "beans");
+        this.transactions = Objects.requireNonNull(backend.transactions(), "transactions");
         this.runner = Objects.requireNonNull(runner, "runner");
         this.history = Objects.requireNonNull(history, "history");
         this.tabGroup = Objects.requireNonNull(group, "group");

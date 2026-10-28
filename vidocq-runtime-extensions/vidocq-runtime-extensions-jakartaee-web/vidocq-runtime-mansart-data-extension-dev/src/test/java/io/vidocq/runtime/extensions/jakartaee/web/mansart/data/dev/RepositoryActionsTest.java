@@ -87,12 +87,12 @@ class RepositoryActionsTest {
     }
 
     private RepositoryActions build(TransactionRunner transactions, Predicate<Method> accessible, int max) {
-        return RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), type -> {
+        return RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), new Backend(type -> {
             if (type == GizmoRepository.class) {
                 return gizmos;
             }
             throw new BeanLookup.NoBean();
-        }, transactions, RunFixtures::model, accessible, max);
+        }, transactions, RunFixtures::model), accessible, max);
     }
 
     private RepositoryActions build() {

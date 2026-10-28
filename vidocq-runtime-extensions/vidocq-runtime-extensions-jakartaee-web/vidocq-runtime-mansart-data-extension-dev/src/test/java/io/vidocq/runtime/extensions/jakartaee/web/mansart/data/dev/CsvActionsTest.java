@@ -124,8 +124,8 @@ class CsvActionsTest {
         List<MansartDataCatalogue.Entity> entities = new ArrayList<>(RunFixtures.catalogue().entities());
         entities.add(new MansartDataCatalogue.Entity("Slot", Slot.class.getName(), "slots", List.of(), null));
         JdqlActions jdql = new JdqlActions(entities,
-                className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES), RunFixtures::model, json,
-                beans, transactions, runner, history, JdqlActions.GROUP);
+                className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES),
+                new Backend(beans, transactions, RunFixtures::model), json, runner, history, JdqlActions.GROUP);
         return new CsvActions(jdql, json, transactions, runner, saver, history, JdqlActions.GROUP);
     }
 
@@ -530,11 +530,12 @@ class CsvActionsTest {
 
     @Test
     void theJdqlTabEndsWithTheCsvActionsWhichCountAgainstThePanelsLimit() {
-        List<String> ids = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
-                        TransactionRunner.NONE, RunFixtures::model, method -> true, 7, runner, saver)
+        Backend backend = new Backend(BEANS, TransactionRunner.NONE, RunFixtures::model);
+        List<String> ids = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), backend,
+                        method -> true, 7, runner, saver)
                 .actions().stream().map(PanelAction::id).toList();
-        List<String> without = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
-                        TransactionRunner.NONE, RunFixtures::model, method -> true, 7, runner)
+        List<String> without = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), backend,
+                        method -> true, 7, runner)
                 .actions().stream().map(PanelAction::id).toList();
 
         assertEquals(7, ids.size());
@@ -545,9 +546,9 @@ class CsvActionsTest {
 
     @Test
     void theCsvCallsGoIntoThePanelsCallsTable() {
-        RepositoryActions actions = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(), BEANS,
-                new TransactionRunner(new JtaDemarcation(() -> manager)), RunFixtures::model, method -> true,
-                RepositoryActions.MAX_ACTIONS, runner, saver);
+        RepositoryActions actions = RepositoryActions.build(RunFixtures.REPOSITORIES, RunFixtures.catalogue(),
+                new Backend(BEANS, new TransactionRunner(new JtaDemarcation(() -> manager)), RunFixtures::model),
+                method -> true, RepositoryActions.MAX_ACTIONS, runner, saver);
         runner.answer = new JdqlResult.Count(3);
         PanelAction export = actions.actions().stream().filter(a -> a.id().equals(CsvActions.EXPORT)).findFirst()
                 .orElseThrow();
@@ -576,8 +577,8 @@ class CsvActionsTest {
                 null));
         TransactionRunner transactions = new TransactionRunner(new JtaDemarcation(() -> manager));
         JdqlActions jdql = new JdqlActions(entities,
-                className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES), RunFixtures::model, json,
-                BEANS, transactions, runner, history, JdqlActions.GROUP);
+                className -> RepositoryActions.load(className, RunFixtures.REPOSITORIES),
+                new Backend(BEANS, transactions, RunFixtures::model), json, runner, history, JdqlActions.GROUP);
         CsvActions tab = new CsvActions(jdql, json, transactions, runner, saver, history, JdqlActions.GROUP);
 
         assertRefused(load(tab, "Tally", "label\r\na\r\nb\r\n", null, "commit"),
