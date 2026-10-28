@@ -162,6 +162,11 @@ public interface GadgetRepository extends CrudRepository<Gadget, Long> {
     @Query("WHERE LOWER(name) IN ?1 ORDER BY name")
     List<Gadget> byLowerNameAnyOf(List<String> names);
 
+    @Query("WHERE name IN ?1 AND UPPER(name) <> ?2 AND stock BETWEEN ?3 AND ?4 AND LENGTH(name) BETWEEN ?5 AND ?6"
+            + " AND price IS NOT NULL AND UPPER(category) IS NOT NULL AND LOWER(category) IN ?7 ORDER BY name")
+    List<Gadget> namedAmongInWindows(List<String> names, String notUpperName, int minStock, int maxStock,
+                                     int minLength, int maxLength, List<String> lowerCategories);
+
     @Query("WHERE ABS(stock) > ?1 OR (category = ?2 AND price < ?3) ORDER BY name")
     List<Gadget> busyOrCheap(int stock, String category, double price);
 

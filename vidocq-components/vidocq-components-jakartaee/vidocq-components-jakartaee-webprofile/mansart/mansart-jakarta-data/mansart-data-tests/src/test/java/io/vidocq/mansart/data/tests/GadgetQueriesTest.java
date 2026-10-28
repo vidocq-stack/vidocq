@@ -242,6 +242,13 @@ class GadgetQueriesTest {
 
     @ParameterizedTest
     @MethodSource("repositories")
+    void queryMixingACollectionInWithFunctionsAndRanges(GadgetRepository repo) {
+        assertThat(names(repo.namedAmongInWindows(List.of(ANVIL, BOLT, DRONE, EASEL), "BOLT", 1, 10, 4, 5,
+                List.of(TOOLS, TOYS)))).containsExactly(ANVIL, DRONE);
+    }
+
+    @ParameterizedTest
+    @MethodSource("repositories")
     void queryReturnShapes(GadgetRepository repo) {
         assertThat(repo.exactlyNamed(ANVIL).getPrice()).isEqualTo(30.0);
         assertThat(repo.countByFlag(true)).isEqualTo(3);
