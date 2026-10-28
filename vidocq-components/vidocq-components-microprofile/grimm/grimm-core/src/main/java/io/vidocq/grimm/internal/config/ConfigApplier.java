@@ -134,28 +134,38 @@ public final class ConfigApplier {
         }
         Map<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : config.schemaOverrides().entrySet()) {
-            String fqcn = e.getKey();
-            String json = e.getValue();
-            Class<?> clazz = tryLoad(fqcn);
-            if (clazz == null) {
-                continue; // unknown class — silently skip (spec is silent on this case)
+            String name = applySchemaOverride(registry, e.getKey(), e.getValue());
+            if (name != null) {
+                result.put(e.getKey(), name);
             }
-            Object parsed = JsonDeserializer.parseRaw(json);
-            if (!(parsed instanceof Map<?, ?> map)) {
-                continue; // not a JSON object — skip
-            }
-            // "name" only chooses the registry name: it is not a schema keyword.
-            Object nameField = map.get("name");
-            Map<Object, Object> keywords = new LinkedHashMap<>(map);
-            keywords.remove("name");
-            Schema schema = JsonDeserializer.toSchema(expandRefAliases(keywords));
-            String preferredName = nameField instanceof String s && !s.isBlank()
-                    ? s : clazz.getSimpleName();
-            String name = registry.reserve(clazz, preferredName);
-            registry.publish(name, schema);
-            result.put(fqcn, name);
         }
         return result;
+    }
+
+    /**
+     * Registers one {@code mp.openapi.schema.<fqcn>} override.
+     *
+     * @return the registered schema name, or {@code null} when the class is unknown (the spec is
+     *         silent on this case) or the value is not a JSON object: the override is skipped
+     */
+    private static String applySchemaOverride(SchemaRegistry registry, String fqcn, String json) {
+        Class<?> clazz = tryLoad(fqcn);
+        if (clazz == null) {
+            return null;
+        }
+        if (!(JsonDeserializer.parseRaw(json) instanceof Map<?, ?> map)) {
+            return null;
+        }
+        // "name" only chooses the registry name: it is not a schema keyword.
+        Object nameField = map.get("name");
+        Map<Object, Object> keywords = new LinkedHashMap<>(map);
+        keywords.remove("name");
+        Schema schema = JsonDeserializer.toSchema(expandRefAliases(keywords));
+        String preferredName = nameField instanceof String s && !s.isBlank()
+                ? s : clazz.getSimpleName();
+        String name = registry.reserve(clazz, preferredName);
+        registry.publish(name, schema);
+        return name;
     }
 
     private static final List<String> SCHEMA_KEYS = List.of("items", "additionalProperties", "not", "if", "then",
@@ -205,10 +215,10 @@ public final class ConfigApplier {
     private static Class<?> tryLoad(String fqcn) {
         try {
             return Class.forName(fqcn, false, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             try {
                 return Class.forName(fqcn);
-            } catch (ClassNotFoundException ignored) {
+            } catch (ClassNotFoundException _) {
                 return null;
             }
         }

@@ -54,24 +54,20 @@ public final class YamlSerializer {
         for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
             appendIndent(builder, indent);
             builder.append(writeKey(entry.getKey())).append(':');
-            Object child = entry.getValue();
-            if (child instanceof Map<?, ?> childMap) {
-                if (childMap.isEmpty()) {
-                    builder.append(" {}\n");
-                } else {
-                    builder.append('\n');
-                    writeYaml(childMap, builder, indent + 2);
-                }
-            } else if (child instanceof List<?> childList) {
-                if (childList.isEmpty()) {
-                    builder.append(" []\n");
-                } else {
-                    builder.append('\n');
-                    writeYaml(childList, builder, indent + 2);
-                }
-            } else {
-                builder.append(' ').append(writeScalar(child)).append('\n');
+            writeEntryValue(entry.getValue(), builder, indent);
+        }
+    }
+
+    /** Writes the value after a map key or a list dash: inline when scalar or empty, nested otherwise. */
+    private void writeEntryValue(Object value, StringBuilder builder, int indent) {
+        switch (value) {
+            case Map<?, ?> map when map.isEmpty() -> builder.append(" {}\n");
+            case List<?> list when list.isEmpty() -> builder.append(" []\n");
+            case Map<?, ?> _, List<?> _ -> {
+                builder.append('\n');
+                writeYaml(value, builder, indent + 2);
             }
+            case null, default -> builder.append(' ').append(writeScalar(value)).append('\n');
         }
     }
 
@@ -90,23 +86,7 @@ public final class YamlSerializer {
         for (Object item : listValue) {
             appendIndent(builder, indent);
             builder.append('-');
-            if (item instanceof Map<?, ?> itemMap) {
-                if (itemMap.isEmpty()) {
-                    builder.append(" {}\n");
-                } else {
-                    builder.append('\n');
-                    writeYaml(itemMap, builder, indent + 2);
-                }
-            } else if (item instanceof List<?> itemList) {
-                if (itemList.isEmpty()) {
-                    builder.append(" []\n");
-                } else {
-                    builder.append('\n');
-                    writeYaml(itemList, builder, indent + 2);
-                }
-            } else {
-                builder.append(' ').append(writeScalar(item)).append('\n');
-            }
+            writeEntryValue(item, builder, indent);
         }
     }
 

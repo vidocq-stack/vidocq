@@ -53,7 +53,7 @@ public class ScannedTypesCreator implements SyntheticBeanCreator<ScannedTypes> {
         for (String name : params.get(CLASSES, String[].class, new String[0])) {
             try {
                 classes.add(Class.forName(name, false, loader));
-            } catch (ClassNotFoundException | LinkageError notVisible) {
+            } catch (ClassNotFoundException | LinkageError _) {
                 // The container's own types (an application server's beans) are not the application's.
                 LOG.log(System.Logger.Level.DEBUG, "Scanned class {0} is not visible to the application", name);
             }

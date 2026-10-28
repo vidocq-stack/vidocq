@@ -110,7 +110,7 @@ public final class AnnotationModelMappings {
     public static Object parseJsonValue(String rawValue) {
         try {
             return JsonDeserializer.parseRaw(rawValue);
-        } catch (IllegalArgumentException notJson) {
+        } catch (IllegalArgumentException _) {
             return rawValue;
         }
     }

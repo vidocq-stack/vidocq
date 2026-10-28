@@ -42,7 +42,7 @@ public class GrimmConfigProducer {
         try {
             Config config = ConfigProvider.getConfig();
             return GrimmConfig.fromMpConfig(config);
-        } catch (IllegalStateException | java.util.ServiceConfigurationError e) {
+        } catch (IllegalStateException | java.util.ServiceConfigurationError _) {
             // No MP-Config provider on the classpath — fall back to defaults so the
             // pipeline still produces a valid (empty) /openapi document.
             return GrimmConfig.defaults();

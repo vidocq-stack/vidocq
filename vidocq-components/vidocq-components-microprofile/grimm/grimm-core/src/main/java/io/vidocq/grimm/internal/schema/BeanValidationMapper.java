@@ -313,7 +313,7 @@ public final class BeanValidationMapper {
         try {
             Method method = ann.annotationType().getMethod(methodName);
             return method.invoke(ann);
-        } catch (ReflectiveOperationException e) {
+        } catch (ReflectiveOperationException _) {
             return null;
         }
     }

@@ -547,7 +547,7 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
                 SchemaImpl::setDiscriminator));
         p.put("title", Property.of(String.class, SchemaImpl::getTitle, SchemaImpl::setTitle));
         p.put("default", Property.of(Object.class, SchemaImpl::getDefaultValue, SchemaImpl::setDefaultValue));
-        p.put("enum", Property.of(List.class, SchemaImpl::getEnumeration, (s, v) -> s.setEnumeration(v)));
+        p.put("enum", Property.of(List.class, SchemaImpl::getEnumeration, SchemaImpl::setEnumeration));
         p.put("multipleOf", Property.of(BigDecimal.class, SchemaImpl::getMultipleOf, SchemaImpl::setMultipleOf));
         p.put("maximum", Property.of(BigDecimal.class, SchemaImpl::getMaximum, SchemaImpl::setMaximum));
         p.put("exclusiveMaximum", Property.of(BigDecimal.class, SchemaImpl::getExclusiveMaximum,
@@ -577,12 +577,11 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
                 value -> value instanceof Schema || value instanceof Boolean,
                 SchemaImpl::getAdditionalPropertiesSchema,
                 (s, v) -> {
-                    if (v instanceof Boolean b) {
-                        s.setAdditionalPropertiesBoolean(b);
-                    } else if (v instanceof Schema schema && isBareBooleanSchema(schema)) {
-                        s.setAdditionalPropertiesBoolean(schema.getBooleanSchema());
-                    } else {
-                        s.setAdditionalPropertiesSchema((Schema) v);
+                    switch (v) {
+                        case Boolean b -> s.setAdditionalPropertiesBoolean(b);
+                        case Schema schema when isBareBooleanSchema(schema) ->
+                                s.setAdditionalPropertiesBoolean(schema.getBooleanSchema());
+                        case null, default -> s.setAdditionalPropertiesSchema((Schema) v);
                     }
                 }));
         p.put("description", Property.of(String.class, SchemaImpl::getDescription, SchemaImpl::setDescription));
@@ -625,7 +624,7 @@ public class SchemaImpl extends AbstractExtensibleRef<Schema> implements Schema 
                 SchemaImpl::setContentMediaType));
         p.put("contentSchema", Property.of(Schema.class, SchemaImpl::getContentSchema,
                 SchemaImpl::setContentSchema));
-        p.put("examples", Property.of(List.class, SchemaImpl::getExamples, (s, v) -> s.setExamples(v)));
+        p.put("examples", Property.of(List.class, SchemaImpl::getExamples, SchemaImpl::setExamples));
         return Collections.unmodifiableMap(p);
     }
 }

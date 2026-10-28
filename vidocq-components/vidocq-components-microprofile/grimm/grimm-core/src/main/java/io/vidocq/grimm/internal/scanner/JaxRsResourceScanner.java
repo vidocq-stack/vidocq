@@ -1165,13 +1165,6 @@ final class JaxRsResourceScanner {
         return methodLevel.length > 0 ? methodLevel : classLevel;
     }
 
-    private static Type entityType(Method method, int entityIndex) {
-        if (entityIndex < 0) {
-            return method.getGenericReturnType();
-        }
-        return method.getGenericParameterTypes()[entityIndex];
-    }
-
     private void processSecuritySchemes(Class<?> clazz, OpenAPI openAPI) {
         List<SecurityScheme> annotations = new ArrayList<>();
         SecuritySchemes grouped = clazz.getAnnotation(SecuritySchemes.class);

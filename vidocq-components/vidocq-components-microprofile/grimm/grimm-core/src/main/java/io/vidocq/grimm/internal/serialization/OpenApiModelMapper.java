@@ -1173,7 +1173,7 @@ final class OpenApiModelMapper {
         }
         try {
             return new BigDecimal(number.toString());
-        } catch (NumberFormatException notFinite) {
+        } catch (NumberFormatException _) {
             return null; // NaN or an infinity has no BigDecimal form
         }
     }
@@ -1185,7 +1185,7 @@ final class OpenApiModelMapper {
         }
         try {
             return decimal.intValueExact();
-        } catch (ArithmeticException notAnInt) {
+        } catch (ArithmeticException _) {
             return null;
         }
     }

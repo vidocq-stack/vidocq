@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Immutable snapshot of all MicroProfile OpenAPI 4.2 configuration keys (spec §4.1).
@@ -89,14 +90,14 @@ public record GrimmConfig(
 
     /** Builds a snapshot from a flat key/value map (spec §4.1). */
     public static GrimmConfig fromMap(Map<String, String> source) {
-        Function<String, String> getter = source::get;
+        UnaryOperator<String> getter = source::get;
         return fromGetter(getter, source.keySet());
     }
 
     /** Builds a snapshot from a live MicroProfile {@link Config}. */
     public static GrimmConfig fromMpConfig(Config config) {
         Objects.requireNonNull(config, "config");
-        Function<String, String> getter = key ->
+        UnaryOperator<String> getter = key ->
                 config.getOptionalValue(key, String.class).orElse(null);
         Set<String> keys = new LinkedHashSet<>();
         config.getPropertyNames().forEach(keys::add);

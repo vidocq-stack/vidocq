@@ -39,7 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Invokes the configured {@link OASFilter} to post-process the OpenAPI model.
@@ -104,14 +104,11 @@ public final class FilterInvoker {
     private void filterOperations(PathItem item, OASFilter filter) {
         for (PathItem.HttpMethod m : PathItem.HttpMethod.values()) {
             Operation op = getOperation(item, m);
-            if (op == null) continue;
-            filterOperationDetails(op, filter);
-            Operation filtered = filter.filterOperation(op);
-            if (filtered == null) {
-                setOperation(item, m, null);
-                continue;
+            if (op != null) {
+                filterOperationDetails(op, filter);
+                // A null result removes the operation (spec §4.3.1).
+                setOperation(item, m, filter.filterOperation(op));
             }
-            setOperation(item, m, filtered);
         }
     }
 
@@ -211,7 +208,7 @@ public final class FilterInvoker {
         filterMap(c.getSecuritySchemes(), filter::filterSecurityScheme, c::setSecuritySchemes);
     }
 
-    private <V> void filterMap(Map<String, V> map, Function<V, V> fn, Consumer<Map<String, V>> setter) {
+    private <V> void filterMap(Map<String, V> map, UnaryOperator<V> fn, Consumer<Map<String, V>> setter) {
         if (map == null || map.isEmpty()) return;
         Map<String, V> kept = new LinkedHashMap<>();
         for (Map.Entry<String, V> e : map.entrySet()) {

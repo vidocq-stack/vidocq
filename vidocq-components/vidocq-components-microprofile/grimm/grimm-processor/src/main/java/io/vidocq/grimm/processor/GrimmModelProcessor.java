@@ -150,7 +150,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         boolean hasOperation = false;
 
         for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
-            hasOperation |= addOperation(type, method, basePath, classProduces, schemaGenerator, paths);
+            hasOperation |= addOperation(method, basePath, classProduces, schemaGenerator, paths);
         }
 
         if (!hasOperation) {
@@ -160,8 +160,8 @@ public final class GrimmModelProcessor extends AbstractProcessor {
     }
 
     /** Adds the operation of {@code method} to {@code paths}; {@code false} when it is not one. */
-    private boolean addOperation(TypeElement type, ExecutableElement method, String basePath,
-                                 String[] classProduces, SchemaGenerator schemaGenerator, Paths paths)
+    private boolean addOperation(ExecutableElement method, String basePath, String[] classProduces,
+                                 SchemaGenerator schemaGenerator, Paths paths)
             throws SkipGeneration {
         if (method.getModifiers().contains(Modifier.STATIC)
                 || method.getModifiers().contains(Modifier.PRIVATE)) {
@@ -178,7 +178,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         }
         String template = joinPath(basePath, methodSubPath(method));
         String[] methodProduces = producesOf(method);
-        Operation operation = buildOperation(type, method, schemaGenerator,
+        Operation operation = buildOperation(method, schemaGenerator,
                 methodProduces != null ? methodProduces : classProduces);
 
         PathItem item = paths.getPathItem(template);
@@ -202,8 +202,8 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         return value.startsWith("/") ? value : "/" + value;
     }
 
-    private Operation buildOperation(TypeElement type, ExecutableElement method,
-                                     SchemaGenerator schemaGenerator, String[] produces)
+    private Operation buildOperation(ExecutableElement method, SchemaGenerator schemaGenerator,
+                                     String[] produces)
             throws SkipGeneration {
         Operation operation = OASFactory.createObject(Operation.class);
 

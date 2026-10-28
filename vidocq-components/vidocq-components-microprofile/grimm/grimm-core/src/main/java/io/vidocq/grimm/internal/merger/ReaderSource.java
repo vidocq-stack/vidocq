@@ -25,13 +25,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
  * Source produced by the configured {@code OASModelReader} (spec §4.1). Lowest priority in
  * {@link ModelMerger}: the starting model, which the static file and the annotations override.
  */
-public final class ReaderSource implements ModelSource {
-
-    private final OpenAPI model;
-
-    public ReaderSource(OpenAPI model) {
-        this.model = model;
-    }
+public record ReaderSource(OpenAPI model) implements ModelSource {
 
     @Override
     public OpenAPI getModel() {

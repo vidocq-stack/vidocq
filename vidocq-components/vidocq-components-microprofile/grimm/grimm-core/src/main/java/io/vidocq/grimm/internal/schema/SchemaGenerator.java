@@ -41,6 +41,7 @@ import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -299,7 +300,7 @@ public final class SchemaGenerator {
         body.addType(Schema.SchemaType.STRING);
         List<Object> values = new ArrayList<>();
         if (enumAnn != null && enumAnn.enumeration().length > 0) {
-            for (String v : enumAnn.enumeration()) values.add(v);
+            Collections.addAll(values, enumAnn.enumeration());
         } else {
             Object[] constants = enumClass.getEnumConstants();
             if (constants != null) {
@@ -451,7 +452,7 @@ public final class SchemaGenerator {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException ignored) {
+            } catch (NoSuchFieldException _) {
                 current = current.getSuperclass();
             }
         }

@@ -985,6 +985,9 @@ public final class AnnotationScanner {
             case "OPTIONS" -> pathItem.setOPTIONS(operation);
             case "HEAD" -> pathItem.setHEAD(operation);
             case "TRACE" -> pathItem.setTRACE(operation);
+            default -> {
+                // Not an HTTP method of the Path Item Object: the operation is not documented.
+            }
         }
     }
 
