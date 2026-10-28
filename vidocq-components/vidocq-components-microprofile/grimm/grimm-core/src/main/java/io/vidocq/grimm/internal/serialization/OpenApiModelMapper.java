@@ -962,11 +962,8 @@ final class OpenApiModelMapper {
                 case "authorizationUrl" -> flow.setAuthorizationUrl(asString(value));
                 case "tokenUrl" -> flow.setTokenUrl(asString(value));
                 case "refreshUrl" -> flow.setRefreshUrl(asString(value));
-                case "scopes" -> {
-                    if (value instanceof Map<?, ?> scopes) {
-                        flow.setScopes(toScopes(scopes));
-                    }
-                }
+                // A fresh flow has no scopes: a non-map value leaves it so.
+                case "scopes" -> flow.setScopes(value instanceof Map<?, ?> scopes ? toScopes(scopes) : null);
                 default -> {
                     if (key.startsWith("x-")) {
                         flow.addExtension(key, value);

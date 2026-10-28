@@ -176,71 +176,8 @@ public final class YamlDeserializer {
         return c == quote && i + 1 < text.length() && text.charAt(i + 1) == quote;
     }
 
-    private static String stripComment(String line) {
-        int i = 0;
-        while (i < line.length()) {
-            if (opensQuote(line, i)) {
-                int close = closingQuote(line, i);
-                if (close < 0) {
-                    return line;
-                }
-                i = close + 1;
-            } else if (line.charAt(i) == '#' && (i == 0 || line.charAt(i - 1) == ' ')) {
-                return line.substring(0, i);
-            } else {
-                i++;
-            }
-        }
-        return line;
-    }
-
-    private static int indentOf(String line) {
-        int indent = 0;
-        while (indent < line.length() && line.charAt(indent) == ' ') {
-            indent++;
-        }
-        return indent;
-    }
-
-    private static boolean isListItem(String text) {
-        return "-".equals(text) || text.startsWith("- ");
-    }
-
     private static boolean isFlowStart(CharSequence text) {
         return !text.isEmpty() && (text.charAt(0) == '[' || text.charAt(0) == '{');
-    }
-
-    /** Index of the colon that separates a block mapping key from its value, or -1. */
-    private static int mappingColon(String text) {
-        if (isFlowStart(text)) {
-            return -1;
-        }
-        int from = 0;
-        if (opensQuote(text, 0)) {
-            int close = closingQuote(text, 0);
-            if (close < 0) {
-                return -1;
-            }
-            from = close + 1;
-            if (from < text.length() && text.charAt(from) == ':') {
-                return from;
-            }
-        }
-        for (int i = text.indexOf(':', from); i >= 0; i = text.indexOf(':', i + 1)) {
-            if (i + 1 == text.length() || text.charAt(i + 1) == ' ') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static String normalizeKey(String key) {
-        String trimmed = key.trim();
-        if (trimmed.length() >= 2 && (trimmed.startsWith("\"") || trimmed.startsWith("'"))
-                && trimmed.endsWith(trimmed.substring(0, 1))) {
-            return trimmed.substring(1, trimmed.length() - 1);
-        }
-        return trimmed;
     }
 
     private static IllegalArgumentException invalid(String what, int lineIndex, String line) {
@@ -253,6 +190,69 @@ public final class YamlDeserializer {
 
         private NodeParser(String yaml) {
             this.lines = new ArrayList<>(yaml.lines().toList());
+        }
+
+        private static String stripComment(String line) {
+            int i = 0;
+            while (i < line.length()) {
+                if (opensQuote(line, i)) {
+                    int close = closingQuote(line, i);
+                    if (close < 0) {
+                        return line;
+                    }
+                    i = close + 1;
+                } else if (line.charAt(i) == '#' && (i == 0 || line.charAt(i - 1) == ' ')) {
+                    return line.substring(0, i);
+                } else {
+                    i++;
+                }
+            }
+            return line;
+        }
+
+        private static int indentOf(String line) {
+            int indent = 0;
+            while (indent < line.length() && line.charAt(indent) == ' ') {
+                indent++;
+            }
+            return indent;
+        }
+
+        private static boolean isListItem(String text) {
+            return "-".equals(text) || text.startsWith("- ");
+        }
+
+        /** Index of the colon that separates a block mapping key from its value, or -1. */
+        private static int mappingColon(String text) {
+            if (isFlowStart(text)) {
+                return -1;
+            }
+            int from = 0;
+            if (opensQuote(text, 0)) {
+                int close = closingQuote(text, 0);
+                if (close < 0) {
+                    return -1;
+                }
+                from = close + 1;
+                if (from < text.length() && text.charAt(from) == ':') {
+                    return from;
+                }
+            }
+            for (int i = text.indexOf(':', from); i >= 0; i = text.indexOf(':', i + 1)) {
+                if (i + 1 == text.length() || text.charAt(i + 1) == ' ') {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static String normalizeKey(String key) {
+            String trimmed = key.trim();
+            if (trimmed.length() >= 2 && (trimmed.startsWith("\"") || trimmed.startsWith("'"))
+                    && trimmed.endsWith(trimmed.substring(0, 1))) {
+                return trimmed.substring(1, trimmed.length() - 1);
+            }
+            return trimmed;
         }
 
         private Object parseDocument() {
@@ -344,6 +344,18 @@ public final class YamlDeserializer {
         }
 
         private String parseBlockScalar(int parentIndent, String indicator) {
+            List<String> block = readBlockLines(parentIndent);
+            int trailingBlankLines = 0;
+            while (!block.isEmpty() && block.getLast().isEmpty()) {
+                block.removeLast();
+                trailingBlankLines++;
+            }
+            String body = indicator.charAt(0) == '>' ? fold(block) : String.join("\n", block);
+            return chomp(body, indicator, trailingBlankLines);
+        }
+
+        /** The lines of a block scalar, without their common indentation; blank lines kept empty. */
+        private List<String> readBlockLines(int parentIndent) {
             List<String> block = new ArrayList<>();
             int blockIndent = -1;
             while (index < lines.size()) {
@@ -358,13 +370,7 @@ public final class YamlDeserializer {
                 block.add(line.isBlank() ? "" : line.substring(blockIndent));
                 index++;
             }
-            int trailingBlankLines = 0;
-            while (!block.isEmpty() && block.getLast().isEmpty()) {
-                block.removeLast();
-                trailingBlankLines++;
-            }
-            String body = indicator.charAt(0) == '>' ? fold(block) : String.join("\n", block);
-            return chomp(body, indicator, trailingBlankLines);
+            return block;
         }
 
         private static String fold(List<String> block) {
