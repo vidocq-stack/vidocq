@@ -24,8 +24,13 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import java.util.List;
 import java.util.Map;
+import org.eclipse.microprofile.openapi.annotations.Components;
 import org.eclipse.microprofile.openapi.annotations.ExternalDocumentation;
+import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
 import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.headers.Header;
+import org.eclipse.microprofile.openapi.annotations.info.Info;
+import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.junit.jupiter.api.Test;
 
@@ -125,5 +130,53 @@ class AnnotationModelMappingsTest {
         OpenAPI openAPI = new AnnotationScanner(ScanConfig.defaultConfig()).scanClasses(List.of(EmptyUrlResource.class));
         assertNotNull(openAPI.getPaths().getPathItem("/e").getGET());
         assertNull(openAPI.getPaths().getPathItem("/e").getGET().getExternalDocs());
+    }
+    @OpenAPIDefinition(info = @Info(title = "Headers", version = "1"), components = @Components(headers = {
+            @Header(name = "X-Sample", example = "plain",
+            examples = {
+                    @ExampleObject(name = "full", summary = "Full", description = "Every attribute",
+                            value = "42", externalValue = "https://example.org/42.json",
+                            ref = "#/components/examples/full",
+                            extensions = @Extension(name = "x-origin", value = "test")),
+                    @ExampleObject(name = "empty"),
+                    @ExampleObject(summary = "nameless, ignored")
+            }),
+            @Header(name = "X-Bare")}))
+    static class WithHeaders { }
+
+    private static Header header(int index) {
+        return WithHeaders.class.getAnnotation(OpenAPIDefinition.class).components().headers()[index];
+    }
+
+    @Test
+    void headerExamplesAreMappedByName() {
+        // §5.2.3 @Header: example and named examples; nameless examples are ignored.
+        var header = org.eclipse.microprofile.openapi.OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.headers.Header.class);
+        AnnotationModelMappings.applyHeaderExamples(header, header(0));
+
+        assertEquals("plain", header.getExample());
+        assertEquals(2, header.getExamples().size());
+        var full = header.getExamples().get("full");
+        assertAll(
+                () -> assertEquals("Full", full.getSummary()),
+                () -> assertEquals("Every attribute", full.getDescription()),
+                () -> assertEquals("42", full.getValue()),
+                () -> assertEquals("https://example.org/42.json", full.getExternalValue()),
+                () -> assertEquals("#/components/examples/full", full.getRef()),
+                () -> assertEquals("test", full.getExtensions().get("x-origin")));
+        var empty = header.getExamples().get("empty");
+        assertNull(empty.getSummary());
+        assertNull(empty.getValue());
+    }
+
+    @Test
+    void headerWithoutExamplesKeepsNone() {
+        var header = org.eclipse.microprofile.openapi.OASFactory.createObject(
+                org.eclipse.microprofile.openapi.models.headers.Header.class);
+        AnnotationModelMappings.applyHeaderExamples(header, header(1));
+
+        assertNull(header.getExample());
+        assertNull(header.getExamples());
     }
 }
