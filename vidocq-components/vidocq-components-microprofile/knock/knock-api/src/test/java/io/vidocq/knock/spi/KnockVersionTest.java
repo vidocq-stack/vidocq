@@ -33,7 +33,9 @@ class KnockVersionTest {
     @Test
     void implementationVersionMatchesTheBuildVersion() {
         // project.version is injected by surefire (systemPropertyVariables).
-        assertEquals(System.getProperty("project.version"), Knock.IMPLEMENTATION_VERSION,
+        String buildVersion = System.getProperty("project.version");
+        String reportedVersion = Knock.IMPLEMENTATION_VERSION;
+        assertEquals(buildVersion, reportedVersion,
                 "Knock.IMPLEMENTATION_VERSION must be the Maven build version, not a hardcoded constant");
     }
 

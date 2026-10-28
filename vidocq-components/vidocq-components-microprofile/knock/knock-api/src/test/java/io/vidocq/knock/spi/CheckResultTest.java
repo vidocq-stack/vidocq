@@ -44,8 +44,9 @@ class CheckResultTest {
                 HealthCheckResponse.Status.UP, AT, data);
         data.put("pool", "0");
 
-        assertEquals(Map.of("pool", "8"), result.data());
-        assertThrows(UnsupportedOperationException.class, () -> result.data().put("x", "y"));
+        Map<String, String> copy = result.data();
+        assertEquals(Map.of("pool", "8"), copy);
+        assertThrows(UnsupportedOperationException.class, () -> copy.put("x", "y"));
     }
 
     @Test
@@ -58,19 +59,21 @@ class CheckResultTest {
 
     @Test
     void all_is_not_a_probe_a_check_answers_for() {
+        Map<String, String> noData = Map.of();
         assertThrows(IllegalArgumentException.class, () -> new CheckResult(ProbeType.ALL, "c", "c",
-                HealthCheckResponse.Status.UP, AT, Map.of()));
+                HealthCheckResponse.Status.UP, AT, noData));
     }
 
     @Test
     void identity_fields_are_mandatory() {
+        Map<String, String> noData = Map.of();
         assertThrows(NullPointerException.class, () -> new CheckResult(null, "c", "c",
-                HealthCheckResponse.Status.UP, AT, Map.of()));
+                HealthCheckResponse.Status.UP, AT, noData));
         assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, null, "c",
-                HealthCheckResponse.Status.UP, AT, Map.of()));
+                HealthCheckResponse.Status.UP, AT, noData));
         assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
-                null, AT, Map.of()));
+                null, AT, noData));
         assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
-                HealthCheckResponse.Status.UP, null, Map.of()));
+                HealthCheckResponse.Status.UP, null, noData));
     }
 }
