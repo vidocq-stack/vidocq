@@ -166,25 +166,41 @@ public final class ScanSelection {
             Dependency dep = dependencies.get(i);
             JarFacts f = facts.get(i);
             List<String> bricks = bricksByJar.getOrDefault(dep.jar(), List.of());
-            Source source = anyMatch(scanDependencies, dep) ? Source.APPLICATION
-                    : anyMatch(extensionPatterns, dep) ? Source.EXTENSION
-                    : autoScan && f.beansXml() && !"none".equals(f.discoveryMode()) ? Source.AUTOMATIC
-                    : !bricks.isEmpty() ? Source.BRICK
-                    : null;
-            String excluded = null;
-            if (source != null) {
-                if (f.processed()) {
-                    excluded = "already carries generated code (Vauban APT or plugin)";
-                } else if (anyMatch(scanExcludes, dep)) {
-                    excluded = "listed in scanExcludes";
-                } else if (f.signed() && source != Source.APPLICATION) {
-                    excluded = "signed: enriching it would break its signature — name it in scanDependencies to"
-                            + " enrich it anyway";
-                }
-            }
+            Source source = source(dep, f, scanDependencies, extensionPatterns, autoScan, !bricks.isEmpty());
+            String excluded = source == null ? null : excludedBecause(dep, f, source, scanExcludes);
             decisions.add(new Decision(dep, f, source, excluded, source == Source.BRICK ? bricks : List.of()));
         }
         return decisions;
+    }
+
+    /** Why {@code dep} is to be scanned, by the first rule that names it, or {@code null} when none does. */
+    private static Source source(Dependency dep, JarFacts f, List<String> scanDependencies,
+                                 Set<String> extensionPatterns, boolean autoScan, boolean brickSelected) {
+        if (anyMatch(scanDependencies, dep)) {
+            return Source.APPLICATION;
+        }
+        if (anyMatch(extensionPatterns, dep)) {
+            return Source.EXTENSION;
+        }
+        if (autoScan && f.beansXml() && !"none".equals(f.discoveryMode())) {
+            return Source.AUTOMATIC;
+        }
+        return brickSelected ? Source.BRICK : null;
+    }
+
+    /** Why {@code dep}, which {@code source} names, is not scanned after all, or {@code null} when it is. */
+    private static String excludedBecause(Dependency dep, JarFacts f, Source source, List<String> scanExcludes) {
+        if (f.processed()) {
+            return "already carries generated code (Vauban APT or plugin)";
+        }
+        if (anyMatch(scanExcludes, dep)) {
+            return "listed in scanExcludes";
+        }
+        if (f.signed() && source != Source.APPLICATION) {
+            return "signed: enriching it would break its signature — name it in scanDependencies to"
+                    + " enrich it anyway";
+        }
+        return null;
     }
 
     /** What the jar, or reactor classes directory, says about itself. */

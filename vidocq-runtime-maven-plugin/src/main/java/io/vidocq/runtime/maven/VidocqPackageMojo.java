@@ -154,10 +154,10 @@ public class VidocqPackageMojo extends AbstractMojo {
             // -Dvidocq.app.path, so it resolves into a Vauban-defined module layer
             // instead of the JVM module path.
             Path appJar = project.getArtifact().getFile().toPath();
-            Path appDir = layerMode ? distRoot.resolve("app") : libDir;
-            Files.createDirectories(appDir);
-            this.appDir = layerMode ? appDir : null;
-            Files.copy(appJar, appDir.resolve(appJar.getFileName()),
+            Path appJarDir = layerMode ? distRoot.resolve("app") : libDir;
+            Files.createDirectories(appJarDir);
+            this.appDir = layerMode ? appJarDir : null;
+            Files.copy(appJar, appJarDir.resolve(appJar.getFileName()),
                     StandardCopyOption.REPLACE_EXISTING);
 
             // Copy dependency JARs. A dependency for which vidocq:generate parked
@@ -166,45 +166,12 @@ public class VidocqPackageMojo extends AbstractMojo {
             // no --patch-module needed at launch. A dependency patched with a generated
             // module-info by vauban:modularize (target/vauban-modularized/) ships as that
             // copy, under the original file name.
-            List<Packaged> packaged = new ArrayList<>();
-            var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession,
-                    remoteRepos, getLog()::warn, false);
-            for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() != null && "jar".equals(artifact.getType())) {
-                    if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
-                        getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
-                        continue;
-                    }
-                    Path original = artifact.getFile().toPath();
-                    packaging.rebase(new EnrichedJars.Scanned(original, artifact.getArtifactId(),
-                            artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
-                            getLog()::info);
-                    Path src = EnrichedJars.resolve(buildDir.toPath(), original);
-                    boolean enriched = EnrichedJars.isEnriched(buildDir.toPath(), original);
-                    if (enriched) {
-                        getLog().info("Packaging enriched copy of " + original.getFileName()
-                                + " (vidocq:generate added its generated code and declared it)");
-                    } else if (!src.equals(original)) {
-                        getLog().info("Packaging modularized copy of " + original.getFileName()
-                                + " (vauban:modularize generated its module descriptor)");
-                    }
-                    packaged.add(new Packaged(artifact, src, enriched,
-                            JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId())));
-                }
-            }
+            List<Packaged> packaged = packagedDependencies();
 
             // vidocq.app.layer=all: the parent layer stays in lib/, the other libraries ship in app/.
             Set<Path> toApp = splitForAppLayer(packaged);
             for (Packaged p : packaged) {
-                Path destDir = toApp.contains(p.src()) ? appDir : libDir;
-                if (!p.enriched() && Files.isDirectory(p.patchDir())) {
-                    JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
-                    getLog().info("Enriched " + p.src().getFileName()
-                            + " with its generated classes (JPMS cross-module)");
-                } else {
-                    Files.copy(p.src(), destDir.resolve(p.src().getFileName()),
-                            StandardCopyOption.REPLACE_EXISTING);
-                }
+                ship(p, toApp.contains(p.src()) ? appJarDir : libDir);
             }
 
             // Generate launch scripts (module-path based)
@@ -222,6 +189,56 @@ public class VidocqPackageMojo extends AbstractMojo {
 
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create distribution", e);
+        }
+    }
+
+    /** The dependency jars to ship, each rebased on its enriched or modularized copy; dev-only jars dropped. */
+    private List<Packaged> packagedDependencies() throws IOException, MojoExecutionException {
+        List<Packaged> packaged = new ArrayList<>();
+        var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession,
+                remoteRepos, getLog()::warn, false);
+        for (var artifact : project.getArtifacts()) {
+            if (artifact.getFile() == null || !"jar".equals(artifact.getType())) {
+                continue;
+            }
+            if (DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
+                getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
+            } else {
+                packaged.add(packaged(packaging, artifact));
+            }
+        }
+        return packaged;
+    }
+
+    /** One dependency jar to ship, once its copy is rebased: the copy if there is one, else the jar itself. */
+    private Packaged packaged(DependencyBricks.Packaging packaging, Artifact artifact)
+            throws IOException, MojoExecutionException {
+        Path original = artifact.getFile().toPath();
+        packaging.rebase(new EnrichedJars.Scanned(original, artifact.getArtifactId(),
+                artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
+                getLog()::info);
+        Path src = EnrichedJars.resolve(buildDir.toPath(), original);
+        boolean enriched = EnrichedJars.isEnriched(buildDir.toPath(), original);
+        if (enriched) {
+            getLog().info("Packaging enriched copy of " + original.getFileName()
+                    + " (vidocq:generate added its generated code and declared it)");
+        } else if (!src.equals(original)) {
+            getLog().info("Packaging modularized copy of " + original.getFileName()
+                    + " (vauban:modularize generated its module descriptor)");
+        }
+        return new Packaged(artifact, src, enriched,
+                JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId()));
+    }
+
+    /** Copies {@code p} into {@code destDir}, enriched with its parked classes when it has some and no copy does. */
+    private void ship(Packaged p, Path destDir) throws IOException {
+        if (!p.enriched() && Files.isDirectory(p.patchDir())) {
+            JpmsPatches.enrich(p.src(), p.patchDir(), destDir.resolve(p.src().getFileName().toString()));
+            getLog().info("Enriched " + p.src().getFileName()
+                    + " with its generated classes (JPMS cross-module)");
+        } else {
+            Files.copy(p.src(), destDir.resolve(p.src().getFileName()),
+                    StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

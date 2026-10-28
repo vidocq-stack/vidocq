@@ -68,8 +68,9 @@ class DependencyBricksPackagingTest {
         EnrichedJars.enrichAll(build,
                 List.of(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0", List.of("Foy"),
                         DependencyBricks.inputLines(List.of(FOY)))),
-                List.of(), List.of(auto), DependencyBricks.mergedResources(List.of(FOY)),
-                packages -> Set.of(), line -> { }, line -> { });
+                List.of(), List.of(auto),
+                new EnrichedJars.BrickMerge(DependencyBricks.mergedResources(List.of(FOY)), packages -> Set.of()),
+                line -> { }, line -> { });
         jar(build.resolve("vauban-modularized/flow-1.0.jar"), Map.of(
                 "module-info.class", descriptor("org.flow"),
                 "org/dep/Servlet.class", emptyClass("org.dep.Servlet")), Map.of());

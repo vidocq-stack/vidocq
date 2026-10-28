@@ -124,7 +124,7 @@ class VidocqGenerateDependencyCodegenTest {
 
     /** A generator that counts its runs and generates {@code com.acme.Foo$$Gen} and the given resources. */
     private DependencyCodegenPass.Generator fake(Map<String, String> resources, List<String> warnings) {
-        return (jar, bricks, classes, classpath, release, coordinates, log, logDisplay) -> {
+        return (_, _, _, _, _, _, _) -> {
             generated.incrementAndGet();
             Map<String, byte[]> files = new LinkedHashMap<>();
             files.put("com/acme/Foo$$Gen.class", classBytes("com.acme.Foo$$Gen"));
@@ -135,7 +135,7 @@ class VidocqGenerateDependencyCodegenTest {
 
     private DependencyCodegenPass pass(Path buildDir, List<Brick> bricks, DependencyCodegenPass.Generator generator) {
         return new DependencyCodegenPass(bricks, new DependencyCodegenCache(dir.resolve("cache")), generator,
-                buildDir, dir, info::add, warn::add, error::add);
+                buildDir, dir, new DependencyCodegenPass.Messages(info::add, warn::add, error::add));
     }
 
     private DependencyCodegenPass.Result run(Path buildDir, List<Brick> bricks, DependencyCodegenPass.Generator generator,
@@ -239,7 +239,7 @@ class VidocqGenerateDependencyCodegenTest {
         run(buildDir, List.of(fakeBrick("Alpha")), fake(Map.of("META-INF/fixture/old.list", "x\n"), List.of()), lib);
 
         DependencyCodegenPass.forgetWritten(buildDir);
-        run(buildDir, List.of(fakeBrick("Beta")), (jar, bricks, classes, cp, release, coordinates, log, logDisplay) ->
+        run(buildDir, List.of(fakeBrick("Beta")), (_, _, _, _, _, _, _) ->
                 new DependencyCodegen.Output(Map.of("META-INF/fixture/new.list", "y\n".getBytes(StandardCharsets.UTF_8)),
                         List.of()), plainJar("lib-1.0", Map.of("META-INF/fixture/beta", "")));
 
@@ -302,7 +302,7 @@ class VidocqGenerateDependencyCodegenTest {
                 "io.vidocq:foy-codegen:1.0", List.of(Files.writeString(dir.resolve("foy.jar"), "foy")));
         List<List<String>> passed = new ArrayList<>();
 
-        run(dir.resolve("target"), List.of(foy), (jar, bricks, classes, cp, release, coordinates, log, display) -> {
+        run(dir.resolve("target"), List.of(foy), (_, _, classes, _, _, _, _) -> {
             passed.add(classes);
             return new DependencyCodegen.Output(Map.of(), List.of());
         }, lib);
@@ -437,7 +437,7 @@ class VidocqGenerateDependencyCodegenTest {
     @Test
     void anEmptyOutputLeavesTheJarAsItIs() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
-        DependencyCodegenPass.Generator nothing = (jar, bricks, classes, classpath, release, coordinates, log, display) ->
+        DependencyCodegenPass.Generator nothing = (_, _, _, _, _, _, _) ->
                 new DependencyCodegen.Output(Map.of(), List.of());
         Path buildDir = dir.resolve("target");
 
@@ -451,7 +451,7 @@ class VidocqGenerateDependencyCodegenTest {
     @Test
     void theLineCountsTwoClassesInThePlural() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, ""));
-        DependencyCodegenPass.Generator two = (jar, bricks, classes, classpath, release, coordinates, log, display) ->
+        DependencyCodegenPass.Generator two = (_, _, _, _, _, _, _) ->
                 new DependencyCodegen.Output(Map.of("com/acme/Foo$$A.class", classBytes("com.acme.Foo$$A"),
                         "com/acme/Foo$$B.class", classBytes("com.acme.Foo$$B")), List.of());
 
@@ -537,8 +537,8 @@ class VidocqGenerateDependencyCodegenTest {
         Brick alpha = fakeBrick("Alpha");
         Path buildDir = dir.resolve("target");
         var result = run(buildDir, List.of(alpha), fake(Map.of(), List.of()), lib);
-        EnrichedJars.enrichAll(buildDir, result.processed(), List.of(), List.of(lib), result.mergedResources(),
-                packages -> Set.of(), info::add, warn::add);
+        EnrichedJars.enrichAll(buildDir, result.processed(), List.of(), List.of(lib),
+                new EnrichedJars.BrickMerge(result.mergedResources(), packages -> Set.of()), info::add, warn::add);
         var bare = new EnrichedJars.Scanned(lib, "lib", "com.acme:lib:1.0");
 
         assertEquals(result.processed().getFirst(),
@@ -558,8 +558,8 @@ class VidocqGenerateDependencyCodegenTest {
         Path buildDir = dir.resolve("target");
         var result = run(buildDir, List.of(alpha), fake(Map.of("META-INF/fixture/a.list", "com.acme.Foo\n"),
                 List.of()), lib);
-        EnrichedJars.enrichAll(buildDir, result.processed(), List.of(), List.of(lib), result.mergedResources(),
-                packages -> Set.of(), info::add, warn::add);
+        EnrichedJars.enrichAll(buildDir, result.processed(), List.of(), List.of(lib),
+                new EnrichedJars.BrickMerge(result.mergedResources(), packages -> Set.of()), info::add, warn::add);
         var bare = new EnrichedJars.Scanned(lib, "lib", "com.acme:lib:1.0");
         AtomicInteger lookups = new AtomicInteger();
         DependencyBricks.Source source = () -> {

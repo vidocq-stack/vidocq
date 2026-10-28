@@ -48,7 +48,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 /**
@@ -104,8 +104,7 @@ final class DependencyBricks {
      * module on its own, so that one that is not a valid module (an automatic name that cannot be derived, a broken
      * descriptor) loses only its own packages; {@code warn} names it.
      */
-    static Function<Set<String>, Set<String>> modulesOfPackages(Collection<Path> dependencies,
-                                                               Consumer<String> warn) {
+    static UnaryOperator<Set<String>> modulesOfPackages(Collection<Path> dependencies, Consumer<String> warn) {
         Map<String, String> owners = new HashMap<>();
         for (Path entry : dependencies) {
             boolean module = Files.isRegularFile(entry) && entry.getFileName().toString().endsWith(".jar")
@@ -191,7 +190,7 @@ final class DependencyBricks {
         private final Consumer<String> warn;
         private final boolean jlink;
         private List<Brick> bricks;
-        private Function<Set<String>, Set<String>> modulesOfPackages;
+        private UnaryOperator<Set<String>> modulesOfPackages;
 
         /**
          * @param jlink whether the rebase is for {@code vidocq:jlink}, which needs every copy explicit, rather than

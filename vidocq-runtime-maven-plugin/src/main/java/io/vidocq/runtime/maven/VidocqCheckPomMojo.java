@@ -240,6 +240,11 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             return;
         }
 
+        reportIssues(issues);
+    }
+
+    /** Logs {@code issues} as errors and fails the build when {@code failOnMissing}, else as warnings. */
+    private void reportIssues(List<String> issues) throws MojoFailureException {
         for (String issue : issues) {
             if (failOnMissing) getLog().error(issue);
             else getLog().warn(issue);
@@ -345,17 +350,26 @@ public class VidocqCheckPomMojo extends AbstractMojo {
                                             Map<String, String> codegenPaths) {
         List<String> result = new ArrayList<>();
         for (String codegenName : codegenPaths.keySet()) {
-            if (CORE_CODEGEN.equals(codegenName)) continue;  // universal
-            Matcher m = CODEGEN_PATTERN.matcher(codegenName);
-            if (!m.matches()) continue;
-            String extName = extensionArtifact(m.group(1));
-            if (!extensions.containsKey(extName)) {
+            String extName = extensionOf(codegenName);
+            if (extName != null && !extensions.containsKey(extName)) {
                 result.add("Codegen bundle '" + codegenName + "' is in annotationProcessorPaths "
                         + "but its runtime extension '" + extName + "' is not declared as a "
                         + "dependency. Remove the orphan codegen path or add the extension.");
             }
         }
         return result;
+    }
+
+    /**
+     * The runtime extension artifact a codegen bundle belongs to, or {@code null} for the core codegen, which is
+     * universal, and for a name that is not a codegen bundle's.
+     */
+    private static String extensionOf(String codegenName) {
+        if (CORE_CODEGEN.equals(codegenName)) {
+            return null;
+        }
+        Matcher m = CODEGEN_PATTERN.matcher(codegenName);
+        return m.matches() ? extensionArtifact(m.group(1)) : null;
     }
 
     // ---- Check 3: Extension and codegen at different versions ----
@@ -366,13 +380,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         for (Map.Entry<String, String> codegen : codegenPaths.entrySet()) {
             String codegenName = codegen.getKey();
             String codegenVer = codegen.getValue();
-            if (CORE_CODEGEN.equals(codegenName)) continue;
-            Matcher m = CODEGEN_PATTERN.matcher(codegenName);
-            if (!m.matches()) continue;
-            String extName = extensionArtifact(m.group(1));
-            String extVer = extensions.get(extName);
-            if (extVer == null || codegenVer == null) continue;
-            if (!Objects.equals(extVer, codegenVer)) {
+            String extName = extensionOf(codegenName);
+            String extVer = extName == null ? null : extensions.get(extName);
+            if (extVer != null && codegenVer != null && !Objects.equals(extVer, codegenVer)) {
                 result.add("Version mismatch: '" + extName + "' is at " + extVer
                         + " but '" + codegenName + "' is at " + codegenVer
                         + ". Align both to the same version.");
@@ -397,15 +407,19 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     Map<String, String> collectExtensions(Map<String, String> groupsOut) {
         Map<String, String> result = new LinkedHashMap<>();
         for (Dependency d : project.getDependencies()) {
-            if (!isVidocqRuntimeGroup(d.getGroupId())) continue;
             String aid = d.getArtifactId();
-            // -codegen also contains "-extension-" — exclude explicitly.
-            if (CODEGEN_PATTERN.matcher(aid).matches()) continue;
-            if (!EXTENSION_PATTERN.matcher(aid).matches()) continue;
-            result.put(aid, d.getVersion());
-            groupsOut.put(aid, d.getGroupId());
+            if (isVidocqRuntimeGroup(d.getGroupId()) && isExtensionArtifact(aid)) {
+                result.put(aid, d.getVersion());
+                groupsOut.put(aid, d.getGroupId());
+            }
         }
         return result;
+    }
+
+    /** Whether {@code aid} names a runtime extension, its codegen bundle excepted. */
+    private static boolean isExtensionArtifact(String aid) {
+        // -codegen also contains "-extension-" — exclude explicitly.
+        return !CODEGEN_PATTERN.matcher(aid).matches() && EXTENSION_PATTERN.matcher(aid).matches();
     }
 
     /** The Vidocq codegen bundles declared on the processor path with {@code <type>pom</type>}, in order. */

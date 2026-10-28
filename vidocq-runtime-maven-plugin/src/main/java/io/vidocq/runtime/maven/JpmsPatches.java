@@ -66,6 +66,8 @@ public final class JpmsPatches {
     /** Directory under {@code target/} where cross-module generated classes are parked. */
     public static final String DIR_NAME = "vidocq-patches";
 
+    private static final String CLASS_SUFFIX = ".class";
+
     private JpmsPatches() {}
 
     /** Root of the patches tree for the given build directory ({@code target/vidocq-patches}). */
@@ -108,37 +110,48 @@ public final class JpmsPatches {
                     .filter(e -> e.getValue().contains(pkg))
                     .map(Map.Entry::getKey)
                     .findFirst().orElse(null);
-            if (owner == null) {
-                continue; // project-owned package: the class legitimately stays in this module
+            // No owner: a project-owned package, where the class legitimately stays in this module.
+            int moved = owner == null ? 0
+                    : relocateClass(classesDir, patchDirFor(buildDir, owner), pkg, fqcn.substring(dot + 1));
+            if (moved > 0) {
+                relocated.merge(owner, moved, Integer::sum);
+                touchedPackageDirs.add(classesDir.resolve(pkg.replace('.', '/')));
             }
-            Path pkgDir = classesDir.resolve(pkg.replace('.', '/'));
-            if (!Files.isDirectory(pkgDir)) {
-                continue;
-            }
-            String simpleName = fqcn.substring(dot + 1);
-            // The class itself plus any inner classes it may have spawned.
-            List<Path> files = new ArrayList<>();
-            try (DirectoryStream<Path> ds = Files.newDirectoryStream(pkgDir,
-                    p -> matchesClassFile(p.getFileName().toString(), simpleName))) {
-                ds.forEach(files::add);
-            }
-            if (files.isEmpty()) {
-                continue;
-            }
-            Path targetDir = patchDirFor(buildDir, owner).resolve(pkg.replace('.', '/'));
-            Files.createDirectories(targetDir);
-            for (Path f : files) {
-                Files.move(f, targetDir.resolve(f.getFileName().toString()),
-                        StandardCopyOption.REPLACE_EXISTING);
-            }
-            relocated.merge(owner, files.size(), Integer::sum);
-            touchedPackageDirs.add(pkgDir);
         }
 
         for (Path dir : touchedPackageDirs) {
             pruneEmptyDirs(classesDir, dir);
         }
         return relocated;
+    }
+
+    /**
+     * Moves the class files of {@code pkg.simpleName} from {@code classesDir} into {@code patchDir}.
+     *
+     * @return the number of files moved
+     */
+    private static int relocateClass(Path classesDir, Path patchDir, String pkg, String simpleName)
+            throws IOException {
+        Path pkgDir = classesDir.resolve(pkg.replace('.', '/'));
+        if (!Files.isDirectory(pkgDir)) {
+            return 0;
+        }
+        // The class itself plus any inner classes it may have spawned.
+        List<Path> files = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(pkgDir,
+                p -> matchesClassFile(p.getFileName().toString(), simpleName))) {
+            ds.forEach(files::add);
+        }
+        if (files.isEmpty()) {
+            return 0;
+        }
+        Path targetDir = patchDir.resolve(pkg.replace('.', '/'));
+        Files.createDirectories(targetDir);
+        for (Path f : files) {
+            Files.move(f, targetDir.resolve(f.getFileName().toString()),
+                    StandardCopyOption.REPLACE_EXISTING);
+        }
+        return files.size();
     }
 
     /**
@@ -197,20 +210,23 @@ public final class JpmsPatches {
         List<String> args = new ArrayList<>();
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(rootDir, Files::isDirectory)) {
             for (Path patchDir : ds) {
-                Path jar = jarsByArtifactId.get(patchDir.getFileName().toString());
-                if (jar == null) {
-                    continue;
+                String moduleName = moduleNameOf(jarsByArtifactId.get(patchDir.getFileName().toString()));
+                if (moduleName != null) {
+                    args.add("--patch-module");
+                    args.add(moduleName + "=" + patchDir.toAbsolutePath());
                 }
-                var descriptors = ModuleFinder.of(jar).findAll();
-                if (descriptors.isEmpty()) {
-                    continue;
-                }
-                String moduleName = descriptors.iterator().next().descriptor().name();
-                args.add("--patch-module");
-                args.add(moduleName + "=" + patchDir.toAbsolutePath());
             }
         }
         return args;
+    }
+
+    /** The module name of {@code jar}, or {@code null} when there is no jar or it is not a module. */
+    private static String moduleNameOf(Path jar) {
+        if (jar == null) {
+            return null;
+        }
+        var descriptors = ModuleFinder.of(jar).findAll();
+        return descriptors.isEmpty() ? null : descriptors.iterator().next().descriptor().name();
     }
 
     /** Dot-separated packages containing at least one class file in the given jar or exploded directory. */
@@ -218,7 +234,7 @@ public final class JpmsPatches {
         Set<String> packages = new HashSet<>();
         if (Files.isDirectory(jarOrDir)) {
             try (Stream<Path> walk = Files.walk(jarOrDir)) {
-                walk.filter(p -> p.getFileName().toString().endsWith(".class"))
+                walk.filter(p -> p.getFileName().toString().endsWith(CLASS_SUFFIX))
                         .forEach(p -> {
                             Path rel = jarOrDir.relativize(p).getParent();
                             packages.add(rel == null ? "" : rel.toString().replace('\\', '/').replace('/', '.'));
@@ -228,7 +244,7 @@ public final class JpmsPatches {
         }
         try (JarFile jf = new JarFile(jarOrDir.toFile())) {
             jf.stream()
-                    .filter(e -> !e.isDirectory() && e.getName().endsWith(".class"))
+                    .filter(e -> !e.isDirectory() && e.getName().endsWith(CLASS_SUFFIX))
                     .forEach(e -> {
                         int slash = e.getName().lastIndexOf('/');
                         packages.add(slash < 0 ? "" : e.getName().substring(0, slash).replace('/', '.'));
@@ -238,8 +254,8 @@ public final class JpmsPatches {
     }
 
     private static boolean matchesClassFile(String fileName, String simpleName) {
-        return fileName.equals(simpleName + ".class")
-                || (fileName.startsWith(simpleName + "$") && fileName.endsWith(".class"));
+        return fileName.equals(simpleName + CLASS_SUFFIX)
+                || (fileName.startsWith(simpleName + "$") && fileName.endsWith(CLASS_SUFFIX));
     }
 
     /** Deletes {@code dir} and its now-empty ancestors, stopping at {@code stopAt} (exclusive). */

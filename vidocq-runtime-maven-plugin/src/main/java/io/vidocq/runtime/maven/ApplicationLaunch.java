@@ -250,22 +250,23 @@ public final class ApplicationLaunch {
     static Map<String, Set<String>> declaredReads(List<Artifact> artifacts, Map<String, String> moduleByCoordinates) {
         Map<String, Set<String>> reads = new LinkedHashMap<>();
         for (Artifact a : artifacts) {
-            List<String> trail = a.getDependencyTrail();
             String self = moduleByCoordinates.get(a.getGroupId() + ":" + a.getArtifactId());
-            if (trail == null || trail.size() < 3 || self == null) {
-                continue;
-            }
-            // The first element is the project; the last is the artifact itself; its dependent is just before.
-            String[] parent = trail.get(trail.size() - 2).split(":");
-            if (parent.length < 2) {
-                continue;
-            }
-            String parentModule = moduleByCoordinates.get(parent[0] + ":" + parent[1]);
+            String parentModule = self == null ? null : dependentModule(a.getDependencyTrail(), moduleByCoordinates);
             if (parentModule != null) {
                 reads.computeIfAbsent(parentModule, k -> new LinkedHashSet<>()).add(self);
             }
         }
         return reads;
+    }
+
+    /** The module of the artifact that depends on the trail's last one, or {@code null} when the trail names none. */
+    private static String dependentModule(List<String> trail, Map<String, String> moduleByCoordinates) {
+        if (trail == null || trail.size() < 3) {
+            return null;
+        }
+        // The first element is the project; the last is the artifact itself; its dependent is just before.
+        String[] parent = trail.get(trail.size() - 2).split(":");
+        return parent.length < 2 ? null : moduleByCoordinates.get(parent[0] + ":" + parent[1]);
     }
 
     /** The project's own module name, when its classes have a descriptor. */

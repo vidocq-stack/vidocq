@@ -53,33 +53,47 @@ final class AnalyzeReport {
             throws IOException {
         List<BrickLine> lines = new ArrayList<>();
         for (DependencyCodegenPass.Selection selection : selections) {
-            ScanSelection.Dependency dep = selection.dependency();
-            var decision = selection.decision();
-            List<String> parts = new ArrayList<>();
-            for (var match : decision.matches()) {
-                parts.add(match.brick().brick() + " (" + match.reason() + ")");
+            List<String> parts = brickParts(selection);
+            if (!parts.isEmpty()) {
+                lines.add(new BrickLine(selection.dependency().artifactId(),
+                        brickText(parts, selection, cache, release, classpath)));
             }
-            for (var skip : decision.skips()) {
-                parts.add(skip.brick().brick() + " skipped (marker " + skip.marker() + ")");
-            }
-            if (parts.isEmpty()) {
-                continue;
-            }
-            StringBuilder text = new StringBuilder(String.join(", ", parts));
-            if (decision.selected()) {
-                if (decision.signed()) {
-                    text.append(", signed: processed only when named in scanDependencies");
-                }
-                var cached = cache.peek(DependencyCodegenCache.key(dep.jar(), selection.bricks(), release,
-                        classpath));
-                if (cached.isPresent()) {
-                    long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();
-                    text.append(", cached (").append(classes).append(classes == 1 ? " class)" : " classes)");
-                }
-            }
-            lines.add(new BrickLine(dep.artifactId(), text.toString()));
         }
         return lines;
+    }
+
+    /** The matching and the skipped bricks of one selection, empty when no brick concerns the jar. */
+    private static List<String> brickParts(DependencyCodegenPass.Selection selection) {
+        var decision = selection.decision();
+        List<String> parts = new ArrayList<>();
+        for (var match : decision.matches()) {
+            parts.add(match.brick().brick() + " (" + match.reason() + ")");
+        }
+        for (var skip : decision.skips()) {
+            parts.add(skip.brick().brick() + " skipped (marker " + skip.marker() + ")");
+        }
+        return parts;
+    }
+
+    /** The line text: the brick parts, then for a selected jar its signature note and what the cache holds. */
+    private static String brickText(List<String> parts, DependencyCodegenPass.Selection selection,
+                                    DependencyCodegenCache cache, int release, List<String> classpath)
+            throws IOException {
+        var decision = selection.decision();
+        StringBuilder text = new StringBuilder(String.join(", ", parts));
+        if (!decision.selected()) {
+            return text.toString();
+        }
+        if (decision.signed()) {
+            text.append(", signed: processed only when named in scanDependencies");
+        }
+        var cached = cache.peek(DependencyCodegenCache.key(selection.dependency().jar(), selection.bricks(),
+                release, classpath));
+        if (cached.isPresent()) {
+            long classes = cached.get().files().keySet().stream().filter(n -> n.endsWith(".class")).count();
+            text.append(", cached (").append(classes).append(classes == 1 ? " class)" : " classes)");
+        }
+        return text.toString();
     }
 
     static String render(List<ScanSelection.Decision> decisions, List<BrickLine> bricks) {
@@ -87,35 +101,13 @@ final class AnalyzeReport {
         int others = 0;
         StringBuilder block = new StringBuilder();
         for (ScanSelection.Decision d : decisions) {
-            ScanSelection.JarFacts f = d.facts();
-            if (d.source() == null && !f.beansXml()) {
+            if (d.source() == null && !d.facts().beansXml()) {
                 others++;
-                continue;
-            }
-            out.append("  ").append(d.dependency().coordinates()).append(" — ")
-                    .append(f.beansXml() ? "bean archive (" + f.discoveryMode() + ")" : "not a bean archive")
-                    .append(", ").append(f.automatic() ? "automatic module" : "explicit module")
-                    .append(f.signed() ? ", signed" : "").append('\n');
-            out.append("    ");
-            if (d.selected()) {
-                out.append("scanned: ").append(d.sourceLabel()).append(" → ")
-                        .append(f.automatic() ? "open module synthesized, then enriched copy" : "enriched copy");
-                if (d.source() == ScanSelection.Source.AUTOMATIC) {
-                    block.append("    <scanDependency>").append(d.dependency().groupId()).append(':')
-                            .append(d.dependency().artifactId()).append("</scanDependency>\n");
-                }
-            } else if (d.excludedBecause() != null) {
-                out.append("not scanned: ").append(d.excludedBecause());
             } else {
-                out.append("not scanned: discovery mode none, or the bean-archive detection is off");
+                appendDecision(out, block, d);
             }
-            out.append('\n');
         }
-        if (others == 1) {
-            out.append("1 other dependency is not a bean archive and is not named.\n");
-        } else if (others > 1) {
-            out.append(others).append(" other dependencies are not bean archives and are not named.\n");
-        }
+        appendOthers(out, others);
         if (!block.isEmpty()) {
             out.append("\nTo make the detected bean archives explicit:\n<scanDependencies>\n").append(block)
                     .append("</scanDependencies>\n");
@@ -125,5 +117,37 @@ final class AnalyzeReport {
             bricks.forEach(b -> out.append("  ").append(b.artifactId()).append(": ").append(b.text()).append('\n'));
         }
         return out.toString();
+    }
+
+    /** The two lines of one concerned dependency; a jar scanned by detection also adds its line to {@code block}. */
+    private static void appendDecision(StringBuilder out, StringBuilder block, ScanSelection.Decision d) {
+        ScanSelection.JarFacts f = d.facts();
+        out.append("  ").append(d.dependency().coordinates()).append(" — ")
+                .append(f.beansXml() ? "bean archive (" + f.discoveryMode() + ")" : "not a bean archive")
+                .append(", ").append(f.automatic() ? "automatic module" : "explicit module")
+                .append(f.signed() ? ", signed" : "").append('\n');
+        out.append("    ");
+        if (d.selected()) {
+            out.append("scanned: ").append(d.sourceLabel()).append(" → ")
+                    .append(f.automatic() ? "open module synthesized, then enriched copy" : "enriched copy");
+            if (d.source() == ScanSelection.Source.AUTOMATIC) {
+                block.append("    <scanDependency>").append(d.dependency().groupId()).append(':')
+                        .append(d.dependency().artifactId()).append("</scanDependency>\n");
+            }
+        } else if (d.excludedBecause() != null) {
+            out.append("not scanned: ").append(d.excludedBecause());
+        } else {
+            out.append("not scanned: discovery mode none, or the bean-archive detection is off");
+        }
+        out.append('\n');
+    }
+
+    /** The summary line for the dependencies that are neither bean archives nor named. */
+    private static void appendOthers(StringBuilder out, int others) {
+        if (others == 1) {
+            out.append("1 other dependency is not a bean archive and is not named.\n");
+        } else if (others > 1) {
+            out.append(others).append(" other dependencies are not bean archives and are not named.\n");
+        }
     }
 }

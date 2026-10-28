@@ -191,12 +191,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 providers = generateVauban(classesDir, scannedByArtifactId);
             }
 
-            List<Path> closure = new ArrayList<>();
-            for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
-                    closure.add(artifact.getFile().toPath());
-                }
-            }
+            List<Path> closure = dependencyClosure();
             DependencyCodegenPass.Result bricks = generateForBricks(brickList, brickSelection, closure,
                     DependencyCodegenPass.coordinatesOf(dependencies));
             if (scannedByArtifactId.isEmpty() && bricks.processed().isEmpty()) {
@@ -206,25 +201,43 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
             // One enriched copy per processed jar: its generated code inside, its descriptor declaring the
             // providers, substituted for the original by dev, run, package and jlink.
-            List<EnrichedJars.Scanned> scanned = new ArrayList<>();
-            for (var artifact : project.getArtifacts()) {
-                Path jar = artifact.getFile() == null ? null : artifact.getFile().toPath();
-                if (jar != null && scannedByArtifactId.containsKey(jar) && Files.isRegularFile(jar)) {
-                    // A jar a brick selected stays automatic in its copy even when only Vauban generated for it.
-                    scanned.add(new EnrichedJars.Scanned(jar, artifact.getArtifactId(),
-                            artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion(),
-                            bricksByJar.containsKey(jar)));
-                }
-            }
+            List<EnrichedJars.Scanned> scanned = scannedJars(scannedByArtifactId, bricksByJar);
             EnrichedJars.enrichAll(buildDirectory.toPath(), DependencyCodegenPass.onePerJar(scanned,
-                            bricks.processed()), providers, closure, bricks.mergedResources(),
-                    bricks.processed().isEmpty() ? packages -> Set.of()
-                            : DependencyBricks.modulesOfPackages(closure, getLog()::warn),
+                            bricks.processed()), providers, closure, new EnrichedJars.BrickMerge(
+                            bricks.mergedResources(), bricks.processed().isEmpty() ? packages -> Set.of()
+                            : DependencyBricks.modulesOfPackages(closure, getLog()::warn)),
                     getLog()::info, getLog()::warn);
 
         } catch (IOException e) {
             throw new MojoExecutionException("vidocq:generate failed: " + e.getMessage(), e);
         }
+    }
+
+    /** Every dependency jar or directory of the project: what the bricks compile against and jdeps resolves. */
+    private List<Path> dependencyClosure() {
+        List<Path> closure = new ArrayList<>();
+        for (var artifact : project.getArtifacts()) {
+            if (artifact.getFile() != null && ScanSelection.isJarOrDirectory(artifact.getFile().toPath())) {
+                closure.add(artifact.getFile().toPath());
+            }
+        }
+        return closure;
+    }
+
+    /** The scanned jars, in the project's artifact order, each marked when a brick selected it. */
+    private List<EnrichedJars.Scanned> scannedJars(Map<Path, String> scannedByArtifactId,
+                                                   Map<Path, List<String>> bricksByJar) {
+        List<EnrichedJars.Scanned> scanned = new ArrayList<>();
+        for (var artifact : project.getArtifacts()) {
+            Path jar = artifact.getFile() == null ? null : artifact.getFile().toPath();
+            if (jar != null && scannedByArtifactId.containsKey(jar) && Files.isRegularFile(jar)) {
+                // A jar a brick selected stays automatic in its copy even when only Vauban generated for it.
+                scanned.add(new EnrichedJars.Scanned(jar, artifact.getArtifactId(),
+                        artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion(),
+                        bricksByJar.containsKey(jar)));
+            }
+        }
+        return scanned;
     }
 
     /** Vauban's part: the bean index, proxies and interceptors of the scanned jars. Returns the providers written. */
@@ -326,7 +339,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
         var cache = new DependencyCodegenCache(cacheDirectory());
         var pass = new DependencyCodegenPass(bricks, cache, DependencyCodegenPass.JAVAC, buildDirectory.toPath(),
-                project.getBasedir().toPath(), getLog()::info, getLog()::warn, getLog()::error);
+                project.getBasedir().toPath(),
+                new DependencyCodegenPass.Messages(getLog()::info, getLog()::warn, getLog()::error));
         return pass.generate(selections, closure, coordinates,
                 DependencyCodegenPass.release(project.getProperties().getProperty("maven.compiler.release")),
                 orEmpty(scanDependencies));

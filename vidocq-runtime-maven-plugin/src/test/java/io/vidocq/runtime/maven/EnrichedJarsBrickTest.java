@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -76,15 +76,17 @@ class EnrichedJarsBrickTest {
                         ClassDesc.of("org.unresolved.Thing")));
     }
 
-    static Function<Set<String>, Set<String>> modules(Map<String, String> moduleOfPackage) {
+    static UnaryOperator<Set<String>> modules(Map<String, String> moduleOfPackage) {
         return packages -> packages.stream().map(moduleOfPackage::get).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 
-    static final Function<Set<String>, Set<String>> MODULES = modules(Map.of(
+    static final UnaryOperator<Set<String>> MODULES = modules(Map.of(
             "io.vidocq.foy.spi", "io.vidocq.foy",
             "org.dep.api", "org.dep",
             "java.lang", "java.base"));
+
+    static final EnrichedJars.BrickMerge BRICKS = new EnrichedJars.BrickMerge(MERGED, MODULES);
 
     static Path jar(Path file, Map<String, byte[]> entries, Map<String, String> mainAttributes) throws Exception {
         Files.createDirectories(file.getParent());
@@ -124,8 +126,8 @@ class EnrichedJarsBrickTest {
     }
 
     List<Path> enrich(Path build, EnrichedJars.Scanned dep, List<String> providers) throws Exception {
-        return EnrichedJars.enrichAll(build, List.of(dep), providers, List.of(dep.originalJar()), MERGED, MODULES,
-                line -> { }, line -> { });
+        return EnrichedJars.enrichAll(build, List.of(dep), providers, List.of(dep.originalJar()), BRICKS, line -> { },
+                line -> { });
     }
 
     /** The core reads this same literal in {@code StartupFacts.enrichedBy} (it cannot depend on the plugin). */
@@ -276,7 +278,7 @@ class EnrichedJarsBrickTest {
                 "org/dep/_VaubanComponents.class", foyComponent("org.dep._VaubanComponents")));
 
         EnrichedJars.enrichAll(build, List.of(new EnrichedJars.Scanned(lib, "lib", "org.dep:lib:1.0")),
-                List.of("org.dep._VaubanComponents"), List.of(lib), MERGED, MODULES, line -> { }, line -> { });
+                List.of("org.dep._VaubanComponents"), List.of(lib), BRICKS, line -> { }, line -> { });
 
         Set<String> requires = descriptorOf(EnrichedJars.resolve(build, lib)).requires().stream()
                 .map(ModuleDescriptor.Requires::name).collect(Collectors.toSet());
@@ -299,7 +301,7 @@ class EnrichedJarsBrickTest {
 
         List<Path> enriched = EnrichedJars.enrichAll(build,
                 List.of(new EnrichedJars.Scanned(auto, "flow", "org.dep:flow:1.0", true)),
-                List.of("org.dep._VaubanComponents"), List.of(auto), MERGED, MODULES, line -> { }, line -> { });
+                List.of("org.dep._VaubanComponents"), List.of(auto), BRICKS, line -> { }, line -> { });
 
         assertEquals(List.of(auto), enriched);
         Path copy = EnrichedJars.resolve(build, auto);

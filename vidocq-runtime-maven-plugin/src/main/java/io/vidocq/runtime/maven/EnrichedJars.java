@@ -48,7 +48,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -96,6 +96,7 @@ public final class EnrichedJars {
     private static final String AUTOMATIC_BRICK_SELECTED = "brick-selected";
     private static final String SERVICES_DIR = "META-INF/services/";
     private static final String META_INF = "META-INF/";
+    private static final String CLASS_SUFFIX = ".class";
 
     /**
      * One scanned dependency: the original jar, its artifact id and {@code groupId:artifactId:version}, and the
@@ -132,8 +133,33 @@ public final class EnrichedJars {
 
     /** What the bricks' output needs to be merged and declared, beyond the parked files themselves. */
     private record BrickOutput(List<String> bricks, Set<String> mergedResources,
-                               Function<Set<String>, Set<String>> modulesOfPackages, boolean keepAutomatic) {
+                               UnaryOperator<Set<String>> modulesOfPackages, boolean keepAutomatic) {
         static final BrickOutput NONE = new BrickOutput(List.of(), Set.of(), packages -> Set.of(), false);
+    }
+
+    /**
+     * What the bricks that processed the jars need for their output to be merged and declared.
+     *
+     * @param mergedResources   the union of the bricks' {@code merge} lists
+     * @param modulesOfPackages the modules, among the dependencies, that hold any of the given packages; a package
+     *                          no module holds is left out
+     */
+    public record BrickMerge(Set<String> mergedResources, UnaryOperator<Set<String>> modulesOfPackages) {
+        /** For jars no brick processed. */
+        public static final BrickMerge NONE = new BrickMerge(Set.of(), packages -> Set.of());
+    }
+
+    /** Where a copy comes from, as its manifest records it, and the inputs stamp it is written from. */
+    private record Origin(String coordinates, Path originalJar, String inputs) {
+    }
+
+    /** One {@link #enrichAll} run: what every scanned jar of it is enriched with. */
+    private record Enrichment(Path buildDir, List<String> providers, List<Path> closure, BrickMerge merge,
+                              Consumer<String> info, Consumer<String> warn) {
+    }
+
+    /** The source jar of a copy: its manifest, its files but the manifest and signatures, and its folders. */
+    private record SourceJar(Manifest manifest, Map<String, byte[]> entries, List<String> folders) {
     }
 
     private EnrichedJars() {}
@@ -192,7 +218,7 @@ public final class EnrichedJars {
     public static List<Path> enrichAll(Path buildDir, List<Scanned> scanned, List<String> providers,
                                        List<Path> closure, Consumer<String> info, Consumer<String> warn)
             throws IOException {
-        return enrichAll(buildDir, scanned, providers, closure, Set.of(), packages -> Set.of(), info, warn);
+        return enrichAll(buildDir, scanned, providers, closure, BrickMerge.NONE, info, warn);
     }
 
     /**
@@ -209,65 +235,72 @@ public final class EnrichedJars {
      *       inputs digest.</li>
      * </ul>
      *
-     * @param mergedResources   the union of the bricks' {@code merge} lists
-     * @param modulesOfPackages the modules, among the dependencies, that hold any of the given packages; a package
-     *                          no module holds is left out
+     * @param merge what the bricks' output needs to be merged and declared
      */
     public static List<Path> enrichAll(Path buildDir, List<Scanned> scanned, List<String> providers,
-                                       List<Path> closure, Set<String> mergedResources,
-                                       Function<Set<String>, Set<String>> modulesOfPackages,
+                                       List<Path> closure, BrickMerge merge,
                                        Consumer<String> info, Consumer<String> warn) throws IOException {
+        Enrichment run = new Enrichment(buildDir, providers, closure, merge, info, warn);
         List<Path> enriched = new ArrayList<>();
         Set<String> current = new HashSet<>();
         for (Scanned dep : scanned) {
             Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
-            if (!Files.isDirectory(patchDir)) {
-                continue;
-            }
-            // A jar without a descriptor that a brick selected stays automatic, Vauban providers included (spec §4.4):
-            // a synthesized descriptor must list every uses, and its detection misses ServiceLoader.load(Class,
-            // ClassLoader), while an automatic module may use any service and gets its provides from its service
-            // files. So its copy starts from the original jar, never from a vauban:modularize copy.
-            boolean keepAutomatic = dep.selectedByBrick() && !hasDescriptor(dep.originalJar());
-            Path source = keepAutomatic ? dep.originalJar() : ModularizedJars.resolve(buildDir, dep.originalJar());
-            Set<String> packages = JpmsPatches.packagesOf(source);
-            List<String> own = providers.stream().filter(p -> packages.contains(packageOf(p))).toList();
-            // Only Vauban's providers need a descriptor on an automatic jar: the JDK derives an automatic module's
-            // provides from its service files, which is all a brick's output asks.
-            boolean automatic = !hasDescriptor(source);
-            boolean synthesize = automatic && !keepAutomatic && (!own.isEmpty() || !providersIn(patchDir).isEmpty());
-            BrickOutput brickOutput = new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages,
-                    keepAutomatic);
-            Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
-            String inputs = inputs(source, patchDir, own, dep.coordinates(), synthesize ? closure : List.of(),
-                    dep, mergedResources);
-            if (inputs.equals(inputsOf(out))) {
-                // Written by an earlier run from the same inputs: left untouched, since a running vidocq:dev
-                // child holds it open, and a jar held open cannot be replaced on every platform.
+            Path out = Files.isDirectory(patchDir) ? enrich(run, dep, patchDir) : null;
+            if (out != null) {
                 current.add(out.getFileName().toString());
                 enriched.add(dep.originalJar());
-                info.accept("Enriched copy of " + dep.originalJar().getFileName() + " is up to date");
-                continue;
             }
-            byte[] moduleInfo = null;
-            if (synthesize) {
-                Optional<byte[]> synthesized = Modularizer.synthesizeOne(source, closure, true, info);
-                if (synthesized.isEmpty()) {
-                    warn.accept(dep.artifactId() + ": no module descriptor can be given to it here, so its"
-                            + " generated classes stay attached with --patch-module and its providers are not used");
-                    continue;
-                }
-                moduleInfo = synthesized.get();
-            }
-            write(source, moduleInfo, patchDir, own, dep.coordinates(), dep.originalJar(), out, inputs, brickOutput);
-            current.add(out.getFileName().toString());
-            enriched.add(dep.originalJar());
-            info.accept("Enriched " + dep.originalJar().getFileName() + " with its generated code (" + own.size()
-                    + " provider(s)" + (dep.bricks().isEmpty() ? "" : ", " + String.join(", ", dep.bricks()))
-                    + ") → target/" + DIR_NAME + "/" + out.getFileName());
         }
         retainOnly(buildDir, current);
         return enriched;
+    }
+
+    /**
+     * Writes the enriched copy of {@code dep}, unless one written from the same inputs is there already.
+     *
+     * @return the copy, or {@code null} when the jar needs a descriptor that cannot be given to it
+     */
+    private static Path enrich(Enrichment run, Scanned dep, Path patchDir) throws IOException {
+        // A jar without a descriptor that a brick selected stays automatic, Vauban providers included (spec §4.4):
+        // a synthesized descriptor must list every uses, and its detection misses ServiceLoader.load(Class,
+        // ClassLoader), while an automatic module may use any service and gets its provides from its service
+        // files. So its copy starts from the original jar, never from a vauban:modularize copy.
+        boolean keepAutomatic = dep.selectedByBrick() && !hasDescriptor(dep.originalJar());
+        Path source = keepAutomatic ? dep.originalJar() : ModularizedJars.resolve(run.buildDir(), dep.originalJar());
+        Set<String> packages = JpmsPatches.packagesOf(source);
+        List<String> own = run.providers().stream().filter(p -> packages.contains(packageOf(p))).toList();
+        // Only Vauban's providers need a descriptor on an automatic jar: the JDK derives an automatic module's
+        // provides from its service files, which is all a brick's output asks.
+        boolean automatic = !hasDescriptor(source);
+        boolean synthesize = automatic && !keepAutomatic && (!own.isEmpty() || !providersIn(patchDir).isEmpty());
+        Set<String> mergedResources = run.merge().mergedResources();
+        BrickOutput brickOutput = new BrickOutput(dep.bricks(), mergedResources, run.merge().modulesOfPackages(),
+                keepAutomatic);
+        Path out = root(run.buildDir()).resolve(dep.originalJar().getFileName().toString());
+        String inputs = inputs(source, patchDir, own, dep.coordinates(), synthesize ? run.closure() : List.of(),
+                dep, mergedResources);
+        if (inputs.equals(inputsOf(out))) {
+            // Written by an earlier run from the same inputs: left untouched, since a running vidocq:dev
+            // child holds it open, and a jar held open cannot be replaced on every platform.
+            run.info().accept("Enriched copy of " + dep.originalJar().getFileName() + " is up to date");
+            return out;
+        }
+        byte[] moduleInfo = null;
+        if (synthesize) {
+            Optional<byte[]> synthesized = Modularizer.synthesizeOne(source, run.closure(), true, run.info());
+            if (synthesized.isEmpty()) {
+                run.warn().accept(dep.artifactId() + ": no module descriptor can be given to it here, so its"
+                        + " generated classes stay attached with --patch-module and its providers are not used");
+                return null;
+            }
+            moduleInfo = synthesized.get();
+        }
+        write(source, moduleInfo, patchDir, own, out, new Origin(dep.coordinates(), dep.originalJar(), inputs),
+                brickOutput);
+        run.info().accept("Enriched " + dep.originalJar().getFileName() + " with its generated code ("
+                + own.size() + " provider(s)" + (dep.bricks().isEmpty() ? "" : ", " + String.join(", ", dep.bricks()))
+                + ") → target/" + DIR_NAME + "/" + out.getFileName());
+        return out;
     }
 
     /**
@@ -284,12 +317,12 @@ public final class EnrichedJars {
 
     /**
      * {@link #rebaseOnModularized(Path, Scanned, Consumer)} for a jar bricks processed: the rebuilt copy merges and
-     * declares their output as {@link #enrichAll(Path, List, List, List, Set, Function, Consumer, Consumer)} does.
+     * declares their output as {@link #enrichAll(Path, List, List, List, BrickMerge, Consumer, Consumer)} does.
      * A copy that names bricks in {@code Vidocq-Enriched-By} while {@code dep} names none is left as it is, since
      * rebuilding it without what merges and declares their output would lose it.
      */
     public static void rebaseOnModularized(Path buildDir, Scanned dep, Set<String> mergedResources,
-                                           Function<Set<String>, Set<String>> modulesOfPackages,
+                                           UnaryOperator<Set<String>> modulesOfPackages,
                                            Consumer<String> info) throws IOException {
         Path out = root(buildDir).resolve(dep.originalJar().getFileName().toString());
         Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
@@ -311,7 +344,7 @@ public final class EnrichedJars {
         if (inputs.equals(inputsOf(out))) {
             return;
         }
-        write(source, null, patchDir, providers, dep.coordinates(), dep.originalJar(), out, inputs,
+        write(source, null, patchDir, providers, out, new Origin(dep.coordinates(), dep.originalJar(), inputs),
                 new BrickOutput(dep.bricks(), mergedResources, modulesOfPackages, false));
         info.accept("Rebuilt the enriched copy of " + dep.originalJar().getFileName()
                 + " on the module descriptor vauban:modularize generated");
@@ -328,8 +361,8 @@ public final class EnrichedJars {
      */
     public static void write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers,
                              String coordinates, Path originalJar, Path out) throws IOException {
-        write(source, moduleInfo, patchDir, providers, coordinates, originalJar, out,
-                inputs(source, patchDir, providers, coordinates, List.of(), null, Set.of()), BrickOutput.NONE);
+        write(source, moduleInfo, patchDir, providers, out, new Origin(coordinates, originalJar,
+                inputs(source, patchDir, providers, coordinates, List.of(), null, Set.of())), BrickOutput.NONE);
     }
 
     /**
@@ -337,14 +370,55 @@ public final class EnrichedJars {
      * output merged and declared. Without a descriptor to start from and without {@code providers}, the copy stays
      * an automatic module.
      */
-    private static void write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers,
-                              String coordinates, Path originalJar, Path out, String inputs, BrickOutput bricks)
-            throws IOException {
+    private static void write(Path source, byte[] moduleInfo, Path patchDir, List<String> providers, Path out,
+                              Origin origin, BrickOutput bricks) throws IOException {
         Map<String, byte[]> patch = readTree(patchDir);
         List<byte[]> patchClasses = patch.entrySet().stream()
-                .filter(e -> e.getKey().endsWith(".class")).map(Map.Entry::getValue).toList();
+                .filter(e -> e.getKey().endsWith(CLASS_SUFFIX)).map(Map.Entry::getValue).toList();
         Set<String> requires = VaubanModuleReferences.of(patchClasses);
 
+        SourceJar sourceJar = readSource(source);
+        Map<String, byte[]> entries = sourceJar.entries();
+        // The root descriptor and those of a multi-release jar's versions: whichever the JDK reads must declare
+        // the output. Without any, a synthesized descriptor goes at the root.
+        List<String> descriptors = entries.keySet().stream().filter(EnrichedJars::isDescriptor).toList();
+        if (descriptors.isEmpty() && moduleInfo != null) {
+            entries.put(MODULE_INFO, moduleInfo);
+            descriptors = List.of(MODULE_INFO);
+        }
+        if (descriptors.isEmpty() && !providers.isEmpty() && !bricks.keepAutomatic()) {
+            throw new IllegalArgumentException(source.getFileName() + " has no module descriptor to enrich");
+        }
+        Map<String, List<String>> addedProviders = mergePatch(patch, entries, bricks.mergedResources());
+        if (!descriptors.isEmpty()) {
+            // Only a copy a brick processed requires for the bricks: a Vauban-only copy stays as Vauban writes it.
+            Set<String> referenced = bricks.bricks().isEmpty() ? Set.of()
+                    : bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses));
+            Set<String> addedPackages = addedPackages(patch.keySet(), providers, addedProviders);
+            for (String name : descriptors) {
+                byte[] descriptor = ModuleInfoRewriter.addComponentProvider(entries.get(name), providers, requires);
+                Set<String> brickRequires = new TreeSet<>(referenced);
+                brickRequires.remove("java.base");
+                brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));
+                entries.put(name, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires,
+                        addedPackages));
+            }
+        }
+        if (!providers.isEmpty()) {
+            Set<String> services = new LinkedHashSet<>();
+            if (entries.containsKey(SERVICE_FILE)) {
+                services.addAll(lines(entries.get(SERVICE_FILE)));
+            }
+            services.addAll(providers);
+            entries.put(SERVICE_FILE, (String.join("\n", services) + "\n").getBytes(StandardCharsets.UTF_8));
+        }
+        Manifest manifest = sourceJar.manifest();
+        stamp(manifest, origin, bricks);
+        writeJar(out, manifest, sourceJar.folders(), entries);
+    }
+
+    /** Reads {@code source}: its manifest, its files but the manifest and the signature files, and its folders. */
+    private static SourceJar readSource(Path source) throws IOException {
         Map<String, byte[]> entries = new LinkedHashMap<>();
         List<String> sourceFolders = new ArrayList<>();
         Manifest manifest = new Manifest();
@@ -365,17 +439,17 @@ public final class EnrichedJars {
                 }
             }
         }
-        // The root descriptor and those of a multi-release jar's versions: whichever the JDK reads must declare
-        // the output. Without any, a synthesized descriptor goes at the root.
-        List<String> descriptors = entries.keySet().stream().filter(EnrichedJars::isDescriptor).toList();
-        if (descriptors.isEmpty() && moduleInfo != null) {
-            entries.put(MODULE_INFO, moduleInfo);
-            descriptors = List.of(MODULE_INFO);
-        }
-        if (descriptors.isEmpty() && !providers.isEmpty() && !bricks.keepAutomatic()) {
-            throw new IllegalArgumentException(source.getFileName() + " has no module descriptor to enrich");
-        }
-        // service → the providers the parked service files add to the jar's: an explicit module declares them.
+        return new SourceJar(manifest, entries, sourceFolders);
+    }
+
+    /**
+     * Adds the parked files of {@code patch} to {@code entries}: a file the jar lacks is added, one named in
+     * {@code mergedResources} is merged line by line after the jar's own lines, any other stays the jar's.
+     *
+     * @return service → the providers the parked service files add to the jar's: an explicit module declares them
+     */
+    private static Map<String, List<String>> mergePatch(Map<String, byte[]> patch, Map<String, byte[]> entries,
+                                                        Set<String> mergedResources) {
         Map<String, List<String>> addedProviders = new TreeMap<>();
         for (var e : patch.entrySet()) {
             String name = e.getKey();
@@ -384,7 +458,7 @@ public final class EnrichedJars {
             if (jars == null) {
                 entries.put(name, e.getValue());
                 added = isServiceFile(name) ? lines(e.getValue()) : List.of();
-            } else if (bricks.mergedResources().contains(name)) {
+            } else if (mergedResources.contains(name)) {
                 List<String> own = lines(jars);
                 Set<String> merged = new LinkedHashSet<>(own);
                 merged.addAll(lines(e.getValue()));
@@ -395,40 +469,31 @@ public final class EnrichedJars {
                 addedProviders.put(name.substring(SERVICES_DIR.length()), added);
             }
         }
-        if (!descriptors.isEmpty()) {
-            // Only a copy a brick processed requires for the bricks: a Vauban-only copy stays as Vauban writes it.
-            Set<String> referenced = bricks.bricks().isEmpty() ? Set.of()
-                    : bricks.modulesOfPackages().apply(ModuleDescriptorAugmenter.referencedPackages(patchClasses));
-            // A descriptor that lists its packages must list those of the added classes and providers too.
-            Set<String> addedPackages = new TreeSet<>();
-            patch.keySet().stream().filter(n -> n.endsWith(".class") && !n.startsWith("META-INF/"))
-                    .forEach(n -> addedPackages.add(n.lastIndexOf('/') < 0 ? ""
-                            : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
-            providers.forEach(p -> addedPackages.add(packageOf(p)));
-            addedProviders.values().forEach(impls -> impls.forEach(p -> addedPackages.add(packageOf(p))));
-            for (String name : descriptors) {
-                byte[] descriptor = ModuleInfoRewriter.addComponentProvider(entries.get(name), providers, requires);
-                Set<String> brickRequires = new TreeSet<>(referenced);
-                brickRequires.remove("java.base");
-                brickRequires.remove(ModuleDescriptorAugmenter.moduleName(descriptor));
-                entries.put(name, ModuleDescriptorAugmenter.augment(descriptor, addedProviders, brickRequires,
-                        addedPackages));
-            }
-        }
-        if (!providers.isEmpty()) {
-            Set<String> services = new LinkedHashSet<>();
-            if (entries.containsKey(SERVICE_FILE)) {
-                services.addAll(lines(entries.get(SERVICE_FILE)));
-            }
-            services.addAll(providers);
-            entries.put(SERVICE_FILE, (String.join("\n", services) + "\n").getBytes(StandardCharsets.UTF_8));
-        }
+        return addedProviders;
+    }
+
+    /**
+     * The packages of the added classes and providers: a descriptor that lists its packages must list them too.
+     */
+    private static Set<String> addedPackages(Set<String> patchFiles, List<String> providers,
+                                             Map<String, List<String>> addedProviders) {
+        Set<String> addedPackages = new TreeSet<>();
+        patchFiles.stream().filter(n -> n.endsWith(CLASS_SUFFIX) && !n.startsWith(META_INF))
+                .forEach(n -> addedPackages.add(n.lastIndexOf('/') < 0 ? ""
+                        : n.substring(0, n.lastIndexOf('/')).replace('/', '.')));
+        providers.forEach(p -> addedPackages.add(packageOf(p)));
+        addedProviders.values().forEach(impls -> impls.forEach(p -> addedPackages.add(packageOf(p))));
+        return addedPackages;
+    }
+
+    /** Names the copy's origin, inputs and bricks in {@code manifest}, whose per-entry sections are dropped. */
+    private static void stamp(Manifest manifest, Origin origin, BrickOutput bricks) throws IOException {
         manifest.getEntries().clear();
         Attributes main = manifest.getMainAttributes();
         main.putIfAbsent(Attributes.Name.MANIFEST_VERSION, "1.0");
-        main.putValue(ENRICHED_FROM, coordinates);
-        main.putValue(ENRICHED_DIGEST, "sha256:" + sha256(originalJar));
-        main.putValue(ENRICHED_INPUTS, inputs);
+        main.putValue(ENRICHED_FROM, origin.coordinates());
+        main.putValue(ENRICHED_DIGEST, "sha256:" + sha256(origin.originalJar()));
+        main.putValue(ENRICHED_INPUTS, origin.inputs());
         if (!bricks.bricks().isEmpty()) {
             main.putValue(ENRICHED_BY, String.join(", ", bricks.bricks()));
         }
@@ -437,7 +502,11 @@ public final class EnrichedJars {
         } else {
             main.remove(new Attributes.Name(AUTOMATIC));
         }
+    }
 
+    /** Writes the jar {@code out} through a temporary file, so that a reader never sees it half written. */
+    private static void writeJar(Path out, Manifest manifest, List<String> sourceFolders, Map<String, byte[]> entries)
+            throws IOException {
         Files.createDirectories(out.toAbsolutePath().getParent());
         Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(tmp), manifest)) {
@@ -561,7 +630,7 @@ public final class EnrichedJars {
     private static List<String> providersIn(Path patchDir) throws IOException {
         return readTree(patchDir).keySet().stream()
                 .filter(name -> name.equals(PROVIDER_CLASS_FILE) || name.endsWith("/" + PROVIDER_CLASS_FILE))
-                .map(name -> name.substring(0, name.length() - ".class".length()).replace('/', '.'))
+                .map(name -> name.substring(0, name.length() - CLASS_SUFFIX.length()).replace('/', '.'))
                 .sorted().toList();
     }
 

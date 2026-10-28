@@ -117,70 +117,94 @@ final class SharedResources {
     static List<String> merge(Path stage, List<Shared> shared) throws IOException {
         List<String> log = new ArrayList<>();
         for (Shared s : shared) {
-            Map<String, Map<String, byte[]>> files = new TreeMap<>();
-            String owner = null;
-            for (String jar : s.jars()) {
-                Map<String, byte[]> own = new TreeMap<>();
-                boolean classes = false;
-                try (JarFile in = new JarFile(stage.resolve(jar).toFile())) {
-                    for (JarEntry entry : Collections.list(in.entries())) {
-                        if (s.directory().equals(directoryOf(entry))) {
-                            if (entry.getName().endsWith(".class")) {
-                                classes = true;
-                            } else {
-                                try (InputStream is = in.getInputStream(entry)) {
-                                    own.put(entry.getName(), is.readAllBytes());
-                                }
-                            }
-                        }
-                    }
-                }
-                files.put(jar, own);
-                if (classes) {
-                    owner = jar;
-                }
+            log.add(mergeDirectory(stage, s));
+        }
+        return log;
+    }
+
+    /** Merges one shared directory, see {@link #merge(Path, List)}; the line for the build log. */
+    private static String mergeDirectory(Path stage, Shared s) throws IOException {
+        Map<String, Map<String, byte[]>> files = new TreeMap<>();
+        String owner = null;
+        for (String jar : s.jars()) {
+            Map<String, byte[]> own = new TreeMap<>();
+            if (readDirectory(stage.resolve(jar), s.directory(), own)) {
+                owner = jar;
             }
-            if (owner == null) {
-                owner = s.jars().stream()
-                        .max((a, b) -> files.get(a).size() != files.get(b).size()
-                                ? Integer.compare(files.get(a).size(), files.get(b).size()) : b.compareTo(a))
-                        .orElseThrow();
-            }
-            String pkg = s.directory().substring(0, s.directory().length() - 1).replace('/', '.');
-            Map<String, byte[]> moved = new LinkedHashMap<>();
-            Map<String, String> from = new TreeMap<>(); // path → the donor its moved copy comes from
-            List<String> donors = new ArrayList<>();
-            int count = 0;
-            for (String jar : s.jars()) {
-                if (jar.equals(owner)) {
-                    continue;
-                }
+            files.put(jar, own);
+        }
+        if (owner == null) {
+            owner = s.jars().stream()
+                    .max((a, b) -> files.get(a).size() != files.get(b).size()
+                            ? Integer.compare(files.get(a).size(), files.get(b).size()) : b.compareTo(a))
+                    .orElseThrow();
+        }
+        String pkg = s.directory().substring(0, s.directory().length() - 1).replace('/', '.');
+        Map<String, byte[]> moved = new LinkedHashMap<>();
+        Map<String, String> from = new TreeMap<>(); // path → the donor its moved copy comes from
+        List<String> donors = new ArrayList<>();
+        for (String jar : s.jars()) {
+            if (!jar.equals(owner)) {
                 if (declares(stage.resolve(jar), pkg)) {
                     throw new IOException("vidocq:jlink: cannot merge " + s.directory() + " into " + owner + ": "
                             + jar + " declares the package " + pkg);
                 }
                 donors.add(jar);
-                for (var e : files.get(jar).entrySet()) {
-                    byte[] there = files.get(owner).containsKey(e.getKey()) ? files.get(owner).get(e.getKey())
-                            : moved.get(e.getKey());
-                    if (there != null && !Arrays.equals(there, e.getValue())) {
-                        throw new IOException("vidocq:jlink: cannot merge " + s.directory() + ": " + e.getKey()
-                                + " differs between " + jar + " and "
-                                + (moved.containsKey(e.getKey()) ? from.get(e.getKey()) : owner));
-                    }
-                    if (there == null) {
-                        moved.put(e.getKey(), e.getValue());
-                        from.put(e.getKey(), jar);
-                        count++;
-                    }
-                }
+                collectMoved(s.directory(), jar, files.get(jar), owner, files.get(owner), moved, from);
                 rewrite(stage.resolve(jar), files.get(jar).keySet(), Map.of(), null);
             }
-            rewrite(stage.resolve(owner), Set.of(), moved, pkg);
-            log.add("merged " + s.directory() + " into " + owner + " (" + count + (count == 1 ? " file" : " files")
-                    + " from " + String.join(", ", donors) + ")");
         }
-        return log;
+        rewrite(stage.resolve(owner), Set.of(), moved, pkg);
+        int count = moved.size();
+        return "merged " + s.directory() + " into " + owner + " (" + count + (count == 1 ? " file" : " files")
+                + " from " + String.join(", ", donors) + ")";
+    }
+
+    /**
+     * Reads the files of {@code jar} directly in {@code directory}, its class files excepted, into {@code own}.
+     *
+     * @return whether the directory holds class files in that jar
+     */
+    private static boolean readDirectory(Path jar, String directory, Map<String, byte[]> own) throws IOException {
+        boolean classes = false;
+        try (JarFile in = new JarFile(jar.toFile())) {
+            for (JarEntry entry : Collections.list(in.entries())) {
+                if (!directory.equals(directoryOf(entry))) {
+                    continue;
+                }
+                if (entry.getName().endsWith(CLASS_SUFFIX)) {
+                    classes = true;
+                } else {
+                    try (InputStream is = in.getInputStream(entry)) {
+                        own.put(entry.getName(), is.readAllBytes());
+                    }
+                }
+            }
+        }
+        return classes;
+    }
+
+    /**
+     * Adds to {@code moved} the files of donor {@code jar} that neither the owner nor an earlier donor holds,
+     * recording in {@code from} where each comes from.
+     *
+     * @throws IOException when the owner or an earlier donor holds one of them with different contents
+     */
+    private static void collectMoved(String directory, String jar, Map<String, byte[]> donorFiles, String owner,
+                                     Map<String, byte[]> ownerFiles, Map<String, byte[]> moved,
+                                     Map<String, String> from) throws IOException {
+        for (var e : donorFiles.entrySet()) {
+            byte[] there = ownerFiles.containsKey(e.getKey()) ? ownerFiles.get(e.getKey()) : moved.get(e.getKey());
+            if (there != null && !Arrays.equals(there, e.getValue())) {
+                throw new IOException("vidocq:jlink: cannot merge " + directory + ": " + e.getKey()
+                        + " differs between " + jar + " and "
+                        + (moved.containsKey(e.getKey()) ? from.get(e.getKey()) : owner));
+            }
+            if (there == null) {
+                moved.put(e.getKey(), e.getValue());
+                from.put(e.getKey(), jar);
+            }
+        }
     }
 
     private static List<Path> jars(Path stage) throws IOException {

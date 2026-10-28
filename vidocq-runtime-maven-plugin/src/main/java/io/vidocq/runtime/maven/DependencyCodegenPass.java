@@ -53,11 +53,25 @@ final class DependencyCodegenPass {
     @FunctionalInterface
     interface Generator {
         DependencyCodegen.Output generate(Path jar, List<Brick> bricks, List<String> classes, List<Path> classpath,
-                                          int release, String coordinates, Path log, String logDisplay)
+                                          int release, String coordinates, Log log)
                 throws DependencyCodegen.Failure, IOException;
     }
 
-    static final Generator JAVAC = DependencyCodegen::run;
+    /**
+     * Where the javac output of one jar goes.
+     *
+     * @param file    the log file
+     * @param display how failure lines print it
+     */
+    record Log(Path file, String display) {
+    }
+
+    /** Where the pass reports: progress, the processors' warnings, and each failure line. */
+    record Messages(Consumer<String> info, Consumer<String> warn, Consumer<String> error) {
+    }
+
+    static final Generator JAVAC = (jar, bricks, classes, classpath, release, coordinates, log) ->
+            DependencyCodegen.run(jar, bricks, classes, classpath, release, coordinates, log.file(), log.display());
 
     /** Where the javac output of each jar goes, under {@code target/}. */
     static final String LOG_DIR = "vidocq-depgen";
@@ -101,15 +115,15 @@ final class DependencyCodegenPass {
      * @param baseDir the project's base directory, against which failure lines print the log paths
      */
     DependencyCodegenPass(List<Brick> bricks, DependencyCodegenCache cache, Generator generator, Path buildDir,
-                          Path baseDir, Consumer<String> info, Consumer<String> warn, Consumer<String> error) {
+                          Path baseDir, Messages messages) {
         this.bricks = List.copyOf(bricks);
         this.cache = cache;
         this.generator = generator;
         this.buildDir = buildDir;
         this.baseDir = baseDir;
-        this.info = info;
-        this.warn = warn;
-        this.error = error;
+        this.info = messages.info();
+        this.warn = messages.warn();
+        this.error = messages.error();
     }
 
     /**
@@ -138,19 +152,27 @@ final class DependencyCodegenPass {
         }
         List<DependencyCodegenHints> hints = bricks.stream().map(Brick::hints).toList();
         for (ScanSelection.Dependency dep : dependencies) {
-            if (!Files.isRegularFile(dep.jar()) || isVidocqRuntime(dep) || matchesAny(scanExcludes, dep)) {
-                continue;
+            if (Files.isRegularFile(dep.jar()) && !isVidocqRuntime(dep) && !matchesAny(scanExcludes, dep)) {
+                Selection selection = selection(bricks, hints, dep, memo, store);
+                if (selection != null) {
+                    selections.add(selection);
+                }
             }
-            var decision = memo == null ? DependencyCodegenSelection.decide(dep.jar(), hints)
-                    : DependencyCodegenSelection.decide(dep.jar(), hints, memo, store);
-            if (decision.matches().isEmpty() && decision.skips().isEmpty()) {
-                continue;
-            }
-            List<Brick> selected = bricks.stream()
-                    .filter(b -> decision.matches().stream().anyMatch(m -> m.brick() == b.hints())).toList();
-            selections.add(new Selection(dep, decision, selected));
         }
         return selections;
+    }
+
+    /** What the bricks decide for {@code dep}, or {@code null} when none of them wants or skips it. */
+    private static Selection selection(List<Brick> bricks, List<DependencyCodegenHints> hints,
+                                       ScanSelection.Dependency dep, Path memo, boolean store) throws IOException {
+        var decision = memo == null ? DependencyCodegenSelection.decide(dep.jar(), hints)
+                : DependencyCodegenSelection.decide(dep.jar(), hints, memo, store);
+        if (decision.matches().isEmpty() && decision.skips().isEmpty()) {
+            return null;
+        }
+        List<Brick> selected = bricks.stream()
+                .filter(b -> decision.matches().stream().anyMatch(m -> m.brick() == b.hints())).toList();
+        return new Selection(dep, decision, selected);
     }
 
     /** The jars some brick selects, with the names of those bricks: what Vauban scans for them too. */
@@ -241,78 +263,13 @@ final class DependencyCodegenPass {
         List<EnrichedJars.Scanned> processed = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         for (Selection selection : selections) {
-            if (selection.bricks().isEmpty()) {
-                continue;
-            }
-            ScanSelection.Dependency dep = selection.dependency();
-            Path jar = dep.jar();
-            var decision = selection.decision();
-            List<Brick> selected = selection.bricks();
-            String names = selected.stream().map(b -> b.hints().brick()).collect(Collectors.joining(", "));
-            String file = jar.getFileName().toString();
-            if (decision.signed() && !matchesAny(scanDependencies, dep)) {
-                info.accept(LOG_PREFIX + file + " is signed; not processed for " + names
-                        + " (name it in scanDependencies to process it)");
-                continue;
-            }
-            String key = DependencyCodegenCache.key(jar, selected, release, classpathCoordinates);
-            Optional<DependencyCodegen.Output> cached = cache.get(key);
-            DependencyCodegen.Output output;
-            if (cached.isPresent()) {
-                output = cached.get();
-            } else {
-                Path log = buildDir.resolve(LOG_DIR).resolve(dep.artifactId() + ".log");
-                try {
-                    List<String> classes = decision.matches().stream()
-                            .filter(m -> selected.stream().anyMatch(b -> b.hints() == m.brick()))
-                            .flatMap(m -> m.classes().stream()).distinct().sorted().toList();
-                    output = generator.generate(jar, selected, classes, classpath, release,
-                            dep.groupId() + ":" + dep.artifactId(), log, display(baseDir, log));
-                } catch (DependencyCodegen.Failure f) {
-                    failures.addAll(f.lines());
-                    continue;
+            if (!selection.bricks().isEmpty()) {
+                EnrichedJars.Scanned scanned = generateJar(selection, classpath, classpathCoordinates, release,
+                        scanDependencies, mergedResources, failures);
+                if (scanned != null) {
+                    processed.add(scanned);
                 }
-                cache.put(key, output);
             }
-            // What describes every class of the jar would be partial, the processors having seen only the hinted
-            // ones: dropped here, not before caching, so that a change of the hints needs no new cache entry.
-            Set<String> wholeJar = selected.stream().flatMap(b -> b.hints().wholeJar().stream())
-                    .collect(Collectors.toSet());
-            if (output.files().keySet().stream().anyMatch(wholeJar::contains)) {
-                Map<String, byte[]> kept = new LinkedHashMap<>(output.files());
-                kept.keySet().removeAll(wholeJar);
-                output = new DependencyCodegen.Output(kept, output.warnings());
-            }
-            output.warnings().forEach(warn);
-            List<String> clashes = clashes(jar, output, mergedResources, names, dep);
-            if (!clashes.isEmpty()) {
-                failures.addAll(clashes);
-                continue;
-            }
-            long classes = output.files().keySet().stream().filter(n -> n.endsWith(".class")).count();
-            info.accept(LOG_PREFIX + file + " — " + names + " (" + classes
-                    + (classes == 1 ? " class, " : " classes, ")
-                    + (cached.isPresent() ? "cached" : "generated") + ")");
-            if (output.files().isEmpty()) {
-                continue;
-            }
-            Path patchDir = JpmsPatches.patchDirFor(buildDir, dep.artifactId());
-            List<String> written = new ArrayList<>();
-            for (var e : output.files().entrySet()) {
-                Path target = patchDir.resolve(e.getKey()).normalize();
-                if (!target.startsWith(patchDir)) {
-                    throw new IOException(file + ": generated entry " + e.getKey() + " escapes " + patchDir);
-                }
-                // A file already there is one Vauban parked this run: the next run must not delete it.
-                if (!Files.exists(target)) {
-                    written.add(e.getKey());
-                }
-                Files.createDirectories(target.getParent());
-                Files.write(target, e.getValue());
-            }
-            record(dep.artifactId(), written);
-            processed.add(new EnrichedJars.Scanned(jar, dep.artifactId(), dep.coordinates(),
-                    selected.stream().map(b -> b.hints().brick()).toList(), DependencyBricks.inputLines(selected)));
         }
         if (!failures.isEmpty()) {
             failures.forEach(error);
@@ -321,8 +278,110 @@ final class DependencyCodegenPass {
         return new Result(processed, mergedResources);
     }
 
+    /**
+     * Generates for one jar some brick selects and writes the output into its patch directory. A problem is added to
+     * {@code failures} rather than thrown, so that every jar's problems are reported together.
+     *
+     * @return the processed jar, or {@code null} when it is not processed or yields no file
+     */
+    private EnrichedJars.Scanned generateJar(Selection selection, List<Path> classpath,
+                                             List<String> classpathCoordinates, int release,
+                                             List<String> scanDependencies, Set<String> mergedResources,
+                                             List<String> failures) throws IOException {
+        ScanSelection.Dependency dep = selection.dependency();
+        Path jar = dep.jar();
+        List<Brick> selected = selection.bricks();
+        String names = selected.stream().map(b -> b.hints().brick()).collect(Collectors.joining(", "));
+        String file = jar.getFileName().toString();
+        if (selection.decision().signed() && !matchesAny(scanDependencies, dep)) {
+            info.accept(LOG_PREFIX + file + " is signed; not processed for " + names
+                    + " (name it in scanDependencies to process it)");
+            return null;
+        }
+        String key = DependencyCodegenCache.key(jar, selected, release, classpathCoordinates);
+        Optional<DependencyCodegen.Output> cached = cache.get(key);
+        DependencyCodegen.Output output;
+        try {
+            output = cached.isPresent() ? cached.get() : generateAndCache(selection, classpath, release, key);
+        } catch (DependencyCodegen.Failure f) {
+            failures.addAll(f.lines());
+            return null;
+        }
+        output = withoutWholeJar(output, selected);
+        output.warnings().forEach(warn);
+        List<String> clashes = clashes(jar, output, mergedResources, names, dep);
+        if (!clashes.isEmpty()) {
+            failures.addAll(clashes);
+            return null;
+        }
+        long classes = output.files().keySet().stream().filter(n -> n.endsWith(".class")).count();
+        info.accept(LOG_PREFIX + file + " — " + names + " (" + classes
+                + (classes == 1 ? " class, " : " classes, ")
+                + (cached.isPresent() ? "cached" : "generated") + ")");
+        if (output.files().isEmpty()) {
+            return null;
+        }
+        recordWritten(dep.artifactId(), writePatch(dep.artifactId(), file, output));
+        return new EnrichedJars.Scanned(jar, dep.artifactId(), dep.coordinates(),
+                selected.stream().map(b -> b.hints().brick()).toList(), DependencyBricks.inputLines(selected));
+    }
+
+    /** Runs the processors of the selection's bricks over the classes they hint, and caches the output. */
+    private DependencyCodegen.Output generateAndCache(Selection selection, List<Path> classpath, int release,
+                                                      String key) throws DependencyCodegen.Failure, IOException {
+        ScanSelection.Dependency dep = selection.dependency();
+        List<Brick> selected = selection.bricks();
+        Path log = buildDir.resolve(LOG_DIR).resolve(dep.artifactId() + ".log");
+        List<String> classes = selection.decision().matches().stream()
+                .filter(m -> selected.stream().anyMatch(b -> b.hints() == m.brick()))
+                .flatMap(m -> m.classes().stream()).distinct().sorted().toList();
+        DependencyCodegen.Output output = generator.generate(dep.jar(), selected, classes, classpath, release,
+                dep.groupId() + ":" + dep.artifactId(), new Log(log, display(baseDir, log)));
+        cache.put(key, output);
+        return output;
+    }
+
+    /**
+     * {@code output} without what describes every class of the jar: it would be partial, the processors having seen
+     * only the hinted ones. Dropped here, not before caching, so that a change of the hints needs no new cache entry.
+     */
+    private static DependencyCodegen.Output withoutWholeJar(DependencyCodegen.Output output, List<Brick> selected) {
+        Set<String> wholeJar = selected.stream().flatMap(b -> b.hints().wholeJar().stream())
+                .collect(Collectors.toSet());
+        if (output.files().keySet().stream().noneMatch(wholeJar::contains)) {
+            return output;
+        }
+        Map<String, byte[]> kept = new LinkedHashMap<>(output.files());
+        kept.keySet().removeAll(wholeJar);
+        return new DependencyCodegen.Output(kept, output.warnings());
+    }
+
+    /**
+     * Writes {@code output} into the patch directory of {@code artifactId}.
+     *
+     * @return the entries written that were not there yet
+     */
+    private List<String> writePatch(String artifactId, String file, DependencyCodegen.Output output)
+            throws IOException {
+        Path patchDir = JpmsPatches.patchDirFor(buildDir, artifactId);
+        List<String> written = new ArrayList<>();
+        for (var e : output.files().entrySet()) {
+            Path target = patchDir.resolve(e.getKey()).normalize();
+            if (!target.startsWith(patchDir)) {
+                throw new IOException(file + ": generated entry " + e.getKey() + " escapes " + patchDir);
+            }
+            // A file already there is one Vauban parked this run: the next run must not delete it.
+            if (!Files.exists(target)) {
+                written.add(e.getKey());
+            }
+            Files.createDirectories(target.getParent());
+            Files.write(target, e.getValue());
+        }
+        return written;
+    }
+
     /** Adds {@code files} to what {@link #forgetWritten} deletes on the next run for {@code artifactId}. */
-    private void record(String artifactId, List<String> files) throws IOException {
+    private void recordWritten(String artifactId, List<String> files) throws IOException {
         if (files.isEmpty()) {
             return;
         }

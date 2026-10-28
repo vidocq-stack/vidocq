@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import io.vidocq.vauban.maven.modularize.Modularizer;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
@@ -178,7 +179,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
     }
 
-    private void stageModules() throws IOException, MojoExecutionException {
+    void stageModules() throws IOException, MojoExecutionException {
         Path stage = modsDir.toPath();
         deleteRecursive(stage);
         Files.createDirectories(stage);
@@ -191,51 +192,68 @@ public class VidocqJlinkMojo extends AbstractMojo {
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {
-                if (DevOnlyJars.isDevOnly(f.toPath())) {
-                    getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
-                    continue;
-                }
-                // Prefer a sealed/repackaged copy (cassini-maven-plugin) when one exists for this
-                // artifact: same module name, but the resource package is closed and the adapters are
-                // published via `provides`. Staged under the ORIGINAL filename for consistency.
-                File sealed = new File(new File(project.getBuild().getDirectory(), "cassini-repackaged"),
-                        artifact.getArtifactId() + "-" + artifact.getVersion() + "-cassini.jar");
-                Path src = sealed.isFile() ? sealed.toPath() : f.toPath();
-                if (sealed.isFile()) {
-                    getLog().info("Staging sealed copy of " + artifact.getArtifactId()
-                            + " (resource package closed, adapters via provides)");
-                }
-                // Prefer the enriched copy vidocq:generate wrote (its generated code declared in its
-                // descriptor), else the copy patched with a generated module-info by vauban:modularize:
-                // jlink rejects automatic modules, so this is what makes a non-modular
-                // dependency stageable at all.
-                packaging.rebase(new EnrichedJars.Scanned(f.toPath(), artifact.getArtifactId(),
-                        artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
-                        getLog()::info);
-                Path modularized = EnrichedJars.resolve(buildDir.toPath(), f.toPath());
-                if (!modularized.equals(f.toPath())) {
-                    src = modularized;
-                    getLog().info(EnrichedJars.isEnriched(buildDir.toPath(), f.toPath())
-                            ? "Staging enriched copy of " + artifact.getArtifactId()
-                                    + " (vidocq:generate added its generated code and declared it)"
-                            : "Staging modularized copy of " + artifact.getArtifactId()
-                                    + " (vauban:modularize generated its module descriptor)");
-                }
-                // Stage an enriched copy when vidocq:generate parked cross-module classes
-                // for this dependency: the generated classes ship inside the module that
-                // owns their package, so the image has no split package to reject.
-                Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
-                if (!EnrichedJars.isEnriched(buildDir.toPath(), f.toPath()) && Files.isDirectory(patchDir)) {
-                    JpmsPatches.enrich(src, patchDir, stage.resolve(f.getName()));
-                    getLog().info("Staging enriched copy of " + artifact.getArtifactId()
-                            + " (carries its generated classes, JPMS cross-module)");
-                } else {
-                    Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
-                }
+                stageDependency(stage, packaging, artifact, f);
             }
         }
+        checkNamedModules(stage);
+        checkSharedResources(stage);
+    }
 
-        // Check: All staged jars must be named modules.
+    /** Stages the jar {@code f} of {@code artifact} into {@code stage}, unless it is dev-only. */
+    private void stageDependency(Path stage, DependencyBricks.Packaging packaging, Artifact artifact, File f)
+            throws IOException, MojoExecutionException {
+        if (DevOnlyJars.isDevOnly(f.toPath())) {
+            getLog().warn(DevOnlyJars.droppedWarning(artifact.getArtifactId()));
+            return;
+        }
+        Path src = stagingSource(packaging, artifact, f);
+        // Stage an enriched copy when vidocq:generate parked cross-module classes
+        // for this dependency: the generated classes ship inside the module that
+        // owns their package, so the image has no split package to reject.
+        Path patchDir = JpmsPatches.patchDirFor(buildDir.toPath(), artifact.getArtifactId());
+        if (!EnrichedJars.isEnriched(buildDir.toPath(), f.toPath()) && Files.isDirectory(patchDir)) {
+            JpmsPatches.enrich(src, patchDir, stage.resolve(f.getName()));
+            getLog().info("Staging enriched copy of " + artifact.getArtifactId()
+                    + " (carries its generated classes, JPMS cross-module)");
+        } else {
+            Files.copy(src, stage.resolve(f.getName()), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /** The jar to stage for {@code artifact}: its enriched or modularized copy, else its sealed one, else {@code f}. */
+    private Path stagingSource(DependencyBricks.Packaging packaging, Artifact artifact, File f)
+            throws IOException, MojoExecutionException {
+        // Prefer a sealed/repackaged copy (cassini-maven-plugin) when one exists for this
+        // artifact: same module name, but the resource package is closed and the adapters are
+        // published via `provides`. Staged under the ORIGINAL filename for consistency.
+        File sealed = new File(new File(project.getBuild().getDirectory(), "cassini-repackaged"),
+                artifact.getArtifactId() + "-" + artifact.getVersion() + "-cassini.jar");
+        Path src = sealed.isFile() ? sealed.toPath() : f.toPath();
+        if (sealed.isFile()) {
+            getLog().info("Staging sealed copy of " + artifact.getArtifactId()
+                    + " (resource package closed, adapters via provides)");
+        }
+        // Prefer the enriched copy vidocq:generate wrote (its generated code declared in its
+        // descriptor), else the copy patched with a generated module-info by vauban:modularize:
+        // jlink rejects automatic modules, so this is what makes a non-modular
+        // dependency stageable at all.
+        packaging.rebase(new EnrichedJars.Scanned(f.toPath(), artifact.getArtifactId(),
+                artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion()),
+                getLog()::info);
+        Path modularized = EnrichedJars.resolve(buildDir.toPath(), f.toPath());
+        if (!modularized.equals(f.toPath())) {
+            src = modularized;
+            getLog().info(EnrichedJars.isEnriched(buildDir.toPath(), f.toPath())
+                    ? "Staging enriched copy of " + artifact.getArtifactId()
+                            + " (vidocq:generate added its generated code and declared it)"
+                    : "Staging modularized copy of " + artifact.getArtifactId()
+                            + " (vauban:modularize generated its module descriptor)");
+        }
+        return src;
+    }
+
+    /** Check: all staged jars must be named modules. */
+    private void checkNamedModules(Path stage) throws IOException {
         List<String> automatic = new ArrayList<>();
         for (var ref : ModuleFinder.of(stage).findAll()) {
             ModuleDescriptor md = ref.descriptor();
@@ -246,8 +264,10 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (!automatic.isEmpty()) {
             throw new IOException(automaticModulesMessage(automatic, buildDir.toPath()));
         }
+    }
 
-        // Check: no resource directory held by several jars, a split package jlink refuses.
+    /** Check: no resource directory held by several jars, a split package jlink refuses, unless merged. */
+    private void checkSharedResources(Path stage) throws IOException {
         List<SharedResources.Shared> shared = SharedResources.find(stage);
         if (!shared.isEmpty()) {
             if (!mergeSharedResources) {
