@@ -305,3 +305,30 @@ outside Vauban. Same cause as Knock's BUG-20261010-01 and Heisenberg's BUG-006.
 `vauban-api` is a runtime dependency of `cervantes-cdi-vauban` and `cervantes-jaxrs` (plain
 `requires`), with its Jakarta CDI dependencies excluded. Covered by `cervantes-it-weld` (5 tests) and
 `cervantes-it-openliberty` (5 tests over HTTP).
+
+## CERV-009 — `ParsedJwt` compares its byte arrays by identity and prints the raw token
+
+- **Opening date**: 2026-10-28
+- **Status**: ✅ FIXED 2026-10-28
+
+### Symptom
+
+Two `ParsedJwt` values decoded from the same compact token were not equal and had different hash
+codes, and `toString()` printed `[B@…` identities plus the whole raw token — a bearer credential —
+so any log of the value would leak it. Reported by SonarQube (java:S6218).
+
+### Minimal repro
+
+`ParsedJwtTest`: build two `ParsedJwt` with equal header, claims, byte arrays and raw token;
+`assertEquals` fails, and `toString()` contains the raw token.
+
+### Cause
+
+`ParsedJwt` is a record with `byte[]` components: the generated `equals`, `hashCode` and `toString`
+use the array references and print every component.
+
+### Fix
+
+`ParsedJwt` overrides `equals` and `hashCode` with `Arrays.equals` / `Arrays.hashCode`, and
+`toString()` prints the header, the claims and the array lengths, never the raw token. Regression
+test: `ParsedJwtTest`.
