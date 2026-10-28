@@ -20,14 +20,24 @@
 package io.vidocq.dirac.cdi.internal;
 
 import io.vidocq.dirac.api.DiracException;
+import org.eclipse.microprofile.metrics.Metadata;
+import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
+import org.eclipse.microprofile.metrics.Tag;
+import org.eclipse.microprofile.metrics.annotation.Counted;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
-import org.junit.jupiter.api.BeforeEach;
+import org.eclipse.microprofile.metrics.annotation.Timed;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.util.function.Function;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * M2 tests — BCE validation of {@code @Gauge} methods, MicroProfile Metrics 5.1.1 spec §4.2.
@@ -63,6 +73,81 @@ class DiracExtensionTest {
     @Test
     void rejectsMalformedGaugeTags() {
         assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidTagGaugeService.class));
+    }
+
+    /** DRC-007: the same metric discovered twice is kept once (records compare tag contents). */
+    @Test
+    void ingestingTheSameClassTwiceKeepsOneMetricEach() {
+        var discovered = new DiscoveredMetrics();
+        discovered.scanTimedMethods(TimedCountedService.class);
+        discovered.scanTimedMethods(TimedCountedService.class);
+        discovered.scanCountedMethods(TimedCountedService.class);
+        discovered.scanCountedMethods(TimedCountedService.class);
+
+        assertEquals(1, discovered.timers().size());
+        assertEquals(1, discovered.counters().size());
+    }
+
+    @Test
+    void preRegisteredMetricComparesTagContents() {
+        var metadata = Metadata.builder().withName("m").build();
+        var first = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "application");
+        var same = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "application");
+        var otherTags = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "w")}, "application");
+        var otherScope = new DiracExtension.PreRegisteredMetric(metadata, new Tag[]{new Tag("k", "v")}, "vendor");
+
+        assertEquals(first, same);
+        assertEquals(first.hashCode(), same.hashCode());
+        assertNotEquals(first, otherTags);
+        assertNotEquals(first, otherScope);
+        assertNotEquals(first, new DiracExtension.PreRegisteredMetric(Metadata.builder().withName("n").build(),
+                new Tag[]{new Tag("k", "v")}, "application"));
+        assertNotEquals(first, (Object) "m");
+        assertTrue(first.toString().contains("tags=[Tag{k=v}]"), first.toString());
+    }
+
+    @Test
+    void resolvedGaugeComparesTagContents() {
+        var metadata = Metadata.builder().withName("g").build();
+        Function<Object, Number> invoker = bean -> 1;
+        var id = new MetricID("g", new Tag("k", "v"));
+        var first = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
+                new Tag[]{new Tag("k", "v")}, "application", invoker);
+        var same = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
+                new Tag[]{new Tag("k", "v")}, "application", invoker);
+        var otherTags = new DiracExtension.ResolvedGauge(Object.class, null, true, id, metadata,
+                new Tag[]{new Tag("k", "w")}, "application", invoker);
+        var otherBean = new DiracExtension.ResolvedGauge(String.class, null, true, id, metadata,
+                new Tag[]{new Tag("k", "v")}, "application", invoker);
+        var instanceGauge = new DiracExtension.ResolvedGauge(Object.class, null, false, id, metadata,
+                new Tag[]{new Tag("k", "v")}, "application", invoker);
+
+        assertEquals(first, same);
+        assertEquals(first.hashCode(), same.hashCode());
+        assertNotEquals(first, otherTags);
+        assertNotEquals(first, otherBean);
+        assertNotEquals(first, instanceGauge);
+        assertNotEquals(first, gauge(MethodHandles.zero(int.class), id, metadata, "application", invoker));
+        assertNotEquals(first, gauge(null, new MetricID("h"), metadata, "application", invoker));
+        assertNotEquals(first, gauge(null, id, Metadata.builder().withName("h").build(), "application", invoker));
+        assertNotEquals(first, gauge(null, id, metadata, "vendor", invoker));
+        assertNotEquals(first, gauge(null, id, metadata, "application", bean -> 2));
+        assertNotEquals(first, (Object) "g");
+        assertTrue(first.toString().contains("tags=[Tag{k=v}]"), first.toString());
+    }
+
+    private static DiracExtension.ResolvedGauge gauge(MethodHandle handle, MetricID id, Metadata metadata,
+                                                      String scope, Function<Object, Number> invoker) {
+        return new DiracExtension.ResolvedGauge(Object.class, handle, true, id, metadata,
+                new Tag[]{new Tag("k", "v")}, scope, invoker);
+    }
+
+    static class TimedCountedService {
+        @Timed(name = "twice.timer", absolute = true, tags = {"kind=unit"})
+        @Counted(name = "twice.counter", absolute = true, tags = {"kind=unit"})
+        void work() {
+            // metric target only
+        }
     }
 
     static class ValidGaugeService {

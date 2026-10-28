@@ -43,6 +43,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -299,8 +300,56 @@ public class DiracExtension implements BuildCompatibleExtension {
                          Tag[] tags,
                          String scope,
                          Function<Object, Number> invoker) {
+
+        // Records compare arrays by identity: the tags are compared by content so that the
+        // same gauge discovered twice is kept once in the DiscoveredMetrics sets (DRC-007).
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof ResolvedGauge that
+                    && staticMethod == that.staticMethod
+                    && beanClass == that.beanClass
+                    && Objects.equals(methodHandle, that.methodHandle)
+                    && Objects.equals(metricID, that.metricID)
+                    && Objects.equals(metadata, that.metadata)
+                    && Arrays.equals(tags, that.tags)
+                    && Objects.equals(scope, that.scope)
+                    && Objects.equals(invoker, that.invoker);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(beanClass, methodHandle, staticMethod, metricID, metadata,
+                    Arrays.hashCode(tags), scope, invoker);
+        }
+
+        @Override
+        public String toString() {
+            return "ResolvedGauge[beanClass=" + beanClass + ", staticMethod=" + staticMethod
+                    + ", metricID=" + metricID + ", metadata=" + metadata
+                    + ", tags=" + Arrays.toString(tags) + ", scope=" + scope + "]";
+        }
     }
 
     record PreRegisteredMetric(Metadata metadata, Tag[] tags, String scope) {
+
+        // Tags compared by content: the same metric discovered twice is kept once (DRC-007).
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof PreRegisteredMetric that
+                    && Objects.equals(metadata, that.metadata)
+                    && Arrays.equals(tags, that.tags)
+                    && Objects.equals(scope, that.scope);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(metadata, Arrays.hashCode(tags), scope);
+        }
+
+        @Override
+        public String toString() {
+            return "PreRegisteredMetric[metadata=" + metadata + ", tags=" + Arrays.toString(tags)
+                    + ", scope=" + scope + "]";
+        }
     }
 }

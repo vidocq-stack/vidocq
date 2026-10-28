@@ -243,3 +243,37 @@ the server's own bean classes, which the application's class loader cannot load,
 
 A class that cannot be loaded (`ClassNotFoundException` or `LinkageError`) is skipped, with a `DEBUG` log:
 it cannot carry a metric of the application.
+
+---
+
+## DRC-007 — The same metric discovered twice is kept twice by `DiscoveredMetrics`
+
+- **Opening date**: 2026-10-28
+- **Status**: ✅ FIXED 2026-10-28
+
+### Symptom
+
+Scanning the same bean class twice leaves two `PreRegisteredMetric` entries for one timer
+(and two for one counter) in the `DiscoveredMetrics` sets, so the metric is pre-registered
+twice. Found while fixing SonarQube `java:S6218` (record with an array component).
+
+### Minimal repro
+
+```java
+var discovered = new DiscoveredMetrics();
+discovered.scanTimedMethods(TimedService.class);
+discovered.scanTimedMethods(TimedService.class);
+discovered.timers().size(); // 2, expected 1
+```
+
+### Cause
+
+`DiracExtension.PreRegisteredMetric` and `DiracExtension.ResolvedGauge` are records with a
+`Tag[]` component: the generated `equals`/`hashCode` compare arrays by identity, so two
+equal metrics never compare equal in the `ConcurrentHashMap` key sets.
+
+### Fix
+
+Both records override `equals`, `hashCode` and `toString` to compare and print the tags by
+content. Regression tests: `DiracExtensionTest.ingestingTheSameClassTwiceKeepsOneMetricEach`,
+`preRegisteredMetricComparesTagContents`, `resolvedGaugeComparesTagContents`.
