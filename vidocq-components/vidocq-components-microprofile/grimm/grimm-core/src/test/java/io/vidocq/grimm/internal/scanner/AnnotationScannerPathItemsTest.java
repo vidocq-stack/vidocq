@@ -116,7 +116,7 @@ class AnnotationScannerPathItemsTest {
                                             @Callback(callbackUrlExpression = NAMELESS)
                                     },
                                     extensions = @Extension(name = X_PART, value = "operation")),
-                            @PathItemOperation(method = "post", requestBody = @RequestBody(required = true)),
+                            @PathItemOperation(method = "post", requestBody = @RequestBody(content = @Content(mediaType = "text/plain"))),
                             @PathItemOperation(method = "put", requestBody = @RequestBody(description = "Put body")),
                             @PathItemOperation(method = "delete"),
                             @PathItemOperation(method = "patch"),
@@ -238,8 +238,20 @@ class AnnotationScannerPathItemsTest {
         var item = components().getPathItems().get(ITEM);
 
         assertEquals(Boolean.TRUE, item.getPOST().getRequestBody().getRequired());
+        assertNotNull(item.getPOST().getRequestBody().getContent().getMediaType("text/plain"));
         assertEquals("Put body", item.getPUT().getRequestBody().getDescription());
         assertEquals(Boolean.TRUE, item.getPUT().getRequestBody().getRequired());
+    }
+
+    @Test
+    void operationWithoutRequestBodyDeclaresNone() {
+        // BUG-20261028-01: @PathItemOperation.requestBody defaults to @RequestBody(), whose required
+        // attribute defaults to true; that default alone must not produce a Request Body Object
+        // (OpenAPI 3.1 §4.8.13: content is REQUIRED), so a DELETE without a body declares none.
+        var item = components().getPathItems().get(ITEM);
+
+        assertNull(item.getDELETE().getRequestBody());
+        assertNull(item.getPATCH().getRequestBody());
     }
 
     @Test

@@ -356,3 +356,21 @@ Track reproducible bugs with:
   the resources `grimm-processor` described (a `@Path` class that is not a bean, in `annotated` mode).
   `GrimmModelCache` takes `Instance<ScannedTypes>`. Covered by `TwoContainersOneJvmTest`,
   `ScannedTypesCreatorTest`, `GrimmExtensionApplicationScanTest`; official TCK 367/367.
+
+### BUG-20261028-01 — Every `@Components.pathItems` operation gets a content-less request body
+
+- **id**: BUG-20261028-01
+- **date**: 2026-10-28
+- **symptom**: an operation of a reusable path item (`@OpenAPIDefinition(components = @Components(pathItems =
+  @PathItem(operations = @PathItemOperation(method = "delete"))))`) is documented with
+  `requestBody: {required: true}` although it declares no request body; the Request Body Object has no
+  `content`, which OpenAPI 3.1 requires.
+- **minimal repro**: `AnnotationScannerPathItemsTest.operationWithoutRequestBodyDeclaresNone`: the DELETE and
+  PATCH operations of `petItem` have a request body.
+- **hypothesis (confirmed)**: `@PathItemOperation.requestBody` defaults to `@RequestBody()`, whose `required`
+  defaults to `true` (MP OpenAPI 4.2); `AnnotationScanner` created a request body as soon as `required()` was
+  true, so for every operation.
+- **status**: FIXED — 2026-10-28. A request body is created only when the annotation sets a `ref`, a
+  `description` or some `content`; `addComponentPathItems` is split into smaller helpers (path item,
+  operation, tags, security, request body, responses, callback). Regression test:
+  `AnnotationScannerPathItemsTest.operationWithoutRequestBodyDeclaresNone`.
