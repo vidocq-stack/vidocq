@@ -487,3 +487,21 @@
 - **Fix**: the finalizer returns a `WebApplicationException`'s own response, records any other exception on the
   current SERVER span (made current by the request filter, on the same thread) and answers 500; the response
   filter ends the span on every runtime.
+
+## BUG-20261028-01 — `CompletableResultCode.join` leaves the result pending when it times out or is interrupted
+
+- **Date**: 2026-10-28
+- **Status**: FIXED (branch `fix/sonar-reliability`, 2026-10-28)
+- **Component**: humboldt-sdk-common
+- **Affected**: 0.4.0-SNAPSHOT and earlier
+- **Symptom**: `join(timeout, unit)` returns a result that is still pending (`isDone() == false`) after the timeout
+  elapsed or the waiting thread was interrupted. The OpenTelemetry SDK `CompletableResultCode#join`, which this
+  class mirrors, fails the result in both cases, so callers checking `isDone()`/`isSuccess()` after a bounded
+  `shutdown().join(10, SECONDS)` saw a different state than with the OTel SDK, and completion callbacks never ran.
+  Found through SonarQube S899 (the boolean returned by `CountDownLatch.await` was ignored).
+- **Minimal reproduction**: `new CompletableResultCode().join(10, TimeUnit.MILLISECONDS).isDone()` returns `false`.
+- **Cause**: the result of `latch.await(timeout, unit)` was discarded and the `InterruptedException` handler only
+  restored the interrupt flag.
+- **Fix**: `join` fails the result when `await` returns `false` or is interrupted (the interrupt flag is kept).
+- **Regression test**: `CompletableResultCodeTest.join_fails_the_code_when_it_times_out`,
+  `join_fails_the_code_and_keeps_the_interrupt_flag_when_interrupted`.

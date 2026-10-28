@@ -107,11 +107,19 @@ public final class CompletableResultCode {
         return this;
     }
 
+    /**
+     * Waits up to {@code timeout} for this result to complete. If it times out or the
+     * waiting thread is interrupted, the result is failed (same contract as the
+     * OpenTelemetry SDK's {@code CompletableResultCode#join}).
+     */
     public CompletableResultCode join(long timeout, TimeUnit unit) {
         try {
-            latch.await(timeout, unit);
-        } catch (InterruptedException ie) {
+            if (!latch.await(timeout, unit)) {
+                fail();
+            }
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
+            fail();
         }
         return this;
     }
