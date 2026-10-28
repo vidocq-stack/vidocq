@@ -96,11 +96,8 @@ public record ChappeListener(String name, String host, int port, boolean tls) {
         String[] groups = (zone < 0 ? full : full.substring(0, zone)).split(":", -1);
         int bestStart = -1;
         int bestLength = 1;
-        for (int i = 0; i < groups.length; ) {
-            if (!"0".equals(groups[i])) {
-                i++;
-                continue;
-            }
+        int i = 0;
+        while (i < groups.length) {
             int start = i;
             while (i < groups.length && "0".equals(groups[i])) {
                 i++;
@@ -108,6 +105,9 @@ public record ChappeListener(String name, String host, int port, boolean tls) {
             if (i - start > bestLength) {
                 bestStart = start;
                 bestLength = i - start;
+            }
+            if (i == start) {
+                i++; // a non-zero group
             }
         }
         if (bestStart < 0) {

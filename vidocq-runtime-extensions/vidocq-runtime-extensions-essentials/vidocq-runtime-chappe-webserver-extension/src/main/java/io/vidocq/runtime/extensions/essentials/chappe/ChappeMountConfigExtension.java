@@ -187,8 +187,9 @@ public final class ChappeMountConfigExtension implements VidocqExtension {
         for (String key : config.getPropertyNames()) {
             if (!key.startsWith(PREFIX) || !key.endsWith(SUFFIX_PATH)) continue;
             String middle = key.substring(PREFIX.length(), key.length() - SUFFIX_PATH.length());
-            if (middle.isEmpty() || middle.indexOf('.') >= 0) continue;
-            names.add(middle);
+            if (!middle.isEmpty() && middle.indexOf('.') < 0) {
+                names.add(middle);
+            }
         }
         return names;
     }
