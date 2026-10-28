@@ -370,7 +370,8 @@ public final class ConfigResolver {
     private static Config loadConfig() {
         try {
             return ConfigProvider.getConfig();
-        } catch (Throwable _) {
+        } catch (RuntimeException | java.util.ServiceConfigurationError | LinkageError _) {
+            // No MicroProfile Config implementation (or a broken one): annotation values only.
             return null;
         }
     }
