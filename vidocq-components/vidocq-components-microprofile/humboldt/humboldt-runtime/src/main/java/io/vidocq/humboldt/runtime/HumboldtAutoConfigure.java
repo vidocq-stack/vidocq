@@ -356,13 +356,12 @@ public final class HumboldtAutoConfigure {
     }
 
     private static void applyHeaders(EnvConfig env, java.util.function.BiConsumer<String, String> setter) {
-        env.get("OTEL_EXPORTER_OTLP_HEADERS").ifPresent(raw -> {
+        env.get("OTEL_EXPORTER_OTLP_HEADERS").ifPresent(raw ->
             Arrays.stream(raw.split(",")).forEach(pair -> {
                 int idx = pair.indexOf('=');
                 if (idx > 0) {
                     setter.accept(pair.substring(0, idx).trim(), pair.substring(idx + 1).trim());
                 }
-            });
-        });
+            }));
     }
 }

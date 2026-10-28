@@ -86,7 +86,7 @@ public class HumboldtServerResponseFilter implements ContainerResponseFilter {
                 if (scheme instanceof String s) b.put(URL_SCHEME, s);
                 double durationSec = (System.nanoTime() - startNanos) / 1_000_000_000.0;
                 h.record(durationSec, b.build());
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // If MeterProvider is not ready yet or an error occurs — continue without histogram.
             }
         }

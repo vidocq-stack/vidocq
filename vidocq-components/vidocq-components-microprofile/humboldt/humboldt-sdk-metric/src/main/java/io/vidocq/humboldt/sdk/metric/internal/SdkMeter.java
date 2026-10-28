@@ -94,7 +94,7 @@ public final class SdkMeter implements Meter {
         // therefore reflects the most recent values.
         for (Runnable cb : observableCallbacks) {
             try { cb.run(); }
-            catch (RuntimeException ignored) { /* erratic observable callback — silently ignored */ }
+            catch (RuntimeException _) { /* erratic observable callback — silently ignored */ }
         }
         List<MetricData> out = new ArrayList<>(instruments.size());
         for (InstrumentEntry e : instruments) {

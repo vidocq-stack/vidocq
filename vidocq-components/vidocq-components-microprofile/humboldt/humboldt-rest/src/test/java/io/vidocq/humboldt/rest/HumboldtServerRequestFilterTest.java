@@ -262,7 +262,6 @@ class HumboldtServerRequestFilterTest {
     void default_propagator_hooks_return_the_w3c_propagators() {
         HumboldtServerRequestFilter filter = new HumboldtServerRequestFilter();
         assertSame(W3CPropagators.get(), filter.propagatorsAdapter());
-        assertSame(W3CPropagators.textMap(), new HumboldtServerRequestFilter.W3CPropagatorsWrapper().textMap());
         assertSame(GlobalOpenTelemetry.get(), filter.openTelemetry());
     }
 

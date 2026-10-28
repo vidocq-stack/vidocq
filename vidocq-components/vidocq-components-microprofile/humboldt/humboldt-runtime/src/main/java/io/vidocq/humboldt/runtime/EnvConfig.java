@@ -22,7 +22,7 @@ package io.vidocq.humboldt.runtime;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * Env vars + system properties configuration reader.
@@ -39,10 +39,10 @@ import java.util.function.Function;
  */
 public final class EnvConfig {
 
-    private final Function<String, String> envLookup;
-    private final Function<String, String> propLookup;
+    private final UnaryOperator<String> envLookup;
+    private final UnaryOperator<String> propLookup;
 
-    private EnvConfig(Function<String, String> envLookup, Function<String, String> propLookup) {
+    private EnvConfig(UnaryOperator<String> envLookup, UnaryOperator<String> propLookup) {
         this.envLookup = envLookup;
         this.propLookup = propLookup;
     }
@@ -83,14 +83,14 @@ public final class EnvConfig {
     public long getLong(String envKey, long def) {
         return get(envKey).map(v -> {
             try { return Long.parseLong(v); }
-            catch (NumberFormatException e) { return def; }
+            catch (NumberFormatException _) { return def; }
         }).orElse(def);
     }
 
     public double getDouble(String envKey, double def) {
         return get(envKey).map(v -> {
             try { return Double.parseDouble(v); }
-            catch (NumberFormatException e) { return def; }
+            catch (NumberFormatException _) { return def; }
         }).orElse(def);
     }
 

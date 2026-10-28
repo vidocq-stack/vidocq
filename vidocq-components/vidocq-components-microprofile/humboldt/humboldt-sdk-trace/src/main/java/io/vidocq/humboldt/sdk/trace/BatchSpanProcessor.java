@@ -41,8 +41,6 @@ public final class BatchSpanProcessor extends AbstractBatchProcessor<SpanData> i
     private static final int DEFAULT_MAX_BATCH = 512;
     private static final Duration DEFAULT_SCHEDULE = Duration.ofSeconds(5);
 
-    private final SpanExporter exporter;
-
     public static Builder builder(SpanExporter exporter) {
         return new Builder(exporter);
     }
@@ -53,10 +51,9 @@ public final class BatchSpanProcessor extends AbstractBatchProcessor<SpanData> i
                 b.maxQueueSize,
                 b.maxExportBatchSize,
                 b.scheduleDelay,
-                batch -> b.exporter.export(batch),
+                b.exporter::export,
                 b.exporter::flush,
-                () -> b.exporter.shutdown());
-        this.exporter = b.exporter;
+                b.exporter::shutdown);
     }
 
     @Override

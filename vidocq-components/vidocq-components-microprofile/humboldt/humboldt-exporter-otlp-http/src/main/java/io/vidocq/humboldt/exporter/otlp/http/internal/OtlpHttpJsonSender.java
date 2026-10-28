@@ -115,7 +115,7 @@ public final class OtlpHttpJsonSender {
                 try {
                     Thread.sleep(backoffMs);
                     sendWithRetry(req, result, attempt + 1);
-                } catch (InterruptedException ie) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                     result.fail();
                 }

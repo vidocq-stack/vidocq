@@ -149,10 +149,14 @@ public final class SdkSpanBuilder implements SpanBuilder {
         return this;
     }
 
+    private Context parentContext() {
+        if (noParent) return Context.root();
+        return parent != null ? parent : Context.current();
+    }
+
     @Override
     public Span startSpan() {
-        Context parentCtx = noParent ? Context.root()
-                : (parent != null ? parent : Context.current());
+        Context parentCtx = parentContext();
         SpanContext parentSpanContext = Span.fromContext(parentCtx).getSpanContext();
 
         String traceId = parentSpanContext.isValid()

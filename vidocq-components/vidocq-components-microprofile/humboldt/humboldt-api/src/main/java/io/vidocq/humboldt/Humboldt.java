@@ -37,18 +37,19 @@ public final class Humboldt {
 
     // Filtered by the Maven build into a same-module resource — published artifacts
     // used to report a stale hardcoded snapshot version (BUG-20260712-01).
+    private static final String UNKNOWN = "unknown";
     private static final String VERSION = loadVersion();
 
     private static String loadVersion() {
         try (InputStream in = Humboldt.class.getResourceAsStream("version.properties")) {
             if (in == null) {
-                return "unknown";
+                return UNKNOWN;
             }
             Properties props = new Properties();
             props.load(in);
-            return props.getProperty("version", "unknown");
-        } catch (IOException e) {
-            return "unknown";
+            return props.getProperty("version", UNKNOWN);
+        } catch (IOException _) {
+            return UNKNOWN;
         }
     }
 

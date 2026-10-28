@@ -215,7 +215,7 @@ public final class OtelSpiAutoConfiguration {
             if (otelResource == null) return;
             otelResource.getAttributes().forEach((key, value) -> {
                 if (value == null) return;
-                if (attrs.length() > 0) attrs.append(',');
+                if (!attrs.isEmpty()) attrs.append(',');
                 attrs.append(key.getKey()).append('=').append(value);
             });
             LOG.log(Level.INFO, "  -> ResourceProvider discovered: {0} (attrs={1})",

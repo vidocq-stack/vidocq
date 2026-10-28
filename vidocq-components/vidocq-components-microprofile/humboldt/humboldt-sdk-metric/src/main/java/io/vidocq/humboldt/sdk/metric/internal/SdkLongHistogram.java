@@ -36,7 +36,7 @@ public final class SdkLongHistogram implements LongHistogram {
     @Override
     public void record(long value, Attributes attributes) {
         if (value < 0L) return; // OTel alignment: reject negatives for histograms
-        aggregator.recordDouble((double) value, attributes != null ? attributes : Attributes.empty());
+        aggregator.recordDouble(value, attributes != null ? attributes : Attributes.empty());
     }
 
     @Override

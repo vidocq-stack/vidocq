@@ -166,7 +166,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
         var attrs = resource.getAttributes();
         attrs.forEach((key, value) -> {
             if (value == null) return;
-            if (sb.length() > 0) sb.append(',');
+            if (!sb.isEmpty()) sb.append(',');
             sb.append(key.getKey()).append('=').append(value);
         });
         return sb.toString();
@@ -199,7 +199,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
         Sampler placeholder = Sampler.alwaysOn();
         for (var c : samplerCustomizers) {
             try { placeholder = c.apply(placeholder, cfg); }
-            catch (RuntimeException ignored) { /* side-effect-only */ }
+            catch (RuntimeException _) { /* side-effect-only */ }
         }
     }
 
@@ -210,7 +210,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
         SpanExporter placeholder = NO_OP_SPAN_EXPORTER;
         for (var c : spanExporterCustomizers) {
             try { placeholder = c.apply(placeholder, cfg); }
-            catch (RuntimeException ignored) { /* side-effect-only */ }
+            catch (RuntimeException _) { /* side-effect-only */ }
         }
     }
 
@@ -221,7 +221,7 @@ public final class CollectingAutoConfigurationCustomizer implements AutoConfigur
         SdkTracerProviderBuilder builder = io.opentelemetry.sdk.trace.SdkTracerProvider.builder();
         for (var c : tracerProviderCustomizers) {
             try { builder = c.apply(builder, cfg); }
-            catch (RuntimeException ignored) { /* side-effect-only */ }
+            catch (RuntimeException _) { /* side-effect-only */ }
         }
     }
 

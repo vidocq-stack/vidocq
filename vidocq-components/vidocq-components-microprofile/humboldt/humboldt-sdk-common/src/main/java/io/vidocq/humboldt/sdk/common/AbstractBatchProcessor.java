@@ -120,7 +120,7 @@ public abstract class AbstractBatchProcessor<T> {
         }
         try {
             worker.join(TimeUnit.SECONDS.toMillis(10));
-        } catch (InterruptedException ie) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
         shutdownExporter.run();

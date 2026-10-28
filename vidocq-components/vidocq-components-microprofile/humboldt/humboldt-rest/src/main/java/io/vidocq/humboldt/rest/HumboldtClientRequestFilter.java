@@ -30,7 +30,6 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapPropagator;
 import io.opentelemetry.context.propagation.TextMapSetter;
-import io.vidocq.humboldt.propagator.w3c.W3CPropagators;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.client.ClientRequestContext;
@@ -128,7 +127,7 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
         try {
             return new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(),
                     uri.getPath(), uri.getQuery(), null).toString();
-        } catch (Exception e) {
+        } catch (Exception _) {
             return uri.toString();
         }
     }

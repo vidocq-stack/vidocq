@@ -50,7 +50,7 @@ public final class OtelMetricExporterBridge implements MetricExporter {
         for (MetricData m : metrics) {
             try {
                 otelMetrics.add(MetricDataMapper.toOtel(m));
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // Skip metrics that cannot be mapped (types unsupported by the mapper)
             }
         }

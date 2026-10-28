@@ -209,7 +209,7 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         if (segment == null || segment.isEmpty()) return;
         // Normalisation to avoid double slashes: e.g. @Path("/")
         // on the class + @Path("/span") on the method → "/ctx/" + "/span" = "/ctx//span".
-        boolean sbEndsSlash = sb.length() > 0 && sb.charAt(sb.length() - 1) == '/';
+        boolean sbEndsSlash = !sb.isEmpty() && sb.charAt(sb.length() - 1) == '/';
         boolean segStartsSlash = segment.startsWith("/");
         if (sbEndsSlash && segStartsSlash) {
             sb.append(segment, 1, segment.length());
@@ -254,20 +254,5 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
 
     protected io.opentelemetry.context.propagation.ContextPropagators propagatorsAdapter() {
         return W3CPropagators.get();
-    }
-
-    /**
-     * Test hook — overridable to point to a custom propagator.
-     * @return the default W3C adapter.
-     */
-    private W3CPropagatorsWrapper propagators() {
-        return new W3CPropagatorsWrapper();
-    }
-
-    /** Internal wrapper — exposes {@code textMap()} in a testable way. */
-    static class W3CPropagatorsWrapper {
-        TextMapPropagator textMap() {
-            return W3CPropagators.textMap();
-        }
     }
 }

@@ -110,7 +110,7 @@ public final class LoggingMetricExporter implements MetricExporter {
             }
             writer.flush();
             return CompletableResultCode.ofSuccess();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return CompletableResultCode.ofFailure();
         } finally {
             writeLock.unlock();
@@ -138,7 +138,7 @@ public final class LoggingMetricExporter implements MetricExporter {
         if (closed) return CompletableResultCode.ofFailure();
         writeLock.lock();
         try { writer.flush(); return CompletableResultCode.ofSuccess(); }
-        catch (IOException e) { return CompletableResultCode.ofFailure(); }
+        catch (IOException _) { return CompletableResultCode.ofFailure(); }
         finally { writeLock.unlock(); }
     }
 
@@ -151,7 +151,7 @@ public final class LoggingMetricExporter implements MetricExporter {
             writer.flush();
             if (closeOnShutdown) writer.close();
             return CompletableResultCode.ofSuccess();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return CompletableResultCode.ofFailure();
         } finally {
             writeLock.unlock();

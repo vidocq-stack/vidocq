@@ -130,13 +130,11 @@ public final class SdkSpan implements Span, ReadableSpan {
         if (ended || statusCode == null) return this;
         // OTel rule: you cannot go down from OK. ERROR > OK > UNSET.
         if (this.status.code() == StatusCode.OK) return this;
-        if (statusCode == StatusCode.OK) {
-            this.status = StatusData.ok();
-        } else if (statusCode == StatusCode.ERROR) {
-            this.status = StatusData.error(description != null ? description : "");
-        } else {
-            this.status = StatusData.unset();
-        }
+        this.status = switch (statusCode) {
+            case OK -> StatusData.ok();
+            case ERROR -> StatusData.error(description != null ? description : "");
+            case UNSET -> StatusData.unset();
+        };
         return this;
     }
 

@@ -87,7 +87,7 @@ public final class PeriodicMetricReader implements MetricReader {
         }
         try {
             worker.join(TimeUnit.SECONDS.toMillis(10));
-        } catch (InterruptedException ie) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
         return exporter.shutdown();
@@ -103,7 +103,7 @@ public final class PeriodicMetricReader implements MetricReader {
                 if (waitNanos > 0 && pendingFlush == null && running.get()) {
                     try {
                         TimeUnit.NANOSECONDS.timedWait(flushLock, waitNanos);
-                    } catch (InterruptedException ie) {
+                    } catch (InterruptedException _) {
                         Thread.currentThread().interrupt();
                     }
                 }

@@ -38,7 +38,7 @@ public interface Aggregator<P extends PointData> {
 
     /** Records a long value with its associated attributes. */
     default void recordLong(long value, Attributes attributes) {
-        recordDouble((double) value, attributes);
+        recordDouble(value, attributes);
     }
 
     /** Records a double value with its associated attributes. */

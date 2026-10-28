@@ -149,7 +149,7 @@ public final class MetricDataMapper {
         var out = new ArrayList<io.opentelemetry.sdk.metrics.data.MetricData>(humboldts.size());
         for (MetricData m : humboldts) {
             try { out.add(toOtel(m)); }
-            catch (RuntimeException ignored) {}
+            catch (RuntimeException _) { /* unsupported metric type: skipped */ }
         }
         return out;
     }

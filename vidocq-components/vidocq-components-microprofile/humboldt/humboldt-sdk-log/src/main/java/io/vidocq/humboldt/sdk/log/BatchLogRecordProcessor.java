@@ -49,9 +49,9 @@ public final class BatchLogRecordProcessor extends AbstractBatchProcessor<LogRec
                 b.maxQueueSize,
                 b.maxExportBatchSize,
                 b.scheduleDelay,
-                batch -> b.exporter.export(batch),
+                b.exporter::export,
                 b.exporter::flush,
-                () -> b.exporter.shutdown());
+                b.exporter::shutdown);
     }
 
     @Override
