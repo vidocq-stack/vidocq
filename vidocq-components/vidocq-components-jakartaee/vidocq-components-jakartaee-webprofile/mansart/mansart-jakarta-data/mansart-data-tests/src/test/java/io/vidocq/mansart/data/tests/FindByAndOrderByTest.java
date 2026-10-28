@@ -95,4 +95,12 @@ class FindByAndOrderByTest {
         assertThat(repo.seat(third.getId())).get().extracting(LabSeat::getSeatBlockIndex).isEqualTo(8);
         assertThat(repo.seat(-1L)).isEmpty();
     }
+
+    /** MANSART-020: a {@code @Find} method returning a {@code Collection} gets every match. */
+    @ParameterizedTest
+    @MethodSource("repositories")
+    void returnsEveryMatchAsACollection(LabSeatRepository repo) {
+        assertThat(repo.inRoom("room")).hasSize(4);
+        assertThat(repo.inRoom("other")).isEmpty();
+    }
 }

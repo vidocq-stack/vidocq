@@ -634,17 +634,16 @@ public final class RuntimeRepositoryProxy {
 
     /** The {@code Limit} argument's window of {@code list}, or {@code list} itself without a limit. */
     private static List<Object> limited(List<Object> list, Object[] callArgs, int[] ctrl) {
-        int[] limR = controlLimitRange(callArgs, ctrl, 0);
-        if (limR[1] <= 0) return list;
-        int from = Math.max(0, limR[0]);
-        if (from >= list.size()) return new ArrayList<>();
-        return new ArrayList<>(list.subList(from, Math.min(list.size(), from + limR[1])));
+        return window(list, controlLimitRange(callArgs, ctrl, 0));
     }
 
     /** {@code list} as the {@code @Find} method returns it: a stream, a list, an array or its first element. */
     private static Object shapeFindResult(Class<?> returnType, List<Object> list) {
         if (returnType == java.util.stream.Stream.class) return list.stream();
-        if (List.class.isAssignableFrom(returnType)) return list;
+        if (List.class.isAssignableFrom(returnType) || returnType == java.util.Collection.class
+                || returnType == Iterable.class) {
+            return list;
+        }
         if (returnType.isArray()) {
             Object arr = java.lang.reflect.Array.newInstance(returnType.getComponentType(), list.size());
             for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
@@ -655,100 +654,105 @@ public final class RuntimeRepositoryProxy {
 
     /* ---- Derived queries (findByX, countByX, deleteByX, existsByX, …) ---- */
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     private static Dispatcher derivedDispatcher(Method m, EntityModel<?> model,
                                                 java.util.Set<String> attributeNames) {
         int[] limitOut = new int[]{0};
         QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(m.getName(), attributeNames, limitOut);
         if (desc == null) return null;
-        int firstNLimit = limitOut[0];
 
         // Map predicate-attribute names to Attribute<?, ?> instances at proxy-build time.
         Map<String, Attribute<?, ?>> attrIndex = new java.util.HashMap<>();
         for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
 
-        OrderBy baseOrderBy = buildOrderBy(desc.orderBy(), attrIndex);
-        boolean returnsStream = m.getReturnType() == java.util.stream.Stream.class;
-        boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
-        boolean returnsList = java.util.List.class.isAssignableFrom(m.getReturnType())
-                || java.util.Collection.class == m.getReturnType()
-                || Iterable.class == m.getReturnType();
-        boolean returnsArray = m.getReturnType().isArray();
-        boolean isVoid = m.getReturnType() == void.class;
-        boolean returnsLong = m.getReturnType() == long.class || m.getReturnType() == Long.class;
-        boolean returnsInt  = m.getReturnType() == int.class || m.getReturnType() == Integer.class;
-
         // M7-12 — pre-locate Jakarta Data control parameter positions by type so the dispatcher
         // can read Limit/Sort/Order/PageRequest at call time and apply them to the query.
-        int[] ctrl = locateControlParams(m);
+        DerivedPlan plan = new DerivedPlan(m, desc, attrIndex, buildOrderBy(desc.orderBy(), attrIndex),
+                limitOut[0], List.of(locateControlParams(m)));
+        return (rt, em, callArgs) -> executeDerived(plan, rt, em, callArgs);
+    }
 
-        return (rt, em, callArgs) -> {
-            BuiltWhere built = buildWhere(desc, attrIndex, callArgs);
-            Where w = built.where;
-            Object[] xs = built.args;
+    /** A derived query method, resolved once at proxy creation. {@code ctrl}: see {@link #locateControlParams}. */
+    private record DerivedPlan(Method method, QueryMethodParser.QueryDescriptor desc,
+                               Map<String, Attribute<?, ?>> attrIndex, OrderBy baseOrderBy, int firstN,
+                               List<int[]> ctrl) {
+        int[] controls() {
+            return ctrl.get(0);
+        }
+    }
 
-            // Extend OrderBy with Sort/Order/Sort[] control args, then layer Limit / PageRequest.
-            OrderBy effOrder = applyControlOrder(baseOrderBy, callArgs, ctrl, attrIndex, (EntityModel) em, rt);
-            int[] limR = controlLimitRange(callArgs, ctrl, firstNLimit);
-            int limStart = limR[0];
-            int limCount = limR[1];
-            jakarta.data.page.PageRequest pageReq = controlPage(callArgs, ctrl);
-
-            return switch (desc.op()) {
-                case FIND -> {
-                    if (w == Where.ALWAYS_FALSE) {
-                        yield emptyForReturn(returnsStream, returnsOptional, returnsList);
-                    }
-                    if (pageReq != null) {
-                        var page = rt.queryPage((EntityModel) em, w, effOrder, pageReq, xs);
-                        if (jakarta.data.page.CursoredPage.class.isAssignableFrom(m.getReturnType())) {
-                            yield rt.queryCursored((EntityModel) em, w, effOrder, pageReq, xs);
-                        }
-                        yield page;
-                    }
-                    if (returnsOptional) yield rt.queryOne((EntityModel) em, w, xs);
-                    List<Object> list = rt.queryList((EntityModel) em, w, effOrder, xs);
-                    if (limCount > 0) {
-                        int from = Math.max(0, limStart);
-                        int to = Math.min(list.size(), from + limCount);
-                        list = (from >= list.size()) ? new ArrayList<>() : new ArrayList<>(list.subList(from, to));
-                    }
-                    if (returnsStream) yield list.stream();
-                    if (returnsList)   yield list;
-                    if (returnsArray) {
-                        Object arr = java.lang.reflect.Array.newInstance(m.getReturnType().getComponentType(), list.size());
-                        for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
-                        yield arr;
-                    }
-                    java.util.Optional<?> oneOpt = rt.queryOne((EntityModel) em, w, xs);
-                    if (oneOpt.isEmpty()) {
-                        throw new jakarta.data.exceptions.EmptyResultException(
-                                "No result for " + em.entityClass().getSimpleName());
-                    }
-                    yield oneOpt.get();
-                }
-                case FIND_ONE -> {
-                    // findFirstBy / findOneBy semantics: take the FIRST match (LIMIT 1), don't
-                    // throw NonUniqueResultException on multiple hits — the explicit "First/One"
-                    // is itself a single-result selector.
-                    List<Object> firstOne = rt.queryList((EntityModel) em, w, effOrder, xs);
-                    if (firstOne.isEmpty()) {
-                        yield returnsOptional ? java.util.Optional.empty() : null;
-                    }
-                    Object pick = firstOne.get(0);
-                    yield returnsOptional ? java.util.Optional.of(pick) : pick;
-                }
-                case COUNT    -> rt.countWhere((EntityModel) em, w, xs);
-                case EXISTS   -> rt.existsWhere((EntityModel) em, w, xs);
-                case DELETE -> {
-                    long n = rt.deleteWhere((EntityModel) em, w, xs);
-                    if (isVoid)     yield null;
-                    if (returnsInt) yield (int) n;
-                    if (returnsLong) yield n;
-                    yield n;
-                }
-            };
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object executeDerived(DerivedPlan plan, RepositoryRuntime rt, EntityModel em, Object[] callArgs) {
+        BuiltWhere built = buildWhere(plan.desc(), plan.attrIndex(), callArgs);
+        Where w = built.where;
+        Object[] xs = built.args;
+        Class<?> returnType = plan.method().getReturnType();
+        return switch (plan.desc().op()) {
+            case FIND     -> derivedFind(plan, rt, em, callArgs, w, xs);
+            case FIND_ONE -> derivedFirst(returnType, em,
+                    rt.queryList(em, w, derivedOrder(plan, rt, em, callArgs), xs));
+            case COUNT    -> rt.countWhere(em, w, xs);
+            case EXISTS   -> rt.existsWhere(em, w, xs);
+            case DELETE   -> {
+                long n = rt.deleteWhere(em, w, xs);
+                if (returnType == void.class) yield null;
+                yield returnType == int.class || returnType == Integer.class ? (Object) (int) n : (Object) n;
+            }
         };
+    }
+
+    /** The derived {@code OrderBy} extended with the Sort/Order/Sort[] control arguments. */
+    private static OrderBy derivedOrder(DerivedPlan plan, RepositoryRuntime rt, EntityModel<?> em, Object[] callArgs) {
+        return applyControlOrder(plan.baseOrderBy(), callArgs, plan.controls(), plan.attrIndex(), em, rt);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object derivedFind(DerivedPlan plan, RepositoryRuntime rt, EntityModel em, Object[] callArgs,
+                                      Where w, Object[] xs) {
+        Class<?> returnType = plan.method().getReturnType();
+        boolean returnsList = List.class.isAssignableFrom(returnType)
+                || java.util.Collection.class == returnType || Iterable.class == returnType;
+        if (w == Where.ALWAYS_FALSE) {
+            return emptyForReturn(returnType == java.util.stream.Stream.class,
+                    returnType == java.util.Optional.class, returnsList);
+        }
+        OrderBy order = derivedOrder(plan, rt, em, callArgs);
+        jakarta.data.page.PageRequest pageReq = controlPage(callArgs, plan.controls());
+        if (pageReq != null) {
+            return jakarta.data.page.CursoredPage.class.isAssignableFrom(returnType)
+                    ? rt.queryCursored(em, w, order, pageReq, xs)
+                    : rt.queryPage(em, w, order, pageReq, xs);
+        }
+        if (returnType == java.util.Optional.class) return rt.queryOne(em, w, xs);
+        if (returnType.isArray() || returnsList || returnType == java.util.stream.Stream.class) {
+            int[] limR = controlLimitRange(callArgs, plan.controls(), plan.firstN());
+            return shapeFindResult(returnType, window(rt.queryList(em, w, order, xs), limR));
+        }
+        java.util.Optional<?> one = rt.queryOne(em, w, xs);
+        if (one.isEmpty()) {
+            throw new jakarta.data.exceptions.EmptyResultException("No result for " + em.entityClass().getSimpleName());
+        }
+        return one.get();
+    }
+
+    /** {@code [start, count]} window of {@code list}; the whole list when {@code count} is not positive. */
+    private static List<Object> window(List<Object> list, int[] range) {
+        if (range[1] <= 0) return list;
+        int from = Math.max(0, range[0]);
+        if (from >= list.size()) return new ArrayList<>();
+        return new ArrayList<>(list.subList(from, Math.min(list.size(), from + range[1])));
+    }
+
+    /**
+     * {@code findFirstBy} / {@code findOneBy}: the FIRST match, no {@code NonUniqueResultException} on several hits;
+     * no match is an empty {@code Optional}, or {@code EmptyResultException} for a single entity (MANSART-019).
+     */
+    private static Object derivedFirst(Class<?> returnType, EntityModel<?> em, List<Object> found) {
+        boolean optional = returnType == java.util.Optional.class;
+        if (found.isEmpty()) {
+            if (optional) return java.util.Optional.empty();
+            throw new jakarta.data.exceptions.EmptyResultException("No result for " + em.entityClass().getSimpleName());
+        }
+        return optional ? java.util.Optional.of(found.get(0)) : found.get(0);
     }
 
     private static boolean isControlParamType(Class<?> p) {

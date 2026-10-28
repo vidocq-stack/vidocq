@@ -54,4 +54,8 @@ public interface LabSeatRepository extends BasicRepository<LabSeat, Long> {
     /** {@code @Find} binding its parameter to the id through {@code @By(By.ID)} (MANSART-018). */
     @Find
     java.util.Optional<LabSeat> seat(@By(By.ID) Long seatId);
+
+    /** {@code @Find} returning a {@code Collection} (MANSART-020). */
+    @Find
+    java.util.Collection<LabSeat> inRoom(@By("roomId") String room);
 }

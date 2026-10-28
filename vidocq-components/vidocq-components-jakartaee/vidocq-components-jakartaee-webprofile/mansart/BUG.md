@@ -685,3 +685,40 @@ inherited methods on purpose (`BasicRepository.save` and `delete` have other sem
 The runtime binding reads `@By` (then `@Param`, then the parameter name; `By.ID` is the entity's id) and applies the
 method's `@OrderBy` before any dynamic sort. The processor maps `By.ID` to the entity's `@Id` field; `findQuery` is
 split (`findWhere`, `findAttribute`, `findOrderBy`, `appendOrderList`). Regression test: `FindByAndOrderByTest`.
+
+## MANSART-019 — Runtime proxy: a single-entity `findFirst` without a match returned `null`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: low (the generated implementation already threw)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+`Author findFirstByNameStartsWithOrderByNameAsc("Zz")` returned `null` on the runtime path when nothing matched;
+Jakarta Data 1.0 and the generated implementation throw `EmptyResultException`.
+
+### Minimal repro
+`DerivedFirstTest.findFirstWithoutAMatchThrowsEmptyResultException` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RuntimeRepositoryProxy.derivedFirst` throws `EmptyResultException` for a single-entity return (an `Optional` stays
+empty). `derivedDispatcher` is split (`DerivedPlan`, `executeDerived`, `derivedFind`, `derivedFirst`, `derivedOrder`,
+`window`) to stay under the complexity limit.
+
+## MANSART-020 — Runtime proxy: a `@Find` method returning a `Collection` or an `Iterable` failed
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: medium (`ClassCastException` on every call)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+`@Find Collection<LabSeat> inRoom(@By("roomId") String room)` threw `ClassCastException: LabSeat cannot be cast to
+java.util.Collection` on the runtime path: only `List` returns were recognised, other return types got the first row.
+
+### Minimal repro
+`FindByAndOrderByTest.returnsEveryMatchAsACollection` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RuntimeRepositoryProxy.shapeFindResult` returns the list for `Collection` and `Iterable` returns too, as derived
+queries already did.

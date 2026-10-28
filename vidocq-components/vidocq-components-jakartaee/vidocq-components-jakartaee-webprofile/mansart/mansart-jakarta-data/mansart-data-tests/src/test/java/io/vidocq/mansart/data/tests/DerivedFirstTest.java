@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.core.MansartData;
+import jakarta.data.exceptions.EmptyResultException;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,7 @@ import java.sql.Statement;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * MANSART-013: the {@code First} keyword of a derived query keeps the first result(s) in the {@code OrderBy} order,
@@ -89,5 +91,14 @@ class DerivedFirstTest {
     void findFirstNKeepsAtMostNResults(AuthorRepository repo) {
         assertThat(repo.findFirst2ByNameNotOrderByNameAsc("Alfred")).extracting(Author::getName)
                 .containsExactly("Alpha", "Bravo");
+    }
+
+    /** MANSART-019: a single-entity {@code findFirst} without a match throws, it does not return {@code null}. */
+    @ParameterizedTest
+    @MethodSource("repositories")
+    void findFirstWithoutAMatchThrowsEmptyResultException(AuthorRepository repo) {
+        assertThat(repo.findFirstByOrderByNameDesc()).isPresent();
+        assertThatThrownBy(() -> repo.findFirstByNameStartsWithOrderByNameAsc("Zz"))
+                .isInstanceOf(EmptyResultException.class);
     }
 }
