@@ -158,25 +158,25 @@ public interface FtMetricsRecorder {
         @Override
         public void register(Class<?> beanClass, Method method, boolean hasRetry, boolean hasTimeout,
                              boolean hasCircuitBreaker, boolean hasBulkhead, boolean hasFallback,
-                             boolean asyncBulkhead) {}
+                             boolean asyncBulkhead) { /* no instrumentation */ }
         @Override
         public void recordInvocation(Class<?> beanClass, Method method, boolean succeeded,
-                                     boolean fallbackApplied, boolean fallbackDefined) {}
+                                     boolean fallbackApplied, boolean fallbackDefined) { /* no instrumentation */ }
         @Override
-        public void recordRetry(Class<?> beanClass, Method method, int retryCount, RetryResult result) {}
+        public void recordRetry(Class<?> beanClass, Method method, int retryCount, RetryResult result) { /* no instrumentation */ }
         @Override
-        public void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos) {}
+        public void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos) { /* no instrumentation */ }
         @Override
-        public void recordCircuitBreakerCall(Class<?> beanClass, Method method, CBCallResult result) {}
+        public void recordCircuitBreakerCall(Class<?> beanClass, Method method, CBCallResult result) { /* no instrumentation */ }
         @Override
-        public void notifyCircuitBreakerStateChange(Class<?> beanClass, Method method, CBState from, CBState to) {}
+        public void notifyCircuitBreakerStateChange(Class<?> beanClass, Method method, CBState from, CBState to) { /* no instrumentation */ }
         @Override
-        public void recordBulkheadAccepted(Class<?> beanClass, Method method, long waitNanos, long runNanos) {}
+        public void recordBulkheadAccepted(Class<?> beanClass, Method method, long waitNanos, long runNanos) { /* no instrumentation */ }
         @Override
-        public void recordBulkheadRejected(Class<?> beanClass, Method method) {}
+        public void recordBulkheadRejected(Class<?> beanClass, Method method) { /* no instrumentation */ }
         @Override
-        public void bulkheadRunningDelta(Class<?> beanClass, Method method, int delta) {}
+        public void bulkheadRunningDelta(Class<?> beanClass, Method method, int delta) { /* no instrumentation */ }
         @Override
-        public void bulkheadWaitingDelta(Class<?> beanClass, Method method, int delta) {}
+        public void bulkheadWaitingDelta(Class<?> beanClass, Method method, int delta) { /* no instrumentation */ }
     };
 }

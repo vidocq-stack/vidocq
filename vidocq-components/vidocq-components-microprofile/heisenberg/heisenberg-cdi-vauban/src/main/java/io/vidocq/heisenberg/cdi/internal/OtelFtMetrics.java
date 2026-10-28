@@ -80,7 +80,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
     private static final AttributeKey<String> BULKHEAD_RESULT_KEY = AttributeKey.stringKey("bulkheadResult");
     private static final AttributeKey<String> BOOTSTRAP_KEY = AttributeKey.stringKey("heisenberg.bootstrap");
 
-    // Instruments cached lazily (par nom)
+    // Instruments cached lazily (by name)
     private volatile Meter meter;
     private final ConcurrentHashMap<String, LongCounter> counters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, DoubleHistogram> histograms = new ConcurrentHashMap<>();
@@ -130,7 +130,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
             try {
                 m = GlobalOpenTelemetry.get().getMeter(METER_NAME);
                 meter = m;
-            } catch (Throwable t) {
+            } catch (RuntimeException | LinkageError _) {
                 return null;
             }
         }
@@ -142,7 +142,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
             return ConfigProvider.getConfig()
                     .getOptionalValue("MP_Fault_Tolerance_Metrics_Enabled", Boolean.class)
                     .orElse(Boolean.TRUE);
-        } catch (Exception e) {
+        } catch (Exception _) {
             return true;
         }
     }
@@ -194,6 +194,14 @@ final class OtelFtMetrics implements FtMetricsRecorder {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /** The {@code fallback} tag value of {@code ft.invocations.total} (MP FT 4.1 §9). */
+    private static String fallbackTag(boolean fallbackDefined, boolean fallbackApplied) {
+        if (!fallbackDefined) {
+            return "notDefined";
+        }
+        return fallbackApplied ? "applied" : "notApplied";
+    }
 
     private static String methodKey(Class<?> beanClass, Method method) {
         return beanClass.getName() + "#" + method.getName();
@@ -315,9 +323,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled() || meter() == null) return;
         String mtag = methodTagValue(beanClass, method);
         String result = succeeded ? "valueReturned" : "exceptionThrown";
-        String fb = fallbackDefined
-                ? (fallbackApplied ? "applied" : "notApplied")
-                : "notDefined";
+        String fb = fallbackTag(fallbackDefined, fallbackApplied);
         counter("ft.invocations.total").add(1L,
                 Attributes.of(METHOD_KEY, mtag, RESULT_KEY, result, FALLBACK_KEY, fb));
     }

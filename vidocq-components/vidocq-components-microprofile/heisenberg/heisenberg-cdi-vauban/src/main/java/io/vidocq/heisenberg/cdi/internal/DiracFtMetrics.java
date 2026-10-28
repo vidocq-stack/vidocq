@@ -23,7 +23,6 @@ import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import jakarta.enterprise.inject.Instance;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.metrics.Counter;
-import org.eclipse.microprofile.metrics.Histogram;
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
@@ -195,9 +194,7 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         String result = succeeded ? "valueReturned" : "exceptionThrown";
-        String fb = fallbackDefined
-                ? (fallbackApplied ? "applied" : "notApplied")
-                : "notDefined";
+        String fb = fallbackTag(fallbackDefined, fallbackApplied);
         Counter c = registry.counter("ft.invocations.total", methodTag,
                 new Tag("result", result), new Tag("fallback", fb));
         c.inc();
@@ -315,6 +312,14 @@ final class DiracFtMetrics implements FtMetricsRecorder {
     // Helpers
     // ------------------------------------------------------------------
 
+    /** The {@code fallback} tag value of {@code ft.invocations.total} (MP FT 4.1 §9). */
+    private static String fallbackTag(boolean fallbackDefined, boolean fallbackApplied) {
+        if (!fallbackDefined) {
+            return "notDefined";
+        }
+        return fallbackApplied ? "applied" : "notApplied";
+    }
+
     private static String methodKey(Class<?> beanClass, Method method) {
         return beanClass.getName() + "." + method.getName();
     }
@@ -328,7 +333,7 @@ final class DiracFtMetrics implements FtMetricsRecorder {
             return ConfigProvider.getConfig()
                     .getOptionalValue("MP_Fault_Tolerance_Metrics_Enabled", Boolean.class)
                     .orElse(Boolean.TRUE);
-        } catch (Exception e) {
+        } catch (Exception _) {
             return true;
         }
     }

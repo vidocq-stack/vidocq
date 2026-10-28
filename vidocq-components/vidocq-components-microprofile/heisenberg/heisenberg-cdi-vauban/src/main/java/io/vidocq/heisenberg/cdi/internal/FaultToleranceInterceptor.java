@@ -151,7 +151,7 @@ public class FaultToleranceInterceptor {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(methodName, interceptedMethod.getParameterTypes());
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 // continue walking up
             }
             current = current.getSuperclass();

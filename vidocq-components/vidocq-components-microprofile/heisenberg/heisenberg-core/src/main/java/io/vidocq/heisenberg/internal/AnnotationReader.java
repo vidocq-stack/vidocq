@@ -81,7 +81,7 @@ public final class AnnotationReader {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(interceptedMethod.getName(), interceptedMethod.getParameterTypes());
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 current = current.getSuperclass();
             }
         }

@@ -184,7 +184,7 @@ public final class FallbackResolver {
         Optional<MethodHandles.Lookup> granted;
         try {
             granted = LOOKUP_SOURCE.get().lookupFor(beanClass);
-        } catch (RuntimeException | LinkageError unavailable) {
+        } catch (RuntimeException | LinkageError _) {
             granted = Optional.empty();
         }
         if (granted.isPresent() && granted.get().lookupClass().getModule() == module) {
@@ -207,16 +207,9 @@ public final class FallbackResolver {
         Class<?> current = beanClass;
         while (current != null && current != Object.class) {
             for (Method candidate : current.getDeclaredMethods()) {
-                if (!candidate.getName().equals(fallbackMethodName)) {
-                    continue;
+                if (isCompatibleCandidate(candidate, beanClass, guardedMethod, fallbackMethodName)) {
+                    return candidate;
                 }
-                if (!isFallbackMethodVisibleFrom(beanClass, candidate)) {
-                    continue;
-                }
-                if (!isMethodCompatible(guardedMethod, candidate)) {
-                    continue;
-                }
-                return candidate;
             }
             Method fromInterface = findCompatibleFallbackMethodOnInterfaces(current, beanClass, guardedMethod, fallbackMethodName);
             if (fromInterface != null) {
@@ -235,16 +228,9 @@ public final class FallbackResolver {
     ) {
         for (Class<?> itf : type.getInterfaces()) {
             for (Method candidate : itf.getMethods()) {
-                if (!candidate.getName().equals(fallbackMethodName)) {
-                    continue;
+                if (isCompatibleCandidate(candidate, beanClass, guardedMethod, fallbackMethodName)) {
+                    return candidate;
                 }
-                if (!isFallbackMethodVisibleFrom(beanClass, candidate)) {
-                    continue;
-                }
-                if (!isMethodCompatible(guardedMethod, candidate)) {
-                    continue;
-                }
-                return candidate;
             }
             Method nested = findCompatibleFallbackMethodOnInterfaces(itf, beanClass, guardedMethod, fallbackMethodName);
             if (nested != null) {
@@ -252,6 +238,13 @@ public final class FallbackResolver {
             }
         }
         return null;
+    }
+
+    private boolean isCompatibleCandidate(Method candidate, Class<?> beanClass, Method guardedMethod,
+                                          String fallbackMethodName) {
+        return candidate.getName().equals(fallbackMethodName)
+                && isFallbackMethodVisibleFrom(beanClass, candidate)
+                && isMethodCompatible(guardedMethod, candidate);
     }
 
     private boolean isFallbackMethodVisibleFrom(Class<?> beanClass, Method fallbackMethod) {
@@ -367,21 +360,16 @@ public final class FallbackResolver {
     private void validateHandlerReturnType(Method guardedMethod, Class<? extends FallbackHandler<?>> handlerClass) {
         Type[] interfaces = handlerClass.getGenericInterfaces();
         for (Type itf : interfaces) {
-            if (!(itf instanceof ParameterizedType p)) {
-                continue;
-            }
-            if (!(p.getRawType() instanceof Class<?> raw) || raw != FallbackHandler.class) {
-                continue;
-            }
-            Type fallbackType = p.getActualTypeArguments()[0];
-            if (fallbackType instanceof Class<?> clazz) {
-                if (!boxed(guardedMethod.getReturnType()).isAssignableFrom(clazz)) {
+            if (itf instanceof ParameterizedType p && p.getRawType() == FallbackHandler.class) {
+                Type fallbackType = p.getActualTypeArguments()[0];
+                if (fallbackType instanceof Class<?> clazz
+                        && !boxed(guardedMethod.getReturnType()).isAssignableFrom(clazz)) {
                     throw new FaultToleranceDefinitionException(
                             "FallbackHandler return type mismatch for " + guardedMethod
                     );
                 }
+                return;
             }
-            return;
         }
     }
 
@@ -416,7 +404,7 @@ public final class FallbackResolver {
             if (resolved instanceof FallbackHandler<?> handler) {
                 return handler;
             }
-        } catch (Throwable ignored) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError _) {
             // CDI absent/inactive: fall back to local reflective instantiation.
         }
         return null;

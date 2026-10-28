@@ -136,7 +136,7 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		try {
 			return Class.forName(className, false, Thread.currentThread().getContextClassLoader());
 		}
-		catch (ClassNotFoundException e) {
+		catch (ClassNotFoundException _) {
 			return null;
 		}
 	}

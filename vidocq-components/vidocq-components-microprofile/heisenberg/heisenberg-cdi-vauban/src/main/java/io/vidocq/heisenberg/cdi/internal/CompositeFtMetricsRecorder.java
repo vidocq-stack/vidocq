@@ -51,8 +51,8 @@ final class CompositeFtMetricsRecorder implements FtMetricsRecorder {
         for (FtMetricsRecorder r : delegates) {
             try {
                 action.run(r);
-            } catch (Throwable ignored) {
-                // l'instrumentation ne doit jamais casser le chemin mtier
+            } catch (RuntimeException | LinkageError _) {
+                // instrumentation must never break the business call path
             }
         }
     }

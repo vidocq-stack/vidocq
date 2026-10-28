@@ -60,7 +60,7 @@ abstract class DelegatingFtMetricsRecorder implements FtMetricsRecorder {
         try {
             Class<?> type = Class.forName(className, false, DelegatingFtMetricsRecorder.class.getClassLoader());
             return DelegatingFtMetricsRecorder.class.getModule().canRead(type.getModule());
-        } catch (ClassNotFoundException | LinkageError e) {
+        } catch (ClassNotFoundException | LinkageError _) {
             return false;
         }
     }

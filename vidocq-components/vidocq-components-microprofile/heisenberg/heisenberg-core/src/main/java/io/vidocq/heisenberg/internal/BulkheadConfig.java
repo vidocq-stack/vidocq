@@ -19,9 +19,6 @@
  */
 package io.vidocq.heisenberg.internal;
 
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-
 /**
  * Immutable configuration for the {@code @Bulkhead} policy.
  *

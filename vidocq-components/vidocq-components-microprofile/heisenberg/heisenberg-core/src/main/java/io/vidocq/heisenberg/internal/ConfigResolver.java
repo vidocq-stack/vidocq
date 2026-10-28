@@ -40,6 +40,15 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 
 public final class ConfigResolver {
 
+    private static final String RETRY = "Retry";
+    private static final String TIMEOUT = "Timeout";
+    private static final String CIRCUIT_BREAKER = "CircuitBreaker";
+    private static final String BULKHEAD = "Bulkhead";
+    private static final String FALLBACK = "Fallback";
+    private static final String ASYNCHRONOUS = "Asynchronous";
+    private static final String VALUE = "value";
+    private static final String PRIORITY_KEY = "mp.fault.tolerance.interceptor.priority";
+
     private ConfigResolver() {}
 
     public static RetryConfig retryConfig(Method method, Retry retry) {
@@ -91,7 +100,7 @@ public final class ConfigResolver {
     }
 
     static TimeoutConfig timeoutConfig(Method method, Class<?> beanClass, Timeout timeout, Config config) {
-        long value = getLong(config, method, beanClass, Timeout.class, "value").orElse(timeout.value());
+        long value = getLong(config, method, beanClass, Timeout.class, VALUE).orElse(timeout.value());
         ChronoUnit unit = getChronoUnit(config, method, beanClass, Timeout.class, "unit").orElse(timeout.unit());
         return new TimeoutConfig(value, unit);
     }
@@ -146,7 +155,7 @@ public final class ConfigResolver {
     }
 
     static BulkheadConfig bulkheadConfig(Method method, Class<?> beanClass, Bulkhead bulkhead, Config config) {
-        int value = getInt(config, method, beanClass, Bulkhead.class, "value").orElse(bulkhead.value());
+        int value = getInt(config, method, beanClass, Bulkhead.class, VALUE).orElse(bulkhead.value());
         int waitingTaskQueue = getInt(config, method, beanClass, Bulkhead.class, "waitingTaskQueue")
                 .orElse(bulkhead.waitingTaskQueue());
 
@@ -182,51 +191,51 @@ public final class ConfigResolver {
 
     // M7: policy-based disablement via external configuration
     public static boolean isRetryEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "Retry");
+        return isEnabled(method, method.getDeclaringClass(), RETRY);
     }
 
     public static boolean isRetryEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "Retry");
+        return isEnabled(method, beanClass, RETRY);
     }
 
     public static boolean isTimeoutEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "Timeout");
+        return isEnabled(method, method.getDeclaringClass(), TIMEOUT);
     }
 
     public static boolean isTimeoutEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "Timeout");
+        return isEnabled(method, beanClass, TIMEOUT);
     }
 
     public static boolean isCircuitBreakerEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "CircuitBreaker");
+        return isEnabled(method, method.getDeclaringClass(), CIRCUIT_BREAKER);
     }
 
     public static boolean isCircuitBreakerEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "CircuitBreaker");
+        return isEnabled(method, beanClass, CIRCUIT_BREAKER);
     }
 
     public static boolean isBulkheadEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "Bulkhead");
+        return isEnabled(method, method.getDeclaringClass(), BULKHEAD);
     }
 
     public static boolean isBulkheadEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "Bulkhead");
+        return isEnabled(method, beanClass, BULKHEAD);
     }
 
     public static boolean isFallbackEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "Fallback");
+        return isEnabled(method, method.getDeclaringClass(), FALLBACK);
     }
 
     public static boolean isFallbackEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "Fallback");
+        return isEnabled(method, beanClass, FALLBACK);
     }
 
     public static boolean isAsynchronousEnabled(Method method) {
-        return isEnabled(method, method.getDeclaringClass(), "Asynchronous");
+        return isEnabled(method, method.getDeclaringClass(), ASYNCHRONOUS);
     }
 
     public static boolean isAsynchronousEnabled(Method method, Class<?> beanClass) {
-        return isEnabled(method, beanClass, "Asynchronous");
+        return isEnabled(method, beanClass, ASYNCHRONOUS);
     }
 
     /**
@@ -238,7 +247,7 @@ public final class ConfigResolver {
 
     static boolean isInterceptorGloballyDisabled(Config config) {
         if (config == null) return false;
-        return config.getOptionalValue("mp.fault.tolerance.interceptor.priority", Integer.class)
+        return config.getOptionalValue(PRIORITY_KEY, Integer.class)
                 .map(priority -> priority >= Integer.MAX_VALUE)
                 .orElse(false);
     }
@@ -252,7 +261,7 @@ public final class ConfigResolver {
 
     static int interceptorPriority(Config config) {
         if (config != null) {
-            Optional<Integer> fromConfig = config.getOptionalValue("mp.fault.tolerance.interceptor.priority", Integer.class);
+            Optional<Integer> fromConfig = config.getOptionalValue(PRIORITY_KEY, Integer.class);
             if (fromConfig.isPresent()) {
                 return fromConfig.get();
             }
@@ -277,15 +286,15 @@ public final class ConfigResolver {
                 try (InputStream in = resource.openStream()) {
                     Properties props = new Properties();
                     props.load(in);
-                    String raw = props.getProperty("mp.fault.tolerance.interceptor.priority");
+                    String raw = props.getProperty(PRIORITY_KEY);
                     if (raw != null && !raw.trim().isEmpty()) {
                         return Optional.of(Integer.parseInt(raw.trim()));
                     }
-                } catch (Exception ignored) {
+                } catch (Exception _) {
                     // Ignore malformed resources and continue scanning the classpath.
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             return Optional.empty();
         }
         return Optional.empty();
@@ -318,20 +327,17 @@ public final class ConfigResolver {
         if (explicit.isPresent()) {
             return explicit.get();
         }
-        if (isNonFallbackGloballyDisabled(config) && !"Fallback".equals(annotation)) {
-            return false;
-        }
-        return true;
+        return !isNonFallbackGloballyDisabled(config) || FALLBACK.equals(annotation);
     }
 
     private static Class<? extends Annotation> annotationTypeFor(String simpleName) {
         switch (simpleName) {
-            case "Retry": return Retry.class;
-            case "Timeout": return Timeout.class;
-            case "CircuitBreaker": return CircuitBreaker.class;
-            case "Bulkhead": return Bulkhead.class;
-            case "Fallback": return Fallback.class;
-            case "Asynchronous": return Asynchronous.class;
+            case RETRY: return Retry.class;
+            case TIMEOUT: return Timeout.class;
+            case CIRCUIT_BREAKER: return CircuitBreaker.class;
+            case BULKHEAD: return Bulkhead.class;
+            case FALLBACK: return Fallback.class;
+            case ASYNCHRONOUS: return Asynchronous.class;
             default: return null;
         }
     }
@@ -480,7 +486,7 @@ public final class ConfigResolver {
             Method method,
             Class<?> beanClass
     ) {
-        return getValue(config, method, beanClass, Fallback.class, "value", String.class).map(className -> {
+        return getValue(config, method, beanClass, Fallback.class, VALUE, String.class).map(className -> {
             try {
                 Class<?> clazz = Class.forName(className.trim());
                 if (!FallbackHandler.class.isAssignableFrom(clazz)) {

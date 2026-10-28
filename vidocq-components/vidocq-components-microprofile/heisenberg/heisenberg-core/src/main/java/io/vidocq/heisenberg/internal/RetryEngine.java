@@ -53,7 +53,7 @@ public final class RetryEngine {
                     throwAsException(effectiveFailure);
                 }
 
-                // MP FT 4.1 §3.4 : maxRetries = -1 signifie « retry indefinitely ».
+                // MP FT 4.1 §3.4: maxRetries = -1 means "retry indefinitely".
                 if (config.maxRetries() >= 0 && attempt >= config.maxRetries()) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_RETRIES_REACHED);
                     throwAsException(effectiveFailure);

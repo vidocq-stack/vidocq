@@ -45,7 +45,7 @@ final class VaubanLookupSource {
     private static Optional<MethodHandles.Lookup> lookupFor(Class<?> beanClass) {
         try {
             return ModuleLookups.lookupFor(beanClass);
-        } catch (LinkageError notVauban) {
+        } catch (LinkageError _) {
             return Optional.empty();
         }
     }
