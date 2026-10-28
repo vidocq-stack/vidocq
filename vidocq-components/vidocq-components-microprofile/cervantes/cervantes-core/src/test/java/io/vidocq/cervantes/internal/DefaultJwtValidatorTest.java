@@ -54,13 +54,13 @@ class DefaultJwtValidatorTest {
     private static final String ISS = "https://issuer.vidocq.dev";
     private static final String AUD = "cervantes-tests";
 
-    private static KeyPair RSA;
-    private static KeyPair EC;
+    private static KeyPair rsa;
+    private static KeyPair ec;
 
     @BeforeAll
     static void generateKeys() throws Exception {
-        RSA = TestJwts.rsaKeyPair();
-        EC = TestJwts.ecKeyPair("secp256r1"); //P-256 → ES256
+        rsa = TestJwts.rsaKeyPair();
+        ec = TestJwts.ecKeyPair("secp256r1"); //P-256 → ES256
     }
 
     // --- helpers -----------------------------------------------------------
@@ -79,13 +79,13 @@ class DefaultJwtValidatorTest {
 
     private static DefaultJwtValidator rsaValidator() {
         return new DefaultJwtValidator(
-                new ConfiguredKeyResolver(RSA.getPublic()),
+                new ConfiguredKeyResolver(rsa.getPublic()),
                 JwtConfig.of(ISS, Set.of(AUD)),
                 CLOCK);
     }
 
     private static String rsaToken(JsonObject claims) throws Exception {
-        return TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null), claims, RSA.getPrivate(),
+        return TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null), claims, rsa.getPrivate(),
                 SignatureAlgorithm.RS256);
     }
 
@@ -110,11 +110,11 @@ class DefaultJwtValidatorTest {
         String token = TestJwts.sign(
                 TestJwts.header(SignatureAlgorithm.ES256, "k1"),
                 baseClaims().build(),
-                EC.getPrivate(),
+                ec.getPrivate(),
                 SignatureAlgorithm.ES256);
 
         DefaultJwtValidator validator = new DefaultJwtValidator(
-                new ConfiguredKeyResolver(EC.getPublic()),
+                new ConfiguredKeyResolver(ec.getPublic()),
                 JwtConfig.of(ISS, Set.of(AUD)),
                 CLOCK);
 
@@ -145,7 +145,7 @@ class DefaultJwtValidatorTest {
 
     @Test
     void tamperedSignature_isRejected() throws Exception {
-        //signed with OTHER RSA key → signature does not check with expected key
+        //signed with OTHER rsa key → signature does not check with expected key
         KeyPair other = TestJwts.rsaKeyPair();
         String token = TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null),
                 baseClaims().build(), other.getPrivate(), SignatureAlgorithm.RS256);
@@ -165,7 +165,7 @@ class DefaultJwtValidatorTest {
     }
 
     @Test
-    void missingExpiration_isRejectedWhenRequired() throws Exception {
+    void missingExpiration_isRejectedWhenRequired() {
         JsonObjectBuilder b = baseClaims();
         JsonObject withoutExp = Json.createObjectBuilder(b.build()).remove("exp").build();
         assertThrows(JwtValidationException.class, () -> rsaValidator().validate(rsaToken(withoutExp)));
@@ -178,7 +178,7 @@ class DefaultJwtValidatorTest {
     }
 
     @Test
-    void unsupportedAlgorithm_isRejected() throws Exception {
+    void unsupportedAlgorithm_isRejected() {
         //alg "none" (unsigned token) must be refused
         String h = TestJwts.B64URL.encodeToString("{\"alg\":\"none\",\"typ\":\"JWT\"}".getBytes());
         String p = TestJwts.B64URL.encodeToString("{\"sub\":\"x\"}".getBytes());
@@ -190,7 +190,7 @@ class DefaultJwtValidatorTest {
     void issuerNotChecked_whenNotConfigured() throws Exception {
         // config without an issuer: the token's iss is ignored
         DefaultJwtValidator validator = new DefaultJwtValidator(
-                new ConfiguredKeyResolver(RSA.getPublic()),
+                new ConfiguredKeyResolver(rsa.getPublic()),
                 new JwtConfig(Optional.empty(), Set.of(), Duration.ofSeconds(60), true, Optional.empty(), false, Optional.empty()),
                 CLOCK);
         String token = rsaToken(baseClaims().add("iss", "https://whatever").build());
@@ -206,22 +206,22 @@ class DefaultJwtValidatorTest {
         JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
                 true, Optional.empty(), false, Optional.empty());
         KeyResolver both = (kid, alg) -> Optional.of(
-                alg.family() == SignatureAlgorithm.Family.EC ? EC.getPublic() : RSA.getPublic());
+                alg.family() == SignatureAlgorithm.Family.EC ? ec.getPublic() : rsa.getPublic());
         DefaultJwtValidator validator = new DefaultJwtValidator(both, config, CLOCK, null);
 
-        assertNotNull(validator.validate(signedWith(RSA, SignatureAlgorithm.RS256)));
-        assertNotNull(validator.validate(signedWith(EC, SignatureAlgorithm.ES256)));
+        assertNotNull(validator.validate(signedWith(rsa, SignatureAlgorithm.RS256)));
+        assertNotNull(validator.validate(signedWith(ec, SignatureAlgorithm.ES256)));
     }
 
     @Test
-    void rejectsTokenWhoseAlgorithmFamilyDiffersFromConfiguredOne() throws Exception {
+    void rejectsTokenWhoseAlgorithmFamilyDiffersFromConfiguredOne() {
         JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
                 true, Optional.empty(), false, Optional.of(SignatureAlgorithm.ES256));
-        KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
+        KeyResolver rsaOnly = (kid, alg) -> Optional.of(rsa.getPublic());
         DefaultJwtValidator validator = new DefaultJwtValidator(rsaOnly, config, CLOCK, null);
 
         JwtValidationException ex = assertThrows(JwtValidationException.class,
-                () -> validator.validate(signedWith(RSA, SignatureAlgorithm.RS256)));
+                () -> validator.validate(signedWith(rsa, SignatureAlgorithm.RS256)));
         assertTrue(ex.getMessage().contains("ES256"));
     }
 
@@ -229,9 +229,9 @@ class DefaultJwtValidatorTest {
     void acceptsSameFamilyAlgorithmDifferentFromConfiguredOne() throws Exception {
         JwtConfig config = new JwtConfig(Optional.of(ISS), Set.of(AUD), Duration.ofSeconds(60),
                 true, Optional.empty(), false, Optional.of(SignatureAlgorithm.RS256));
-        KeyResolver rsaOnly = (kid, alg) -> Optional.of(RSA.getPublic());
+        KeyResolver rsaOnly = (kid, alg) -> Optional.of(rsa.getPublic());
         DefaultJwtValidator validator = new DefaultJwtValidator(rsaOnly, config, CLOCK, null);
 
-        assertNotNull(validator.validate(signedWith(RSA, SignatureAlgorithm.RS512)));
+        assertNotNull(validator.validate(signedWith(rsa, SignatureAlgorithm.RS512)));
     }
 }

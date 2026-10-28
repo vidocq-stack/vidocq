@@ -37,7 +37,6 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -48,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * JWKS key resolution tests (MicroProfile JWT 2.2 §9; RFC 7517): validation
- * end-to-end, cache, rotation by {@code kid}, unknown kid, EC key.
+ * end-to-end, cache, rotation by {@code kid}, unknown kid, ec key.
  */
 class JwksKeyResolverTest {
 
@@ -56,15 +55,15 @@ class JwksKeyResolverTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final String ISS = "https://issuer.vidocq.dev";
 
-    private static KeyPair RSA_A;
-    private static KeyPair RSA_B;
-    private static KeyPair EC;
+    private static KeyPair rsaA;
+    private static KeyPair rsaB;
+    private static KeyPair ec;
 
     @BeforeAll
     static void keys() throws Exception {
-        RSA_A = TestJwts.rsaKeyPair();
-        RSA_B = TestJwts.rsaKeyPair();
-        EC = TestJwts.ecKeyPair("secp256r1");
+        rsaA = TestJwts.rsaKeyPair();
+        rsaB = TestJwts.rsaKeyPair();
+        ec = TestJwts.ecKeyPair("secp256r1");
     }
 
     private static JsonObject claims() {
@@ -85,26 +84,26 @@ class JwksKeyResolverTest {
 
     @Test
     void validatesTokenWhoseKeyIsInTheJwks() throws Exception {
-        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        byte[] jwks = TestJwks.jwksJson("rsa-a", rsaA.getPublic());
         JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
 
-        JsonWebToken jwt = validator(resolver).validate(token("rsa-a", RSA_A, SignatureAlgorithm.RS256));
+        JsonWebToken jwt = validator(resolver).validate(token("rsa-a", rsaA, SignatureAlgorithm.RS256));
         assertEquals("u-1", jwt.getSubject());
     }
 
     @Test
     void resolvesEcKeyFromJwks() throws Exception {
-        byte[] jwks = TestJwks.jwksJson("ec-1", EC.getPublic());
+        byte[] jwks = TestJwks.jwksJson("ec-1", ec.getPublic());
         JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
 
-        JsonWebToken jwt = validator(resolver).validate(token("ec-1", EC, SignatureAlgorithm.ES256));
+        JsonWebToken jwt = validator(resolver).validate(token("ec-1", ec, SignatureAlgorithm.ES256));
         assertEquals("u-1", jwt.getSubject());
     }
 
     @Test
     void cachesWithinRefreshInterval() throws Exception {
         AtomicInteger fetches = new AtomicInteger();
-        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        byte[] jwks = TestJwks.jwksJson("rsa-a", rsaA.getPublic());
         JwksSource counting = () -> {
             fetches.incrementAndGet();
             return jwks;
@@ -121,9 +120,9 @@ class JwksKeyResolverTest {
     void refreshesOnUnknownKid_pickingUpRotatedKey() throws Exception {
         //Mutable source: first only key A, then A + B (rotation).
         Map<String, PublicKey> set = new LinkedHashMap<>();
-        set.put("rsa-a", RSA_A.getPublic());
+        set.put("rsa-a", rsaA.getPublic());
         AtomicReference<byte[]> body = new AtomicReference<>(TestJwks.jwksJson(set));
-        JwksSource mutable = () -> body.get();
+        JwksSource mutable = body::get;
 
         //minRefreshInterval = 0 → An unknown kid immediately triggers a refresh.
         JwksKeyResolver resolver = new JwksKeyResolver(
@@ -133,7 +132,7 @@ class JwksKeyResolverTest {
         assertEquals(Optional.empty(), resolver.resolve("rsa-b", SignatureAlgorithm.RS256));
 
         //rotation: the new key B is published
-        set.put("rsa-b", RSA_B.getPublic());
+        set.put("rsa-b", rsaB.getPublic());
         body.set(TestJwks.jwksJson(set));
 
         assertTrue(resolver.resolve("rsa-b", SignatureAlgorithm.RS256).isPresent(),
@@ -143,7 +142,7 @@ class JwksKeyResolverTest {
     @Test
     void keepsStaleSnapshotWhenRefreshFails() throws Exception {
         AtomicReference<JwksSource> delegate =
-                new AtomicReference<>(() -> TestJwks.jwksJson("rsa-a", RSA_A.getPublic()));
+                new AtomicReference<>(() -> TestJwks.jwksJson("rsa-a", rsaA.getPublic()));
         JwksSource flaky = () -> delegate.get().fetch();
         JwksKeyResolver resolver = new JwksKeyResolver(
                 flaky, Duration.ZERO, Duration.ZERO, CLOCK); //TTL 0 → refresh every call
@@ -167,7 +166,7 @@ class JwksKeyResolverTest {
 
     @Test
     void usesSingleKeyWhenTokenHasNoKid() throws Exception {
-        byte[] jwks = TestJwks.jwksJson("rsa-a", RSA_A.getPublic());
+        byte[] jwks = TestJwks.jwksJson("rsa-a", rsaA.getPublic());
         JwksKeyResolver resolver = new JwksKeyResolver(() -> jwks);
 
         //kid null + single key set → key used
@@ -178,12 +177,12 @@ class JwksKeyResolverTest {
     @Test
     void mixedRsaAndEcJwksYieldsTheRightKeyPerAlgorithm() throws Exception {
         Map<String, PublicKey> set = new LinkedHashMap<>();
-        set.put("rskey", RSA_A.getPublic());
-        set.put("eckey", EC.getPublic());
+        set.put("rskey", rsaA.getPublic());
+        set.put("eckey", ec.getPublic());
         byte[] jwks = TestJwks.jwksJson(set);
         DefaultJwtValidator validator = validator(new JwksKeyResolver(() -> jwks));
 
-        assertEquals("u-1", validator.validate(token("rskey", RSA_A, SignatureAlgorithm.RS256)).getSubject());
-        assertEquals("u-1", validator.validate(token("eckey", EC, SignatureAlgorithm.ES256)).getSubject());
+        assertEquals("u-1", validator.validate(token("rskey", rsaA, SignatureAlgorithm.RS256)).getSubject());
+        assertEquals("u-1", validator.validate(token("eckey", ec, SignatureAlgorithm.ES256)).getSubject());
     }
 }

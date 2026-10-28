@@ -128,7 +128,7 @@ class JwtAuthConfigProducerTest {
     }
 
     @Test
-    void unrecognisedAlgorithmFailsInBuildConfig() throws Exception {
+    void unrecognisedAlgorithmFailsInBuildConfig() {
         for (String bad : new String[] {"es256", "ES-256", "PS256", "HS256"}) {
             Config config = CdiTestSupport.config(Map.of("mp.jwt.verify.publickey.algorithm", bad));
             JwtValidationException ex = assertThrows(JwtValidationException.class,

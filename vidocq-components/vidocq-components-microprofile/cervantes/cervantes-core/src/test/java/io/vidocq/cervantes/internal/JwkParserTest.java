@@ -60,7 +60,7 @@ class JwkParserTest {
         //a key rebuilt via X509/spec equals the original (same hardware)
         assertEquals(rsa.getPublic(), jwks.byKid().get("rsa-1"));
         assertEquals(ec.getPublic(), jwks.byKid().get("ec-1"));
-        assertTrue(jwks.all().size() == 2);
+        assertEquals(2, jwks.all().size());
     }
 
     @Test

@@ -26,10 +26,8 @@ import jakarta.json.JsonObject;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Producer for the {@code JsonWebToken} principal from the request context. */
 class JsonWebTokenProducerTest {

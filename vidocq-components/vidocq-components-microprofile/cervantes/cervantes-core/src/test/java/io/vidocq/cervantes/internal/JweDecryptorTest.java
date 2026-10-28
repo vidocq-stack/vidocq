@@ -45,13 +45,13 @@ class JweDecryptorTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final String ISS = "https://issuer.vidocq.dev";
 
-    private static KeyPair SIGN; //signature of the issuer
-    private static KeyPair ENC;  //encryption for the recipient
+    private static KeyPair issuer; //signature of the issuer
+    private static KeyPair recipient; //encryption for the recipient
 
     @BeforeAll
     static void keys() throws Exception {
-        SIGN = TestJwts.rsaKeyPair();
-        ENC = TestJwts.rsaKeyPair();
+        issuer = TestJwts.rsaKeyPair();
+        recipient = TestJwts.rsaKeyPair();
     }
 
     private static String signedJws() throws Exception {
@@ -60,21 +60,21 @@ class JweDecryptorTest {
                 .add("sub", "u-jwe")
                 .add("exp", NOW.getEpochSecond() + 3600)
                 .build();
-        return TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null), claims, SIGN.getPrivate(),
+        return TestJwts.sign(TestJwts.header(SignatureAlgorithm.RS256, null), claims, issuer.getPrivate(),
                 SignatureAlgorithm.RS256);
     }
 
     private static DefaultJwtValidator decryptingValidator() {
         return new DefaultJwtValidator(
-                new ConfiguredKeyResolver(SIGN.getPublic()),
+                new ConfiguredKeyResolver(issuer.getPublic()),
                 JwtConfig.forIssuer(ISS),
                 CLOCK,
-                new JweDecryptor(ENC.getPrivate()));
+                new JweDecryptor(recipient.getPrivate()));
     }
 
     @Test
     void encryptedToken_isDecryptedThenValidated() throws Exception {
-        String jwe = TestJwe.encrypt(signedJws(), ENC.getPublic());
+        String jwe = TestJwe.encrypt(signedJws(), recipient.getPublic());
         JsonWebToken jwt = decryptingValidator().validate(jwe);
         assertEquals("u-jwe", jwt.getSubject());
     }
@@ -87,15 +87,15 @@ class JweDecryptorTest {
 
     @Test
     void encryptedToken_withoutDecryptionKey_isRejected() throws Exception {
-        String jwe = TestJwe.encrypt(signedJws(), ENC.getPublic());
+        String jwe = TestJwe.encrypt(signedJws(), recipient.getPublic());
         DefaultJwtValidator noDecrypt = new DefaultJwtValidator(
-                new ConfiguredKeyResolver(SIGN.getPublic()), JwtConfig.forIssuer(ISS), CLOCK);
+                new ConfiguredKeyResolver(issuer.getPublic()), JwtConfig.forIssuer(ISS), CLOCK);
         assertThrows(JwtValidationException.class, () -> noDecrypt.validate(jwe));
     }
 
     @Test
     void tamperedCiphertext_isRejected() throws Exception {
-        String jwe = TestJwe.encrypt(signedJws(), ENC.getPublic());
+        String jwe = TestJwe.encrypt(signedJws(), recipient.getPublic());
         String[] parts = jwe.split("\\.", -1);
         //alters a ciphertext character → GCM authentication must fail
         char[] ct = parts[3].toCharArray();
@@ -107,10 +107,10 @@ class JweDecryptorTest {
 
     @Test
     void wrongDecryptionKey_isRejected() throws Exception {
-        String jwe = TestJwe.encrypt(signedJws(), ENC.getPublic());
+        String jwe = TestJwe.encrypt(signedJws(), recipient.getPublic());
         KeyPair otherEnc = TestJwts.rsaKeyPair();
         DefaultJwtValidator wrongKey = new DefaultJwtValidator(
-                new ConfiguredKeyResolver(SIGN.getPublic()), JwtConfig.forIssuer(ISS), CLOCK,
+                new ConfiguredKeyResolver(issuer.getPublic()), JwtConfig.forIssuer(ISS), CLOCK,
                 new JweDecryptor(otherEnc.getPrivate()));
         assertThrows(JwtValidationException.class, () -> wrongKey.validate(jwe));
     }

@@ -43,17 +43,17 @@ class RolesAllowedEnforcementTest {
     // --- test resources ---
 
     static class OpenResource {
-        @RolesAllowed("admin") public void adminOnly() {}
-        @PermitAll public void open() {}
-        @DenyAll public void forbidden() {}
-        public void unannotated() {}
+        @RolesAllowed("admin") public void adminOnly() { /* stub: only its security annotations are read */ }
+        @PermitAll public void open() { /* stub: only its security annotations are read */ }
+        @DenyAll public void forbidden() { /* stub: only its security annotations are read */ }
+        public void unannotated() { /* stub: only its security annotations are read */ }
     }
 
     @RolesAllowed("user")
     static class SecuredResource {
-        public void inherited() {}
-        @PermitAll public void openMethod() {}
-        @RolesAllowed("admin") public void elevated() {}
+        public void inherited() { /* stub: only its security annotations are read */ }
+        @PermitAll public void openMethod() { /* stub: only its security annotations are read */ }
+        @RolesAllowed("admin") public void elevated() { /* stub: only its security annotations are read */ }
     }
 
     // --- helpers ---
