@@ -56,32 +56,55 @@ final class CompanionRegistry {
 
     /** Returns the companion for {@code beanClass}, or {@code null} (scan fallback). */
     static MetricsCompanion resolve(Class<?> beanClass) {
-        ModuleLayer layer = beanClass.getModule().getLayer();
-        if (layer != null) {
-            try {
-                for (MetricsCompanion companion : ServiceLoader.load(layer, MetricsCompanion.class)) {
-                    if (companion.beanClass() == beanClass) {
-                        SERVICE_LOADER_HITS.incrementAndGet();
-                        return companion;
-                    }
-                }
-            } catch (java.util.ServiceConfigurationError e) {
-                LOG.log(System.Logger.Level.DEBUG, () -> "MetricsCompanion layer scan failed: " + e);
-            }
+        MetricsCompanion companion = fromModuleLayer(beanClass);
+        if (companion == null) {
+            companion = fromServiceLoaders(beanClass);
         }
+        if (companion != null) {
+            SERVICE_LOADER_HITS.incrementAndGet();
+            return companion;
+        }
+        return byNamingConvention(beanClass);
+    }
+
+    private static MetricsCompanion fromModuleLayer(Class<?> beanClass) {
+        ModuleLayer layer = beanClass.getModule().getLayer();
+        if (layer == null) {
+            return null;
+        }
+        try {
+            return find(ServiceLoader.load(layer, MetricsCompanion.class), beanClass);
+        } catch (java.util.ServiceConfigurationError e) {
+            LOG.log(System.Logger.Level.DEBUG, () -> "MetricsCompanion layer scan failed: " + e);
+            return null;
+        }
+    }
+
+    private static MetricsCompanion fromServiceLoaders(Class<?> beanClass) {
         for (ClassLoader loader : candidateLoaders(beanClass)) {
             try {
-                for (MetricsCompanion companion : ServiceLoader.load(MetricsCompanion.class, loader)) {
-                    if (companion.beanClass() == beanClass) {
-                        SERVICE_LOADER_HITS.incrementAndGet();
-                        return companion;
-                    }
+                MetricsCompanion companion = find(ServiceLoader.load(MetricsCompanion.class, loader), beanClass);
+                if (companion != null) {
+                    return companion;
                 }
             } catch (java.util.ServiceConfigurationError e) {
                 LOG.log(System.Logger.Level.DEBUG,
                         () -> "MetricsCompanion ServiceLoader scan failed on " + loader + ": " + e);
             }
         }
+        return null;
+    }
+
+    private static MetricsCompanion find(Iterable<MetricsCompanion> companions, Class<?> beanClass) {
+        for (MetricsCompanion companion : companions) {
+            if (companion.beanClass() == beanClass) {
+                return companion;
+            }
+        }
+        return null;
+    }
+
+    private static MetricsCompanion byNamingConvention(Class<?> beanClass) {
         String generatedName = beanClass.getName() + SUFFIX;
         try {
             Class<?> generated = Class.forName(generatedName, true, beanClass.getClassLoader());
@@ -94,7 +117,7 @@ final class CompanionRegistry {
             }
             PRE_GENERATED_HITS.incrementAndGet();
             return companion;
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             return null;
         } catch (ReflectiveOperationException | ClassCastException e) {
             LOG.log(System.Logger.Level.WARNING,

@@ -33,7 +33,6 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
@@ -114,72 +113,54 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
     // Model — mirrors DiracExtension scan semantics exactly
     // ------------------------------------------------------------------
 
+    /** The names a bean class contributes to its metric names. */
+    private record BeanNames(String binaryName, String simpleName, String packageName) {
+    }
+
+    /** {@code @Timed} or {@code @Counted}, read into one shape (scope and tags left raw). */
+    private record Declared(String scope, List<String> tags, String unit, String description,
+                            boolean absolute, String name) {
+
+        static Declared timed(Timed annotation) {
+            return annotation == null ? null : new Declared(annotation.scope(), List.of(annotation.tags()),
+                    annotation.unit(), annotation.description(), annotation.absolute(), annotation.name());
+        }
+
+        static Declared counted(Counted annotation) {
+            return annotation == null ? null : new Declared(annotation.scope(), List.of(annotation.tags()),
+                    annotation.unit(), annotation.description(), annotation.absolute(), annotation.name());
+        }
+    }
+
     private void generateCompanion(TypeElement type) throws SkipGeneration, IOException {
         if (isInterceptor(type)) return;
 
-        Timed classTimed = findTimed(type);
-        Counted classCounted = findCounted(type);
+        Declared classTimed = Declared.timed(findTimed(type));
+        Declared classCounted = Declared.counted(findCounted(type));
 
         List<Spec> timers = new ArrayList<>();
         List<Spec> counters = new ArrayList<>();
         List<GaugeModel> gauges = new ArrayList<>();
 
-        String binaryName = processingEnv.getElementUtils().getBinaryName(type).toString();
-        String simpleName = type.getSimpleName().toString();
-        String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
+        var bean = new BeanNames(processingEnv.getElementUtils().getBinaryName(type).toString(),
+                type.getSimpleName().toString(),
+                processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString());
 
         for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
             Gauge gauge = method.getAnnotation(Gauge.class);
             if (gauge != null) {
-                gauges.add(gaugeModel(binaryName, method, gauge));
+                gauges.add(gaugeModel(bean.binaryName(), method, gauge));
             }
-            if (method.getModifiers().contains(Modifier.STATIC)) continue;
-            boolean isPrivate = method.getModifiers().contains(Modifier.PRIVATE);
-
-            Timed methodTimed = findTimed(method);
-            Timed timed = methodTimed != null ? methodTimed : classTimed;
-            if (timed != null && !(methodTimed == null && isPrivate)) {
-                boolean classLevel = methodTimed == null;
-                timers.add(new Spec(
-                        resolveSimpleMetricName(binaryName, packageName, method.getSimpleName().toString(),
-                                timed.name(), timed.absolute(), classLevel),
-                        timed.description(), timed.unit(),
-                        validatedTags(timed.tags()), normalizeScope(timed.scope())));
-            }
-
-            Counted methodCounted = findCounted(method);
-            Counted counted = methodCounted != null ? methodCounted : classCounted;
-            if (counted != null && !(methodCounted == null && isPrivate)) {
-                boolean classLevel = methodCounted == null;
-                counters.add(new Spec(
-                        resolveSimpleMetricName(binaryName, packageName, method.getSimpleName().toString(),
-                                counted.name(), counted.absolute(), classLevel),
-                        counted.description(), counted.unit(),
-                        validatedTags(counted.tags()), normalizeScope(counted.scope())));
+            if (!method.getModifiers().contains(Modifier.STATIC)) {
+                addMethodSpec(timers, bean, method, Declared.timed(findTimed(method)), classTimed);
+                addMethodSpec(counters, bean, method, Declared.counted(findCounted(method)), classCounted);
             }
         }
 
         for (ExecutableElement ctor : ElementFilter.constructorsIn(type.getEnclosedElements())) {
-            if (ctor.getModifiers().contains(Modifier.PRIVATE)) continue;
-            Timed ctorTimed = findTimed(ctor);
-            Timed timed = ctorTimed != null ? ctorTimed : classTimed;
-            if (timed != null) {
-                String name = ctorTimed == null
-                        ? resolveClassLevelConstructorName(binaryName, packageName, simpleName,
-                                timed.name(), timed.absolute())
-                        : resolveConstructorLevelName(binaryName, simpleName, timed.name(), timed.absolute());
-                timers.add(new Spec(name, timed.description(), timed.unit(),
-                        validatedTags(timed.tags()), normalizeScope(timed.scope())));
-            }
-            Counted ctorCounted = findCounted(ctor);
-            Counted counted = ctorCounted != null ? ctorCounted : classCounted;
-            if (counted != null) {
-                String name = ctorCounted == null
-                        ? resolveClassLevelConstructorName(binaryName, packageName, simpleName,
-                                counted.name(), counted.absolute())
-                        : resolveConstructorLevelName(binaryName, simpleName, counted.name(), counted.absolute());
-                counters.add(new Spec(name, counted.description(), counted.unit(),
-                        validatedTags(counted.tags()), normalizeScope(counted.scope())));
+            if (!ctor.getModifiers().contains(Modifier.PRIVATE)) {
+                addConstructorSpec(timers, bean, Declared.timed(findTimed(ctor)), classTimed);
+                addConstructorSpec(counters, bean, Declared.counted(findCounted(ctor)), classCounted);
             }
         }
 
@@ -189,7 +170,35 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
         if (type.getNestingKind().isNested()) {
             throw new SkipGeneration("nested bean classes are not emitted as companions");
         }
-        emit(type, binaryName, packageName, simpleName, timers, counters, gauges);
+        emit(type, bean, timers, counters, gauges);
+    }
+
+    /** A member annotation wins over the class one, which does not apply to private methods. */
+    private void addMethodSpec(List<Spec> target, BeanNames bean, ExecutableElement method,
+                               Declared onMethod, Declared onClass) throws SkipGeneration {
+        boolean classLevel = onMethod == null;
+        if (classLevel && (onClass == null || method.getModifiers().contains(Modifier.PRIVATE))) {
+            return;
+        }
+        Declared declared = classLevel ? onClass : onMethod;
+        target.add(spec(resolveSimpleMetricName(bean.binaryName(), bean.packageName(),
+                method.getSimpleName().toString(), declared.name(), declared.absolute(), classLevel), declared));
+    }
+
+    private void addConstructorSpec(List<Spec> target, BeanNames bean, Declared onConstructor, Declared onClass)
+            throws SkipGeneration {
+        if (onConstructor != null) {
+            target.add(spec(resolveConstructorLevelName(bean.binaryName(), bean.simpleName(),
+                    onConstructor.name(), onConstructor.absolute()), onConstructor));
+        } else if (onClass != null) {
+            target.add(spec(resolveClassLevelConstructorName(bean.binaryName(), bean.packageName(),
+                    bean.simpleName(), onClass.name(), onClass.absolute()), onClass));
+        }
+    }
+
+    private Spec spec(String name, Declared declared) throws SkipGeneration {
+        return new Spec(name, declared.description(), declared.unit(),
+                validatedTags(declared.tags()), normalizeScope(declared.scope()));
     }
 
     private GaugeModel gaugeModel(String binaryName, ExecutableElement method, Gauge gauge)
@@ -207,13 +216,11 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                     + " does not return a number (runtime rejects it at deployment)");
         }
         String explicit = gauge.name().trim();
-        String metricName = explicit.isEmpty()
-                ? (gauge.absolute() ? method.getSimpleName().toString()
-                        : binaryName + "." + method.getSimpleName())
-                : (gauge.absolute() ? explicit : binaryName + "." + explicit);
+        String localName = explicit.isEmpty() ? method.getSimpleName().toString() : explicit;
+        String metricName = gauge.absolute() ? localName : binaryName + "." + localName;
         return new GaugeModel(
                 new Spec(metricName, gauge.description(), gauge.unit(),
-                        validatedTags(gauge.tags()), normalizeScope(gauge.scope())),
+                        validatedTags(List.of(gauge.tags())), normalizeScope(gauge.scope())),
                 method.getModifiers().contains(Modifier.STATIC),
                 method.getSimpleName().toString());
     }
@@ -271,9 +278,8 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
     }
 
     /** Tag validation mirroring DiracExtension#parseTag — invalid tags trip the valve. */
-    private List<String> validatedTags(String[] tags) throws SkipGeneration {
-        if (tags == null || tags.length == 0) return List.of();
-        List<String> out = new ArrayList<>(tags.length);
+    private List<String> validatedTags(List<String> tags) throws SkipGeneration {
+        List<String> out = new ArrayList<>(tags.size());
         for (String tag : tags) {
             if (tag == null || tag.isBlank()) continue;
             int separator = tag.indexOf('=');
@@ -323,10 +329,10 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
     // Emission
     // ------------------------------------------------------------------
 
-    private void emit(TypeElement type, String binaryName, String packageName, String simpleName,
-                      List<Spec> timers, List<Spec> counters, List<GaugeModel> gauges)
-            throws IOException {
-        String className = simpleName + SUFFIX;
+    private void emit(TypeElement type, BeanNames bean, List<Spec> timers, List<Spec> counters,
+                      List<GaugeModel> gauges) throws IOException {
+        String packageName = bean.packageName();
+        String className = bean.simpleName() + SUFFIX;
         String generatedFqn = packageName.isEmpty() ? className : packageName + "." + className;
         String beanSource = type.getQualifiedName().toString();
 

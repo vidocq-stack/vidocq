@@ -21,10 +21,10 @@ package io.vidocq.dirac.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Properties;
+import java.util.function.ToDoubleFunction;
 
 /**
  * Resolves MP Metrics distribution configuration from microprofile-config.properties.
@@ -48,9 +48,9 @@ final class DistributionConfig {
         var values = parseCsv(raw, token -> {
             try {
                 var value = Double.parseDouble(token);
-                return value > 0d && value < 1d ? value : null;
-            } catch (NumberFormatException ignored) {
-                return null;
+                return value > 0d && value < 1d ? value : Double.NaN;
+            } catch (NumberFormatException _) {
+                return Double.NaN;
             }
         });
         return values.length == 0 ? new double[0] : values;
@@ -63,10 +63,9 @@ final class DistributionConfig {
         }
         return parseCsv(raw, token -> {
             try {
-                var value = Double.parseDouble(token);
-                return value > 0d ? value : null;
-            } catch (NumberFormatException ignored) {
-                return null;
+                return positive(Double.parseDouble(token));
+            } catch (NumberFormatException _) {
+                return Double.NaN;
             }
         });
     }
@@ -79,10 +78,10 @@ final class DistributionConfig {
         return parseCsv(raw, DistributionConfig::parseTimerBucketToNanos);
     }
 
-    private static Double parseTimerBucketToNanos(String token) {
+    private static double parseTimerBucketToNanos(String token) {
         var normalized = token.trim().toLowerCase();
         if (normalized.isEmpty()) {
-            return null;
+            return Double.NaN;
         }
 
         try {
@@ -106,16 +105,17 @@ final class DistributionConfig {
             }
             // Bare number defaults to milliseconds and must be integer-like.
             if (!normalized.matches("\\d+")) {
-                return null;
+                return Double.NaN;
             }
             return positive(Double.parseDouble(normalized) * 1_000_000d);
-        } catch (NumberFormatException ignored) {
-            return null;
+        } catch (NumberFormatException _) {
+            return Double.NaN;
         }
     }
 
-    private static Double positive(double value) {
-        return value > 0d ? value : null;
+    /** Returns {@code value} when strictly positive, else {@code NaN} (the "invalid" marker). */
+    private static double positive(double value) {
+        return value > 0d ? value : Double.NaN;
     }
 
     private static String readConfigValue(String key) {
@@ -142,7 +142,7 @@ final class DistributionConfig {
                     }
                 }
             }
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // Ignore and use defaults.
         }
 
@@ -213,23 +213,14 @@ final class DistributionConfig {
         return builder.append('$').toString();
     }
 
-    private static double[] parseCsv(String source, java.util.function.Function<String, Double> parser) {
-        var values = new ArrayList<Double>();
-        Arrays.stream(source.split(","))
+    /** Parses the comma-separated values, dropping the empty and invalid ({@code NaN}) ones. */
+    private static double[] parseCsv(String source, ToDoubleFunction<String> parser) {
+        return Arrays.stream(source.split(","))
                 .map(String::trim)
                 .filter(token -> !token.isEmpty())
-                .forEach(token -> {
-                    var parsed = parser.apply(token);
-                    if (parsed != null) {
-                        values.add(parsed);
-                    }
-                });
-
-        var result = new double[values.size()];
-        for (int i = 0; i < values.size(); i++) {
-            result[i] = values.get(i);
-        }
-        return result;
+                .mapToDouble(parser)
+                .filter(value -> !Double.isNaN(value))
+                .toArray();
     }
 }
 

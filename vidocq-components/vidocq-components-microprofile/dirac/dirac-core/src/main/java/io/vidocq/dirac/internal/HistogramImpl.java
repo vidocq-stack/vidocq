@@ -88,8 +88,8 @@ final class HistogramImpl implements Histogram {
     HistogramSnapshot snapshot() {
         var snapshot = (HistogramSnapshotImpl) getSnapshot();
         var percentileValues = snapshot.percentileValues();
-        var min = snapshot.sortedValues.length == 0 ? 0 : snapshot.sortedValues[0];
-        var max = snapshot.sortedValues.length == 0 ? 0 : snapshot.sortedValues[snapshot.sortedValues.length - 1];
+        var smallest = snapshot.sortedValues.length == 0 ? 0 : snapshot.sortedValues[0];
+        var largest = snapshot.sortedValues.length == 0 ? 0 : snapshot.sortedValues[snapshot.sortedValues.length - 1];
         double p50 = percentileValueAt(percentileValues, 0);
         double p75 = percentileValueAt(percentileValues, 1);
         double p95 = percentileValueAt(percentileValues, 2);
@@ -99,8 +99,8 @@ final class HistogramImpl implements Histogram {
         return new HistogramSnapshot(
                 snapshot.size(),
                 getSum(),
-                min,
-                max,
+                smallest,
+                largest,
                 snapshot.getMean(),
                 p50,
                 p75,

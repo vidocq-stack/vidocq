@@ -92,17 +92,26 @@ public class CountedInterceptor {
         var classCounted = beanClass.getAnnotation(Counted.class);
         // Scan all methods including inherited ones (excluding Object methods)
         for (var method : getAllDeclaredMethods(beanClass)) {
-            if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) || method.isSynthetic()) continue;
-            if (method.getName().contains("$$")) continue;
-            var methodCounted = method.getAnnotation(Counted.class);
-            final Counted counted = methodCounted != null ? methodCounted : classCounted;
-            if (counted == null) continue;
-            boolean classLevel = (methodCounted == null);
-            if (classLevel && java.lang.reflect.Modifier.isPrivate(method.getModifiers())) continue;
-            var resolved = counters.computeIfAbsent(new CacheKey(beanClass, method),
-                    ignored -> createResolvedCounter(beanClass, method, counted));
-            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.metricID().getTagsAsArray());
+            var counted = preRegisteredCounted(method, classCounted);
+            if (counted != null) {
+                var resolved = counters.computeIfAbsent(new CacheKey(beanClass, method),
+                        _ -> createResolvedCounter(beanClass, method, counted));
+                registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.metricID().getTagsAsArray());
+            }
         }
+    }
+
+    /** The annotation that makes {@code method} carry a metric, or {@code null}. */
+    private static Counted preRegisteredCounted(Method method, Counted classCounted) {
+        if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) || method.isSynthetic()
+                || method.getName().contains("$$")) {
+            return null;
+        }
+        var methodCounted = method.getAnnotation(Counted.class);
+        if (methodCounted != null) {
+            return methodCounted;
+        }
+        return java.lang.reflect.Modifier.isPrivate(method.getModifiers()) ? null : classCounted;
     }
 
     /**
@@ -165,7 +174,7 @@ public class CountedInterceptor {
                 if (inherited != null) {
                     return new FoundCounted(declared, inherited);
                 }
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 // Continue with superclass traversal.
             }
             current = current.getSuperclass();
@@ -201,7 +210,7 @@ public class CountedInterceptor {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(targetName, method.getParameterTypes());
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 current = current.getSuperclass();
             }
         }
@@ -232,11 +241,12 @@ public class CountedInterceptor {
             }
             return MetricRegistry.name(method.getDeclaringClass(), explicitName);
         }
-        return counted.absolute()
-                ? method.getName()
-                : (method.isAnnotationPresent(Counted.class)
+        if (counted.absolute()) {
+            return method.getName();
+        }
+        return method.isAnnotationPresent(Counted.class)
                 ? MetricRegistry.name(method.getDeclaringClass(), method.getName())
-                : MetricRegistry.name(beanClass, method.getName()));
+                : MetricRegistry.name(beanClass, method.getName());
     }
 
     private static String normalizeScope(String scope) {

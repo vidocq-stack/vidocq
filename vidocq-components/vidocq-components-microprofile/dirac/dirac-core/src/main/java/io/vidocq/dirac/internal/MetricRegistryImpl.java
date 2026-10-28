@@ -52,16 +52,14 @@ import java.util.function.Supplier;
  */
 public final class MetricRegistryImpl implements MetricRegistry {
     private final String scope;
+    private static final String METRIC_ID_REQUIRED = "metricID must not be null";
+
     private final ConcurrentHashMap<MetricID, Metric> metrics = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Metadata> metadataByName = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, SortedSet<String>> tagKeysByName = new ConcurrentHashMap<>();
 
     public MetricRegistryImpl(String scope) {
         this.scope = requireMetricName(scope, "scope");
-    }
-
-    public MetricRegistryImpl(Type type) {
-        this(Objects.requireNonNull(type, "type must not be null").getName());
     }
 
     @Override
@@ -76,7 +74,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public Counter counter(MetricID metricID) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         return counter(defaultMetadata(metricID.getName()), metricID.getTagsAsArray());
     }
 
@@ -100,7 +98,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public <T, R extends Number> Gauge<R> gauge(MetricID metricID, T object, Function<T, R> function) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         return registerGauge(metricID, defaultMetadata(metricID.getName()), () -> requireGaugeFunction(function).apply(object));
     }
 
@@ -118,7 +116,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public <T extends Number> Gauge<T> gauge(MetricID metricID, Supplier<T> supplier) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         return registerGauge(metricID, defaultMetadata(metricID.getName()), supplier);
     }
 
@@ -140,7 +138,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public Histogram histogram(MetricID metricID) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         return histogram(defaultMetadata(metricID.getName()), metricID.getTagsAsArray());
     }
 
@@ -169,7 +167,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public Timer timer(MetricID metricID) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         return timer(defaultMetadata(metricID.getName()), metricID.getTagsAsArray());
     }
 
@@ -188,7 +186,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public Metric getMetric(MetricID metricID) {
-        return metrics.get(Objects.requireNonNull(metricID, "metricID must not be null"));
+        return metrics.get(Objects.requireNonNull(metricID, METRIC_ID_REQUIRED));
     }
 
     @Override
@@ -239,7 +237,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
 
     @Override
     public boolean remove(MetricID metricID) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         var removed = metrics.remove(metricID) != null;
         if (removed && metrics.keySet().stream().noneMatch(existing -> existing.getName().equals(metricID.getName()))) {
             metadataByName.remove(metricID.getName());
@@ -336,7 +334,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
     }
 
     public <T extends Metric> T register(MetricID metricID, T metric) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         Objects.requireNonNull(metric, "metric must not be null");
         ensureTagKeySetConsistency(metricID.getName(), metricID.getTagsAsArray());
         metadataByName.putIfAbsent(metricID.getName(), defaultMetadata(metricID.getName()));
@@ -352,7 +350,7 @@ public final class MetricRegistryImpl implements MetricRegistry {
     }
 
     private <T extends Number> Gauge<T> registerGauge(MetricID metricID, Metadata metadata, Supplier<T> supplier) {
-        Objects.requireNonNull(metricID, "metricID must not be null");
+        Objects.requireNonNull(metricID, METRIC_ID_REQUIRED);
         Objects.requireNonNull(supplier, "supplier must not be null");
         metadataByName.putIfAbsent(metricID.getName(), metadata);
         return registerOrGet(metricID, Gauge.class, () -> new SupplierGauge<>(supplier));

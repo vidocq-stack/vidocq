@@ -96,17 +96,26 @@ public class TimedInterceptor {
         var classTimed = beanClass.getAnnotation(Timed.class);
         // Scan all methods including inherited ones (excluding Object methods)
         for (var method : getAllDeclaredMethods(beanClass)) {
-            if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) || method.isSynthetic()) continue;
-            if (method.getName().contains("$$")) continue;
-            var methodTimed = method.getAnnotation(Timed.class);
-            final Timed timed = methodTimed != null ? methodTimed : classTimed;
-            if (timed == null) continue;
-            boolean classLevel = (methodTimed == null);
-            if (classLevel && java.lang.reflect.Modifier.isPrivate(method.getModifiers())) continue;
-            var resolved = timers.computeIfAbsent(new CacheKey(beanClass, method),
-                    ignored -> createResolvedTimer(beanClass, method, timed));
-            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
+            var timed = preRegisteredTimed(method, classTimed);
+            if (timed != null) {
+                var resolved = timers.computeIfAbsent(new CacheKey(beanClass, method),
+                        _ -> createResolvedTimer(beanClass, method, timed));
+                registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
+            }
         }
+    }
+
+    /** The annotation that makes {@code method} carry a metric, or {@code null}. */
+    private static Timed preRegisteredTimed(Method method, Timed classTimed) {
+        if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) || method.isSynthetic()
+                || method.getName().contains("$$")) {
+            return null;
+        }
+        var methodTimed = method.getAnnotation(Timed.class);
+        if (methodTimed != null) {
+            return methodTimed;
+        }
+        return java.lang.reflect.Modifier.isPrivate(method.getModifiers()) ? null : classTimed;
     }
 
     /**
@@ -167,15 +176,10 @@ public class TimedInterceptor {
         }
 
         for (var method : superClass.getDeclaredMethods()) {
-            if (java.lang.reflect.Modifier.isPublic(method.getModifiers())) {
-                continue;
-            }
-            var timed = method.getAnnotation(Timed.class);
-            if (timed == null) {
-                continue;
-            }
-            var resolved = createResolvedTimer(beanClass, method, timed);
-            var timer = registry.getTimer(resolved.metricID());
+            var timed = java.lang.reflect.Modifier.isPublic(method.getModifiers())
+                    ? null : method.getAnnotation(Timed.class);
+            var timer = timed == null
+                    ? null : registry.getTimer(createResolvedTimer(beanClass, method, timed).metricID());
             if (timer != null) {
                 timer.update(Duration.ZERO);
             }
@@ -215,7 +219,7 @@ public class TimedInterceptor {
                 if (inherited != null) {
                     return new FoundTimed(declared, inherited);
                 }
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 // Continue with superclass traversal.
             }
             current = current.getSuperclass();
@@ -251,7 +255,7 @@ public class TimedInterceptor {
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(targetName, method.getParameterTypes());
-            } catch (NoSuchMethodException ignored) {
+            } catch (NoSuchMethodException _) {
                 current = current.getSuperclass();
             }
         }
@@ -282,11 +286,12 @@ public class TimedInterceptor {
             }
             return MetricRegistry.name(method.getDeclaringClass(), explicitName);
         }
-        return timed.absolute()
-                ? method.getName()
-                : (method.isAnnotationPresent(Timed.class)
+        if (timed.absolute()) {
+            return method.getName();
+        }
+        return method.isAnnotationPresent(Timed.class)
                 ? MetricRegistry.name(method.getDeclaringClass(), method.getName())
-                : MetricRegistry.name(beanClass, method.getName()));
+                : MetricRegistry.name(beanClass, method.getName());
     }
 
     private static String normalizeScope(String scope) {

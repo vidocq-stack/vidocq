@@ -54,12 +54,6 @@ class MetricRegistryImplApiTest {
     private final MetricRegistryImpl registry = new MetricRegistryImpl(MetricRegistry.APPLICATION_SCOPE);
 
     @Test
-    @SuppressWarnings("deprecation")
-    void legacyTypeNamesTheScope() {
-        assertEquals(MetricRegistry.VENDOR_SCOPE, new MetricRegistryImpl(MetricRegistry.Type.VENDOR).getScope());
-    }
-
-    @Test
     void metadataOverloadsRegisterUntaggedMetrics() {
         var counter = registry.counter(Metadata.builder().withName("c").withDescription("d").build());
         var histogram = registry.histogram(Metadata.builder().withName("h").build());

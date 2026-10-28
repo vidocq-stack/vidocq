@@ -43,6 +43,7 @@ import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +62,7 @@ public class DiracExtension implements BuildCompatibleExtension {
     private final Set<String> metricClasses = ConcurrentHashMap.newKeySet();
 
     public DiracExtension() {
+        // Instantiated by the CDI container through the BuildCompatibleExtension service.
     }
 
     @Discovery
@@ -131,17 +133,16 @@ public class DiracExtension implements BuildCompatibleExtension {
         );
     }
 
-    static PreRegisteredMetric resolvePreRegisteredMetric(Class<?> beanClass, Method method, String name, boolean absolute,
-                                                                    String description, String unit,
-                                                                    String[] tags, String scope, boolean classLevel) {
-        var metricName = resolveSimpleMetricName(beanClass, method, name, absolute, classLevel);
-        var parsedTags = parseTags(tags);
+    static PreRegisteredMetric resolvePreRegisteredMetric(Class<?> beanClass, Method method, MetricAnnotation metric,
+                                                          boolean classLevel) {
+        var metricName = resolveSimpleMetricName(beanClass, method, metric.name(), metric.absolute(), classLevel);
+        var parsedTags = parseTags(metric.tags().toArray(String[]::new));
         var metadata = Metadata.builder()
                 .withName(metricName)
-                .withDescription(description)
-                .withUnit(unit)
+                .withDescription(metric.description())
+                .withUnit(metric.unit())
                 .build();
-        return new PreRegisteredMetric(metadata, parsedTags, scope);
+        return new PreRegisteredMetric(metadata, parsedTags, normalizeScope(metric.scope()));
     }
 
     static String resolveClassLevelConstructorMetricName(Class<?> beanClass, Timed timed) {
@@ -327,6 +328,21 @@ public class DiracExtension implements BuildCompatibleExtension {
             return "ResolvedGauge[beanClass=" + beanClass + ", staticMethod=" + staticMethod
                     + ", metricID=" + metricID + ", metadata=" + metadata
                     + ", tags=" + Arrays.toString(tags) + ", scope=" + scope + "]";
+        }
+    }
+
+    /** The attributes {@code @Timed} and {@code @Counted} share, read once from either annotation. */
+    record MetricAnnotation(String name, boolean absolute, String description, String unit, List<String> tags,
+                            String scope) {
+
+        static MetricAnnotation of(Timed timed) {
+            return timed == null ? null : new MetricAnnotation(timed.name(), timed.absolute(),
+                    timed.description(), timed.unit(), List.of(timed.tags()), timed.scope());
+        }
+
+        static MetricAnnotation of(Counted counted) {
+            return counted == null ? null : new MetricAnnotation(counted.name(), counted.absolute(),
+                    counted.description(), counted.unit(), List.of(counted.tags()), counted.scope());
         }
     }
 
