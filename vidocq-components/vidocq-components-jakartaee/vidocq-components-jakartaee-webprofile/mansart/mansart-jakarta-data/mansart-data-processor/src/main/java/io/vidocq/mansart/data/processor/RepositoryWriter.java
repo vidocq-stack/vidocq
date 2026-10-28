@@ -52,6 +52,7 @@ final class RepositoryWriter {
     private static final String LIST       = "java.util.List";
     private static final String COLLECTION = "java.util.Collection";
     private static final String ITERABLE   = "java.lang.Iterable";
+    private static final String VALUE      = "value";
 
     private final SourceSink sink;
     private final Elements elements;
@@ -429,7 +430,7 @@ final class RepositoryWriter {
 
     private void appendOrderList(StringBuilder orderBy, javax.lang.model.element.AnnotationMirror list) {
         for (var entry : elements.getElementValuesWithDefaults(list).entrySet()) {
-            if (!entry.getKey().getSimpleName().contentEquals("value")) continue;
+            if (!entry.getKey().getSimpleName().contentEquals(VALUE)) continue;
             for (Object item : (List<?>) entry.getValue().getValue()) {
                 appendOrder(orderBy, (javax.lang.model.element.AnnotationMirror)
                         ((javax.lang.model.element.AnnotationValue) item).getValue());
@@ -442,7 +443,7 @@ final class RepositoryWriter {
         boolean descending = false;
         for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
             String key = entry.getKey().getSimpleName().toString();
-            if (key.equals("value")) attribute = String.valueOf(entry.getValue().getValue());
+            if (key.equals(VALUE)) attribute = String.valueOf(entry.getValue().getValue());
             if (key.equals("descending")) descending = Boolean.TRUE.equals(entry.getValue().getValue());
         }
         if (attribute == null) return;
@@ -456,7 +457,7 @@ final class RepositoryWriter {
             String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
             if (!fqn.equals(annotationFqn)) continue;
             for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
-                if (entry.getKey().getSimpleName().contentEquals("value")) return String.valueOf(entry.getValue().getValue());
+                if (entry.getKey().getSimpleName().contentEquals(VALUE)) return String.valueOf(entry.getValue().getValue());
             }
         }
         return null;
@@ -467,7 +468,7 @@ final class RepositoryWriter {
             String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
             if (!fqn.equals("jakarta.data.repository.Query")) continue;
             for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
-                if (entry.getKey().getSimpleName().contentEquals("value")) {
+                if (entry.getKey().getSimpleName().contentEquals(VALUE)) {
                     return (String) entry.getValue().getValue();
                 }
             }
@@ -768,11 +769,11 @@ final class RepositoryWriter {
         return switch (op) {
             case FIND -> {
                 String s = rt.toString();
-                if (s.startsWith("java.util.Optional"))            yield "return java.util.Optional.empty();";
-                if (s.startsWith("java.util.stream.Stream"))       yield "return java.util.stream.Stream.empty();";
-                if (s.startsWith("java.util.List")
-                        || s.startsWith("java.util.Collection")
-                        || s.startsWith("java.lang.Iterable"))      yield "return java.util.List.of();";
+                if (s.startsWith(OPTIONAL))            yield "return java.util.Optional.empty();";
+                if (s.startsWith(STREAM))       yield "return java.util.stream.Stream.empty();";
+                if (s.startsWith(LIST)
+                        || s.startsWith(COLLECTION)
+                        || s.startsWith(ITERABLE))      yield "return java.util.List.of();";
                 yield "throw new io.vidocq.mansart.data.core.MansartDataException(\"empty In with single-entity return\");";
             }
             case FIND_ONE -> "return java.util.Optional.empty();";
@@ -785,8 +786,8 @@ final class RepositoryWriter {
 
     private boolean isCollectionLike(TypeMirror t) {
         String s = types.erasure(t).toString();
-        return s.equals("java.util.Collection") || s.equals("java.util.List") || s.equals("java.util.Set")
-                || s.equals("java.lang.Iterable");
+        return s.equals(COLLECTION) || s.equals(LIST) || s.equals("java.util.Set")
+                || s.equals(ITERABLE);
     }
 
     private boolean isPageRequest(TypeMirror t) {
@@ -808,13 +809,13 @@ final class RepositoryWriter {
     private String findBody(TypeMirror returnType, String metamodel, String where, String orderBy, String args) {
         String rt = returnType.toString();
         String list = "runtime.queryList(" + metamodel + ".$MODEL, " + where + ", " + orderBy + ", " + args + ")";
-        if (rt.startsWith("java.util.Optional")) {
+        if (rt.startsWith(OPTIONAL)) {
             return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
         }
-        if (rt.startsWith("java.util.stream.Stream"))    return "return " + list + ".stream();";
-        if (rt.startsWith("java.util.List"))             return "return " + list + ";";
-        if (rt.startsWith("java.util.Collection"))       return "return " + list + ";";
-        if (rt.startsWith("java.lang.Iterable"))         return "return " + list + ";";
+        if (rt.startsWith(STREAM))    return "return " + list + ".stream();";
+        if (rt.startsWith(LIST))             return "return " + list + ";";
+        if (rt.startsWith(COLLECTION))       return "return " + list + ";";
+        if (rt.startsWith(ITERABLE))         return "return " + list + ";";
         // Single-entity return → use queryOne and unwrap (throws if missing per Jakarta Data semantics)
         return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args
                 + ").orElseThrow(() -> new jakarta.data.exceptions.EmptyResultException(\"No result\"));";
@@ -992,7 +993,7 @@ final class RepositoryWriter {
                            TypeMirror returnType, String metamodel, String entityFqn) {
         int arity = paramTypes.size();
         boolean isVoid = returnType.getKind() == javax.lang.model.type.TypeKind.VOID;
-        boolean returnsStream = returnType.toString().startsWith("java.util.stream.Stream");
+        boolean returnsStream = returnType.toString().startsWith(STREAM);
         return switch (name) {
             case "save"        -> arity == 1 ? saveBody(metamodel, entityFqn) : null;
             case "saveAll"     -> arity == 1 ? saveAllBody(metamodel, entityFqn) : null;
@@ -1119,7 +1120,7 @@ final class RepositoryWriter {
                 String attrName = entry.getKey().getSimpleName().toString();
                 javax.lang.model.element.AnnotationValue av = entry.getValue();
                 switch (attrName) {
-                    case "value" -> parts.add("value = " + renderAnnotationValue(av));
+                    case VALUE -> parts.add(VALUE + " = " + renderAnnotationValue(av));
                     case "rollbackOn" -> parts.add("rollbackOn = " + renderAnnotationValue(av));
                     case "dontRollbackOn" -> parts.add("dontRollbackOn = " + renderAnnotationValue(av));
                 }

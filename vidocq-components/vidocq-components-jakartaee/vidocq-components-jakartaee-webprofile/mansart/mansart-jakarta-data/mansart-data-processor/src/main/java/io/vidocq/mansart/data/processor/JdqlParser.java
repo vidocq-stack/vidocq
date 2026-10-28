@@ -51,6 +51,8 @@ import java.util.Set;
  */
 final class JdqlParser {
 
+    private static final String PROJECTED_LIST = "var _list = runtime.projectColumn(";
+
     private JdqlParser() {}
 
     /** Emits the body for a {@code @Query} method. */
@@ -157,14 +159,14 @@ final class JdqlParser {
               .append(", ").append(elem).append(".class, _w, _ob, _xs).stream();");
         } else if (rt.startsWith("java.util.Optional")) {
             String elem = projectionElementBoxed(rt);
-            sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs); ");
             sb.append("return _list.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(_list.get(0));");
         } else if (returnType instanceof javax.lang.model.type.ArrayType array) {
             // An array, of a primitive or not (MANSART-015): the column as its boxed type, copied element by element.
             String component = array.getComponentType().toString();
-            sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(boxedReturnType(array.getComponentType())).append(".class, _w, _ob, _xs); ");
             sb.append(component).append("[] _a = new ").append(component).append("[_list.size()]; ")
@@ -172,7 +174,7 @@ final class JdqlParser {
         } else {
             // Single scalar return — fetch first, throw if absent
             String boxed = boxedReturnType(returnType);
-            sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(boxed).append(".class, _w, _ob, _xs); ");
             sb.append("if (_list.isEmpty()) throw new jakarta.data.exceptions.EmptyResultException("
