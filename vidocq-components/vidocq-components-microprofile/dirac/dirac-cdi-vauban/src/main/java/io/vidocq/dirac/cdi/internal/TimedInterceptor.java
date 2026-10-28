@@ -47,11 +47,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TimedInterceptor {
     private final ConcurrentHashMap<CacheKey, ResolvedTimer> timers = new ConcurrentHashMap<>();
 
-    private MetricRegistryProducerBean registries;
-
-    public TimedInterceptor() {
-        // the container uses the injection constructor
-    }
+    private final MetricRegistryProducerBean registries;
 
     @Inject
     TimedInterceptor(MetricRegistryProducerBean registries) {

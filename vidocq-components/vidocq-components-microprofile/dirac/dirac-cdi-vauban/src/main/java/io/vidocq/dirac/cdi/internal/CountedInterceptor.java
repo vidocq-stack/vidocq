@@ -46,11 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CountedInterceptor {
     private final ConcurrentHashMap<CacheKey, ResolvedCounter> counters = new ConcurrentHashMap<>();
 
-    private MetricRegistryProducerBean registries;
-
-    public CountedInterceptor() {
-        // the container uses the injection constructor
-    }
+    private final MetricRegistryProducerBean registries;
 
     @Inject
     CountedInterceptor(MetricRegistryProducerBean registries) {
