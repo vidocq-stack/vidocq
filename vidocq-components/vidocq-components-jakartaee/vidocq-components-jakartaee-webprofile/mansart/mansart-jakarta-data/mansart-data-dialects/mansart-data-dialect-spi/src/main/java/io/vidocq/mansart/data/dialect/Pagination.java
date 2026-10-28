@@ -19,11 +19,34 @@
  */
 package io.vidocq.mansart.data.dialect;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 public sealed interface Pagination {
 
     Pagination NONE = new None();
 
     record None() implements Pagination {}
     record Offset(long offset, int limit) implements Pagination {}
-    record Keyset(int limit, Object[] cursor, OrderBy order) implements Pagination {}
+    record Keyset(int limit, Object[] cursor, OrderBy order) implements Pagination {
+
+        /** By content (MANSART-011): the record default would compare the cursor arrays by identity. */
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Keyset k
+                    && limit == k.limit
+                    && Arrays.equals(cursor, k.cursor)
+                    && Objects.equals(order, k.order);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(limit, Arrays.hashCode(cursor), order);
+        }
+
+        @Override
+        public String toString() {
+            return "Keyset[limit=" + limit + ", cursor=" + Arrays.toString(cursor) + ", order=" + order + "]";
+        }
+    }
 }

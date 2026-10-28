@@ -496,3 +496,25 @@ references (SonarQube java:S6218).
 ### Fix
 `ScannedXid` overrides `equals`, `hashCode` and `toString` on the format id and the contents of both arrays, as
 `MansartXid` already does. Regression test: `RecoveryLogTest.scannedXidsCompareByContent`.
+
+## MANSART-011 — Dialect SPI: `Pagination.Keyset` compares its cursor by array identity
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/sonar-reliability-security`)
+- **Severity**: low (no Mansart code compares keysets today; the SPI is public, a dialect or a caller may)
+- **Module**: `mansart-data-dialect-spi` (`Pagination.Keyset`)
+
+### Symptom
+Two `Pagination.Keyset` values with the same limit, order and cursor values are not `equals` and have different hash
+codes; `toString()` prints the array identity instead of the cursor values.
+
+### Minimal repro
+`PaginationKeysetTest` (`mansart-data-tests`): two keysets built from two `Object[]{42L, "b"}` arrays.
+
+### Cause
+`Keyset` is a record holding an `Object[]` component: the generated `equals`/`hashCode`/`toString` use the array
+reference (SonarQube java:S6218).
+
+### Fix
+`Keyset` overrides `equals`, `hashCode` and `toString` with `Arrays.equals`/`Arrays.hashCode`/`Arrays.toString` on the
+cursor. Regression test: `PaginationKeysetTest`.
