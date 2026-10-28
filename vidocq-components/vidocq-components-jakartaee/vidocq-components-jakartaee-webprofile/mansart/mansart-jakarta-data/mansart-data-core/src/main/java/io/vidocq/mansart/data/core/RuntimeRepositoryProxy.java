@@ -394,16 +394,8 @@ public final class RuntimeRepositoryProxy {
     }
 
     private static String readQueryAnnotationValue(Method m) {
-        for (java.lang.annotation.Annotation a : m.getDeclaredAnnotations()) {
-            if (a.annotationType().getName().equals("jakarta.data.repository.Query")) {
-                try {
-                    return (String) a.annotationType().getMethod("value").invoke(a);
-                } catch (ReflectiveOperationException ignored) {
-                    return null;
-                }
-            }
-        }
-        return null;
+        jakarta.data.repository.Query query = m.getDeclaredAnnotation(jakarta.data.repository.Query.class);
+        return query == null ? null : query.value();
     }
 
     /* ---- Lifecycle dispatchers (@Insert/@Update/@Delete/@Save) — M7-3 ---- */
@@ -534,88 +526,106 @@ public final class RuntimeRepositoryProxy {
      * usual control parameters (Limit, Sort, Order, PageRequest, Sort[]) are passed through to
      * the underlying queryList/queryPage call.
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
     private static Dispatcher findAnnotationDispatcher(Method m, EntityModel<?> model,
                                                        java.util.Set<String> attributeNames) {
         // BasicRepository / CrudRepository / DataRepository methods carry @Find / @Save / etc. in
         // the spec, but their semantics are owned by the inheritedDispatcher (built-in K-keyed
         // ops). Skip those here so we don't route findById through the user-method @Find path.
-        if (m.getDeclaringClass().getName().startsWith("jakarta.data.")) return null;
-        boolean hasFind = false;
-        for (var ann : m.getDeclaredAnnotations()) {
-            if (ann.annotationType().getName().equals("jakarta.data.repository.Find")) {
-                hasFind = true; break;
-            }
+        if (m.getDeclaringClass().getName().startsWith("jakarta.data.")
+                || !m.isAnnotationPresent(jakarta.data.repository.Find.class)) {
+            return null;
         }
-        if (!hasFind) return null;
         Map<String, Attribute<?, ?>> attrIndex = new java.util.HashMap<>();
         for (Attribute<?, ?> a : model.attributes()) attrIndex.put(a.name(), a);
-
-        var params = m.getParameters();
-        Class<?>[] paramTypes = m.getParameterTypes();
-        // Pre-resolve which parameters bind to attributes (others are control args).
-        // Resolution order per Jakarta Data: @Param("attr") > parameter name match > positional
-        // (single field of matching type) for the remaining non-control parameters.
-        List<Integer> attrParamIdx = new ArrayList<>();
-        List<Attribute<?, ?>> attrForParam = new ArrayList<>();
-        java.util.Set<Integer> consumed = new java.util.HashSet<>();
-        for (int i = 0; i < params.length; i++) {
-            if (isControlParamType(paramTypes[i])) { consumed.add(i); continue; }
-            String paramHint = readParamAnnotation(params[i]);
-            if (paramHint == null) paramHint = params[i].getName();
-            Attribute<?, ?> a = attrIndex.get(paramHint);
-            if (a != null) { attrParamIdx.add(i); attrForParam.add(a); consumed.add(i); }
-        }
-        // Positional fallback: any remaining non-control param is matched against the entity
-        // attribute whose Java type is assignable from the parameter type (single-candidate only,
-        // first-fit). Covers @Find(char ch, String hex) where the param names ch/hex don't
-        // match thisCharacter/hexadecimal.
-        for (int i = 0; i < params.length; i++) {
-            if (consumed.contains(i)) continue;
-            Attribute<?, ?> match = singleAttributeOfType(model, paramTypes[i], attrForParam);
-            if (match != null) { attrParamIdx.add(i); attrForParam.add(match); }
-        }
-        boolean returnsOptional = m.getReturnType() == java.util.Optional.class;
-        boolean returnsStream   = m.getReturnType() == java.util.stream.Stream.class;
-        boolean returnsList     = java.util.List.class.isAssignableFrom(m.getReturnType());
-        boolean returnsArray    = m.getReturnType().isArray();
-        boolean returnsPage     = jakarta.data.page.Page.class.isAssignableFrom(m.getReturnType());
-        boolean returnsCursored = jakarta.data.page.CursoredPage.class.isAssignableFrom(m.getReturnType());
+        FindBindings bindings = FindBindings.of(m, model, attrIndex);
         int[] ctrl = locateControlParams(m);
+        return (rt, em, callArgs) -> executeFind(m, rt, em, callArgs, bindings, ctrl, attrIndex);
+    }
 
-        return (rt, em, callArgs) -> {
-            List<Where> parts = new ArrayList<>(attrForParam.size());
-            List<Object> bound = new ArrayList<>(attrForParam.size());
-            for (int k = 0; k < attrForParam.size(); k++) {
-                Attribute<?, ?> a = attrForParam.get(k);
-                Object v = callArgs[attrParamIdx.get(k)];
-                parts.add(new Where.Eq(a));
-                bound.add(v);
+    /**
+     * Which {@code @Find} parameters bind to which attributes; the others are control
+     * arguments. {@code paramIndexes.get(k)} is the argument compared to {@code attributes.get(k)}.
+     */
+    private record FindBindings(List<Integer> paramIndexes, List<Attribute<?, ?>> attributes) {
+
+        /**
+         * Resolution order per Jakarta Data: {@code @Param("attr")} &gt; parameter name match &gt;
+         * positional (single attribute of matching type) for the remaining non-control parameters.
+         */
+        static FindBindings of(Method m, EntityModel<?> model, Map<String, Attribute<?, ?>> attrIndex) {
+            var params = m.getParameters();
+            Class<?>[] paramTypes = m.getParameterTypes();
+            List<Integer> paramIndexes = new ArrayList<>();
+            List<Attribute<?, ?>> attributes = new ArrayList<>();
+            java.util.Set<Integer> consumed = new java.util.HashSet<>();
+            for (int i = 0; i < params.length; i++) {
+                if (isControlParamType(paramTypes[i])) {
+                    consumed.add(i);
+                    continue;
+                }
+                String paramHint = readParamAnnotation(params[i]);
+                Attribute<?, ?> a = attrIndex.get(paramHint == null ? params[i].getName() : paramHint);
+                if (a != null) { paramIndexes.add(i); attributes.add(a); consumed.add(i); }
             }
-            Where w = parts.isEmpty() ? Where.ALWAYS_TRUE
-                    : (parts.size() == 1 ? parts.get(0) : new Where.And(parts));
-            Object[] xs = bound.toArray();
-            OrderBy order = applyControlOrder(OrderBy.NONE, callArgs, ctrl, attrIndex, (EntityModel) em, rt);
-            jakarta.data.page.PageRequest pr = controlPage(callArgs, ctrl);
-            if (returnsCursored && pr != null) return rt.queryCursored((EntityModel) em, w, order, pr, xs);
-            if (returnsPage && pr != null)     return rt.queryPage((EntityModel) em, w, order, pr, xs);
-            if (returnsOptional) return rt.queryOne((EntityModel) em, w, xs);
-            List<Object> list = rt.queryList((EntityModel) em, w, order, xs);
-            int[] limR = controlLimitRange(callArgs, ctrl, 0);
-            if (limR[1] > 0) {
-                int from = Math.max(0, limR[0]);
-                int to = Math.min(list.size(), from + limR[1]);
-                list = (from >= list.size()) ? new ArrayList<>() : new ArrayList<>(list.subList(from, to));
+            // Positional fallback: any remaining non-control param is matched against the entity
+            // attribute whose Java type is assignable from the parameter type (single-candidate
+            // only, first-fit). Covers @Find(char ch, String hex) where the param names ch/hex
+            // don't match thisCharacter/hexadecimal.
+            for (int i = 0; i < params.length; i++) {
+                Attribute<?, ?> match = consumed.contains(i) ? null
+                        : singleAttributeOfType(model, paramTypes[i], attributes);
+                if (match != null) { paramIndexes.add(i); attributes.add(match); }
             }
-            if (returnsStream) return list.stream();
-            if (returnsList)   return list;
-            if (returnsArray) {
-                Object arr = java.lang.reflect.Array.newInstance(m.getReturnType().getComponentType(), list.size());
-                for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
-                return arr;
-            }
-            return list.isEmpty() ? null : list.get(0);
+            return new FindBindings(List.copyOf(paramIndexes), List.copyOf(attributes));
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object executeFind(Method m, RepositoryRuntime rt, EntityModel em, Object[] callArgs,
+                                      FindBindings bindings, int[] ctrl, Map<String, Attribute<?, ?>> attrIndex) {
+        List<Where> parts = new ArrayList<>(bindings.attributes().size());
+        Object[] xs = new Object[bindings.attributes().size()];
+        for (int k = 0; k < xs.length; k++) {
+            parts.add(new Where.Eq(bindings.attributes().get(k)));
+            xs[k] = callArgs[bindings.paramIndexes().get(k)];
+        }
+        Where w = switch (parts.size()) {
+            case 0 -> Where.ALWAYS_TRUE;
+            case 1 -> parts.get(0);
+            default -> new Where.And(parts);
         };
+        OrderBy order = applyControlOrder(OrderBy.NONE, callArgs, ctrl, attrIndex, em, rt);
+        jakarta.data.page.PageRequest pr = controlPage(callArgs, ctrl);
+        Class<?> returnType = m.getReturnType();
+        if (pr != null && jakarta.data.page.CursoredPage.class.isAssignableFrom(returnType)) {
+            return rt.queryCursored(em, w, order, pr, xs);
+        }
+        if (pr != null && jakarta.data.page.Page.class.isAssignableFrom(returnType)) {
+            return rt.queryPage(em, w, order, pr, xs);
+        }
+        if (returnType == java.util.Optional.class) return rt.queryOne(em, w, xs);
+        return shapeFindResult(returnType, limited(rt.queryList(em, w, order, xs), callArgs, ctrl));
+    }
+
+    /** The {@code Limit} argument's window of {@code list}, or {@code list} itself without a limit. */
+    private static List<Object> limited(List<Object> list, Object[] callArgs, int[] ctrl) {
+        int[] limR = controlLimitRange(callArgs, ctrl, 0);
+        if (limR[1] <= 0) return list;
+        int from = Math.max(0, limR[0]);
+        if (from >= list.size()) return new ArrayList<>();
+        return new ArrayList<>(list.subList(from, Math.min(list.size(), from + limR[1])));
+    }
+
+    /** {@code list} as the {@code @Find} method returns it: a stream, a list, an array or its first element. */
+    private static Object shapeFindResult(Class<?> returnType, List<Object> list) {
+        if (returnType == java.util.stream.Stream.class) return list.stream();
+        if (List.class.isAssignableFrom(returnType)) return list;
+        if (returnType.isArray()) {
+            Object arr = java.lang.reflect.Array.newInstance(returnType.getComponentType(), list.size());
+            for (int i = 0; i < list.size(); i++) java.lang.reflect.Array.set(arr, i, list.get(i));
+            return arr;
+        }
+        return list.isEmpty() ? null : list.get(0);
     }
 
     /* ---- Derived queries (findByX, countByX, deleteByX, existsByX, …) ---- */
@@ -717,23 +727,16 @@ public final class RuntimeRepositoryProxy {
     }
 
     private static boolean isControlParamType(Class<?> p) {
-        if (p.getName().equals("jakarta.data.Limit")) return true;
-        if (p.getName().equals("jakarta.data.Sort")) return true;
-        if (p.getName().equals("jakarta.data.Order")) return true;
-        if (p.getName().equals("jakarta.data.page.PageRequest")) return true;
-        return p.isArray() && p.getComponentType().getName().equals("jakarta.data.Sort");
+        return p == jakarta.data.Limit.class
+                || p == jakarta.data.Sort.class
+                || p == jakarta.data.Order.class
+                || p == jakarta.data.page.PageRequest.class
+                || p == jakarta.data.Sort[].class;
     }
 
     private static String readParamAnnotation(java.lang.reflect.Parameter param) {
-        for (var ann : param.getDeclaredAnnotations()) {
-            if (ann.annotationType().getName().equals("jakarta.data.repository.Param")) {
-                try {
-                    Object v = ann.annotationType().getMethod("value").invoke(ann);
-                    if (v instanceof String s && !s.isEmpty()) return s;
-                } catch (ReflectiveOperationException ignored) { /* fall through */ }
-            }
-        }
-        return null;
+        jakarta.data.repository.Param p = param.getDeclaredAnnotation(jakarta.data.repository.Param.class);
+        return p == null || p.value().isEmpty() ? null : p.value();
     }
 
     private static Attribute<?, ?> singleAttributeOfType(EntityModel<?> model, Class<?> paramType,
@@ -776,15 +779,14 @@ public final class RuntimeRepositoryProxy {
         Class<?>[] pts = m.getParameterTypes();
         for (int i = 0; i < pts.length; i++) {
             Class<?> p = pts[i];
-            if (p.getName().equals("jakarta.data.Limit"))                  base[0] = i;
-            else if (p.isArray() && p.getComponentType().getName().equals("jakarta.data.Sort"))
-                                                                            base[2] = i;
-            else if (p.getName().equals("jakarta.data.Sort")) {
+            if (p == jakarta.data.Limit.class)                     base[0] = i;
+            else if (p == jakarta.data.Sort[].class)               base[2] = i;
+            else if (p == jakarta.data.Sort.class) {
                 if (base[1] < 0) base[1] = i;
                 else extraSorts.add(i);
             }
-            else if (p.getName().equals("jakarta.data.Order"))              base[3] = i;
-            else if (p.getName().equals("jakarta.data.page.PageRequest"))   base[4] = i;
+            else if (p == jakarta.data.Order.class)                base[3] = i;
+            else if (p == jakarta.data.page.PageRequest.class)     base[4] = i;
         }
         int[] r = new int[5 + extraSorts.size()];
         System.arraycopy(base, 0, r, 0, 5);

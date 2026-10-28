@@ -434,59 +434,26 @@ public final class RepositoryRuntime {
             orderBy = new OrderBy(java.util.List.of(OrderBy.Order.asc(model.id())));
         }
         int n = orderBy.orders().size();
+        boolean previous = pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS;
 
         Where combined = userWhere;
         Object[] effectiveArgs = args;
         OrderBy effectiveOrder = orderBy;
 
-        if (pr.cursor().isPresent()) {
-            PageRequest.Cursor cursor = pr.cursor().get();
+        java.util.Optional<PageRequest.Cursor> requested = pr.cursor();
+        if (requested.isPresent()) {
+            PageRequest.Cursor cursor = requested.get();
             if (cursor.size() != n) {
                 throw new MansartDataException("Cursor element count must match OrderBy size (got "
                         + cursor.size() + ", expected " + n + ")");
             }
-            boolean isAfter = pr.mode() == PageRequest.Mode.CURSOR_NEXT;
-
-            // Lexicographic OR-AND chain.
-            List<Where> orParts = new ArrayList<>(n);
-            for (int i = 0; i < n; i++) {
-                List<Where> andParts = new ArrayList<>(i + 1);
-                for (int j = 0; j < i; j++) {
-                    andParts.add(Where.eq(orderBy.orders().get(j).attr()));
-                }
-                OrderBy.Order o = orderBy.orders().get(i);
-                boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
-                boolean useGt = (asc == isAfter);
-                andParts.add(useGt ? new Where.Gt(o.attr()) : new Where.Lt(o.attr()));
-                orParts.add(andParts.size() == 1 ? andParts.get(0)
-                        : Where.and(andParts.toArray(new Where[0])));
-            }
-            Where cursorPred = orParts.size() == 1 ? orParts.get(0)
-                    : Where.or(orParts.toArray(new Where[0]));
+            Where cursorPred = cursorPredicate(orderBy, pr.mode() == PageRequest.Mode.CURSOR_NEXT);
             combined = (userWhere instanceof Where.AlwaysTrue)
                     ? cursorPred
                     : Where.and(userWhere, cursorPred);
-
             // For CURSOR_PREVIOUS, flip every direction so the page is built backward.
-            if (pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS) {
-                List<OrderBy.Order> reversed = new ArrayList<>(n);
-                for (OrderBy.Order o : orderBy.orders()) {
-                    boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
-                    reversed.add(asc ? OrderBy.Order.desc(o.attr()) : OrderBy.Order.asc(o.attr()));
-                }
-                effectiveOrder = new OrderBy(reversed);
-            }
-
-            // Expand args. For each OR clause i, append cursor[0..i-1] (for ==) then cursor[i] (for >).
-            int extraBindings = n * (n + 1) / 2;
-            Object[] expanded = new Object[args.length + extraBindings];
-            System.arraycopy(args, 0, expanded, 0, args.length);
-            int idx = args.length;
-            for (int i = 0; i < n; i++) {
-                for (int j = 0; j < i; j++) expanded[idx++] = cursor.get(j);
-                expanded[idx++] = cursor.get(i);
-            }
-            effectiveArgs = expanded;
+            if (previous) effectiveOrder = reversed(orderBy);
+            effectiveArgs = withCursorArgs(args, cursor, n);
         }
 
         Pagination.Offset pag = new Pagination.Offset(0, pr.size());
@@ -506,25 +473,70 @@ public final class RepositoryRuntime {
             }
         });
 
-        if (pr.mode() == PageRequest.Mode.CURSOR_PREVIOUS) {
+        if (previous) {
             java.util.Collections.reverse(queryResult);
         }
 
-        // Capture the cursor tuple for each materialized row.
         List<List<Object>> cursors = new ArrayList<>(queryResult.size());
-        for (E e : queryResult) {
-            List<Object> values = new ArrayList<>(n);
-            for (OrderBy.Order o : orderBy.orders()) {
-                @SuppressWarnings("unchecked")
-                Attribute<E, Object> a = (Attribute<E, Object>) o.attr();
-                try { values.add(a.getter().invoke(e)); }
-                catch (Throwable t) { throw new MansartDataException("Failed to read cursor attribute", t); }
-            }
-            cursors.add(values);
-        }
+        for (E e : queryResult) cursors.add(cursorOf(e, orderBy));
 
         long total = pr.requestTotal() ? countWhere(model, userWhere, args) : -1L;
         return new MansartCursoredPage<>(queryResult, pr, total, cursors);
+    }
+
+    /**
+     * The lexicographic predicate {@code (a > ?) OR (a = ? AND b > ?) OR …} over the order keys:
+     * {@code >} for an ascending key when moving forward ({@code <} otherwise).
+     */
+    private static Where cursorPredicate(OrderBy orderBy, boolean isAfter) {
+        int n = orderBy.orders().size();
+        List<Where> orParts = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            List<Where> andParts = new ArrayList<>(i + 1);
+            for (int j = 0; j < i; j++) {
+                andParts.add(Where.eq(orderBy.orders().get(j).attr()));
+            }
+            OrderBy.Order o = orderBy.orders().get(i);
+            boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
+            andParts.add(asc == isAfter ? new Where.Gt(o.attr()) : new Where.Lt(o.attr()));
+            orParts.add(andParts.size() == 1 ? andParts.get(0)
+                    : Where.and(andParts.toArray(new Where[0])));
+        }
+        return orParts.size() == 1 ? orParts.get(0) : Where.or(orParts.toArray(new Where[0]));
+    }
+
+    /** {@code orderBy} with every direction flipped. */
+    private static OrderBy reversed(OrderBy orderBy) {
+        List<OrderBy.Order> reversed = new ArrayList<>(orderBy.orders().size());
+        for (OrderBy.Order o : orderBy.orders()) {
+            boolean asc = o.direction() == OrderBy.Order.Direction.ASC;
+            reversed.add(asc ? OrderBy.Order.desc(o.attr()) : OrderBy.Order.asc(o.attr()));
+        }
+        return new OrderBy(reversed);
+    }
+
+    /** {@code args} followed, for each OR clause i, by cursor[0..i-1] (for =) then cursor[i] (for > or <). */
+    private static Object[] withCursorArgs(Object[] args, PageRequest.Cursor cursor, int n) {
+        Object[] expanded = new Object[args.length + n * (n + 1) / 2];
+        System.arraycopy(args, 0, expanded, 0, args.length);
+        int idx = args.length;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < i; j++) expanded[idx++] = cursor.get(j);
+            expanded[idx++] = cursor.get(i);
+        }
+        return expanded;
+    }
+
+    /** The cursor tuple of a materialized row: the values of its order keys. */
+    @SuppressWarnings("unchecked")
+    private static <E> List<Object> cursorOf(E row, OrderBy orderBy) {
+        List<Object> values = new ArrayList<>(orderBy.orders().size());
+        for (OrderBy.Order o : orderBy.orders()) {
+            Attribute<E, Object> a = (Attribute<E, Object>) o.attr();
+            try { values.add(a.getter().invoke(row)); }
+            catch (Throwable t) { throw new MansartDataException("Failed to read cursor attribute", t); }
+        }
+        return values;
     }
 
     /** Maps a {@code jakarta.data.Order<E>} to the dialect-neutral {@link OrderBy}. */
@@ -619,98 +631,92 @@ public final class RepositoryRuntime {
      * Strict update by id (and version, if {@code @Version} is present). Increments the version
      * field on success; throws {@link OptimisticLockingFailureException} if no row matched.
      */
-    @SuppressWarnings("unchecked")
     public <E> E updateStrict(EntityModel<E> model, E entity) {
         Object id = readId(model, entity);
         if (id == null) {
             throw new OptimisticLockingFailureException("Cannot update entity without id");
         }
-
-        Where where;
-        Object oldVersion = null;
-        if (model.version().isPresent()) {
-            VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
-            oldVersion = readAttribute(ver, entity);
-            if (oldVersion == null) oldVersion = zero(ver.javaType());
-            Object newVersion = increment(oldVersion);
-            try { ((Attribute<E, Object>) ver).setter().invoke(entity, newVersion); }
-            catch (Throwable t) { throw new MansartDataException("Failed to bump @Version on " + model.entityClass(), t); }
-            where = Where.and(Where.eq(model.id()), Where.eq(ver));
-        } else {
-            where = Where.eq(model.id());
-        }
-
+        VersionAttribute<E, ?> ver = model.version().orElse(null);
+        Object oldVersion = ver == null ? null : bumpVersion(model, ver, entity);
+        Where where = ver == null ? Where.eq(model.id()) : Where.and(Where.eq(model.id()), Where.eq(ver));
         SqlFragment frag = dialect.update(model, where);
-        Object versionForBind = oldVersion;
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        int updated = ConnectionScope.withConnection(bridge, dataSource, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
-                int idx = 1;
-                for (Attribute<E, ?> a : model.attributes()) {
-                    if (a == model.id()) continue;
-                    Object v = readAttribute(a, entity);
-                    dialect.bind(ps, idx++, valueToBind(a, v), bindType(a));
-                }
+                int idx = bindNonIdAttributes(ps, model, entity);
                 dialect.bind(ps, idx++, id, model.id().javaType());
-                if (model.version().isPresent()) {
-                    VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
-                    dialect.bind(ps, idx++, versionForBind, ver.javaType());
-                }
-                int updated = ps.executeUpdate();
-                if (updated == 0) {
-                    if (model.version().isPresent()) {
-                        try {
-                            ((Attribute<E, Object>) model.version().get()).setter().invoke(entity, versionForBind);
-                        } catch (Throwable ignored) {}
-                    }
-                    throw new OptimisticLockingFailureException(
-                            "No row matched id=" + id
-                            + (model.version().isPresent() ? " and version=" + versionForBind : "")
-                            + " for " + model.entityClass().getSimpleName());
-                }
-                return entity;
+                if (ver != null) dialect.bind(ps, idx, oldVersion, ver.javaType());
+                return ps.executeUpdate();
             }
         });
+        if (updated == 0) {
+            var failure = new OptimisticLockingFailureException(noRowMatched(model, id, ver, oldVersion));
+            if (ver != null) restoreVersion(ver, entity, oldVersion, failure);
+            throw failure;
+        }
+        return entity;
     }
 
     /**
      * Strict delete by id (and version, if {@code @Version} is present). Throws
      * {@link OptimisticLockingFailureException} if no row matched.
      */
-    @SuppressWarnings("unchecked")
     public <E> void deleteStrict(EntityModel<E> model, E entity) {
         Object id = readId(model, entity);
         if (id == null) {
             throw new OptimisticLockingFailureException("Cannot delete entity without id");
         }
-
-        Where where;
-        Object versionForBind = null;
-        if (model.version().isPresent()) {
-            VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
-            versionForBind = readAttribute(ver, entity);
-            where = Where.and(Where.eq(model.id()), Where.eq(ver));
-        } else {
-            where = Where.eq(model.id());
-        }
+        VersionAttribute<E, ?> ver = model.version().orElse(null);
+        Object version = ver == null ? null : readAttribute(ver, entity);
+        Where where = ver == null ? Where.eq(model.id()) : Where.and(Where.eq(model.id()), Where.eq(ver));
         SqlFragment frag = dialect.delete(model, where);
-        Object versionToBind = versionForBind;
         int affected = ConnectionScope.withConnection(bridge, dataSource, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
-                int idx = 1;
-                dialect.bind(ps, idx++, id, model.id().javaType());
-                if (model.version().isPresent()) {
-                    VersionAttribute<E, ?> ver = (VersionAttribute<E, ?>) model.version().get();
-                    dialect.bind(ps, idx++, versionToBind, ver.javaType());
-                }
+                dialect.bind(ps, 1, id, model.id().javaType());
+                if (ver != null) dialect.bind(ps, 2, version, ver.javaType());
                 return ps.executeUpdate();
             }
         });
         if (affected == 0) {
-            throw new OptimisticLockingFailureException(
-                    "No row matched id=" + id
-                    + (model.version().isPresent() ? " and version=" + versionForBind : "")
-                    + " for " + model.entityClass().getSimpleName());
+            throw new OptimisticLockingFailureException(noRowMatched(model, id, ver, version));
         }
+    }
+
+    /** Increments the {@code @Version} field of {@code entity} and returns its value before the increment. */
+    @SuppressWarnings("unchecked")
+    private <E> Object bumpVersion(EntityModel<E> model, VersionAttribute<E, ?> ver, E entity) {
+        Object oldVersion = readAttribute(ver, entity);
+        if (oldVersion == null) oldVersion = zero(ver.javaType());
+        Object newVersion = increment(oldVersion);
+        try { ((Attribute<E, Object>) ver).setter().invoke(entity, newVersion); }
+        catch (Throwable t) { throw new MansartDataException("Failed to bump @Version on " + model.entityClass(), t); }
+        return oldVersion;
+    }
+
+    /** Puts back the {@code @Version} value an update that matched no row had bumped. */
+    @SuppressWarnings("unchecked")
+    private static <E> void restoreVersion(VersionAttribute<E, ?> ver, E entity, Object oldVersion,
+                                           RuntimeException failure) {
+        try {
+            ((Attribute<E, Object>) ver).setter().invoke(entity, oldVersion);
+        } catch (Throwable t) {
+            failure.addSuppressed(t);
+        }
+    }
+
+    private static String noRowMatched(EntityModel<?> model, Object id, VersionAttribute<?, ?> ver, Object version) {
+        return "No row matched id=" + id
+                + (ver != null ? " and version=" + version : "")
+                + " for " + model.entityClass().getSimpleName();
+    }
+
+    /** Binds every attribute but the id, from index 1, and returns the next free index. */
+    private <E> int bindNonIdAttributes(PreparedStatement ps, EntityModel<E> model, E entity) throws SQLException {
+        int idx = 1;
+        for (Attribute<E, ?> a : model.attributes()) {
+            if (a == model.id()) continue;
+            dialect.bind(ps, idx++, valueToBind(a, readAttribute(a, entity)), bindType(a));
+        }
+        return idx;
     }
 
     private static Object increment(Object v) {

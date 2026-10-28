@@ -863,15 +863,9 @@ public final class JdqlExecutor {
         Map<String, Integer> map = new HashMap<>();
         java.lang.reflect.Parameter[] params = m.getParameters();
         for (int i = 0; i < params.length; i++) {
-            for (var ann : params[i].getDeclaredAnnotations()) {
-                if (ann.annotationType().getName().equals("jakarta.data.repository.Param")) {
-                    try {
-                        var v = ann.annotationType().getMethod("value").invoke(ann);
-                        if (v instanceof String s && !s.isEmpty()) {
-                            map.put(s, i);
-                        }
-                    } catch (ReflectiveOperationException ignored) { /* fall through */ }
-                }
+            jakarta.data.repository.Param param = params[i].getDeclaredAnnotation(jakarta.data.repository.Param.class);
+            if (param != null && !param.value().isEmpty()) {
+                map.put(param.value(), i);
             }
             // Also register the reflective name (arg0/arg1 when -parameters absent — harmless,
             // a well-named @Param always wins because it's set first).
