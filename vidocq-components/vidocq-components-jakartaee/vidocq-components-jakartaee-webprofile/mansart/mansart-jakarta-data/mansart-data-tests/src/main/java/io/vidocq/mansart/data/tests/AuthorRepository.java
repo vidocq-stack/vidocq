@@ -210,4 +210,13 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     @jakarta.data.repository.Find
     @jakarta.data.repository.OrderBy("name")
     jakarta.data.page.Page<Author> everyonePaged(jakarta.data.page.PageRequest page);
+
+    /** {@code findFirst}: the first result in the {@code OrderBy} order, even when several match (MANSART-013). */
+    java.util.Optional<Author> findFirstByOrderByNameDesc();
+
+    /** {@code findFirst<N>}: at most N results, in the {@code OrderBy} order (MANSART-013). */
+    java.util.List<Author> findFirst2ByNameNotOrderByNameAsc(String excluded);
+
+    /** {@code findFirst} with a single-entity return (MANSART-013). */
+    Author findFirstByNameStartsWithOrderByNameAsc(String prefix);
 }

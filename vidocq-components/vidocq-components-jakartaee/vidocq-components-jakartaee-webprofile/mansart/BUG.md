@@ -538,3 +538,32 @@ Both methods cached their instance in the same map, keyed by the repository inte
 
 ### Fix
 `runtimeRepository` keeps its instances in a map of its own. Regression test: `MansartDataRepositoriesTest`.
+
+## MANSART-013 — Annotation processor: the `First` keyword of derived queries was ignored
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (generated repositories throw or return too many rows; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+In a repository implemented by the annotation processor:
+- `Optional<E> findFirstByOrderByNameDesc()` threw `NonUniqueResultException` as soon as two rows existed;
+- `List<E> findFirst2By…()` returned every matching row;
+- `E findFirstBy…()` (single-entity return) generated code that did not compile.
+`findOneBy…` behaved like `findFirstBy…` (`NonUniqueResultException` on several matches).
+
+### Minimal repro
+`DerivedFirstTest` (`mansart-data-tests`), with `AuthorRepository.findFirstByOrderByNameDesc`,
+`findFirst2ByNameNotOrderByNameAsc` and `findFirstByNameStartsWithOrderByNameAsc`, through both implementations.
+
+### Cause
+`RepositoryWriter` parsed the method name with the `QueryMethodParser.parse` overload that drops the `First<N>` limit,
+and emitted `runtime.queryOne(…)` for `findFirstBy`/`findOneBy`: one result or `NonUniqueResultException`, and an
+`Optional` even for a single-entity return.
+
+### Fix
+`RepositoryWriter.derivedBody` reads the limit and, for `First`, `First<N>` and `One`, runs the query as a list in the
+`OrderBy` order and keeps its first result(s), shaped as the method returns them (`Optional`, `Stream`, `List`, or the
+entity, `EmptyResultException` when there is none), as the runtime proxy does. `writeMethod` is split
+(`signature`, `appendTypeVariables`, `derivedBody`, `firstResults`). Regression test: `DerivedFirstTest`.

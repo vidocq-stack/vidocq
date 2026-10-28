@@ -47,6 +47,11 @@ final class RepositoryWriter {
     private static final String BASIC_REPOSITORY = "jakarta.data.repository.BasicRepository";
     private static final String CRUD_REPOSITORY  = "jakarta.data.repository.CrudRepository";
     private static final String DATA_REPOSITORY  = "jakarta.data.repository.DataRepository";
+    private static final String OPTIONAL   = "java.util.Optional";
+    private static final String STREAM     = "java.util.stream.Stream";
+    private static final String LIST       = "java.util.List";
+    private static final String COLLECTION = "java.util.Collection";
+    private static final String ITERABLE   = "java.lang.Iterable";
 
     private final SourceSink sink;
     private final Elements elements;
@@ -229,47 +234,13 @@ final class RepositoryWriter {
         if (hasAnnotation(m, "jakarta.transaction.Transactional")) {
             emitTransactionalAnnotation(w, m, "    ");
         }
-        StringBuilder sig = new StringBuilder("    @Override public ");
-        var typeVars = resolved.getTypeVariables();
-        if (!typeVars.isEmpty()) {
-            sig.append('<');
-            for (int i = 0; i < typeVars.size(); i++) {
-                if (i > 0) sig.append(", ");
-                var tv = typeVars.get(i);
-                sig.append(tv);
-                var upper = tv.getUpperBound();
-                if (upper != null && !upper.toString().equals("java.lang.Object")) {
-                    sig.append(" extends ").append(upper);
-                }
-            }
-            sig.append("> ");
-        }
-        sig.append(returnType).append(' ').append(name).append('(');
-        for (int i = 0; i < paramTypes.size(); i++) {
-            if (i > 0) sig.append(", ");
-            sig.append(paramTypes.get(i)).append(' ').append(p(i));
-        }
-        sig.append(')');
-        if (!m.getThrownTypes().isEmpty()) {
-            sig.append(" throws ");
-            for (int i = 0; i < m.getThrownTypes().size(); i++) {
-                if (i > 0) sig.append(", ");
-                sig.append(m.getThrownTypes().get(i));
-            }
-        }
-        sig.append(" {");
-        w.println(sig);
+        w.println(signature(m, resolved, name));
 
         String body = jdqlBody(m, returnType, metamodel, attributeNames, paramTypes);
         if (body == null) body = lifecycleBody(m, returnType, metamodel, entityFqn, repo);
         if (body == null) body = bodyFor(name, paramTypes, returnType, metamodel, entityFqn);
-        if (body == null) {
-            // Try derived-query parsing (M3b).
-            QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames, pathResolver);
-            if (desc != null) {
-                body = derivedQueryBody(desc, returnType, metamodel, (List<? extends TypeMirror>) paramTypes);
-            }
-        }
+        if (body == null) body = derivedBody(name, returnType, metamodel, entityFqn, attributeNames, paramTypes,
+                pathResolver);
         if (body == null) {
             // MANSART-002: never emit a runtime-throwing stub silently — surface it at build time so an
             // unresolved derived query (typo, unsupported keyword) is seen now, not on first invocation.
@@ -287,6 +258,76 @@ final class RepositoryWriter {
         }
         w.println("    }");
         w.println();
+    }
+
+    /** The {@code @Override public} line implementing {@code m}, up to its opening brace. */
+    private String signature(ExecutableElement m, ExecutableType resolved, String name) {
+        StringBuilder sig = new StringBuilder("    @Override public ");
+        appendTypeVariables(sig, resolved.getTypeVariables());
+        sig.append(resolved.getReturnType()).append(' ').append(name).append('(');
+        List<? extends TypeMirror> paramTypes = resolved.getParameterTypes();
+        for (int i = 0; i < paramTypes.size(); i++) {
+            if (i > 0) sig.append(", ");
+            sig.append(paramTypes.get(i)).append(' ').append(p(i));
+        }
+        sig.append(')');
+        List<? extends TypeMirror> thrown = m.getThrownTypes();
+        for (int i = 0; i < thrown.size(); i++) {
+            sig.append(i == 0 ? " throws " : ", ").append(thrown.get(i));
+        }
+        return sig.append(" {").toString();
+    }
+
+    private static void appendTypeVariables(StringBuilder sig,
+                                            List<? extends javax.lang.model.type.TypeVariable> typeVars) {
+        if (typeVars.isEmpty()) return;
+        sig.append('<');
+        for (int i = 0; i < typeVars.size(); i++) {
+            if (i > 0) sig.append(", ");
+            var tv = typeVars.get(i);
+            sig.append(tv);
+            var upper = tv.getUpperBound();
+            if (upper != null && !upper.toString().equals("java.lang.Object")) {
+                sig.append(" extends ").append(upper);
+            }
+        }
+        sig.append("> ");
+    }
+
+    /**
+     * The body of a derived query ({@code findByX}, {@code countByX}, …), or {@code null} when {@code name} is not
+     * one. The {@code First} keyword keeps the first result, {@code First<N>} the first N (MANSART-013).
+     */
+    private String derivedBody(String name, TypeMirror returnType, String metamodel, String entityFqn,
+                               java.util.Set<String> attributeNames, List<? extends TypeMirror> paramTypes,
+                               QueryMethodParser.PathResolver pathResolver) {
+        int[] firstN = {0};
+        QueryMethodParser.QueryDescriptor desc = QueryMethodParser.parse(name, attributeNames, firstN, pathResolver);
+        if (desc == null) return null;
+        boolean paged = !paramTypes.isEmpty() && isPageRequest(paramTypes.get(paramTypes.size() - 1));
+        boolean first = desc.op() == QueryMethodParser.Operation.FIND_ONE;
+        if (paged || (!first && firstN[0] == 0)) {
+            return derivedQueryBody(desc, returnType, metamodel, paramTypes);
+        }
+        var asFind = new QueryMethodParser.QueryDescriptor(QueryMethodParser.Operation.FIND, desc.predicates(),
+                desc.combinator(), desc.orderBy());
+        String query = derivedQueryBody(asFind, types.getDeclaredType(elements.getTypeElement(LIST)), metamodel,
+                paramTypes);
+        return "java.util.function.Supplier<java.util.List<" + entityFqn + ">> _query = () -> { " + query + " }; "
+                + "java.util.List<" + entityFqn + "> _found = _query.get(); "
+                + firstResults(returnType, first ? 1 : firstN[0]);
+    }
+
+    /** Returns, as {@code returnType}, the first {@code n} elements of the list {@code _found}. */
+    private static String firstResults(TypeMirror returnType, int n) {
+        String rt = returnType.toString();
+        if (rt.startsWith(OPTIONAL)) return "return _found.stream().findFirst();";
+        if (rt.startsWith(STREAM)) return "return _found.stream().limit(" + n + ");";
+        if (rt.startsWith(LIST) || rt.startsWith(COLLECTION) || rt.startsWith(ITERABLE)) {
+            return "return _found.stream().limit(" + n + ").toList();";
+        }
+        return "if (_found.isEmpty()) throw new jakarta.data.exceptions.EmptyResultException(\"No result\"); "
+                + "return _found.get(0);";
     }
 
     /** Read {@code @jakarta.data.repository.Query("…")} from {@code m} and emit the body. */
