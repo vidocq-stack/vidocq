@@ -249,26 +249,26 @@ public final class DependencyCodegenSelection {
             }
             return true;
         }
-    }
 
-    /**
-     * The binary name of the top-level class of a base class entry, e.g. {@code com.acme.Outer} for
-     * {@code com/acme/Outer$Inner.class}; {@code null} for anything else, versioned entries and module or package
-     * infos included.
-     */
-    private static String topLevelClass(String entry) {
-        if (!entry.endsWith(CLASS_SUFFIX) || entry.startsWith("META-INF/")) {
-            return null;
+        /**
+         * The binary name of the top-level class of a base class entry, e.g. {@code com.acme.Outer} for
+         * {@code com/acme/Outer$Inner.class}; {@code null} for anything else, versioned entries and module or package
+         * infos included.
+         */
+        private static String topLevelClass(String entry) {
+            if (!entry.endsWith(CLASS_SUFFIX) || entry.startsWith("META-INF/")) {
+                return null;
+            }
+            String binary = entry.substring(0, entry.length() - CLASS_SUFFIX.length());
+            int slash = binary.lastIndexOf('/');
+            String simple = binary.substring(slash + 1);
+            if (simple.equals("module-info") || simple.equals("package-info")) {
+                return null;
+            }
+            int dollar = simple.indexOf('$');
+            String top = dollar > 0 ? binary.substring(0, slash + 1 + dollar) : binary;
+            return top.replace('/', '.');
         }
-        String binary = entry.substring(0, entry.length() - CLASS_SUFFIX.length());
-        int slash = binary.lastIndexOf('/');
-        String simple = binary.substring(slash + 1);
-        if (simple.equals("module-info") || simple.equals("package-info")) {
-            return null;
-        }
-        int dollar = simple.indexOf('$');
-        String top = dollar > 0 ? binary.substring(0, slash + 1 + dollar) : binary;
-        return top.replace('/', '.');
     }
 
     /**
