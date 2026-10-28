@@ -390,6 +390,209 @@ class GrimmModelProcessorOracleTest {
     }
 
     @Test
+    void everyScalarTypeAndVerb_matchesScan() throws Exception {
+        var compilation = compile(writeSource("t/Scalars.java", """
+                package t;
+                import jakarta.ws.rs.HEAD;
+                import jakarta.ws.rs.HeaderParam;
+                import jakarta.ws.rs.OPTIONS;
+                import jakarta.ws.rs.PATCH;
+                import jakarta.ws.rs.PUT;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.PathParam;
+                import jakarta.ws.rs.Produces;
+                import jakarta.ws.rs.QueryParam;
+
+                @Path("/scalars/")
+                @Produces("application/json")
+                public class Scalars {
+
+                    @PUT
+                    @Path("{b}")
+                    public byte put(@PathParam("b") byte b, @QueryParam("s") short s,
+                                    @QueryParam("f") float f, @QueryParam("d") double d,
+                                    @QueryParam("c") char c) {
+                        return b;
+                    }
+
+                    @PATCH
+                    public Double patch(@QueryParam("z") Boolean z, @QueryParam("y") Byte y,
+                                        @QueryParam("x") Short x, @QueryParam("w") Integer w,
+                                        @HeaderParam("v") Long v, @HeaderParam("u") Float u) {
+                        return 0d;
+                    }
+
+                    @HEAD
+                    public void head() {
+                    }
+
+                    @OPTIONS
+                    @Produces("text/plain")
+                    public String options() {
+                        return "o";
+                    }
+
+                    public String helper() {
+                        return "not an operation";
+                    }
+
+                    public static String util() {
+                        return "static";
+                    }
+
+                    private String hidden() {
+                        return "private";
+                    }
+                }
+                """));
+        assertFragmentMatchesScan(compilation, "t.Scalars");
+    }
+
+    @Test
+    void rootPathResourceInTheUnnamedPackage_matchesScan() throws Exception {
+        var compilation = compile(writeSource("Root.java", """
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.Produces;
+
+                @Path("/")
+                public class Root {
+                    @GET
+                    @Path("hello")
+                    @Produces("text/plain")
+                    public String hello() { return "hi"; }
+
+                    @GET
+                    public int status() { return 1; }
+                }
+                """));
+        assertFragmentMatchesScan(compilation, "Root");
+    }
+
+    @Test
+    void valve_nestedGenericConsumesAndInterfaceResources() throws Exception {
+        var compilation = compile(
+                writeSource("t/Outer.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        public class Outer {
+                            @Path("/nested")
+                            public static class Nested {
+                                @GET
+                                public String get() { return ""; }
+                            }
+                        }
+                        """),
+                writeSource("t/Generic.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        @Path("/generic")
+                        public class Generic<T> {
+                            @GET
+                            public String get() { return ""; }
+                        }
+                        """),
+                writeSource("t/Consuming.java", """
+                        package t;
+                        import jakarta.ws.rs.Consumes;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        @Path("/consuming")
+                        @Consumes("application/json")
+                        public class Consuming {
+                            @GET
+                            public String get() { return ""; }
+                        }
+                        """),
+                writeSource("t/Contract.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        @Path("/contract")
+                        public interface Contract {
+                            @GET
+                            String get();
+                        }
+                        """));
+        assertSkipped(compilation, "t.Outer$Nested");
+        assertSkipped(compilation, "t.Generic");
+        assertSkipped(compilation, "t.Consuming");
+        assertSkipped(compilation, "t.Contract");
+    }
+
+    @Test
+    void valve_verbsAndReturnTypesOutsideTheSubset() throws Exception {
+        var compilation = compile(
+                writeSource("t/FOO.java", """
+                        package t;
+                        import jakarta.ws.rs.HttpMethod;
+                        import java.lang.annotation.Retention;
+                        import java.lang.annotation.RetentionPolicy;
+                        @HttpMethod("FOO")
+                        @Retention(RetentionPolicy.RUNTIME)
+                        public @interface FOO {
+                        }
+                        """),
+                writeSource("t/CustomVerb.java", """
+                        package t;
+                        import jakarta.ws.rs.Path;
+                        @Path("/custom")
+                        public class CustomVerb {
+                            @FOO
+                            public String foo() { return ""; }
+                        }
+                        """),
+                writeSource("t/TwoVerbs.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.POST;
+                        import jakarta.ws.rs.Path;
+                        @Path("/two")
+                        public class TwoVerbs {
+                            @GET
+                            @POST
+                            public String both() { return ""; }
+                        }
+                        """),
+                writeSource("t/NoVerb.java", """
+                        package t;
+                        import jakarta.ws.rs.Path;
+                        @Path("/none")
+                        public class NoVerb {
+                            public String plain() { return ""; }
+                        }
+                        """),
+                writeSource("t/ArrayResult.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        @Path("/array")
+                        public class ArrayResult {
+                            @GET
+                            public String[] all() { return new String[0]; }
+                        }
+                        """),
+                writeSource("t/ObjectParam.java", """
+                        package t;
+                        import jakarta.ws.rs.GET;
+                        import jakarta.ws.rs.Path;
+                        import jakarta.ws.rs.QueryParam;
+                        @Path("/object")
+                        public class ObjectParam {
+                            @GET
+                            public void find(@QueryParam("q") java.util.UUID q) { }
+                        }
+                        """));
+        assertSkipped(compilation, "t.CustomVerb");
+        assertSkipped(compilation, "t.TwoVerbs");
+        assertSkipped(compilation, "t.NoVerb");
+        assertSkipped(compilation, "t.ArrayResult");
+        assertSkipped(compilation, "t.ObjectParam");
+    }
+
+    @Test
     void servicesFile_listsGeneratedContributions() throws Exception {
         var compilation = compile(writeSource("t/Listed.java", """
                 package t;
