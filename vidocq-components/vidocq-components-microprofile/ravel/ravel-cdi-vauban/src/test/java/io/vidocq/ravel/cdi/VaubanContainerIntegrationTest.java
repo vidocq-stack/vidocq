@@ -178,7 +178,7 @@ class VaubanContainerIntegrationTest {
         org.junit.jupiter.api.Assertions.assertThrows(
                 jakarta.enterprise.inject.spi.DeploymentException.class,
                 () -> {
-                    try (SeContainer container = initializer.initialize()) {
+                    try (var _ = initializer.initialize()) {
                         // deployment must not succeed
                     }
                 },

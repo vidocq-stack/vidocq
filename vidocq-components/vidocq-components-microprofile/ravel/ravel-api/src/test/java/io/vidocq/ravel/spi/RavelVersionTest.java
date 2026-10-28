@@ -33,7 +33,7 @@ class RavelVersionTest {
     @Test
     void implementationVersionMatchesTheBuildVersion() {
         // project.version is injected by surefire (systemPropertyVariables).
-        assertEquals(System.getProperty("project.version"), Ravel.IMPLEMENTATION_VERSION,
+        assertEquals(Ravel.IMPLEMENTATION_VERSION, System.getProperty("project.version"),
                 "Ravel.IMPLEMENTATION_VERSION must be the Maven build version, not a hardcoded constant");
     }
 

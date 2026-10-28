@@ -28,7 +28,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -165,28 +164,31 @@ class ImplicitConverterTest {
 
     public static final class AllPatterns {
         public final String pattern;
-        // Constructeur public (String) — pattern §5.2 #4
-        public AllPatterns(String s) { this.pattern = "ctor"; }
-        // Constructeur privé pour les factories — esquive la rentrée par le ctor public.
-        private AllPatterns(String marker, boolean tag) { this.pattern = marker; }
-        public static AllPatterns of(String s)          { return new AllPatterns("of", true); }
-        public static AllPatterns valueOf(String s)     { return new AllPatterns("valueOf", true); }
-        public static AllPatterns parse(CharSequence s) { return new AllPatterns("parse", true); }
+        public final String source;
+        // Public (String) constructor — §5.2 pattern #4
+        public AllPatterns(String s) { this("ctor", s); }
+        // Private constructor for the factories — avoids re-entering through the public constructor.
+        private AllPatterns(String marker, String source) { this.pattern = marker; this.source = source; }
+        public static AllPatterns of(String s)          { return new AllPatterns("of", s); }
+        public static AllPatterns valueOf(String s)     { return new AllPatterns("valueOf", s); }
+        public static AllPatterns parse(CharSequence s) { return new AllPatterns("parse", s.toString()); }
     }
 
     public static final class NoOf {
         public final String pattern;
-        public NoOf(String s) { this.pattern = "ctor"; }
-        private NoOf(String marker, boolean tag) { this.pattern = marker; }
-        public static NoOf valueOf(String s)     { return new NoOf("valueOf", true); }
-        public static NoOf parse(CharSequence s) { return new NoOf("parse", true); }
+        public final String source;
+        public NoOf(String s) { this("ctor", s); }
+        private NoOf(String marker, String source) { this.pattern = marker; this.source = source; }
+        public static NoOf valueOf(String s)     { return new NoOf("valueOf", s); }
+        public static NoOf parse(CharSequence s) { return new NoOf("parse", s.toString()); }
     }
 
     public static final class OnlyParseAndCtor {
         public final String pattern;
-        public OnlyParseAndCtor(String s) { this.pattern = "ctor"; }
-        private OnlyParseAndCtor(String marker, boolean tag) { this.pattern = marker; }
-        public static OnlyParseAndCtor parse(CharSequence s) { return new OnlyParseAndCtor("parse", true); }
+        public final String source;
+        public OnlyParseAndCtor(String s) { this("ctor", s); }
+        private OnlyParseAndCtor(String marker, String source) { this.pattern = marker; this.source = source; }
+        public static OnlyParseAndCtor parse(CharSequence s) { return new OnlyParseAndCtor("parse", s.toString()); }
     }
 
     public enum Color { RED, GREEN, BLUE }

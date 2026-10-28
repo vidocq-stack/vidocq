@@ -87,18 +87,16 @@ class ConfigCdiExtensionTest {
 
     @Test
     void supportedType_accepts_generic_parameterized_types() {
-        // Spec MP Config 3.1 §6.1 : tout type pour lequel un Converter existe est
-        // injectable. La validation au déploiement reste conservative et accepte
-        // les types paramétrés non-wrapper (Set<Class>, List<String>, ...) ;
-        // l'absence de Converter sera détectée au runtime via NoSuchElementException.
+        // MP Config 3.1 §6.1: any type with a Converter can be injected. Deployment
+        // validation stays conservative and accepts non-wrapper parameterized types
+        // (Set of Class, List of String, ...); a missing Converter shows up at runtime.
         Type setOfClass = parameterizedType("java.util.Set", classType("java.lang.Class"));
         Type optionalOfNested = parameterizedType("java.util.Optional",
                 parameterizedType("java.util.List", classType("java.lang.String")));
 
         assertTrue(ConfigCdiExtension.isSupportedType(setOfClass));
-        // Optional<List<String>> : le wrapper Optional exige que son argument soit
-        // un ClassType pour la validation déployée — sinon on laisse passer car la
-        // résolution dynamique se fera côté Converter (wrapper non-restrictif).
+        // An Optional of a List of String passes too: the element conversion is
+        // resolved dynamically by the Converter, the wrapper does not restrict it.
         assertTrue(ConfigCdiExtension.isSupportedType(optionalOfNested));
     }
 
@@ -365,14 +363,14 @@ class ConfigCdiExtensionTest {
     private static final class CapturingMessages implements Messages {
         private final List<String> errors = new ArrayList<>();
 
-        @Override public void info(String message) { }
-        @Override public void info(String message, jakarta.enterprise.lang.model.AnnotationTarget target) { }
-        @Override public void info(String message, BeanInfo bean) { }
-        @Override public void info(String message, jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observer) { }
-        @Override public void warn(String message) { }
-        @Override public void warn(String message, jakarta.enterprise.lang.model.AnnotationTarget target) { }
-        @Override public void warn(String message, BeanInfo bean) { }
-        @Override public void warn(String message, jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observer) { }
+        @Override public void info(String message) { /* only errors are captured */ }
+        @Override public void info(String message, jakarta.enterprise.lang.model.AnnotationTarget target) { /* only errors are captured */ }
+        @Override public void info(String message, BeanInfo bean) { /* only errors are captured */ }
+        @Override public void info(String message, jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observer) { /* only errors are captured */ }
+        @Override public void warn(String message) { /* only errors are captured */ }
+        @Override public void warn(String message, jakarta.enterprise.lang.model.AnnotationTarget target) { /* only errors are captured */ }
+        @Override public void warn(String message, BeanInfo bean) { /* only errors are captured */ }
+        @Override public void warn(String message, jakarta.enterprise.inject.build.compatible.spi.ObserverInfo observer) { /* only errors are captured */ }
         @Override public void error(String message) { errors.add(message); }
         @Override public void error(String message, jakarta.enterprise.lang.model.AnnotationTarget target) { errors.add(message); }
         @Override public void error(String message, BeanInfo bean) { errors.add(message); }

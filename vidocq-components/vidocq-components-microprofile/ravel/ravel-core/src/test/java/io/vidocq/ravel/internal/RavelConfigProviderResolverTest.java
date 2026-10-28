@@ -27,13 +27,12 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URLClassLoader;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -93,7 +92,7 @@ class RavelConfigProviderResolverTest {
     }
 
     @Test
-    void distinct_classloaders_yield_distinct_configs() throws Exception {
+    void distinct_classloaders_yield_distinct_configs() {
         ClassLoader cl1 = getClass().getClassLoader();
         transientCl = new URLClassLoader(new java.net.URL[0], null);
 
@@ -103,7 +102,7 @@ class RavelConfigProviderResolverTest {
     }
 
     @Test
-    void registerConfig_overrides_default_for_classloader() throws Exception {
+    void registerConfig_overrides_default_for_classloader() {
         transientCl = new URLClassLoader(new java.net.URL[0], null);
         Config custom = new RavelConfigBuilder()
                 .withSources(MapConfigSource.of("customSrc", 999, Map.of("k", "v")))
@@ -117,7 +116,7 @@ class RavelConfigProviderResolverTest {
     }
 
     @Test
-    void releaseConfig_allows_rebuild() throws Exception {
+    void releaseConfig_allows_rebuild() {
         transientCl = new URLClassLoader(new java.net.URL[0], null);
 
         Config first = resolver.getConfig(transientCl);
@@ -130,8 +129,8 @@ class RavelConfigProviderResolverTest {
     @Test
     void releaseConfig_unknown_is_silent() {
         Config strangerConfig = new RavelConfigBuilder().build();
-        // Ne doit pas lever — no-op si la config n'est pas dans le registre.
-        resolver.releaseConfig(strangerConfig);
+        // No-op when the config is not in the registry: must not throw.
+        assertDoesNotThrow(() -> resolver.releaseConfig(strangerConfig));
     }
 
     @Test
@@ -152,18 +151,17 @@ class RavelConfigProviderResolverTest {
         var seen = Collections.newSetFromMap(new ConcurrentHashMap<Config, Boolean>());
         var start = new CountDownLatch(1);
         var done = new CountDownLatch(threads);
-        var workers = new java.util.ArrayList<Thread>();
         for (int i = 0; i < threads; i++) {
-            workers.add(Thread.ofVirtual().start(() -> {
+            Thread.ofVirtual().start(() -> {
                 try {
                     start.await();
                     seen.add(resolver.getConfig(transientCl));
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 } finally {
                     done.countDown();
                 }
-            }));
+            });
         }
         start.countDown();
         done.await(5, TimeUnit.SECONDS);
@@ -173,8 +171,8 @@ class RavelConfigProviderResolverTest {
 
     @Test
     void instance_via_ConfigProviderResolver_static_factory() {
-        // Une fois le wiring ServiceLoader actif (étape i), ConfigProviderResolver.instance()
-        // doit retourner une RavelConfigProviderResolver.
+        // With the ServiceLoader wiring in place, the static factory of the specification
+        // answers the Ravel resolver.
         ConfigProviderResolver inst = ConfigProviderResolver.instance();
         assertInstanceOf(RavelConfigProviderResolver.class, inst);
     }
