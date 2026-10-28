@@ -176,14 +176,6 @@ public final class YamlDeserializer {
         return c == quote && i + 1 < text.length() && text.charAt(i + 1) == quote;
     }
 
-    private static boolean isFlowStart(CharSequence text) {
-        return !text.isEmpty() && (text.charAt(0) == '[' || text.charAt(0) == '{');
-    }
-
-    private static IllegalArgumentException invalid(String what, int lineIndex, String line) {
-        return new IllegalArgumentException("Invalid YAML " + what + " at line " + (lineIndex + 1) + ": " + line);
-    }
-
     private static final class NodeParser {
         private final List<String> lines;
         private int index;
@@ -253,6 +245,14 @@ public final class YamlDeserializer {
                 return trimmed.substring(1, trimmed.length() - 1);
             }
             return trimmed;
+        }
+
+        private static boolean isFlowStart(CharSequence text) {
+            return !text.isEmpty() && (text.charAt(0) == '[' || text.charAt(0) == '{');
+        }
+
+        private static IllegalArgumentException invalid(String what, int lineIndex, String line) {
+            return new IllegalArgumentException("Invalid YAML " + what + " at line " + (lineIndex + 1) + ": " + line);
         }
 
         private Object parseDocument() {
