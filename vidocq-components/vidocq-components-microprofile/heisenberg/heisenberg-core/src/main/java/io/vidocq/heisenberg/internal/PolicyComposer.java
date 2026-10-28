@@ -24,7 +24,6 @@ import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
 import org.eclipse.microprofile.faulttolerance.Fallback;
@@ -339,36 +338,52 @@ public final class PolicyComposer {
                 recorder.recordInvocation(beanClass, method, succeeded, fallbackApplied.get(), fallbackPolicy != null);
             }
         }
-    }
 
-    private static FtMetricsRecorder.CBState toCBState(CircuitBreakerState state) {
-        return switch (state) {
-            case CLOSED -> FtMetricsRecorder.CBState.CLOSED;
-            case OPEN -> FtMetricsRecorder.CBState.OPEN;
-            case HALF_OPEN -> FtMetricsRecorder.CBState.HALF_OPEN;
-        };
-    }
-
-    /**
-     * MP FT 4.1 §5.1.1: determines whether an exception thrown by the protected method
-     * must be counted as a circuit-breaker failure.
-     *
-     * <p>{@code skipOn} takes precedence over {@code failOn}; an exception not listed in
-     * {@code failOn} (or listed in {@code skipOn}) does NOT count as a failure and must
-     * be reported as success in the {@code ft.circuitbreaker.calls.total} metric
-     * (result {@code success}).</p>
-     */
-    private static boolean isCircuitBreakerFailure(Throwable failure, CircuitBreakerConfig config) {
-        if (matchesAny(failure, config.skipOn())) return false;
-        return matchesAny(failure, config.failOn());
-    }
-
-    private static boolean matchesAny(Throwable failure, Class<? extends Throwable>[] types) {
-        if (types == null) return false;
-        for (Class<? extends Throwable> type : types) {
-            if (type != null && type.isAssignableFrom(failure.getClass())) return true;
+        private static FtMetricsRecorder.CBState toCBState(CircuitBreakerState state) {
+            return switch (state) {
+                case CLOSED -> FtMetricsRecorder.CBState.CLOSED;
+                case OPEN -> FtMetricsRecorder.CBState.OPEN;
+                case HALF_OPEN -> FtMetricsRecorder.CBState.HALF_OPEN;
+            };
         }
-        return false;
+
+        /**
+         * MP FT 4.1 §5.1.1: determines whether an exception thrown by the protected method
+         * must be counted as a circuit-breaker failure.
+         *
+         * <p>{@code skipOn} takes precedence over {@code failOn}; an exception not listed in
+         * {@code failOn} (or listed in {@code skipOn}) does NOT count as a failure and must
+         * be reported as success in the {@code ft.circuitbreaker.calls.total} metric
+         * (result {@code success}).</p>
+         */
+        private static boolean isCircuitBreakerFailure(Throwable failure, CircuitBreakerConfig config) {
+            if (matchesAny(failure, config.skipOn())) return false;
+            return matchesAny(failure, config.failOn());
+        }
+
+        private static boolean matchesAny(Throwable failure, Class<? extends Throwable>[] types) {
+            if (types == null) return false;
+            for (Class<? extends Throwable> type : types) {
+                if (type != null && type.isAssignableFrom(failure.getClass())) return true;
+            }
+            return false;
+        }
+
+        /**
+         * Unwraps the potentially asynchronous result of an invocation: if the result is a
+         * {@link CompletionStage} or a {@link java.util.concurrent.Future}, waits for its completion
+         * and propagates the causal exception as-is so the policies can see it (§8.2).
+         */
+        private static Object unwrapAsyncResult(Object result) throws Exception {
+            if (result instanceof CompletionStage<?> stage) {
+                try {
+                    return stage.toCompletableFuture().get();
+                } catch (ExecutionException ee) {
+                    throw Failures.asException(ee.getCause());
+                }
+            }
+            return result;
+        }
     }
 
     private static Class<?> resolveRuntimeBeanClass(Object target, Method method) {
@@ -377,21 +392,5 @@ public final class PolicyComposer {
         }
 
         return BeanClasses.userClass(target.getClass());
-    }
-
-    /**
-     * Unwraps the potentially asynchronous result of an invocation: if the result is a
-     * {@link CompletionStage} or a {@link java.util.concurrent.Future}, waits for its completion
-     * and propagates the causal exception as-is so the policies can see it (§8.2).
-     */
-    private static Object unwrapAsyncResult(Object result) throws Exception {
-        if (result instanceof CompletionStage<?> stage) {
-            try {
-                return stage.toCompletableFuture().get();
-            } catch (ExecutionException ee) {
-                throw Failures.asException(ee.getCause());
-            }
-        }
-        return result;
     }
 }
