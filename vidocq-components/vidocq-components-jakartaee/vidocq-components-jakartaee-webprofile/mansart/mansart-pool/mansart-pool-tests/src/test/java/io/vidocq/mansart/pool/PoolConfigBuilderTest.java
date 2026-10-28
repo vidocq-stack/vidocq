@@ -22,6 +22,7 @@ package io.vidocq.mansart.pool;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -85,7 +86,8 @@ class PoolConfigBuilderTest {
         assertThat(c.driverProperties()).doesNotContainKey("late");
 
         // Returned map is unmodifiable.
-        assertThatThrownBy(() -> c.driverProperties().put("x", "y"))
+        Map<String, String> properties = c.driverProperties();
+        assertThatThrownBy(() -> properties.put("x", "y"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -102,53 +104,62 @@ class PoolConfigBuilderTest {
 
     @Test
     void rejectsMissingJdbcUrl() {
-        assertThatThrownBy(() -> PoolConfig.builder().build())
+        PoolConfig.Builder noUrl = PoolConfig.builder();
+        assertThatThrownBy(noUrl::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("jdbcUrl");
-        assertThatThrownBy(() -> PoolConfig.builder().jdbcUrl("   ").build())
+        PoolConfig.Builder blankUrl = PoolConfig.builder().jdbcUrl("   ");
+        assertThatThrownBy(blankUrl::build)
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsNegativeMinIdle() {
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").minIdle(-1).build())
+        PoolConfig.Builder negativeMinIdle = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").minIdle(-1);
+        assertThatThrownBy(negativeMinIdle::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("minIdle");
     }
 
     @Test
     void rejectsZeroMaxSize() {
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").maxSize(0).build())
+        PoolConfig.Builder zeroMaxSize = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").maxSize(0);
+        assertThatThrownBy(zeroMaxSize::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxSize");
     }
 
     @Test
     void rejectsMinIdleAboveMaxSize() {
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").minIdle(20).maxSize(5).build())
+        PoolConfig.Builder minIdleAboveMaxSize = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").minIdle(20).maxSize(5);
+        assertThatThrownBy(minIdleAboveMaxSize::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContainingAll("minIdle", "maxSize");
     }
 
     @Test
     void rejectsZeroOrNegativeTimeouts() {
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").acquireTimeout(Duration.ZERO).build())
+        PoolConfig.Builder zeroAcquireTimeout = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").acquireTimeout(Duration.ZERO);
+        assertThatThrownBy(zeroAcquireTimeout::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("acquireTimeout");
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").idleTimeout(Duration.ofSeconds(-1)).build())
+        PoolConfig.Builder negativeIdleTimeout = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").idleTimeout(Duration.ofSeconds(-1));
+        assertThatThrownBy(negativeIdleTimeout::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("idleTimeout");
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").maxLifetime(Duration.ZERO).build())
+        PoolConfig.Builder zeroMaxLifetime = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").maxLifetime(Duration.ZERO);
+        assertThatThrownBy(zeroMaxLifetime::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxLifetime");
-        assertThatThrownBy(() -> PoolConfig.builder()
-                .jdbcUrl("jdbc:h2:mem:test").validationTimeout(Duration.ofSeconds(-1)).build())
+        PoolConfig.Builder negativeValidationTimeout = PoolConfig.builder()
+                .jdbcUrl("jdbc:h2:mem:test").validationTimeout(Duration.ofSeconds(-1));
+        assertThatThrownBy(negativeValidationTimeout::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("validationTimeout");
     }
@@ -161,21 +172,21 @@ class PoolConfigBuilderTest {
                 .build();
         assertThat(c.leakDetectionThreshold()).isEqualTo(Duration.ZERO);
 
-        assertThatThrownBy(() -> PoolConfig.builder()
+        PoolConfig.Builder negativeLeakThreshold = PoolConfig.builder()
                 .jdbcUrl("jdbc:h2:mem:test")
-                .leakDetectionThreshold(Duration.ofSeconds(-1))
-                .build())
+                .leakDetectionThreshold(Duration.ofSeconds(-1));
+        assertThatThrownBy(negativeLeakThreshold::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("leakDetectionThreshold");
     }
 
     @Test
     void rejectsIdleTimeoutAboveMaxLifetime() {
-        assertThatThrownBy(() -> PoolConfig.builder()
+        PoolConfig.Builder idleAboveLifetime = PoolConfig.builder()
                 .jdbcUrl("jdbc:h2:mem:test")
                 .idleTimeout(Duration.ofMinutes(30))
-                .maxLifetime(Duration.ofMinutes(10))
-                .build())
+                .maxLifetime(Duration.ofMinutes(10));
+        assertThatThrownBy(idleAboveLifetime::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContainingAll("idleTimeout", "maxLifetime");
     }

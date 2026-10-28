@@ -47,7 +47,7 @@ class DurableTmBootstrapTest {
     }
 
     @Test
-    void journalPathMeansDurableTm() throws Exception {
+    void journalPathMeansDurableTm() {
         Path journal = dir.resolve("tx-recovery.log");
         MansartTransactionManager tm = MansartTransactionsProducer.bootstrapTm(journal.toString());
 
@@ -59,8 +59,9 @@ class DurableTmBootstrapTest {
     void unwritableJournalFailsLoudly() {
         // A DIRECTORY at the journal path cannot be opened for append — missing parent
         // directories, by contrast, are created (FileRecoveryLog.createDirectories).
+        String journalPath = dir.toString();
         assertThrows(IllegalStateException.class,
-                () -> MansartTransactionsProducer.bootstrapTm(dir.toString()),
+                () -> MansartTransactionsProducer.bootstrapTm(journalPath),
                 "an unopenable journal is a boot error, not a silent volatile fallback");
     }
 }

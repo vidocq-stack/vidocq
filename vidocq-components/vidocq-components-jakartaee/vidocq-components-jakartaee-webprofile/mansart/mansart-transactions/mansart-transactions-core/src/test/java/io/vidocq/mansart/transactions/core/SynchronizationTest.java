@@ -124,9 +124,9 @@ class SynchronizationTest {
         // does not mandate calling subsequent beforeCompletion(s) — Mansart skips the rest and
         // proceeds to rollback. Both syncs receive afterCompletion(STATUS_ROLLEDBACK).
         assertThat(log).contains("a.before",
-                "a.after(" + Status.STATUS_ROLLEDBACK + ")",
-                "b.after(" + Status.STATUS_ROLLEDBACK + ")");
-        assertThat(log).doesNotContain("a.after(" + Status.STATUS_COMMITTED + ")");
+                        "a.after(" + Status.STATUS_ROLLEDBACK + ")",
+                        "b.after(" + Status.STATUS_ROLLEDBACK + ")")
+                .doesNotContain("a.after(" + Status.STATUS_COMMITTED + ")");
     }
 
     @Test
@@ -152,7 +152,8 @@ class SynchronizationTest {
         tm.begin();
         var tx = tm.getTransaction();
         tm.commit();
-        assertThatThrownBy(() -> tx.registerSynchronization(new RecordingSync("nope", new ArrayList<>())))
+        var sync = new RecordingSync("nope", new ArrayList<>());
+        assertThatThrownBy(() -> tx.registerSynchronization(sync))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -163,7 +164,8 @@ class SynchronizationTest {
         tm.setRollbackOnly();
         // Spec §3.3.5: registerSynchronization is only legal in STATUS_ACTIVE. STATUS_MARKED_ROLLBACK
         // is past the point where adding a hook makes sense — it would never see beforeCompletion.
-        assertThatThrownBy(() -> tx.registerSynchronization(new RecordingSync("nope", new ArrayList<>())))
+        var sync = new RecordingSync("nope", new ArrayList<>());
+        assertThatThrownBy(() -> tx.registerSynchronization(sync))
                 .isInstanceOf(IllegalStateException.class);
         tm.rollback();
     }

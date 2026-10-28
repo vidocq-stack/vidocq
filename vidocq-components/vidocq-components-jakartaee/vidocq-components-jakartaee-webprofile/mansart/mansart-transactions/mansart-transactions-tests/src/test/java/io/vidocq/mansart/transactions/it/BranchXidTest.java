@@ -27,7 +27,6 @@ import jakarta.transaction.TransactionManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
 import java.nio.file.Path;

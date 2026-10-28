@@ -24,7 +24,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
-import java.sql.SQLException;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -129,7 +128,7 @@ class LeakDetectionTest {
     }
 
     private static void waitFor(java.util.function.BooleanSupplier cond, Duration timeout)
-            throws InterruptedException, SQLException {
+            throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             if (cond.getAsBoolean()) return;

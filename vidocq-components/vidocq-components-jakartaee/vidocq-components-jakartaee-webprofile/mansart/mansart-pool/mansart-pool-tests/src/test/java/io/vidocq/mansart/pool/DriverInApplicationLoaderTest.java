@@ -68,8 +68,8 @@ class DriverInApplicationLoaderTest {
                 // whose context loader cannot see H2
                 assertThat(withContextLoader(ClassLoader.getPlatformClassLoader(), () -> {
                     Method getConnection = ds.getClass().getMethod("getConnection");
-                    try (Connection first = (Connection) getConnection.invoke(ds);
-                         Connection second = (Connection) getConnection.invoke(ds);
+                    try (var _ = (Connection) getConnection.invoke(ds);
+                         var _ = (Connection) getConnection.invoke(ds);
                          Connection third = (Connection) getConnection.invoke(ds);
                          Statement s = third.createStatement(); ResultSet rs = s.executeQuery("SELECT 42")) {
                         rs.next();
@@ -101,7 +101,7 @@ class DriverInApplicationLoaderTest {
         }
     }
 
-    private static URLClassLoader poolLoader() throws Exception {
+    private static URLClassLoader poolLoader() {
         return new URLClassLoader("pool", new URL[]{location(PoolConfig.class), location(MansartDataSource.class)},
                 ClassLoader.getPlatformClassLoader());
     }

@@ -94,13 +94,13 @@ class SuspendResumeTest {
     @Test
     void resumeForeignTransactionFails() {
         Transaction stranger = new Transaction() {
-            @Override public void commit() { }
+            @Override public void commit() { /* a foreign transaction: never driven by this test */ }
             @Override public boolean delistResource(javax.transaction.xa.XAResource x, int f) { return false; }
             @Override public boolean enlistResource(javax.transaction.xa.XAResource x) { return false; }
             @Override public int getStatus() { return Status.STATUS_ACTIVE; }
-            @Override public void registerSynchronization(jakarta.transaction.Synchronization s) { }
-            @Override public void rollback() { }
-            @Override public void setRollbackOnly() { }
+            @Override public void registerSynchronization(jakarta.transaction.Synchronization s) { /* never called */ }
+            @Override public void rollback() { /* never called */ }
+            @Override public void setRollbackOnly() { /* never called */ }
         };
         assertThatThrownBy(() -> tm.resume(stranger)).isInstanceOf(InvalidTransactionException.class);
     }

@@ -97,7 +97,7 @@ class XaDataSourceExposureTest {
     }
 
     @Test
-    void plainPoolDoesNotAdvertiseXa() throws Exception {
+    void plainPoolDoesNotAdvertiseXa() {
         PoolConfig config = PoolConfig.builder()
                 .jdbcUrl(URL)
                 .username("sa")

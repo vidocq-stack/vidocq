@@ -108,7 +108,7 @@ class TransactionStateMachineTest {
         var fromOther = new int[]{Status.STATUS_UNKNOWN};
         var t = Thread.ofVirtual().start(() -> {
             try { fromOther[0] = tm.getStatus(); }
-            catch (Exception e) { fromOther[0] = -1; }
+            catch (Exception _) { fromOther[0] = -1; }
         });
         t.join();
         assertThat(fromOther[0]).isEqualTo(Status.STATUS_NO_TRANSACTION);

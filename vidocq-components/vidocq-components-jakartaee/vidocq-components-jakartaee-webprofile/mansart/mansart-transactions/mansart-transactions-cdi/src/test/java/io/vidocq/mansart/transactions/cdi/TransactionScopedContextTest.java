@@ -75,12 +75,13 @@ class TransactionScopedContextTest {
             if (tm != null && tm.getStatus() != jakarta.transaction.Status.STATUS_NO_TRANSACTION) {
                 tm.rollback();
             }
-        } catch (Exception ignored) { /* best effort */ }
+        } catch (Exception _) { /* best effort */ }
     }
 
     @Test
     void scopeIsInactiveOutsideTx() {
-        assertThatThrownBy(() -> lookup().bump())
+        TxBean bean = lookup();
+        assertThatThrownBy(bean::bump)
                 .isInstanceOf(ContextNotActiveException.class);
     }
 
@@ -110,7 +111,7 @@ class TransactionScopedContextTest {
 
         ut.begin();
         TxBean second = lookup();
-        assertThat(second.value()).isEqualTo(0);
+        assertThat(second.value()).isZero();
         ut.commit();
         assertThat(CREATED.get()).isEqualTo(2);
         assertThat(DESTROYED.get()).isEqualTo(2);

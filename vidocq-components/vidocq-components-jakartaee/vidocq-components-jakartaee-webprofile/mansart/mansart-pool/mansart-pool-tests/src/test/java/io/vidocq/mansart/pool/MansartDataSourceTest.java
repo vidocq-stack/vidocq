@@ -80,7 +80,7 @@ class MansartDataSourceTest {
 
     @Test
     void connectionsAreReusedFromIdle() throws SQLException {
-        try (Connection c1 = ds.getConnection()) { /* borrow then release */ }
+        try (var _ = ds.getConnection()) { /* borrow then release */ }
         try (Connection c2 = ds.getConnection()) {
             assertThat(c2.isClosed()).isFalse();
         }
@@ -106,7 +106,7 @@ class MansartDataSourceTest {
     }
 
     @Test
-    void closeOnPoolDisablesFurtherBorrows() throws SQLException {
+    void closeOnPoolDisablesFurtherBorrows() {
         ds.close();
         assertThatThrownBy(() -> ds.getConnection())
                 .isInstanceOf(PoolException.class)

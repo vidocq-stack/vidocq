@@ -61,7 +61,7 @@ class RecoveryLogTest {
     }
 
     @Test
-    void noOpLogScansEmpty() throws Exception {
+    void noOpLogScansEmpty() {
         var log = NoOpRecoveryLog.INSTANCE;
         log.append(new RecoveryLog.Record(RecoveryLog.Type.PREPARED, new MansartXid(new byte[]{1}, new byte[]{0})));
         assertThat(log.scan()).isEmpty();

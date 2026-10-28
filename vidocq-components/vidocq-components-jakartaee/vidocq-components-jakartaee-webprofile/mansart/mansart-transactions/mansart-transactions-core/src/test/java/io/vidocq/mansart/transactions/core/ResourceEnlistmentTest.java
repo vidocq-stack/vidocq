@@ -48,13 +48,10 @@ class ResourceEnlistmentTest {
     }
 
     @Test
-    void enlistOutsideTxFails() {
-        var r = new RecordingXAResource("a", new ArrayList<>());
-        assertThatThrownBy(() -> {
-            // No TX active — Transaction is null, so enlist isn't even reachable through
-            // the normal flow. The user-facing failure is "no TX" via TransactionManager.
-            tm.getTransaction().enlistResource(r);
-        }).isInstanceOf(NullPointerException.class);
+    void enlistOutsideTxFails() throws Exception {
+        // No TX active — there is no Transaction to enlist a resource in, so enlist isn't even
+        // reachable through the normal flow. The user-facing failure is "no TX" via TransactionManager.
+        assertThat(tm.getTransaction()).isNull();
     }
 
     @Test

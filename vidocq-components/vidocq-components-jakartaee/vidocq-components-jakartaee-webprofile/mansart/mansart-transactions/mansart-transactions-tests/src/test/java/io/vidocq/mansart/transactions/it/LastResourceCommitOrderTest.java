@@ -130,8 +130,8 @@ class LastResourceCommitOrderTest {
                 .as("a failed last-resource commit is a rollback, not a heuristic UNKNOWN")
                 .isInstanceOf(RollbackException.class);
 
-        assertThat(log).contains("local.commit", "xa1.rollback", "xa2.rollback");
         assertThat(log)
+                .contains("local.commit", "xa1.rollback", "xa2.rollback")
                 .as("prepared XA resources must be rolled back, never committed")
                 .doesNotContain("xa1.commit", "xa2.commit");
     }

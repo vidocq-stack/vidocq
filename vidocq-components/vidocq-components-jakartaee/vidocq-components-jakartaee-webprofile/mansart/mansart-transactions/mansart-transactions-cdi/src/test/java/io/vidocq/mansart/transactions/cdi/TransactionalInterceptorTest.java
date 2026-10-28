@@ -67,7 +67,7 @@ class TransactionalInterceptorTest {
             if (tm != null && tm.getStatus() != Status.STATUS_NO_TRANSACTION) {
                 tm.rollback();
             }
-        } catch (Exception ignored) { /* best effort */ }
+        } catch (Exception _) { /* best effort */ }
     }
 
     // ============ REQUIRED ============
