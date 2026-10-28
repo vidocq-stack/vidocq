@@ -19,10 +19,16 @@
  */
 package io.vidocq.heisenberg.cdi.internal;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
 class HeisenbergAutoDiscoveryTest {
@@ -36,6 +42,28 @@ class HeisenbergAutoDiscoveryTest {
             assertNotNull(input);
             String content = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(content.contains(HeisenbergAutoDiscovery.class.getName()));
+        }
+    }
+
+    @Test
+    void delegatesToTheOtherConfigProviderResolver() throws Exception {
+        HeisenbergAutoDiscovery discovery = new HeisenbergAutoDiscovery();
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+
+        assertSame(discovery.getConfig(current), discovery.getConfig());
+        assertFalse(discovery.getConfig().getOptionalValue("heisenberg.test.absent", String.class).isPresent());
+
+        // A config registered through the discovery is the one returned for its class loader,
+        // until it is released.
+        try (URLClassLoader loader = new URLClassLoader(new URL[0], current)) {
+            Config built = discovery.getBuilder().build();
+            discovery.registerConfig(built, loader);
+            assertSame(built, discovery.getConfig(loader));
+
+            discovery.releaseConfig(built);
+            Config rebuilt = discovery.getConfig(loader);
+            assertNotSame(built, rebuilt);
+            discovery.releaseConfig(rebuilt);
         }
     }
 }

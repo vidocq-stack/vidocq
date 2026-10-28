@@ -63,4 +63,7 @@ module io.vidocq.heisenberg.cdi.vauban {
 
     provides org.eclipse.microprofile.config.spi.ConfigProviderResolver
             with io.vidocq.heisenberg.cdi.internal.HeisenbergAutoDiscovery;
+    // HeisenbergAutoDiscovery looks the actual resolver (Ravel) up with ServiceLoader: on the module
+    // path that lookup needs this module to declare the service it uses (BUG-013).
+    uses org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 }
