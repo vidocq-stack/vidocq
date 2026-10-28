@@ -119,10 +119,10 @@ public final class FileRecoveryLog implements RecoveryLog {
         /** By content (MANSART-010): the record default would compare the arrays by identity. */
         @Override
         public boolean equals(Object o) {
-            return o instanceof ScannedXid x
-                    && format == x.format
-                    && Arrays.equals(gtrid, x.gtrid)
-                    && Arrays.equals(bqual, x.bqual);
+            return o instanceof ScannedXid(var otherFormat, var otherGtrid, var otherBqual)
+                    && format == otherFormat
+                    && Arrays.equals(gtrid, otherGtrid)
+                    && Arrays.equals(bqual, otherBqual);
         }
 
         @Override

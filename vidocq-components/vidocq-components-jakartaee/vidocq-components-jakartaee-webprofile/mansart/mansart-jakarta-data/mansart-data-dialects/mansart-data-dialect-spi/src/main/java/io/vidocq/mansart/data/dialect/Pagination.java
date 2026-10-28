@@ -33,10 +33,10 @@ public sealed interface Pagination {
         /** By content (MANSART-011): the record default would compare the cursor arrays by identity. */
         @Override
         public boolean equals(Object o) {
-            return o instanceof Keyset k
-                    && limit == k.limit
-                    && Arrays.equals(cursor, k.cursor)
-                    && Objects.equals(order, k.order);
+            return o instanceof Keyset(var otherLimit, var otherCursor, var otherOrder)
+                    && limit == otherLimit
+                    && Arrays.equals(cursor, otherCursor)
+                    && Objects.equals(order, otherOrder);
         }
 
         @Override
