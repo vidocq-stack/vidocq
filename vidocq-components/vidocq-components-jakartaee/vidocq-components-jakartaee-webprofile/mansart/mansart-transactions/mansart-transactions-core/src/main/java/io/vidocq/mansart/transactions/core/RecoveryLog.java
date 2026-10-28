@@ -61,7 +61,7 @@ public interface RecoveryLog extends Closeable {
     record Record(Type type, Xid xid) { }
 
     /** Append a record and force it to durable storage before returning. */
-    void append(Record record) throws IOException;
+    void append(Record entry) throws IOException;
 
     /** Read every record in chronological order. Used at startup for recovery. */
     List<Record> scan() throws IOException;

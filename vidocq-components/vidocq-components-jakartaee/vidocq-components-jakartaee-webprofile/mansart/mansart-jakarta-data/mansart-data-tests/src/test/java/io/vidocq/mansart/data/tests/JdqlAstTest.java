@@ -46,10 +46,10 @@ class JdqlAstTest {
     @Test
     void parsesLiteralsOfEveryKind() {
         var and = (JdqlAst.And) parse("WHERE price >= 1.5d AND stock <> 10L AND name = 'it''s' AND active = TRUE"
-                + " AND stock != 3").where;
+                + " AND stock != 3").where();
 
         assertThat(and.children()).hasSize(5).allSatisfy(p -> assertThat(p).isInstanceOf(JdqlAst.Cmp.class));
-        var literals = and.children().stream().map(p -> ((JdqlAst.Cmp) p).arg().literal).toList();
+        var literals = and.children().stream().map(p -> ((JdqlAst.Cmp) p).arg().literal()).toList();
         assertThat(literals).containsExactly(1.5, 10, "it's", true, 3);
         assertThat(((JdqlAst.Cmp) and.children().get(1)).op()).isEqualTo(JdqlAst.Op.NE);
     }
@@ -57,7 +57,7 @@ class JdqlAstTest {
     @Test
     void parsesInfixNegationsAndFunctionPredicates() {
         var or = (JdqlAst.Or) parse("WHERE name NOT LIKE :p OR stock NOT BETWEEN ?1 AND ?2 OR category NOT IN ('a', 'b')"
-                + " OR UPPER(name) IS NOT NULL OR LOWER(category) NOT IN :cats OR (ABS(stock) < 5)").where;
+                + " OR UPPER(name) IS NOT NULL OR LOWER(category) NOT IN :cats OR (ABS(stock) < 5)").where();
 
         assertThat(or.children()).hasSize(6);
         assertThat(or.children().subList(0, 3)).allSatisfy(p -> assertThat(p).isInstanceOf(JdqlAst.Not.class));
@@ -71,23 +71,23 @@ class JdqlAstTest {
         Stmt stmt = parse("UPDATE Gadget SET price = (price - 1) / 2, name = CONCAT(name, '-', :suffix), stock = stock * 3"
                 + " WHERE active = true");
 
-        assertThat(stmt.kind).isEqualTo(Stmt.Kind.UPDATE);
-        assertThat(stmt.setAssignments).extracting(JdqlAst.SetAssign::attr).containsExactly("price", NAME, STOCK);
-        assertThat(stmt.setAssignments.get(0).value()).isInstanceOf(JdqlAst.ExprBin.class);
-        assertThat(stmt.setAssignments.get(1).value()).isInstanceOf(JdqlAst.ExprFunc.class);
-        assertThat(parse("DELETE FROM Gadget WHERE stock = 0").kind).isEqualTo(Stmt.Kind.DELETE);
-        assertThat(parse("DELETE WHERE stock = 0").kind).isEqualTo(Stmt.Kind.DELETE);
+        assertThat(stmt.kind()).isEqualTo(Stmt.Kind.UPDATE);
+        assertThat(stmt.setAssignments()).extracting(JdqlAst.SetAssign::attr).containsExactly("price", NAME, STOCK);
+        assertThat(stmt.setAssignments().get(0).value()).isInstanceOf(JdqlAst.ExprBin.class);
+        assertThat(stmt.setAssignments().get(1).value()).isInstanceOf(JdqlAst.ExprFunc.class);
+        assertThat(parse("DELETE FROM Gadget WHERE stock = 0").kind()).isEqualTo(Stmt.Kind.DELETE);
+        assertThat(parse("DELETE WHERE stock = 0").kind()).isEqualTo(Stmt.Kind.DELETE);
     }
 
     @Test
     void parsesSelectClauses() {
-        assertThat(parse("SELECT COUNT(*) FROM Gadget").kind).isEqualTo(Stmt.Kind.COUNT);
-        assertThat(parse("SELECT COUNT(this)").kind).isEqualTo(Stmt.Kind.COUNT);
+        assertThat(parse("SELECT COUNT(*) FROM Gadget").kind()).isEqualTo(Stmt.Kind.COUNT);
+        assertThat(parse("SELECT COUNT(this)").kind()).isEqualTo(Stmt.Kind.COUNT);
         Stmt avg = parse("SELECT AVG(price) WHERE active = true");
-        assertThat(avg.kind).isEqualTo(Stmt.Kind.AGGREGATE);
-        assertThat(avg.aggregateOp).isEqualTo("AVG");
-        assertThat(parse("SELECT name, stock ORDER BY name DESC").projectAttrs).containsExactly(NAME, STOCK);
-        assertThat(parse("SELECT this FROM Gadget ORDER BY stock ASC, name").orderBy).hasSize(2);
+        assertThat(avg.kind()).isEqualTo(Stmt.Kind.AGGREGATE);
+        assertThat(avg.aggregateOp()).isEqualTo("AVG");
+        assertThat(parse("SELECT name, stock ORDER BY name DESC").projectAttrs()).containsExactly(NAME, STOCK);
+        assertThat(parse("SELECT this FROM Gadget ORDER BY stock ASC, name").orderBy()).hasSize(2);
     }
 
     @ParameterizedTest

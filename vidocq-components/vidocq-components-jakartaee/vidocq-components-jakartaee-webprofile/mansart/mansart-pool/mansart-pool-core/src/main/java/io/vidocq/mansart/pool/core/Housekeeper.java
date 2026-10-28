@@ -61,7 +61,7 @@ final class Housekeeper {
         long minFloor = pool.leakDetectionEnabled()
                 ? java.time.Duration.ofMillis(50).toNanos()
                 : java.time.Duration.ofSeconds(1).toNanos();
-        this.sweepIntervalNanos = Math.max(minFloor, Math.min(base, leak));
+        this.sweepIntervalNanos = Math.clamp(Math.min(base, leak), minFloor, Long.MAX_VALUE);
         this.thread = Thread.ofVirtual()
                 .name("mansart-pool-housekeeper")
                 .unstarted(this::loop);

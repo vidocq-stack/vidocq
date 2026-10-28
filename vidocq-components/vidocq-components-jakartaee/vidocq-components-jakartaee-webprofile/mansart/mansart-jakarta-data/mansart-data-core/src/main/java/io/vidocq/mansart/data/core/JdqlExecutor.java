@@ -173,12 +173,12 @@ public final class JdqlExecutor {
         }
         Object result = execute(stmt, shapeOf(stmt, model, attrIndex, names), model, attrIndex, runtime, args,
                 pagination);
-        return switch (stmt.kind) {
+        return switch (stmt.kind()) {
             case SELECT -> new JdqlResult.Entities((List<?>) result);
             case COUNT, UPDATE, DELETE -> new JdqlResult.Count(((Number) result).longValue());
             case AGGREGATE -> new JdqlResult.Value(result);
-            case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr), columnRows((List<?>) result));
-            case PROJECT_MULTI -> new JdqlResult.Rows(stmt.projectAttrs, projectedRows(result));
+            case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr()), columnRows((List<?>) result));
+            case PROJECT_MULTI -> new JdqlResult.Rows(stmt.projectAttrs(), projectedRows(result));
         };
     }
 
@@ -281,15 +281,15 @@ public final class JdqlExecutor {
     /** The named parameters {@code stmt} uses, each once, in the order they appear; a positional one is refused. */
     private static List<String> parameterNames(JdqlAst.Stmt stmt) {
         List<JdqlAst.ArgRef> refs = new ArrayList<>();
-        for (JdqlAst.SetAssign sa : stmt.setAssignments) collectArgs(sa.value(), refs);
-        if (stmt.where != null) collectArgs(stmt.where, refs);
+        for (JdqlAst.SetAssign sa : stmt.setAssignments()) collectArgs(sa.value(), refs);
+        if (stmt.where() != null) collectArgs(stmt.where(), refs);
         java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
         for (JdqlAst.ArgRef ref : refs) {
-            if (ref.isLiteral) continue;
+            if (ref.isLiteral()) continue;
             if (!ref.isNamed()) {
                 throw new MansartDataException("positional parameters are not supported here; use :name");
             }
-            names.add(ref.named);
+            names.add(ref.named());
         }
         return List.copyOf(names);
     }
@@ -334,13 +334,13 @@ public final class JdqlExecutor {
      */
     private static CallShape shapeOf(JdqlAst.Stmt stmt, EntityModel<?> model,
                                      Map<String, Attribute<?, ?>> attrIndex, Map<String, Integer> names) {
-        return switch (stmt.kind) {
+        return switch (stmt.kind()) {
             case SELECT -> new CallShape(List.class, model.entityClass(), names, true);
             case PROJECT -> new CallShape(List.class,
-                    boxed(lookup(model, attrIndex, stmt.scalarAttr).javaType()), names, true);
+                    boxed(lookup(model, attrIndex, stmt.scalarAttr()).javaType()), names, true);
             case PROJECT_MULTI -> new CallShape(List.class, Object[].class, names, true);
             case AGGREGATE -> new CallShape(
-                    aggregateType(stmt.aggregateOp, lookup(model, attrIndex, stmt.scalarAttr).javaType()),
+                    aggregateType(stmt.aggregateOp(), lookup(model, attrIndex, stmt.scalarAttr()).javaType()),
                     null, names, true);
             case COUNT, UPDATE, DELETE -> new CallShape(long.class, null, names, true);
         };
@@ -357,9 +357,14 @@ public final class JdqlExecutor {
         boolean floating = type == Double.class || type == Float.class;
         return switch (op) {
             case "AVG" -> type == java.math.BigDecimal.class ? java.math.BigDecimal.class : Double.class;
-            case "SUM" -> integral ? Long.class : floating ? Double.class : type;
+            case "SUM" -> sumType(type, integral, floating);
             default -> type;
         };
+    }
+
+    private static Class<?> sumType(Class<?> type, boolean integral, boolean floating) {
+        if (integral) return Long.class;
+        return floating ? Double.class : type;
     }
 
     /** A projected column as rows of one value. */
@@ -387,24 +392,24 @@ public final class JdqlExecutor {
     static Object execute(JdqlAst.Stmt stmt, CallShape shape, EntityModel<?> model,
                           Map<String, Attribute<?, ?>> attrIndex,
                           RepositoryRuntime runtime, Object[] args, Pagination pagination) {
-        OrderBy orderBy = buildOrderBy(stmt.orderBy, model, attrIndex);
+        OrderBy orderBy = buildOrderBy(stmt.orderBy(), model, attrIndex);
         // M7-21 — fold any Sort/Order control args into the OrderBy. The query's own ORDER BY
         // (from JDQL) takes precedence (declared first); runtime Sort args extend it.
         orderBy = appendRuntimeSorts(orderBy, args, attrIndex);
         Execution call = new Execution(shape, model, runtime, args, orderBy, pagination);
 
-        return switch (stmt.kind) {
-            case COUNT -> call.count(buildWhere(stmt.where, model, attrIndex, args, shape));
-            case SELECT -> call.select(buildWhere(stmt.where, model, attrIndex, args, shape));
-            case AGGREGATE -> call.aggregate(buildWhere(stmt.where, model, attrIndex, args, shape),
-                    stmt.aggregateOp, lookup(model, attrIndex, stmt.scalarAttr));
-            case PROJECT_MULTI -> call.projectColumns(buildWhere(stmt.where, model, attrIndex, args, shape),
-                    lookupAll(model, attrIndex, stmt.projectAttrs));
-            case PROJECT -> call.projectColumn(buildWhere(stmt.where, model, attrIndex, args, shape),
-                    lookup(model, attrIndex, stmt.scalarAttr), stmt.scalarAttr);
-            case UPDATE -> call.update(renderSet(stmt.setAssignments, attrIndex, args, shape),
-                    buildWhere(stmt.where, model, attrIndex, args, shape));
-            case DELETE -> call.delete(buildWhere(stmt.where, model, attrIndex, args, shape));
+        return switch (stmt.kind()) {
+            case COUNT -> call.count(buildWhere(stmt.where(), model, attrIndex, args, shape));
+            case SELECT -> call.select(buildWhere(stmt.where(), model, attrIndex, args, shape));
+            case AGGREGATE -> call.aggregate(buildWhere(stmt.where(), model, attrIndex, args, shape),
+                    stmt.aggregateOp(), lookup(model, attrIndex, stmt.scalarAttr()));
+            case PROJECT_MULTI -> call.projectColumns(buildWhere(stmt.where(), model, attrIndex, args, shape),
+                    lookupAll(model, attrIndex, stmt.projectAttrs()));
+            case PROJECT -> call.projectColumn(buildWhere(stmt.where(), model, attrIndex, args, shape),
+                    lookup(model, attrIndex, stmt.scalarAttr()), stmt.scalarAttr());
+            case UPDATE -> call.update(renderSet(stmt.setAssignments(), attrIndex, args, shape),
+                    buildWhere(stmt.where(), model, attrIndex, args, shape));
+            case DELETE -> call.delete(buildWhere(stmt.where(), model, attrIndex, args, shape));
         };
     }
 
@@ -415,14 +420,16 @@ public final class JdqlExecutor {
         return attrs;
     }
 
-    /** The {@code SET} clause of an {@code UPDATE}: its SQL and the values it binds, with their types. */
-    private record SetClause(String sql, List<Object> values, List<Class<?>> types) {}
+    /** The {@code SET} clause of an {@code UPDATE}: its SQL and the values it binds. */
+    private record SetClause(String sql, SetValues bound) {}
+
+    /** The values a {@code SET} clause binds, in placeholder order, with the type each is bound as. */
+    private record SetValues(List<Object> values, List<Class<?>> types) {}
 
     private static SetClause renderSet(List<JdqlAst.SetAssign> assignments, Map<String, Attribute<?, ?>> attrIndex,
                                        Object[] args, CallShape shape) {
         StringBuilder setSql = new StringBuilder();
-        List<Object> setVals = new ArrayList<>();
-        List<Class<?>> setTypes = new ArrayList<>();
+        SetValues bound = new SetValues(new ArrayList<>(), new ArrayList<>());
         for (JdqlAst.SetAssign sa : assignments) {
             // SET LHS doesn't allow path expressions (cannot UPDATE through a join). Stay
             // on the flat attrIndex and reject paths explicitly.
@@ -433,9 +440,9 @@ public final class JdqlExecutor {
             if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
             if (!setSql.isEmpty()) setSql.append(", ");
             setSql.append('"').append(a.columnName()).append("\" = ");
-            renderExpr(setSql, sa.value(), attrIndex, args, shape, setVals, setTypes, a.javaType());
+            renderExpr(setSql, sa.value(), attrIndex, args, shape, bound, a.javaType());
         }
-        return new SetClause(setSql.toString(), setVals, setTypes);
+        return new SetClause(setSql.toString(), bound);
     }
 
     /** The rows {@code limit} keeps of {@code rows} (all of them without a limit), in a new list. */
@@ -558,7 +565,8 @@ public final class JdqlExecutor {
         }
 
         Object update(SetClause set, BuiltWhere bw) {
-            long n = runtime.executeUpdateRaw(model, set.sql(), set.values(), set.types(), bw.where, bw.args);
+            long n = runtime.executeUpdateRaw(model, set.sql(), set.bound().values(), set.bound().types(),
+                    bw.where, bw.args);
             return wrapLongResult(shape.returnType(), n);
         }
 
@@ -636,11 +644,11 @@ public final class JdqlExecutor {
             }
             case JdqlAst.In(var attr, var args, var collection) -> {
                 a = lookup(model, attrIndex, attr);
-                return buildIn(a, args, collection, callArgs, shape, argsOut, alwaysFalse, null);
+                return flagNoMatch(buildIn(a, args, collection, callArgs, shape, argsOut, null), alwaysFalse);
             }
             case JdqlAst.FnIn(var fn, var attr, var args, var collection) -> {
                 a = lookup(model, attrIndex, attr);
-                return buildIn(a, args, collection, callArgs, shape, argsOut, alwaysFalse, fn);
+                return flagNoMatch(buildIn(a, args, collection, callArgs, shape, argsOut, fn), alwaysFalse);
             }
             case JdqlAst.And(var children) -> {
                 List<Where> cs = new ArrayList<>(children.size());
@@ -678,16 +686,22 @@ public final class JdqlExecutor {
         };
     }
 
+    /** {@code where}, {@code alwaysFalse} set when it is the empty-IN {@link Where#ALWAYS_FALSE}. */
+    private static Where flagNoMatch(Where where, boolean[] alwaysFalse) {
+        if (where == Where.ALWAYS_FALSE) alwaysFalse[0] = true;
+        return where;
+    }
+
+    /** The IN predicate, {@link Where#ALWAYS_FALSE} for an IN over an empty collection. */
     private static Where buildIn(Attribute<?, ?> a, List<JdqlAst.ArgRef> argRefs, boolean collection,
                                  Object[] callArgs, CallShape shape,
-                                 List<Object> argsOut, boolean[] alwaysFalse, String wrapFn) {
+                                 List<Object> argsOut, String wrapFn) {
         Class<?> target = wrapFn == null ? a.javaType() : comparedType(wrapFn, a);
         Where inner;
         if (collection) {
             Object v = resolveArg(argRefs.get(0), callArgs, shape, target);
             if (v instanceof Collection<?> col) {
                 if (col.isEmpty()) {
-                    alwaysFalse[0] = true;
                     return Where.ALWAYS_FALSE;
                 }
                 for (Object e : col) argsOut.add(e);
@@ -723,22 +737,25 @@ public final class JdqlExecutor {
      * shape says so ({@link JdqlValues}), as is otherwise.
      */
     private static Object resolveArg(JdqlAst.ArgRef ref, Object[] args, CallShape shape, Class<?> target) {
-        if (ref.isLiteral) {
-            Object value = resolveLiteral(ref.literal, target);
-            return shape.convert() ? JdqlValues.convert(value, target, literalLabel(ref.literal)) : value;
+        if (ref.isLiteral()) {
+            Object value = resolveLiteral(ref.literal(), target);
+            return shape.convert() ? JdqlValues.convert(value, target, literalLabel(ref.literal())) : value;
         }
         Object value;
         if (ref.isNamed()) {
-            Integer i = shape.names().get(ref.named);
-            if (i == null) throw new MansartDataException("@Query references :" + ref.named
+            Integer i = shape.names().get(ref.named());
+            if (i == null) throw new MansartDataException("@Query references :" + ref.named()
                     + " but the method has no parameter with that name (compile with -parameters or use ?N)");
             value = args[i];
         } else {
-            value = args[ref.positional - 1];
+            value = args[ref.positional() - 1];
         }
-        return shape.convert()
-                ? JdqlValues.convert(value, target, ref.isNamed() ? ":" + ref.named : "?" + ref.positional)
-                : value;
+        return shape.convert() ? JdqlValues.convert(value, target, parameterLabel(ref)) : value;
+    }
+
+    /** How an error names a parameter: {@code :name} or {@code ?1}. */
+    private static String parameterLabel(JdqlAst.ArgRef ref) {
+        return ref.isNamed() ? ":" + ref.named() : "?" + ref.positional();
     }
 
     /** How an error names a literal: a text in quotes, {@code 'LOST'}, anything else as it reads. */
@@ -780,16 +797,14 @@ public final class JdqlExecutor {
 
     /**
      * M7-24 — render a JDQL value expression (supports + - * /, attribute references, and arg
-     * references) into a SQL fragment. Bindings flow into {@code outVals} / {@code outTypes}
-     * in the order the placeholders appear, paired with {@code targetType} for the dialect to
-     * coerce against (the SET column's Java type).
+     * references) into a SQL fragment. Bindings flow into {@code out} in the order the
+     * placeholders appear, paired with {@code targetType} for the dialect to coerce against
+     * (the SET column's Java type).
      */
-    @SuppressWarnings("unchecked")
     private static void renderExpr(StringBuilder sb, JdqlAst.Expr expr,
                                    Map<String, Attribute<?, ?>> attrIndex,
                                    Object[] callArgs, CallShape shape,
-                                   List<Object> outVals, List<Class<?>> outTypes,
-                                   Class<?> targetType) {
+                                   SetValues out, Class<?> targetType) {
         switch (expr) {
             case JdqlAst.ExprAttr(var name) -> {
                 Attribute<?, ?> attr = attrIndex.get(name);
@@ -797,15 +812,15 @@ public final class JdqlExecutor {
                 sb.append('"').append(attr.columnName()).append('"');
             }
             case JdqlAst.ExprArg(var arg) -> {
-                outVals.add(resolveArg(arg, callArgs, shape, targetType));
-                outTypes.add(targetType);
+                out.values().add(resolveArg(arg, callArgs, shape, targetType));
+                out.types().add(targetType);
                 sb.append('?');
             }
             case JdqlAst.ExprBin(var left, var op, var right) -> {
                 sb.append('(');
-                renderExpr(sb, left, attrIndex, callArgs, shape, outVals, outTypes, targetType);
+                renderExpr(sb, left, attrIndex, callArgs, shape, out, targetType);
                 sb.append(' ').append(op).append(' ');
-                renderExpr(sb, right, attrIndex, callArgs, shape, outVals, outTypes, targetType);
+                renderExpr(sb, right, attrIndex, callArgs, shape, out, targetType);
                 sb.append(')');
             }
             // M8-1 — render scalar functions in SET RHS. LENGTH → CHAR_LENGTH (SQL-portable).
@@ -818,7 +833,7 @@ public final class JdqlExecutor {
                 sb.append(sqlFn).append('(');
                 for (int i = 0; i < args.size(); i++) {
                     if (i > 0) sb.append(", ");
-                    renderExpr(sb, args.get(i), attrIndex, callArgs, shape, outVals, outTypes, innerType);
+                    renderExpr(sb, args.get(i), attrIndex, callArgs, shape, out, innerType);
                 }
                 sb.append(')');
             }

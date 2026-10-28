@@ -69,10 +69,10 @@ final class RuntimeRepositoryClassGenerator {
             cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_SYNTHETIC);
             cb.withInterfaceSymbols(itfCd);
 
-            // private final MansartCallback cb;
+            // The callback every method delegates to, held in a private final field named "cb".
             cb.withField("cb", callbackCd, ClassFile.ACC_PRIVATE | ClassFile.ACC_FINAL);
 
-            // public <init>(MansartCallback cb) { super(); this.cb = cb; }
+            // A public constructor taking that callback: it calls Object's constructor, then stores the callback.
             cb.withMethodBody(ConstantDescs.INIT_NAME,
                     MethodTypeDesc.of(ConstantDescs.CD_void, callbackCd),
                     ClassFile.ACC_PUBLIC,
@@ -254,14 +254,18 @@ final class RuntimeRepositoryClassGenerator {
 
     private static void pushInt(java.lang.classfile.CodeBuilder code, int v) {
         switch (v) {
-            case -1 -> { code.iconst_m1(); return; }
-            case 0  -> { code.iconst_0(); return; }
-            case 1  -> { code.iconst_1(); return; }
-            case 2  -> { code.iconst_2(); return; }
-            case 3  -> { code.iconst_3(); return; }
-            case 4  -> { code.iconst_4(); return; }
-            case 5  -> { code.iconst_5(); return; }
+            case -1 -> code.iconst_m1();
+            case 0  -> code.iconst_0();
+            case 1  -> code.iconst_1();
+            case 2  -> code.iconst_2();
+            case 3  -> code.iconst_3();
+            case 4  -> code.iconst_4();
+            case 5  -> code.iconst_5();
+            default -> pushWideInt(code, v);
         }
+    }
+
+    private static void pushWideInt(java.lang.classfile.CodeBuilder code, int v) {
         if (v >= Byte.MIN_VALUE && v <= Byte.MAX_VALUE) code.bipush(v);
         else if (v >= Short.MIN_VALUE && v <= Short.MAX_VALUE) code.sipush(v);
         else code.ldc(v);

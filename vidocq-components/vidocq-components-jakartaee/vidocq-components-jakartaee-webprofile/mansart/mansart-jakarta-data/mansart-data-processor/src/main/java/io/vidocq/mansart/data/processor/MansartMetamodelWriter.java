@@ -96,15 +96,14 @@ final class MansartMetamodelWriter {
             w.println(CLOSE_MEMBER);
             w.println();
             for (AttributeDescriptor a : e.attributes()) {
-                writeAttribute(w, entityRef, a, a == e.id(), a == e.version());
+                writeAttribute(w, entityRef, a);
             }
             writeModel(w, entityRef, e);
             w.println("}");
         }
     }
 
-    private void writeAttribute(PrintWriter w, String entityRef, AttributeDescriptor a,
-                                boolean isId, boolean isVersion) {
+    private void writeAttribute(PrintWriter w, String entityRef, AttributeDescriptor a) {
         String boxed = box(a.javaTypeFqn());
         // For findGetter/findSetter we MUST use the raw declared type — passing Double.class
         // for a `double` field fails with NoSuchFieldException because MethodHandles.Lookup

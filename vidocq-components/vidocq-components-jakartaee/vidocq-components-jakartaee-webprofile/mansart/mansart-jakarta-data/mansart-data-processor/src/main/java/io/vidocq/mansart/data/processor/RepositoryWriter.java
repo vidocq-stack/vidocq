@@ -61,6 +61,7 @@ final class RepositoryWriter {
     private static final String IS_NULL_OPEN = ".IsNull(";
     private static final String IS_NOT_NULL_OPEN = ".IsNotNull(";
     private static final String LIKE_OPEN = ".Like(";
+    private static final String WHERE_TYPE = "io.vidocq.mansart.data.dialect.Where";
     private static final String RETURN_QUERY_ONE = "return runtime.queryOne(";
     private static final String MODEL_WHERE_ARGS = ".$MODEL, _w, _xs);";
     private static final String MODEL_ARG = ".$MODEL, ";
@@ -177,7 +178,6 @@ final class RepositoryWriter {
         TypeElement entityType = (TypeElement) args.entity.asElement();
         emittedEntity = entityType;
         String entityFqn = entityType.getQualifiedName().toString();
-        String idFqn     = args.idBoxedFqn();
 
         java.util.Set<String> attributeNames = collectAttributeNames(entityType);
         // M8-3i — path resolver: greedy split of CamelCase chunks against the cross-entity registry.
@@ -228,9 +228,8 @@ final class RepositoryWriter {
             w.println("    }");
             w.println();
 
-            DeclaredType repoType = (DeclaredType) repo.asType();
             for (ExecutableElement m : abstractMethods(repo)) {
-                writeMethod(w, m, repo, repoType, metamodel, entityFqn, idFqn, attributeNames, pathResolver);
+                writeMethod(w, m, repo, metamodel, entityFqn, attributeNames, pathResolver);
             }
 
             w.println("}");
@@ -238,11 +237,11 @@ final class RepositoryWriter {
         return fqn;
     }
 
-    private void writeMethod(PrintWriter w, ExecutableElement m, TypeElement repo, DeclaredType repoType,
-                             String metamodel, String entityFqn, String idFqn,
+    private void writeMethod(PrintWriter w, ExecutableElement m, TypeElement repo,
+                             String metamodel, String entityFqn,
                              java.util.Set<String> attributeNames,
                              QueryMethodParser.PathResolver pathResolver) {
-        ExecutableType resolved = (ExecutableType) types.asMemberOf(repoType, m);
+        ExecutableType resolved = (ExecutableType) types.asMemberOf((DeclaredType) repo.asType(), m);
         String name = m.getSimpleName().toString();
         TypeMirror returnType = resolved.getReturnType();
         List<? extends TypeMirror> paramTypes = resolved.getParameterTypes();
@@ -368,7 +367,7 @@ final class RepositoryWriter {
 
         try {
             return JdqlParser.generateBody(jdql, m, metamodel, entitySimple, attributeNames,
-                    returnType, trailingPageRequest, cursoredPage);
+                    returnType, new JdqlParser.Paging(trailingPageRequest, cursoredPage));
         } catch (JdqlParser.ParseException e) {
             throw new IllegalStateException((readQueryAnnotation(m) == null ? "@Find" : "@Query")
                     + " parse error on " + m.getSimpleName()
@@ -589,7 +588,7 @@ final class RepositoryWriter {
 
         // Mixed predicates with at least one In(Collection): switch to runtime-built Where.
         if (anyInWithCollection(d.predicates(), paramTypes, predicateArity)) {
-            return mixedInBody(d, returnType, metamodel, paramTypes, predicateArity, trailingPageRequest);
+            return mixedInBody(d, returnType, metamodel, paramTypes, trailingPageRequest);
         }
 
         String where = renderWhere(d, metamodel);
@@ -638,88 +637,17 @@ final class RepositoryWriter {
      */
     private String mixedInBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType,
                                String metamodel, List<? extends TypeMirror> paramTypes,
-                               int predicateArity, boolean trailingPageRequest) {
-        String pkg = "io.vidocq.mansart.data.dialect.Where";
+                               boolean trailingPageRequest) {
+        String pkg = WHERE_TYPE;
         StringBuilder sb = new StringBuilder();
         sb.append("java.util.List<").append(pkg).append("> _parts = new java.util.ArrayList<>(); ");
         sb.append("java.util.List<java.lang.Object> _args = new java.util.ArrayList<>(); ");
 
+        String emptyReturn = emptyInReturn(d.op(), returnType);
         int idx = 0;
         for (QueryMethodParser.Predicate p : d.predicates()) {
             // M8-3i — paths route through PathResolver at runtime; flat attrs use static field.
-            String attr = attrRef(metamodel, p.attribute());
-            String paramName = p(idx);
-            // M7-28 — same wrapping logic as predicateExpr: comparator → IgnoreCase → Not.
-            String partExpr;
-            switch (p.comparator()) {
-                case IN -> {
-                    if (isCollectionLike(paramTypes.get(idx))) {
-                        sb.append("java.util.Collection<?> _col").append(idx)
-                          .append(" = (java.util.Collection<?>) ").append(paramName).append("; ");
-                        sb.append("if (_col").append(idx).append(".isEmpty()) ")
-                          .append(emptyInReturn(d.op(), returnType)).append(' ');
-                        partExpr = "new " + pkg + ".In(" + attr + ", _col" + idx + ".size())";
-                        partExpr = wrapIgnoreCaseAndNot(partExpr, p, pkg);
-                        sb.append(ADD_PART).append(partExpr).append("); ");
-                        sb.append("for (Object _v : _col").append(idx).append(") _args.add(_v); ");
-                    } else {
-                        partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".In(" + attr + ", 1)", p, pkg);
-                        sb.append(ADD_PART).append(partExpr).append("); ");
-                        sb.append(ADD_ARG).append(paramName).append("); ");
-                    }
-                    idx += 1;
-                }
-                case BETWEEN -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Between(" + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append(ADD_ARG).append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
-                    idx += 2;
-                }
-                case IS_NULL, EMPTY -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + IS_NULL_OPEN + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                }
-                case IS_NOT_NULL, NOT_EMPTY -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + IS_NOT_NULL_OPEN + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                }
-                case TRUE -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append("_args.add(java.lang.Boolean.TRUE); ");
-                }
-                case FALSE -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + ".Eq(" + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append("_args.add(java.lang.Boolean.FALSE); ");
-                }
-                case CONTAINS -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append("_args.add(\"%\" + ").append(paramName).append(" + \"%\"); ");
-                    idx += 1;
-                }
-                case STARTS_WITH -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append(ADD_ARG).append(paramName).append(" + \"%\"); ");
-                    idx += 1;
-                }
-                case ENDS_WITH -> {
-                    partExpr = wrapIgnoreCaseAndNot("new " + pkg + LIKE_OPEN + attr + ")", p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append("_args.add(\"%\" + ").append(paramName).append("); ");
-                    idx += 1;
-                }
-                default -> {
-                    partExpr = wrapIgnoreCaseAndNot(
-                            "new " + pkg + '.' + comparatorClass(p.comparator()) + '(' + attr + ')',
-                            p, pkg);
-                    sb.append(ADD_PART).append(partExpr).append("); ");
-                    sb.append(ADD_ARG).append(paramName).append("); ");
-                    idx += 1;
-                }
-            }
+            idx += appendMixedPredicate(sb, p, attrRef(metamodel, p.attribute()), idx, paramTypes, emptyReturn);
         }
 
         String combine = d.combinator() == QueryMethodParser.Combinator.AND ? "and" : "or";
@@ -741,6 +669,65 @@ final class RepositoryWriter {
             case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(MODEL_WHERE_ARGS).toString();
             case DELETE   -> sb.append(deleteBody(returnType, metamodel, "_w", "_xs")).toString();
         };
+    }
+
+    /**
+     * Appends the {@code _parts} / {@code _args} statements of one predicate, reading from parameter {@code idx};
+     * returns how many parameters it consumes. M7-28 — same wrapping logic as predicateExpr: comparator →
+     * IgnoreCase → Not.
+     */
+    private int appendMixedPredicate(StringBuilder sb, QueryMethodParser.Predicate p, String attr, int idx,
+                                     List<? extends TypeMirror> paramTypes, String emptyReturn) {
+        String paramName = p(idx);
+        switch (p.comparator()) {
+            case IN -> {
+                if (isCollectionLike(paramTypes.get(idx))) {
+                    sb.append("java.util.Collection<?> _col").append(idx)
+                      .append(" = (java.util.Collection<?>) ").append(paramName).append("; ");
+                    sb.append("if (_col").append(idx).append(".isEmpty()) ").append(emptyReturn).append(' ');
+                    appendPart(sb, p, "In(" + attr + ", _col" + idx + ".size()");
+                    sb.append("for (Object _v : _col").append(idx).append(") _args.add(_v); ");
+                } else {
+                    appendPart(sb, p, "In(" + attr + ", 1");
+                    sb.append(ADD_ARG).append(paramName).append("); ");
+                }
+                return 1;
+            }
+            case BETWEEN -> {
+                appendPart(sb, p, "Between(" + attr);
+                sb.append(ADD_ARG).append(p(idx)).append("); _args.add(").append(p(idx + 1)).append("); ");
+                return 2;
+            }
+            case IS_NULL, EMPTY -> {
+                appendPart(sb, p, "IsNull(" + attr);
+                return 0;
+            }
+            case IS_NOT_NULL, NOT_EMPTY -> {
+                appendPart(sb, p, "IsNotNull(" + attr);
+                return 0;
+            }
+            case TRUE, FALSE -> {
+                appendPart(sb, p, "Eq(" + attr);
+                sb.append("_args.add(java.lang.Boolean.").append(p.comparator()).append("); ");
+                return 0;
+            }
+            case CONTAINS, STARTS_WITH, ENDS_WITH -> {
+                appendPart(sb, p, "Like(" + attr);
+                sb.append(ADD_ARG).append(argFor(p.comparator(), idx)).append("); ");
+                return 1;
+            }
+            default -> {
+                appendPart(sb, p, comparatorClass(p.comparator()) + '(' + attr);
+                sb.append(ADD_ARG).append(paramName).append("); ");
+                return 1;
+            }
+        }
+    }
+
+    /** {@code _parts.add(new Where.<whereCall>));}, the predicate wrapped by its IgnoreCase / Not flags. */
+    private void appendPart(StringBuilder sb, QueryMethodParser.Predicate p, String whereCall) {
+        String partExpr = wrapIgnoreCaseAndNot("new " + WHERE_TYPE + '.' + whereCall + ')', p, WHERE_TYPE);
+        sb.append(ADD_PART).append(partExpr).append("); ");
     }
 
     /** M7-28 — wraps a Where expression with IgnoreCase and/or Not according to predicate flags. */
@@ -778,8 +765,11 @@ final class RepositoryWriter {
             case FIND_ONE -> "return java.util.Optional.empty();";
             case COUNT    -> "return 0L;";
             case EXISTS   -> "return false;";
-            case DELETE   -> rt.getKind() == javax.lang.model.type.TypeKind.VOID ? "return;"
-                          : (rt.getKind() == javax.lang.model.type.TypeKind.INT ? "return 0;" : "return 0L;");
+            case DELETE   -> switch (rt.getKind()) {
+                case VOID -> "return;";
+                case INT  -> "return 0;";
+                default   -> "return 0L;";
+            };
         };
     }
 
@@ -855,7 +845,7 @@ final class RepositoryWriter {
         // M8-3i — paths (a.b.c) route through PathResolver at runtime; flat attrs use the
         // compile-time static field reference.
         String attr = attrRef(metamodel, p.attribute());
-        String pkg = "io.vidocq.mansart.data.dialect.Where";
+        String pkg = WHERE_TYPE;
         String inner = switch (p.comparator()) {
             case EQ        -> "new " + pkg + ".Eq(" + attr + ")";
             case NOT_EQ    -> "new " + pkg + ".NotEq(" + attr + ")";
@@ -1099,6 +1089,7 @@ final class RepositoryWriter {
                     case VALUE -> parts.add(VALUE + " = " + renderAnnotationValue(av));
                     case "rollbackOn" -> parts.add("rollbackOn = " + renderAnnotationValue(av));
                     case "dontRollbackOn" -> parts.add("dontRollbackOn = " + renderAnnotationValue(av));
+                    default -> { /* no other member of @Transactional is reproduced */ }
                 }
             }
             String attrs = parts.isEmpty() ? "" : "(" + String.join(", ", parts) + ")";
@@ -1215,18 +1206,5 @@ final class RepositoryWriter {
         }
     }
 
-    private record TypeArgs(DeclaredType entity, TypeMirror id) {
-        String idBoxedFqn() {
-            return switch (id.toString()) {
-                case "byte"    -> "java.lang.Byte";
-                case "short"   -> "java.lang.Short";
-                case "int"     -> "java.lang.Integer";
-                case "long"    -> "java.lang.Long";
-                case "boolean" -> "java.lang.Boolean";
-                case "float"   -> "java.lang.Float";
-                case "double"  -> "java.lang.Double";
-                default        -> id.toString();
-            };
-        }
-    }
+    private record TypeArgs(DeclaredType entity, TypeMirror id) {}
 }

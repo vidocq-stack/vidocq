@@ -67,11 +67,17 @@ final class JdqlParser {
 
     private JdqlParser() {}
 
+    /**
+     * How a query method pages: it ends with a {@code PageRequest} parameter, and it returns a {@code CursoredPage}.
+     */
+    record Paging(boolean trailingPageRequest, boolean cursoredPageReturn) {}
+
     /** Emits the body for a {@code @Query} method. */
     static String generateBody(String jdql, ExecutableElement method, String metamodel,
                                String entitySimpleName, Set<String> attributeNames,
-                               TypeMirror returnType, boolean trailingPageRequest,
-                               boolean isCursoredPageReturn) {
+                               TypeMirror returnType, Paging paging) {
+        boolean trailingPageRequest = paging.trailingPageRequest();
+        boolean isCursoredPageReturn = paging.cursoredPageReturn();
         Map<String, Integer> nameToIdx = new HashMap<>();
         for (int i = 0; i < method.getParameters().size(); i++) {
             nameToIdx.put(queryParameterName(method.getParameters().get(i)), i);
@@ -85,7 +91,7 @@ final class JdqlParser {
         try {
             io.vidocq.mansart.data.core.JdqlAst.Stmt runtimeStmt =
                     io.vidocq.mansart.data.core.JdqlAst.parse(jdql, attributeNames, entitySimpleName);
-            if (runtimeStmt.kind == io.vidocq.mansart.data.core.JdqlAst.Stmt.Kind.UPDATE
+            if (runtimeStmt.kind() == io.vidocq.mansart.data.core.JdqlAst.Stmt.Kind.UPDATE
                     && hasComplexSet(runtimeStmt)) {
                 return emitRuntimeFallback(jdql, method, metamodel, returnType);
             }
@@ -434,34 +440,32 @@ final class JdqlParser {
         return sb.toString();
     }
 
-    private static final class DynCtx { final Map<Object, String> colVar = new java.util.IdentityHashMap<>(); int counter = 0; }
+    private static final class DynCtx {
+        final Map<Object, String> colVar = new java.util.IdentityHashMap<>();
+        int counter = 0;
+    }
 
     private static void declareInCollections(StringBuilder sb, Pred p,
                                              Map<String, Integer> nameToIdx, ExecutableElement m,
                                              DynCtx ctx) {
         if (p == null) return;
         switch (p) {
-            case In in -> {
-                if (in.collection) {
-                    String var = "_col" + ctx.counter++;
-                    ctx.colVar.put(in, var);
-                    sb.append("java.util.Collection<?> ").append(var)
-                      .append(" = (java.util.Collection<?>) ").append(resolveArg(in.args.get(0), nameToIdx, m)).append("; ");
-                }
-            }
-            case FnIn in -> {
-                if (in.collection) {
-                    String var = "_col" + ctx.counter++;
-                    ctx.colVar.put(in, var);
-                    sb.append("java.util.Collection<?> ").append(var)
-                      .append(" = (java.util.Collection<?>) ").append(resolveArg(in.args.get(0), nameToIdx, m)).append("; ");
-                }
-            }
+            case In in when in.collection() -> declareCollection(sb, in, in.args().get(0), nameToIdx, m, ctx);
+            case FnIn in when in.collection() -> declareCollection(sb, in, in.args().get(0), nameToIdx, m, ctx);
             case And(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
             case Or(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
             case Not(var child) -> declareInCollections(sb, child, nameToIdx, m, ctx);
             default    -> { /* no IN collection to declare */ }
         }
+    }
+
+    /** {@code java.util.Collection<?> _colN = (java.util.Collection<?>) <arg>;}, the variable recorded for {@code in}. */
+    private static void declareCollection(StringBuilder sb, Pred in, ArgRef arg,
+                                          Map<String, Integer> nameToIdx, ExecutableElement m, DynCtx ctx) {
+        String name = "_col" + ctx.counter++;
+        ctx.colVar.put(in, name);
+        sb.append("java.util.Collection<?> ").append(name)
+          .append(" = (java.util.Collection<?>) ").append(resolveArg(arg, nameToIdx, m)).append("; ");
     }
 
     private static String buildWhereExpr(Pred p, String metamodel,
@@ -541,7 +545,7 @@ final class JdqlParser {
     /** M8-1f — at least one SET assignment whose RHS is not a plain ArgRef (i.e. arithmetic or
      *  scalar function call). The runtime fallback handles those without compile-time emit code. */
     private static boolean hasComplexSet(io.vidocq.mansart.data.core.JdqlAst.Stmt stmt) {
-        for (var sa : stmt.setAssignments) {
+        for (var sa : stmt.setAssignments()) {
             if (!(sa.value() instanceof io.vidocq.mansart.data.core.JdqlAst.ExprArg)) return true;
         }
         return false;
@@ -763,7 +767,12 @@ final class JdqlParser {
     record Not(Pred child)                                  implements Pred {}
     record Order(String attr, boolean asc) {}
     /** A {@code :name} or {@code ?N} reference inside the JDQL. */
-    static final class ArgRef { String named; int positional; ArgRef(String n) { named = n; } ArgRef(int p) { positional = p; } }
+    static final class ArgRef {
+        String named;
+        int positional;
+        ArgRef(String n) { named = n; }
+        ArgRef(int p) { positional = p; }
+    }
     enum Op { EQ, NE, LT, LTE, GT, GTE, LIKE }
 
     /* ---------- code emission ---------- */

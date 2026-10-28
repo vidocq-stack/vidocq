@@ -55,10 +55,6 @@ public class MansartTransactionManager implements TransactionManager {
     private final ThreadLocal<MansartTransaction> active = new ThreadLocal<>();
     private final RecoveryLog recoveryLog;
 
-    /** Default timeout in seconds applied to new transactions. {@code 0} = no timeout. M1 stores
-     *  the value but does not enforce it yet — enforcement lands with M2's reaper task. */
-    private volatile int defaultTimeoutSeconds;
-
     /** Volatile TM (no recovery log) — the most common case for embedded apps and tests. */
     public MansartTransactionManager() {
         this(NoOpRecoveryLog.INSTANCE);
@@ -130,7 +126,7 @@ public class MansartTransactionManager implements TransactionManager {
         if (seconds < 0) {
             throw new SystemException("Negative transaction timeout: " + seconds);
         }
-        this.defaultTimeoutSeconds = seconds;
+        // Accepted but not enforced yet: transaction timeouts land with the reaper task (M2).
     }
 
     @Override

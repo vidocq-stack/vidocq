@@ -26,6 +26,7 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 import jakarta.transaction.InvalidTransactionException;
 import jakarta.transaction.Status;
+import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionRequiredException;
@@ -172,7 +173,7 @@ public class TransactionalInterceptor {
         try { tm.rollback(); } catch (Exception _) { /* best effort */ }
     }
 
-    private boolean isActive() throws Exception {
+    private boolean isActive() throws SystemException {
         return tm.getStatus() == Status.STATUS_ACTIVE
             || tm.getStatus() == Status.STATUS_MARKED_ROLLBACK;
     }

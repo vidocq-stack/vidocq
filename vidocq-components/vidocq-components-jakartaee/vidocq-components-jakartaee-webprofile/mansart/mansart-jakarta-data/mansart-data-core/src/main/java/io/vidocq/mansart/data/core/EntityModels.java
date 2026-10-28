@@ -75,13 +75,14 @@ public final class EntityModels {
      *                              metamodel without a public static {@code $MODEL} field; the initialisation of a
      *                              generated metamodel may also throw its own error
      */
-    @SuppressWarnings("unchecked")
     public static <E> EntityModel<E> of(Class<E> entityType) {
-        return (EntityModel<E>) lookup(entityType);
+        return lookup(entityType);
     }
 
-    static EntityModel<?> lookup(Class<?> entityType) {
-        return CACHE.get(entityType);
+    /** The model of {@code entityType}, built once (the cache maps each entity class to its own model). */
+    @SuppressWarnings("unchecked")
+    static <E> EntityModel<E> lookup(Class<E> entityType) {
+        return (EntityModel<E>) CACHE.get(entityType);
     }
 
     private static EntityModel<?> resolve(Class<?> entityType) {

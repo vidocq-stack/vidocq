@@ -43,16 +43,29 @@ public final class JdqlAst {
 
     /* ---------- AST ---------- */
 
+    /** A parsed statement; the parser fills it in, readers use its accessors. */
     public static final class Stmt {
         public enum Kind { SELECT, COUNT, UPDATE, DELETE, AGGREGATE, PROJECT, PROJECT_MULTI }
-        public Kind kind = Kind.SELECT;
-        public Pred where;
-        public List<Order> orderBy = new ArrayList<>();
-        public List<SetAssign> setAssignments = new ArrayList<>();
-        public String aggregateOp;
-        public String scalarAttr;
+        private Kind kind = Kind.SELECT;
+        private Pred where;
+        private final List<Order> orderBy = new ArrayList<>();
+        private final List<SetAssign> setAssignments = new ArrayList<>();
+        private String aggregateOp;
+        private String scalarAttr;
         /** M8-2 — for {@link Kind#PROJECT_MULTI}: list of attribute names selected. */
-        public List<String> projectAttrs = new ArrayList<>();
+        private final List<String> projectAttrs = new ArrayList<>();
+
+        public Kind kind() { return kind; }
+        /** The WHERE predicate, {@code null} without one. */
+        public Pred where() { return where; }
+        public List<Order> orderBy() { return orderBy; }
+        public List<SetAssign> setAssignments() { return setAssignments; }
+        /** {@code SUM}, {@code AVG}, {@code MIN} or {@code MAX} for {@link Kind#AGGREGATE}. */
+        public String aggregateOp() { return aggregateOp; }
+        /** The attribute of {@link Kind#AGGREGATE} or {@link Kind#PROJECT}. */
+        public String scalarAttr() { return scalarAttr; }
+        /** M8-2 — for {@link Kind#PROJECT_MULTI}: list of attribute names selected. */
+        public List<String> projectAttrs() { return projectAttrs; }
     }
 
     public record SetAssign(String attr, Expr value) {
@@ -89,11 +102,12 @@ public final class JdqlAst {
     public record Not(Pred child)                                  implements Pred {}
     public record Order(String attr, boolean asc) {}
 
+    /** A value of a statement: a named ({@code :name}) or positional ({@code ?1}) parameter, or a literal. */
     public static final class ArgRef {
-        public String named;
-        public int positional;
-        public Object literal;          // M7-5c — boolean / number / String / enum FQN literal
-        public boolean isLiteral;
+        private String named;
+        private int positional;
+        private Object literal;          // M7-5c — boolean / number / String / enum FQN literal
+        private boolean isLiteral;
         public ArgRef(String n) { named = n; }
         public ArgRef(int p) { positional = p; }
         private ArgRef() {}
@@ -101,6 +115,13 @@ public final class JdqlAst {
             ArgRef r = new ArgRef(); r.literal = value; r.isLiteral = true; return r;
         }
         public boolean isNamed() { return named != null; }
+        /** The parameter name, {@code null} unless {@link #isNamed()}. */
+        public String named() { return named; }
+        /** The 1-based parameter position of a positional parameter. */
+        public int positional() { return positional; }
+        /** The literal value, when {@link #isLiteral()}. */
+        public Object literal() { return literal; }
+        public boolean isLiteral() { return isLiteral; }
     }
     public enum Op { EQ, NE, LT, LTE, GT, GTE, LIKE }
 

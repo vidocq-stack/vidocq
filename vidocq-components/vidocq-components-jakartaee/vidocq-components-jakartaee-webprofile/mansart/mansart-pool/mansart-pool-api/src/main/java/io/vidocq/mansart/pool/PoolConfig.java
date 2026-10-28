@@ -135,9 +135,10 @@ public record PoolConfig(
                         "idleTimeout (" + idleTimeout + ") must be <= maxLifetime (" + maxLifetime + ")");
             }
 
-            ValidationMode resolvedValidation = validation != null
-                    ? validation
-                    : (validationQuery != null ? ValidationMode.ON_BORROW : ValidationMode.PERIODIC);
+            ValidationMode resolvedValidation = validation;
+            if (resolvedValidation == null) {
+                resolvedValidation = validationQuery != null ? ValidationMode.ON_BORROW : ValidationMode.PERIODIC;
+            }
 
             return new PoolConfig(
                     jdbcUrl, username, password,

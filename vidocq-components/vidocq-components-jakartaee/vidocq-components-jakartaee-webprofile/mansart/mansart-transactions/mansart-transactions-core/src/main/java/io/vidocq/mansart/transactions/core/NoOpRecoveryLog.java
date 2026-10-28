@@ -35,7 +35,7 @@ public final class NoOpRecoveryLog implements RecoveryLog {
     private NoOpRecoveryLog() {}
 
     @Override
-    public void append(Record record) {
+    public void append(Record entry) {
         // no-op
     }
 

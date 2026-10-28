@@ -93,7 +93,7 @@ public final class RuntimeRepositoryProxy {
         // while we ship and validate the bytecode emitter.
         try {
             return (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
-        } catch (Throwable _) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError _) {
             // Swallow and fall through to the Proxy path. The generator is the canonical
             // runtime impl; java.lang.reflect.Proxy stays as a safety net for shapes not yet
             // supported by RuntimeRepositoryClassGenerator.
@@ -132,7 +132,7 @@ public final class RuntimeRepositoryProxy {
             // Adapt the local Dispatcher functional interface to MansartCallback.Dispatcher
             // (same signature; just two distinct type names so they don't collide with the
             // existing compile-time *Impl path).
-            dispArr[i] = (rt, em, args) -> inner.invoke(rt, em, args);
+            dispArr[i] = inner::invoke;
             modelArr[i] = methodModel.getOrDefault(m, primary);
         }
         MansartCallback callback = new MansartCallback(dispArr, modelArr, runtime);
@@ -168,11 +168,15 @@ public final class RuntimeRepositoryProxy {
         try {
             EntityModel<?> em = RuntimeEntityModelBuilder.build(entityClass);
             out.put(entityClass, em);
-            try { runtime.ensureTable(em); }
-            catch (RuntimeException _) { /* schema may already exist */ }
+            ensureTableQuietly(runtime, em);
         } catch (RuntimeException _) {
             // Not a Mansart-mappable entity (e.g. value object) — skip silently.
         }
+    }
+
+    private static void ensureTableQuietly(RepositoryRuntime runtime, EntityModel<?> em) {
+        try { runtime.ensureTable(em); }
+        catch (RuntimeException _) { /* schema may already exist */ }
     }
 
     /**
@@ -229,11 +233,9 @@ public final class RuntimeRepositoryProxy {
         String[] words = s.split("\\s+");
         for (int i = 0; i < words.length; i++) {
             String w = words[i].toUpperCase(java.util.Locale.ROOT);
-            if ("FROM".equals(w) || "UPDATE".equals(w)) {
-                if (i + 1 < words.length) {
-                    String next = words[i + 1].replaceAll("[^a-zA-Z0-9_$]", "");
-                    if (!next.isEmpty() && Character.isUpperCase(next.charAt(0))) return next;
-                }
+            if (("FROM".equals(w) || "UPDATE".equals(w)) && i + 1 < words.length) {
+                String next = words[i + 1].replaceAll("[^a-zA-Z0-9_$]", "");
+                if (!next.isEmpty() && Character.isUpperCase(next.charAt(0))) return next;
             }
         }
         return null;
@@ -260,7 +262,7 @@ public final class RuntimeRepositoryProxy {
         java.util.Set<String> attributeNames = new java.util.LinkedHashSet<>();
         for (Attribute<?, ?> a : em.attributes()) attributeNames.add(a.name());
         Dispatcher d = jdqlDispatcher(m, em, attributeNames);
-        if (d == null) d = findAnnotationDispatcher(m, em, attributeNames);
+        if (d == null) d = findAnnotationDispatcher(m, em);
         if (d == null) d = lifecycleDispatcher(m);
         if (d == null) d = inheritedDispatcher(m);
         if (d == null) d = derivedDispatcher(m, em, attributeNames);
@@ -532,8 +534,7 @@ public final class RuntimeRepositoryProxy {
      * usual control parameters (Limit, Sort, Order, PageRequest, Sort[]) are passed through to
      * the underlying queryList/queryPage call.
      */
-    private static Dispatcher findAnnotationDispatcher(Method m, EntityModel<?> model,
-                                                       java.util.Set<String> attributeNames) {
+    private static Dispatcher findAnnotationDispatcher(Method m, EntityModel<?> model) {
         // BasicRepository / CrudRepository / DataRepository methods carry @Find / @Save / etc. in
         // the spec, but their semantics are owned by the inheritedDispatcher (built-in K-keyed
         // ops). Skip those here so we don't route findById through the user-method @Find path.
@@ -614,7 +615,7 @@ public final class RuntimeRepositoryProxy {
         };
         List<OrderBy.Order> fixedOrder = new ArrayList<>();
         for (jakarta.data.Sort<?> sort : bindings.sorts()) addSortToOrder(sort, attrIndex, fixedOrder);
-        OrderBy order = applyControlOrder(new OrderBy(fixedOrder), callArgs, ctrl, attrIndex, em, rt);
+        OrderBy order = applyControlOrder(new OrderBy(fixedOrder), callArgs, ctrl, attrIndex);
         jakarta.data.page.PageRequest pr = controlPage(callArgs, ctrl);
         Class<?> returnType = m.getReturnType();
         if (pr != null && jakarta.data.page.CursoredPage.class.isAssignableFrom(returnType)) {
@@ -697,7 +698,7 @@ public final class RuntimeRepositoryProxy {
 
     /** The derived {@code OrderBy} extended with the Sort/Order/Sort[] control arguments. */
     private static OrderBy derivedOrder(DerivedPlan plan, RepositoryRuntime rt, EntityModel<?> em, Object[] callArgs) {
-        return applyControlOrder(plan.baseOrderBy(), callArgs, plan.controls(), plan.attrIndex(), em, rt);
+        return applyControlOrder(plan.baseOrderBy(), callArgs, plan.controls(), plan.attrIndex());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -815,16 +816,13 @@ public final class RuntimeRepositoryProxy {
             else if (p == jakarta.data.Order.class)                base[3] = i;
             else if (p == jakarta.data.page.PageRequest.class)     base[4] = i;
         }
-        int[] r = new int[5 + extraSorts.size()];
-        System.arraycopy(base, 0, r, 0, 5);
-        for (int k = 0; k < extraSorts.size(); k++) r[5 + k] = extraSorts.get(k);
-        return r;
+        return java.util.stream.IntStream.concat(java.util.Arrays.stream(base),
+                extraSorts.stream().mapToInt(Integer::intValue)).toArray();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static OrderBy applyControlOrder(OrderBy base, Object[] callArgs, int[] ctrl,
-                                             Map<String, Attribute<?, ?>> attrIndex,
-                                             EntityModel<?> model, RepositoryRuntime rt) {
+                                             Map<String, Attribute<?, ?>> attrIndex) {
         List<OrderBy.Order> out = new ArrayList<>(base.orders());
         if (ctrl[1] >= 0 && callArgs[ctrl[1]] instanceof jakarta.data.Sort<?> s) {
             addSortToOrder(s, attrIndex, out);
@@ -858,7 +856,7 @@ public final class RuntimeRepositoryProxy {
     /** Returns {@code [startAtZeroBased, maxResults]}; both -1 if no limit is in effect. */
     private static int[] controlLimitRange(Object[] callArgs, int[] ctrl, int findFirstN) {
         if (ctrl[0] >= 0 && callArgs[ctrl[0]] instanceof jakarta.data.Limit l) {
-            return new int[] { (int) (l.startAt() - 1), (int) l.maxResults() };
+            return new int[] { (int) (l.startAt() - 1), l.maxResults() };
         }
         if (findFirstN > 0) return new int[] { 0, findFirstN };
         return new int[] { -1, -1 };

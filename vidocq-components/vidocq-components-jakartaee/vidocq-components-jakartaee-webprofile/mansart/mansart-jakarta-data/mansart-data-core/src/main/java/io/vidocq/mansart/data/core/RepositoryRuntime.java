@@ -157,9 +157,7 @@ public final class RepositoryRuntime {
                 try (ResultSet keys = ps.getGeneratedKeys()) {
                     if (keys.next()) {
                         IdAttribute<E, Object> id = (IdAttribute<E, Object>) model.id();
-                        Object generated = dialect.extract(keys, 1, id.javaType());
-                        try { id.setter().invoke(entity, generated); }
-                        catch (Throwable t) { throw new MansartDataException("Failed to set generated id", t); }
+                        setGeneratedId(id, entity, dialect.extract(keys, 1, id.javaType()));
                     }
                 }
                 return entity;
@@ -167,6 +165,11 @@ public final class RepositoryRuntime {
                 throw dialect.translate(e);
             }
         });
+    }
+
+    private static <E> void setGeneratedId(IdAttribute<E, Object> id, E entity, Object generated) {
+        try { id.setter().invoke(entity, generated); }
+        catch (Throwable t) { throw new MansartDataException("Failed to set generated id", t); }
     }
 
     public <E, K> Optional<E> findById(EntityModel<E> model, K id) {
@@ -553,12 +556,6 @@ public final class RepositoryRuntime {
         });
     }
 
-    /**
-     * Targeted UPDATE for JDQL {@code UPDATE … SET col = ?} statements (M5-2).
-     *
-     * <p>Args layout: SET values come first (in {@code attributes} order), then any args consumed
-     * by {@code where} (in render order). Returns the number of rows affected.
-     */
     /**
      * M7-24 — generic UPDATE for JDQL queries with arithmetic SET expressions
      * (e.g. {@code SET length = length + ?1}). The caller supplies the fully-rendered

@@ -148,21 +148,16 @@ public final class ConnectionScope {
             committed = true;
             return result;
         } catch (Exception e) {
-            rollbackQuietly(c);
             if (e instanceof RuntimeException re) throw re;
             throw new MansartDataException("Transaction body failed", e);
-        } catch (Error e) {
-            rollbackQuietly(c);
-            throw e;
         } finally {
-            // Best-effort restore + return-to-pool. If we never committed, we already rolled back
-            // above; setAutoCommit(true) is the standard contract before handing the connection
-            // back to a pool that expects auto-commit by default.
+            // Whatever ended the body — an exception, an error, a failed commit — an uncommitted
+            // transaction is rolled back. Then best-effort restore + return-to-pool:
+            // setAutoCommit(true) is the standard contract before handing the connection back to
+            // a pool that expects auto-commit by default.
+            if (!committed) rollbackQuietly(c);
             try { c.setAutoCommit(true); } catch (SQLException _) { /* best effort: the connection is closed next */ }
             closeQuietly(c);
-            if (!committed) {
-                // already rolled back; no-op marker
-            }
         }
     }
 

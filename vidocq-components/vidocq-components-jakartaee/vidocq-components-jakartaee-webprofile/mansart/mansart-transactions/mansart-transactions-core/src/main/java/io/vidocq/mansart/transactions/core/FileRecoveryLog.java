@@ -67,11 +67,11 @@ public final class FileRecoveryLog implements RecoveryLog {
     }
 
     @Override
-    public synchronized void append(Record record) throws IOException {
-        String line = record.type().name() + SEP
-                + Integer.toHexString(record.xid().getFormatId()).toUpperCase() + SEP
-                + HEX.formatHex(record.xid().getGlobalTransactionId()) + SEP
-                + HEX.formatHex(record.xid().getBranchQualifier()) + "\n";
+    public synchronized void append(Record entry) throws IOException {
+        String line = entry.type().name() + SEP
+                + Integer.toHexString(entry.xid().getFormatId()).toUpperCase() + SEP
+                + HEX.formatHex(entry.xid().getGlobalTransactionId()) + SEP
+                + HEX.formatHex(entry.xid().getBranchQualifier()) + "\n";
         byte[] bytes = line.getBytes(StandardCharsets.UTF_8);
         channel.write(java.nio.ByteBuffer.wrap(bytes));
         // DSYNC open option already forces sync on every write, force(true) is belt-and-suspenders

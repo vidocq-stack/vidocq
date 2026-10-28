@@ -59,6 +59,7 @@ public final class TransactionScopedContext implements AlterableContext {
      * {@link MansartTransactionsProducer#tm()} (the same singleton the CDI producer publishes).
      */
     public TransactionScopedContext() {
+        // nothing to initialise: the transaction manager is looked up on each call
     }
 
     private TransactionManager tm() {
