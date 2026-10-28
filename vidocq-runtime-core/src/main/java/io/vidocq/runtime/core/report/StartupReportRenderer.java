@@ -258,17 +258,7 @@ public final class StartupReportRenderer {
         for (Cells cells : table.subList(0, Math.min(MAX_ITEMS, table.size()))) {
             rows.add(cells.cells().stream().map(StartupReportRenderer::clean).toList());
         }
-        List<Integer> widths = new ArrayList<>();
-        for (List<String> row : rows) {
-            for (int i = 0; i < row.size(); i++) {
-                int length = row.get(i).length();
-                if (i == widths.size()) {
-                    widths.add(length);
-                } else if (length > widths.get(i)) {
-                    widths.set(i, length);
-                }
-            }
-        }
+        List<Integer> widths = columnWidths(rows);
         for (List<String> row : rows) {
             StringBuilder line = new StringBuilder(" ".repeat(INDENT));
             for (int i = 0; i < row.size(); i++) {
@@ -283,6 +273,22 @@ public final class StartupReportRenderer {
             out.add(" ".repeat(INDENT) + more(table.size() - MAX_ITEMS));
         }
         table.clear();
+    }
+
+    /** The width of each column of {@code rows}: that of its longest cell. */
+    private static List<Integer> columnWidths(List<List<String>> rows) {
+        List<Integer> widths = new ArrayList<>();
+        for (List<String> row : rows) {
+            for (int i = 0; i < row.size(); i++) {
+                int length = row.get(i).length();
+                if (i == widths.size()) {
+                    widths.add(length);
+                } else if (length > widths.get(i)) {
+                    widths.set(i, length);
+                }
+            }
+        }
+        return widths;
     }
 
     /**
@@ -385,7 +391,8 @@ public final class StartupReportRenderer {
     /** {@code value} with every unsafe character replaced, read until the result has {@code limit} characters. */
     private static String replaceUnsafe(String value, int limit) {
         StringBuilder cleaned = new StringBuilder(Math.min(value.length(), limit));
-        for (int i = 0; i < value.length() && cleaned.length() < limit; ) {
+        int i = 0;
+        while (i < value.length() && cleaned.length() < limit) {
             int codePoint = value.codePointAt(i);
             i += Character.charCount(codePoint);
             if (unsafe(codePoint)) {

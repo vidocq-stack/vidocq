@@ -142,23 +142,14 @@ public final class StartupContributors {
         List<Ranked> services = new ArrayList<>();
         for (ServiceLoader.Provider<StartupReportContributor> provider : providers(loader, classes, recorder)) {
             String className = provider.type().getName();
-            StartupReportContributor contributor;
-            try {
-                contributor = provider.get();
-            } catch (ServiceConfigurationError | RuntimeException | LinkageError e) {
-                recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, CONTRIBUTOR + className
-                        + " could not be created (" + describe(e) + SECTION_SKIPPED, null,
-                        StartupRecorder.CORE, e);
-                continue;
-            }
-            Contributor identified = identify(contributor, className, recorder);
-            if (identified == null) {
-                continue;
-            }
-            try {
-                services.add(new Ranked(identified, contributor.order()));
-            } catch (RuntimeException | LinkageError e) {
-                failedToGive("order", className, e, recorder);
+            StartupReportContributor contributor = create(provider, className, recorder);
+            Contributor identified = contributor == null ? null : identify(contributor, className, recorder);
+            if (identified != null) {
+                try {
+                    services.add(new Ranked(identified, contributor.order()));
+                } catch (RuntimeException | LinkageError e) {
+                    failedToGive("order", className, e, recorder);
+                }
             }
         }
         services.sort(Comparator.comparingInt(Ranked::order).thenComparing(ranked -> ranked.contributor().id()));
@@ -166,6 +157,19 @@ public final class StartupContributors {
             found.add(ranked.contributor());
         }
         return unique(found, recorder);
+    }
+
+    /** The contributor {@code provider} creates, or {@code null}, with an anomaly, when it cannot be created. */
+    private static StartupReportContributor create(ServiceLoader.Provider<StartupReportContributor> provider,
+                                                   String className, StartupRecorder recorder) {
+        try {
+            return provider.get();
+        } catch (ServiceConfigurationError | RuntimeException | LinkageError e) {
+            recorder.anomaly(StartupAnomalies.CONTRIBUTOR_FAILED, CONTRIBUTOR + className
+                    + " could not be created (" + describe(e) + SECTION_SKIPPED, null,
+                    StartupRecorder.CORE, e);
+            return null;
+        }
     }
 
     /**
@@ -187,23 +191,23 @@ public final class StartupContributors {
         Set<String> classes = new HashSet<>(known);
         Set<String> reported = new HashSet<>();
         int failures = 0;
-        while (failures < MAX_DISCOVERY_FAILURES) {
-            ServiceLoader.Provider<StartupReportContributor> provider;
+        boolean more = true;
+        while (more && failures < MAX_DISCOVERY_FAILURES) {
+            ServiceLoader.Provider<StartupReportContributor> provider = null;
             try {
-                if (!lookup.hasNext()) {
-                    break;
+                more = lookup.hasNext();
+                if (more) {
+                    provider = lookup.next();
                 }
-                provider = lookup.next();
             } catch (ServiceConfigurationError | RuntimeException | LinkageError e) {
                 failures++;
                 // the same failure again is the same broken file read again: said once
                 if (reported.add(e.getClass().getName() + ": " + e.getMessage())) {
                     notLoaded(e, recorder);
                 }
-                continue;
             }
             // a layer twin: the class of this name found first is kept, and this copy is never created
-            if (classes.add(provider.type().getName())) {
+            if (provider != null && classes.add(provider.type().getName())) {
                 providers.add(provider);
             }
         }

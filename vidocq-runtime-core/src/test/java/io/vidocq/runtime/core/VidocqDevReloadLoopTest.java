@@ -24,11 +24,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VidocqDevReloadLoopTest {
 
@@ -55,5 +58,25 @@ class VidocqDevReloadLoopTest {
     @Test
     void aFailureNeverStopsTheApplication(@TempDir Path dir) {
         assertDoesNotThrow(() -> VidocqDevReloadLoop.acknowledge(dir.resolve("absent/.vidocq-dev-reload"), 1L));
+    }
+
+    @Test
+    void aBootThatShutsDownEndsTheWaitWithoutReload(@TempDir Path dir) {
+        VidocqBootstrap bootstrap = VidocqBootstrap.create();
+        bootstrap.shutdown();
+
+        assertTrue(VidocqDevReloadLoop.awaitReloadSignal(bootstrap, dir.resolve(".vidocq-dev-reload"), 0L).isEmpty());
+    }
+
+    @Test
+    void aMovedStampSignalsAReload(@TempDir Path dir) throws Exception {
+        Path reload = Files.writeString(dir.resolve(".vidocq-dev-reload"), "");
+        Files.setLastModifiedTime(reload, FileTime.fromMillis(42_000L));
+        VidocqBootstrap bootstrap = VidocqBootstrap.create();
+        try {
+            assertEquals(OptionalLong.of(42_000L), VidocqDevReloadLoop.awaitReloadSignal(bootstrap, reload, 1L));
+        } finally {
+            bootstrap.shutdown();
+        }
     }
 }

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.OptionalLong;
 
 /**
  * Dev-mode hot reload by <b>application-layer re-creation</b>, in the same JVM: when the
@@ -72,21 +73,11 @@ final class VidocqDevReloadLoop {
 
             acknowledge(reloadFile, lastSignal);
 
-            boolean reloadRequested = false;
-            while (true) {
-                if (bootstrap.awaitShutdown(POLL_MILLIS)) {
-                    break; // normal shutdown (hook, or programmatic)
-                }
-                long stamp = signalStamp(reloadFile);
-                if (stamp != lastSignal) {
-                    lastSignal = stamp;
-                    reloadRequested = true;
-                    break;
-                }
+            OptionalLong reload = awaitReloadSignal(bootstrap, reloadFile, lastSignal);
+            if (reload.isEmpty()) {
+                return; // normal shutdown (hook, or programmatic)
             }
-            if (!reloadRequested) {
-                return;
-            }
+            lastSignal = reload.getAsLong();
 
             long t0 = System.nanoTime();
             LOG.log(System.Logger.Level.INFO,
@@ -97,6 +88,21 @@ final class VidocqDevReloadLoop {
             LOG.log(System.Logger.Level.INFO,
                     "Hot reload - previous deployment stopped in " + elapsed + " ms");
         }
+    }
+
+    /**
+     * Waits until {@code bootstrap} shuts down or the stamp of {@code reloadFile} moves past {@code lastSignal}.
+     *
+     * @return the new stamp when a reload is signalled, empty when the bootstrap shut down first
+     */
+    static OptionalLong awaitReloadSignal(VidocqBootstrap bootstrap, Path reloadFile, long lastSignal) {
+        while (!bootstrap.awaitShutdown(POLL_MILLIS)) {
+            long stamp = signalStamp(reloadFile);
+            if (stamp != lastSignal) {
+                return OptionalLong.of(stamp);
+            }
+        }
+        return OptionalLong.empty();
     }
 
     /** {@code <reload file>.ready}, next to it. */

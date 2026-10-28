@@ -122,15 +122,27 @@ final class StartupFacts {
         for (ResolvedModule resolved : layer.configuration().modules()) {
             URI location = resolved.reference().location().orElse(null);
             Path file = file(location);
-            int index = file == null ? -1 : order.indexOf(file);
-            String kind = file != null ? kind(location, file) : location == null ? "-" : location.getScheme();
-            int rank = resolved.name().equals(application) ? -1 : index < 0 ? Integer.MAX_VALUE : index;
+            int rank = resolved.name().equals(application) ? -1 : rankIn(order, file);
             placed.add(new Placed(rank,
-                    new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(), kind,
-                            file == null ? List.of() : enriched.apply(file))));
+                    new CoreSections.LayerModule(resolved.name(), file == null ? null : file.toString(),
+                            locationKind(location, file), file == null ? List.of() : enriched.apply(file))));
         }
         placed.sort(Comparator.comparingInt(Placed::index).thenComparing(p -> p.module().name()));
         return placed.stream().map(Placed::module).toList();
+    }
+
+    /** The position of {@code file} among the given archives, {@link Integer#MAX_VALUE} when it is not one of them. */
+    private static int rankIn(List<Path> order, Path file) {
+        int index = file == null ? -1 : order.indexOf(file);
+        return index < 0 ? Integer.MAX_VALUE : index;
+    }
+
+    /** The kind of a module location: that of its file, else the URI scheme, else {@code -} when it has none. */
+    private static String locationKind(URI location, Path file) {
+        if (file != null) {
+            return kind(location, file);
+        }
+        return location == null ? "-" : location.getScheme();
     }
 
     /**

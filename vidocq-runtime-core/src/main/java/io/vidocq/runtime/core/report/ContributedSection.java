@@ -186,23 +186,28 @@ final class ContributedSection implements StartupReportSection {
             lines.add(new Text(summary));
         }
         for (Entry entry : entries) {
-            switch (entry) {
-                case Written written -> lines.add(written.line());
-                case Route route -> {
-                    String url = route.url(listeners);
-                    // A GET with no template variable is a URL a browser can open as it is.
-                    boolean openable = "GET".equals(route.method()) && absolute(url) && url.indexOf('{') < 0;
-                    lines.add(new Cells(List.of(route.method(), url, route.shortHandler()), openable ? url : null));
-                }
-                case Link link -> {
-                    String base = listeners.get(link.listener());
-                    String url = base == null ? link.path() : join(base, link.path());
-                    lines.add(new Row(link.label(), url, absolute(url) ? url : null));
-                }
-            }
+            lines.add(lineOf(entry, listeners));
         }
         String headline = title == null || title.isBlank() || title.equals(id) ? null : title;
         return new Section(id, headline, summary, lines, nanos);
+    }
+
+    /** The line that prints {@code entry}, a route or a link joined with {@code listeners}. */
+    private static Line lineOf(Entry entry, Map<String, String> listeners) {
+        return switch (entry) {
+            case Written(Line line) -> line;
+            case Route route -> {
+                String url = route.url(listeners);
+                // A GET with no template variable is a URL a browser can open as it is.
+                boolean openable = "GET".equals(route.method()) && absolute(url) && url.indexOf('{') < 0;
+                yield new Cells(List.of(route.method(), url, route.shortHandler()), openable ? url : null);
+            }
+            case Link(String label, String listener, String path) -> {
+                String base = listeners.get(listener);
+                String url = base == null ? path : join(base, path);
+                yield new Row(label, url, absolute(url) ? url : null);
+            }
+        };
     }
 
     /** The listeners of {@code sections}, by name, the first section that declared a name keeping it. */

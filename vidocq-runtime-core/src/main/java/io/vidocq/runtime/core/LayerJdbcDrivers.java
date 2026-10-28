@@ -92,17 +92,25 @@ final class LayerJdbcDrivers {
             if (dot < 0 || name.endsWith("module-info")) {
                 continue;
             }
-            String pkg = name.substring(0, dot);
-            for (Module m : readers) {
-                if (m.getPackages().contains(pkg)) {
-                    try {
-                        Class<?> c = Class.forName(m, name);
-                        if (c != null) {
-                            return c;
-                        }
-                    } catch (LinkageError e) {
-                        // an optional dependency of this class is absent: try another class of the layer
+            Class<?> c = loadFromReaders(readers, name.substring(0, dot), name);
+            if (c != null) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /** Class {@code name} of package {@code pkg}, loaded from the first reader that holds the package; null when none loads. */
+    private static Class<?> loadFromReaders(List<Module> readers, String pkg, String name) {
+        for (Module m : readers) {
+            if (m.getPackages().contains(pkg)) {
+                try {
+                    Class<?> c = Class.forName(m, name);
+                    if (c != null) {
+                        return c;
                     }
+                } catch (LinkageError _) {
+                    // an optional dependency of this class is absent: try another class of the layer
                 }
             }
         }

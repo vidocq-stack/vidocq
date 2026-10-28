@@ -240,18 +240,23 @@ public record BuildInfo(String module, String version, String commit, Boolean di
             }
             details.add("classes in " + lastSegments(location, 3));
         } else if (snapshot() || isDirty()) {
-            if (commit != null) {
-                details.add(commit + (isDirty() ? "+dirty" : ""));
-            }
-            if (builtAt != null) {
-                details.add("built " + builtAt);
-            } else if (committedAt != null) {
-                details.add("committed " + committedAt);
-            } else if (fileDatedAt != null) {
-                details.add("jar dated " + fileDatedAt);
-            }
+            addJarDetails(details);
         }
         return details.isEmpty() ? null : String.join(", ", details);
+    }
+
+    /** The details of a snapshot or dirty jar: its commit, then the most precise date known. */
+    private void addJarDetails(List<String> details) {
+        if (commit != null) {
+            details.add(commit + (isDirty() ? "+dirty" : ""));
+        }
+        if (builtAt != null) {
+            details.add("built " + builtAt);
+        } else if (committedAt != null) {
+            details.add("committed " + committedAt);
+        } else if (fileDatedAt != null) {
+            details.add("jar dated " + fileDatedAt);
+        }
     }
 
     /** The last {@code count} segments of a {@code file:} location, {@code /}-separated. */

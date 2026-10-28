@@ -40,29 +40,32 @@ final class BannerTemplate {
         int i = 0;
         while (i < template.length()) {
             int start = template.indexOf("${", i);
+            int end = start < 0 ? -1 : closing(template, start);
             if (start < 0) {
                 out.append(template, i, template.length());
-                break;
-            }
-            int end = closing(template, start);
-            if (end < 0) {
+                i = template.length();
+            } else if (end < 0) {
                 out.append(template, i, start + 2);
                 i = start + 2;
-                continue;
+            } else {
+                out.append(template, i, start);
+                appendPlaceholder(out, template.substring(start + 2, end), values);
+                i = end + 1;
             }
-            out.append(template, i, start);
-            String expression = template.substring(start + 2, end);
-            int colon = expression.indexOf(':');
-            String key = (colon < 0 ? expression : expression.substring(0, colon)).strip();
-            String value = key.isEmpty() ? null : values.apply(key);
-            if (value != null) {
-                out.append(value);
-            } else if (colon >= 0) {
-                out.append(expression, colon + 1, expression.length());
-            }
-            i = end + 1;
         }
         return out.toString();
+    }
+
+    /** Appends what the placeholder {@code expression} (between the braces) resolves to. */
+    private static void appendPlaceholder(StringBuilder out, String expression, UnaryOperator<String> values) {
+        int colon = expression.indexOf(':');
+        String key = (colon < 0 ? expression : expression.substring(0, colon)).strip();
+        String value = key.isEmpty() ? null : values.apply(key);
+        if (value != null) {
+            out.append(value);
+        } else if (colon >= 0) {
+            out.append(expression, colon + 1, expression.length());
+        }
     }
 
     /** Whether {@code template} holds a <code>${key}</code> or <code>${key:default}</code> placeholder. */

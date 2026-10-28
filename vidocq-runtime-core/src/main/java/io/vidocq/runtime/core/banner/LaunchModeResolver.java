@@ -220,19 +220,16 @@ public final class LaunchModeResolver {
     static Resolution fromArchives(List<Path> archives) {
         Path candidate = null;
         String shape = null;
-        for (int i = 0; i < archives.size() && i < MAX_ARCHIVES; i++) {
+        for (int i = 0; i < archives.size() && i < MAX_ARCHIVES && shape == null; i++) {
             Path archive = archives.get(i);
-            if (archive == null || !isDirectory(archive)) {
-                continue;
-            }
-            String named = classesDirectory(archive);
-            if (named != null) {
-                candidate = archive;
-                shape = named;
-                break;
-            }
-            if (candidate == null) {
-                candidate = archive;
+            if (archive != null && isDirectory(archive)) {
+                String named = classesDirectory(archive);
+                if (named != null) {
+                    candidate = archive;
+                    shape = named;
+                } else if (candidate == null) {
+                    candidate = archive;
+                }
             }
         }
         if (candidate == null) {

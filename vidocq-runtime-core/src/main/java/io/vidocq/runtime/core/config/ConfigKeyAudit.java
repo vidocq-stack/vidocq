@@ -79,20 +79,22 @@ public final class ConfigKeyAudit {
 
         Set<String> unconsumed = new TreeSet<>();
         for (String key : propertyNames) {
-            if (key == null || !key.startsWith(NAMESPACE_PREFIX)) {
-                continue;
-            }
-            if (BUILD_TIME_KEYS.contains(key) || key.startsWith(BUILD_TIME_DEV_PREFIX)) {
-                continue;
-            }
-            if (!claimedNamespaces.contains(namespaceOf(key))) {
-                continue;
-            }
-            if (!isDeclared(key, declaredKeys)) {
+            if (isUnconsumed(key, claimedNamespaces, declaredKeys)) {
                 unconsumed.add(key);
             }
         }
         return List.copyOf(unconsumed);
+    }
+
+    /** Whether {@code key} is a runtime key of a claimed namespace that no declared key matches. */
+    private static boolean isUnconsumed(String key, Set<String> claimedNamespaces, Set<String> declaredKeys) {
+        if (key == null || !key.startsWith(NAMESPACE_PREFIX)) {
+            return false;
+        }
+        if (BUILD_TIME_KEYS.contains(key) || key.startsWith(BUILD_TIME_DEV_PREFIX)) {
+            return false;
+        }
+        return claimedNamespaces.contains(namespaceOf(key)) && !isDeclared(key, declaredKeys);
     }
 
     /**

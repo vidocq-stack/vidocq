@@ -452,13 +452,16 @@ public final class VidocqBootstrap {
     private StartupReport headerOnly(StartupRecorder recorder) {
         try {
             recorder.end();
-            String runtime;
-            try {
-                runtime = runtime();
-            } catch (RuntimeException | LinkageError _) {
-                runtime = null;
-            }
-            return recorder.report(launchMode(), launchReason(), verbosity, runtime, List.of(), null);
+            return recorder.report(launchMode(), launchReason(), verbosity, runtimeOrNull(), List.of(), null);
+        } catch (RuntimeException | LinkageError _) {
+            return null;
+        }
+    }
+
+    /** {@link #runtime()}, or {@code null} when it cannot be had. */
+    private String runtimeOrNull() {
+        try {
+            return runtime();
         } catch (RuntimeException | LinkageError _) {
             return null;
         }
@@ -499,16 +502,21 @@ public final class VidocqBootstrap {
             }
             stopInReverse(started);
             if (container != null) {
-                try {
-                    container.close();
-                } catch (RuntimeException | LinkageError e) {
-                    LOG.log(System.Logger.Level.ERROR, "Error closing the container of the failed boot", e);
-                }
+                closeContainerOfFailedBoot();
             }
         } catch (RuntimeException | LinkageError unstopped) {
             LOG.log(System.Logger.Level.ERROR, "Error stopping the failed boot", unstopped);
         } finally {
             shutdownLatch.countDown();
+        }
+    }
+
+    /** Closes the container a failed boot built; a failure is logged. */
+    private void closeContainerOfFailedBoot() {
+        try {
+            container.close();
+        } catch (RuntimeException | LinkageError e) {
+            LOG.log(System.Logger.Level.ERROR, "Error closing the container of the failed boot", e);
         }
     }
 
