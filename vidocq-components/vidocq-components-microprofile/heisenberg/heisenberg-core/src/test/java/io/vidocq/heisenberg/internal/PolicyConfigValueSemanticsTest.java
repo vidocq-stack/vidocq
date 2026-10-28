@@ -25,6 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.time.temporal.ChronoUnit;
+import org.eclipse.microprofile.faulttolerance.ExecutionContext;
+import org.eclipse.microprofile.faulttolerance.FallbackHandler;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -93,5 +95,57 @@ class PolicyConfigValueSemanticsTest {
         assertNotEquals(first, new FallbackConfig(types(IOException.class), types(IllegalStateException.class),
                 "other", null));
         assertTrue(first.toString().contains(IO_EXCEPTION), first::toString);
+    }
+
+    @Test
+    void retryConfigDiffersOnEveryComponent() {
+        RetryConfig base = retry(IOException.class);
+        Class<? extends Throwable>[] io = types(IOException.class);
+        Class<? extends Throwable>[] state = types(IllegalStateException.class);
+
+        assertNotEquals(null, base);
+        assertNotEquals("RetryConfig", base);
+        assertNotEquals(base, new RetryConfig(3, 1, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 999, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 1, ChronoUnit.MILLIS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.SECONDS, 1000, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 1000, ChronoUnit.SECONDS, 0, ChronoUnit.MILLIS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 0, ChronoUnit.SECONDS, io, state));
+        assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, io));
+    }
+
+    @Test
+    void circuitBreakerConfigDiffersOnEveryComponent() {
+        Class<? extends Throwable>[] io = types(IOException.class);
+        Class<? extends Throwable>[] none = types();
+        CircuitBreakerConfig base = new CircuitBreakerConfig(4, 0.5, 100, ChronoUnit.MILLIS, 2, io, none);
+
+        assertNotEquals(null, base);
+        assertNotEquals("CircuitBreakerConfig", base);
+        assertNotEquals(base, new CircuitBreakerConfig(5, 0.5, 100, ChronoUnit.MILLIS, 2, io, none));
+        assertNotEquals(base, new CircuitBreakerConfig(4, 0.75, 100, ChronoUnit.MILLIS, 2, io, none));
+        assertNotEquals(base, new CircuitBreakerConfig(4, 0.5, 101, ChronoUnit.MILLIS, 2, io, none));
+        assertNotEquals(base, new CircuitBreakerConfig(4, 0.5, 100, ChronoUnit.SECONDS, 2, io, none));
+        assertNotEquals(base, new CircuitBreakerConfig(4, 0.5, 100, ChronoUnit.MILLIS, 3, io, none));
+        assertNotEquals(base, new CircuitBreakerConfig(4, 0.5, 100, ChronoUnit.MILLIS, 2, io, io));
+    }
+
+    @Test
+    void fallbackConfigDiffersOnEveryComponent() {
+        Class<? extends Throwable>[] io = types(IOException.class);
+        Class<? extends Throwable>[] state = types(IllegalStateException.class);
+        FallbackConfig base = new FallbackConfig(io, state, "recover", null);
+
+        assertNotEquals(null, base);
+        assertNotEquals("FallbackConfig", base);
+        assertNotEquals(base, new FallbackConfig(io, io, "recover", null));
+        assertNotEquals(base, new FallbackConfig(io, state, "recover", NoopHandler.class));
+    }
+
+    public static class NoopHandler implements FallbackHandler<String> {
+        @Override
+        public String handle(ExecutionContext context) {
+            return "noop";
+        }
     }
 }
