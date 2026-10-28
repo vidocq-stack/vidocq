@@ -227,6 +227,13 @@ class SnapshotTest {
         Map<String, Object> ready = Json.object(snapshot.document());
 
         assertEquals("ready", ready.get("state"));
+        assertEquals(1, pool.samples.get(), "the report written, the next document samples the contributed panels");
+    }
+
+    @Test
+    void theReadySnapshotCarriesTheStartupReport() {
+        Map<String, Object> ready = readyDocument(new TestPanels.PoolPanel());
+
         assertEquals("dev", at(ready, "startup", "launchMode"));
         assertEquals("vidocq.launch.mode", at(ready, "startup", "launchReason"));
         assertEquals(Map.of("code", "VIDOCQ-CFG-003", "message", "vidocq.pool.urll is read by nothing",
@@ -237,6 +244,12 @@ class SnapshotTest {
         assertEquals(java.util.Arrays.asList(null, "com.acme.app", "target/classes", "directory"),
                 at(ready, "startup", "sections", 1, "lines", 0), "a table row has no key");
         assertEquals("Vidocq startup report\n  launch      dev (vidocq.launch.mode)", at(ready, "startup", "text"));
+    }
+
+    @Test
+    void theReadySnapshotListsTheContributedPanelsThenTheConsolesOwn() {
+        TestPanels.PoolPanel pool = new TestPanels.PoolPanel();
+        Map<String, Object> ready = readyDocument(pool);
 
         assertEquals(List.of("acme-pool", "facts", "clock"), ids(ready, "panels"),
                 "the contributed panels in report order, the console's own last");
@@ -267,6 +280,14 @@ class SnapshotTest {
         assertEquals("ticking", clock.get("summary"));
         assertEquals(List.of(List.of("source", "test")), clock.get("lines"));
         assertEquals(Long.valueOf(42), at(clock, "sample", "values", 0, "value"));
+    }
+
+    /** The document of a bound console once the report is written, with {@code pool} and a facts-only panel. */
+    private Map<String, Object> readyDocument(TestPanels.PoolPanel pool) {
+        Snapshot snapshot = snapshot(new ClockPanel());
+        snapshot.bound("http://127.0.0.1:8888/", 8888, 8888);
+        report.set(FakeReportView.of(pool, new TestPanels.FactsOnly()));
+        return Json.object(snapshot.document());
     }
 
     @Test

@@ -26,6 +26,8 @@ import org.apache.maven.model.PluginExecution;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -59,28 +61,20 @@ class ApplicationMainClassTest {
         assertEquals("a.b.App", ApplicationMainClass.normalize("a.b/a.b.App"));
     }
 
-    @Test
-    void declared_readsThePropertyWhenThePluginHasNoMainClass() {
-        MavenProject project = project(plugin(null));
+    /**
+     * The property is read when the plugin has no main class, the plugin-level configuration wins over it, and a blank
+     * plugin-level value falls back to it.
+     */
+    @ParameterizedTest(name = "plugin mainClass [{0}] -> {1}")
+    @CsvSource(nullValues = "NONE", value = {
+            "NONE, com.example.PropertyApp",
+            "com.example.ConfiguredApp, com.example.ConfiguredApp",
+            "'  ', com.example.PropertyApp"})
+    void declared_prefersThePluginLevelValueThenTheProperty(String pluginMainClass, String expected) {
+        MavenProject project = project(plugin(pluginMainClass));
         project.getProperties().setProperty("vidocq.mainClass", "com.example.PropertyApp");
 
-        assertEquals("com.example.PropertyApp", ApplicationMainClass.declared(project));
-    }
-
-    @Test
-    void declared_prefersThePluginLevelConfigurationOverTheProperty() {
-        MavenProject project = project(plugin("com.example.ConfiguredApp"));
-        project.getProperties().setProperty("vidocq.mainClass", "com.example.PropertyApp");
-
-        assertEquals("com.example.ConfiguredApp", ApplicationMainClass.declared(project));
-    }
-
-    @Test
-    void declared_fallsBackToThePropertyWhenThePluginLevelValueIsBlank() {
-        MavenProject project = project(plugin("  "));
-        project.getProperties().setProperty("vidocq.mainClass", "com.example.PropertyApp");
-
-        assertEquals("com.example.PropertyApp", ApplicationMainClass.declared(project));
+        assertEquals(expected, ApplicationMainClass.declared(project));
     }
 
     @Test

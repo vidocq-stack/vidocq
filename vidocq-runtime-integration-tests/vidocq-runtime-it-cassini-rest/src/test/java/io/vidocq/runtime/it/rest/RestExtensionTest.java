@@ -27,6 +27,8 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -61,11 +63,20 @@ class RestExtensionTest {
                 .addClass(ComposedResource.class);
     }
 
-    @Test
-    void shouldReturnPlainText() throws IOException {
-        var response = httpGet("/test");
+    /**
+     * A plain-text resource, a resource with an injected CDI bean, and Vidocq/vauban#24: ComposedService declares no
+     * no-arg constructor and its {@code @Inject} constructor dereferences its parameter; the woven (ProxyLink) entry
+     * constructor makes the client proxy viable without any workaround in the bean.
+     */
+    @ParameterizedTest(name = "GET {0} answers {1}")
+    @CsvSource({
+            "/test, hello-vidocq",
+            "/injected, hello-from-cdi",
+            "/composed, hello-from-cdi-composed"})
+    void shouldAnswerWithTheResourceBody(String path, String body) throws IOException {
+        var response = httpGet(path);
         assertEquals(200, response.statusCode);
-        assertEquals("hello-vidocq", response.body);
+        assertEquals(body, response.body);
     }
 
     @Test
@@ -73,23 +84,6 @@ class RestExtensionTest {
         var response = httpGet("/test/json");
         assertEquals(200, response.statusCode);
         assertTrue(response.body.contains("\"status\":\"ok\""));
-    }
-
-    @Test
-    void shouldInjectCdiBeans() throws IOException {
-        var response = httpGet("/injected");
-        assertEquals(200, response.statusCode);
-        assertEquals("hello-from-cdi", response.body);
-    }
-
-    @Test
-    void shouldProxyABeanWithOnlyAnInjectConstructor() throws IOException {
-        // Vidocq/vauban#24: ComposedService declares no no-arg constructor and its @Inject
-        // constructor dereferences its parameter. The woven (ProxyLink) entry constructor
-        // makes the client proxy viable without any workaround in the bean.
-        var response = httpGet("/composed");
-        assertEquals(200, response.statusCode);
-        assertEquals("hello-from-cdi-composed", response.body);
     }
 
     @Test
