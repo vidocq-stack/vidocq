@@ -32,6 +32,7 @@ import java.lang.reflect.GenericArrayType;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.faulttolerance.ExecutionContext;
 import org.eclipse.microprofile.faulttolerance.Fallback;
 import org.eclipse.microprofile.faulttolerance.FallbackHandler;
@@ -50,11 +51,12 @@ public final class FallbackResolver {
         Optional<MethodHandles.Lookup> lookupFor(Class<?> beanClass);
     }
 
-    private static volatile LookupSource lookupSource = beanClass -> Optional.empty();
+    private static final AtomicReference<LookupSource> LOOKUP_SOURCE =
+            new AtomicReference<>(beanClass -> Optional.empty());
 
     /** Installs the container's lookup source, used for every fallback method resolved from now on. */
     public static void useLookupSource(LookupSource source) {
-        lookupSource = Objects.requireNonNull(source, "source");
+        LOOKUP_SOURCE.set(Objects.requireNonNull(source, "source"));
     }
 
     public Object resolve(Fallback fallback, Object target, Method guardedMethod, Object[] parameters, Throwable failure)
@@ -99,7 +101,7 @@ public final class FallbackResolver {
         if (hasFallbackMethod) {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallbackMethod);
         } else {
-            instantiateHandler(fallbackHandler);
+            instantiateHandler(Objects.requireNonNull(fallbackHandler, "fallbackHandler"));
             validateHandlerReturnType(guardedMethod, fallbackHandler);
         }
     }
@@ -181,7 +183,7 @@ public final class FallbackResolver {
         }
         Optional<MethodHandles.Lookup> granted;
         try {
-            granted = lookupSource.lookupFor(beanClass);
+            granted = LOOKUP_SOURCE.get().lookupFor(beanClass);
         } catch (RuntimeException | LinkageError unavailable) {
             granted = Optional.empty();
         }
