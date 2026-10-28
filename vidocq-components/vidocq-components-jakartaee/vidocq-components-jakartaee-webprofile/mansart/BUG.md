@@ -659,3 +659,29 @@ inherited methods on purpose (`BasicRepository.save` and `delete` have other sem
 `insertStrict` and `updateStrict` (one entity, or each entity of the list in order). `inheritedDispatcher` is split
 (`findAll`, `deleteAll`) to stay under the complexity limit. Regression test:
 `LifecycleBatchTest.crudRepositoryInsertsAndUpdates`.
+
+## MANSART-018 — `@Find`: the runtime proxy ignored `@By` and `@OrderBy`; the processor failed on `@By(By.ID)`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (wrong rows or order on the runtime path; a build failure on the processor path)
+- **Modules**: `mansart-data-core` (`RuntimeRepositoryProxy`), `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+- Runtime proxy: `@Find @OrderBy(value = "seatRow", descending = true) List<LabSeat> inBlock(@By("seatBlockIndex") int
+  block)` returned the rows of every block (the parameter, named neither as an attribute nor matching a single
+  attribute of its type, was not bound) and in no particular order (`@OrderBy` was not applied).
+- Annotation processor: `@Find Optional<LabSeat> seat(@By(By.ID) Long id)` stopped the compilation with
+  `@Find parse error on seat: Expected comparison operator after 'id', got: ( — JDQL: WHERE id(this) = ?1`.
+
+### Minimal repro
+`LabSeatRepository.inBlock` and `seat` + `FindByAndOrderByTest` (`mansart-data-tests`), through both implementations.
+
+### Cause
+`RuntimeRepositoryProxy`'s `@Find` binding read `@Param` only and its dispatcher started from an empty `OrderBy`;
+`RepositoryWriter.findQuery` copied `By.ID` (`id(this)`) into its JDQL as an attribute name.
+
+### Fix
+The runtime binding reads `@By` (then `@Param`, then the parameter name; `By.ID` is the entity's id) and applies the
+method's `@OrderBy` before any dynamic sort. The processor maps `By.ID` to the entity's `@Id` field; `findQuery` is
+split (`findWhere`, `findAttribute`, `findOrderBy`, `appendOrderList`). Regression test: `FindByAndOrderByTest`.

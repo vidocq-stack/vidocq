@@ -363,6 +363,17 @@ final class RepositoryWriter {
      * a warning, for a {@code Sort}, {@code Order} or {@code Limit} parameter, not supported yet.
      */
     private String findQuery(ExecutableElement m, List<? extends TypeMirror> paramTypes) {
+        String where = findWhere(m, paramTypes);
+        if (where == null) return null;
+        String orderBy = findOrderBy(m);
+        var jdql = new StringBuilder();
+        if (!where.isEmpty()) jdql.append("WHERE ").append(where);
+        if (!orderBy.isEmpty()) jdql.append(jdql.isEmpty() ? "" : " ").append("ORDER BY ").append(orderBy);
+        return jdql.toString();
+    }
+
+    /** The {@code WHERE} condition of a {@code @Find} method, or {@code null} (warned) for an unsupported parameter. */
+    private String findWhere(ExecutableElement m, List<? extends TypeMirror> paramTypes) {
         var where = new StringBuilder();
         var params = m.getParameters();
         for (int i = 0; i < params.size(); i++) {
@@ -378,30 +389,52 @@ final class RepositoryWriter {
                 }
                 return null;
             }
-            String attribute = annotationValue(params.get(i), "jakarta.data.repository.By");
-            if (attribute == null) attribute = params.get(i).getSimpleName().toString();
             if (!where.isEmpty()) where.append(" AND ");
-            where.append(attribute).append(" = ?").append(i + 1);
+            where.append(findAttribute(m, params.get(i))).append(" = ?").append(i + 1);
         }
+        return where.toString();
+    }
+
+    /**
+     * The attribute a {@code @Find} parameter is compared to: the one its {@code @By} names, the entity's id for
+     * {@code @By(By.ID)} (MANSART-018), else the attribute of the parameter's own name.
+     */
+    private String findAttribute(ExecutableElement m, javax.lang.model.element.VariableElement param) {
+        String attribute = annotationValue(param, "jakarta.data.repository.By");
+        if (attribute == null) return param.getSimpleName().toString();
+        if (!attribute.equals("id(this)")) return attribute;
+        TypeElement entity = entityForRepo(m);
+        for (var member : entity.getEnclosedElements()) {
+            if (member.getKind() == javax.lang.model.element.ElementKind.FIELD
+                    && hasAnnotation(member, "jakarta.persistence.Id")) {
+                return member.getSimpleName().toString();
+            }
+        }
+        return "id";
+    }
+
+    /** The {@code ORDER BY} list of a {@code @Find} method's {@code @OrderBy} annotations, in declaration order. */
+    private String findOrderBy(ExecutableElement m) {
         var orderBy = new StringBuilder();
         for (var a : m.getAnnotationMirrors()) {
             String fqn = ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString();
             if (fqn.equals("jakarta.data.repository.OrderBy")) {
                 appendOrder(orderBy, a);
             } else if (fqn.equals("jakarta.data.repository.OrderBy.List")) {
-                for (var entry : elements.getElementValuesWithDefaults(a).entrySet()) {
-                    if (!entry.getKey().getSimpleName().contentEquals("value")) continue;
-                    for (Object item : (List<?>) entry.getValue().getValue()) {
-                        appendOrder(orderBy, (javax.lang.model.element.AnnotationMirror)
-                                ((javax.lang.model.element.AnnotationValue) item).getValue());
-                    }
-                }
+                appendOrderList(orderBy, a);
             }
         }
-        var jdql = new StringBuilder();
-        if (!where.isEmpty()) jdql.append("WHERE ").append(where);
-        if (!orderBy.isEmpty()) jdql.append(jdql.isEmpty() ? "" : " ").append("ORDER BY ").append(orderBy);
-        return jdql.toString();
+        return orderBy.toString();
+    }
+
+    private void appendOrderList(StringBuilder orderBy, javax.lang.model.element.AnnotationMirror list) {
+        for (var entry : elements.getElementValuesWithDefaults(list).entrySet()) {
+            if (!entry.getKey().getSimpleName().contentEquals("value")) continue;
+            for (Object item : (List<?>) entry.getValue().getValue()) {
+                appendOrder(orderBy, (javax.lang.model.element.AnnotationMirror)
+                        ((javax.lang.model.element.AnnotationValue) item).getValue());
+            }
+        }
     }
 
     private void appendOrder(StringBuilder orderBy, javax.lang.model.element.AnnotationMirror a) {

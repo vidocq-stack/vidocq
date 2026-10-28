@@ -20,6 +20,9 @@
 package io.vidocq.mansart.data.tests;
 
 import jakarta.data.repository.BasicRepository;
+import jakarta.data.repository.By;
+import jakarta.data.repository.Find;
+import jakarta.data.repository.OrderBy;
 import jakarta.data.repository.Repository;
 
 import java.util.List;
@@ -39,4 +42,16 @@ public interface LabSeatRepository extends BasicRepository<LabSeat, Long> {
     /** The regression: four-condition And chain (String, int, int, boolean). */
     List<LabSeat> findByRoomIdAndSeatRowAndSeatBlockIndexAndReleased(
             String roomId, int seatRow, int seatBlockIndex, boolean released);
+
+    /**
+     * {@code @Find} binding its parameter through {@code @By} (its name matches no attribute, and two attributes
+     * have its type), ordered by {@code @OrderBy} (MANSART-018).
+     */
+    @Find
+    @OrderBy(value = "seatRow", descending = true)
+    List<LabSeat> inBlock(@By("seatBlockIndex") int block);
+
+    /** {@code @Find} binding its parameter to the id through {@code @By(By.ID)} (MANSART-018). */
+    @Find
+    java.util.Optional<LabSeat> seat(@By(By.ID) Long seatId);
 }

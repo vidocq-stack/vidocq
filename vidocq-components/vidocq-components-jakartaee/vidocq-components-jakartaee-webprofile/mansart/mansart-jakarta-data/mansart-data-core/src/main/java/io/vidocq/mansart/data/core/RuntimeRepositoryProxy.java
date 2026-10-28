@@ -556,12 +556,15 @@ public final class RuntimeRepositoryProxy {
     /**
      * Which {@code @Find} parameters bind to which attributes; the others are control
      * arguments. {@code paramIndexes.get(k)} is the argument compared to {@code attributes.get(k)}.
+     * {@code sorts} are the method's {@code @OrderBy}, applied before any dynamic sort (MANSART-018).
      */
-    private record FindBindings(List<Integer> paramIndexes, List<Attribute<?, ?>> attributes) {
+    private record FindBindings(List<Integer> paramIndexes, List<Attribute<?, ?>> attributes,
+                                List<jakarta.data.Sort<?>> sorts) {
 
         /**
-         * Resolution order per Jakarta Data: {@code @Param("attr")} &gt; parameter name match &gt;
-         * positional (single attribute of matching type) for the remaining non-control parameters.
+         * Resolution order per Jakarta Data: {@code @By("attr")} or {@code @Param("attr")} &gt; parameter
+         * name match &gt; positional (single attribute of matching type) for the remaining non-control
+         * parameters.
          */
         static FindBindings of(Method m, EntityModel<?> model, Map<String, Attribute<?, ?>> attrIndex) {
             var params = m.getParameters();
@@ -575,6 +578,7 @@ public final class RuntimeRepositoryProxy {
                     continue;
                 }
                 String paramHint = readParamAnnotation(params[i]);
+                if (jakarta.data.repository.By.ID.equals(paramHint)) paramHint = model.id().name();
                 Attribute<?, ?> a = attrIndex.get(paramHint == null ? params[i].getName() : paramHint);
                 if (a != null) { paramIndexes.add(i); attributes.add(a); consumed.add(i); }
             }
@@ -587,7 +591,15 @@ public final class RuntimeRepositoryProxy {
                         : singleAttributeOfType(model, paramTypes[i], attributes);
                 if (match != null) { paramIndexes.add(i); attributes.add(match); }
             }
-            return new FindBindings(List.copyOf(paramIndexes), List.copyOf(attributes));
+            return new FindBindings(List.copyOf(paramIndexes), List.copyOf(attributes), orderBySorts(m));
+        }
+
+        private static List<jakarta.data.Sort<?>> orderBySorts(Method m) {
+            List<jakarta.data.Sort<?>> sorts = new ArrayList<>();
+            for (var o : m.getAnnotationsByType(jakarta.data.repository.OrderBy.class)) {
+                sorts.add(o.descending() ? jakarta.data.Sort.desc(o.value()) : jakarta.data.Sort.asc(o.value()));
+            }
+            return List.copyOf(sorts);
         }
     }
 
@@ -605,7 +617,9 @@ public final class RuntimeRepositoryProxy {
             case 1 -> parts.get(0);
             default -> new Where.And(parts);
         };
-        OrderBy order = applyControlOrder(OrderBy.NONE, callArgs, ctrl, attrIndex, em, rt);
+        List<OrderBy.Order> fixedOrder = new ArrayList<>();
+        for (jakarta.data.Sort<?> sort : bindings.sorts()) addSortToOrder(sort, attrIndex, fixedOrder);
+        OrderBy order = applyControlOrder(new OrderBy(fixedOrder), callArgs, ctrl, attrIndex, em, rt);
         jakarta.data.page.PageRequest pr = controlPage(callArgs, ctrl);
         Class<?> returnType = m.getReturnType();
         if (pr != null && jakarta.data.page.CursoredPage.class.isAssignableFrom(returnType)) {
@@ -745,7 +759,10 @@ public final class RuntimeRepositoryProxy {
                 || p == jakarta.data.Sort[].class;
     }
 
+    /** The attribute a {@code @Find} parameter names with {@code @By} (MANSART-018) or {@code @Param}, or {@code null}. */
     private static String readParamAnnotation(java.lang.reflect.Parameter param) {
+        jakarta.data.repository.By by = param.getDeclaredAnnotation(jakarta.data.repository.By.class);
+        if (by != null && !by.value().isEmpty()) return by.value();
         jakarta.data.repository.Param p = param.getDeclaredAnnotation(jakarta.data.repository.Param.class);
         return p == null || p.value().isEmpty() ? null : p.value();
     }
