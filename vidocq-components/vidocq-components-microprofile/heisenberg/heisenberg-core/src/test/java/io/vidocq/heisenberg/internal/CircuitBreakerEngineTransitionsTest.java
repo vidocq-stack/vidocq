@@ -70,7 +70,7 @@ class CircuitBreakerEngineTransitionsTest {
     }
 
     @Test
-    void openCircuitFailsFastUntilTheDelayElapses() throws Exception {
+    void openCircuitFailsFastUntilTheDelayElapses() {
         CircuitBreakerEngine engine = openedEngine(1, new Class[0]);
         registry.millisSinceOpen = 40;
 
