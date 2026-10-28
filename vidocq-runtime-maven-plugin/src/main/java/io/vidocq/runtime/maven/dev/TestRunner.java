@@ -136,9 +136,9 @@ final class TestRunner implements ContinuousTesting.Launcher {
         root.destroy();
         try {
             root.onExit().get(grace.toNanos(), TimeUnit.NANOSECONDS);
-        } catch (TimeoutException | ExecutionException stillThere) {
+        } catch (TimeoutException | ExecutionException _) {
             // killed below
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
         if (root.isAlive()) {

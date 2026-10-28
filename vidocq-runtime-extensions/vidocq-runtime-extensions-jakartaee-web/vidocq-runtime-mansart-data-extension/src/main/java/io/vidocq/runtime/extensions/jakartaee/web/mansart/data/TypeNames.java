@@ -35,7 +35,7 @@ final class TypeNames {
     static String of(Type type) {
         try {
             return print(type);
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return raw(type);
         }
     }

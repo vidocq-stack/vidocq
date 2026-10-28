@@ -206,7 +206,7 @@ final class Json {
         }
         try {
             return new BigDecimal(number);
-        } catch (NumberFormatException exponentTooLarge) {
+        } catch (NumberFormatException _) {
             at = start;
             throw error();
         }

@@ -302,7 +302,7 @@ public final class LaunchModeResolver {
             return StackWalker.getInstance().walk(frames -> frames.limit(MAX_FRAMES)
                     .map(StackWalker.StackFrame::getClassName)
                     .toList());
-        } catch (RuntimeException | LinkageError unavailable) {
+        } catch (RuntimeException | LinkageError _) {
             return List.of();
         }
     }
@@ -345,7 +345,7 @@ public final class LaunchModeResolver {
                 return null;
             }
             return Path.of(location.get());
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -358,7 +358,7 @@ public final class LaunchModeResolver {
     private static Path path(String value) {
         try {
             return Path.of(value);
-        } catch (RuntimeException invalid) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -366,7 +366,7 @@ public final class LaunchModeResolver {
     private static boolean isDirectory(Path path) {
         try {
             return Files.isDirectory(path);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return false;
         }
     }
@@ -374,7 +374,7 @@ public final class LaunchModeResolver {
     private static boolean isRegularFile(Path path) {
         try {
             return Files.isRegularFile(path);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return false;
         }
     }

@@ -59,7 +59,7 @@ interface BeanLookup {
             Bean<?> bean;
             try {
                 bean = beans.resolve(found);
-            } catch (AmbiguousResolutionException ambiguous) {
+            } catch (AmbiguousResolutionException _) {
                 throw new NoBean();
             }
             if (bean == null) {

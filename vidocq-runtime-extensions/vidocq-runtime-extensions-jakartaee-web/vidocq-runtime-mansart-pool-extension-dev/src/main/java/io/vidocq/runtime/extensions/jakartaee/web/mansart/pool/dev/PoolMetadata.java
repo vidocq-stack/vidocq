@@ -199,7 +199,7 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
     private static String currentSchema(Connection connection) {
         try {
             return connection.getSchema();
-        } catch (SQLException | AbstractMethodError unsupported) {
+        } catch (SQLException | AbstractMethodError _) {
             return null;
         }
     }

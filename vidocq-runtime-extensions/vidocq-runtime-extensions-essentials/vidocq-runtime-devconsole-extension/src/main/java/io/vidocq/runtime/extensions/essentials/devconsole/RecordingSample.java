@@ -394,7 +394,7 @@ final class RecordingSample implements PanelSample {
     private static long nanos(Duration duration) {
         try {
             return duration.toNanos();
-        } catch (ArithmeticException tooLong) {
+        } catch (ArithmeticException _) {
             return duration.isNegative() ? Long.MIN_VALUE : Long.MAX_VALUE;
         }
     }

@@ -100,7 +100,7 @@ public final class CliInstaller {
             return Files.isRegularFile(marker)
                     ? Optional.of(Files.readString(marker).strip()).filter(s -> !s.isEmpty())
                     : Optional.empty();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return Optional.empty();
         }
     }

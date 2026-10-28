@@ -113,7 +113,7 @@ public final class DependencyCodegenCache {
     public Optional<DependencyCodegen.Output> peek(String key) throws IOException {
         try {
             return read(key, false);
-        } catch (NoSuchFileException vanished) {
+        } catch (NoSuchFileException _) {
             return Optional.empty();
         }
     }
@@ -186,7 +186,7 @@ public final class DependencyCodegenCache {
             Files.writeString(temp.resolve(COMPLETE), "");
             try {
                 move(temp, target);
-            } catch (FileAlreadyExistsException | java.nio.file.DirectoryNotEmptyException concurrent) {
+            } catch (FileAlreadyExistsException | java.nio.file.DirectoryNotEmptyException _) {
                 // Another build stored the same content-keyed entry meanwhile; ours is redundant.
                 deleteTree(temp);
                 return;
@@ -206,11 +206,11 @@ public final class DependencyCodegenCache {
                     if (Files.getLastModifiedTime(child).toInstant().isBefore(limit)) {
                         deleteTree(child);
                     }
-                } catch (IOException | RuntimeException ignored) {
+                } catch (IOException | RuntimeException _) {
                     // another build may be sweeping the same directory
                 }
             }
-        } catch (IOException | RuntimeException ignored) {
+        } catch (IOException | RuntimeException _) {
             // nothing to sweep
         }
     }
@@ -218,7 +218,7 @@ public final class DependencyCodegenCache {
     private static void move(Path from, Path to) throws IOException {
         try {
             Files.move(from, to, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
+        } catch (AtomicMoveNotSupportedException _) {
             Files.move(from, to);
         }
     }
@@ -231,13 +231,13 @@ public final class DependencyCodegenCache {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
                 try {
                     Files.deleteIfExists(p);
-                } catch (NoSuchFileException gone) {
+                } catch (NoSuchFileException _) {
                     // a racing delete got there first
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }
             });
-        } catch (NoSuchFileException gone) {
+        } catch (NoSuchFileException _) {
             // a racing delete got there first
         } catch (UncheckedIOException e) {
             throw e.getCause();

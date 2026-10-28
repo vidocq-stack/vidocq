@@ -145,7 +145,7 @@ public class VidocqTestMojo extends AbstractMojo {
                 }
                 testing.changed(change.main() ? Trigger.CHANGE : Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             getLog().info("Vidocq test interrupted — shutting down.");
         } catch (IOException e) {
@@ -154,7 +154,7 @@ public class VidocqTestMojo extends AbstractMojo {
             shutdown(testing, session);
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
-            } catch (IllegalStateException ignored) {
+            } catch (IllegalStateException _) {
                 // shutdown already in progress
             }
         }
@@ -174,7 +174,7 @@ public class VidocqTestMojo extends AbstractMojo {
                 case QUIT -> {
                     try {
                         watcher.close();
-                    } catch (IOException ignored) {
+                    } catch (IOException _) {
                         // the loop ends anyway
                     }
                 }

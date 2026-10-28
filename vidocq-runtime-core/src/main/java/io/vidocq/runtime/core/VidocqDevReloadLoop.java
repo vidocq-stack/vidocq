@@ -127,7 +127,7 @@ final class VidocqDevReloadLoop {
     private static long signalStamp(Path file) {
         try {
             return Files.getLastModifiedTime(file).toMillis();
-        } catch (IOException absentOrUnreadable) {
+        } catch (IOException _) {
             return 0L;
         }
     }

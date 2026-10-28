@@ -148,7 +148,7 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
             throw new IllegalStateException("Transaction recovery scan failed", e);
         } finally {
             for (XAConnection xaConnection : xaConnections) {
-                try { xaConnection.close(); } catch (SQLException ignored) { /* best effort */ }
+                try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
             }
         }
     }
@@ -157,7 +157,7 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
         if (ds instanceof XADataSource xa) return xa;
         try {
             if (ds.isWrapperFor(XADataSource.class)) return ds.unwrap(XADataSource.class);
-        } catch (SQLException notAWrapper) {
+        } catch (SQLException _) {
             // JDBC allows isWrapperFor/unwrap to throw — treat as not XA-capable.
         }
         return null;

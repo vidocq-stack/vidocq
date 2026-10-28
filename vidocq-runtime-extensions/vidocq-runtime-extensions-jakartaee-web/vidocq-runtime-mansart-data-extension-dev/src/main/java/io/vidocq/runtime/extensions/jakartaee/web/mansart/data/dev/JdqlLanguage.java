@@ -169,7 +169,7 @@ final class JdqlLanguage {
             }
             try {
                 out.put(attribute.name(), attribute(attribute, models));
-            } catch (RuntimeException | LinkageError unreadable) {
+            } catch (RuntimeException | LinkageError _) {
                 // an attribute Mansart cannot describe is left out, as a joined one is
             }
         }
@@ -227,7 +227,7 @@ final class JdqlLanguage {
         try {
             EntityModel<?> model = models.apply(entity);
             return model == null || model.id() == null ? null : model.id().javaType();
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

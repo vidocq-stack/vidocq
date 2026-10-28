@@ -121,7 +121,7 @@ public final class ApplicationLaunch {
             Set<java.lang.module.ModuleReference> modules;
             try {
                 modules = ModuleFinder.of(entry).findAll();
-            } catch (java.lang.module.FindException e) {
+            } catch (java.lang.module.FindException _) {
                 continue;
             }
             for (var module : modules) {

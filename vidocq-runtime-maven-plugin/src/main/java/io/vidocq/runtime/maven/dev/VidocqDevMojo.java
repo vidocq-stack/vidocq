@@ -754,7 +754,7 @@ public class VidocqDevMojo extends AbstractMojo {
                     RUNTIME_SCOPE, "jar", "", new DefaultArtifactHandler("jar"));
             resolved.setFile(result.getArtifact().getFile());
             return resolved;
-        } catch (ArtifactResolutionException e) {
+        } catch (ArtifactResolutionException _) {
             getLog().warn("Dev tools: cannot resolve " + key + ":" + version + " (the dev console, at the version of"
                     + " the application's Vidocq runtime" + (version.equals(pluginVersion) ? "" : "; this plugin is "
                     + pluginVersion) + "); vidocq:dev continues without it. Run the build once online, or mvn -U.");

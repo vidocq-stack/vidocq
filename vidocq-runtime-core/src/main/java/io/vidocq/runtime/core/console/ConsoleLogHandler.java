@@ -48,7 +48,7 @@ public final class ConsoleLogHandler extends StreamHandler {
         if (encoding != null) {
             try {
                 setEncoding(encoding);
-            } catch (UnsupportedEncodingException | RuntimeException unsupported) {
+            } catch (UnsupportedEncodingException | RuntimeException _) {
                 // keep the platform default
             }
         }

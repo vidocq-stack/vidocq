@@ -67,7 +67,7 @@ public interface ApplicationLayer {
                     return layer;
                 }
             }
-        } catch (ServiceConfigurationError unusable) {
+        } catch (ServiceConfigurationError _) {
             // a provider that cannot be loaded gives no layer
         }
         return Optional.empty();

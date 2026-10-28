@@ -317,7 +317,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
                     reasons.put(rest.substring(0, sep).strip(), rest.substring(sep + 3).strip());
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException _) {
             // A report we cannot read only costs the extra explanation, never the failure itself.
             return Map.of();
         }

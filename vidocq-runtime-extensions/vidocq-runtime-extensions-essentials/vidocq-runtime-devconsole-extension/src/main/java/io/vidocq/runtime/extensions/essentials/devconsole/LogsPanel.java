@@ -285,7 +285,7 @@ final class LogsPanel implements DevConsolePanel {
     private static String finderName(Supplier<String> finder) {
         try {
             return finder.get();
-        } catch (RuntimeException | LinkageError unknown) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

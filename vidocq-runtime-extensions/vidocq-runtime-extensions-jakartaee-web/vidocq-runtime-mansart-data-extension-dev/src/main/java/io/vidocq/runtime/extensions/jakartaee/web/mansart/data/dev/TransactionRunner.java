@@ -78,7 +78,7 @@ final class TransactionRunner {
         try {
             Demarcation found = JtaDemarcation.of(beans);
             return found == null ? NONE : new TransactionRunner(found);
-        } catch (RuntimeException | LinkageError absent) {
+        } catch (RuntimeException | LinkageError _) {
             return NONE;
         }
     }

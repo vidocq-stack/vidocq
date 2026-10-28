@@ -527,7 +527,7 @@ public final class EnrichedJars {
         }
         try (JarFile in = new JarFile(copy.toFile(), false)) {
             return in.getManifest() == null ? null : in.getManifest().getMainAttributes().getValue(attribute);
-        } catch (IOException e) {
+        } catch (IOException _) {
             return null;
         }
     }

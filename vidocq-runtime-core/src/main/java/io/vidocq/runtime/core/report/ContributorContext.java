@@ -86,7 +86,7 @@ final class ContributorContext implements StartupReportContext {
                 beanTypes = beanTypes(beans);
             }
             return beanTypes.contains(typeName);
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return false;
         }
     }
@@ -125,7 +125,7 @@ final class ContributorContext implements StartupReportContext {
                 }
             }
             return List.copyOf(urls);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return List.of();
         }
     }
@@ -145,7 +145,7 @@ final class ContributorContext implements StartupReportContext {
         for (CreationalContext<?> context : created) {
             try {
                 context.release();
-            } catch (RuntimeException | LinkageError ignored) {
+            } catch (RuntimeException | LinkageError _) {
                 // a bean that fails to be destroyed is no concern of the report
             }
         }

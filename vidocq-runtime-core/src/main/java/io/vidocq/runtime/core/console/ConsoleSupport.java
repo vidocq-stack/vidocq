@@ -92,7 +92,7 @@ public record ConsoleSupport(String noColor, String term, String osName, boolean
         List<String> arguments;
         try {
             arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
-        } catch (RuntimeException | LinkageError unavailable) {
+        } catch (RuntimeException | LinkageError _) {
             arguments = List.of();
         }
         return new ConsoleSupport(System.getenv("NO_COLOR"), System.getenv("TERM"),

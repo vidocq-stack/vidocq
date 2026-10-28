@@ -134,7 +134,7 @@ public final class ExtensionCache {
         try {
             BasicFileAttributes attrs = Files.readAttributes(file, BasicFileAttributes.class);
             return new Fingerprint(file, attrs.size(), attrs.lastModifiedTime().toMillis());
-        } catch (IOException e) {
+        } catch (IOException _) {
             return null;
         }
     }
@@ -185,7 +185,7 @@ public final class ExtensionCache {
                     default -> { return Optional.empty(); }
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (RuntimeException _) {
             return Optional.empty();
         }
         return pomHash == null ? Optional.empty()

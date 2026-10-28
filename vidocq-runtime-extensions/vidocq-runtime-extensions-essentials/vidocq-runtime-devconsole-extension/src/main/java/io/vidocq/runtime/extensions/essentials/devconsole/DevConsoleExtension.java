@@ -418,7 +418,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             ticking.interrupt();
             try {
                 ticking.join(TICKER_STOP.toMillis());
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -503,7 +503,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
             Properties info = new Properties();
             info.load(in);
             return info.getProperty("git.build.version");
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return null;
         }
     }

@@ -96,7 +96,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
                 return unknown(null);
             }
             return read(null, null, source.getLocation().toURI());
-        } catch (Exception e) {
+        } catch (Exception _) {
             return unknown(null);
         }
     }
@@ -124,7 +124,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
                 }
             }
             return read(name, rawVersion, location, Archive.NONE);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException _) {
             return unknown(name);
         }
     }
@@ -142,7 +142,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
                 }
             }
             return read(module, rawVersion, location, Archive.NONE);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException _) {
             return new BuildInfo(module, real(rawVersion), null, null, null, null, location, false, null, null);
         }
     }
@@ -261,7 +261,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
             int n = path.getNameCount();
             Path tail = n <= count ? path : path.subpath(n - count, n);
             return tail.toString().replace('\\', '/');
-        } catch (RuntimeException notAFileUri) {
+        } catch (RuntimeException _) {
             return location.toString();
         }
     }
@@ -314,7 +314,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
             if (in != null) {
                 properties.load(in);
             }
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             // an unreadable file is an absent one
             properties.clear();
         }
@@ -402,7 +402,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
         public Instant dated() {
             try {
                 return Files.getLastModifiedTime(path).toInstant().truncatedTo(ChronoUnit.SECONDS);
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException _) {
                 return null;
             }
         }

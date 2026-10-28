@@ -131,7 +131,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         try {
             String title = contributor.title();
             return title == null || title.isBlank() ? id : title;
-        } catch (RuntimeException | LinkageError failed) {
+        } catch (RuntimeException | LinkageError _) {
             return id;
         }
     }

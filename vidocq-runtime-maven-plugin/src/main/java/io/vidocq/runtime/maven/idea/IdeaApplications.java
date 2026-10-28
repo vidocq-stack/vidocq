@@ -559,7 +559,7 @@ final class IdeaApplications {
     private static Path realPath(Path path) {
         try {
             return path.toRealPath();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return path.toAbsolutePath().normalize();
         }
     }

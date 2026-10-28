@@ -199,7 +199,7 @@ final class RepositoryActions {
     static boolean accessible(Method method) {
         try {
             return method.trySetAccessible();
-        } catch (SecurityException refused) {
+        } catch (SecurityException _) {
             return false;
         }
     }

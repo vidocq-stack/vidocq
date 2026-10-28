@@ -279,7 +279,7 @@ final class SqlRunner {
                 Object[] elements = list.stream().map(SqlRunner::scalar).toArray();
                 try {
                     statement.setArray(i + 1, connection.createArrayOf(arrayType(elements), elements));
-                } catch (SQLFeatureNotSupportedException noArray) {
+                } catch (SQLFeatureNotSupportedException _) {
                     statement.setObject(i + 1, elements);
                 }
             } else if (value instanceof String text && binding == Binding.UNTYPED) {
@@ -297,7 +297,7 @@ final class SqlRunner {
         if (value instanceof BigDecimal number) {
             try {
                 return number.longValueExact();
-            } catch (ArithmeticException notALong) {
+            } catch (ArithmeticException _) {
                 return number;
             }
         }
@@ -361,7 +361,7 @@ final class SqlRunner {
     private static void quietly(Step step) {
         try {
             step.run();
-        } catch (SQLException | RuntimeException ignored) {
+        } catch (SQLException | RuntimeException _) {
             // the connection goes back to the pool all the same, which validates it
         }
     }

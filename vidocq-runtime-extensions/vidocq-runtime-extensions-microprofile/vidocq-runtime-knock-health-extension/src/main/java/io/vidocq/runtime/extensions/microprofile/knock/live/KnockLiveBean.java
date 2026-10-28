@@ -63,7 +63,7 @@ public record KnockLiveBean(BeanManager beans, Bean<?> registry) {
         }
         try {
             return new KnockLiveBean(beans, beans.resolve(beans.getBeans(HealthCheckRegistry.class)));
-        } catch (RuntimeException | LinkageError unresolvable) {
+        } catch (RuntimeException | LinkageError _) {
             return new KnockLiveBean(beans, null);
         }
     }
@@ -82,7 +82,7 @@ public record KnockLiveBean(BeanManager beans, Bean<?> registry) {
         try {
             Context context = beans.getContext(registry.getScope());
             return context.get(registry) instanceof HealthCheckRegistry existing ? existing : null;
-        } catch (RuntimeException | LinkageError noInstance) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

@@ -650,7 +650,7 @@ public class VidocqIdeaMojo extends AbstractMojo {
             Files.writeString(temporary, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
             try {
                 Files.move(temporary, target.file(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
+            } catch (AtomicMoveNotSupportedException _) {
                 Files.move(temporary, target.file(), StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {

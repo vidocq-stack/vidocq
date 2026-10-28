@@ -93,7 +93,7 @@ final class WriteKinds {
         try {
             Object value = transactional.annotationType().getMethod("value").invoke(transactional);
             return value instanceof Enum<?> e ? e.name() : "REQUIRED";
-        } catch (ReflectiveOperationException | RuntimeException unreadable) {
+        } catch (ReflectiveOperationException | RuntimeException _) {
             return "REQUIRED";
         }
     }

@@ -163,7 +163,7 @@ final class StartupFacts {
         try {
             Module application = Vidocq.applicationModule();
             return application == null ? null : application.getName();
-        } catch (RuntimeException | LinkageError unknown) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -177,7 +177,7 @@ final class StartupFacts {
                 for (ConfigSource source : config.getConfigSources()) {
                     sources.add(paths.scrub(source.getName()) + " " + source.getOrdinal());
                 }
-            } catch (RuntimeException unreadable) {
+            } catch (RuntimeException _) {
                 sources.add("not readable");
             }
             if (config instanceof VidocqConfigImpl vidocq) {
@@ -187,7 +187,7 @@ final class StartupFacts {
         List<String> audited;
         try {
             audited = ConfigKeyAudit.auditedNamespaces(VidocqBootstrap.declaredConfigKeys(extensions));
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             // an extension whose configKeys() throws: the audit reported it as VIDOCQ-CFG-002
             audited = List.of();
         }
@@ -205,7 +205,7 @@ final class StartupFacts {
             List<String> namespaces;
             try {
                 namespaces = ConfigKeyAudit.auditedNamespaces(extension.configKeys());
-            } catch (RuntimeException unreadable) {
+            } catch (RuntimeException _) {
                 namespaces = List.of();
             }
             String name = VidocqBootstrap.nameOf(extension);
@@ -251,7 +251,7 @@ final class StartupFacts {
     private static int priorityOf(VidocqExtension extension) {
         try {
             return extension.priority();
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return 0;
         }
     }
@@ -262,7 +262,7 @@ final class StartupFacts {
         }
         try {
             return Path.of(location).normalize();
-        } catch (RuntimeException notAFile) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -270,7 +270,7 @@ final class StartupFacts {
     private static Path absolute(String archive) {
         try {
             return Path.of(archive).toAbsolutePath().normalize();
-        } catch (RuntimeException invalid) {
+        } catch (RuntimeException _) {
             return null;
         }
     }

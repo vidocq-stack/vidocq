@@ -45,9 +45,9 @@ public final class HttpDownloads implements AutoCloseable {
             HttpResponse<String> response = client.send(request(url, Duration.ofSeconds(15)),
                     HttpResponse.BodyHandlers.ofString());
             return response.statusCode() == 200 ? Optional.of(response.body()) : Optional.empty();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return Optional.empty();
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return Optional.empty();
         }

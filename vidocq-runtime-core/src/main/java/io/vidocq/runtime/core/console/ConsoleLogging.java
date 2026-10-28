@@ -115,7 +115,7 @@ public final class ConsoleLogging {
         try {
             Mode mode = ConsoleSupport.earlySetting(LOG_CONSOLE_KEY).flatMap(Mode::parse).orElse(Mode.AUTO);
             return install(mode, ConsoleSupport.earlyColorMode());
-        } catch (RuntimeException | LinkageError e) {
+        } catch (RuntimeException | LinkageError _) {
             return false;
         }
     }

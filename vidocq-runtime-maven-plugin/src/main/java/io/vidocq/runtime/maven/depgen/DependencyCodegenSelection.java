@@ -234,7 +234,7 @@ public final class DependencyCodegenSelection {
                 if (memoized.isPresent()) {
                     return memoized.get();
                 }
-            } catch (NoSuchFileException vanished) {
+            } catch (NoSuchFileException _) {
                 // another build replaced it meanwhile: search
             }
         }
@@ -317,7 +317,7 @@ public final class DependencyCodegenSelection {
             Files.write(temp, lines, StandardCharsets.UTF_8);
             try {
                 Files.move(temp, entry, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
+            } catch (AtomicMoveNotSupportedException _) {
                 Files.move(temp, entry, StandardCopyOption.REPLACE_EXISTING);
             }
         } finally {

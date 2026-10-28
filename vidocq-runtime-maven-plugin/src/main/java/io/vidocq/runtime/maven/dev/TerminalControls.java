@@ -83,7 +83,7 @@ final class TerminalControls implements Runnable {
                     return;
                 }
             }
-        } catch (IOException closed) {
+        } catch (IOException _) {
             // the goal is stopping
         }
     }

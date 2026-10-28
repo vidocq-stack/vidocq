@@ -100,7 +100,7 @@ final class SqlValues {
         try {
             OffsetDateTime value = results.getObject(column, OffsetDateTime.class);
             return value == null ? timestamp.toInstant().toString() : value.toString();
-        } catch (SQLException | RuntimeException noOffset) {
+        } catch (SQLException | RuntimeException _) {
             return timestamp.toInstant().toString();
         }
     }
@@ -116,7 +116,7 @@ final class SqlValues {
         Object raw = array.getArray();
         try {
             array.free();
-        } catch (SQLException unsupported) {
+        } catch (SQLException _) {
             // a driver that keeps nothing to free
         }
         if (!(raw instanceof Object[] values)) {

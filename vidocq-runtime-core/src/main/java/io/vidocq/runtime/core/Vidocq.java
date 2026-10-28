@@ -218,7 +218,7 @@ public final class Vidocq {
             if (instance.isResolvable()) {
                 return (VidocqApp) instance.get();
             }
-        } catch (RuntimeException notABeanOrNoContainer) {
+        } catch (RuntimeException _) {
             // fall through to plain instantiation
         }
         // …otherwise through its public no-arg constructor (package exported to us

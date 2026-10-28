@@ -143,7 +143,7 @@ final class TestsPanel implements DevConsolePanel {
             running.interrupt();
             try {
                 running.join(1_000);
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }

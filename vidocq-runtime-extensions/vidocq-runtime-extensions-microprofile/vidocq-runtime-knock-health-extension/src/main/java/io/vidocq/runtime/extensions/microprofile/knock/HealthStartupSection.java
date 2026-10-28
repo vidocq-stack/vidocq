@@ -108,7 +108,7 @@ final class HealthStartupSection {
                 if (path != null && path.endsWith(HEALTH_PATH)) {
                     return path;
                 }
-            } catch (IllegalArgumentException malformed) {
+            } catch (IllegalArgumentException _) {
                 // not a URL this section can read: try the next one
             }
         }

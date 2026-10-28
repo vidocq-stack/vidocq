@@ -162,7 +162,7 @@ public final class KeycloakDevService implements DevService {
         }
         try {
             return realmFile.toAbsolutePath() + "#" + Arrays.hashCode(Files.readAllBytes(realmFile));
-        } catch (IOException e) {
+        } catch (IOException _) {
             return realmFile.toAbsolutePath().toString(); // unreadable: the copy will say so when it starts
         }
     }

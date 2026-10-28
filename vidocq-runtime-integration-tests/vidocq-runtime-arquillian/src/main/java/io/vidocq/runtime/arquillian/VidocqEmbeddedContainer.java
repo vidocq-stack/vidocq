@@ -242,7 +242,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
         if (root == null) return;
         try (var files = java.nio.file.Files.walk(root)) {
             files.sorted(java.util.Comparator.reverseOrder()).forEach(file -> file.toFile().delete());
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // A temporary directory left behind is harmless.
         }
     }
@@ -264,7 +264,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private static void shutdownQuietly(VidocqBootstrap bootstrap) {
         try {
             bootstrap.shutdown();
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             // A boot that failed to start may have nothing to stop.
         }
     }
@@ -272,7 +272,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private static void closeQuietly(MaterializedDeployment materialized) {
         try {
             materialized.close();
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // Temp files are cleaned up by the OS eventually; never fail a test on this.
         }
     }
@@ -280,7 +280,7 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private int findFreePort() {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
-        } catch (IOException e) {
+        } catch (IOException _) {
             return 18080; // fallback
         }
     }

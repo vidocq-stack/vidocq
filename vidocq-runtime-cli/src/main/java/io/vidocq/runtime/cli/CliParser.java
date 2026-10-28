@@ -601,7 +601,7 @@ public final class CliParser {
         String raw = value(args, idx, opt);
         try {
             return Integer.parseInt(raw);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw new CliException("Option " + opt + " expects an integer, got: " + raw);
         }
     }

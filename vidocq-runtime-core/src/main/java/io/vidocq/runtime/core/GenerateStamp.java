@@ -64,7 +64,7 @@ public final class GenerateStamp {
         try {
             byte[] stamp = read(application, PATH);
             return stamp == null || !content(read(application, INDEX)).equals(new String(stamp, StandardCharsets.UTF_8));
-        } catch (IOException e) {
+        } catch (IOException _) {
             return false;
         }
     }

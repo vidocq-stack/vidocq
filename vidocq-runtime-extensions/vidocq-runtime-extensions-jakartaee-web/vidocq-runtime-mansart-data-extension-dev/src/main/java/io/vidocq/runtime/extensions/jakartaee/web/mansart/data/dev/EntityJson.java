@@ -227,7 +227,7 @@ final class EntityJson {
             if (attribute instanceof ReferenceAttribute<?, ?> reference) {
                 try {
                     type = model(reference.javaType()).id().javaType();
-                } catch (RuntimeException | LinkageError unreadable) {
+                } catch (RuntimeException | LinkageError _) {
                     type = null;
                 }
             }
@@ -266,7 +266,7 @@ final class EntityJson {
                 if (Scalars.schema(type) != null && (referenced == null || referenced.id().setter() != null)) {
                     out.put(attribute.name(), new Settable(attribute, type, referenced));
                 }
-            } catch (RuntimeException | LinkageError unreadable) {
+            } catch (RuntimeException | LinkageError _) {
                 // a reference to an entity Mansart cannot model: left out, as a joined attribute is
             }
         }

@@ -98,7 +98,7 @@ public final class ShellSetup {
                     Files.writeString(script, generator.apply(shell));
                     refreshed.add(shell);
                 }
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException _) {
                 // best effort: a stale completion is not worth failing the command
             }
         }

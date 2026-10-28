@@ -112,7 +112,7 @@ final class LogRing extends Handler {
             }
             long sequence = next.getAndIncrement();
             store(new Line(sequence, time, logRecord.getLevel().getName(), logger, thread, message(logRecord)));
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             // a record the ring cannot read is left out: logging never fails because of the console
         }
     }
@@ -135,7 +135,7 @@ final class LogRing extends Handler {
         String text;
         try {
             text = formatter.formatMessage(entry);
-        } catch (RuntimeException formatting) {
+        } catch (RuntimeException _) {
             text = entry.getMessage();
         }
         StringBuilder message = new StringBuilder(text == null ? "" : text);

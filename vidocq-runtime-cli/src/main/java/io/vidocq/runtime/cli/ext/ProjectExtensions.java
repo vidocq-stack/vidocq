@@ -79,7 +79,7 @@ public final class ProjectExtensions {
             return ExtensionCache.read(Files.readString(cacheFile))
                     .filter(e -> ExtensionCache.isValid(e, pomHash, ExtensionCache::fingerprint))
                     .map(ExtensionCache.Entry::extensions);
-        } catch (IOException e) {
+        } catch (IOException _) {
             return Optional.empty();
         }
     }
@@ -105,7 +105,7 @@ public final class ProjectExtensions {
                 Files.createDirectories(cacheFile.getParent());
                 Files.writeString(cacheFile, ExtensionCache.write(new ExtensionCache.Entry(
                         ExtensionCache.hash(pomXml), snapshots, r.extensions())));
-            } catch (IOException | IllegalArgumentException e) {
+            } catch (IOException | IllegalArgumentException _) {
                 // best effort: the next run resolves again
             }
         }
@@ -143,7 +143,7 @@ public final class ProjectExtensions {
             return new Resolution.Resolved(detect(resolved, declared), false);
         } catch (IOException | IllegalArgumentException e) {
             return new Resolution.Failed(String.valueOf(e.getMessage()), "");
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return new Resolution.Failed("interrupted", "");
         } finally {
@@ -173,7 +173,7 @@ public final class ProjectExtensions {
             List<String> lines = Files.readAllLines(log);
             List<String> tail = lines.subList(Math.max(0, lines.size() - 15), lines.size());
             return String.join("\n", tail);
-        } catch (IOException e) {
+        } catch (IOException _) {
             return "";
         }
     }
@@ -184,7 +184,7 @@ public final class ProjectExtensions {
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // best effort
         }
     }

@@ -163,7 +163,7 @@ public final class GrimmOpenApiExtension implements VidocqExtension, StartupRepo
     private static GrimmModelCache tryResolve(VaubanContainer container) {
         try {
             return container.select(GrimmModelCache.class);
-        } catch (RuntimeException unsatisfied) {
+        } catch (RuntimeException _) {
             return null;
         }
     }

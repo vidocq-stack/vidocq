@@ -455,11 +455,11 @@ public final class VidocqBootstrap {
             String runtime;
             try {
                 runtime = runtime();
-            } catch (RuntimeException | LinkageError unknown) {
+            } catch (RuntimeException | LinkageError _) {
                 runtime = null;
             }
             return recorder.report(launchMode(), launchReason(), verbosity, runtime, List.of(), null);
-        } catch (RuntimeException | LinkageError unreported) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -480,7 +480,7 @@ public final class VidocqBootstrap {
             StartupReport partial = recorder.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
             startupReport.set(partial);
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);
-        } catch (RuntimeException | LinkageError unreported) {
+        } catch (RuntimeException | LinkageError _) {
             // the failure of the boot is what matters, and the caller rethrows it untouched
         }
     }
@@ -558,7 +558,7 @@ public final class VidocqBootstrap {
     private BeanManager beanManager() {
         try {
             return container == null ? null : container.getBeanManager();
-        } catch (RuntimeException | LinkageError unavailable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -577,7 +577,7 @@ public final class VidocqBootstrap {
         try {
             String name = extension.name();
             return name != null ? name : extension.getClass().getName();
-        } catch (RuntimeException unnamed) {
+        } catch (RuntimeException _) {
             return extension.getClass().getName();
         }
     }
@@ -608,7 +608,7 @@ public final class VidocqBootstrap {
         String value;
         try {
             value = config.getValue(key).map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
         if (!valid.test(value)) {
@@ -694,7 +694,7 @@ public final class VidocqBootstrap {
     public void awaitShutdown() {
         try {
             shutdownLatch.await();
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             shutdown();
         }
@@ -708,7 +708,7 @@ public final class VidocqBootstrap {
     public boolean awaitShutdown(long timeoutMillis) {
         try {
             return shutdownLatch.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return true;
         }
@@ -721,7 +721,7 @@ public final class VidocqBootstrap {
         if (shutdownHook != null) {
             try {
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
-            } catch (IllegalStateException jvmAlreadyShuttingDown) {
+            } catch (IllegalStateException _) {
                 // called FROM the hook — nothing to deregister
             }
         }

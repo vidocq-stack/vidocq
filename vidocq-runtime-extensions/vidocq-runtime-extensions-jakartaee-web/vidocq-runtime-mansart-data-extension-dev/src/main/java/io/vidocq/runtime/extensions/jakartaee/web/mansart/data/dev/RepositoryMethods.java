@@ -122,7 +122,7 @@ final class RepositoryMethods {
         Type[] generic;
         try {
             generic = method.getGenericParameterTypes();
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             generic = method.getParameterTypes();
         }
         List<String> names = new ArrayList<>();
@@ -134,7 +134,7 @@ final class RepositoryMethods {
         String returns;
         try {
             returns = print(method.getGenericReturnType(), bindings, 0);
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             returns = method.getReturnType().getSimpleName();
         }
         return new Candidate(method, List.copyOf(names), List.copyOf(types), returns, inherited);

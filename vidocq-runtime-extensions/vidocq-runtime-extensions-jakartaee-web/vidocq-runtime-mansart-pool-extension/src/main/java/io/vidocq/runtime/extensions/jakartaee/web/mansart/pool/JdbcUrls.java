@@ -110,7 +110,7 @@ final class JdbcUrls {
         try {
             Redacted redacted = redactOrNull(jdbcUrl);
             return redacted != null ? redacted : new Redacted(failClosed(jdbcUrl), false);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return new Redacted(failClosed(jdbcUrl), false);
         }
     }
@@ -152,7 +152,7 @@ final class JdbcUrls {
         Redacted redacted;
         try {
             redacted = redactOrNull(jdbcUrl);
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
         if (redacted == null) {

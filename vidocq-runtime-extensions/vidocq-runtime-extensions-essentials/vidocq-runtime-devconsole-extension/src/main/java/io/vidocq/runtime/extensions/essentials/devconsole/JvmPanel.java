@@ -248,7 +248,7 @@ final class JvmPanel implements DevConsolePanel {
             }
             handle = MethodHandles.publicLookup().findVirtual(extended, getter, MethodType.methodType(double.class))
                     .bindTo(system);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError _) {
             return () -> Double.NaN;
         }
         return () -> {
@@ -256,7 +256,7 @@ final class JvmPanel implements DevConsolePanel {
                 return (double) handle.invoke();
             } catch (RuntimeException | Error thrown) {
                 throw thrown;
-            } catch (Throwable impossible) {
+            } catch (Throwable _) {
                 return Double.NaN;
             }
         };

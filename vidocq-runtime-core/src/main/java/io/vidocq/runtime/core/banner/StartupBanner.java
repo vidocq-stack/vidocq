@@ -345,7 +345,7 @@ public final class StartupBanner {
             default -> {
                 try {
                     yield config.apply(key).orElse(null);
-                } catch (RuntimeException unreadable) {
+                } catch (RuntimeException _) {
                     yield null;
                 }
             }
@@ -427,7 +427,7 @@ public final class StartupBanner {
                     case null, default -> ClassLoader.getSystemResourceAsStream(name);
                 }) {
             return in == null ? Optional.empty() : Optional.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return Optional.empty();
         }
     }
@@ -435,7 +435,7 @@ public final class StartupBanner {
     private static Optional<String> readFile(Path path) {
         try {
             return Files.isRegularFile(path) ? Optional.of(Files.readString(path, StandardCharsets.UTF_8)) : Optional.empty();
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return Optional.empty();
         }
     }

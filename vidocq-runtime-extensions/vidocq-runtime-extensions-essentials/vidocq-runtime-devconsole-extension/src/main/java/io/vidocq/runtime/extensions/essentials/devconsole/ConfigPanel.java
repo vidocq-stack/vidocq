@@ -176,7 +176,7 @@ final class ConfigPanel implements DevConsolePanel {
         Optional<StartupReportView> written;
         try {
             written = report.get();
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             written = Optional.empty();
         }
         if (written.isEmpty()) {

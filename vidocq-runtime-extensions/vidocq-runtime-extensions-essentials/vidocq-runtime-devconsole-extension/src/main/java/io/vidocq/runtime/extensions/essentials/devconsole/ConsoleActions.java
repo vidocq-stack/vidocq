@@ -215,7 +215,7 @@ final class ConsoleActions {
             body = body(request, max);
         } catch (TooLarge _) {
             return text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + max + " bytes.");
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return text(StatusCode.BAD_REQUEST, "The body is not UTF-8 text.");
         }
         Map<String, String> arguments;
@@ -246,7 +246,7 @@ final class ConsoleActions {
                             .value(outcome.text()).endObject().toString());
         } catch (TimeoutException | ExecutionException _) {
             return stillRunning();
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return stillRunning();
         }

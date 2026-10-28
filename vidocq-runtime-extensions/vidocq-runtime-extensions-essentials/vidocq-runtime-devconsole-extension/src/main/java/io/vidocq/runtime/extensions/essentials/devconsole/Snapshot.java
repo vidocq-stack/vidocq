@@ -365,7 +365,7 @@ final class Snapshot implements Handler {
         try {
             // a supplier breaking its contract with null reads as no report
             return Objects.requireNonNullElse(report.get(), Optional.empty());
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return Optional.empty();
         }
     }
@@ -442,7 +442,7 @@ final class Snapshot implements Handler {
     private static String id(StartupReportContributor contributor) {
         try {
             return contributor.id();
-        } catch (RuntimeException | LinkageError failed) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -483,7 +483,7 @@ final class Snapshot implements Handler {
     private static String detailedText(StartupReportView view) {
         try {
             return view.detailedText();
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -627,7 +627,7 @@ final class Snapshot implements Handler {
         Object parsed;
         try {
             parsed = JsonValues.parse(schema, PanelAction.Argument.MAX_JSON_DEPTH);
-        } catch (IllegalArgumentException unreadable) {
+        } catch (IllegalArgumentException _) {
             out.nullValue();
             return;
         }

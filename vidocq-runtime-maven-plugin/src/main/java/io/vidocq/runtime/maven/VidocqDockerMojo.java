@@ -159,7 +159,7 @@ public class VidocqDockerMojo extends AbstractMojo {
             byte[] head = new byte[4];
             try (var in = Files.newInputStream(java)) {
                 if (in.readNBytes(head, 0, 4) < 2) return null;
-            } catch (IOException e) {
+            } catch (IOException _) {
                 return null;
             }
             int magic = ((head[0] & 0xFF) << 24) | ((head[1] & 0xFF) << 16) | ((head[2] & 0xFF) << 8) | (head[3] & 0xFF);

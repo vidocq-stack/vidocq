@@ -57,14 +57,14 @@ final class TestRequestFile implements AutoCloseable {
         String word;
         try {
             word = Files.readString(file, StandardCharsets.UTF_8).strip();
-        } catch (NoSuchFileException none) {
+        } catch (NoSuchFileException _) {
             return Optional.empty();
-        } catch (IOException unreadable) {
+        } catch (IOException _) {
             return Optional.empty();
         }
         try {
             Files.deleteIfExists(file);
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // read again on the next poll, and ignored again if unknown
         }
         Optional<Trigger> trigger = Trigger.ofRequest(word);
@@ -110,7 +110,7 @@ final class TestRequestFile implements AutoCloseable {
             running.interrupt();
             try {
                 running.join(1_000);
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }

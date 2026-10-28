@@ -250,7 +250,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         if (thread != null && thread != Thread.currentThread()) {
             try {
                 thread.join(CLOSE_WAIT.toMillis());
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }

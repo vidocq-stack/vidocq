@@ -106,7 +106,7 @@ final class HostGuard {
         try {
             InetAddress.ofLiteral(name);
             return true;
-        } catch (IllegalArgumentException notAnAddress) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }

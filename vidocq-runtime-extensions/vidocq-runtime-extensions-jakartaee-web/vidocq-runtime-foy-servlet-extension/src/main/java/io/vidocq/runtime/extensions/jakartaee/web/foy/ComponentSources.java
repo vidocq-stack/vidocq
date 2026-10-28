@@ -48,7 +48,7 @@ final class ComponentSources {
         if (spelling != null && spelling.endsWith(resource)) {
             try {
                 return new URL(spelling.substring(0, spelling.length() - resource.length()));
-            } catch (MalformedURLException e) {
+            } catch (MalformedURLException _) {
                 // Not a URL once cut: fall back to the code source.
             }
         }

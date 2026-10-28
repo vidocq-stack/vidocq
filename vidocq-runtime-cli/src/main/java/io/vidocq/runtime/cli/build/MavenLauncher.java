@@ -85,7 +85,7 @@ public final class MavenLauncher {
             Thread waitForMaven = new Thread(() -> {
                 try {
                     process.waitFor(30, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             }, "vidocq-wait-for-maven");
@@ -95,14 +95,14 @@ public final class MavenLauncher {
             } finally {
                 try {
                     Runtime.getRuntime().removeShutdownHook(waitForMaven);
-                } catch (IllegalStateException shuttingDown) {
+                } catch (IllegalStateException _) {
                     // the hook is already running
                 }
             }
         } catch (IOException e) {
             System.err.println("Failed to launch Maven (" + command.get(0) + "): " + e.getMessage());
             return 1;
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             System.err.println("Build interrupted.");
             return 1;

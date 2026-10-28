@@ -176,7 +176,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             req.setRepositories(remoteRepos);
             Artifact resolved = repoSystem.resolveArtifact(repoSession, req).getArtifact();
             return Optional.of(resolved.getFile().toPath());
-        } catch (ArtifactResolutionException ignored) {
+        } catch (ArtifactResolutionException _) {
             return Optional.empty();
         }
     }
@@ -443,7 +443,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             req.setRepositories(remoteRepos);
             repoSystem.resolveArtifact(repoSession, req);
             return true;
-        } catch (ArtifactResolutionException ignored) {
+        } catch (ArtifactResolutionException _) {
             return false;
         }
     }

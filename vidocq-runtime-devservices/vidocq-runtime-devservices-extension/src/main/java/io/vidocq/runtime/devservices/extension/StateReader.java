@@ -230,7 +230,7 @@ public final class StateReader {
             char value = (char) Integer.parseInt(hex, 16);
             cursor.pos += 4;
             return value;
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw cursor.fail("invalid unicode escape");
         }
     }

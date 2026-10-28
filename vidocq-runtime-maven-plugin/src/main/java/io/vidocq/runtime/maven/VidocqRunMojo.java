@@ -374,7 +374,7 @@ public class VidocqRunMojo extends AbstractMojo {
             exitCode = child.waitFor();
         } catch (IOException e) {
             throw new MojoExecutionException("Cannot start the application JVM", e);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             stop(running.getAndSet(null));
             getLog().info(PREFIX + "interrupted — the application was stopped.");
@@ -383,7 +383,7 @@ public class VidocqRunMojo extends AbstractMojo {
             running.set(null);
             try {
                 Runtime.getRuntime().removeShutdownHook(hook);
-            } catch (IllegalStateException shuttingDown) {
+            } catch (IllegalStateException _) {
                 // The hook is running: it stops the child itself.
             }
         }
@@ -402,7 +402,7 @@ public class VidocqRunMojo extends AbstractMojo {
         }
         try {
             child.stop(Duration.ofMillis(gracePeriodMillis));
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
     }

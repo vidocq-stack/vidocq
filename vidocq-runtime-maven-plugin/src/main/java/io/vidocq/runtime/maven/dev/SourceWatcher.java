@@ -276,7 +276,7 @@ final class SourceWatcher implements AutoCloseable {
                         touched.main = true;
                     }
                 }
-            } catch (IOException | UncheckedIOException ignored) {
+            } catch (IOException | UncheckedIOException _) {
                 // a root we cannot read yet is not fatal: its later events still count once registered
             }
         }

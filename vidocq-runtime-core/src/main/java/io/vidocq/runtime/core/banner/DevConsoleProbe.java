@@ -80,7 +80,7 @@ final class DevConsoleProbe {
                 return null;
             }
             return new StartupBanner.DevConsole(host(setting(config, HOST_KEY)), port(setting(config, PORT_KEY)));
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

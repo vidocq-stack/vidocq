@@ -176,7 +176,7 @@ public final class PostgresDevService implements DevService {
         for (GenericContainer<?> c : containers) {
             try {
                 c.stop();
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // best-effort teardown — keep stopping the remaining containers
             }
         }

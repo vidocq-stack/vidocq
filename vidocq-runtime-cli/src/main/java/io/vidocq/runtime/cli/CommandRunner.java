@@ -540,7 +540,7 @@ public final class CommandRunner {
             Path dir = modules == null ? null : modules.getParent();
             return dir != null && "modules".equals(String.valueOf(modules.getFileName()))
                     && Files.isRegularFile(dir.resolve("bin").resolve(LAUNCHER)) ? dir : null;
-        } catch (Exception e) {
+        } catch (Exception _) {
             return null;
         }
     }
@@ -578,7 +578,7 @@ public final class CommandRunner {
                 }
             } catch (IOException e) {
                 CliOutput.warning("Could not refresh the " + shell.token() + " completion: " + e.getMessage());
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }

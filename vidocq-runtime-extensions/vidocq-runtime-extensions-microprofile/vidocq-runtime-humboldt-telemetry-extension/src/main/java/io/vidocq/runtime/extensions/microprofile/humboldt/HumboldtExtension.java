@@ -129,7 +129,7 @@ public final class HumboldtExtension implements VidocqExtension {
             LOG.log(Level.INFO,
                     "Humboldt installed as GlobalOpenTelemetry (service.name=" +
                             env.getOrDefault("OTEL_SERVICE_NAME", "vidocq-app") + ")");
-        } catch (IllegalStateException already) {
+        } catch (IllegalStateException _) {
             // Sequential boots in the same JVM (e.g. TCK deployments) hit the
             // set-once guard of GlobalOpenTelemetry: reset and retry ONCE. In
             // production the set happens a single time and this path is never taken.
@@ -139,7 +139,7 @@ public final class HumboldtExtension implements VidocqExtension {
                 LOG.log(Level.WARNING,
                         "GlobalOpenTelemetry was already set (previous boot in this JVM) - "
                                 + "replaced it with this Humboldt instance");
-            } catch (IllegalStateException stillSet) {
+            } catch (IllegalStateException _) {
                 LOG.log(Level.WARNING,
                         "GlobalOpenTelemetry is already set by another component - "
                                 + "Humboldt remains active as a local SDK but will not be the global one");

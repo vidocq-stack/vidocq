@@ -69,7 +69,7 @@ public record DiracLiveBean(BeanManager beans, Bean<?> producer) {
             // The identity check keeps out another copy of the class, whose instance a cast would reject.
             return new DiracLiveBean(beans,
                     bean != null && bean.getBeanClass() == MetricRegistryProducerBean.class ? bean : null);
-        } catch (RuntimeException | LinkageError unresolvable) {
+        } catch (RuntimeException | LinkageError _) {
             return new DiracLiveBean(beans, null);
         }
     }
@@ -90,7 +90,7 @@ public record DiracLiveBean(BeanManager beans, Bean<?> producer) {
             return context.get(producer) instanceof MetricRegistryProducerBean existing
                     ? DiracRegistries.of(existing)
                     : null;
-        } catch (RuntimeException | LinkageError noInstance) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }

@@ -124,7 +124,7 @@ final class LivePanels {
         for (LivePanel panel : byId.values()) {
             try {
                 panel.stop();
-            } catch (RuntimeException | LinkageError ignored) {
+            } catch (RuntimeException | LinkageError _) {
                 // stopping never fails the console's own stop
             }
         }

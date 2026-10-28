@@ -105,7 +105,7 @@ final class DevMcp {
         } catch (ConsoleActions.TooLarge _) {
             return ConsoleActions.text(StatusCode.PAYLOAD_TOO_LARGE, "The body is larger than " + MAX_BODY
                     + " bytes.");
-        } catch (IOException | RuntimeException unreadable) {
+        } catch (IOException | RuntimeException _) {
             return answer(StatusCode.BAD_REQUEST, error(null, PARSE_ERROR, "The body is not UTF-8 text."));
         }
         return answer(body);

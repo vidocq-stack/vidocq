@@ -89,7 +89,7 @@ final class RepositoryReader {
     static Type[] primaryTypes(Class<?> repository) {
         try {
             return primaryTypes(repository, Map.of());
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return null;
         }
     }
@@ -146,7 +146,7 @@ final class RepositoryReader {
         Method[] declared;
         try {
             declared = repository.getDeclaredMethods();
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return List.of();
         }
         List<MansartDataCatalogue.Method> methods = new ArrayList<>();
@@ -168,7 +168,7 @@ final class RepositoryReader {
             Query query = method.getAnnotation(Query.class);
             return new MansartDataCatalogue.Method(method.getName(), kind(method, query),
                     query == null ? "" : cut(query.value(), maxQuery), parameters(method), returns(method));
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return new MansartDataCatalogue.Method(method.getName(), "other", "", "", "");
         }
     }
@@ -225,7 +225,7 @@ final class RepositoryReader {
     private static Type[] parameterTypes(Method method) {
         try {
             return method.getGenericParameterTypes();
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return method.getParameterTypes();
         }
     }
@@ -233,7 +233,7 @@ final class RepositoryReader {
     private static String returns(Method method) {
         try {
             return TypeNames.of(method.getGenericReturnType());
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return TypeNames.of(method.getReturnType());
         }
     }
@@ -258,7 +258,7 @@ final class RepositoryReader {
                 return "";
             }
             return "inherits " + String.join(", ", reached.keySet()) + ": " + String.join(", ", names);
-        } catch (RuntimeException | LinkageError unreadable) {
+        } catch (RuntimeException | LinkageError _) {
             return "";
         }
     }

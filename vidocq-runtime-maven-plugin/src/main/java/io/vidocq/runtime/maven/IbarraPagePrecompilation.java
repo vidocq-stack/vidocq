@@ -145,7 +145,7 @@ final class IbarraPagePrecompilation {
                 for (var reference : ModuleFinder.of(path).findAll()) {
                     if (!reference.descriptor().isAutomatic() && names.add(reference.descriptor().name())) out.add(path);
                 }
-            } catch (FindException unreadable) {
+            } catch (FindException _) {
                 // Not a module Ibarra can use: leave it out.
             }
         }
